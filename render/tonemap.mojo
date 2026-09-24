@@ -29,6 +29,17 @@ implementation is promised: `exp2` of `log2` rounds differently from a
 `pow`. Applied at the end, the curve also never sees the uv debug view,
 which is coordinates rather than light.
 
+**A custom curve is a node program.** three.js's `CustomToneMapping`
+runs the `CustomToneMapping` function a caller writes into its shader
+chunk, and the chunk's own body returns the color unchanged. Here the
+function is the `OUTPUT_NODE` of a `materials.nodes` program: its `lit`
+node reads the light, and what it computes is the mapped color.
+`custom_tone_map` runs it, the host through `ProgramCurve` and the kernel
+through the fog buffer, with the one interpreter both rasterizers use.
+With no program, the color is left as it is, as three.js's default body
+leaves it. The exposure is not applied, as three.js does not apply it to
+a custom curve: a program can read a uniform of its own for it.
+
 **Shared with the kernel.** The GPU encodes its own pixels, so it tone maps
 its own pixels, with this module's `tone_map`, from the same numbers. The
 curves are written with `exp2` and `log2` where three.js has `pow`, so the
@@ -36,6 +47,15 @@ host and the device compute them from intrinsics both have, as `falloff`
 is.
 """
 
+from materials.nodes import (
+    OUTPUT_NODE,
+    NodeContext,
+    NodeInputs,
+    NodeSource,
+    has_output,
+    run_nodes,
+)
+from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from std.math import exp2, isfinite, log2, max, min
 
@@ -52,7 +72,8 @@ struct ToneMapping(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven named curves."""
+        """Return True if this is one of the seven named curves or the
+        custom one."""
         return (
             self == NO_TONE_MAPPING
             or self == LINEAR_TONE_MAPPING
@@ -61,6 +82,7 @@ struct ToneMapping(Equatable, ImplicitlyCopyable, Writable):
             or self == ACES_FILMIC_TONE_MAPPING
             or self == AGX_TONE_MAPPING
             or self == NEUTRAL_TONE_MAPPING
+            or self == CUSTOM_TONE_MAPPING
         )
 
 
@@ -82,10 +104,13 @@ comptime AGX_TONE_MAPPING = ToneMapping(5)
 # The Khronos PBR neutral curve: hue-preserving up to a knee, then a soft
 # roll toward white. three.js's `NeutralToneMapping`.
 comptime NEUTRAL_TONE_MAPPING = ToneMapping(6)
+# A curve the caller writes as a node program, three.js's
+# `CustomToneMapping`. See `custom_tone_map`.
+comptime CUSTOM_TONE_MAPPING = ToneMapping(7)
 
 
 def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
-    """Refuse a curve that is none of the seven, or an exposure that is
+    """Refuse a curve that is none of the eight, or an exposure that is
     negative or not finite.
 
     The one list, asked by every boundary that takes the pair --
@@ -105,7 +130,7 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
             negative or not finite.
     """
     if not mode.is_valid():
-        raise Error("A tone mapping that is none of the seven")
+        raise Error("A tone mapping that is none of the eight")
     if not isfinite(exposure) or exposure < 0:
         raise Error("A tone mapping exposure must be finite and not negative")
 
@@ -368,3 +393,119 @@ def tone_map(
     elif mode == NEUTRAL_TONE_MAPPING:
         mapped = _neutral(color.r, color.g, color.b, exposure)
     return FloatColor(mapped.r, mapped.g, mapped.b, color.a)
+
+
+struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
+    """The host's `NodeSource` for a custom curve: a program's floats in a
+    list, with no texture and no triangle.
+
+    An empty list is no program, and `custom_tone_map` then leaves the
+    color as it is.
+    """
+
+    var words: Pointer[List[Float32], Self.origin]
+
+    def __init__(out self, words: Pointer[List[Float32], Self.origin]):
+        """Read a program from its floats.
+
+        Args:
+            words: The program's floats, `NodeProgram.code`, or an empty
+                list for none.
+        """
+        self.words = words
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program, or zero past its end.
+
+        Args:
+            at: Its offset from the program's first float.
+
+        Returns:
+            The float.
+        """
+        return self.words[][at] if at < len(self.words[]) else Float32(0)
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return opaque white: a curve reads no texture.
+
+        Args:
+            slot: The texture's id.
+            u: Across.
+            v: Up.
+
+        Returns:
+            Opaque white, what a texture node reads where no texture opens.
+        """
+        return FloatColor(1, 1, 1, 1)
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return no weights: a curve has no triangle.
+
+        Args:
+            context: Any context.
+
+        Returns:
+            Zero in every lane.
+        """
+        return SIMD[DType.float32, 4](0)
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return a corner of nothing: a curve has no triangle.
+
+        Args:
+            context: Any corner.
+
+        Returns:
+            Zero attributes.
+        """
+        return _no_inputs(Vector3(0, 0, 0))
+
+
+def _no_inputs(lit: Vector3) -> NodeInputs:
+    """Return the inputs a curve hands its program: the light alone."""
+    var zero = Vector3(0, 0, 0)
+    return NodeInputs(0, 0, zero, zero, zero, lit, False)
+
+
+def custom_tone_map[S: NodeSource](color: FloatColor, curve: S) -> FloatColor:
+    """Return `color` through a custom curve, alpha kept.
+
+    Args:
+        color: Linear light, straight alpha.
+        curve: The curve's program. Its `OUTPUT_NODE` reads the light as
+            its `lit` node.
+
+    Returns:
+        What the program's output computes, or `color` itself when the
+        program sets no output, as three.js's default custom curve returns
+        its color.
+    """
+    if not has_output(curve, OUTPUT_NODE):
+        return color
+    var mapped = run_nodes(
+        curve, OUTPUT_NODE, _no_inputs(Vector3(color.r, color.g, color.b))
+    )
+    return FloatColor(mapped[0], mapped[1], mapped[2], color.a)
+
+
+def tone_map_with[
+    S: NodeSource
+](
+    color: FloatColor, mode: ToneMapping, exposure: Float32, curve: S
+) -> FloatColor:
+    """Return `color` compressed by `mode`, through `curve` for the custom
+    one.
+
+    Args:
+        color: Linear light, straight alpha, with no top.
+        mode: Which curve.
+        exposure: What a named curve scales the light by first.
+        curve: The custom curve's program, read only for
+            `CUSTOM_TONE_MAPPING`.
+
+    Returns:
+        What `custom_tone_map` or `tone_map` returns.
+    """
+    if mode == CUSTOM_TONE_MAPPING:
+        return custom_tone_map(color, curve)
+    return tone_map(color, mode, exposure)

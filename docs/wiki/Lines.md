@@ -244,7 +244,7 @@ A width in the world is measured in the world. A width in pixels is measured on 
 - **A width in the world is a flat ribbon.** three.js traces a capsule for each fragment. Here the ribbon faces the camera, and its outline matches the capsule's outline. Where the ribbon passes through another surface, the two cross along a different curve.
 - **A segment with no length is a round dot.** three.js normalizes a zero vector there, and GLSL leaves the result undefined.
 - **A hit outside `near` and `far` is dropped.** three.js's `LineSegments2.raycast` keeps it. A mesh hit is dropped in both.
-- **Not ported:** `alphaToCoverage`, the raycaster's `params.Line2.threshold`, a hit's `pointOnLine`, `LineMaterial.resolution`, and a `Line2` that casts or receives a shadow.
+- **Not ported:** the `fwidth` ramp of `LineMaterial`'s `alphaToCoverage`, the raycaster's `params.Line2.threshold`, a hit's `pointOnLine` and `LineMaterial.resolution`. A `Line2` casts no shadow and receives none.
 - **`intersect_scene` does not pick a wide line.** It has no camera for a width in pixels.
 
 ### What raises

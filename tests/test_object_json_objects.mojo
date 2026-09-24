@@ -609,6 +609,58 @@ def test_depth_stencil_and_packing_use_three_js_numbers() raises:
     )
 
 
+def test_the_material_flags_are_written_and_read() raises:
+    """The fragment flags, the blend constant, the shadow side and
+    whether a material is visible travel with three.js's keys."""
+    var assets = Assets()
+    var scene = Scene()
+    var flagged = Material(WHITE, kind=BASIC)
+    flagged.dithering = True
+    flagged.alpha_hash = True
+    flagged.alpha_to_coverage = True
+    flagged.premultiplied_alpha = True
+    flagged.tone_mapped = False
+    flagged.visible = False
+    flagged.shadow_side = DOUBLE_SIDE
+    flagged.blend_color = Color(255, 128, 0)
+    flagged.blend_alpha = 0.25
+    plain_mesh(assets, scene, flagged)
+    plain_mesh(assets, scene, Material(WHITE, kind=BASIC))
+    var text = object_to_json(scene, assets)
+    assert_true(text.find('"dithering":true') >= 0)
+    assert_true(text.find('"alphaHash":true') >= 0)
+    assert_true(text.find('"alphaToCoverage":true') >= 0)
+    assert_true(text.find('"premultipliedAlpha":true') >= 0)
+    assert_true(text.find('"toneMapped":false') >= 0)
+    assert_true(text.find('"visible":false') >= 0)
+    assert_true(text.find('"shadowSide":2') >= 0)
+    assert_true(text.find('"blendColor":16744448') >= 0)
+    assert_true(text.find('"blendAlpha":0.25') >= 0)
+    var read = _read(text)
+    var again = read[1].materials.get(MaterialId(0))
+    assert_true(again.dithering)
+    assert_true(again.alpha_hash)
+    assert_true(again.alpha_to_coverage)
+    assert_true(again.premultiplied_alpha)
+    assert_false(again.tone_mapped)
+    assert_false(again.visible)
+    assert_true(again.shadow_face() == DOUBLE_SIDE)
+    assert_equal(again.blend_color.hex(), 0xFF8000)
+    assert_equal(again.blend_alpha, 0.25)
+    # The defaults are left out, and read back as three.js's.
+    var plain = read[1].materials.get(MaterialId(1))
+    assert_false(plain.dithering)
+    assert_true(plain.tone_mapped)
+    assert_true(plain.visible)
+    assert_false(Bool(plain.shadow_side))
+    # A shadow side that is none of the three, and a blend alpha outside
+    # zero to one, are refused.
+    with assert_raises(contains="shadow side"):
+        _ = _material('"type":"MeshBasicMaterial","shadowSide":7')
+    with assert_raises(contains="blend color"):
+        _ = _material('"type":"MeshBasicMaterial","blendAlpha":3')
+
+
 def test_three_js_defaults_are_read() raises:
     """A class without its keys is read with three.js's defaults."""
     var physical = _material('"type":"MeshPhysicalMaterial"')

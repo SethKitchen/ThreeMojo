@@ -66,6 +66,7 @@ from render.cube_texture_store import (
     CubeTextureStore,
 )
 from render.target import RenderTarget
+from render.fragment_flags import alpha_covers, dither, hashed_threshold
 from render.raster_state import (
     REVERSED_DEPTH,
     RasterState,
@@ -2392,7 +2393,8 @@ def check_output_kinds(
 
     Raises:
         Error: If the curve is on and the frame holds both a surface that
-            shows data and a surface, a segment or a point that blends.
+            shows data, or a primitive whose material has `tone_mapped`
+            off, and a surface, a segment or a point that blends.
     """
     if not mapped:
         return
@@ -2400,24 +2402,32 @@ def check_output_kinds(
     var mixes_light = False
     for triangle in range(len(corners) // 3):
         ref first = corners[triangle * 3]
-        # A data triangle cannot blend -- `check_triangle_state` refuses it
-        # -- so these two are exclusive and the elif loses nothing.
-        if first.kind.is_data():
+        # A triangle whose material turns the tone mapping off keeps the
+        # curve off its pixels as a data triangle does, so it counts as
+        # one. One that also blends is refused on its own: its pixels
+        # would be mixtures.
+        if first.kind.is_data() or not first.state.tone_mapped:
             shows_data = True
-        elif first.blend.mixes():
+        if first.blend.mixes():
             mixes_light = True
     for segment in range(len(segments) // 2):
-        if segments[segment * 2].blend.mixes():
+        ref start = segments[segment * 2]
+        if not start.state.tone_mapped:
+            shows_data = True
+        if start.blend.mixes():
             mixes_light = True
     for point in range(len(points)):
+        if not points[point].state.tone_mapped:
+            shows_data = True
         if points[point].blend.mixes():
             mixes_light = True
     if shows_data and mixes_light:
         raise Error(
-            "A tone-mapped frame cannot hold both a data material and a"
-            " blended one: the curve is on for light and off for data, and"
-            " a blend decides that for the pixel behind it however faint it"
-            " is. Draw the data in its own pass, or set NO_TONE_MAPPING"
+            "A tone-mapped frame cannot hold both a data material, or one"
+            " with tone_mapped off, and a blended one: the curve is on for"
+            " light and off for data, and a blend decides that for the"
+            " pixel behind it however faint it is. Draw the data in its own"
+            " pass, or set NO_TONE_MAPPING"
         )
 
 
@@ -3133,6 +3143,19 @@ def rasterize_shaded(
     # nearest surface's coordinates and cuts nothing out, as it samples no
     # texture.
     var tested = a.alpha_test > 0 and mode != SHADE_UV
+    # Whether a hashed alpha test or the alpha's coverage can throw a
+    # fragment away, three.js's `alphaHash` and `alphaToCoverage`: a
+    # discard like the alpha test's, asked after it. The uv view cuts
+    # nothing out. See `render.fragment_flags`.
+    var hashed = a.state.alpha_hash and mode != SHADE_UV
+    var covered = a.state.alpha_to_coverage and mode != SHADE_UV
+    var may_discard = tested or hashed or covered
+    # Whether the finished color is dithered, three.js's `dithering`.
+    # Never data, which is bytes and not light.
+    var dithered = a.state.dithering and not data
+    # Whether an opaque fragment keeps the tone mapping off its pixel,
+    # three.js's `toneMapped: false`, as a data fragment keeps it off.
+    var untoned = data or not a.state.tone_mapped
     # Whether a fragment that passes writes its depth: an opaque one with
     # the depth test and the depth write on. A blending fragment never
     # does; see `render.raster_state.RasterState.writes_depth`.
@@ -3248,7 +3271,7 @@ def rasterize_shaded(
             # settles here unless an alpha test could still discard it;
             # see `render.raster_state.shades`.
             var test = target.test_fragment(x, y, stored_z, a.state)
-            if not shades(test, tested or masked):
+            if not shades(test, may_discard or masked):
                 target.keep_stencil(x, y, test)
                 continue
             # Nothing in the renderer produces a zero here: clipping removes
@@ -4012,6 +4035,14 @@ def rasterize_shaded(
             # had their say over alpha and before anything is written.
             if tested and shaded.a < a.alpha_test:
                 continue
+            # Thrown away below a hashed threshold, three.js's
+            # `alphahash_fragment`, from the world position here and at
+            # the pixels beside it, as the kernel reads them.
+            if hashed and shaded.a < hashed_threshold(nodes):
+                continue
+            # Not covering this sample, WebGL's alpha to coverage.
+            if covered and not alpha_covers(shaded.a, x, y):
+                continue
             if data:
                 # Data rather than light, as bytes the display shows as they
                 # are: the normal, three.js's `packNormalToRGB`, or the
@@ -4403,6 +4434,10 @@ def rasterize_shaded(
                 shaded = FloatColor(
                     finished[0], finished[1], finished[2], shaded.a
                 )
+            # Dithered last, three.js's `dithering_fragment`; see
+            # `render.fragment_flags.dither`.
+            if dithered:
+                shaded = dither(shaded, x, y, target.height)
             # The stencil and the depth the tests asked for, written now
             # that the fragment has survived. One that failed its tests
             # was shaded only to learn that, and is drawn no further.
@@ -4414,7 +4449,14 @@ def rasterize_shaded(
             if not a.state.color_write:
                 continue
             if blended:
-                target.blend(x, y, shaded, a.blend.value)
+                target.blend(
+                    x,
+                    y,
+                    shaded,
+                    a.blend.value,
+                    a.state.premultiplied_alpha,
+                    a.state.blend_constant(),
+                )
             else:
                 # An opaque fragment is written with an alpha of one, as
                 # three.js's `opaque_fragment` writes it: the material's
@@ -4430,7 +4472,7 @@ def rasterize_shaded(
                     x,
                     y,
                     shaded,
-                    data,
+                    untoned,
                     _kept_normal(facing, a.kind, lighting, keeps_normals),
                 )
         row = row + down
@@ -4730,6 +4772,10 @@ def rasterize_line(
                 continue
             if x < 0 or x >= target.width:
                 continue
+            # Not covering this sample, WebGL's alpha to coverage, which
+            # comes before the stencil and the depth tests.
+            if a.state.alpha_to_coverage and not alpha_covers(color.a, x, y):
+                continue
             # The stencil and the depth tests, settled at once: a line
             # has no alpha test to discard it later.
             var test = target.test_fragment(x, y, stored_z, a.state)
@@ -4746,14 +4792,24 @@ def rasterize_line(
                 target.claim_depth(x, y, stored_z)
             if not a.state.color_write:
                 continue
+            # Dithered, three.js's `dithering_fragment`, at this pixel.
+            var drawn = color
+            if a.state.dithering:
+                drawn = dither(color, x, y, target.height)
             if a.blend.mixes():
-                target.blend(x, y, color, a.blend.value)
+                target.blend(
+                    x,
+                    y,
+                    drawn,
+                    a.blend.value,
+                    a.state.premultiplied_alpha,
+                    a.state.blend_constant(),
+                )
             else:
                 # Opaque, so written with an alpha of one, as a triangle
                 # is.
-                var opaque = color
-                opaque.a = 1
-                target.write(x, y, opaque, False)
+                drawn.a = 1
+                target.write(x, y, drawn, not a.state.tone_mapped)
 
 
 # --- points -----------------------------------------------------------------
@@ -4890,6 +4946,8 @@ def rasterize_point(
     var blended = point.blend.mixes() and mode != SHADE_UV
     var fogged = fog.is_on() and mode != SHADE_UV and point.fog
     var tested = point.alpha_test > 0 and mode != SHADE_UV
+    var covered = point.state.alpha_to_coverage and mode != SHADE_UV
+    var may_discard = tested or covered
     var writes_depth = point.state.writes_depth(blended)
     var sampled = mode == SHADE_TEXTURE
     var center = Vector2(point.x, point.y)
@@ -4928,7 +4986,7 @@ def rasterize_point(
             # Tested and settled as a triangle's fragment is; see
             # `rasterize_shaded`.
             var test = target.test_fragment(x, y, stored_z, point.state)
-            if not shades(test, tested):
+            if not shades(test, may_discard):
                 target.keep_stencil(x, y, test)
                 continue
             var shaded = point.color
@@ -4969,6 +5027,8 @@ def rasterize_point(
             # a triangle's fragment is.
             if tested and shaded.a < point.alpha_test:
                 continue
+            if covered and not alpha_covers(shaded.a, x, y):
+                continue
             if fogged:
                 shaded = fog_mix(
                     shaded, fog.color, fog.factor_at(point.view_depth)
@@ -4981,11 +5041,18 @@ def rasterize_point(
             if not point.state.color_write:
                 continue
             if blended:
-                target.blend(x, y, shaded, point.blend.value)
+                target.blend(
+                    x,
+                    y,
+                    shaded,
+                    point.blend.value,
+                    point.state.premultiplied_alpha,
+                    point.state.blend_constant(),
+                )
             else:
                 # Opaque, so written with an alpha of one, as a triangle is.
                 shaded.a = 1
-                target.write(x, y, shaded, False)
+                target.write(x, y, shaded, not point.state.tone_mapped)
 
 
 # --- frames -----------------------------------------------------------------

@@ -74,6 +74,7 @@ from core.fog import Fog, no_fog
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId, Object3D, facing, scale_of
 from lights.light import Light
+from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.euler import XYZ, Euler
@@ -203,6 +204,11 @@ struct Scene(Movable):
     # `environmentRotation`, in place of its own `env_map_rotation`.
     var environment_intensity: Float32
     var environment_rotation: Euler
+    # The material every object is drawn with in place of its own,
+    # three.js's `scene.overrideMaterial`, or `None` for each object's
+    # own. An object whose material turns `allow_override` off keeps its
+    # own. Shadow maps are not drawn with it, as in three.js.
+    var override_material: Optional[MaterialId]
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -235,6 +241,7 @@ struct Scene(Movable):
         self.environment_rotation = Euler(
             ZERO_ANGLE, ZERO_ANGLE, ZERO_ANGLE, XYZ
         )
+        self.override_material = None
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 

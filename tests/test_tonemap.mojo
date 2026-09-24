@@ -11,11 +11,17 @@ figures: the curves are evaluated in `Float32` with `exp2` and `log2`
 standing in for `pow`, which agrees to about six.
 """
 
-from render.framebuffer import FloatColor
+from materials.nodes import CORNER_A, AT_RIGHT, NodeGraph, OUTPUT_NODE
+from render.framebuffer import Color, FloatColor
+from render.target import RenderTarget
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
     AGX_TONE_MAPPING,
     CINEON_TONE_MAPPING,
+    CUSTOM_TONE_MAPPING,
+    ProgramCurve,
+    custom_tone_map,
+    tone_map_with,
     LINEAR_TONE_MAPPING,
     NEUTRAL_TONE_MAPPING,
     NO_TONE_MAPPING,
@@ -246,6 +252,40 @@ def test_the_boundary_check_refuses_an_unknown_curve_or_a_bad_exposure() raises:
         check_tone_mapping(REINHARD_TONE_MAPPING, inf[DType.float32]())
     with assert_raises():
         check_tone_mapping(REINHARD_TONE_MAPPING, nan[DType.float32]())
+
+
+def test_a_custom_curve_is_a_node_program() raises:
+    assert_true(CUSTOM_TONE_MAPPING.is_valid())
+    check_tone_mapping(CUSTOM_TONE_MAPPING, 1.0)
+    var color = FloatColor(0.8, 0.4, 0.2, 0.5)
+    # With no program, three.js's default body returns the color.
+    var none = List[Float32]()
+    var same = custom_tone_map(color, ProgramCurve(Pointer(to=none)))
+    assert_equal(same.r, color.r)
+    assert_equal(same.a, color.a)
+    # A program's output is the mapped color, alpha kept.
+    var graph = NodeGraph()
+    graph.set_output(OUTPUT_NODE, graph.mul(graph.lit(), graph.float(0.5)))
+    var code = graph.compile().code.copy()
+    var curve = ProgramCurve(Pointer(to=code))
+    var half = tone_map_with(color, CUSTOM_TONE_MAPPING, 3.0, curve)
+    assert_almost_equal(half.r, 0.4, atol=TOLERANCE)
+    assert_almost_equal(half.b, 0.1, atol=TOLERANCE)
+    assert_equal(half.a, color.a)
+    # A named curve ignores the program.
+    var named = tone_map_with(color, REINHARD_TONE_MAPPING, 1.0, curve)
+    assert_equal(named.r, tone_map(color, REINHARD_TONE_MAPPING, 1.0).r)
+    # A curve reads no texture and has no triangle.
+    assert_equal(curve.sample(0, 0.5, 0.5).g, 1)
+    assert_equal(curve.shares(AT_RIGHT)[0], 0)
+    assert_equal(curve.corner(CORNER_A).u, 0)
+    assert_equal(curve.word(len(code) + 5), 0)
+    # A target resolves through it, and shows a pixel through it.
+    var target = RenderTarget(1, 1, Color(255, 255, 255))
+    var image = target.resolve(1, CUSTOM_TONE_MAPPING, 1.0, code)
+    var shown = target.shown(0, 0, CUSTOM_TONE_MAPPING, 1.0, code)
+    assert_equal(image.get_pixel(0, 0).r, shown.r)
+    assert_true(shown.r < 255)
 
 
 def main() raises:

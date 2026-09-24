@@ -83,7 +83,7 @@ kernel keeps its running color the same way.
 """
 
 from math.vector3 import Vector3
-from render.blend import NORMAL_MODE, Rgba, blend_pixel
+from render.blend import NORMAL_MODE, Rgba, blend_fragment
 from render.float_image import FloatImage
 from render.raster_state import (
     STANDARD_DEPTH,
@@ -113,9 +113,10 @@ from render.texture import (
 )
 from render.tonemap import (
     NO_TONE_MAPPING,
+    ProgramCurve,
     ToneMapping,
     check_tone_mapping,
-    tone_map,
+    tone_map_with,
 )
 from std.math import inf, isfinite, max, min
 
@@ -270,6 +271,7 @@ def _encode_run(
     exposure: Float32,
     clear: FloatColor,
     clear_shown: Color,
+    program: Pointer[List[Float32], ImmutAnyOrigin],
 ):
     """Encode the pixels in `[first, past)` from linear light to bytes.
 
@@ -298,7 +300,9 @@ def _encode_run(
                 curve = NO_TONE_MAPPING
             else:
                 straight = straight.unpremultiplied()
-            shown = tone_map(straight, curve, exposure).encode()
+            shown = tone_map_with(
+                straight, curve, exposure, ProgramCurve(program)
+            ).encode()
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -316,6 +320,7 @@ async def _encode_band(
     exposure: Float32,
     clear: FloatColor,
     clear_shown: Color,
+    program: Pointer[List[Float32], ImmutAnyOrigin],
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
     _encode_run(
@@ -328,6 +333,7 @@ async def _encode_band(
         exposure,
         clear,
         clear_shown,
+        program,
     )
 
 
@@ -444,10 +450,17 @@ struct RenderTarget(Movable):
         rect: Rect,
         clear: Color,
         depth_mode: DepthMode = STANDARD_DEPTH,
+        color: Bool = True,
+        depth: Bool = True,
+        stencil: Bool = True,
     ) raises:
         """Reset every pixel inside `rect` to `clear`, its depth to the
         far distance, its stencil to zero, its normal to none and its flag
         to light, leaving the rest alone.
+
+        Each of the three buffers can be left as it is, three.js's
+        `clear(color, depth, stencil)`: the color takes the normal and the
+        flag with it, and the depth takes the depth mode.
 
         The far distance is the depth mode's: infinity, or minus infinity
         under `REVERSED_DEPTH`, three.js's clear of the reversed buffer.
@@ -463,6 +476,9 @@ struct RenderTarget(Movable):
             rect: The pixels to reset. It must lie wholly inside the target.
             clear: The color to fill with, decoded from sRGB, alpha kept.
             depth_mode: How the depth is stored from now on.
+            color: Whether the color is cleared. On by default.
+            depth: Whether the depth is cleared. On by default.
+            stencil: Whether the stencil is cleared. On by default.
 
         Raises:
             Error: If the rectangle is empty or reaches outside the target,
@@ -472,18 +488,23 @@ struct RenderTarget(Movable):
             raise Error("A clear must lie inside the target")
         if not depth_mode.is_valid():
             raise Error("A depth mode that is none of the three")
-        self.clear = FloatColor(srgb=clear).premultiplied()
-        self.depth_mode = depth_mode
-        var far = cleared_depth(depth_mode)
+        if color:
+            self.clear = FloatColor(srgb=clear).premultiplied()
+        if depth:
+            self.depth_mode = depth_mode
+        var far = cleared_depth(self.depth_mode)
         var top = rect.top(self.height)
         for y in range(top, top + rect.height):  # pragma: no branch
             for x in range(rect.x, rect.x + rect.width):  # pragma: no branch
                 var slot = y * self.width + x
-                self.colors[slot] = self.clear
-                self.depth[slot] = far
-                self.data[slot] = False
-                self.stencil[slot] = 0
-        if self.has_normals():
+                if color:
+                    self.colors[slot] = self.clear
+                    self.data[slot] = False
+                if depth:
+                    self.depth[slot] = far
+                if stencil:
+                    self.stencil[slot] = 0
+        if color and self.has_normals():
             for y in range(top, top + rect.height):  # pragma: no branch
                 for x in range(
                     rect.x, rect.x + rect.width
@@ -716,7 +737,13 @@ struct RenderTarget(Movable):
             self.normals[slot] = normal
 
     def blend(
-        mut self, x: Int, y: Int, color: FloatColor, mode: Int = NORMAL_MODE
+        mut self,
+        x: Int,
+        y: Int,
+        color: FloatColor,
+        mode: Int = NORMAL_MODE,
+        premultiplied: Bool = False,
+        constant: Rgba = Rgba(0),
     ) raises:
         """Mix `color` into pixel (x, y) by a blending mode.
 
@@ -742,6 +769,10 @@ struct RenderTarget(Movable):
                 alpha is how much of what is behind it is hidden.
             mode: The blending mode's value, `render.blend`'s numbering.
                 Source-over when left out.
+            premultiplied: Whether the material's `premultipliedAlpha` is
+                on; see `render.blend.blend_fragment`. Off by default.
+            constant: The constant color the constant factors read,
+                `RasterState.blend_constant`. Clear black by default.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -753,10 +784,12 @@ struct RenderTarget(Movable):
             return
         var behind = self.light_at(slot)
         self.data[slot] = False
-        var out = blend_pixel(
+        var out = blend_fragment(
             Rgba(behind.r, behind.g, behind.b, behind.a),
             Rgba(color.r, color.g, color.b, color.a),
             mode,
+            premultiplied,
+            constant,
         )
         self.colors[slot] = FloatColor(out[0], out[1], out[2], out[3])
 
@@ -766,6 +799,7 @@ struct RenderTarget(Movable):
         y: Int,
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
+        program: List[Float32] = List[Float32](),
     ) raises -> Color:
         """Return what a display should show for pixel (x, y).
 
@@ -778,13 +812,16 @@ struct RenderTarget(Movable):
             tone_mapping: The curve to compress the light with; see
                 `resolve`.
             exposure: What the light is scaled by before the curve.
+            program: The custom curve's program, `NodeProgram.code`, read
+                under `CUSTOM_TONE_MAPPING`; see `render.tonemap`. None by
+                default, which leaves the light as it is.
 
         Returns:
             The resolved eight-bit color.
 
         Raises:
             Error: If the coordinate is out of bounds, the curve is none of
-                the seven, or the exposure is negative or not finite.
+                the eight, or the exposure is negative or not finite.
         """
         check_tone_mapping(tone_mapping, exposure)
         var slot = self._slot(x, y)
@@ -794,7 +831,9 @@ struct RenderTarget(Movable):
             curve = NO_TONE_MAPPING
         else:
             straight = straight.unpremultiplied()
-        return tone_map(straight, curve, exposure).encode()
+        return tone_map_with(
+            straight, curve, exposure, ProgramCurve(Pointer(to=program))
+        ).encode()
 
     def downsampled(self, factor: Int) raises -> Self:
         """Return this target shrunk by `factor` each way, every pixel of
@@ -934,6 +973,7 @@ struct RenderTarget(Movable):
         workers: Int = 1,
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
+        program: List[Float32] = List[Float32](),
     ) raises -> Framebuffer:
         """Return the finished image, encoded for a display.
 
@@ -965,6 +1005,9 @@ struct RenderTarget(Movable):
             exposure: What the light is scaled by before the curve,
                 three.js's `toneMappingExposure`. Not applied without a
                 curve.
+            program: The custom curve's program, `NodeProgram.code`, read
+                under `CUSTOM_TONE_MAPPING`; see `render.tonemap`. None by
+                default, which leaves the light as it is.
 
         Returns:
             The image as eight-bit sRGB with unassociated alpha, which is what
@@ -972,7 +1015,7 @@ struct RenderTarget(Movable):
 
         Raises:
             Error: If `workers` is less than one, the curve is none of the
-                seven, the exposure is negative or not finite, or the
+                eight, the exposure is negative or not finite, or the
                 framebuffer cannot be built.
         """
         if workers < 1:
@@ -981,8 +1024,12 @@ struct RenderTarget(Movable):
         var count = self.width * self.height
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
         # The background, by the same three steps every other pixel takes.
-        var clear_shown = tone_map(
-            self.clear.unpremultiplied(), tone_mapping, exposure
+        var words = Pointer(to=program).unsafe_origin_cast[ImmutAnyOrigin]()
+        var clear_shown = tone_map_with(
+            self.clear.unpremultiplied(),
+            tone_mapping,
+            exposure,
+            ProgramCurve(words),
         ).encode()
         var bands = min(workers, count)
         if bands == 1:
@@ -996,6 +1043,7 @@ struct RenderTarget(Movable):
                 exposure,
                 self.clear,
                 clear_shown,
+                words,
             )
         else:
             var group = TaskGroup()
@@ -1016,6 +1064,7 @@ struct RenderTarget(Movable):
                         exposure,
                         self.clear,
                         clear_shown,
+                        words,
                     )
                 )
             group.wait()

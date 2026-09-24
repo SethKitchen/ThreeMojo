@@ -25,6 +25,21 @@ The modes are three.js's with `premultipliedAlpha` off, its default:
 | subtractive | `dst * (1 - src)` | `dst_a` |
 | multiply | `dst * src` | `dst_a * a` |
 
+With `premultipliedAlpha` on, the fragment's color is multiplied by its
+alpha first, three.js's `premultiplied_alpha_fragment`, and the named modes
+take the factors three.js sets for a premultiplied source:
+
+| Mode | Color | Alpha |
+|---|---|---|
+| normal | `src * a + dst * (1 - a)` | `a + dst_a * (1 - a)` |
+| additive | `src * a + dst` | `a + dst_a` |
+| subtractive | `dst * (1 - src * a)` | `dst_a` |
+| multiply | `src * a * dst + dst * (1 - a)` | `dst_a` |
+
+A custom mode keeps its own factors and reads the premultiplied color.
+The four constant factors read the material's `blendColor` and
+`blendAlpha`, WebGL's `blendColor`.
+
 The pixel is stored premultiplied, as `render.target` explains, and the
 factors read it as WebGL reads its framebuffer. Over an opaque pixel, alpha
 one, stored and straight are the same numbers, so every mode agrees with
@@ -60,7 +75,7 @@ struct BlendFactor(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a factor.
         """
-        return self.value >= 0 and self.value <= 10
+        return self.value >= 0 and self.value <= 14
 
 
 comptime ZERO_FACTOR = BlendFactor(0)
@@ -74,6 +89,12 @@ comptime ONE_MINUS_DST_ALPHA_FACTOR = BlendFactor(7)
 comptime DST_COLOR_FACTOR = BlendFactor(8)
 comptime ONE_MINUS_DST_COLOR_FACTOR = BlendFactor(9)
 comptime SRC_ALPHA_SATURATE_FACTOR = BlendFactor(10)
+# The material's `blendColor` and `blendAlpha`, WebGL's constant color.
+# three.js's `ConstantColorFactor` and the three after it.
+comptime CONSTANT_COLOR_FACTOR = BlendFactor(11)
+comptime ONE_MINUS_CONSTANT_COLOR_FACTOR = BlendFactor(12)
+comptime CONSTANT_ALPHA_FACTOR = BlendFactor(13)
+comptime ONE_MINUS_CONSTANT_ALPHA_FACTOR = BlendFactor(14)
 
 
 @fieldwise_init
@@ -158,7 +179,7 @@ def is_valid_custom(mode: Int) -> Bool:
 
 
 @always_inline
-def _factor(code: Int, src: Rgba, dst: Rgba) -> Rgba:
+def _factor(code: Int, src: Rgba, dst: Rgba, constant: Rgba) -> Rgba:
     """Return a factor for all four channels, color and alpha alike.
 
     The alpha channel of each factor is WebGL's alpha rule for it: the
@@ -166,6 +187,14 @@ def _factor(code: Int, src: Rgba, dst: Rgba) -> Rgba:
     saturate factor weighs it by one.
     """
     var one = Rgba(1)
+    if code == CONSTANT_COLOR_FACTOR.value:
+        return constant
+    if code == ONE_MINUS_CONSTANT_COLOR_FACTOR.value:
+        return one - constant
+    if code == CONSTANT_ALPHA_FACTOR.value:
+        return Rgba(constant[3])
+    if code == ONE_MINUS_CONSTANT_ALPHA_FACTOR.value:
+        return Rgba(1 - constant[3])
     if code == ZERO_FACTOR.value:
         return Rgba(0)
     if code == ONE_FACTOR.value:
@@ -210,27 +239,98 @@ def _join(
 
 
 @always_inline
-def _custom(mode: Int, src: Rgba, dst: Rgba) -> Rgba:
+def _custom(mode: Int, src: Rgba, dst: Rgba, constant: Rgba) -> Rgba:
     """Return a custom mode applied, color and alpha by their own fields."""
     var color = _join(
         _field(mode, 2),
         src,
         dst,
-        src * _factor(_field(mode, 0), src, dst),
-        dst * _factor(_field(mode, 1), src, dst),
+        src * _factor(_field(mode, 0), src, dst, constant),
+        dst * _factor(_field(mode, 1), src, dst, constant),
     )
     var alpha = _join(
         _field(mode, 5),
         src,
         dst,
-        src * _factor(_field(mode, 3), src, dst),
-        dst * _factor(_field(mode, 4), src, dst),
+        src * _factor(_field(mode, 3), src, dst, constant),
+        dst * _factor(_field(mode, 4), src, dst, constant),
     )
     return Rgba(color[0], color[1], color[2], alpha[3])
 
 
 @always_inline
 def blend_pixel(dst: Rgba, src: Rgba, mode: Int) -> Rgba:
+    """Return a pixel after a fragment is mixed into it, with straight
+    alpha and no constant color.
+
+    `blend_fragment` with `premultipliedAlpha` off and a black, clear
+    constant: three.js's material defaults.
+
+    Args:
+        dst: The pixel as stored, premultiplied.
+        src: The fragment's color with straight alpha.
+        mode: A named mode or a custom one.
+
+    Returns:
+        What `blend_fragment` returns.
+    """
+    return blend_fragment(dst, src, mode, False, Rgba(0))
+
+
+@always_inline
+def _named(mode: Int, premultiplied: Bool) -> Int:
+    """Return the custom mode a named mode applies, for a straight or a
+    premultiplied source. Normal is applied by `blend_fragment` itself."""
+    if mode == ADDITIVE_MODE:
+        if premultiplied:
+            return pack_custom(
+                ONE_FACTOR,
+                ONE_FACTOR,
+                ADD_EQUATION,
+                ONE_FACTOR,
+                ONE_FACTOR,
+                ADD_EQUATION,
+            )
+        return pack_custom(
+            SRC_ALPHA_FACTOR,
+            ONE_FACTOR,
+            ADD_EQUATION,
+            ONE_FACTOR,
+            ONE_FACTOR,
+            ADD_EQUATION,
+        )
+    if mode == SUBTRACTIVE_MODE:
+        return pack_custom(
+            ZERO_FACTOR,
+            ONE_MINUS_SRC_COLOR_FACTOR,
+            ADD_EQUATION,
+            ZERO_FACTOR,
+            ONE_FACTOR,
+            ADD_EQUATION,
+        )
+    if premultiplied:
+        return pack_custom(
+            DST_COLOR_FACTOR,
+            ONE_MINUS_SRC_ALPHA_FACTOR,
+            ADD_EQUATION,
+            ZERO_FACTOR,
+            ONE_FACTOR,
+            ADD_EQUATION,
+        )
+    return pack_custom(
+        ZERO_FACTOR,
+        SRC_COLOR_FACTOR,
+        ADD_EQUATION,
+        ZERO_FACTOR,
+        SRC_ALPHA_FACTOR,
+        ADD_EQUATION,
+    )
+
+
+@always_inline
+def blend_fragment(
+    dst: Rgba, src: Rgba, mode: Int, premultiplied: Bool, constant: Rgba
+) -> Rgba:
     """Return a pixel after a fragment is mixed into it.
 
     Args:
@@ -238,6 +338,11 @@ def blend_pixel(dst: Rgba, src: Rgba, mode: Int) -> Rgba:
         src: The fragment's color with straight alpha. The alpha is kept
             between zero and one first.
         mode: A named mode or a custom one.
+        premultiplied: Whether the material's `premultipliedAlpha` is on:
+            the color is multiplied by the alpha first, and a named mode
+            takes three.js's premultiplied factors.
+        constant: The constant color the four constant factors read,
+            three.js's `blendColor` with `blendAlpha` as its alpha.
 
     Returns:
         The new pixel, premultiplied for the normal mode, as WebGL's
@@ -246,8 +351,12 @@ def blend_pixel(dst: Rgba, src: Rgba, mode: Int) -> Rgba:
     """
     var share = max(Float32(0), min(Float32(1), src[3]))
     var fragment = Rgba(src[0], src[1], src[2], share)
+    if premultiplied:
+        fragment = Rgba(src[0] * share, src[1] * share, src[2] * share, share)
     var out: Rgba
     if mode == NORMAL_MODE:
+        # The same sum either way: a straight source is weighed by its
+        # alpha here, and a premultiplied one was weighed already.
         var keep = 1 - share
         out = Rgba(
             src[0] * share + dst[0] * keep,
@@ -255,47 +364,10 @@ def blend_pixel(dst: Rgba, src: Rgba, mode: Int) -> Rgba:
             src[2] * share + dst[2] * keep,
             share + dst[3] * keep,
         )
-    elif mode == ADDITIVE_MODE:
-        out = _custom(
-            pack_custom(
-                SRC_ALPHA_FACTOR,
-                ONE_FACTOR,
-                ADD_EQUATION,
-                ONE_FACTOR,
-                ONE_FACTOR,
-                ADD_EQUATION,
-            ),
-            fragment,
-            dst,
-        )
-    elif mode == SUBTRACTIVE_MODE:
-        out = _custom(
-            pack_custom(
-                ZERO_FACTOR,
-                ONE_MINUS_SRC_COLOR_FACTOR,
-                ADD_EQUATION,
-                ZERO_FACTOR,
-                ONE_FACTOR,
-                ADD_EQUATION,
-            ),
-            fragment,
-            dst,
-        )
-    elif mode == MULTIPLY_MODE:
-        out = _custom(
-            pack_custom(
-                ZERO_FACTOR,
-                SRC_COLOR_FACTOR,
-                ADD_EQUATION,
-                ZERO_FACTOR,
-                SRC_ALPHA_FACTOR,
-                ADD_EQUATION,
-            ),
-            fragment,
-            dst,
-        )
+    elif mode >= ADDITIVE_MODE and mode <= MULTIPLY_MODE:
+        out = _custom(_named(mode, premultiplied), fragment, dst, constant)
     else:
-        out = _custom(mode, fragment, dst)
+        out = _custom(mode, fragment, dst, constant)
     return Rgba(
         max(Float32(0), out[0]),
         max(Float32(0), out[1]),

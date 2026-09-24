@@ -12,7 +12,11 @@ so it is built once and named by every helper's `Line`.
 
 Tone mapping is applied once to every pixel of a frame here rather than
 per material, so a helper under a tone curve is curved with the scene.
-three.js's `toneMapped: false` has no counterpart; see `render.tonemap`.
+This material leaves `tone_mapped` on, where three.js's helpers turn it
+off: under a curve, a frame that holds an untoned primitive beside a
+blended one is refused; see `render.rasterizer.check_output_kinds`. Set
+`tone_mapped` to False on the material to keep the curve off an opaque
+helper.
 """
 
 from materials.material import BASIC, Blending, Material

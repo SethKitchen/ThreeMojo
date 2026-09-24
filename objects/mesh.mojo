@@ -100,6 +100,14 @@ struct Mesh(ImplicitlyCopyable):
     # array, or empty for a mesh with one material. See the module
     # docstring.
     var materials: List[MaterialId]
+    # The materials a light's shadow map draws this mesh with in place of
+    # its own, three.js's `customDepthMaterial` for a directional or a
+    # spot light and `customDistanceMaterial` for a point light, or `None`
+    # for the renderer's own. The mesh's own material still says whether
+    # it is visible and which faces are drawn; see
+    # `Renderer.shadow_maps`.
+    var custom_depth_material: Optional[MaterialId]
+    var custom_distance_material: Optional[MaterialId]
 
     def __init__(
         out self,
@@ -146,6 +154,8 @@ struct Mesh(ImplicitlyCopyable):
         self.cast_shadow = cast_shadow
         self.receive_shadow = receive_shadow
         self.materials = List[MaterialId]()
+        self.custom_depth_material = None
+        self.custom_distance_material = None
 
     def __init__(
         out self,
@@ -208,6 +218,8 @@ struct Mesh(ImplicitlyCopyable):
         self.cast_shadow = copy.cast_shadow
         self.receive_shadow = copy.receive_shadow
         self.materials = copy.materials.copy()
+        self.custom_depth_material = copy.custom_depth_material
+        self.custom_distance_material = copy.custom_distance_material
 
     def is_multi_material(self) -> Bool:
         """Return True if the mesh wears a list of materials, three.js's

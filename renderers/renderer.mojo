@@ -159,6 +159,7 @@ from materials.material import (
     NORMALS,
     OBJECT_SPACE_NORMAL_MAP,
     PHYSICAL,
+    SHADOW,
     Blending,
     Combine,
     Material,
@@ -214,7 +215,12 @@ from render.raster_state import (
 )
 from render.transmission import TransmissionTarget
 from render.packing import DepthPacking
-from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
+from render.tonemap import (
+    CUSTOM_TONE_MAPPING,
+    NO_TONE_MAPPING,
+    ToneMapping,
+    check_tone_mapping,
+)
 from math.vector2 import Vector2
 from render.rasterizer import (
     DRAW_POINTS,
@@ -250,6 +256,7 @@ from renderers.clip import (
     within_sides,
 )
 from std.math import cos, floor, isfinite, max, pi, sin
+from std.memory import ArcPointer
 from std.sys import num_logical_cores
 
 
@@ -741,6 +748,203 @@ struct _Draw(ImplicitlyCopyable):
     # stream, which is what every other draw fills.
     var group_start: Int
     var group_count: Int
+    # The node the draw belongs to, what a render hook is told.
+    var node: NodeId
+    # Which faces a light's view of the casters draws: the object's own
+    # material's `shadow_face`, whatever material draws it there.
+    var cast_side: Side
+
+    def source(self) -> _Source:
+        """Return what drew this draw, for its run's `RenderItem`."""
+        return _Source(self.node, self.geometry, self.material)
+
+
+@fieldwise_init
+struct _Source(ImplicitlyCopyable):
+    """The object a run of primitives came from: its node, its geometry
+    and the material it was drawn with."""
+
+    var node: NodeId
+    var geometry: GeometryId
+    var material: MaterialId
+
+
+@fieldwise_init
+struct RenderItem(ImplicitlyCopyable):
+    """One run of a prepared frame, what three.js's render list holds for
+    one object: what a render hook is told, and what a custom sort
+    compares.
+
+    The node, the geometry and the material drawn with, the scene's
+    `override_material` when it replaced the object's own. A sprite names
+    no geometry, and its `geometry` is -1.
+    """
+
+    var node: NodeId
+    var geometry: GeometryId
+    var material: MaterialId
+    # Which primitives the run holds, and how many: `DRAW_TRIANGLES`,
+    # `DRAW_SEGMENTS` or `DRAW_POINTS`.
+    var kind: DrawKind
+    var count: Int
+    # The node's render order, three.js's `renderOrder`.
+    var order: Int
+    # How far ahead of the camera the object's origin is, in meters: the
+    # larger, the further. It orders as three.js's `z` does.
+    var z: Float32
+
+
+# How a caller orders a frame's runs, three.js's `setOpaqueSort` and
+# `setTransparentSort`: True when the first is drawn before the second. A
+# plain function, as three.js's is, and the sort is stable.
+comptime RenderSort = def(RenderItem, RenderItem) thin -> Bool
+
+
+@fieldwise_init
+struct RenderInfo(ImplicitlyCopyable):
+    """What the renderer drew, three.js's `renderer.info.render`.
+
+    `frame` counts the frames drawn. The rest count what the last frame
+    drew, or every frame since `Renderer.reset_info` when
+    `Renderer.info_auto_reset` is off.
+    """
+
+    var frame: Int
+    # The runs drawn, three.js's draw calls: one per object and list.
+    var calls: Int
+    var triangles: Int
+    var points: Int
+    var lines: Int
+
+
+struct _RendererState(Movable):
+    """What a renderer counts while it draws: its `RenderInfo`, and the
+    casters its last shadow pass drew. Held behind an `ArcPointer`, so a
+    renderer counts through a read-only reference, as every caller holds
+    one, and a supersampled twin counts into its parent's."""
+
+    var info: RenderInfo
+    var shadow_items: List[RenderItem]
+    var shadow_lights: List[Int]
+
+    def __init__(out self):
+        """Count nothing yet."""
+        self.info = RenderInfo(0, 0, 0, 0, 0)
+        self.shadow_items = List[RenderItem]()
+        self.shadow_lights = List[Int]()
+
+    def begin_frame(mut self, auto_reset: Bool):
+        """Count one more frame, and forget the last one's draws unless
+        the caller keeps them."""
+        self.info.frame += 1
+        if auto_reset:
+            self.reset()
+
+    def reset(mut self):
+        """Forget the draws counted so far, three.js's `info.reset`."""
+        self.info.calls = 0
+        self.info.triangles = 0
+        self.info.points = 0
+        self.info.lines = 0
+
+    def count(mut self, items: List[RenderItem]):
+        """Count one frame's runs by their kind."""
+        for index in range(len(items)):
+            ref item = items[index]
+            self.info.calls += 1
+            if item.kind == DRAW_TRIANGLES:
+                self.info.triangles += item.count
+            elif item.kind == DRAW_SEGMENTS:
+                self.info.lines += item.count
+            else:
+                self.info.points += item.count
+
+
+trait RenderHooks:
+    """What a caller runs around a frame: three.js's `onBeforeRender`,
+    `onAfterRender` and `onBeforeShadow`, of the scene and of each object.
+
+    A trait rather than a function on each object, because a hook keeps
+    state and a plain function cannot: a counter, a log, a list of what
+    was drawn. Pass one to `Renderer.render_with` or
+    `Renderer.render_into_with`. Every method does nothing unless a hook
+    replaces it. A hook reads the scene and the item and cannot change
+    them: the frame is prepared before the object hooks are called.
+    """
+
+    def on_before_scene(mut self, scene: Scene) raises:
+        """Run before anything of the frame is prepared, three.js's
+        `scene.onBeforeRender`.
+
+        Args:
+            scene: The scene about to be drawn.
+
+        Raises:
+            Error: Whatever the hook raises, which stops the frame.
+        """
+        pass
+
+    def on_after_scene(mut self, scene: Scene) raises:
+        """Run after the frame is drawn, three.js's `scene.onAfterRender`.
+
+        Args:
+            scene: The scene just drawn.
+
+        Raises:
+            Error: Whatever the hook raises.
+        """
+        pass
+
+    def on_before_render(mut self, scene: Scene, item: RenderItem) raises:
+        """Run before an object's run is drawn, three.js's
+        `object.onBeforeRender`, in the frame's draw order.
+
+        Args:
+            scene: The scene.
+            item: The run about to be drawn.
+
+        Raises:
+            Error: Whatever the hook raises, which stops the frame.
+        """
+        pass
+
+    def on_after_render(mut self, scene: Scene, item: RenderItem) raises:
+        """Run after an object's run is drawn, three.js's
+        `object.onAfterRender`, in the frame's draw order.
+
+        Args:
+            scene: The scene.
+            item: The run just drawn.
+
+        Raises:
+            Error: Whatever the hook raises.
+        """
+        pass
+
+    def on_before_shadow(
+        mut self, scene: Scene, item: RenderItem, light: Int
+    ) raises:
+        """Run for each run a light's shadow map drew, three.js's
+        `object.onBeforeShadow`, once per face of a point light's cube.
+
+        Args:
+            scene: The scene.
+            item: The caster's run, with the material the map drew it
+                with.
+            light: The light's index in `scene.lights`.
+
+        Raises:
+            Error: Whatever the hook raises, which stops the frame.
+        """
+        pass
+
+
+struct NoHooks(RenderHooks):
+    """The hooks `Renderer.render` runs: none."""
+
+    def __init__(out self):
+        """Make the empty set of hooks."""
+        pass
 
 
 struct _Span(ImplicitlyCopyable):
@@ -763,6 +967,8 @@ struct _Span(ImplicitlyCopyable):
     # Whether the draw's material transmits, three.js's `transmissive`
     # list: drawn after every opaque run and before every blended one.
     var transmits: Bool
+    # What drew the run.
+    var source: _Source
 
     def __init__(
         out self,
@@ -772,6 +978,7 @@ struct _Span(ImplicitlyCopyable):
         depth: Float32,
         blends: Bool,
         order: Int,
+        source: _Source,
         transmits: Bool = False,
     ):
         """Record one run.
@@ -783,6 +990,7 @@ struct _Span(ImplicitlyCopyable):
             depth: The draw's camera-space depth.
             blends: Whether its material blends.
             order: Its node's render order.
+            source: What drew it.
             transmits: Whether its material transmits. Only a filled
                 surface can.
         """
@@ -792,7 +1000,20 @@ struct _Span(ImplicitlyCopyable):
         self.depth = depth
         self.blends = blends
         self.order = order
+        self.source = source
         self.transmits = transmits
+
+    def item(self) -> RenderItem:
+        """Return the run as a hook and a sort see it."""
+        return RenderItem(
+            self.source.node,
+            self.source.geometry,
+            self.source.material,
+            self.kind,
+            self.count,
+            self.order,
+            -self.depth,
+        )
 
 
 def _note_span(
@@ -803,6 +1024,7 @@ def _note_span(
     depth: Float32,
     blends: Bool,
     order: Int,
+    source: _Source,
     transmits: Bool = False,
 ):
     """Record the primitives one draw emitted between two corner counts.
@@ -820,13 +1042,23 @@ def _note_span(
         depth: The draw's camera-space depth.
         blends: Whether its material blends.
         order: Its node's render order.
+        source: What drew it.
         transmits: Whether its material transmits.
     """
     var stride = kind.stride()
     var count = (end - begin) // stride
     if count > 0:
         spans.append(
-            _Span(kind, begin // stride, count, depth, blends, order, transmits)
+            _Span(
+                kind,
+                begin // stride,
+                count,
+                depth,
+                blends,
+                order,
+                source,
+                transmits,
+            )
         )
 
 
@@ -928,6 +1160,7 @@ def _gather(
     var placed = scene.world_matrix(node)
     var blends = False
     var asked = False
+    var cast_side = FRONT_SIDE
     for index in range(len(matrices)):
         check_placing(matrices[index])
         var world = Matrix4(copy=placed)
@@ -941,7 +1174,14 @@ def _gather(
         ):
             continue
         if not asked:
-            blends = assets.materials.get(material).is_transparent()
+            # A material that is not `visible` leaves the object out of
+            # every list, three.js's `material.visible` in
+            # `projectObject` and in the shadow map's `renderObject`.
+            var own = assets.materials.get(material)
+            if not own.visible:
+                return
+            blends = own.is_transparent()
+            cast_side = own.shadow_face()
             asked = True
         # The camera looks down -z, so a smaller z is further away. The
         # draw's own origin: the translation column of where it is placed.
@@ -973,6 +1213,8 @@ def _gather(
                 instance,
                 group_start,
                 group_count,
+                node,
+                cast_side,
             )
         )
 
@@ -988,6 +1230,7 @@ def _draws(
     mut skins: List[SkinPose],
     casters_only: Bool = False,
     receivers_cast: Bool = False,
+    distance_casters: Bool = False,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -1050,9 +1293,14 @@ def _draws(
         receivers_cast: Whether a light's view also holds the meshes that
             receive a shadow, as three.js draws them into a
             `VSM_SHADOW_MAP`.
+        distance_casters: Whether a light's view is a point light's, which
+            draws a mesh with its `custom_distance_material` rather than
+            its `custom_depth_material`.
 
     Returns:
-        The draws the camera makes, in the order to make them.
+        The draws the camera makes, in the order to make them. A frame's
+        draws are drawn with the scene's `override_material` where it
+        applies; a light's view keeps each mesh's own, or its custom one.
 
     Raises:
         Error: If anything drawn names a node, a geometry or a material
@@ -1105,6 +1353,7 @@ def _draws(
         # describes the face the mesh has stopped wearing. three.js culls
         # it anyway and clips morphed meshes at the edge of the view for
         # exactly this reason.
+        var before = len(draws)
         for run in range(len(runs)):
             _gather(
                 draws,
@@ -1129,6 +1378,15 @@ def _draws(
                 group_start=runs[run].start,
                 group_count=runs[run].count,
             )
+        # A light's view draws the mesh with its custom depth or distance
+        # material, three.js's `getDepthMaterial`, when it has one.
+        var custom = mesh.custom_depth_material
+        if distance_casters:
+            custom = mesh.custom_distance_material
+        var swapped = Bool(custom)
+        if casters_only and swapped:
+            for slot in range(before, len(draws)):
+                draws[slot].material = custom.value()
     for index in range(len(scene.skinned_meshes)):
         if casters_only:
             continue
@@ -1260,7 +1518,10 @@ def _draws(
         var depth = view.transform_point(
             Vector3(world.elements[12], world.elements[13], world.elements[14])
         ).z
-        var blends = assets.materials.get(sprite.material).is_transparent()
+        var shown = assets.materials.get(sprite.material)
+        if not shown.visible:
+            continue
+        var blends = shown.is_transparent()
         depths.append(depth)
         clear.append(blends)
         draws.append(
@@ -1280,6 +1541,8 @@ def _draws(
                 -1,
                 0,
                 -1,
+                sprite.node,
+                FRONT_SIDE,
             )
         )
     # The wide lines, sorted among the meshes by their own depth, as the
@@ -1299,7 +1562,10 @@ def _draws(
         var depth = view.transform_point(
             Vector3(world.elements[12], world.elements[13], world.elements[14])
         ).z
-        var blends = assets.materials.get(line.material).is_transparent()
+        var shown = assets.materials.get(line.material)
+        if not shown.visible:
+            continue
+        var blends = shown.is_transparent()
         depths.append(depth)
         clear.append(blends)
         draws.append(
@@ -1319,6 +1585,8 @@ def _draws(
                 -1,
                 0,
                 -1,
+                line.node,
+                FRONT_SIDE,
             )
         )
 
@@ -1346,6 +1614,17 @@ def _draws(
         ordered.append(draws[solid[position]])
     for position in range(len(see_through)):
         ordered.append(draws[see_through[position]])
+    # The scene's override draws what the frame draws, each in the list
+    # its own material put it in, as three.js's `renderObjects` swaps it
+    # in after the lists are made. A light's view keeps the casters' own.
+    var overridden = Bool(scene.override_material)
+    if overridden and not casters_only:
+        for position in range(len(ordered)):
+            ordered[position].material = _drawn_material(
+                scene,
+                assets.materials.get(ordered[position].material),
+                ordered[position].material,
+            )
     return ordered^
 
 
@@ -1380,6 +1659,46 @@ def _after(
     """Return True if an entry sorts after another: a higher render order,
     or the same order and a larger key."""
     return order > other_order or (order == other_order and key > other_key)
+
+
+def _sort_with(mut runs: List[_Span], before: RenderSort):
+    """Sort runs in place, stably, by a caller's function, three.js's
+    custom sort: a run moves in front of the one before it while the
+    function says it is drawn first."""
+    for position in range(1, len(runs)):
+        var held = runs[position]
+        var slot = position
+        while slot > 0 and before(held.item(), runs[slot - 1].item()):
+            runs[slot] = runs[slot - 1]
+            slot -= 1
+        runs[slot] = held
+
+
+def _furthest_first(mut runs: List[_Span], custom: Optional[RenderSort]):
+    """Sort blended or transmissive runs in place: by the caller's
+    transparent sort when there is one, and otherwise by render order
+    and then furthest first, as `_draws` sorts its translucent draws."""
+    var sorted = Bool(custom)
+    if sorted:
+        _sort_with(runs, custom.value())
+        return
+    var order = List[Int]()
+    var depths = List[Float32]()
+    var orders = List[Int]()
+    for position in range(len(runs)):
+        order.append(position)
+        depths.append(runs[position].depth)
+        orders.append(runs[position].order)
+    _sort_by(order, depths, orders)
+    var kept = runs.copy()
+    for position in range(len(order)):
+        runs[position] = kept[order[position]]
+
+
+def _add_run(mut draws: List[Draw], mut items: List[RenderItem], run: _Span):
+    """Append one run to a frame's draw order, and its item beside it."""
+    draws.append(Draw(run.kind, run.first, run.count))
+    items.append(run.item())
 
 
 def _turned_around(corner: RasterVertex) -> RasterVertex:
@@ -1915,7 +2234,13 @@ struct _Paint(ImplicitlyCopyable):
         corners.append(three)
 
 
-def _draw_state(material: Material, casters_only: Bool) raises -> RasterState:
+def _draw_state(
+    material: Material,
+    casters_only: Bool,
+    dithers: Bool,
+    hashes: Bool,
+    premultiplies: Bool,
+) raises -> RasterState:
     """Return the depth, color and stencil state a draw is made under.
 
     The material's, checked, for a frame. A light's view of the casters
@@ -1923,9 +2248,18 @@ def _draw_state(material: Material, casters_only: Bool) raises -> RasterState:
     mesh's, so it takes the default state: a mask pass that writes no
     color still casts its shadow.
 
+    A fragment flag stays on only where three.js's shader for the
+    primitive reads it: `dithering` in the `dithering_fragment` chunk,
+    `alphaHash` in `alphahash_fragment`, `premultipliedAlpha` in
+    `premultiplied_alpha_fragment`. `toneMapped` and `alphaToCoverage`
+    are kept as the material sets them.
+
     Args:
         material: The draw's material.
         casters_only: Whether this is a light's view of the casters.
+        dithers: Whether the primitive's shader dithers.
+        hashes: Whether it has an alpha hash.
+        premultiplies: Whether it premultiplies its alpha.
 
     Returns:
         The state.
@@ -1937,7 +2271,29 @@ def _draw_state(material: Material, casters_only: Bool) raises -> RasterState:
     var state = material.raster_state()
     if casters_only:
         return RasterState()
+    state.dithering = state.dithering and dithers
+    state.alpha_hash = state.alpha_hash and hashes
+    state.premultiplied_alpha = state.premultiplied_alpha and premultiplies
     return state
+
+
+def _drawn_material(scene: Scene, own: Material, id: MaterialId) -> MaterialId:
+    """Return the material an object is drawn with: the scene's
+    `override_material` when it has one and the object's own material
+    allows it, three.js's `renderObjects`, and the object's own otherwise.
+
+    Args:
+        scene: The scene, for its override.
+        own: The object's own material.
+        id: Its id.
+
+    Returns:
+        The id to draw with.
+    """
+    var overridden = Bool(scene.override_material)
+    if overridden and own.allow_override:
+        return scene.override_material.value()
+    return id
 
 
 def _draw_offset(
@@ -2509,7 +2865,9 @@ def _emit_sprite(
         MULTIPLY_OPERATION,
         _Physics(),
         False,
-        _draw_state(material, casters_only),
+        # three.js's `sprite` shader hashes its alpha, and neither dithers
+        # nor premultiplies.
+        _draw_state(material, casters_only, False, True, False),
         _draw_offset(material, casters_only),
         _shown_of(material),
         TextureFrames(),
@@ -2909,7 +3267,9 @@ def _emit_wide_line(
         MULTIPLY_OPERATION,
         _Physics(),
         False,
-        _draw_state(material, False),
+        # three.js's `LineMaterial` premultiplies, and neither dithers nor
+        # hashes its alpha.
+        _draw_state(material, False, False, False, True),
         _draw_offset(material, False),
         _shown_of(material),
         TextureFrames(),
@@ -3319,6 +3679,9 @@ struct Frame(Movable):
     # The node materials' programs, with this frame's time and view
     # written in; see `materials.nodes`.
     var programs: NodeProgramStore
+    # What drew each draw, one item per entry of `draws`: what the render
+    # hooks are told and `Renderer.info` counts.
+    var items: List[RenderItem]
 
     def __init__(
         out self,
@@ -3327,6 +3690,7 @@ struct Frame(Movable):
         var draws: List[Draw],
         var points: List[RasterVertex] = List[RasterVertex](),
         var programs: NodeProgramStore = NodeProgramStore(),
+        var items: List[RenderItem] = List[RenderItem](),
     ):
         """Hold a prepared frame.
 
@@ -3337,12 +3701,14 @@ struct Frame(Movable):
             points: The points, one corner each. None by default.
             programs: The node programs the corners name, for this frame.
                 None by default.
+            items: What drew each draw. None by default.
         """
         self.corners = corners^
         self.segments = segments^
         self.draws = draws^
         self.points = points^
         self.programs = programs^
+        self.items = items^
 
 
 struct Renderer(Movable):
@@ -3431,6 +3797,29 @@ struct Renderer(Movable):
     # and a position node's offset can follow: three.js's `NodeFrame.time`.
     # Zero by default. The caller moves it on between frames.
     var time: Duration
+    # Whether `render_into` clears the target before it draws, and which
+    # of its buffers: three.js's `autoClear`, `autoClearColor`,
+    # `autoClearDepth` and `autoClearStencil`, all on by default as there.
+    # Off, the frame draws over what the target holds; `clear` clears it
+    # by hand.
+    var auto_clear: Bool
+    var auto_clear_color: Bool
+    var auto_clear_depth: Bool
+    var auto_clear_stencil: Bool
+    # The program `CUSTOM_TONE_MAPPING` maps each pixel through, or
+    # `NO_NODES` for three.js's default custom curve, which leaves the
+    # light as it is. See `render.tonemap.custom_tone_map`.
+    var custom_tone_mapping: NodeProgramId
+    # Whether each frame forgets the last one's counts, three.js's
+    # `info.autoReset`. On by default, as there. See `info`.
+    var info_auto_reset: Bool
+    # The caller's sorts, three.js's `setOpaqueSort` and
+    # `setTransparentSort`, or none for this renderer's own order.
+    var _opaque_sort: Optional[RenderSort]
+    var _transparent_sort: Optional[RenderSort]
+    # What the renderer counts while it draws, shared with a supersampled
+    # twin; see `_RendererState`.
+    var _state: ArcPointer[_RendererState]
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -3465,6 +3854,61 @@ struct Renderer(Movable):
         self.shadow_map_type = PCF_SHADOW_MAP
         self.depth_mode = STANDARD_DEPTH
         self.time = Duration(0.0, SECOND)
+        self.auto_clear = True
+        self.auto_clear_color = True
+        self.auto_clear_depth = True
+        self.auto_clear_stencil = True
+        self.custom_tone_mapping = NO_NODES
+        self.info_auto_reset = True
+        self._opaque_sort = None
+        self._transparent_sort = None
+        self._state = ArcPointer(_RendererState())
+
+    def set_opaque_sort(mut self, method: Optional[RenderSort]):
+        """Order the opaque runs by `method`, three.js's `setOpaqueSort`.
+
+        The function is asked of two runs and answers True when the first
+        is drawn first. It orders every opaque run of every kind together,
+        stably. `None` puts back this renderer's own order: the triangles,
+        then the segments, then the points, each nearest first.
+
+        Args:
+            method: The function, or `None`.
+        """
+        self._opaque_sort = method
+
+    def set_transparent_sort(mut self, method: Optional[RenderSort]):
+        """Order the transmissive runs and the blended runs by `method`,
+        three.js's `setTransparentSort`.
+
+        Each of the two lists is sorted on its own, stably, as three.js
+        sorts its `transmissive` and `transparent` lists. `None` puts back
+        this renderer's own order: render order, then furthest first.
+
+        Args:
+            method: The function, or `None`.
+        """
+        self._transparent_sort = method
+
+    def info(self) -> RenderInfo:
+        """Return what the renderer drew, three.js's `renderer.info.render`.
+
+        Counted by `render_into` and everything that calls it. A run is a
+        call. Its triangles, segments or points are the ones the
+        rasterizer receives: after the faces turned away are culled and
+        the clipper has cut, where three.js counts what it submits. The
+        transmission pass, the shadow maps and the background are not
+        counted.
+
+        Returns:
+            The counts.
+        """
+        return self._state[].info
+
+    def reset_info(self):
+        """Forget the draws counted so far, three.js's `info.reset`. The
+        frame count is kept."""
+        self._state[].reset()
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -3526,6 +3970,16 @@ struct Renderer(Movable):
         big.shadow_map_type = self.shadow_map_type
         big.depth_mode = self.depth_mode
         big.time = self.time
+        big.auto_clear = self.auto_clear
+        big.auto_clear_color = self.auto_clear_color
+        big.auto_clear_depth = self.auto_clear_depth
+        big.auto_clear_stencil = self.auto_clear_stencil
+        big.custom_tone_mapping = self.custom_tone_mapping
+        big.info_auto_reset = self.info_auto_reset
+        big._opaque_sort = self._opaque_sort
+        big._transparent_sort = self._transparent_sort
+        # Counted into this renderer's info, not a copy of it.
+        big._state = self._state
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this
@@ -3775,6 +4229,7 @@ struct Renderer(Movable):
         casters_only: Bool = False,
         receivers_cast: Bool = False,
         transmissive_backs: Bool = False,
+        distance_casters: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -3831,6 +4286,8 @@ struct Renderer(Movable):
                 transmission pass: the back faces of every two-sided
                 transmissive mesh and nothing else, three.js's
                 `material.side = BackSide` over its `transmissiveObjects`.
+            distance_casters: Whether a light's view of the casters is a
+                point light's; see `_draws`.
 
         Returns:
             Raster vertices, three per triangle, in submission order, or
@@ -3896,6 +4353,7 @@ struct Renderer(Movable):
             skins,
             casters_only,
             receivers_cast,
+            distance_casters,
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -3941,6 +4399,7 @@ struct Renderer(Movable):
                     draws[slot].depth,
                     draws[slot].blends,
                     draws[slot].order,
+                    draws[slot].source(),
                 )
                 continue
             if draws[slot].sprite >= 0:
@@ -3986,6 +4445,7 @@ struct Renderer(Movable):
                     draws[slot].depth,
                     draws[slot].blends,
                     draws[slot].order,
+                    draws[slot].source(),
                 )
                 continue
             var world = draws[slot].world
@@ -4008,6 +4468,8 @@ struct Renderer(Movable):
             # The transmission pass's back faces: only a two-sided mesh
             # that transmits, drawn from behind whatever its side says.
             var side = material.side
+            if casters_only:
+                side = draws[slot].cast_side
             if transmissive_backs:
                 if not _has_transmissive_back(material):
                     continue
@@ -4358,6 +4820,12 @@ struct Renderer(Movable):
             # test drops any.
             corners.reserve(len(corners) + triangles * 3)
             var begin = len(corners)
+            var lights_up = not kind.is_data() and kind != SHADOW
+            # A light's view approximates alpha to coverage by an alpha
+            # test at one half, as three.js's shadow map does.
+            var alpha_cut = material.alpha_test
+            if casters_only and material.alpha_to_coverage:
+                alpha_cut = 0.5
             var paint = _Paint(
                 to_screen,
                 map,
@@ -4365,7 +4833,7 @@ struct Renderer(Movable):
                 kind,
                 glow_map,
                 mask,
-                material.alpha_test,
+                alpha_cut,
                 sheen,
                 material.shininess,
                 tones,
@@ -4377,7 +4845,17 @@ struct Renderer(Movable):
                 material.combine,
                 physics,
                 draws[slot].receives_shadow,
-                _draw_state(material, casters_only),
+                # Every surface shader three.js has but the normal, the
+                # depth, the distance and the shadow one dithers and
+                # premultiplies; all but the normal and the shadow one
+                # hash their alpha.
+                _draw_state(
+                    material,
+                    casters_only,
+                    lights_up,
+                    kind != NORMALS and kind != SHADOW,
+                    lights_up,
+                ),
                 _draw_offset(material, casters_only),
                 _shown_of(material),
                 _frames_of(scene, material, world),
@@ -4440,6 +4918,7 @@ struct Renderer(Movable):
                     draws[slot].depth,
                     draws[slot].blends,
                     draws[slot].order,
+                    draws[slot].source(),
                 )
                 continue
             for triangle in range(triangles):
@@ -4542,6 +5021,7 @@ struct Renderer(Movable):
                 draws[slot].depth,
                 draws[slot].blends,
                 draws[slot].order,
+                draws[slot].source(),
                 material.transmits(),
             )
 
@@ -4679,10 +5159,22 @@ struct Renderer(Movable):
             ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
-            var material = assets.materials.get(line.material)
+            # The line's own material says whether it is drawn and which
+            # list it sorts in; the scene's override, when it takes it,
+            # draws it. See `_drawn_material`.
+            var own = assets.materials.get(line.material)
+            if not own.visible:
+                continue
+            var blends = own.is_transparent()
+            var drawn = _drawn_material(scene, own, line.material)
+            var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A line")
             # A line is never a caster, so its state is always its own.
-            var state = _draw_state(material, False)
+            # A dashed line is three.js's `dashed` shader, which does not
+            # dither; a plain one is its `basic` shader, which does.
+            var state = _draw_state(
+                material, False, not material.is_dashed(), False, True
+            )
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
@@ -4834,8 +5326,9 @@ struct Renderer(Movable):
                 begin,
                 len(corners),
                 depth,
-                material.is_transparent(),
+                blends,
                 scene.render_order(line.node),
+                _Source(line.node, line.geometry, drawn),
             )
 
         # And the meshes drawn as the lines of their own triangles.
@@ -4869,6 +5362,7 @@ struct Renderer(Movable):
                             run.depth,
                             run.blends,
                             run.order,
+                            run.source,
                         )
                     )
                 break
@@ -4912,6 +5406,7 @@ struct Renderer(Movable):
                     run.depth,
                     run.blends,
                     run.order,
+                    run.source,
                 )
             )
             ordered.extend(
@@ -5045,10 +5540,16 @@ struct Renderer(Movable):
             ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
-            var material = assets.materials.get(points.material)
+            var own = assets.materials.get(points.material)
+            if not own.visible:
+                continue
+            var blends = own.is_transparent()
+            var drawn = _drawn_material(scene, own, points.material)
+            var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A point")
             # A point is never a caster, so its state is always its own.
-            var state = _draw_state(material, False)
+            # three.js's `points` shader premultiplies and does not dither.
+            var state = _draw_state(material, False, False, False, True)
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
@@ -5166,8 +5667,9 @@ struct Renderer(Movable):
                 begin,
                 len(corners),
                 depth,
-                material.is_transparent(),
+                blends,
                 scene.render_order(points.node),
+                _Source(points.node, points.geometry, drawn),
             )
 
         # Into draw order, as `_prepared_lines` puts the lines.
@@ -5205,6 +5707,7 @@ struct Renderer(Movable):
                     run.depth,
                     run.blends,
                     run.order,
+                    run.source,
                 )
             )
             ordered.extend(Span(corners)[run.first : run.first + run.count])
@@ -5254,71 +5757,61 @@ struct Renderer(Movable):
         )
         var point_spans = List[_Span]()
         var points = self._prepared_points(scene, assets, camera, point_spans)
-        var draws = List[Draw]()
+        var opaque = List[_Span]()
         for span in range(len(corner_spans)):
             ref run = corner_spans[span]
             if not run.blends and not run.transmits:
-                draws.append(Draw(DRAW_TRIANGLES, run.first, run.count))
+                opaque.append(run)
         for span in range(len(segment_spans)):
-            ref run = segment_spans[span]
-            if not run.blends:
-                draws.append(Draw(DRAW_SEGMENTS, run.first, run.count))
+            if not segment_spans[span].blends:
+                opaque.append(segment_spans[span])
         for span in range(len(point_spans)):
-            ref run = point_spans[span]
-            if not run.blends:
-                draws.append(Draw(DRAW_POINTS, run.first, run.count))
+            if not point_spans[span].blends:
+                opaque.append(point_spans[span])
+        # A caller's opaque sort, three.js's `setOpaqueSort`, orders every
+        # opaque run of every kind at once. Without one, the triangles go
+        # first, then the segments and then the points, each nearest first.
+        var sorted_opaque = Bool(self._opaque_sort)
+        if sorted_opaque:
+            _sort_with(opaque, self._opaque_sort.value())
+        var draws = List[Draw]()
+        var items = List[RenderItem]()
+        for position in range(len(opaque)):
+            _add_run(draws, items, opaque[position])
         # The transmissive runs, after every opaque run and before every
         # blended one, furthest first, as three.js draws its
         # `transmissive` list between its `opaque` and `transparent`
         # lists and sorts it as it sorts the transparent one. A
         # transmissive run that also blends is drawn here, as three.js
         # puts an object with any transmission on that list first.
-        var clear_order = List[Int]()
-        var clear_depths = List[Float32]()
-        var clear_orders = List[Int]()
+        var clear = List[_Span]()
         for span in range(len(corner_spans)):
             if corner_spans[span].transmits:
-                clear_order.append(span)
-                clear_depths.append(corner_spans[span].depth)
-                clear_orders.append(corner_spans[span].order)
-        _sort_by(clear_order, clear_depths, clear_orders)
-        for position in range(len(clear_order)):
-            ref run = corner_spans[clear_order[position]]
-            draws.append(Draw(DRAW_TRIANGLES, run.first, run.count))
+                clear.append(corner_spans[span])
+        _furthest_first(clear, self._transparent_sort)
+        for position in range(len(clear)):
+            _add_run(draws, items, clear[position])
         # Every kind's blended runs, furthest first. Each list is already
         # in that order on its own; the sort is stable, so at one depth a
         # surface still goes before a line, and a line before a point.
         var mixed = List[_Span]()
-        var order = List[Int]()
-        var depths = List[Float32]()
-        var orders = List[Int]()
         for span in range(len(corner_spans)):
             if corner_spans[span].blends and not corner_spans[span].transmits:
-                order.append(len(mixed))
-                depths.append(corner_spans[span].depth)
-                orders.append(corner_spans[span].order)
                 mixed.append(corner_spans[span])
         for span in range(len(segment_spans)):
             if segment_spans[span].blends:
-                order.append(len(mixed))
-                depths.append(segment_spans[span].depth)
-                orders.append(segment_spans[span].order)
                 mixed.append(segment_spans[span])
         for span in range(len(point_spans)):
             if point_spans[span].blends:
-                order.append(len(mixed))
-                depths.append(point_spans[span].depth)
-                orders.append(point_spans[span].order)
                 mixed.append(point_spans[span])
-        _sort_by(order, depths, orders)
-        for position in range(len(order)):
-            ref run = mixed[order[position]]
-            draws.append(Draw(run.kind, run.first, run.count))
+        _furthest_first(mixed, self._transparent_sort)
+        for position in range(len(mixed)):
+            _add_run(draws, items, mixed[position])
         # The node programs, with this frame's time and view written in, as
         # three.js updates its `time` and camera nodes before a frame.
         var programs = assets.programs.copy()
         programs.set_frame(self.time, camera.view_matrix_in(scene))
-        return Frame(corners^, segments^, draws^, points^, programs^)
+        return Frame(corners^, segments^, draws^, points^, programs^, items^)
 
     def render[
         C: Camera
@@ -5340,6 +5833,30 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `render_into` raises.
         """
+        var hooks = NoHooks()
+        return self.render_with(hooks, scene, assets, camera)
+
+    def render_with[
+        C: Camera, H: RenderHooks
+    ](
+        self, mut hooks: H, scene: Scene, assets: Assets, camera: C
+    ) raises -> Framebuffer:
+        """Draw the scene as `render` does, running `hooks` around it.
+
+        Args:
+            hooks: What runs before and after the scene, each run and each
+                shadow caster; see `RenderHooks`.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Returns:
+            The rendered image.
+
+        Raises:
+            Error: Everything `render_into` raises, and whatever a hook
+                raises.
+        """
         if self.antialias:
             # Drawn at `SUPERSAMPLE` times the size by a renderer that
             # does not supersample, and averaged down *before* the one
@@ -5348,12 +5865,15 @@ struct Renderer(Movable):
             # holds. See `RenderTarget.downsampled` and `render.antialias`.
             var big = self.supersampled()
             var drawn = RenderTarget(big.width, big.height, self.background)
-            big.render_into(drawn, scene, assets, camera)
+            big.render_into_with(hooks, drawn, scene, assets, camera)
             return drawn.downsampled(SUPERSAMPLE).resolve(
-                self.workers, self.tone_curve(), self.tone_mapping_exposure
+                self.workers,
+                self.tone_curve(),
+                self.tone_mapping_exposure,
+                self.curve_program(assets),
             )
         var target = RenderTarget(self.width, self.height, self.background)
-        self.render_into(target, scene, assets, camera)
+        self.render_into_with(hooks, target, scene, assets, camera)
         # Linear light becomes an image exactly once, here, on as many
         # threads as drew it, through the tone mapping curve on the way --
         # except in the uv view, which is coordinates rather than light and
@@ -5361,7 +5881,10 @@ struct Renderer(Movable):
         # normal or depth material's pixels are data too, and the target
         # keeps the curve off them by itself.
         return target.resolve(
-            self.workers, self.tone_curve(), self.tone_mapping_exposure
+            self.workers,
+            self.tone_curve(),
+            self.tone_mapping_exposure,
+            self.curve_program(assets),
         )
 
     def render_array(
@@ -5405,12 +5928,18 @@ struct Renderer(Movable):
             var drawn = RenderTarget(big.width, big.height, self.background)
             big.render_array_into(drawn, scene, assets, scaled)
             return drawn.downsampled(SUPERSAMPLE).resolve(
-                self.workers, self.tone_curve(), self.tone_mapping_exposure
+                self.workers,
+                self.tone_curve(),
+                self.tone_mapping_exposure,
+                self.curve_program(assets),
             )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_array_into(target, scene, assets, array)
         return target.resolve(
-            self.workers, self.tone_curve(), self.tone_mapping_exposure
+            self.workers,
+            self.tone_curve(),
+            self.tone_mapping_exposure,
+            self.curve_program(assets),
         )
 
     def render_array_into(
@@ -5459,11 +5988,21 @@ struct Renderer(Movable):
                     "A sub camera's viewport must lie inside the target"
                 )
         self.scissor_test = True
+        var hooks = NoHooks()
         try:
             for index in range(array.count()):
                 self.viewport = array.viewports[index]
                 self.scissor = array.viewports[index]
-                self.render_into(target, scene, assets, array.cameras[index])
+                # One frame, however many cameras, as three.js counts an
+                # array camera's `render`.
+                self._draw_into(
+                    hooks,
+                    target,
+                    scene,
+                    assets,
+                    array.cameras[index],
+                    index == 0,
+                )
         except failure:
             # Put back whatever a refused camera left set, then say why.
             self.viewport = viewport
@@ -5486,10 +6025,119 @@ struct Renderer(Movable):
             return NO_TONE_MAPPING
         return self.tone_mapping
 
+    def curve_program(self, assets: Assets) raises -> List[Float32]:
+        """Return the custom curve's program as `RenderTarget.resolve`
+        takes it, for a caller that resolves a target itself.
+
+        Args:
+            assets: Where `custom_tone_mapping` names its program.
+
+        Returns:
+            The program's floats under `CUSTOM_TONE_MAPPING` with a
+            program set, and none otherwise.
+
+        Raises:
+            Error: If `custom_tone_mapping` names a program that is not in
+                `assets.programs`.
+        """
+        var none = List[Float32]()
+        if self.custom_tone_mapping == NO_NODES:
+            return none^
+        var code = assets.programs.get(self.custom_tone_mapping).code.copy()
+        if self.tone_curve() != CUSTOM_TONE_MAPPING:
+            return none^
+        return code^
+
+    def clear(
+        self,
+        mut target: RenderTarget,
+        color: Bool = True,
+        depth: Bool = True,
+        stencil: Bool = True,
+    ) raises:
+        """Clear the target's color, depth or stencil, three.js's `clear`.
+
+        The color is this renderer's `background`, three.js's clear color.
+        With the scissor test on, the scissor alone is cleared.
+
+        Args:
+            target: The target to clear.
+            color: Whether the color is cleared.
+            depth: Whether the depth is cleared.
+            stencil: Whether the stencil is cleared.
+
+        Raises:
+            Error: If the target is not the renderer's size, or the
+                renderer's depth mode is none of the three.
+        """
+        if target.width != self.width or target.height != self.height:
+            raise Error("A target must be the renderer's size")
+        var kept = Rect.whole(self.width, self.height)
+        if self.scissor_test:
+            kept = self.scissor
+        target.clear_inside(
+            kept, self.background, self.depth_mode, color, depth, stencil
+        )
+
     def render_into[
         C: Camera
     ](
         self, mut target: RenderTarget, scene: Scene, assets: Assets, camera: C
+    ) raises:
+        """Draw every mesh in the scene on the CPU into `target`, clearing
+        first, and resolve nothing.
+
+        What `_draw_into` does with no hooks, as one frame.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
+        var hooks = NoHooks()
+        self._draw_into(hooks, target, scene, assets, camera, True)
+
+    def render_into_with[
+        C: Camera, H: RenderHooks
+    ](
+        self,
+        mut hooks: H,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+    ) raises:
+        """Draw the scene into `target` as `render_into` does, running
+        `hooks` around it.
+
+        Args:
+            hooks: What runs before and after the scene, each run and each
+                shadow caster; see `RenderHooks`.
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Raises:
+            Error: Everything `_draw_into` raises, and whatever a hook
+                raises.
+        """
+        self._draw_into(hooks, target, scene, assets, camera, True)
+
+    def _draw_into[
+        C: Camera, H: RenderHooks
+    ](
+        self,
+        mut hooks: H,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        first: Bool,
     ) raises:
         """Draw every mesh in the scene on the CPU into `target`, clearing
         first, and resolve nothing.
@@ -5505,7 +6153,14 @@ struct Renderer(Movable):
         and drawn into, and no other pixel is touched. Off, the whole
         target is.
 
+        The hooks run in three.js's order: the scene's before anything
+        is prepared, each shadow caster's once the shadow maps are drawn,
+        each run's before and after the frame is rasterized, in the
+        frame's draw order, and the scene's after. `Renderer.info` counts
+        the frame. With `auto_clear` off, nothing is cleared.
+
         Args:
+            hooks: What runs around the frame.
             target: The target to draw into. It must be the renderer's
                 size. Its type and outputs are its own: a target with an
                 `OUTPUT_NORMAL` attachment receives every opaque
@@ -5514,6 +6169,8 @@ struct Renderer(Movable):
             scene: The transform hierarchy, and the meshes and lights in it.
             assets: The geometry, materials and textures the meshes name.
             camera: The camera to project through.
+            first: Whether this starts a frame of `info`, rather than
+                adding a camera of an array to the one before it.
 
         Raises:
             Error: If the target is not the renderer's size, if a mesh
@@ -5527,6 +6184,7 @@ struct Renderer(Movable):
         """
         if target.width != self.width or target.height != self.height:
             raise Error("A target must be the renderer's size")
+        hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
         var frame = self.prepare_frame(scene, assets, camera)
@@ -5552,6 +6210,12 @@ struct Renderer(Movable):
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
         var lighting = self._lighting(scene, assets, camera)
+        # The shadow maps are drawn, so their casters are known.
+        ref state = self._state[]
+        for index in range(len(state.shadow_items)):
+            hooks.on_before_shadow(
+                scene, state.shadow_items[index], state.shadow_lights[index]
+            )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)
@@ -5580,9 +6244,21 @@ struct Renderer(Movable):
         var seen = self._transmission_pass(
             frame, scene, assets, camera, lighting, fog, backdrop
         )
-        target.clear_inside(
-            kept, self.clear_color(scene), self.depth_mode_for(camera)
-        )
+        _ = self.curve_program(assets)
+        if first:
+            state.begin_frame(self.info_auto_reset)
+        state.count(frame.items)
+        for index in range(len(frame.items)):
+            hooks.on_before_render(scene, frame.items[index])
+        if self.auto_clear:
+            target.clear_inside(
+                kept,
+                self.clear_color(scene),
+                self.depth_mode_for(camera),
+                self.auto_clear_color,
+                self.auto_clear_depth,
+                self.auto_clear_stencil,
+            )
         # Spelled as a Bool rather than testing the Optional directly,
         # because the coverage instrumenter wraps every condition in a
         # probe that takes a Bool; see `materials.material`.
@@ -5608,6 +6284,9 @@ struct Renderer(Movable):
             seen,
             frame.programs,
         )
+        for index in range(len(frame.items)):
+            hooks.on_after_render(scene, frame.items[index])
+        hooks.on_after_scene(scene)
 
     def _lighting[
         C: Camera
@@ -5885,6 +6564,8 @@ struct Renderer(Movable):
         """
         if not self.shadow_map_type.is_valid():
             raise Error("A shadow map type that is none of the four")
+        self._state[].shadow_items.clear()
+        self._state[].shadow_lights.clear()
         var variance = self.shadow_map_type == VSM_SHADOW_MAP
         var maps = List[ShadowMap]()
         for index in range(len(scene.lights)):
@@ -5917,14 +6598,14 @@ struct Renderer(Movable):
                 )
                 camera.place(at, aimed)
                 corners = self._casters(
-                    scene, assets, camera, shadow.map_size, variance
+                    scene, assets, camera, shadow.map_size, variance, index
                 )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             else:
                 var camera = _spot_camera(light, at, aimed)
                 corners = self._casters(
-                    scene, assets, camera, shadow.map_size, variance
+                    scene, assets, camera, shadow.map_size, variance, index
                 )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
@@ -5987,6 +6668,8 @@ struct Renderer(Movable):
                 camera,
                 size,
                 self.shadow_map_type == VSM_SHADOW_MAP,
+                index,
+                True,
             )
             var target = RenderTarget(size, size, Color(0, 0, 0))
             rasterize_all(
@@ -6103,18 +6786,35 @@ struct Renderer(Movable):
         camera: C,
         size: Int,
         receivers_cast: Bool,
+        light: Int,
+        distance: Bool = False,
     ) raises -> List[RasterVertex]:
         """Return the triangles of the meshes that cast a shadow, and the
         ones that receive when `receivers_cast`, as a light's camera sees
-        them, on a square of `size` pixels a side."""
+        them, on a square of `size` pixels a side, and remember each
+        caster's run for the `on_before_shadow` hook of light `light`. A
+        point light's view, `distance`, draws a mesh's custom distance
+        material."""
         var spans = List[_Span]()
         var square = Renderer(size, size, workers=self.workers)
         # A material's planes cut its shadow under `clip_shadows`, which
         # this renderer's switch decides as it does for the frame.
         square.local_clipping_enabled = self.local_clipping_enabled
-        return square._prepared(
-            scene, assets, camera, False, spans, True, receivers_cast
+        var corners = square._prepared(
+            scene,
+            assets,
+            camera,
+            False,
+            spans,
+            True,
+            receivers_cast,
+            distance_casters=distance,
         )
+        ref state = self._state[]
+        for index in range(len(spans)):
+            state.shadow_items.append(spans[index].item())
+            state.shadow_lights.append(light)
+        return corners^
 
     def clear_color(self, scene: Scene) raises -> Color:
         """Return what a frame of `scene` is cleared to: the scene's color

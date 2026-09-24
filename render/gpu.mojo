@@ -41,7 +41,8 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
-from render.blend import NORMAL_MODE, Rgba, blend_pixel
+from render.blend import NORMAL_MODE, Rgba, blend_fragment
+from render.fragment_flags import alpha_covers, dither, hashed_threshold
 from render.raster_state import (
     REVERSED_DEPTH,
     STANDARD_DEPTH,
@@ -217,10 +218,12 @@ from render.cube_texture_store import (
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
+    CUSTOM_TONE_MAPPING,
     NO_TONE_MAPPING,
     ToneMapping,
     check_tone_mapping,
     tone_map,
+    tone_map_with,
 )
 from materials.nodes import (
     AO_NODE,
@@ -234,6 +237,7 @@ from materials.nodes import (
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
+    NodeProgramId,
     OPACITY_NODE,
     OUTPUT_NODE,
     NodeContext,
@@ -531,7 +535,10 @@ comptime LANE_CLEARCOAT_NORMAL_SCALE_Y = 73
 comptime LANE_ENV_ROTATION = LANE_CLEARCOAT_NORMAL_SCALE_Y + 1
 comptime LANE_REFRACTION_RATIO = LANE_ENV_ROTATION + 9
 comptime LANE_OBJECT_NORMAL = LANE_REFRACTION_RATIO + 1
-comptime FLOATS_PER_VERTEX = LANE_OBJECT_NORMAL + 9
+# The constant color the constant blend factors read, three.js's
+# `blendColor` and `blendAlpha`: `RasterState.blend_constant`, four floats.
+comptime LANE_BLEND_CONSTANT = LANE_OBJECT_NORMAL + 9
+comptime FLOATS_PER_VERTEX = LANE_BLEND_CONSTANT + 4
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -657,7 +664,11 @@ comptime FOG_DENSITY = 2
 comptime FOG_R = 3
 comptime FOG_G = 4
 comptime FOG_B = 5
-comptime FOG_FLOATS = FOG_B + 1
+# Where the custom tone mapping curve's program starts in the fog buffer,
+# or -1 for none: the kernel has no argument left for it. See
+# `render.tonemap.custom_tone_map`.
+comptime FOG_TONE_PROGRAM = 6
+comptime FOG_FLOATS = FOG_TONE_PROGRAM + 1
 
 # How the light buffer begins: where the camera is, the one direction
 # toward it when its rays are parallel, then the ambient term, then the
@@ -993,7 +1004,25 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         _append_basis(flat, corner.frames.env_rotation)
         flat.append(corner.frames.refraction_ratio)
         _append_basis(flat, corner.frames.object_normal)
+        flat.append(corner.state.blend_red)
+        flat.append(corner.state.blend_green)
+        flat.append(corner.state.blend_blue)
+        flat.append(corner.state.blend_alpha)
     return flat^
+
+
+@always_inline
+def _blend_constant(
+    buffer: MutPointer[Float32, MutAnyOrigin], base: Int
+) -> Rgba:
+    """Return the blend constant a vertex's lanes hold, as
+    `RasterState.blend_constant` returns it on the host."""
+    return Rgba(
+        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT],
+        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 1],
+        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 2],
+        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 3],
+    )
 
 
 def _append_basis(mut flat: List[Float32], basis: Basis3):
@@ -1551,11 +1580,13 @@ def _shadow_mask(
     return mask
 
 
-def flatten_fog(fog: FogView) -> List[Float32]:
+def flatten_fog(fog: FogView, curve_start: Int = -1) -> List[Float32]:
     """Return a fog view as the flat float buffer the kernel reads.
 
     Args:
         fog: The scene's fog, as the rasterizers take it.
+        curve_start: Where the custom tone mapping curve's program starts
+            in the fog buffer, or -1, the default, for none.
 
     Returns:
         `FOG_FLOATS` floats, in the order the kernel unpacks them. The
@@ -1568,7 +1599,42 @@ def flatten_fog(fog: FogView) -> List[Float32]:
     flat.append(fog.color.r)
     flat.append(fog.color.g)
     flat.append(fog.color.b)
+    flat.append(Float32(curve_start))
     return flat^
+
+
+struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
+    """The kernel's `NodeSource` for a custom tone mapping curve: a program
+    in the fog buffer, with no texture and no triangle, as
+    `render.tonemap.ProgramCurve` is on the host."""
+
+    var fog: MutPointer[Float32, Self.origin]
+    var start: Int
+
+    def __init__(out self, fog: MutPointer[Float32, Self.origin], start: Int):
+        """Read the program that starts `start` floats into `fog`, or none
+        when `start` is negative."""
+        self.fog = fog
+        self.start = start
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program, or zero for none."""
+        return self.fog[
+            unsafe_offset=self.start + at
+        ] if self.start >= 0 else Float32(0)
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return opaque white: a curve reads no texture."""
+        return FloatColor(1, 1, 1, 1)
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return no weights: a curve has no triangle."""
+        return SIMD[DType.float32, 4](0)
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return a corner of nothing: a curve has no triangle."""
+        var zero = Vector3(0, 0, 0)
+        return NodeInputs(0, 0, zero, zero, zero, zero, False)
 
 
 def program_starts(programs: NodeProgramStore) -> List[Int]:
@@ -3800,8 +3866,9 @@ def rasterize_kernel(
                 var threshold = points[unsafe_offset=base + LANE_ALPHA_TEST]
                 var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
                 # The stencil and the depth tests, by the function the host
-                # asks, and settled at once unless an alpha test could
-                # still discard the point; see `rasterize_shaded`.
+                # asks, and settled at once unless an alpha test or the
+                # alpha's coverage could still discard the point; see
+                # `rasterize_shaded`.
                 var state = RasterState.unpacked(
                     Int(
                         point_maps[
@@ -3829,7 +3896,10 @@ def rasterize_kernel(
                 if not solid:
                     held = cleared_depth(state.depth_mode)
                 var test = test_fragment(state, stored_z, held, stencil)
-                if not shades(test, tested):
+                var point_covered = state.alpha_to_coverage and mode != Int32(
+                    SHADE_UV.value
+                )
+                if not shades(test, tested or point_covered):
                     stencil = test.stencil
                     continue
                 red = points[unsafe_offset=base + LANE_R]
@@ -3888,6 +3958,8 @@ def rasterize_kernel(
                             )
                             alpha *= thinning.g
                 if tested and alpha < threshold:
+                    continue
+                if point_covered and not alpha_covers(alpha, x, y):
                     continue
                 stencil = test.stencil
                 if not test.passes:
@@ -3948,17 +4020,22 @@ def rasterize_kernel(
                     mixed_b = blue * share
                     mixed_a = share
                     # A point is light, never data, except in the uv view,
-                    # which shows coordinates. It has no surface, so it
+                    # which shows coordinates, and a point whose material
+                    # turns the tone mapping off. It has no surface, so it
                     # leaves no normal, as `RenderTarget.write` keeps none.
-                    data = mode == Int32(SHADE_UV.value)
+                    data = (
+                        mode == Int32(SHADE_UV.value) or not state.tone_mapped
+                    )
                     kept_x = 0
                     kept_y = 0
                     kept_z = 0
                 elif state.color_write:
-                    var out = blend_pixel(
+                    var out = blend_fragment(
                         _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                         Rgba(red, green, blue, share),
                         policy,
+                        state.premultiplied_alpha,
+                        _blend_constant(points, base),
                     )
                     mixed_r = out[0]
                     mixed_g = out[1]
@@ -4045,13 +4122,6 @@ def rasterize_kernel(
                 var stored_z = fragment_depth(
                     state, az + (bz - az) * share, total
                 )
-                var held = nearest
-                if not solid:
-                    held = cleared_depth(state.depth_mode)
-                var test = test_fragment(state, stored_z, held, stencil)
-                stencil = test.stencil
-                if not test.passes:
-                    continue
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
                 var drawn = mix_straight(
@@ -4069,6 +4139,17 @@ def rasterize_kernel(
                     ),
                     toward,
                 )
+                # Not covering this sample, WebGL's alpha to coverage,
+                # before the stencil and the depth tests as on the host.
+                if state.alpha_to_coverage and not alpha_covers(drawn.a, x, y):
+                    continue
+                var held = nearest
+                if not solid:
+                    held = cleared_depth(state.depth_mode)
+                var test = test_fragment(state, stored_z, held, stencil)
+                stencil = test.stencil
+                if not test.passes:
+                    continue
                 # The host's line pass reads no shading mode: a line has no surface
                 # coordinates, so there is no uv view of one, and it is veiled by
                 # the fog whatever the mode. See `rasterize_line`.
@@ -4101,6 +4182,9 @@ def rasterize_kernel(
                             fog[unsafe_offset=FOG_DENSITY],
                         ),
                     )
+                # Dithered at this pixel, as the host's line pass does it.
+                if state.dithering:
+                    drawn = dither(drawn, x, y, Int(height))
                 var share_a = drawn.a
                 if share_a > 1:
                     share_a = 1
@@ -4129,16 +4213,20 @@ def rasterize_kernel(
                     mixed_a = share_a
                     # A line is light, never data: it has no normal to show and no
                     # depth material to show one. `check_line_state` refuses any
-                    # kind but an unlit one. It leaves no normal either.
-                    data = False
+                    # kind but an unlit one. It leaves no normal either. A
+                    # line whose material turns the tone mapping off keeps
+                    # the curve off its pixel, as data does.
+                    data = not state.tone_mapped
                     kept_x = 0
                     kept_y = 0
                     kept_z = 0
                 elif state.color_write:
-                    var out = blend_pixel(
+                    var out = blend_fragment(
                         _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                         Rgba(drawn.r, drawn.g, drawn.b, share_a),
                         policy,
+                        state.premultiplied_alpha,
+                        _blend_constant(segments, base),
                     )
                     mixed_r = out[0]
                     mixed_g = out[1]
@@ -4284,7 +4372,13 @@ def rasterize_kernel(
             if not solid:
                 held = cleared_depth(state.depth_mode)
             var test = test_fragment(state, stored_z, held, stencil)
-            if not shades(test, tested or masked):
+            # Whether a hashed alpha test or the alpha's coverage can
+            # still throw the fragment away, as `rasterize_shaded` asks.
+            var hashed = state.alpha_hash and mode != Int32(SHADE_UV.value)
+            var covered = state.alpha_to_coverage and mode != Int32(
+                SHADE_UV.value
+            )
+            if not shades(test, tested or hashed or covered or masked):
                 stencil = test.stencil
                 continue
             var share_a = wa
@@ -5556,6 +5650,13 @@ def rasterize_kernel(
                 # shows whatever is behind it.
                 if tested and alpha < threshold:
                     continue
+                # Below the hashed threshold, or not covering this sample,
+                # from the functions the host calls; see
+                # `render.fragment_flags`.
+                if hashed and alpha < hashed_threshold(nodes):
+                    continue
+                if covered and not alpha_covers(alpha, x, y):
+                    continue
                 if shows_data:
                     # Data rather than light, exactly as `rasterize_shaded`
                     # writes it: the packed normal, or the depth as a gray, as
@@ -6253,6 +6354,14 @@ def rasterize_kernel(
                     red = finished[0]
                     green = finished[1]
                     blue = finished[2]
+                # Dithered last, as the host dithers it.
+                if state.dithering and not shows_data:
+                    var dithered = dither(
+                        FloatColor(red, green, blue, alpha), x, y, Int(height)
+                    )
+                    red = dithered.r
+                    green = dithered.g
+                    blue = dithered.b
 
             # The stencil and the depth the tests asked for, settled now that
             # the fragment has survived its alpha test. One that failed its
@@ -6308,7 +6417,11 @@ def rasterize_kernel(
                 # fragment's, exactly as `RenderTarget.write` decides it.
                 # The uv view shows coordinates, which the tone mapping has
                 # to leave alone exactly as it leaves a normal alone.
-                data = shows_data or mode == Int32(SHADE_UV.value)
+                data = (
+                    shows_data
+                    or mode == Int32(SHADE_UV.value)
+                    or not state.tone_mapped
+                )
                 # And its normal, turned into view space by the host's
                 # function, or as it is for a normal material, whose
                 # normals the renderer turned already.
@@ -6320,10 +6433,12 @@ def rasterize_kernel(
                 kept_z = turned.z
             elif state.color_write:
                 # The mode's arithmetic, shared with `RenderTarget.blend`.
-                var out = blend_pixel(
+                var out = blend_fragment(
                     _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                     Rgba(red, green, blue, share),
                     policy,
+                    state.premultiplied_alpha,
+                    _blend_constant(corners, base),
                 )
                 mixed_r = out[0]
                 mixed_g = out[1]
@@ -6350,7 +6465,14 @@ def rasterize_kernel(
         curve = NO_TONE_MAPPING.value
     else:
         lit = lit.unpremultiplied()
-    var word = pack(tone_map(lit, ToneMapping(curve), exposure).encode())
+    var word = pack(
+        tone_map_with(
+            lit,
+            ToneMapping(curve),
+            exposure,
+            _DeviceCurve(fog, Int(fog[unsafe_offset=FOG_TONE_PROGRAM])),
+        ).encode()
+    )
     if solid:
         nearest_depth = nearest
 
@@ -6694,18 +6816,22 @@ struct GpuRenderer(Movable):
                 count=len(flat),
             )
 
-    def _upload_fog(mut self, fog: FogView, programs: NodeProgramStore) raises:
+    def _upload_fog(
+        mut self, fog: FogView, programs: NodeProgramStore, curve_start: Int
+    ) raises:
         """Put `fog` on the device, and the node programs after it.
 
         Args:
             fog: The scene's fog, as the rasterizers take it.
             programs: The node programs, laid out as `program_starts`
                 says.
+            curve_start: Where the custom tone mapping curve's program
+                starts, or -1 for none.
 
         Raises:
             Error: If the device buffer cannot be made or written.
         """
-        var flat = flatten_fog(fog)
+        var flat = flatten_fog(fog, curve_start)
         flat.extend(flatten_programs(programs))
         if len(flat) > self.fog_room:
             # A draw still in flight may be reading the old buffer; see
@@ -6740,6 +6866,7 @@ struct GpuRenderer(Movable):
         depth_mode: DepthMode = STANDARD_DEPTH,
         transmission: TransmissionTarget = TransmissionTarget(),
         programs: NodeProgramStore = NodeProgramStore(),
+        custom_tone_mapping: NodeProgramId = NO_NODES,
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -6802,6 +6929,11 @@ struct GpuRenderer(Movable):
             programs: The node materials' programs, as
                 `Renderer.prepare_frame` gives them with the frame's time
                 and view. Uploaded with the draw, after the fog.
+            custom_tone_mapping: The program in `programs` that
+                `CUSTOM_TONE_MAPPING` maps each pixel through,
+                `Renderer.custom_tone_mapping`, or `NO_NODES`, the
+                default, for three.js's default curve, which leaves the
+                light as it is. See `render.tonemap.custom_tone_map`.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -6811,7 +6943,7 @@ struct GpuRenderer(Movable):
                 uploaded, a draw is refused
                 by `check_draws`, the mode
                 is none of the three, the tone mapping is none of the
-                seven, the exposure is negative or not finite, the fog
+                eight, the exposure is negative or not finite, the fog
                 view is refused by `FogView.validate`, a triangle's blend
                 policy, material kind, texture or
                 emissive map disagrees between its corners or is a value
@@ -6823,9 +6955,11 @@ struct GpuRenderer(Movable):
                 its alpha, a vertex names a cube texture that is not
                 uploaded, a spot light's map names a texture that is not
                 uploaded, the backdrop is not the target's size, the
-                depth mode is none of the three, or a triangle names a
+                depth mode is none of the three, a triangle names a
                 node program that is not in `programs` or one that reads
-                a texture that is not uploaded under `SHADE_TEXTURE`.
+                a texture that is not uploaded under `SHADE_TEXTURE`, or
+                `custom_tone_mapping` names a program that is not in
+                `programs`.
         """
         if not depth_mode.is_valid():
             raise Error("A depth mode that is none of the three")
@@ -6840,6 +6974,12 @@ struct GpuRenderer(Movable):
         # made here, before the launch, by the same functions.
         check_tone_mapping(tone_mapping, exposure)
         fog.validate()
+        # Where the custom curve's program starts in the fog buffer, or -1
+        # for none; the kernel reads it from the fog's header.
+        var curve_start = -1
+        if custom_tone_mapping != NO_NODES:
+            _ = programs.get(custom_tone_mapping)
+            curve_start = program_starts(programs)[custom_tone_mapping.value]
         # Clamped once here rather than per pixel in the kernel, and
         # clamped the same way `rasterize_line` clamps it on the host.
         var strokes = line_width
@@ -6867,6 +7007,8 @@ struct GpuRenderer(Movable):
                     tone_mapping=tone_mapping,
                     exposure=exposure,
                     depth_mode=depth_mode,
+                    programs=programs,
+                    custom_tone_mapping=custom_tone_mapping,
                 )
         var triangles = len(corners) // 3
 
@@ -7265,7 +7407,7 @@ struct GpuRenderer(Movable):
             )
 
         self._upload_lights(lighting)
-        self._upload_fog(fog, programs)
+        self._upload_fog(fog, programs, curve_start)
         # The transmission target, flattened, and room for it made after
         # the backdrop before the backdrop is written: a new buffer holds
         # nothing, so it is cleared below as a painted one would be.

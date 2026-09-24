@@ -159,6 +159,7 @@ These fields use three.js's keys and three.js's defaults:
 | Stretch | `anisotropy`, `anisotropyRotation` in radians, `anisotropyMap` |
 | Depth and stencil | `depthFunc`, `depthTest`, `depthWrite`, `colorWrite`, `stencilWrite`, `stencilWriteMask`, `stencilFunc`, `stencilRef`, `stencilFuncMask`, `stencilFail`, `stencilZFail`, `stencilZPass` |
 | Polygon offset | `polygonOffset`, `polygonOffsetFactor`, `polygonOffsetUnits` |
+| Flags | `visible`, `shadowSide`, `dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage`, `premultipliedAlpha`, `blendColor`, `blendAlpha`. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#scene-json). |
 | Environment | `envMap`, the uuid of a cube texture or a panorama, and `envMapRotation`. See [Cube textures](#cube-textures). |
 | Refraction | `refractionRatio` on a basic, lambert or phong material |
 | Normal map | `normalMapType`, beside `normalMap` |
@@ -235,7 +236,7 @@ The writer does not write these things, and the reader refuses them:
 - A cube texture that does not have six images, or a mapping that is not a cube mapping. A cube texture with float faces.
 - An `envMap`, an `environment` or a blurred background that names a flat texture without an equirectangular mapping.
 - More than eight clipping planes on a material, or more than eight morph influences on a mesh.
-- A depth function, a stencil function or a stencil operation that is not one of three.js's.
+- A depth function, a stencil function or a stencil operation that is not one of three.js's. A `shadowSide` that is not a side, or a `blendAlpha` outside zero to one.
 - A clip with a track that the reader cannot bind. See [Animation](Animation#scene-json).
 
 The writer does not write these things, and the reader ignores them:

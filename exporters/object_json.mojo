@@ -1024,6 +1024,7 @@ struct _Library(Movable):
         if material.wireframe:
             writer.key("wireframe")
             writer.boolean(True)
+        _flags(writer, material)
         _raster(writer, material)
         _clipping(writer, material)
         if material.dash_offset != NO_DASH:
@@ -1246,6 +1247,40 @@ def _line_fields(mut writer: JsonWriter, material: Material) raises:
         writer.number(material.gap_size.to(METER))
         writer.key("scale")
         writer.number(material.dash_scale)
+
+
+def _flags(mut writer: JsonWriter, material: Material) raises:
+    """Write the shadow side, the blend constant, the fragment flags and
+    whether the material is visible, each where it is not three.js's
+    default, as `Material.toJSON` writes them."""
+    var sided = Bool(material.shadow_side)
+    if sided:
+        writer.key("shadowSide")
+        writer.integer(material.shadow_face().value)
+    if material.blend_color.hex() != 0:
+        writer.key("blendColor")
+        writer.integer(material.blend_color.hex())
+    if material.blend_alpha != 0:
+        writer.key("blendAlpha")
+        writer.number(material.blend_alpha)
+    if material.dithering:
+        writer.key("dithering")
+        writer.boolean(True)
+    if material.alpha_hash:
+        writer.key("alphaHash")
+        writer.boolean(True)
+    if material.alpha_to_coverage:
+        writer.key("alphaToCoverage")
+        writer.boolean(True)
+    if material.premultiplied_alpha:
+        writer.key("premultipliedAlpha")
+        writer.boolean(True)
+    if not material.visible:
+        writer.key("visible")
+        writer.boolean(False)
+    if not material.tone_mapped:
+        writer.key("toneMapped")
+        writer.boolean(False)
 
 
 def _raster(mut writer: JsonWriter, material: Material) raises:

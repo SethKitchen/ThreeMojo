@@ -1830,9 +1830,29 @@ struct _Loader(Movable):
                 self.number(item, "farDistance", 1000), METER
             )
             built.check_data()
+        self.flags(item, built)
         self.raster(item, built)
         self.clipping(item, built)
         return built^
+
+    def flags(self, item: Int, mut material: Material) raises:
+        """Set a material's fragment flags, its blend constant, its shadow
+        side and whether it is visible, from the keys three.js's
+        `MaterialLoader` reads, at its defaults. `raster` checks the
+        blend constant; the shadow side is checked here."""
+        if self.document.get(item, "shadowSide") != NO_NODE:
+            material.shadow_side = Side(self.integer(item, "shadowSide", 0))
+            _ = material.shadow_face()
+        material.blend_color = self.color(item, "blendColor", 0)
+        material.blend_alpha = self.number(item, "blendAlpha", 0)
+        material.dithering = self.flag(item, "dithering", False)
+        material.alpha_hash = self.flag(item, "alphaHash", False)
+        material.alpha_to_coverage = self.flag(item, "alphaToCoverage", False)
+        material.premultiplied_alpha = self.flag(
+            item, "premultipliedAlpha", False
+        )
+        material.visible = self.flag(item, "visible", True)
+        material.tone_mapped = self.flag(item, "toneMapped", True)
 
     def clipping(self, item: Int, mut material: Material) raises:
         """Set a material's own clipping planes, `clipIntersection` and

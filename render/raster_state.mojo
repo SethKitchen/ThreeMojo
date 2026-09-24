@@ -34,12 +34,21 @@ turns the comparison round for the reversed mode. The renderer puts one
 mode on every primitive of a frame, so both backends store and compare
 alike.
 
+**The material flags a fragment reads are in the state.** three.js's
+`dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage` and
+`premultipliedAlpha` ride five more bits of `ops_word`, and the
+constant color its `blendColor` and `blendAlpha` set rides four float
+lanes, as the log factor does. The renderer sets each flag only where
+three.js's shader for that primitive reads it; see
+`docs/wiki/Renderer-hooks-and-material-flags.md`.
+
 **Polygon offset is not in the state.** `PolygonOffset.shift` moves a
 triangle's corners before either backend sees it, so both receive the moved
 depths and agree without a device lane.
 """
 
 from math.vector3 import Vector3
+from render.blend import Rgba
 from std.math import inf, isfinite, log2, max, min
 from std.memory import bitcast
 from std.utils.numerics import max_finite
@@ -362,6 +371,11 @@ def _is_byte(value: Int) -> Bool:
     return value >= 0 and value <= STENCIL_MAX
 
 
+def _is_fraction(value: Float32) -> Bool:
+    """Return True if `value` is finite and from zero to one."""
+    return isfinite(value) and value >= 0 and value <= 1
+
+
 struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     """The depth, color and stencil state of one primitive: every field
     three.js's `Material` holds for them but the polygon offset.
@@ -402,6 +416,30 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     # distance. Read only under `LOGARITHMIC_DEPTH`. It rides a float
     # lane to the device and not the packed words.
     var log_depth_scale: Float32
+    # Whether the fragment's color is dithered before it is written,
+    # three.js's `dithering`. See `render.fragment_flags.dither`.
+    var dithering: Bool
+    # Whether the tone mapping curve reaches the fragment, three.js's
+    # `toneMapped`. Off, an opaque fragment marks its pixel as one the
+    # curve leaves alone, as a data fragment marks it.
+    var tone_mapped: Bool
+    # Whether a fragment is thrown away where its alpha is below a hashed
+    # threshold, three.js's `alphaHash`. See
+    # `render.fragment_flags.alpha_hash_threshold`.
+    var alpha_hash: Bool
+    # Whether a fragment's alpha decides which samples it covers,
+    # three.js's `alphaToCoverage`. See `render.fragment_flags.alpha_covers`.
+    var alpha_to_coverage: Bool
+    # Whether the fragment's color is multiplied by its alpha before the
+    # blend, three.js's `premultipliedAlpha`. See `render.blend`.
+    var premultiplied_alpha: Bool
+    # The constant color the four constant blend factors read: three.js's
+    # `blendColor`, linear, and its `blendAlpha`. Each from zero to one,
+    # as WebGL clamps them.
+    var blend_red: Float32
+    var blend_green: Float32
+    var blend_blue: Float32
+    var blend_alpha: Float32
 
     def __init__(
         out self,
@@ -419,6 +457,15 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         stencil_z_pass: StencilOp = KEEP_STENCIL_OP,
         depth_mode: DepthMode = STANDARD_DEPTH,
         log_depth_scale: Float32 = 0,
+        dithering: Bool = False,
+        tone_mapped: Bool = True,
+        alpha_hash: Bool = False,
+        alpha_to_coverage: Bool = False,
+        premultiplied_alpha: Bool = False,
+        blend_red: Float32 = 0,
+        blend_green: Float32 = 0,
+        blend_blue: Float32 = 0,
+        blend_alpha: Float32 = 0,
     ):
         """Create a state. Every default is three.js's.
 
@@ -439,6 +486,16 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             depth_mode: How the depth is stored. `STANDARD_DEPTH`.
             log_depth_scale: The `logDepthBufFC` of three.js, positive under
                 `LOGARITHMIC_DEPTH`.
+            dithering: Whether the color is dithered.
+            tone_mapped: Whether the tone mapping curve reaches it.
+            alpha_hash: Whether a hashed alpha threshold throws it away.
+            alpha_to_coverage: Whether its alpha decides its coverage.
+            premultiplied_alpha: Whether its color is premultiplied before
+                the blend.
+            blend_red: The constant color's red, linear, zero to one.
+            blend_green: Its green.
+            blend_blue: Its blue.
+            blend_alpha: The constant alpha, zero to one.
         """
         self.depth_test = depth_test
         self.depth_write = depth_write
@@ -454,11 +511,31 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         self.stencil_z_pass = stencil_z_pass
         self.depth_mode = depth_mode
         self.log_depth_scale = log_depth_scale
+        self.dithering = dithering
+        self.tone_mapped = tone_mapped
+        self.alpha_hash = alpha_hash
+        self.alpha_to_coverage = alpha_to_coverage
+        self.premultiplied_alpha = premultiplied_alpha
+        self.blend_red = blend_red
+        self.blend_green = blend_green
+        self.blend_blue = blend_blue
+        self.blend_alpha = blend_alpha
+
+    def blend_constant(self) -> Rgba:
+        """Return the constant color the constant blend factors read.
+
+        Returns:
+            `blendColor` and `blendAlpha`, as one four-lane value.
+        """
+        return Rgba(
+            self.blend_red, self.blend_green, self.blend_blue, self.blend_alpha
+        )
 
     def is_valid(self) -> Bool:
         """Return True if every function, operation and mode is one there
-        is, every stencil value fits eight bits, and a logarithmic depth
-        has a finite, positive factor.
+        is, every stencil value fits eight bits, a logarithmic depth has a
+        finite, positive factor, and every channel of the blend constant
+        is from zero to one.
 
         Returns:
             Whether both backends can draw under this state.
@@ -477,6 +554,10 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
                 self.depth_mode != LOGARITHMIC_DEPTH
                 or (isfinite(self.log_depth_scale) and self.log_depth_scale > 0)
             )
+            and _is_fraction(self.blend_red)
+            and _is_fraction(self.blend_green)
+            and _is_fraction(self.blend_blue)
+            and _is_fraction(self.blend_alpha)
         )
 
     def check(self) raises:
@@ -485,14 +566,16 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If a function or an operation is none of the eight, the
                 reference or a mask is outside 0 to 255, the depth mode is
-                none of the three, or a logarithmic depth has a factor that
-                is not finite and positive.
+                none of the three, a logarithmic depth has a factor that
+                is not finite and positive, or a channel of the blend
+                constant is not from zero to one.
         """
         if not self.is_valid():
             raise Error(
                 "A depth or stencil state names a function, an operation or"
                 " a depth mode there is not, a stencil value outside 0 to"
-                " 255, or a logarithmic depth without a positive factor"
+                " 255, a logarithmic depth without a positive factor, or a"
+                " blend color or alpha outside 0 to 1"
             )
 
     def writes_depth(self, mixes: Bool) -> Bool:
@@ -519,7 +602,10 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             Bit 0 the depth test, bit 1 the depth write, bit 2 the color
             write, bit 3 the stencil write, then three bits each for the
             depth function, the stencil function and the three operations,
-            then two bits for the depth mode. The log factor is not in it.
+            then two bits for the depth mode, then one bit each for
+            `dithering`, `tone_mapped`, `alpha_hash`, `alpha_to_coverage`
+            and `premultiplied_alpha`, bits 21 to 25. The log factor and
+            the blend constant are not in it.
         """
         return (
             Int(self.depth_test)
@@ -532,6 +618,11 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             | (self.stencil_z_fail.value << 13)
             | (self.stencil_z_pass.value << 16)
             | (self.depth_mode.value << 19)
+            | (Int(self.dithering) << 21)
+            | (Int(self.tone_mapped) << 22)
+            | (Int(self.alpha_hash) << 23)
+            | (Int(self.alpha_to_coverage) << 24)
+            | (Int(self.premultiplied_alpha) << 25)
         )
 
     def stencil_word(self) -> Int:
@@ -558,8 +649,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
 
         Returns:
             The state, equal to the one that was packed when it was valid
-            and its log factor was zero. The device sets the factor from
-            its own lane.
+            and its log factor and blend constant were zero. The device
+            sets those from its own lanes.
         """
         return RasterState(
             (ops & 1) != 0,
@@ -575,6 +666,11 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             StencilOp((ops >> 13) & OP_MASK),
             StencilOp((ops >> 16) & OP_MASK),
             DepthMode((ops >> 19) & 3),
+            dithering=(ops & (1 << 21)) != 0,
+            tone_mapped=(ops & (1 << 22)) != 0,
+            alpha_hash=(ops & (1 << 23)) != 0,
+            alpha_to_coverage=(ops & (1 << 24)) != 0,
+            premultiplied_alpha=(ops & (1 << 25)) != 0,
         )
 
 

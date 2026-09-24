@@ -30,6 +30,11 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
 | `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
+| `render_with(hooks, scene, assets, camera)`, `render_into_with(hooks, target, scene, assets, camera)` | The same, with render hooks. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags). |
+| `set_opaque_sort(method)`, `set_transparent_sort(method)` | Your order for the opaque and the translucent runs. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#sorts). |
+| `auto_clear`, `auto_clear_color`, `auto_clear_depth`, `auto_clear_stencil`, `clear(target)` | What `render_into` clears. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#automatic-clear). |
+| `info() -> RenderInfo`, `reset_info()`, `info_auto_reset` | What the renderer drew. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#info). |
+| `custom_tone_mapping`, `curve_program(assets)` | The node program of `CUSTOM_TONE_MAPPING`. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#custom-tone-mapping). |
 | `render_array(scene, assets, array) -> Framebuffer` | Once per camera of an [ArrayCamera](Cameras#arraycamera), each into its own rectangle. |
 | `render_array_into(target, scene, assets, array)` | The same into a target you hold. |
 | `render_cube(scene, assets, camera) -> CubeTexture` | Six faces through a [CubeCamera](Cameras#cubecamera), as a cube texture. |

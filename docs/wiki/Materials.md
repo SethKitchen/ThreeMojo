@@ -1039,7 +1039,7 @@ Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORM
 
 ### Blending modes
 
-`render/blend.mojo` holds the arithmetic of every mode, and both rasterizers call it. three.js: `NormalBlending`, `AdditiveBlending`, `SubtractiveBlending`, `MultiplyBlending` and `CustomBlending`, with `premultipliedAlpha` off.
+`render/blend.mojo` holds the arithmetic of every mode, and both rasterizers call it. three.js: `NormalBlending`, `AdditiveBlending`, `SubtractiveBlending`, `MultiplyBlending` and `CustomBlending`. `premultiplied_alpha`, the constant factors and the other material flags are in [Renderer hooks and material flags](Renderer-hooks-and-material-flags#material-flags).
 
 | Mode | Color | Alpha |
 |---|---|---|

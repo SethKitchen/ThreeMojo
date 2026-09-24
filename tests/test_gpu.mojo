@@ -1876,8 +1876,11 @@ def test_flattening_fog_lays_out_six_floats() raises:
         linear_fog(Color(128, 0, 255), Length(2.0, METER), Length(9.0, METER))
     )
     var flat = flatten_fog(view)
-    assert_equal(len(flat), 6)
+    assert_equal(len(flat), 7)
     assert_equal(len(flat), FOG_FLOATS)
+    # No custom tone mapping curve: its start is -1.
+    assert_equal(flat[6], Float32(-1))
+    assert_equal(flatten_fog(view, 12)[6], Float32(12))
     assert_equal(flat[0], Float32(2))
     assert_equal(flat[1], Float32(9))
     assert_equal(flat[2], Float32(0))
@@ -12504,3 +12507,163 @@ def test_both_backends_draw_the_shadow_map_viewer_alike() raises:
         points=frame.points,
     )
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+# --- material flags, the blend constant and the custom curve (#170) --------
+
+from materials.material import custom_blending as _custom_blending
+from materials.nodes import NodeGraph as _NodeGraph
+from materials.nodes import NO_NODES as _NO_NODES
+from materials.nodes import OUTPUT_NODE as _OUTPUT_NODE
+from render.blend import CONSTANT_COLOR_FACTOR as _CONSTANT_COLOR
+from render.blend import ZERO_FACTOR as _ZERO_FACTOR
+from render.gpu import LANE_BLEND_CONSTANT
+from render.tonemap import CUSTOM_TONE_MAPPING as _CUSTOM
+
+
+def test_flattening_carries_the_blend_constant() raises:
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            state=RasterState(
+                blend_red=0.25, blend_green=0.5, blend_blue=0.75, blend_alpha=1
+            ),
+        )
+    )
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX)
+    assert_equal(flat[LANE_BLEND_CONSTANT], Float32(0.25))
+    assert_equal(flat[LANE_BLEND_CONSTANT + 1], Float32(0.5))
+    assert_equal(flat[LANE_BLEND_CONSTANT + 2], Float32(0.75))
+    assert_equal(flat[LANE_BLEND_CONSTANT + 3], Float32(1))
+
+
+def _flagged_scene(mut assets: Assets, blended: Bool) raises -> Scene:
+    """Return sheets side by side under the camera, each with one flag:
+    dithered, covering by its alpha, hashed with a clear and an opaque
+    alpha, and a blend with a premultiplied color and a constant factor,
+    or with the tone mapping off when not `blended`."""
+    var scene = Scene()
+    var sheet = assets.geometries.add(
+        plane(Length(0.9, METER), Length(0.9, METER))
+    )
+    var dithered = Material(Color(120, 120, 120), kind=BASIC)
+    dithered.dithering = True
+    var covering = Material(Color(200, 80, 40), kind=BASIC, opacity=0.5)
+    covering.alpha_to_coverage = True
+    var clear = Material(Color(40, 200, 80), kind=BASIC, opacity=0.0)
+    clear.alpha_hash = True
+    var solid = Material(Color(40, 80, 200), kind=BASIC)
+    solid.alpha_hash = True
+    var last = Material(Color(250, 250, 250), kind=BASIC)
+    if blended:
+        last = Material(
+            Color(250, 250, 250),
+            kind=BASIC,
+            opacity=0.5,
+            blending=_custom_blending(_CONSTANT_COLOR, _ZERO_FACTOR),
+        )
+        last.premultiplied_alpha = True
+        last.blend_color = Color(128, 255, 64)
+        last.blend_alpha = 0.5
+    else:
+        last.tone_mapped = False
+    var materials = [dithered, covering, clear, solid, last]
+    for index in range(len(materials)):
+        var spot = Object3D()
+        spot.set_position(Float32(index % 3) - 1, Float32(index // 3) - 0.5, 0)
+        var node = scene.add(spot^)
+        scene.add_mesh(
+            Mesh(sheet, assets.materials.add(materials[index]), node)
+        )
+    scene.update()
+    return scene^
+
+
+def _flags_on_both(
+    renderer: Renderer, scene: Scene, assets: Assets
+) raises -> Tuple[Framebuffer, Framebuffer]:
+    """Return the scene drawn by the renderer and by the device from the
+    one prepared frame, through the renderer's curve and program."""
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(20.0, METER),
+    )
+    camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene),
+        FogView(scene.fog),
+        renderer.tone_curve(),
+        renderer.tone_mapping_exposure,
+        frame.segments,
+        frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+        custom_tone_mapping=renderer.custom_tone_mapping,
+    )
+    return (cpu^, device.read_back())
+
+
+def test_both_backends_agree_on_the_material_flags() raises:
+    if skipped_for_lack_of_a_gpu("both backends agree on the material flags"):
+        return
+    var assets = Assets()
+    var scene = _flagged_scene(assets, True)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var both = _flags_on_both(renderer, scene, assets)
+    assert_true(
+        count_background(both[0], BACKGROUND) < 48 * 36 - 100,
+        "the sheets drew nothing",
+    )
+    # Dithering, coverage, the hash of a clear and of an opaque alpha, and
+    # the premultiplied constant blend are the same arithmetic on both
+    # sides, from `render.fragment_flags` and `render.blend`.
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_keep_the_curve_off_an_untoned_surface() raises:
+    if skipped_for_lack_of_a_gpu("both backends keep the curve off untoned"):
+        return
+    var assets = Assets()
+    var scene = _flagged_scene(assets, False)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_tone_mapping(REINHARD_TONE_MAPPING)
+    var both = _flags_on_both(renderer, scene, assets)
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_map_through_a_custom_curve() raises:
+    if skipped_for_lack_of_a_gpu("both backends map through a custom curve"):
+        return
+    var assets = Assets()
+    var scene = _flagged_scene(assets, False)
+    var graph = _NodeGraph()
+    graph.set_output(
+        _OUTPUT_NODE, graph.mul(graph.lit(), graph.vec3(0.5, 0.25, 1))
+    )
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_tone_mapping(_CUSTOM)
+    renderer.custom_tone_mapping = assets.programs.add(graph.compile())
+    var both = _flags_on_both(renderer, scene, assets)
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+    # And with no program, three.js's default curve leaves the light alone.
+    renderer.custom_tone_mapping = _NO_NODES
+    var plain = _flags_on_both(renderer, scene, assets)
+    assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)

@@ -178,6 +178,15 @@ packed into two, three or four channels. See `render.packing`.
 `fog` says whether the scene's fog veils a surface, three.js's `fog`. It is
 on for every kind that shows light and off for the three data kinds, which
 refuse it: three.js's normal, depth and distance shaders read no fog.
+
+`visible`, `allow_override` and `shadow_side` say whether a surface is
+drawn, whether a scene's `override_material` replaces it, and which faces
+a shadow map draws: three.js's `visible`, `allowOverride` and
+`shadowSide`. `dithering`, `tone_mapped`, `alpha_hash`,
+`alpha_to_coverage`, `premultiplied_alpha`, `blend_color` and
+`blend_alpha` are three.js's fragment flags and blend constant; both
+rasterizers read them from `raster_state`. See
+`docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
 from render.cube_texture import check_rotation, is_turned
@@ -1112,6 +1121,31 @@ struct Material(ImplicitlyCopyable):
     # Whether the scene's fog veils this surface, three.js's `fog`. On for
     # every kind that shows light, as there, and off for the data kinds.
     var fog: Bool
+    # Whether anything drawn with this material is drawn at all, three.js's
+    # `visible`. Off, the renderer leaves the object out of the frame and
+    # out of the shadow maps, as three.js leaves it out of its lists.
+    var visible: Bool
+    # Whether a scene's `override_material` replaces this material,
+    # three.js's `allowOverride`.
+    var allow_override: Bool
+    # Which faces a shadow map draws, three.js's `shadowSide`, or `None`
+    # for the material's own `side`; see `Renderer.shadow_maps`.
+    var shadow_side: Optional[Side]
+    # The fragment flags, three.js's fields of the same names at its
+    # defaults: `dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage`
+    # and `premultipliedAlpha`. `raster_state` carries them to both
+    # rasterizers; see `render.fragment_flags` and `render.blend`.
+    var dithering: Bool
+    var tone_mapped: Bool
+    var alpha_hash: Bool
+    var alpha_to_coverage: Bool
+    var premultiplied_alpha: Bool
+    # The constant color and alpha a custom blending's constant factors
+    # read, three.js's `blendColor` and `blendAlpha`. Black and zero by
+    # default, as there. The color is sRGB, as `color` is, and is decoded
+    # to linear light for the blend.
+    var blend_color: Color
+    var blend_alpha: Float32
 
     def __init__(
         out self,
@@ -2206,6 +2240,16 @@ struct Material(ImplicitlyCopyable):
             self.fog = fog.value()
         else:
             self.fog = not kind.is_data()
+        self.visible = True
+        self.allow_override = True
+        self.shadow_side = None
+        self.dithering = False
+        self.tone_mapped = True
+        self.alpha_hash = False
+        self.alpha_to_coverage = False
+        self.premultiplied_alpha = False
+        self.blend_color = Color(0, 0, 0)
+        self.blend_alpha = 0
         self.check_data()
 
     def check_data(self) raises:
@@ -2533,7 +2577,8 @@ struct Material(ImplicitlyCopyable):
         self.clip_shadows = shadows
 
     def raster_state(self) raises -> RasterState:
-        """Return the material's depth, color and stencil state, checked.
+        """Return the material's depth, color and stencil state, checked,
+        with its fragment flags and its blend constant.
 
         What `Renderer.prepare` reads and every corner carries. The fields
         are open, so they are checked here, where the renderer reads them.
@@ -2543,9 +2588,11 @@ struct Material(ImplicitlyCopyable):
 
         Raises:
             Error: If the depth function, the stencil function or a stencil
-                operation is none of the eight, or the stencil reference or
-                a mask is outside 0 to 255.
+                operation is none of the eight, the stencil reference or a
+                mask is outside 0 to 255, or `blend_alpha` is not from zero
+                to one.
         """
+        var constant = FloatColor(srgb=self.blend_color)
         var state = RasterState(
             self.depth_test,
             self.depth_write,
@@ -2559,9 +2606,38 @@ struct Material(ImplicitlyCopyable):
             self.stencil_fail,
             self.stencil_z_fail,
             self.stencil_z_pass,
+            dithering=self.dithering,
+            tone_mapped=self.tone_mapped,
+            alpha_hash=self.alpha_hash,
+            alpha_to_coverage=self.alpha_to_coverage,
+            premultiplied_alpha=self.premultiplied_alpha,
+            blend_red=constant.r,
+            blend_green=constant.g,
+            blend_blue=constant.b,
+            blend_alpha=self.blend_alpha,
         )
         state.check()
         return state
+
+    def shadow_face(self) raises -> Side:
+        """Return which faces a shadow map draws of this material.
+
+        Returns:
+            `shadow_side` when it is set, and `side` when it is not.
+
+        Raises:
+            Error: If `shadow_side` is set to a side that is none of the
+                three.
+        """
+        var stated = Bool(self.shadow_side)
+        if not stated:
+            return self.side
+        var face = self.shadow_side.value()
+        if not face.is_valid():
+            raise Error(
+                "A shadow side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
+            )
+        return face
 
     def depth_offset(self) raises -> PolygonOffset:
         """Return how far the material's filled triangles are pushed back.

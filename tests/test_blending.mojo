@@ -29,12 +29,16 @@ from render.blend import (
     ADD_EQUATION,
     BlendEquation,
     BlendFactor,
+    CONSTANT_ALPHA_FACTOR,
+    CONSTANT_COLOR_FACTOR,
     CUSTOM_BASE,
     DST_ALPHA_FACTOR,
     DST_COLOR_FACTOR,
     MAX_EQUATION,
     MIN_EQUATION,
     ONE_FACTOR,
+    ONE_MINUS_CONSTANT_ALPHA_FACTOR,
+    ONE_MINUS_CONSTANT_COLOR_FACTOR,
     ONE_MINUS_DST_ALPHA_FACTOR,
     ONE_MINUS_DST_COLOR_FACTOR,
     ONE_MINUS_SRC_ALPHA_FACTOR,
@@ -46,6 +50,7 @@ from render.blend import (
     SRC_COLOR_FACTOR,
     SUBTRACT_EQUATION,
     ZERO_FACTOR,
+    blend_fragment,
     blend_pixel,
     is_valid_custom,
     pack_custom,
@@ -98,7 +103,8 @@ comptime FRONT = Rgba(0.5, 0.25, 1.0, 0.8)
 def test_the_types_know_their_values() raises:
     assert_true(ZERO_FACTOR.is_valid())
     assert_true(SRC_ALPHA_SATURATE_FACTOR.is_valid())
-    assert_false(BlendFactor(11).is_valid())
+    assert_true(ONE_MINUS_CONSTANT_ALPHA_FACTOR.is_valid())
+    assert_false(BlendFactor(15).is_valid())
     assert_false(BlendFactor(-1).is_valid())
     assert_true(MAX_EQUATION.is_valid())
     assert_false(BlendEquation(5).is_valid())
@@ -136,7 +142,7 @@ def test_blending_names_its_modes() raises:
     )
     _near(blend_pixel(BEHIND, FRONT, separate.value), 0.5, 0.25, 1.0, 0.8)
     with assert_raises(contains="not one"):
-        _ = custom_blending(BlendFactor(12), ONE_FACTOR)
+        _ = custom_blending(BlendFactor(15), ONE_FACTOR)
 
 
 def test_the_named_modes() raises:
@@ -243,6 +249,97 @@ def test_a_target_blends_by_mode() raises:
     # And adds nothing under the additive one.
     target.blend(0, 0, FloatColor(1.0, 1.0, 1.0, 0.0), ADDITIVE.value)
     assert_almost_equal(target.color_at(0, 0).g, Float32(0.5), atol=TOLERANCE)
+
+
+def test_the_constant_factors_read_the_blend_color() raises:
+    # three.js's `blendColor` and `blendAlpha`, WebGL's constant color.
+    var constant = Rgba(0.25, 0.5, 0.75, 0.4)
+    var s = FRONT
+    var d = BEHIND
+    var codes: List[BlendFactor] = [
+        CONSTANT_COLOR_FACTOR,
+        ONE_MINUS_CONSTANT_COLOR_FACTOR,
+        CONSTANT_ALPHA_FACTOR,
+        ONE_MINUS_CONSTANT_ALPHA_FACTOR,
+    ]
+    var factors: List[Rgba] = [
+        constant,
+        Rgba(1) - constant,
+        Rgba(constant[3]),
+        Rgba(1 - constant[3]),
+    ]
+    for index in range(len(codes)):
+        var mode = _one(codes[index], ZERO_FACTOR, ADD_EQUATION)
+        var got = blend_fragment(d, s, mode, False, constant)
+        var want = s * factors[index]
+        _near(got, want[0], want[1], want[2], want[3])
+    # On the destination's side too.
+    var kept = _one(ZERO_FACTOR, CONSTANT_ALPHA_FACTOR, ADD_EQUATION)
+    var got = blend_fragment(d, s, kept, False, constant)
+    _near(got, 0.2 * 0.4, 0.4 * 0.4, 0.6 * 0.4, 0.5 * 0.4)
+    # With no constant, `blend_pixel` reads black.
+    _near(
+        blend_pixel(
+            d, s, _one(CONSTANT_COLOR_FACTOR, ONE_FACTOR, ADD_EQUATION)
+        ),
+        0.2,
+        0.4,
+        0.6,
+        0.5,
+    )
+
+
+def test_premultiplied_alpha_takes_three_js_factors() raises:
+    var s = FRONT
+    var d = BEHIND
+    var none = Rgba(0)
+    # Normal: the same sum as a straight source.
+    var straight = blend_fragment(d, s, BLEND.value, False, none)
+    var premultiplied = blend_fragment(d, s, BLEND.value, True, none)
+    _near(premultiplied, straight[0], straight[1], straight[2], straight[3])
+    # Additive: ONE, ONE on the premultiplied color, the same sum again.
+    _near(
+        blend_fragment(d, s, ADDITIVE.value, True, none),
+        0.5 * 0.8 + 0.2,
+        0.25 * 0.8 + 0.4,
+        1.0 * 0.8 + 0.6,
+        1.0,
+    )
+    # Subtractive: behind times one less the premultiplied color.
+    _near(
+        blend_fragment(d, s, SUBTRACTIVE.value, True, none),
+        0.2 * (1 - 0.4),
+        0.4 * (1 - 0.2),
+        0.6 * (1 - 0.8),
+        0.5,
+    )
+    # Multiply: DST_COLOR, ONE_MINUS_SRC_ALPHA, ZERO, ONE.
+    _near(
+        blend_fragment(d, s, MULTIPLY.value, True, none),
+        0.4 * 0.2 + 0.2 * 0.2,
+        0.2 * 0.4 + 0.4 * 0.2,
+        0.8 * 0.6 + 0.6 * 0.2,
+        0.5,
+    )
+    # A custom mode keeps its own factors and reads the premultiplied
+    # color.
+    var one = _one(ONE_FACTOR, ZERO_FACTOR, ADD_EQUATION)
+    _near(blend_fragment(d, s, one, True, none), 0.4, 0.2, 0.8, 0.8)
+    # A value that is none of the modes is read as a custom one, as it
+    # always was: all six of its fields are zero.
+    _near(blend_fragment(d, s, 0, True, none), 0, 0, 0, 0)
+
+
+def test_a_target_blends_with_the_material_flags() raises:
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 1.0))
+    var mode = _one(CONSTANT_COLOR_FACTOR, ZERO_FACTOR, ADD_EQUATION)
+    target.blend(
+        0, 0, FloatColor(1.0, 1.0, 1.0, 0.5), mode, True, Rgba(0.5, 0, 0, 1)
+    )
+    var pixel = target.color_at(0, 0)
+    assert_almost_equal(pixel.r, Float32(0.25), atol=TOLERANCE)
+    assert_almost_equal(pixel.g, Float32(0), atol=TOLERANCE)
 
 
 def test_a_material_that_blends_by_any_mode_is_transparent() raises:
