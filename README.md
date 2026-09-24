@@ -173,7 +173,7 @@ The port is not at parity with three.js yet. 174 features are ported and 6 are o
 <details>
 <summary>Ported: 13</summary>
 
-- [x] [Shadow camera frustum, light power, CSM and room environments](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#cascaded-shadow-maps): shadow camera edges, shadow intensity, light power, cascades, PMREM from a scene and room environments [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
+- [x] [Shadow camera frustum, light power, CSM and room environments](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#cascaded-shadow-maps): shadow camera edges and intensity, light power, cascades, and PMREM from a scene [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
 - [x] [PointLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#point): inverse-square falloff, decay, cutoff distance [#52](https://github.com/SethKitchen/ThreeMojo/issues/52)
