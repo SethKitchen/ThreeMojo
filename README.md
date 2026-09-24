@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 178 features are ported and 24 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 179 features are ported and 23 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -233,11 +233,11 @@ The port is not at parity with three.js yet. 178 features are ported and 24 are 
 - [ ] LWO and LDraw loaders [#202](https://github.com/SethKitchen/ThreeMojo/issues/202)
 - [ ] glTF meshopt compression, WebP textures and material variants [#201](https://github.com/SethKitchen/ThreeMojo/issues/201)
 - [ ] Skinned and instanced meshes in OBJ, STL, PLY and USDZ, OBJ lines and points, and glTF extras [#200](https://github.com/SethKitchen/ThreeMojo/issues/200)
-- [ ] More loaders and exporters: 3MF, PCD, SVG, Draco, VRML, 3DS, BVH and others [#176](https://github.com/SethKitchen/ThreeMojo/issues/176)
 
 <details>
-<summary>Ported: 16</summary>
+<summary>Ported: 17</summary>
 
+- [x] [More loaders and exporters](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files): SVG, Draco, VRML, 3DS, BVH, LUT, EXR, USDZ, KTX2 and others, with a byte-exact Draco exporter [#176](https://github.com/SethKitchen/ThreeMojo/issues/176)
 - [x] [glTF export of lights, cameras, animations, skins, morphs and instancing](https://github.com/SethKitchen/ThreeMojo/wiki/Exporters#what-a-node-carries): lines and points too, and the loader reads bump and KTX2 textures [#168](https://github.com/SethKitchen/ThreeMojo/issues/168)
 - [x] [FBX and Collada skins and animation](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#skins-blend-shapes-and-animation): skins, blend shapes and animations read into skinned meshes, morph targets and clips [#175](https://github.com/SethKitchen/ThreeMojo/issues/175)
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
