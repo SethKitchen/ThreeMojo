@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 168 features are ported and 12 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 169 features are ported and 11 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -191,11 +191,11 @@ The port is not at parity with three.js yet. 168 features are ported and 12 are 
 
 ### Textures
 
-- [x] [Texture sampling, environment mapping and background parameters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mapping): per-axis wrap, filters, flipY, equirectangular and cube mappings, and the scene's background and environment settings [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
 
 <details>
-<summary>Ported: 18</summary>
+<summary>Ported: 19</summary>
 
+- [x] [Texture sampling, environment mapping and background parameters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mapping): per-axis wrap, filters, flipY, equirectangular and cube mappings, and the scene's background and environment settings [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
 - [x] [Mipmaps and trilinear filtering](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mipmaps) [#60](https://github.com/SethKitchen/ThreeMojo/issues/60)
