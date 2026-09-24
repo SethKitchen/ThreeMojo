@@ -106,10 +106,11 @@ type this port has no counterpart for, an attribute that is not a
 `Float32Array`, a mesh with more than one material, a
 uuid named twice or named and not there, a `CustomBlending` material, a
 depth function, stencil function or stencil operation that is none of
-three.js's, a texture whose two wraps differ, whose mapping is not
-`UVMapping`, or whose `channel` is neither of two, a cube texture that is
-not six images or not `CubeReflectionMapping`, an `envMap` or
-`environment` that names a flat texture, more than eight clipping planes
+three.js's, a flat texture whose mapping is neither `UVMapping` nor an
+equirectangular one or whose `channel` is neither of two, a cube texture
+that is not six images or whose mapping is neither cube mapping, an
+`envMap`, `environment` or blurred background that names a flat texture
+that is not equirectangular, more than eight clipping planes
 or morph influences, an LOD level that is
 not a bare mesh child, a skeleton with fewer `boneInverses` than bones, a batch
 whose info names what is not there, and every number the builders
@@ -126,9 +127,20 @@ whose object is not found, or does not have the property, is left out, as
 three.js binds it to nothing; a clip left with no track is left out too.
 A track on the scene itself is refused, since the scene is not a node.
 
+**Samplers, panoramas and the scene's environment.** A texture reads its
+`wrap` per axis, its `magFilter` and `minFilter`, its `flipY` and its
+`mapping`. A flat texture with an equirectangular mapping, named as an
+`envMap`, the `environment` or a blurred background, becomes a cube that
+reads it directly, with its PMREM where a standard or physical surface
+reflects it or the background is blurred, as three.js's `WebGLCubeUVMaps`
+builds one. A material reads its `envMapRotation`, a basic, lambert or
+phong material its `refractionRatio`, and a material with a normal map
+its `normalMapType`. The scene reads its `backgroundBlurriness`,
+`backgroundIntensity`, `backgroundRotation`, `environmentIntensity` and
+`environmentRotation`.
+
 **What is read without effect.** `up` and `matrixWorldAutoUpdate`;
-the background's blurriness and intensity, and the
-rotations of the background and the environment; a cube texture's wrap; an
+a cube texture's wrap; an
 `envMap` on a class whose shader reads none; the material keys this port
 has no field for; a texture's `format`, `type`,
 `premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
@@ -240,6 +252,10 @@ from materials.material import (
     PHYSICAL,
     LineWidth,
     PointSize,
+    DEFAULT_REFRACTION_RATIO,
+    NO_ENV_ROTATION,
+    NormalMapType,
+    TANGENT_SPACE_NORMAL_MAP,
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.bounds import Plane
@@ -260,7 +276,11 @@ from objects.points import Points
 from objects.skeleton import Bone, Skeleton, bind_skeleton
 from objects.skinned_mesh import ATTACHED, DETACHED, BindMode, SkinnedMesh
 from objects.sprite import Sprite
-from render.cube_texture import SEEN_FROM_OUTSIDE, cube_texture_from
+from render.cube_texture import (
+    SEEN_FROM_OUTSIDE,
+    cube_of_panorama,
+    cube_texture_from,
+)
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -285,11 +305,16 @@ from render.texture import (
     CLAMP,
     COVERAGE,
     IGNORED,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
     MIRROR,
     NEAREST,
+    NEAREST_MIPMAP_LINEAR,
+    NEAREST_MIPMAP_NEAREST,
     REPEAT,
     Alpha,
     Filter,
+    Mapping,
     UvChannel,
     Wrap,
     texture_from,
@@ -311,6 +336,9 @@ comptime FORMAT_MAJOR = 4
 # three.js's texture constants, by their numbers in `constants.js`.
 comptime UV_MAPPING = 300
 comptime CUBE_REFLECTION_MAPPING = 301
+comptime CUBE_REFRACTION_MAPPING = 302
+comptime EQUIRECTANGULAR_REFLECTION_MAPPING = 303
+comptime EQUIRECTANGULAR_REFRACTION_MAPPING = 304
 comptime REPEAT_WRAPPING = 1000
 comptime CLAMP_TO_EDGE_WRAPPING = 1001
 comptime MIRRORED_REPEAT_WRAPPING = 1002
@@ -464,6 +492,52 @@ def is_mipmap_filter(code: Int) -> Bool:
 def _is_filter(code: Int) -> Bool:
     """Return True for any of three.js's six filter constants."""
     return code >= NEAREST_FILTER and code <= LINEAR_MIPMAP_LINEAR_FILTER
+
+
+def filter_of(code: Int) raises -> Filter:
+    """Return the `Filter` a three.js filter constant names.
+
+    Args:
+        code: `NearestFilter` through `LinearMipmapLinearFilter`, by number.
+
+    Returns:
+        The filter.
+
+    Raises:
+        Error: If the number is none of the six.
+    """
+    if not _is_filter(code):
+        raise Error("Object JSON: a filter that is none of the six")
+    return [
+        NEAREST,
+        NEAREST_MIPMAP_NEAREST,
+        NEAREST_MIPMAP_LINEAR,
+        BILINEAR,
+        LINEAR_MIPMAP_NEAREST,
+        LINEAR_MIPMAP_LINEAR,
+    ][code - NEAREST_FILTER]
+
+
+def filter_code(filter: Filter) -> Int:
+    """Return the three.js filter constant for a valid `Filter`.
+
+    Args:
+        filter: Any of the six named filters.
+
+    Returns:
+        Its number in three.js.
+    """
+    if filter == NEAREST:
+        return NEAREST_FILTER
+    if filter == NEAREST_MIPMAP_NEAREST:
+        return NEAREST_MIPMAP_NEAREST_FILTER
+    if filter == NEAREST_MIPMAP_LINEAR:
+        return NEAREST_MIPMAP_LINEAR_FILTER
+    if filter == BILINEAR:
+        return LINEAR_FILTER
+    if filter == LINEAR_MIPMAP_NEAREST:
+        return LINEAR_MIPMAP_NEAREST_FILTER
+    return LINEAR_MIPMAP_LINEAR_FILTER
 
 
 def blending_of(code: Int) raises -> Optional[Blending]:
@@ -780,6 +854,16 @@ def _flip_rows(mut pixels: List[UInt8], width: Int, height: Int):
             var held = pixels[y * row + x]
             pixels[y * row + x] = pixels[other * row + x]
             pixels[other * row + x] = held
+
+
+@fieldwise_init
+struct _Sampling(ImplicitlyCopyable):
+    """A texture entry's `magFilter` and `minFilter`, and whether it has a
+    mip chain: a mipmap `minFilter` with `generateMipmaps` on."""
+
+    var mag_filter: Filter
+    var min_filter: Filter
+    var mipmapped: Bool
 
 
 struct _Loader(Movable):
@@ -1302,29 +1386,39 @@ struct _Loader(Movable):
         if alpha == IGNORED and self.ignored[at] != NO_TEXTURE:
             return self.ignored[at]
         var item = self.document.at(self.library("textures"), at)
-        if self.integer(item, "mapping", UV_MAPPING) != UV_MAPPING:
-            raise Error("Object JSON: only a UVMapping texture is read")
+        # A flat image is placed by `uv` or read as a panorama; the cube
+        # mappings name six images, and a PMREM is built, not loaded.
+        var mapping = Mapping(self.integer(item, "mapping", UV_MAPPING))
+        if mapping != Mapping(UV_MAPPING) and not (
+            mapping.is_equirectangular()
+        ):
+            raise Error(
+                "Object JSON: a flat texture's mapping is UVMapping or an"
+                " equirectangular one"
+            )
         var wraps = self.numbers(item, "wrap", 2)
         # three.js's `Texture` clamps unless the entry says otherwise.
-        var wrap = CLAMP
+        var wrap_s = CLAMP
+        var wrap_t = CLAMP
         if len(wraps) == 2:
-            if wraps[0] != wraps[1]:
-                raise Error("Object JSON: a texture's two wraps must agree")
-            wrap = wrap_of(Int(wraps[0]))
+            wrap_s = wrap_of(Int(wraps[0]))
+            wrap_t = wrap_of(Int(wraps[1]))
         var sampling = self.sampling(item)
-        var mipmapped = sampling[0]
-        var magnify = sampling[1]
         var image = decode_image(self.image_bytes(self.text(item, "image", "")))
-        if not self.flag(item, "flipY", True):
-            _flip_rows(image.pixels, image.width, image.height)
         var built = texture_from(
             image,
-            wrap,
-            NEAREST if magnify == NEAREST_FILTER else BILINEAR,
+            wrap_s,
+            sampling.mag_filter,
             color_space_of(self.text(item, "colorSpace", "")),
-            mipmapped,
+            sampling.mipmapped,
             alpha,
         )
+        built.wrap_t = wrap_t
+        built.min_filter = sampling.min_filter
+        # The rows stay as the file has them; `flip_y` says which way `v`
+        # reads them, as three.js's `flipY` does.
+        built.flip_y = self.flag(item, "flipY", True)
+        built.mapping = mapping
         var repeat = self.numbers(item, "repeat", 2)
         if len(repeat) == 2:
             built.repeat = Vector2(repeat[0], repeat[1])
@@ -1359,18 +1453,17 @@ struct _Loader(Movable):
         standard or physical surface reflects; the faces stay as they are.
         """
         if not self.is_cube(uuid):
-            raise Error(
-                "Object JSON: an envMap or environment names a texture that"
-                " is not a cube: "
-                + uuid
-            )
+            return self.panorama(uuid, prefilter, assets)
         var at = self.textures[uuid]
         if uuid not in self.cubes:
             var item = self.document.at(self.library("textures"), at)
-            var mapping = self.integer(item, "mapping", CUBE_REFLECTION_MAPPING)
-            if mapping != CUBE_REFLECTION_MAPPING:
+            var mapping = Mapping(
+                self.integer(item, "mapping", CUBE_REFLECTION_MAPPING)
+            )
+            if not mapping.is_cube():
                 raise Error(
-                    "Object JSON: only a CubeReflectionMapping cube is read"
+                    "Object JSON: a cube's mapping is CubeReflectionMapping"
+                    " or CubeRefractionMapping"
                 )
             var urls = self.image_url(self.text(item, "image", ""))
             if self.document.length(urls) != 6:
@@ -1390,10 +1483,15 @@ struct _Loader(Movable):
             var built = cube_texture_from(
                 images,
                 SEEN_FROM_OUTSIDE,
-                NEAREST if sampling[1] == NEAREST_FILTER else BILINEAR,
+                sampling.mag_filter,
                 color_space_of(self.text(item, "colorSpace", "")),
-                sampling[0],
+                sampling.mipmapped,
             )
+            built.mapping = mapping
+            # Six faces, always, so the loop never runs zero times.
+            for face in range(6):  # pragma: no branch
+                built.faces[face].min_filter = sampling.min_filter
+            built.validate()
             self.cubes[uuid] = assets.cube_textures.add(built^).value
         var id = CubeTextureId(self.cubes[uuid])
         var bare = not assets.cube_textures.get(id).is_prefiltered()
@@ -1403,9 +1501,80 @@ struct _Loader(Movable):
             )
         return id
 
-    def sampling(self, item: Int) raises -> Tuple[Bool, Int]:
-        """Return whether a texture entry has a mip chain, and its
-        magnification filter, each checked."""
+    def is_panorama(self, uuid: String) raises -> Bool:
+        """Return True if a flat texture's entry has an equirectangular
+        mapping."""
+        var item = self.document.at(
+            self.library("textures"), self.textures[uuid]
+        )
+        return Mapping(
+            self.integer(item, "mapping", UV_MAPPING)
+        ).is_equirectangular()
+
+    def euler(self, item: Int, key: String) raises -> Euler:
+        """Return the rotation an entry's `key` holds, as `Euler.toArray`
+        writes it: three angles in radians and an order, or no turn at all
+        when the entry has no such key.
+
+        Raises:
+            Error: If the array holds fewer than three numbers, or names an
+                order that is none of the six.
+        """
+        var rotation = self.array(item, key)
+        if rotation == NO_NODE:
+            return NO_ENV_ROTATION
+        var angles = List[Float32]()
+        for at in range(3):  # pragma: no branch
+            angles.append(
+                Float32(self.document.number(self.document.at(rotation, at)))
+            )
+        var order = XYZ
+        if self.document.length(rotation) > 3:
+            order = euler_order_of(
+                self.document.string(self.document.at(rotation, 3))
+            )
+        return Euler(
+            Angle(angles[0], RADIAN),
+            Angle(angles[1], RADIAN),
+            Angle(angles[2], RADIAN),
+            order,
+        )
+
+    def panorama(
+        mut self, uuid: String, prefilter: Bool, mut assets: Assets
+    ) raises -> CubeTextureId:
+        """Return the environment a flat texture with an equirectangular
+        mapping makes, building it the first time it is named: a cube that
+        reads the panorama directly, as `cube_of_panorama` builds it.
+
+        With `prefilter`, the cube gets its PMREM, as three.js's
+        `WebGLCubeUVMaps` prefilters a panorama that a standard or
+        physical surface reflects or a blurred background shows.
+        """
+        var at = self.textures[uuid]
+        var item = self.document.at(self.library("textures"), at)
+        var mapping = Mapping(self.integer(item, "mapping", UV_MAPPING))
+        if not mapping.is_equirectangular():
+            raise Error(
+                "Object JSON: an envMap, environment or blurred background"
+                " names a flat texture that is not equirectangular: "
+                + uuid
+            )
+        if uuid not in self.cubes:
+            var flat = self.texture(uuid, COVERAGE, assets)
+            var built = cube_of_panorama(assets.textures.get(flat))
+            self.cubes[uuid] = assets.cube_textures.add(built^).value
+        var id = CubeTextureId(self.cubes[uuid])
+        var bare = not assets.cube_textures.get(id).is_prefiltered()
+        if prefilter and bare:
+            assets.cube_textures.textures[id.value] = pmrem_from_cube(
+                assets.cube_textures.get(id)
+            )
+        return id
+
+    def sampling(self, item: Int) raises -> _Sampling:
+        """Return a texture entry's two filters, each checked, and whether
+        it has a mip chain."""
         var magnify = self.integer(item, "magFilter", LINEAR_FILTER)
         if magnify != NEAREST_FILTER and magnify != LINEAR_FILTER:
             raise Error("Object JSON: a magFilter that is none of the two")
@@ -1417,7 +1586,7 @@ struct _Loader(Movable):
         var mipmapped = is_mipmap_filter(minify) and self.flag(
             item, "generateMipmaps", True
         )
-        return (mipmapped, magnify)
+        return _Sampling(filter_of(magnify), filter_of(minify), mipmapped)
 
     def map(
         mut self, item: Int, key: String, alpha: Alpha, mut assets: Assets
@@ -1475,6 +1644,23 @@ struct _Loader(Movable):
         var named = self.document.get(item, "envMap")
         if named != NO_NODE and kind.reflects() and shape < 0:
             env_map = self.cube(self.document.string(named), physical, assets)
+        # How the environment is turned, on every mesh class that has one,
+        # and the refraction ratio of the three that refract.
+        var env_map_rotation = NO_ENV_ROTATION
+        if kind.reflects() and shape < 0:
+            env_map_rotation = self.euler(item, "envMapRotation")
+        var refraction_ratio = DEFAULT_REFRACTION_RATIO
+        if reflects and shape < 0:
+            refraction_ratio = self.number(
+                item, "refractionRatio", DEFAULT_REFRACTION_RATIO
+            )
+        # The normal map's frame, written beside the map as three.js
+        # writes it.
+        var normal_map_type = TANGENT_SPACE_NORMAL_MAP
+        if self.document.has(item, "normalMap"):
+            normal_map_type = NormalMapType(
+                self.integer(item, "normalMapType", 0)
+            )
         var normal_scale = self.numbers(item, "normalScale", 2)
         if len(normal_scale) == 0:
             normal_scale = [1, 1]
@@ -1620,6 +1806,9 @@ struct _Loader(Movable):
                 item, "clearcoatNormalMap", IGNORED, assets
             ),
             clearcoat_normal_scale=Vector2(coat_scale[0], coat_scale[1]),
+            env_map_rotation=env_map_rotation,
+            refraction_ratio=refraction_ratio,
+            normal_map_type=normal_map_type,
         )
         # The displacement's numbers too are read beside its map.
         var displacement = self.map(item, "displacementMap", IGNORED, assets)
@@ -1747,13 +1936,29 @@ struct _Loader(Movable):
                 )
             else:
                 raise Error("Object JSON: a fog that is not read: " + kind)
+        # The background's blur, strength and turn, and the environment's
+        # strength and turn, as `Scene.toJSON` writes them.
+        scene.background_blurriness = self.number(
+            item, "backgroundBlurriness", 0
+        )
+        scene.background_intensity = self.number(item, "backgroundIntensity", 1)
+        scene.background_rotation = self.euler(item, "backgroundRotation")
+        scene.environment_intensity = self.number(
+            item, "environmentIntensity", 1
+        )
+        scene.environment_rotation = self.euler(item, "environmentRotation")
+        scene.validate_environment()
         var background = self.document.get(item, "background")
         if background != NO_NODE:
             if self.document.kind(background) == STRING:
                 var uuid = self.document.string(background)
-                if self.is_cube(uuid):
+                # A blurred background is read from its PMREM, which
+                # three.js's `WebGLBackground` builds for a cube or a
+                # panorama: here the panorama becomes a cube to hold one.
+                var blurred = scene.background_blurriness > 0
+                if self.is_cube(uuid) or (blurred and self.is_panorama(uuid)):
                     scene.background = cube_background(
-                        self.cube(uuid, False, assets)
+                        self.cube(uuid, blurred, assets)
                     )
                 else:
                     scene.background = texture_background(
@@ -1808,28 +2013,8 @@ struct _Loader(Movable):
         var position = self.numbers(item, "position", 3)
         if len(position) == 3:
             node.set_position(position[0], position[1], position[2])
-        var rotation = self.array(item, "rotation")
-        if rotation != NO_NODE:
-            var angles = List[Float32]()
-            for at in range(3):  # pragma: no branch
-                angles.append(
-                    Float32(
-                        self.document.number(self.document.at(rotation, at))
-                    )
-                )
-            var order = XYZ
-            if self.document.length(rotation) > 3:
-                order = euler_order_of(
-                    self.document.string(self.document.at(rotation, 3))
-                )
-            node.set_rotation(
-                Euler(
-                    Angle(angles[0], RADIAN),
-                    Angle(angles[1], RADIAN),
-                    Angle(angles[2], RADIAN),
-                    order,
-                )
-            )
+        if self.array(item, "rotation") != NO_NODE:
+            node.set_rotation(self.euler(item, "rotation"))
         var quaternion = self.numbers(item, "quaternion", 4)
         if len(quaternion) == 4:
             node.set_quaternion(

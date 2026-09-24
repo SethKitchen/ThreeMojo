@@ -30,9 +30,22 @@ camera turns and holds still as the camera moves. That is what a sky does.
 The renderer's own `background` color remains: it is what a scene with no
 background of its own is cleared to, three.js's `setClearColor`.
 
+**A panorama is read by direction.** A texture whose `mapping` is
+equirectangular is not stretched: it is read at `equirect_uv` of each
+pixel's direction, as three.js reads it once it has made a cube of it.
+
+**The scene turns, dims and blurs it.** three.js keeps three settings for
+a background on the scene, not on the background, and so does this:
+`Scene.background_rotation` turns the direction a cube or a panorama is
+read in, `background_intensity` multiplies its light, and
+`background_blurriness` reads it at that roughness, from the cube's PMREM
+when it has one. A stretched texture takes the intensity alone, as
+three.js's plane does.
+
 `environment` is the scene's other field of this family, and it is a plain
 `CubeTextureId` on the scene rather than a kind here: a material naming
-`SCENE_ENVIRONMENT` reflects it. See `core.scene`.
+`SCENE_ENVIRONMENT` reflects it, turned by `Scene.environment_rotation`
+and multiplied by `Scene.environment_intensity`. See `core.scene`.
 """
 
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId

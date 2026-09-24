@@ -48,9 +48,18 @@ from materials.material import (
     Blending,
     Combine,
     MaterialKind,
+    DEFAULT_REFRACTION_RATIO,
+    NormalMapType,
+    OBJECT_SPACE_NORMAL_MAP,
+    TANGENT_SPACE_NORMAL_MAP,
     combine_light,
 )
-from render.cube_texture import reflected, rough_reflection
+from render.cube_texture import (
+    Basis3,
+    reflected,
+    refracted,
+    rough_reflection,
+)
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     CubeTextureId,
@@ -730,6 +739,110 @@ struct LayerFactors(ImplicitlyCopyable):
             )
 
 
+@fieldwise_init
+struct TextureFrames(Equatable, ImplicitlyCopyable):
+    """The frames a triangle's environment and normal map are read in: how
+    the environment is turned, how far a refraction bends the view, which
+    frame the normal map holds, and the mesh's normal matrix for an
+    object-space one.
+
+    One struct on `RasterVertex`, per-triangle and read from the first
+    corner as `layers` is, so both rasterizers check one agreement.
+    """
+
+    # The matrix that turns a lookup direction, three.js's `envMapRotation`
+    # uniform; see `render.cube_texture.env_rotation`.
+    var env_rotation: Basis3
+    # three.js's `refractionRatio`, read under a refraction mapping.
+    var refraction_ratio: Float32
+    # three.js's `normalMapType`.
+    var normal_map_type: NormalMapType
+    # The mesh's normal matrix into the world, negated when the renderer
+    # turns a corner around: what an object-space normal map's texel is
+    # turned by, three.js's `normalMatrix * faceDirection`.
+    var object_normal: Basis3
+
+    def __init__(out self):
+        """Create the frames three.js starts a material with: no turn, a
+        ratio of 0.98, a tangent-space normal map, and the identity."""
+        self.env_rotation = Basis3()
+        self.refraction_ratio = DEFAULT_REFRACTION_RATIO
+        self.normal_map_type = TANGENT_SPACE_NORMAL_MAP
+        self.object_normal = Basis3()
+
+    def validate(self) raises:
+        """Refuse frames no shader can read.
+
+        Raises:
+            Error: If the normal map type is none of the two, or the
+                refraction ratio is negative or not finite.
+        """
+        if not self.normal_map_type.is_valid():
+            raise Error(
+                "A triangle's normal map type must be TANGENT_SPACE_NORMAL_MAP"
+                " or OBJECT_SPACE_NORMAL_MAP"
+            )
+        var ratio = self.refraction_ratio
+        if not isfinite(ratio) or ratio < 0:
+            raise Error("A triangle's refraction ratio cannot be negative")
+
+
+def env_direction(
+    toward_eye: Vector3, normal: Vector3, refracts: Bool, frames: TextureFrames
+) -> Vector3:
+    """Return the direction a basic, lambert or phong surface reads its
+    environment in: three.js's `envmap_fragment`.
+
+    The view turned back through the normal, `reflected`, or under a
+    refraction mapping the view bent through the surface by the
+    refraction ratio, `refracted`; then turned by the env map's rotation.
+    Shared by both rasterizers.
+
+    Args:
+        toward_eye: Unit direction from the surface toward the camera.
+        normal: The surface's unit normal.
+        refracts: Whether the env map has a refraction mapping.
+        frames: The triangle's frames, for the ratio and the rotation.
+
+    Returns:
+        The direction to read the environment in.
+    """
+    var looked = reflected(toward_eye, normal)
+    if refracts:
+        looked = refracted(toward_eye, normal, frames.refraction_ratio)
+    return frames.env_rotation.turn(looked)
+
+
+def object_space_normal(
+    normal: Vector3, texel: FloatColor, frame: Basis3
+) -> Vector3:
+    """Return the normal an object-space normal map's texel gives: the
+    `USE_NORMALMAP_OBJECTSPACE` branch of three.js's `normal_fragment_maps`.
+
+    The texel's bytes are unpacked from zero to one into minus one to one
+    and turned into the world by the mesh's normal matrix, which the
+    renderer negates for a corner it turns around, as three.js multiplies
+    by `faceDirection`. The geometry's normal is replaced, not perturbed,
+    and `normalScale` is not read, as in three.js. A texel that unpacks to
+    nothing leaves the geometry's normal alone. Shared by both rasterizers.
+
+    Args:
+        normal: The interpolated unit normal.
+        texel: The map's texel, linear: red is x, green y, blue z.
+        frame: The mesh's normal matrix into the world.
+
+    Returns:
+        The unit normal.
+    """
+    var turned = frame.turn(
+        Vector3(texel.r * 2 - 1, texel.g * 2 - 1, texel.b * 2 - 1)
+    )
+    if turned.length() == 0:
+        return normal
+    turned.normalize()
+    return turned
+
+
 struct RasterVertex(ImplicitlyCopyable):
     """One corner as the rasterizer wants it: screen position and varyings.
 
@@ -958,6 +1071,9 @@ struct RasterVertex(ImplicitlyCopyable):
     # rasterizer is handed. Per-triangle like `texture`, read from the
     # first corner. See `materials.nodes`.
     var nodes: NodeProgramId
+    # The frames the environment and the normal map are read in. Set after
+    # construction, by `Renderer.prepare`; the defaults are three.js's.
+    var frames: TextureFrames
 
     def __init__(
         out self,
@@ -1119,6 +1235,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.far_distance = far_distance
         self.layers = layers
         self.nodes = nodes
+        self.frames = TextureFrames()
 
 
 @fieldwise_init
@@ -1968,6 +2085,11 @@ def check_triangle_state(
             "A triangle names a cube texture id that nothing can hold: the"
             " renderer resolves SCENE_ENVIRONMENT before a corner is built"
         )
+    # The frames the environment and the normal map are read in: the
+    # numbers first, because not-a-number is not equal to itself.
+    a.frames.validate()
+    if b.frames != a.frames or c.frames != a.frames:
+        raise Error("A triangle's corners disagree about their frames")
     # The physical terms and the normal maps, asked as the rest are: the
     # numbers before their agreement checks, then the maps, then the kind.
     if not _is_unit_fraction(a.roughness):
@@ -3255,17 +3377,23 @@ def rasterize_shaded(
                     var turned = placed[NORMAL_MAP_SLOT]
                     var at = turned.place(uv, uv1)
                     var steps = _placed_steps(a, b, c, turned, at, right, up)
-                    facing = mapped_normal(
-                        facing,
-                        along_x,
-                        along_y,
-                        steps[0],
-                        steps[1],
-                        _sample_map(
-                            normals, at.x, at.y, a, b, c, coverage, x, y, turned
-                        ),
-                        a.normal_scale,
+                    var texel = _sample_map(
+                        normals, at.x, at.y, a, b, c, coverage, x, y, turned
                     )
+                    if a.frames.normal_map_type == OBJECT_SPACE_NORMAL_MAP:
+                        facing = object_space_normal(
+                            facing, texel, a.frames.object_normal
+                        )
+                    else:
+                        facing = mapped_normal(
+                            facing,
+                            along_x,
+                            along_y,
+                            steps[0],
+                            steps[1],
+                            texel,
+                            a.normal_scale,
+                        )
                 else:
                     # The height here and one pixel over each way, scaled:
                     # three.js's `dHdxy_fwd`.
@@ -4109,17 +4237,22 @@ def rasterize_shaded(
                 var coat_radiance = Vector3(0, 0, 0)
                 if reflects:
                     ref cube = cubes.get(a.env_map)
+                    # Every direction is turned by the env map's rotation
+                    # before it is read, three.js's `envMapRotation`.
+                    ref spin = a.frames.env_rotation
                     # An anisotropic surface reads along its bent normal,
                     # three.js's `getIBLAnisotropyRadiance`.
                     var seen = cube.sample_rough(
-                        rough_reflection(
-                            toward_eye,
-                            bent_normal(facing, toward_eye, layers, rough),
-                            rough,
+                        spin.turn(
+                            rough_reflection(
+                                toward_eye,
+                                bent_normal(facing, toward_eye, layers, rough),
+                                rough,
+                            )
                         ),
                         rough,
                     )
-                    var around = cube.sample_rough(facing, 1)
+                    var around = cube.sample_rough(spin.turn(facing), 1)
                     var strength = a.env_map_intensity
                     radiance = Vector3(
                         seen.r * strength, seen.g * strength, seen.b * strength
@@ -4131,8 +4264,10 @@ def rasterize_shaded(
                     )
                     if coated:
                         var gloss = cube.sample_rough(
-                            rough_reflection(
-                                toward_eye, coat_normal, coat_rough
+                            spin.turn(
+                                rough_reflection(
+                                    toward_eye, coat_normal, coat_rough
+                                )
                             ),
                             coat_rough,
                         )
@@ -4217,14 +4352,20 @@ def rasterize_shaded(
                 # holds, so a reflection under a parallel projection stops
                 # swimming as the camera slides along its own axis. Read
                 # at the cube's full size; see `render.cube_texture`.
+                # A refraction mapping bends the view through the surface
+                # instead, by the material's `refractionRatio`; either way
+                # the direction is turned by `envMapRotation` last.
                 if reflects:
-                    var bounce = reflected(
+                    ref cube = cubes.get(a.env_map)
+                    var bounce = env_direction(
                         toward_eye_at(lighting.eye, lighting.toward_eye, spot),
                         facing,
+                        cube.mapping.refracts(),
+                        a.frames,
                     )
                     shaded = combine_light(
                         shaded,
-                        cubes.get(a.env_map).sample(bounce),
+                        cube.sample(bounce),
                         a.reflectivity * specular_strength,
                         a.combine,
                     )

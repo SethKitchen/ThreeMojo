@@ -137,7 +137,9 @@ struct HostSource[origin: Origin[mut=False]](TransmissionSource):
         Returns:
             The color, straight alpha.
         """
-        return self.image[]._sample_at(u, v, level)
+        return self.image[]._sample_at(
+            u, v, level, self.image[].filter_at(level)
+        )
 
 
 struct TransmissionTarget(Movable):

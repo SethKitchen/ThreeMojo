@@ -38,6 +38,8 @@ from render.texture import (
     CLAMP,
     COVERAGE,
     IGNORED,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
     MIRROR,
     NEAREST,
     REPEAT,
@@ -206,17 +208,19 @@ def check_cube(
     assert_almost_equal(cutout.metalness, Float32(1), atol=TOLERANCE)
     assert_almost_equal(cutout.roughness, Float32(1), atol=TOLERANCE)
     assert_equal(cutout.color.r, UInt8(255))
-    # The checker at its sampler's settings, flipped as three.js flips it.
+    # The checker at its sampler's settings, with `flipY` off as three.js
+    # reads every glTF texture, and no transform.
     ref checker = assets.textures.get(model.color_textures[0])
     assert_equal(checker.width, 2)
-    assert_equal(checker.wrap, CLAMP)
-    assert_equal(checker.filter, NEAREST)
+    assert_equal(checker.wrap_s, CLAMP)
+    assert_equal(checker.mag_filter, NEAREST)
     assert_equal(checker.color_space, SRGB)
     assert_equal(checker.levels, 1)
     assert_equal(checker.texel(0, 0).r, UInt8(255))
     assert_equal(checker.texel(1, 1).b, UInt8(255))
-    assert_almost_equal(checker.repeat.y, Float32(-1), atol=TOLERANCE)
-    assert_almost_equal(checker.offset.y, Float32(1), atol=TOLERANCE)
+    assert_false(checker.flip_y)
+    assert_almost_equal(checker.repeat.y, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(checker.offset.y, Float32(0), atol=TOLERANCE)
     # Four meshes in the scene: one on each of the first two nodes and
     # two on the third, the last two drawing the default and the glass.
     assert_equal(model.first_mesh, first_mesh)
@@ -1017,6 +1021,24 @@ def test_a_malformed_material_or_texture_is_refused() raises:
             + ',"materials":[{"normalTexture":{"index":0}}]'
         )
     )
+    # A magnified sample reads one level, and a filter must be one of the
+    # six glTF names.
+    for sampler in [
+        '{"magFilter":9987}',
+        '{"minFilter":1}',
+        '{"magFilter":1}',
+        '{"wrapT":7}',
+    ]:
+        _ = refused(
+            doc(
+                image
+                + texture
+                + ',"samplers":['
+                + sampler
+                + '],"textures":[{"source":0,"sampler":0}]'
+                + ',"materials":[{"normalTexture":{"index":0}}]'
+            )
+        )
     _ = refused(
         doc(
             '"images":[{}]'
@@ -1048,7 +1070,7 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     var model = loaded(
         doc(
             image
-            + ',"samplers":[{"wrapS":33648,"magFilter":9729,"minFilter":9987}]'
+            + ',"samplers":[{"wrapS":33648,"wrapT":33071,"magFilter":9729,"minFilter":9985}]'
             + ',"textures":[{"source":0,"sampler":0},{"source":0}]'
             + ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0},"metallicRoughnessTexture":{"index":0}},'
             + '"normalTexture":{"index":0,"scale":0.5},"emissiveTexture":{"index":1},"alphaMode":"MASK"},'
@@ -1072,22 +1094,26 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     assert_equal(second.normal_map, first.normal_map)
     assert_equal(assets.textures.count(), 3)
     ref mirrored = assets.textures.get(model.color_textures[0])
-    assert_equal(mirrored.wrap, MIRROR)
-    assert_equal(mirrored.filter, BILINEAR)
+    assert_equal(mirrored.wrap_s, MIRROR)
+    assert_equal(mirrored.wrap_t, CLAMP)
+    assert_equal(mirrored.mag_filter, BILINEAR)
+    assert_equal(mirrored.min_filter, LINEAR_MIPMAP_NEAREST)
     assert_true(mirrored.levels > 1)
     assert_equal(
         assets.textures.get(model.data_textures[0]).color_space, LINEAR
     )
     ref bare = assets.textures.get(model.color_textures[1])
-    assert_equal(bare.wrap, REPEAT)
+    assert_equal(bare.wrap_s, REPEAT)
+    assert_equal(bare.wrap_t, REPEAT)
+    assert_equal(bare.min_filter, LINEAR_MIPMAP_LINEAR)
     assert_true(bare.levels > 1)
 
 
 def test_a_textured_quad_shows_the_images_top_at_the_top() raises:
     # glTF's (0, 0) is the image's top left. The quad's top-left corner
     # carries (0, 0), so it must show the checker's red texel, and the
-    # bottom-left corner its blue one: the flip three.js does with
-    # `flipY = false` is done with the texture's own transform here.
+    # bottom-left corner its blue one: three.js reads every glTF texture
+    # with `flipY = false`, and so does this.
     var scene = Scene()
     var assets = Assets()
     var model = loaded(

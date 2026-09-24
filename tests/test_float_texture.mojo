@@ -99,7 +99,7 @@ def test_a_float_texel_ignores_its_alpha_when_asked() raises:
 def test_a_float_texture_is_linear_and_clamped_by_default() raises:
     var image = two_by_two()
     assert_true(image.color_space == LINEAR)
-    assert_true(image.wrap == CLAMP)
+    assert_true(image.wrap_s == CLAMP)
     assert_equal(image.levels, 1)
     assert_equal(len(image.pixels), 0)
     assert_equal(len(image.data), 16)
@@ -134,7 +134,7 @@ def test_a_float_texture_must_stay_linear() raises:
 def test_a_float_image_becomes_a_texture() raises:
     var image = FloatImage(1, 1, [3, 2, 1, 1])
     var texture = float_texture_from(image, REPEAT, NEAREST, False, IGNORED)
-    assert_true(texture.wrap == REPEAT)
+    assert_true(texture.wrap_s == REPEAT)
     assert_true(texture.alpha == IGNORED)
     assert_equal(texture.sample(0.5, 0.5).r, 3)
     with assert_raises(contains="out of bounds"):
@@ -261,7 +261,7 @@ def test_a_panorama_becomes_a_cube_read_in_the_same_directions() raises:
     assert_equal(cube.size, 8)
     assert_equal(cube.levels(), 1)
     assert_true(cube.faces[0].texel_type == FLOAT_TYPE)
-    assert_true(cube.faces[0].wrap == CLAMP)
+    assert_true(cube.faces[0].wrap_s == CLAMP)
     # Every face texel holds what the panorama holds in its direction.
     for face in range(FACE_COUNT):
         for y in range(8):
@@ -293,7 +293,7 @@ def test_a_panorama_cube_takes_a_size_and_a_chain() raises:
     with assert_raises(contains="must hold texels"):
         _ = cube_from_equirectangular(Texture())
     var odd = banded(2)
-    odd.filter = Filter(4)
+    odd.mag_filter = Filter(4)
     with assert_raises(contains="filter"):
         _ = cube_from_equirectangular(odd)
 

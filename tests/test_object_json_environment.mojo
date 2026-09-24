@@ -345,7 +345,7 @@ def test_a_scene_read_back_renders_the_same() raises:
     for at in range(len(first.pixels)):
         assert_equal(face.pixels[at], first.pixels[at])
     assert_equal(face.color_space, SRGB)
-    assert_equal(face.filter, BILINEAR)
+    assert_equal(face.mag_filter, BILINEAR)
     var phong = materials.get(meshes[0].material)
     assert_equal(phong.env_map, sky)
     assert_equal(phong.combine, MIX_OPERATION)
@@ -416,7 +416,7 @@ def test_a_cube_as_three_js_writes_it() raises:
     assert_equal(read[0].environment, NO_CUBE_TEXTURE)
     ref cube = read[1].cube_textures.get(id)
     assert_false(cube.is_prefiltered())
-    assert_equal(cube.faces[0].filter, NEAREST)
+    assert_equal(cube.faces[0].mag_filter, NEAREST)
     assert_equal(cube.faces[0].color_space, LINEAR)
     assert_equal(cube.faces[0].levels, 1)
     # Each face is its file as it is, and the px and nx files trade
@@ -437,10 +437,35 @@ def test_a_cube_as_three_js_writes_it() raises:
     ref turned = flipped[1].cube_textures.get(CubeTextureId(0))
     assert_equal(turned.faces[2].pixels[0], file[FACE * (FACE - 1) * 4])
     assert_equal(turned.faces[2].pixels[4], file[(FACE * (FACE - 1) + 1) * 4])
-    assert_equal(turned.faces[2].filter, BILINEAR)
+    assert_equal(turned.faces[2].mag_filter, BILINEAR)
     assert_equal(turned.faces[2].color_space, LINEAR)
     # three.js's default filters give a mip chain.
     assert_true(turned.faces[2].levels > 1)
+
+
+def test_a_cube_of_one_row_faces_turns_over_unchanged() raises:
+    """`flipY` on faces of one row leaves each face as its file is."""
+    var urls = String()
+    for face in range(6):
+        if face > 0:
+            urls += ","
+        var texel: List[UInt8] = [UInt8(face * 40), 7, 9, 255]
+        var png = encode_png(Framebuffer(1, 1, texel^))
+        urls += '"data:image/png;base64,' + encode_base64(png) + '"'
+    var read = _read(
+        _wrap(
+            '"images":[{"uuid":"i","url":['
+            + urls
+            + ']}],"textures":[{"uuid":"c","image":"i","flipY":true,'
+            + '"magFilter":1003,"minFilter":1003}],'
+            + '"materials":[{"uuid":"m","type":"MeshBasicMaterial",'
+            + '"envMap":"c"}],"object":{"uuid":"s","type":"Scene"}'
+        )
+    )
+    ref cube = read[1].cube_textures.get(CubeTextureId(0))
+    assert_equal(cube.faces[2].width, 1)
+    assert_equal(cube.faces[2].pixels[0], UInt8(80))
+    assert_equal(cube.faces[2].pixels[1], UInt8(7))
 
 
 def test_the_environment_and_what_reads_it() raises:
@@ -493,7 +518,7 @@ def test_the_reader_refuses_a_cube_it_cannot_read() raises:
     with assert_raises(contains="CubeReflectionMapping"):
         _ = read_object_json(
             _cube_document(
-                ',"mapping":302', ',"type":"MeshBasicMaterial","envMap":"c"'
+                ',"mapping":303', ',"type":"MeshBasicMaterial","envMap":"c"'
             ),
             scene,
             assets,
@@ -515,7 +540,7 @@ def test_the_reader_refuses_a_cube_it_cannot_read() raises:
         flat
         + '"materials":[{"uuid":"m","type":"MeshBasicMaterial","envMap":"t"}],'
         '"object":{"uuid":"o","type":"Group"}',
-        "is not a cube",
+        "not equirectangular",
     )
     _refuses(
         flat + '"object":{"uuid":"o","type":"Scene","environment":"f"}',
@@ -789,7 +814,7 @@ def test_the_writer_refuses_a_reflection_three_js_would_change() raises:
     assert_equal(object_to_json(shared, assets).find('"envMap"'), -1)
     # A cube whose faces differ, or hold floats, has no PNG form.
     var mixed = _cube_texture()
-    mixed.faces[3].filter = NEAREST
+    mixed.faces[3].mag_filter = NEAREST
     var sky = Scene()
     sky.background = cube_background(assets.cube_textures.add(mixed^))
     _writes(sky, assets, "share their filter")

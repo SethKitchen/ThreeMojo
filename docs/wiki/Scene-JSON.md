@@ -155,7 +155,9 @@ These fields use three.js's keys and three.js's defaults:
 | Stretch | `anisotropy`, `anisotropyRotation` in radians, `anisotropyMap` |
 | Depth and stencil | `depthFunc`, `depthTest`, `depthWrite`, `colorWrite`, `stencilWrite`, `stencilWriteMask`, `stencilFunc`, `stencilRef`, `stencilFuncMask`, `stencilFail`, `stencilZFail`, `stencilZPass` |
 | Polygon offset | `polygonOffset`, `polygonOffsetFactor`, `polygonOffsetUnits` |
-| Environment | `envMap`, the uuid of a cube texture. See [Cube textures](#cube-textures). |
+| Environment | `envMap`, the uuid of a cube texture or a panorama, and `envMapRotation`. See [Cube textures](#cube-textures). |
+| Refraction | `refractionRatio` on a basic, lambert or phong material |
+| Normal map | `normalMapType`, beside `normalMap` |
 | Clipping | `clippingPlanes`, `clipIntersection`, `clipShadows` |
 | Distance | `referencePosition`, `nearDistance` and `farDistance` on a `MeshDistanceMaterial` |
 | Wide line | `dashOffset` |
@@ -168,9 +170,11 @@ three.js's `blending` is a number. `NormalBlending`, the default, follows `trans
 
 ## Textures
 
-The writer writes each texture with its wrap, its filters, its transform, its color space, its `channel` and an image. The image is a PNG `data:` URL of the full-size level. A texture here runs up from its bottom row, as a three.js texture with `flipY` does. Thus `flipY` is true.
+The writer writes each texture with its two wraps, its two filters, its `flipY` and its `mapping`. It also writes its transform, its color space, its `channel` and an image. The image is a PNG `data:` URL of the full-size level, with its rows as they are stored.
 
-The reader decodes a PNG, a JPEG or a TGA image from a `data:` URL or from a file beside the document. When `flipY` is false, the reader turns the image upside down. `colorSpace` `srgb` is `SRGB`. `srgb-linear` and the empty `NoColorSpace` are `LINEAR`. The minification filter tells whether the texture has a mip chain. The magnification filter gives `NEAREST` or `BILINEAR`.
+The reader decodes a PNG, a JPEG or a TGA image from a `data:` URL or from a file beside the document. `wrap` gives `wrap_s` and `wrap_t`. `magFilter` and `minFilter` give the two filters, and a mipmap `minFilter` with `generateMipmaps` builds the chain. `flipY` gives `flip_y`, and the rows stay as the file has them. `mapping` is `UVMapping` or an equirectangular one on a flat texture.
+
+`colorSpace` `srgb` is `SRGB`. `srgb-linear` and the empty `NoColorSpace` are `LINEAR`.
 
 A `channel` of 1 reads the second set of texture coordinates, `uv1`.
 
@@ -182,7 +186,9 @@ A cube texture is a texture entry whose image has six URLs. This is how three.js
 
 three.js keeps the six images of a cube in its own layout. The px image is the view along -x, and the nx image is the view along +x. Thus the writer swaps these two faces, and the reader reads the images `SEEN_FROM_OUTSIDE`. See [Textures](Textures). A `flipY` of true turns each image upside down.
 
-A cube texture is one of these:
+A cube texture can have `CubeRefractionMapping` (302) too. A flat texture with an equirectangular mapping (303 or 304) can take the place of a cube. The reader makes it a cube that reads the panorama directly, with `cube_of_panorama`, and the writer writes such a cube as the panorama.
+
+A cube texture or a panorama is one of these:
 
 | Key | Meaning |
 |---|---|
@@ -192,7 +198,9 @@ A cube texture is one of these:
 
 three.js reads the scene's `environment` only on a standard or physical material without an `envMap`. The reader does the same. A standard or physical material without an `envMap` gets `SCENE_ENVIRONMENT`. Every other class without an `envMap` reflects nothing. A basic, lambert or phong material that reflects the environment here gets the uuid of that cube in its `envMap`.
 
-three.js's renderer prefilters the environment, and each cube that a standard or physical material reflects. Thus the reader builds the PMREM of each of these cubes with `pmrem_from_cube`. The writer does not write the PMREM, because three.js has no key for it. For the same reason, the writer refuses a cube that these surfaces reflect without its PMREM.
+three.js's renderer prefilters the environment, each cube that a standard or physical material reflects, and a blurred background. Thus the reader builds the PMREM of each of these with `pmrem_from_cube`. A blurred panorama background becomes a cube background, to hold its PMREM.
+
+The scene's `backgroundBlurriness`, `backgroundIntensity`, `backgroundRotation`, `environmentIntensity` and `environmentRotation` are read and written as `Scene.toJSON` writes them. The writer writes the blurriness and the two intensities only when they are not the default, and the two rotations always. The writer does not write the PMREM, because three.js has no key for it. For the same reason, the writer refuses a cube that these surfaces reflect without its PMREM.
 
 ## Differences from three.js
 
@@ -218,15 +226,15 @@ The writer does not write these things, and the reader refuses them:
 - `CustomBlending`, and a line width in world units.
 - A batched mesh with geometries that do not have the same attributes and index, or that have morph targets.
 - A mesh with more than one material, and an attribute or an interleaved buffer that is not a `Float32Array`.
-- A texture with two different wraps, a mapping that is not `UVMapping`, or a `channel` that is not 0 or 1.
-- A cube texture that does not have six images, or a mapping that is not `CubeReflectionMapping`. A cube texture with float faces.
+- A flat texture with a mapping that is not `UVMapping` or equirectangular, or a `channel` that is not 0 or 1. A float texture.
+- A cube texture that does not have six images, or a mapping that is not a cube mapping. A cube texture with float faces.
+- An `envMap`, an `environment` or a blurred background that names a flat texture without an equirectangular mapping.
 - More than eight clipping planes on a material, or more than eight morph influences on a mesh.
 - A depth function, a stencil function or a stencil operation that is not one of three.js's.
 - A clip with a track that the reader cannot bind. See [Animation](Animation#scene-json).
 
 The writer does not write these things, and the reader ignores them:
 
-- A background's `backgroundBlurriness`, `backgroundIntensity` and `backgroundRotation`, and the scene's `environmentIntensity` and `environmentRotation`.
 - An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
 - `shapes`, `skeletons`, `up` and `userData`.
 - The material keys that have no field here.

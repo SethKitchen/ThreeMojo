@@ -13,11 +13,18 @@ that is how PNG stores it and how `Framebuffer` addresses it — while texture
 space puts its origin at the bottom left, as OpenGL and three.js do. Sampling
 is where those two disagree, so sampling is where it is reconciled, once:
 `1 - v` turns one into the other. three.js spells the same reconciliation
-`flipY`, and has it on by default.
+`flipY`, and has it on by default; so does `Texture.flip_y`. A texture
+whose rows are stored the way `v` runs -- glTF's, and a compressed
+image's -- turns it off, as three.js does, and `v` then reads from the top.
 
-**Two filters.** `NEAREST` takes the color of whichever texel the sample
-lands in; `BILINEAR`, the default as in three.js, blends the four around
-it, and a chain of mip levels is built by default as three.js builds one. Nearest keeps a checkerboard's
+**Two filters, as three.js has.** `mag_filter` reads a magnified sample
+and `min_filter` a minified one, which `plan_levels` tells apart. Inside a
+level, `NEAREST` takes the color of whichever texel the sample lands in;
+`BILINEAR`, the default as in three.js, blends the four around it. The
+four mipmap filters also say how a level is picked: the nearest one, or
+the two either side mixed. A chain of mip levels is built by default, and
+`min_filter` is then `LINEAR_MIPMAP_LINEAR`, as three.js builds and reads
+one. Nearest keeps a checkerboard's
 edges hard, which is what makes a mapping error legible — a wrong `uv` shows a
 misplaced square rather than a vague blur — and it is exact, so both backends
 agree on it to the last bit. Bilinear is what you want once the image is meant
@@ -42,7 +49,13 @@ a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
 the edge color, and `MIRROR` alternates direction each tile — the same three
 three.js offers. `CLAMP` is the default, as three.js's `ClampToEdgeWrapping`
-is, so a texture meant to tile must ask for `REPEAT`.
+is, so a texture meant to tile must ask for `REPEAT`. Each axis has its own,
+three.js's `wrapS` and `wrapT`: `wrap_s` across and `wrap_t` up.
+
+**A texture has a mapping.** `mapping`, three.js's `Texture.mapping`, is
+`UV_MAPPING` for a map. A panorama that a background or an environment
+reads by direction is `EQUIRECTANGULAR_REFLECTION_MAPPING` or its
+refraction twin; see `render.cube_texture`.
 
 **A texture can be read along the long axis of a footprint.** A surface
 seen at a glancing angle covers a footprint that is long one way and short
@@ -95,7 +108,8 @@ from units.si import Angle, RADIAN
 
 @fieldwise_init
 struct Wrap(Equatable, ImplicitlyCopyable, Writable):
-    """How a coordinate outside the unit square is resolved, as a type.
+    """How a coordinate outside the unit square is resolved on one axis, as
+    a type: three.js's `wrapS` or `wrapT`.
 
     See `core.object3d.NodeId` for why these are wrapped rather than bare
     integers. `value` is what the GPU's descriptor table stores. The type
@@ -109,29 +123,179 @@ struct Wrap(Equatable, ImplicitlyCopyable, Writable):
         return self == REPEAT or self == CLAMP or self == MIRROR
 
 
-# Tile the image; 1.5 reads the same texel as 0.5.
+# Tile the image; 1.5 reads the same texel as 0.5. three.js's
+# `RepeatWrapping`.
 comptime REPEAT = Wrap(0)
-# Hold the edge texel; 1.5 reads the same texel as 1.0.
+# Hold the edge texel; 1.5 reads the same texel as 1.0. three.js's
+# `ClampToEdgeWrapping`.
 comptime CLAMP = Wrap(1)
 # Tile, flipping direction every other tile, so tiles meet without a seam.
+# three.js's `MirroredRepeatWrapping`.
 comptime MIRROR = Wrap(2)
+# three.js's name for `MIRROR`.
+comptime MIRRORED_REPEAT = MIRROR
 
 
 @fieldwise_init
 struct Filter(Equatable, ImplicitlyCopyable, Writable):
-    """How a sample between texel centers is resolved, as a type."""
+    """How a sample is resolved, as a type: three.js's `magFilter` and
+    `minFilter` values.
+
+    `NEAREST` and `BILINEAR` read one level: the texel the sample lands in,
+    or the four around it. The four mipmap filters also say how a level of
+    the chain is picked: the nearest level, or the two either side mixed.
+    A magnified sample reads the full-size image, so `magFilter` takes only
+    the first two. `value` is what the GPU's descriptor table stores. The
+    type does not stop `Filter(9)`, so `Texture.validate` asks `is_valid`.
+    """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `NEAREST` or `BILINEAR`."""
+        """Return True if this is one of the six named filters."""
+        return self.value >= NEAREST.value and self.value <= (
+            LINEAR_MIPMAP_LINEAR.value
+        )
+
+    def magnifies(self) -> Bool:
+        """Return True if this is `NEAREST` or `BILINEAR`: a filter that
+        reads one level, and so one a `magFilter` can be."""
         return self == NEAREST or self == BILINEAR
+
+    def is_mipmap(self) -> Bool:
+        """Return True if this is one of the four filters that read the
+        mip chain."""
+        return self.is_valid() and not self.magnifies()
+
+    def within_level(self) -> Filter:
+        """Return how a texel is read inside one level: `NEAREST` for the
+        two nearest-texel filters, `BILINEAR` for the rest.
+
+        Returns:
+            `NEAREST` or `BILINEAR`.
+        """
+        if (
+            self == NEAREST
+            or self == NEAREST_MIPMAP_NEAREST
+            or self == NEAREST_MIPMAP_LINEAR
+        ):
+            return NEAREST
+        return BILINEAR
+
+    def mixes_levels(self) -> Bool:
+        """Return True if this filter mixes the two levels either side of
+        the sample's level, rather than reading the nearest one."""
+        return self == NEAREST_MIPMAP_LINEAR or self == LINEAR_MIPMAP_LINEAR
 
 
 # Take whichever texel the sample lands in. Hard edges, visible texels.
+# three.js's `NearestFilter`.
 comptime NEAREST = Filter(0)
 # Blend the four texels around the sample by how close it is to each.
+# three.js's `LinearFilter`.
 comptime BILINEAR = Filter(1)
+# The nearest level, and in it the nearest texel: three.js's
+# `NearestMipmapNearestFilter`.
+comptime NEAREST_MIPMAP_NEAREST = Filter(2)
+# The two nearest levels mixed, and in each the nearest texel: three.js's
+# `NearestMipmapLinearFilter`.
+comptime NEAREST_MIPMAP_LINEAR = Filter(3)
+# The nearest level, and in it the four texels blended: three.js's
+# `LinearMipmapNearestFilter`.
+comptime LINEAR_MIPMAP_NEAREST = Filter(4)
+# The two nearest levels mixed, and in each the four texels blended:
+# trilinear, three.js's `LinearMipmapLinearFilter` and its default.
+comptime LINEAR_MIPMAP_LINEAR = Filter(5)
+
+
+def minifying(filter: Filter, mipmapped: Bool) -> Filter:
+    """Return the `minFilter` that reads a texture as `filter` reads it,
+    down a chain when there is one.
+
+    The constructors take one filter and whether to build a chain, and
+    this is the `minFilter` those two mean: `NEAREST` with a chain is
+    `NEAREST_MIPMAP_LINEAR`, `BILINEAR` with a chain is
+    `LINEAR_MIPMAP_LINEAR`, and without a chain the filter is as given.
+
+    Args:
+        filter: `NEAREST` or `BILINEAR`.
+        mipmapped: Whether the texture has a chain.
+
+    Returns:
+        The minification filter.
+    """
+    if not mipmapped:
+        return filter
+    if filter == NEAREST:
+        return NEAREST_MIPMAP_LINEAR
+    return LINEAR_MIPMAP_LINEAR
+
+
+@fieldwise_init
+struct Mapping(Equatable, ImplicitlyCopyable, Writable):
+    """How a texture is laid over what reads it, as a type: three.js's
+    `Texture.mapping`.
+
+    `UV_MAPPING` places an image by a surface's texture coordinates. The
+    others read an environment by direction: a cube, an equirectangular
+    panorama, or three.js's prefiltered cube UV layout. A reflection mapping
+    reads along the view turned back by the normal, and a refraction
+    mapping along the view bent through the surface. `value` is three.js's
+    constant, and what the GPU's descriptor table stores. The type does not
+    stop `Mapping(9)`, so `Texture.validate` asks `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the six named mappings."""
+        return (
+            self == UV_MAPPING
+            or self == CUBE_REFLECTION_MAPPING
+            or self == CUBE_REFRACTION_MAPPING
+            or self == EQUIRECTANGULAR_REFLECTION_MAPPING
+            or self == EQUIRECTANGULAR_REFRACTION_MAPPING
+            or self == CUBE_UV_REFLECTION_MAPPING
+        )
+
+    def refracts(self) -> Bool:
+        """Return True if an environment of this mapping is read along the
+        refracted view rather than the reflected one."""
+        return (
+            self == CUBE_REFRACTION_MAPPING
+            or self == EQUIRECTANGULAR_REFRACTION_MAPPING
+        )
+
+    def is_equirectangular(self) -> Bool:
+        """Return True if this reads a panorama by longitude and latitude."""
+        return (
+            self == EQUIRECTANGULAR_REFLECTION_MAPPING
+            or self == EQUIRECTANGULAR_REFRACTION_MAPPING
+        )
+
+    def is_cube(self) -> Bool:
+        """Return True if this reads six faces by direction."""
+        return (
+            self == CUBE_REFLECTION_MAPPING or self == CUBE_REFRACTION_MAPPING
+        )
+
+
+# By the surface's texture coordinates: three.js's `UVMapping`, the
+# default.
+comptime UV_MAPPING = Mapping(300)
+# Six faces, read along the reflected view: `CubeReflectionMapping`.
+comptime CUBE_REFLECTION_MAPPING = Mapping(301)
+# Six faces, read along the refracted view: `CubeRefractionMapping`.
+comptime CUBE_REFRACTION_MAPPING = Mapping(302)
+# A panorama, read along the reflected view:
+# `EquirectangularReflectionMapping`.
+comptime EQUIRECTANGULAR_REFLECTION_MAPPING = Mapping(303)
+# A panorama, read along the refracted view:
+# `EquirectangularRefractionMapping`.
+comptime EQUIRECTANGULAR_REFRACTION_MAPPING = Mapping(304)
+# three.js's PMREM layout, read at a roughness: `CubeUVReflectionMapping`.
+# What `render.pmrem` builds into a cube's `cube_uv`.
+comptime CUBE_UV_REFLECTION_MAPPING = Mapping(306)
 
 
 @fieldwise_init
@@ -579,6 +743,103 @@ def wrap_index(coordinate: Int, extent: Int, mode: Wrap) -> Int:
     return coordinate % extent
 
 
+def row_coordinate(v: Float32, flip_y: Bool) -> Float32:
+    """Return how far down the stored image a `v` lands, as a fraction.
+
+    The stored image's first row is its top one. Under `flip_y`, three.js's
+    `flipY` and its default for an image, `v` counts up from the bottom row,
+    so it lands at `1 - v`. Without it `v` counts down from the first row,
+    as glTF's texture coordinates and a compressed image's rows do. Pure,
+    because the GPU kernel calls it too.
+
+    Args:
+        v: The vertical texture coordinate.
+        flip_y: Whether `v` counts up from the bottom row.
+
+    Returns:
+        The fraction of the image's height above the sample, from the top.
+    """
+    if flip_y:
+        return 1 - v
+    return v
+
+
+def level_filter(level: Int, mag_filter: Filter, min_filter: Filter) -> Filter:
+    """Return the filter a read of one named level uses inside it:
+    `mag_filter` for the full-size image, and `min_filter`'s filter within
+    a level for any other. Pure, so both rasterizers call it.
+
+    Args:
+        level: Which image of the chain, zero being full size.
+        mag_filter: `NEAREST` or `BILINEAR`.
+        min_filter: Any of the six filters.
+
+    Returns:
+        `NEAREST` or `BILINEAR`.
+    """
+    if level > 0:
+        return min_filter.within_level()
+    return mag_filter
+
+
+@fieldwise_init
+struct LevelPlan(ImplicitlyCopyable):
+    """Which levels a sample reads, and how: what `plan_levels` returns.
+
+    `filter` is how a texel is read inside a level, `NEAREST` or
+    `BILINEAR`. The sample reads `lower`, and when `upper` differs it reads
+    `upper` too and mixes the two by `blend`.
+    """
+
+    var filter: Filter
+    var lower: Int
+    var upper: Int
+    var blend: Float32
+
+
+def plan_levels(
+    level: Float32, levels: Int, mag_filter: Filter, min_filter: Filter
+) -> LevelPlan:
+    """Return which levels a sample at a fractional level reads, under a
+    texture's two filters, as OpenGL's sampler picks them.
+
+    At a level of zero or below the image is magnified, and the full-size
+    image is read through `mag_filter`. Above it the image is minified,
+    and `min_filter` decides: `NEAREST` and `BILINEAR` read the full-size
+    image; the two `MIPMAP_NEAREST` filters read the level nearest the
+    sample's, OpenGL's `ceil(level + 0.5) - 1`; the two `MIPMAP_LINEAR`
+    filters read the two either side and mix them. A texture with no chain
+    reads its one image. Pure, so both rasterizers call it.
+
+    OpenGL moves the change from magnification to minification to a half
+    when `magFilter` is linear and `minFilter` is a nearest-mipmap one.
+    This port changes at zero for every pair, as the rest of its sampler
+    does.
+
+    Args:
+        level: How far down the chain the footprint reaches, fractional.
+        levels: How many levels the texture holds, at least one.
+        mag_filter: `NEAREST` or `BILINEAR`.
+        min_filter: Any of the six filters.
+
+    Returns:
+        The plan.
+    """
+    if level <= 0:
+        return LevelPlan(mag_filter, 0, 0, 0)
+    var within = min_filter.within_level()
+    if levels == 1 or min_filter.magnifies():
+        return LevelPlan(within, 0, 0, 0)
+    var last = levels - 1
+    if not min_filter.mixes_levels():
+        var nearest = min(Int(ceil(level + 0.5)) - 1, last)
+        return LevelPlan(within, nearest, nearest, 0)
+    if level >= Float32(last):
+        return LevelPlan(within, last, last, 0)
+    var lower = Int(floor(level))
+    return LevelPlan(within, lower, lower + 1, level - Float32(lower))
+
+
 struct Texture(Movable):
     """An RGBA image, sampled by texture coordinate."""
 
@@ -595,8 +856,24 @@ struct Texture(Movable):
     # Row-major RGBA floats from the top, the mip chain after the image, in
     # the same layout `pixels` has: filled for a `FLOAT_TYPE` texture only.
     var data: List[Float32]
-    var wrap: Wrap
-    var filter: Filter
+    # How a coordinate past an edge is resolved across, three.js's
+    # `wrapS`, and up, its `wrapT`. `set_wrap` sets both.
+    var wrap_s: Wrap
+    var wrap_t: Wrap
+    # How a magnified sample is read, three.js's `magFilter`: `NEAREST` or
+    # `BILINEAR`. And how a minified one is, its `minFilter`: any of the
+    # six. See `plan_levels`.
+    var mag_filter: Filter
+    var min_filter: Filter
+    # Whether `v` counts up from the bottom row, three.js's `flipY`: true
+    # for an image, the default, and false where rows are stored the way
+    # `v` runs, as glTF's and a compressed image's are. The texels are the
+    # same either way; only where a `v` lands changes. See `row_coordinate`.
+    var flip_y: Bool
+    # How the texture is laid over what reads it, three.js's `mapping`:
+    # `UV_MAPPING` for a map, the default, or an environment mapping for a
+    # panorama a background or an env map reads by direction.
+    var mapping: Mapping
     var color_space: ColorSpace
     # Whether the alpha bytes are coverage or nothing at all; see `Alpha`.
     # Read wherever an alpha byte becomes a number -- the mip build and the
@@ -648,8 +925,12 @@ struct Texture(Movable):
         self.pixels = List[UInt8]()
         self.texel_type = UNSIGNED_BYTE_TYPE
         self.data = List[Float32]()
-        self.wrap = CLAMP
-        self.filter = NEAREST
+        self.wrap_s = CLAMP
+        self.wrap_t = CLAMP
+        self.mag_filter = NEAREST
+        self.min_filter = NEAREST
+        self.flip_y = True
+        self.mapping = UV_MAPPING
         self.color_space = LINEAR
         self.alpha = COVERAGE
         self.ramp = _identity_ramp()
@@ -679,10 +960,14 @@ struct Texture(Movable):
             width: Image width in texels.
             height: Image height in texels.
             pixels: Row-major RGBA bytes from the top, width * height * 4.
-            wrap: How coordinates outside the unit square are resolved.
-                `CLAMP` by default, as three.js's `ClampToEdgeWrapping` is.
-            filter: `NEAREST` or `BILINEAR`. Bilinear by default, as
-                three.js's `LinearFilter` is.
+            wrap: How coordinates outside the unit square are resolved,
+                on both axes. `CLAMP` by default, as three.js's
+                `ClampToEdgeWrapping` is. Set `wrap_s` or `wrap_t` after
+                construction to tell the two apart.
+            filter: `NEAREST` or `BILINEAR`: the `mag_filter`, and the
+                `min_filter` with `minifying`. Bilinear by default, as
+                three.js's `LinearFilter` is, which with the chain makes
+                three.js's `LinearMipmapLinearFilter`.
             color_space: `SRGB` for a color image, the default because that
                 is what an image file holds; `LINEAR` for data that is not
                 color and must not be decoded. `UNKNOWN_SPACE` is refused:
@@ -699,8 +984,9 @@ struct Texture(Movable):
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or the wrap, filter, color space or
-                alpha mode is none of the named values -- see `validate`.
+                disagrees with them, or the wrap, color space or alpha
+                mode is none of the named values, or the filter is not
+                `NEAREST` or `BILINEAR` -- see `validate`.
         """
         if width <= 0 or height <= 0:
             raise Error("Texture dimensions must be positive")
@@ -716,8 +1002,12 @@ struct Texture(Movable):
         self.pixels = pixels^
         self.texel_type = UNSIGNED_BYTE_TYPE
         self.data = List[Float32]()
-        self.wrap = wrap
-        self.filter = filter
+        self.wrap_s = wrap
+        self.wrap_t = wrap
+        self.mag_filter = filter
+        self.min_filter = minifying(filter, mipmapped)
+        self.flip_y = True
+        self.mapping = UV_MAPPING
         self.alpha = alpha
         self.levels = 1
         self.offsets = [0]
@@ -733,29 +1023,49 @@ struct Texture(Movable):
         if mipmapped:
             self._build_mipmaps()
 
+    def set_wrap(mut self, mode: Wrap):
+        """Set how a coordinate past an edge is resolved on both axes, as
+        a three.js texture's `wrapS` and `wrapT` are set together.
+
+        Args:
+            mode: `REPEAT`, `CLAMP` or `MIRROR`; `validate` refuses any
+                other.
+        """
+        self.wrap_s = mode
+        self.wrap_t = mode
+
     def validate(self) raises:
-        """Refuse a wrap, filter, color space, alpha mode, texel type or
-        channel that is none of the named values.
+        """Refuse a wrap, filter, mapping, color space, alpha mode, texel
+        type or channel that is none of the named values.
 
         The types stop a bare integer at compile time and nothing else: a
         struct's fields are open, so `Wrap(9)` constructs, and so does
-        `image.filter = Filter(5)` after the image was checked. The
+        `image.mag_filter = Filter(9)` after the image was checked. The
         constructor calls this, and `render.gpu.flatten_textures` calls it
         again on the way to the device, because a value that is neither of
         two things was once read one way by the host and the other way by
         the kernel.
 
         Raises:
-            Error: If the wrap mode, the filter, the color space, the
-                alpha mode, the texel type or the channel is not one of
-                its named constants, or a float texture is not `LINEAR`.
-                `UNKNOWN_SPACE` counts: it is a decoder's admission, not a
-                way to read texels.
+            Error: If either wrap mode, the minification filter, the
+                mapping, the color space, the alpha mode, the texel type
+                or the channel is not one of its named constants, the
+                magnification filter is not `NEAREST` or `BILINEAR`, or a
+                float texture is not `LINEAR`. `UNKNOWN_SPACE` counts: it
+                is a decoder's admission, not a way to read texels.
         """
-        if not self.wrap.is_valid():
+        if not self.wrap_s.is_valid() or not self.wrap_t.is_valid():
             raise Error("A texture's wrap mode must be REPEAT, CLAMP or MIRROR")
-        if not self.filter.is_valid():
-            raise Error("A texture's filter must be NEAREST or BILINEAR")
+        if not self.mag_filter.magnifies():
+            raise Error(
+                "A texture's magnification filter must be NEAREST or BILINEAR"
+            )
+        if not self.min_filter.is_valid():
+            raise Error(
+                "A texture's minification filter must be one of the six"
+            )
+        if not self.mapping.is_valid():
+            raise Error("A texture's mapping must be one of the six")
         if not self.color_space.is_decodable():
             raise Error(
                 "A texture needs a color space it can decode: SRGB or LINEAR"
@@ -791,8 +1101,12 @@ struct Texture(Movable):
         self.pixels = copy.pixels.copy()
         self.texel_type = copy.texel_type
         self.data = copy.data.copy()
-        self.wrap = copy.wrap
-        self.filter = copy.filter
+        self.wrap_s = copy.wrap_s
+        self.wrap_t = copy.wrap_t
+        self.mag_filter = copy.mag_filter
+        self.min_filter = copy.min_filter
+        self.flip_y = copy.flip_y
+        self.mapping = copy.mapping
         self.color_space = copy.color_space
         self.alpha = copy.alpha
         self.ramp = copy.ramp.copy()
@@ -816,8 +1130,9 @@ struct Texture(Movable):
         blank texture is its own copy: it has no alpha to ignore.
 
         Returns:
-            The copy, with `alpha` set to `IGNORED` and the same wrap,
-            filter, color space, chain length and transform.
+            The copy, with `alpha` set to `IGNORED` and the same wraps,
+            filters, `flip_y`, mapping, color space, chain length and
+            transform.
 
         Raises:
             Error: If this texture's fields were edited into nonsense since
@@ -841,8 +1156,8 @@ struct Texture(Movable):
                 self.width,
                 self.height,
                 base^,
-                self.wrap,
-                self.filter,
+                self.wrap_s,
+                self.mag_filter,
                 self.levels > 1,
                 IGNORED,
             )
@@ -857,8 +1172,8 @@ struct Texture(Movable):
                 self.width,
                 self.height,
                 base^,
-                self.wrap,
-                self.filter,
+                self.wrap_s,
+                self.mag_filter,
                 self.color_space,
                 self.levels > 1,
                 IGNORED,
@@ -873,6 +1188,11 @@ struct Texture(Movable):
         copy.center = self.center
         copy.anisotropy = self.anisotropy
         copy.channel = self.channel
+        copy.wrap_s = self.wrap_s
+        copy.wrap_t = self.wrap_t
+        copy.min_filter = self.min_filter
+        copy.flip_y = self.flip_y
+        copy.mapping = self.mapping
         return copy^
 
     def is_blank(self) -> Bool:
@@ -1180,8 +1500,8 @@ struct Texture(Movable):
         var offset = (
             self.offsets[level]
             + (
-                wrap_index(y, tall, self.wrap) * wide
-                + wrap_index(x, wide, self.wrap)
+                wrap_index(y, tall, self.wrap_t) * wide
+                + wrap_index(x, wide, self.wrap_s)
             )
             * Self.CHANNELS
         )
@@ -1204,6 +1524,8 @@ struct Texture(Movable):
 
         Returns:
             The color found there, or opaque white if the texture is blank.
+            Level zero is read through `mag_filter` and any other through
+            `min_filter`'s filter within a level.
 
         Raises:
             Error: If the texture is not blank and has no such level.
@@ -1212,45 +1534,62 @@ struct Texture(Movable):
             return FloatColor(1.0, 1.0, 1.0, 1.0)
         if not self._has_level(level):
             raise Error("No such mip level")
-        return self._sample_at(u, v, level)
+        return self._sample_at(u, v, level, self.filter_at(level))
 
-    def _sample_at(self, u: Float32, v: Float32, level: Int) -> FloatColor:
+    def filter_at(self, level: Int) -> Filter:
+        """Return the filter a read of one named level uses inside it:
+        `mag_filter` for the full-size image, and `min_filter`'s filter
+        within a level for any other.
+
+        Args:
+            level: Which image of the chain, zero being full size.
+
+        Returns:
+            `NEAREST` or `BILINEAR`.
+        """
+        return level_filter(level, self.mag_filter, self.min_filter)
+
+    def _sample_at(
+        self, u: Float32, v: Float32, level: Int, filter: Filter
+    ) -> FloatColor:
         """Return the color at a coordinate without checking `level` exists.
 
         The hot path, called up to twice per fragment by `sample_level` with
-        a level it has already clamped.
+        a level it has already clamped. `filter` is `NEAREST` or `BILINEAR`,
+        which `plan_levels` chose.
         """
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
         var wide = self.level_width(level)
         var tall = self.level_height(level)
+        var from_top = row_coordinate(v, self.flip_y)
 
-        if self.filter == NEAREST:
+        if filter == NEAREST:
             return self._wrapped_texel(
                 Int(floor(u * Float32(wide))),
-                Int(floor((1 - v) * Float32(tall))),
+                Int(floor(from_top * Float32(tall))),
                 level,
             )
 
         # Texel centers are at half-integers, so shift the sample into a space
         # where they are at integers, and blend between the two either side.
         var across = u * Float32(wide) - 0.5
-        var down = (1 - v) * Float32(tall) - 0.5
+        var down = from_top * Float32(tall) - 0.5
         var column = Int(floor(across))
         var row = Int(floor(down))
         # The four texels are two columns and two rows, so each is wrapped
         # once here rather than once per texel, in texel units of four
         # channels. The same texels `_wrapped_texel` reads, in fewer steps:
         # this is the innermost read of every textured fragment.
-        var left = wrap_index(column, wide, self.wrap) * Self.CHANNELS
-        var right = wrap_index(column + 1, wide, self.wrap) * Self.CHANNELS
+        var left = wrap_index(column, wide, self.wrap_s) * Self.CHANNELS
+        var right = wrap_index(column + 1, wide, self.wrap_s) * Self.CHANNELS
         var near = (
             self.offsets[level]
-            + wrap_index(row, tall, self.wrap) * wide * Self.CHANNELS
+            + wrap_index(row, tall, self.wrap_t) * wide * Self.CHANNELS
         )
         var far = (
             self.offsets[level]
-            + wrap_index(row + 1, tall, self.wrap) * wide * Self.CHANNELS
+            + wrap_index(row + 1, tall, self.wrap_t) * wide * Self.CHANNELS
         )
         return blend_texels(
             self._texel_at(near + left),
@@ -1264,12 +1603,16 @@ struct Texture(Movable):
     def sample_level(
         self, u: Float32, v: Float32, level: Float32
     ) -> FloatColor:
-        """Return the color at a coordinate, blended between two mip levels.
+        """Return the color at a coordinate, read at a fractional mip level
+        through the texture's two filters.
 
-        Trilinear: bilinear within each of the two levels either side of
-        `level`, then linearly between them. The blend between levels is what
-        stops the change from one to the next being a visible seam across a
-        receding surface.
+        `plan_levels` picks the levels and the filter inside them: the
+        full-size image through `mag_filter` when magnified, and through
+        `min_filter` when minified. Under the default,
+        `LINEAR_MIPMAP_LINEAR`, that is trilinear: bilinear within each of
+        the two levels either side of `level`, then linearly between them.
+        The blend between levels is what stops the change from one to the
+        next being a visible seam across a receding surface.
 
         A texture with no chain ignores the level entirely and reads the only
         image it has.
@@ -1284,15 +1627,16 @@ struct Texture(Movable):
         Returns:
             The color found there, or opaque white if the texture is blank.
         """
-        if self.is_blank() or self.levels == 1 or level <= 0:
-            return self._sample_at(u, v, 0)
-        if level >= Float32(self.levels - 1):
-            return self._sample_at(u, v, self.levels - 1)
-        var lower = Int(floor(level))
+        var plan = plan_levels(
+            level, self.levels, self.mag_filter, self.min_filter
+        )
+        var near = self._sample_at(u, v, plan.lower, plan.filter)
+        if plan.upper == plan.lower:
+            return near
         return mix_color(
-            self._sample_at(u, v, lower),
-            self._sample_at(u, v, lower + 1),
-            level - Float32(lower),
+            near,
+            self._sample_at(u, v, plan.upper, plan.filter),
+            plan.blend,
         )
 
     def sample_footprint(
@@ -1364,10 +1708,11 @@ struct Texture(Movable):
         ).unpremultiplied()
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
-        """Return the color at a texture coordinate.
+        """Return the color at a texture coordinate, from the full-size
+        image through `mag_filter`.
 
-        `v` is flipped because rows run down from the top while texture space
-        counts up from the bottom.
+        `v` is flipped when `flip_y` is set, because rows run down from the
+        top while texture space counts up from the bottom.
 
         Under `NEAREST` the sample takes whichever texel it lands in. A
         coordinate of exactly zero or one sits on a tile boundary, and the
@@ -1397,7 +1742,7 @@ struct Texture(Movable):
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
 
-        return self._sample_at(u, v, 0)
+        return self._sample_at(u, v, 0, self.mag_filter)
 
 
 # The most taps a fragment may take along a footprint's long axis, and so
@@ -1864,8 +2209,9 @@ def float_texture(
     image.height = height
     image.texel_type = FLOAT_TYPE
     image.data = data^
-    image.wrap = wrap
-    image.filter = filter
+    image.set_wrap(wrap)
+    image.mag_filter = filter
+    image.min_filter = minifying(filter, mipmapped)
     image.color_space = LINEAR
     image.alpha = alpha
     image.validate()

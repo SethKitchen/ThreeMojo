@@ -57,10 +57,12 @@ state of every class, each under three.js's key and left out where
 `LineDashedMaterial` for a dashed material, `PointsMaterial` and
 `SpriteMaterial`, with their width, dashes, size, attenuation and turn.
 One material that a mesh and a line share is written once for each.
-**A texture** is its sampler's settings, its `channel` and an
-image, written as a PNG `data:` URL of its full-size level. A texture here
-runs up from its bottom row as a three.js texture with `flipY` does, so
-the image is written as it is and `flipY` is true.
+**A texture** is its sampler's settings -- both wraps, both filters --
+its `flipY`, its `mapping`, its `channel` and an image, written as a PNG
+`data:` URL of its full-size level. The image is written as its rows are
+stored, and `flipY` says which way `v` reads them. A cube made from a
+panorama is written as the panorama, a flat texture with its
+equirectangular mapping, as three.js holds one.
 
 **A cube texture** is a `CubeTexture` entry whose image's `url` is an
 array of six PNG `data:` URLs, as `Source.toJSON` writes six images, with
@@ -71,7 +73,11 @@ A basic, lambert or phong material that reflects the scene's environment
 names that cube, since three.js reads the environment only where a
 standard or physical material has no `envMap`. A mesh writes its
 `morphTargetInfluences`. A material writes its own `clippingPlanes`,
-`clipIntersection` and `clipShadows`, a distance material its
+`clipIntersection` and `clipShadows`, a reflecting material its
+`envMapRotation` and a basic, lambert or phong one its `refractionRatio`,
+a material with a normal map its `normalMapType`, and the scene its
+background and environment settings, as `Scene.toJSON` writes them; a
+distance material its
 `referencePosition`, `nearDistance` and `farDistance`, and a material its
 `dashOffset`: three.js's `Material.toJSON` writes none of these, and its
 loader ignores them.
@@ -133,11 +139,8 @@ from loaders.object_loader import (
     CUSTOM_BLENDING,
     FLOAT_TYPE,
     FORMAT_VERSION,
-    LINEAR_FILTER,
-    LINEAR_MIPMAP_LINEAR_FILTER,
     LINEAR_SRGB_COLOR_SPACE,
     NEAREST_FILTER,
-    NEAREST_MIPMAP_NEAREST_FILTER,
     NO_BLENDING,
     RED_INTEGER_FORMAT,
     RGBA_FORMAT,
@@ -147,6 +150,7 @@ from loaders.object_loader import (
     UNSIGNED_INT_TYPE,
     UV_MAPPING,
     ObjectCameras,
+    filter_code,
     bind_mode_name,
     light_type_names,
     line_type_names,
@@ -173,6 +177,7 @@ from materials.material import (
     MaterialId,
     MaterialKind,
 )
+from math.euler import Euler, EulerOrder
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
@@ -192,7 +197,8 @@ from render.raster_state import (
 )
 from render.srgb import SRGB
 from render.texture import FLOAT_TYPE as FLOAT_TEXELS
-from render.texture import NEAREST, Texture
+from render.texture import Mapping
+from render.texture import Texture
 from render.texture_store import TextureId
 from std.math import ceil, isfinite, sqrt
 from std.pathlib import Path
@@ -294,17 +300,30 @@ def index_type(vertices: Int) -> String:
     return "Uint32Array" if vertices > _MAX_SHORT_INDEX else "Uint16Array"
 
 
-def _filters(texture: Texture) -> Tuple[Int, Int]:
-    """Return three.js's minification and magnification filters for a
-    texture's filter and mip chain."""
-    var nearest = texture.filter == NEAREST
-    var magnify = NEAREST_FILTER if nearest else LINEAR_FILTER
-    var minify = magnify
-    if texture.levels > 1:
-        minify = (
-            NEAREST_MIPMAP_NEAREST_FILTER if nearest else LINEAR_MIPMAP_LINEAR_FILTER
-        )
-    return (minify, magnify)
+def _order_name(order: EulerOrder) -> String:
+    """Return an Euler order's name, as three.js's `Euler.toArray` writes
+    it: `XYZ` and so on."""
+    comptime axes = "XYZ"
+    var name = String()
+    name += axes[byte=order.first]
+    name += axes[byte=order.second]
+    name += axes[byte=order.third]
+    return name^
+
+
+def _euler(mut writer: JsonWriter, euler: Euler) raises:
+    """Write a rotation as `Euler.toArray` does: three angles in radians
+    and the order's name.
+
+    Raises:
+        Error: If an angle is not finite.
+    """
+    writer.begin_array()
+    writer.number(euler.x.to(RADIAN))
+    writer.number(euler.y.to(RADIAN))
+    writer.number(euler.z.to(RADIAN))
+    writer.string(_order_name(euler.order))
+    writer.end_array()
 
 
 def _has_emissive(kind: MaterialKind) -> Bool:
@@ -547,74 +566,83 @@ struct _Library(Movable):
         if at < 0:
             at = len(self.texture_keys)
             ref texture = assets.textures.get(id)
-            if texture.width == 0:
-                raise Error("Object JSON: a blank texture has no image")
-            texture.validate()
-            var size = texture.width * texture.height * Texture.CHANNELS
-            var pixels = List[UInt8](capacity=size)
-            pixels.extend(Span(texture.pixels)[0:size])
-            var png = encode_png(
-                Framebuffer(texture.width, texture.height, pixels^)
-            )
-            var image = JsonWriter()
-            image.begin_object()
-            image.key("uuid")
-            image.string(object_uuid(_IMAGE_UUID, at))
-            image.key("url")
-            image.string("data:image/png;base64," + encode_base64(png))
-            image.end_object()
-            self.images.append(image.finish())
-            var filters = _filters(texture)
-            var minify = filters[0]
-            var magnify = filters[1]
-            var writer = JsonWriter()
-            writer.begin_object()
-            writer.key("uuid")
-            writer.string(object_uuid(_TEXTURE_UUID, at))
-            writer.key("name")
-            writer.string("")
-            writer.key("image")
-            writer.string(object_uuid(_IMAGE_UUID, at))
-            writer.key("mapping")
-            writer.integer(UV_MAPPING)
-            writer.key("channel")
-            writer.integer(texture.channel.value)
-            writer.key("repeat")
-            _numbers(writer, [texture.repeat.x, texture.repeat.y])
-            writer.key("offset")
-            _numbers(writer, [texture.offset.x, texture.offset.y])
-            writer.key("center")
-            _numbers(writer, [texture.center.x, texture.center.y])
-            writer.key("rotation")
-            writer.number(texture.rotation.to(RADIAN))
-            writer.key("wrap")
-            var wrap = wrap_code(texture.wrap)
-            writer.begin_array()
-            writer.integer(wrap)
-            writer.integer(wrap)
-            writer.end_array()
-            writer.key("format")
-            writer.integer(RGBA_FORMAT)
-            writer.key("type")
-            writer.integer(UNSIGNED_BYTE_TYPE)
-            writer.key("colorSpace")
-            writer.string(
-                SRGB_COLOR_SPACE if texture.color_space == SRGB else ""
-            )
-            writer.key("minFilter")
-            writer.integer(minify)
-            writer.key("magFilter")
-            writer.integer(magnify)
-            writer.key("anisotropy")
-            writer.integer(texture.anisotropy)
-            writer.key("flipY")
-            writer.boolean(True)
-            writer.key("generateMipmaps")
-            writer.boolean(texture.levels > 1)
-            writer.end_object()
-            self.textures.append(writer.finish())
+            self.flat(texture, at, texture.mapping)
             self.texture_keys.append(id.value)
         return object_uuid(_TEXTURE_UUID, at)
+
+    def flat(mut self, texture: Texture, at: Int, mapping: Mapping) raises:
+        """Write one flat texture and its image as entry `at`, with a
+        mapping: its own, or its cube's for a panorama. The caller records
+        the key.
+
+        The image is written as its rows are stored, and `flipY` says
+        which way `v` reads them, as three.js's does.
+        """
+        if texture.width == 0:
+            raise Error("Object JSON: a blank texture has no image")
+        if texture.texel_type == FLOAT_TEXELS:
+            raise Error(
+                "Object JSON: a float texture is not written, as a PNG"
+                " holds bytes"
+            )
+        texture.validate()
+        var size = texture.width * texture.height * Texture.CHANNELS
+        var pixels = List[UInt8](capacity=size)
+        pixels.extend(Span(texture.pixels)[0:size])
+        var png = encode_png(
+            Framebuffer(texture.width, texture.height, pixels^)
+        )
+        var image = JsonWriter()
+        image.begin_object()
+        image.key("uuid")
+        image.string(object_uuid(_IMAGE_UUID, at))
+        image.key("url")
+        image.string("data:image/png;base64," + encode_base64(png))
+        image.end_object()
+        self.images.append(image.finish())
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_TEXTURE_UUID, at))
+        writer.key("name")
+        writer.string("")
+        writer.key("image")
+        writer.string(object_uuid(_IMAGE_UUID, at))
+        writer.key("mapping")
+        writer.integer(mapping.value)
+        writer.key("channel")
+        writer.integer(texture.channel.value)
+        writer.key("repeat")
+        _numbers(writer, [texture.repeat.x, texture.repeat.y])
+        writer.key("offset")
+        _numbers(writer, [texture.offset.x, texture.offset.y])
+        writer.key("center")
+        _numbers(writer, [texture.center.x, texture.center.y])
+        writer.key("rotation")
+        writer.number(texture.rotation.to(RADIAN))
+        writer.key("wrap")
+        writer.begin_array()
+        writer.integer(wrap_code(texture.wrap_s))
+        writer.integer(wrap_code(texture.wrap_t))
+        writer.end_array()
+        writer.key("format")
+        writer.integer(RGBA_FORMAT)
+        writer.key("type")
+        writer.integer(UNSIGNED_BYTE_TYPE)
+        writer.key("colorSpace")
+        writer.string(SRGB_COLOR_SPACE if texture.color_space == SRGB else "")
+        writer.key("minFilter")
+        writer.integer(filter_code(texture.min_filter))
+        writer.key("magFilter")
+        writer.integer(filter_code(texture.mag_filter))
+        writer.key("anisotropy")
+        writer.integer(texture.anisotropy)
+        writer.key("flipY")
+        writer.boolean(texture.flip_y)
+        writer.key("generateMipmaps")
+        writer.boolean(texture.levels > 1)
+        writer.end_object()
+        self.textures.append(writer.finish())
 
     def cube(mut self, id: CubeTextureId, assets: Assets) raises -> String:
         """Write a cube texture and its six images once, as three.js
@@ -634,6 +662,12 @@ struct _Library(Movable):
             return object_uuid(_TEXTURE_UUID, at)
         at = len(self.texture_keys)
         cube.validate()
+        if cube.has_panorama():
+            # three.js holds a panorama as the flat texture it is, with an
+            # equirectangular mapping; the six faces are this port's.
+            self.flat(cube.panorama, at, cube.mapping)
+            self.texture_keys.append(key)
+            return object_uuid(_TEXTURE_UUID, at)
         ref first = cube.faces[0]
         var image = JsonWriter()
         image.begin_object()
@@ -655,13 +689,14 @@ struct _Library(Movable):
                     " PNG holds bytes"
                 )
             var same = (
-                face.filter == first.filter
+                face.mag_filter == first.mag_filter
+                and face.min_filter == first.min_filter
                 and face.color_space == first.color_space
                 and face.levels == first.levels
             )
             if not same:
                 raise Error(
-                    "Object JSON: a cube's faces must share their filter,"
+                    "Object JSON: a cube's faces must share their filters,"
                     " color space and mip chain, as three.js's CubeTexture"
                     " has one of each"
                 )
@@ -674,7 +709,6 @@ struct _Library(Movable):
         image.end_array()
         image.end_object()
         self.images.append(image.finish())
-        var filters = _filters(first)
         var writer = JsonWriter()
         writer.begin_object()
         writer.key("uuid")
@@ -684,7 +718,7 @@ struct _Library(Movable):
         writer.key("image")
         writer.string(object_uuid(_IMAGE_UUID, at))
         writer.key("mapping")
-        writer.integer(CUBE_REFLECTION_MAPPING)
+        writer.integer(cube.mapping.value)
         writer.key("channel")
         writer.integer(0)
         writer.key("repeat")
@@ -707,9 +741,9 @@ struct _Library(Movable):
         writer.key("colorSpace")
         writer.string(SRGB_COLOR_SPACE if first.color_space == SRGB else "")
         writer.key("minFilter")
-        writer.integer(filters[0])
+        writer.integer(filter_code(first.min_filter))
         writer.key("magFilter")
-        writer.integer(filters[1])
+        writer.integer(filter_code(first.mag_filter))
         writer.key("anisotropy")
         writer.integer(1)
         writer.key("flipY")
@@ -1033,9 +1067,13 @@ struct _Library(Movable):
             writer.number(material.emissive_intensity)
         if kind.reflects():
             self.env_map(writer, material, assets)
+            writer.key("envMapRotation")
+            _euler(writer, material.env_map_rotation)
         if _reflects(kind):
             writer.key("reflectivity")
             writer.number(material.reflectivity)
+            writer.key("refractionRatio")
+            writer.number(material.refraction_ratio)
             writer.key("combine")
             writer.integer(material.combine.value)
         self.map(writer, "map", material.map, assets)
@@ -1045,6 +1083,8 @@ struct _Library(Movable):
         self.map(writer, "matcap", material.matcap, assets)
         if material.normal_map != NO_TEXTURE:
             self.map(writer, "normalMap", material.normal_map, assets)
+            writer.key("normalMapType")
+            writer.integer(material.normal_map_type.value)
             writer.key("normalScale")
             _numbers(writer, [material.normal_scale.x, material.normal_scale.y])
         if material.bump_map != NO_TEXTURE:
@@ -2284,6 +2324,22 @@ def object_to_json(
         var uuid = out.library.cube(scene.background.cube, assets)
         tree.key("background")
         tree.string(uuid)
+    # As `Scene.toJSON` writes them: the blur and the two intensities only
+    # when they are not the default, the two rotations always.
+    scene.validate_environment()
+    if scene.background_blurriness > 0:
+        tree.key("backgroundBlurriness")
+        tree.number(scene.background_blurriness)
+    if scene.background_intensity != 1:
+        tree.key("backgroundIntensity")
+        tree.number(scene.background_intensity)
+    tree.key("backgroundRotation")
+    _euler(tree, scene.background_rotation)
+    if scene.environment_intensity != 1:
+        tree.key("environmentIntensity")
+        tree.number(scene.environment_intensity)
+    tree.key("environmentRotation")
+    _euler(tree, scene.environment_rotation)
     out.library.environment = scene.environment
     if scene.environment != NO_CUBE_TEXTURE:
         var uuid = out.library.cube(scene.environment, assets)

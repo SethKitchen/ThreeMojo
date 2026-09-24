@@ -187,8 +187,8 @@ def check_fixture(path: String) raises:
         )
         assert_true(map_material.map != NO_TEXTURE)
         ref texture = assets.textures.get(map_material.map)
-        assert_true(texture.wrap == MIRROR)
-        assert_true(texture.filter == NEAREST)
+        assert_true(texture.wrap_s == MIRROR)
+        assert_true(texture.mag_filter == NEAREST)
         assert_equal(texture.levels, 1)
         assert_equal(texture.width, 2)
         assert_equal(texture.pixels[0], 255)
@@ -766,9 +766,9 @@ def test_textures_filters_and_refusals() raises:
         # Both objects share the one texture.
         assert_equal(len(model.textures), 1)
         ref texture = assets.textures.get(model.textures[0])
-        assert_true(texture.filter == BILINEAR)
+        assert_true(texture.mag_filter == BILINEAR)
         assert_equal(texture.levels > 1, filter == "auto")
-        assert_true(texture.wrap == REPEAT)
+        assert_true(texture.wrap_s == REPEAT)
     # A `texid` that names no texture makes a material with no map.
     var scene = Scene()
     var assets = Assets()

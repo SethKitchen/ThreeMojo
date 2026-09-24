@@ -230,14 +230,16 @@ def test_a_compressed_texture_takes_threejs_defaults() raises:
     var data = color_block(RED565, BLUE565, same(1))
     var image = compressed_texture(4, 4, data, RGB_S3TC_DXT1_FORMAT)
     assert_equal(image.width, 4)
-    assert_equal(image.wrap, CLAMP)
+    assert_equal(image.wrap_s, CLAMP)
     assert_equal(image.levels, 1)
     assert_equal(image.texel(3, 3).b, UInt8(255))
+    # A block cannot be flipped on upload: three.js's `flipY` is off.
+    assert_false(image.flip_y)
     var custom = compressed_texture(
         4, 4, data, RGB_S3TC_DXT1_FORMAT, REPEAT, NEAREST, LINEAR, True, IGNORED
     )
-    assert_equal(custom.wrap, REPEAT)
-    assert_equal(custom.filter, NEAREST)
+    assert_equal(custom.wrap_s, REPEAT)
+    assert_equal(custom.mag_filter, NEAREST)
     assert_equal(custom.color_space, LINEAR)
     assert_equal(custom.levels, 3)
     assert_equal(custom.alpha, IGNORED)
@@ -400,6 +402,7 @@ def test_signed_rgtc_blocks_decode_to_floats() raises:
     var pair = above.copy()
     pair.extend(below^)
     var two = compressed_texture(4, 4, pair, SIGNED_RED_GREEN_RGTC2_FORMAT)
+    assert_false(two.flip_y)
     assert_equal(two.texel_type, FLOAT_TYPE)
     assert_equal(two.data[1], Float32(-1))
 
@@ -470,7 +473,7 @@ def test_a_compressed_image_names_its_faces_and_levels() raises:
     var small = image.texture(0, 1, REPEAT, NEAREST, True, IGNORED)
     assert_equal(small.width, 4)
     assert_equal(small.height, 2)
-    assert_equal(small.wrap, REPEAT)
+    assert_equal(small.wrap_s, REPEAT)
     assert_equal(small.levels, 3)
     for face in [-1, 1]:
         with assert_raises(contains="no face"):

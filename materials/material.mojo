@@ -180,6 +180,7 @@ on for every kind that shows light and off for the three data kinds, which
 refuse it: three.js's normal, depth and distance shaders read no fog.
 """
 
+from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -214,6 +215,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from materials.nodes import NO_NODES, NodeProgramId
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
+from math.euler import XYZ, Euler
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -546,6 +548,41 @@ def combine_light(
         outgoing.b * keep + toward.b * reflectivity,
         outgoing.a,
     )
+
+
+@fieldwise_init
+struct NormalMapType(Equatable, ImplicitlyCopyable, Writable):
+    """Which frame a normal map's texels are in, as a type: three.js's
+    `normalMapType`.
+
+    `TANGENT_SPACE_NORMAL_MAP` holds each normal relative to the surface:
+    its tangent, bitangent and normal, which is what lets one map wrap any
+    shape. `OBJECT_SPACE_NORMAL_MAP` holds each normal in the mesh's own
+    space, turned into the world by the mesh's normal matrix, and replaces
+    the geometry's normal outright. `value` is three.js's constant. The
+    type does not stop `NormalMapType(9)`, so `Material` asks `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the two named frames."""
+        return (
+            self == TANGENT_SPACE_NORMAL_MAP or self == OBJECT_SPACE_NORMAL_MAP
+        )
+
+
+# Normals relative to the surface's tangent frame: three.js's
+# `TangentSpaceNormalMap` and its default.
+comptime TANGENT_SPACE_NORMAL_MAP = NormalMapType(0)
+# Normals in the mesh's own space: three.js's `ObjectSpaceNormalMap`.
+comptime OBJECT_SPACE_NORMAL_MAP = NormalMapType(1)
+# The ratio of the two indices of refraction a basic, lambert or phong
+# surface bends its view by under a refraction mapping: three.js's
+# `refractionRatio` default.
+comptime DEFAULT_REFRACTION_RATIO = Float32(0.98)
+# No turn of the environment: three.js's `envMapRotation` default.
+comptime NO_ENV_ROTATION = Euler(NO_ROTATION, NO_ROTATION, NO_ROTATION, XYZ)
 
 
 @fieldwise_init
@@ -885,6 +922,18 @@ struct Material(ImplicitlyCopyable):
     # What a physical surface's environment is multiplied by, three.js's
     # `envMapIntensity`. One by default, as there.
     var env_map_intensity: Float32
+    # How the environment is turned before it is read, three.js's
+    # `envMapRotation`. None by default. A surface that reflects the
+    # scene's environment is turned by the scene's `environment_rotation`
+    # instead, as three.js turns it.
+    var env_map_rotation: Euler
+    # The ratio of the indices of refraction a basic, lambert or phong
+    # surface bends its view by, when its env map has a refraction
+    # mapping: three.js's `refractionRatio`. 0.98 by default, as there.
+    var refraction_ratio: Float32
+    # Which frame the normal map's texels are in, three.js's
+    # `normalMapType`. `TANGENT_SPACE_NORMAL_MAP` by default, as there.
+    var normal_map_type: NormalMapType
     # A texture whose texels are tangent-space normals, three.js's
     # `normalMap`, and what its x and y are scaled by, three.js's
     # `normalScale`. Or a texture whose red channel is a height, three.js's
@@ -1148,6 +1197,9 @@ struct Material(ImplicitlyCopyable):
         clearcoat_normal_map: TextureId = NO_TEXTURE,
         clearcoat_normal_scale: Vector2 = UNIT_NORMAL_SCALE,
         nodes: NodeProgramId = NO_NODES,
+        env_map_rotation: Euler = NO_ENV_ROTATION,
+        refraction_ratio: Float32 = DEFAULT_REFRACTION_RATIO,
+        normal_map_type: NormalMapType = TANGENT_SPACE_NORMAL_MAP,
     ) raises:
         """Describe a surface.
 
@@ -1372,6 +1424,15 @@ struct Material(ImplicitlyCopyable):
             nodes: Id of a compiled node graph that replaces parts of the
                 shading, or `NO_NODES`: a node material. See
                 `materials.nodes`.
+            env_map_rotation: How the environment is turned before it is
+                read, three.js's `envMapRotation`. None by default.
+            refraction_ratio: The ratio of the indices of refraction a
+                `BASIC`, `LAMBERT` or `PHONG` surface bends its view by
+                under a refraction mapping, three.js's `refractionRatio`.
+                0.98 by default.
+            normal_map_type: Which frame the normal map's texels are in,
+                three.js's `normalMapType`: `TANGENT_SPACE_NORMAL_MAP`, the
+                default, or `OBJECT_SPACE_NORMAL_MAP`.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1483,6 +1544,13 @@ struct Material(ImplicitlyCopyable):
                 on a kind that is not `PHYSICAL` are refused. A `nodes` id that is a negative other than
                 `NO_NODES`, or one on a kind that `takes_nodes` refuses or
                 on a wireframe, is
+                refused. An `env_map_rotation` whose angles are not finite
+                or whose order is none of the six, or that turns anything
+                on a kind that does not reflect, is refused. A
+                `refraction_ratio` that is negative or not finite, or that
+                is not the default on a kind other than `BASIC`, `LAMBERT`
+                or `PHONG`, is refused. A `normal_map_type` that is none of
+                the two, or `OBJECT_SPACE_NORMAL_MAP` with no normal map, is
                 refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
@@ -1941,6 +2009,35 @@ struct Material(ImplicitlyCopyable):
                 " surface for one to shade"
             )
         self.nodes = nodes
+        # The environment's turn and the refraction, refused where nothing
+        # reads them, as the env map is.
+        check_rotation(env_map_rotation, "An env map rotation")
+        if not kind.reflects() and is_turned(env_map_rotation):
+            raise Error(
+                "Only a material that reflects an environment turns one:"
+                " basic, lambert, phong, standard or physical"
+            )
+        if not isfinite(refraction_ratio) or refraction_ratio < 0:
+            raise Error("A refraction ratio cannot be negative")
+        var bends = kind.reflects() and not kind.is_physical()
+        if not bends and refraction_ratio != DEFAULT_REFRACTION_RATIO:
+            raise Error(
+                "Only a basic, lambert or phong material refracts its"
+                " environment: a physical surface reflects it by roughness"
+            )
+        if not normal_map_type.is_valid():
+            raise Error(
+                "A normal map type must be TANGENT_SPACE_NORMAL_MAP or"
+                " OBJECT_SPACE_NORMAL_MAP"
+            )
+        if (
+            normal_map_type == OBJECT_SPACE_NORMAL_MAP
+            and normal_map == NO_TEXTURE
+        ):
+            raise Error("An object-space normal map type needs a normal map")
+        self.env_map_rotation = env_map_rotation
+        self.refraction_ratio = refraction_ratio
+        self.normal_map_type = normal_map_type
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False

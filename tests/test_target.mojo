@@ -512,7 +512,7 @@ def test_a_target_becomes_a_texture_through_its_resolve() raises:
     var dimmed = target.texture(
         REPEAT, NEAREST, False, IGNORED, 1, REINHARD_TONE_MAPPING, 1.0
     )
-    assert_true(dimmed.wrap == REPEAT)
+    assert_true(dimmed.wrap_s == REPEAT)
     assert_true(dimmed.alpha == IGNORED)
     assert_equal(dimmed.levels, 1)
     assert_equal(dimmed.texel(0, 0).r, UInt8(188))
@@ -527,7 +527,7 @@ def test_a_targets_depth_becomes_a_texture() raises:
     assert_true(seen.color_space == LINEAR)
     assert_equal(seen.texel(0, 0).r, UInt8(128))
     assert_equal(seen.texel(1, 0).r, UInt8(255))
-    assert_true(target.depth_texture(REPEAT).wrap == REPEAT)
+    assert_true(target.depth_texture(REPEAT).wrap_s == REPEAT)
 
 
 def main() raises:

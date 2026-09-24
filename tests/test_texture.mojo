@@ -138,11 +138,11 @@ def test_every_known_wrap_mode_is_accepted() raises:
 
 def test_a_texture_clamps_by_default_as_three_js_does() raises:
     """Every constructor defaults to three.js's `ClampToEdgeWrapping`."""
-    assert_equal(Texture().wrap, CLAMP)
+    assert_equal(Texture().wrap_s, CLAMP)
     var pixels = List[UInt8](length=4, fill=255)
-    assert_equal(Texture(1, 1, pixels^).wrap, CLAMP)
+    assert_equal(Texture(1, 1, pixels^).wrap_s, CLAMP)
     var board = checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
-    assert_equal(board.wrap, CLAMP)
+    assert_equal(board.wrap_s, CLAMP)
     # The dark edge texel holds past the edge. A tiling read would come
     # back to the light square at the left.
     assert_equal(board.sample(1.3, 0.9).r, 0)
@@ -377,7 +377,7 @@ def test_a_checkerboard_must_divide_evenly() raises:
 
 def test_a_checkerboard_carries_its_wrap_mode() raises:
     var board = checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0), CLAMP)
-    assert_equal(board.wrap, CLAMP)
+    assert_equal(board.wrap_s, CLAMP)
 
 
 # --- bilinear filtering -----------------------------------------------------
@@ -476,18 +476,18 @@ def test_a_repeating_bilinear_texture_blends_across_its_seam() raises:
 
 
 def test_a_texture_keeps_the_filter_it_was_given() raises:
-    assert_equal(quad().filter, NEAREST)
-    assert_equal(smooth_quad().filter, BILINEAR)
+    assert_equal(quad().mag_filter, NEAREST)
+    assert_equal(smooth_quad().mag_filter, BILINEAR)
     # Left unsaid, the filter is bilinear and the chain is built, as
     # three.js's `LinearFilter`, `LinearMipmapLinearFilter` and
     # `generateMipmaps` have them.
     var told_nothing = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
-    assert_equal(told_nothing.filter, BILINEAR)
+    assert_equal(told_nothing.mag_filter, BILINEAR)
     assert_equal(told_nothing.levels, 4)
     var board = checkerboard(
         4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, BILINEAR
     )
-    assert_equal(board.filter, BILINEAR)
+    assert_equal(board.mag_filter, BILINEAR)
 
 
 def test_the_blank_texture_is_white_under_either_filter() raises:
@@ -951,7 +951,7 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(not Wrap(9).is_valid())
     assert_true(NEAREST.is_valid())
     assert_true(BILINEAR.is_valid())
-    assert_true(not Filter(5).is_valid())
+    assert_true(not Filter(9).is_valid())
     assert_true(SRGB.is_decodable())
     assert_true(LINEAR.is_decodable())
     assert_true(not UNKNOWN_SPACE.is_decodable())
@@ -974,14 +974,14 @@ def test_a_texture_edited_after_construction_can_be_checked_again() raises:
     # What the GPU upload does before it trusts the fields.
     var image = quad(REPEAT)
     image.validate()
-    image.filter = Filter(5)
+    image.mag_filter = Filter(5)
     with assert_raises():
         image.validate()
-    image.filter = NEAREST
-    image.wrap = Wrap(9)
+    image.mag_filter = NEAREST
+    image.set_wrap(Wrap(9))
     with assert_raises():
         image.validate()
-    image.wrap = REPEAT
+    image.set_wrap(REPEAT)
     image.color_space = ColorSpace(99)
     with assert_raises():
         image.validate()
@@ -1118,8 +1118,8 @@ def test_ignoring_alpha_copies_a_texture_into_the_other_mode() raises:
     assert_equal(copy.alpha, IGNORED)
     assert_equal(copy.levels, original.levels)
     assert_equal(copy.levels, 2)
-    assert_equal(copy.wrap, CLAMP)
-    assert_equal(copy.filter, BILINEAR)
+    assert_equal(copy.wrap_s, CLAMP)
+    assert_equal(copy.mag_filter, BILINEAR)
     assert_equal(copy.color_space, LINEAR)
     var kept = original.wrapped_texel(0, 0, 1)
     assert_almost_equal(kept.r, Float32(1), atol=Float64(0.01))
@@ -1205,8 +1205,8 @@ def test_a_data_texture_quantizes_fractions_without_a_curve() raises:
     assert_equal(ramp.width, 4)
     assert_equal(ramp.height, 1)
     assert_true(ramp.color_space == LINEAR)
-    assert_true(ramp.wrap == CLAMP)
-    assert_true(ramp.filter == NEAREST)
+    assert_true(ramp.wrap_s == CLAMP)
+    assert_true(ramp.mag_filter == NEAREST)
     assert_equal(ramp.levels, 1)
     # One channel is red: green and blue are zero, as a `RedFormat`
     # texture samples, and alpha is one.
@@ -1252,8 +1252,8 @@ def test_a_data_texture_reads_each_channel_count_its_own_way() raises:
         mipmapped=True,
         alpha=IGNORED,
     )
-    assert_true(tiled.wrap == REPEAT)
-    assert_true(tiled.filter == BILINEAR)
+    assert_true(tiled.wrap_s == REPEAT)
+    assert_true(tiled.mag_filter == BILINEAR)
     assert_true(tiled.alpha == IGNORED)
     assert_equal(tiled.levels, 2)
 
@@ -1293,8 +1293,8 @@ def test_a_rendered_image_becomes_a_texture_as_it_is() raises:
     assert_equal(picture.width, 2)
     assert_equal(picture.height, 1)
     assert_true(picture.color_space == SRGB)
-    assert_true(picture.wrap == CLAMP)
-    assert_true(picture.filter == BILINEAR)
+    assert_true(picture.wrap_s == CLAMP)
+    assert_true(picture.mag_filter == BILINEAR)
     assert_true(picture.alpha == COVERAGE)
     assert_equal(picture.levels, 2)
     assert_equal(picture.texel(0, 0).r, UInt8(255))
@@ -1305,8 +1305,8 @@ def test_a_rendered_image_becomes_a_texture_as_it_is() raises:
         Float64(picture.sample(0.25, 0.5).r), 1.0, atol=TOLERANCE
     )
     var plain = texture_of(image, REPEAT, NEAREST, False, IGNORED)
-    assert_true(plain.wrap == REPEAT)
-    assert_true(plain.filter == NEAREST)
+    assert_true(plain.wrap_s == REPEAT)
+    assert_true(plain.mag_filter == NEAREST)
     assert_true(plain.alpha == IGNORED)
     assert_equal(plain.levels, 1)
 
@@ -1351,8 +1351,8 @@ def test_a_depth_texture_holds_window_space_depth_as_gray() raises:
     var seen = depth_texture_of(image)
     assert_true(seen.color_space == LINEAR)
     assert_true(seen.alpha == IGNORED)
-    assert_true(seen.filter == NEAREST)
-    assert_true(seen.wrap == CLAMP)
+    assert_true(seen.mag_filter == NEAREST)
+    assert_true(seen.wrap_s == CLAMP)
     assert_equal(seen.levels, 1)
     # The near plane is zero, the middle a half, and nothing drawn is the
     # far plane, one.
@@ -1363,7 +1363,7 @@ def test_a_depth_texture_holds_window_space_depth_as_gray() raises:
     assert_equal(seen.texel(1, 0).a, UInt8(255))
     assert_equal(seen.texel(2, 0).r, UInt8(255))
     var tiled = depth_texture_of(image, REPEAT)
-    assert_true(tiled.wrap == REPEAT)
+    assert_true(tiled.wrap_s == REPEAT)
 
 
 # --- anisotropy --------------------------------------------------------------------

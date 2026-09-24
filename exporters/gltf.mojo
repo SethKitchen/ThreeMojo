@@ -66,9 +66,10 @@ is written times the amount; see `layer_extensions`.
 is written once, as three.js's `cache.images` keeps it: two textures of
 the same pixels share one image. glTF's `v` runs down
 from the image's top, where a texture here runs up from its bottom, so an
-image is written upside down, as three.js writes a `flipY` texture. A
-texture that `read_gltf` made already carries the flip in its `repeat`
-and `offset`, so its image is written as it is. A texture moved, tiled or
+image of a texture with `flip_y` is written upside down, as three.js
+writes a `flipY` texture. A texture that `read_gltf` made has `flip_y`
+off, so its image is written as it is. Each sampler carries the texture's
+`wrapS`, `wrapT`, `magFilter` and `minFilter`. A texture moved, tiled or
 turned is written with `KHR_texture_transform`, as three.js's
 `applyTextureTransform` writes it; see `GltfPlacement`. glTF keeps
 roughness and metalness in one image, green and blue: when a material's
@@ -99,10 +100,6 @@ from loaders.gltf import (
     COMPONENT_UNSIGNED_INT,
     COMPONENT_UNSIGNED_SHORT,
     EMISSIVE_STRENGTH,
-    FILTER_LINEAR,
-    FILTER_LINEAR_MIPMAP_LINEAR,
-    FILTER_NEAREST,
-    FILTER_NEAREST_MIPMAP_NEAREST,
     GLB_BIN_CHUNK,
     GLB_JSON_CHUNK,
     GLB_MAGIC,
@@ -122,6 +119,7 @@ from loaders.gltf import (
     WRAP_CLAMP,
     WRAP_MIRROR,
     WRAP_REPEAT,
+    gl_filter,
 )
 from materials.material import (
     BASIC,
@@ -138,7 +136,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import encode as encode_png
-from render.texture import CLAMP, FLOAT_TYPE, MIRROR, NEAREST, Texture
+from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
 from std.math import isfinite
 from std.pathlib import Path
@@ -299,13 +297,14 @@ def _is_at(point: Vector2, u: Float32, v: Float32) -> Bool:
 
 
 def _is_written_upside_down(texture: Texture) -> Bool:
-    """Return True if a texture's image is written upside down: one whose
-    `repeat.y` is not negative, where `read_gltf` sets it to minus one.
-
-    Either way the texture samples as it does here, since
-    `GltfPlacement.of` writes the transform that matches the image.
+    """Return True if a texture's image is written upside down: one with
+    `flip_y`, whose `v` counts up from its bottom row, where glTF's counts
+    down from the top, as three.js's `GLTFExporter` flips a `flipY`
+    texture's image. `read_gltf` turns `flip_y` off, and such a texture's
+    image is written as it is. Either way the texture's own transform
+    samples the written image where the texture samples its own.
     """
-    return texture.repeat.y >= 0
+    return texture.flip_y
 
 
 @fieldwise_init
@@ -334,9 +333,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
         three.js's `GLTFExporter` writes `offset`, `repeat` and `rotation`
         as they are and drops `center`. This writes the offset the whole
         matrix has, so a texture turned or scaled about a center samples
-        the same. Where its image is written as it is, the flip of `v` is
-        folded in: the offset's `v` is one minus the matrix's, and the
-        scale's `v` is negated.
+        the same. The image is written the way `v` reads it, so the
+        transform needs no flip.
 
         Args:
             texture: The texture.
@@ -352,16 +350,9 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
         var v = to_uv.get(1, 2)
         var turn = texture.rotation.to(RADIAN)
         var set = texture.channel.value
-        if _is_written_upside_down(texture):
-            return GltfPlacement(
-                Vector2(u, v),
-                Vector2(texture.repeat.x, texture.repeat.y),
-                turn,
-                set,
-            )
         return GltfPlacement(
-            Vector2(u, 1 - v),
-            Vector2(texture.repeat.x, -texture.repeat.y),
+            Vector2(u, v),
+            Vector2(texture.repeat.x, texture.repeat.y),
             turn,
             set,
         )
@@ -398,8 +389,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
 def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     """Return a texture's full-size image as glTF writes it.
 
-    The image is written upside down when its `repeat.y` is not negative,
-    as three.js writes a `flipY` texture, and as it is otherwise, as
+    The image is written upside down when the texture has `flip_y`, as
+    three.js writes a `flipY` texture, and as it is otherwise, as
     `read_gltf` leaves it. `GltfPlacement.of` gives the transform that
     samples it where the texture samples its own.
 
@@ -439,11 +430,11 @@ def _same_image(
     return written_width == width and written == pixels
 
 
-def _wrap_code(texture: Texture) -> Int:
-    """Return a texture's wrap as glTF's constant; the texture is valid."""
-    if texture.wrap == CLAMP:
+def _wrap_code(wrap: Wrap) -> Int:
+    """Return a wrap as glTF's constant; the wrap is valid."""
+    if wrap == CLAMP:
         return WRAP_CLAMP
-    if texture.wrap == MIRROR:
+    if wrap == MIRROR:
         return WRAP_MIRROR
     return WRAP_REPEAT
 
@@ -669,34 +660,33 @@ struct _Exporter(Movable):
         return slot
 
     def sampler(mut self, texture: Texture) raises -> Int:
-        """Write the sampler for a texture's wrap and filter, once."""
-        var mipmapped = texture.levels > 1
+        """Write the sampler for a texture's two wraps and two filters,
+        once, as three.js's `processSampler` writes `wrapS`, `wrapT`,
+        `magFilter` and `minFilter`.
+
+        A mipmap `minFilter` on a texture with no chain is written as the
+        filter it reads inside a level, since only a chain can be read
+        by level and glTF says nothing about whether one is built."""
+        var minify = texture.min_filter
+        if texture.levels == 1:
+            minify = minify.within_level()
         var key = (
-            texture.wrap.value * 4
-            + texture.filter.value * 2
-            + (1 if mipmapped else 0)
-        )
+            (texture.wrap_s.value * 3 + texture.wrap_t.value) * 2
+            + texture.mag_filter.value
+        ) * 6 + minify.value
         for at in range(len(self.sampler_keys)):
             if self.sampler_keys[at] == key:
                 return at
-        var nearest = texture.filter == NEAREST
-        var magnify = FILTER_NEAREST if nearest else FILTER_LINEAR
-        var minify = magnify
-        if mipmapped:
-            minify = (
-                FILTER_NEAREST_MIPMAP_NEAREST if nearest else FILTER_LINEAR_MIPMAP_LINEAR
-            )
-        var wrap = _wrap_code(texture)
         var writer = JsonWriter()
         writer.begin_object()
         writer.key("magFilter")
-        writer.integer(magnify)
+        writer.integer(gl_filter(texture.mag_filter))
         writer.key("minFilter")
-        writer.integer(minify)
+        writer.integer(gl_filter(minify))
         writer.key("wrapS")
-        writer.integer(wrap)
+        writer.integer(_wrap_code(texture.wrap_s))
         writer.key("wrapT")
-        writer.integer(wrap)
+        writer.integer(_wrap_code(texture.wrap_t))
         writer.end_object()
         self.sampler_keys.append(key)
         self.samplers.append(writer.finish())

@@ -295,7 +295,7 @@ def test_a_cube_refuses_a_face_that_is_not_clamped() raises:
 def test_a_face_edited_into_nonsense_is_refused_on_validate() raises:
     var cube = CubeTexture(six_solid())
     cube.validate()
-    cube.faces[2].filter = Filter(9)
+    cube.faces[2].mag_filter = Filter(9)
     with assert_raises():
         cube.validate()
 
@@ -328,8 +328,8 @@ def test_images_seen_from_inside_are_read_as_they_are() raises:
     var cube = cube_texture_from(six_images(RED, GREEN))
     assert_color(cube.sample(Vector3(1, 0, 0.5)).encode(), GREEN)
     assert_color(cube.sample(Vector3(1, 0, -0.5)).encode(), RED)
-    assert_equal(cube.face(0).wrap, CLAMP)
-    assert_equal(cube.face(0).filter, BILINEAR)
+    assert_equal(cube.face(0).wrap_s, CLAMP)
+    assert_equal(cube.face(0).mag_filter, BILINEAR)
     assert_equal(cube.face(0).levels, 1)
 
 
@@ -392,7 +392,7 @@ def test_images_seen_from_outside_are_where_three_js_shows_them() raises:
     # The px image is the face that looks along -x, as it is.
     assert_color(cube.sample(Vector3(-1, 0.5, 0.5)).encode(), _texel(0, 0, 0))
     assert_color(cube.sample(Vector3(1, 0.5, 0.5)).encode(), _texel(1, 1, 0))
-    assert_equal(cube.face(0).filter, NEAREST)
+    assert_equal(cube.face(0).mag_filter, NEAREST)
 
 
 def _render_target_direction(face: Int, column: Int, row: Int) -> Vector3:
@@ -500,12 +500,12 @@ def test_six_renders_become_a_cube() raises:
     var cube = cube_texture_of(frames)
     assert_equal(cube.size, 3)
     assert_equal(cube.face(0).color_space, SRGB)
-    assert_equal(cube.face(0).wrap, CLAMP)
+    assert_equal(cube.face(0).wrap_s, CLAMP)
     assert_color(cube.sample(Vector3(0, 0, -1)).encode(), MAGENTA)
     # With a chain and nearest, when asked.
     var chained = cube_texture_of(frames, NEAREST, True, IGNORED)
     assert_equal(chained.face(0).levels, 2)
-    assert_equal(chained.face(0).filter, NEAREST)
+    assert_equal(chained.face(0).mag_filter, NEAREST)
     assert_equal(chained.face(0).alpha, IGNORED)
     _ = frames.pop()
     with assert_raises():

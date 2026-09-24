@@ -50,7 +50,7 @@ Coverage is integer arithmetic and matches the CPU exactly. Shading is floating 
 
 The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim and the Blinn-Phong highlight. It shares the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
-The state table carries `STATE_PER_TRIANGLE` entries per triangle, thirty-four at present. `triangle_state` writes them from the first corner, in this order:
+The state table carries `STATE_PER_TRIANGLE` entries per triangle, thirty-five at present. `triangle_state` writes them from the first corner, in this order:
 
 | Column | Entry |
 |---|---|
@@ -66,6 +66,9 @@ The state table carries `STATE_PER_TRIANGLE` entries per triangle, thirty-four a
 | 23 to 27 | The sheen color, sheen roughness, iridescence, iridescence thickness and anisotropy maps. See [Materials](Materials#sheen). |
 | 28 | Where the triangle's node program starts in the fog buffer, or -1 for none. |
 | 29 to 33 | The specular intensity, specular color, clearcoat, clearcoat roughness and clearcoat normal maps. See [Materials](Materials#specular-and-clearcoat-maps). |
+| 34 | The normal map type's value, `STATE_NORMAL_MAP_TYPE`. See [Materials](Materials#normal-maps-and-bump-maps). |
+
+A triangle's `TextureFrames` ride its vertex lanes, from `LANE_ENV_ROTATION`. The first nine numbers turn the environment's lookup, then the refraction ratio, then nine numbers of the mesh's normal matrix for an object-space normal map. The kernel turns a direction with `Basis3.turn` and bends one with `env_direction`, the host's own functions. It reads an object-space normal map with `object_space_normal`, as the host does.
 
 Each map column holds a texture id, or `NO_TEXTURE` for none. The `STATE_` constants in `render/gpu.mojo` name every column. A `TOON` triangle's ramp is the gradient map column. The kernel reads the ramp's top row straight out of the texel buffer, with the host's own `toon_index`.
 
@@ -85,13 +88,20 @@ The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area li
 
 ### Texture table
 
-The texture table holds `TABLE_COLUMNS` entries per texture, seventeen at present. Each map has its own transform and channel, and the table carries them. The lanes and the state columns do not change: a triangle names its maps by id, and each id has one row.
+The texture table holds `TABLE_COLUMNS` entries per texture, twenty-one at present. Each map has its own sampler, transform and channel, and the table carries them. The lanes and the state columns do not change: a triangle names its maps by id, and each id has one row.
 
 | Column | Entry |
 |---|---|
-| 0 to 9 | The byte offset, the width, the height, the wrap mode, the filter, the color space, the level count, the alpha mode, the anisotropy and the texel type. |
-| 10 to 15 | From `TABLE_PLACEMENT`: the six numbers of `Texture.placement`, as their `Float32` bits. |
-| 16 | The channel: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
+| 0 to 9 | The byte offset, the width, the height, `wrap_s`, `mag_filter`, the color space, the level count, the alpha mode, the anisotropy and the texel type. |
+| 10 and 11 | `TABLE_WRAP_T` and `TABLE_MIN_FILTER`: `wrap_t` and `min_filter`. |
+| 12 | `TABLE_FLIP_Y`: one if `v` counts up from the bottom row, zero if not. |
+| 13 | `TABLE_MAPPING`: the mapping's value. A cube's panorama row holds the cube's mapping. |
+| 14 to 19 | From `TABLE_PLACEMENT`: the six numbers of `Texture.placement`, as their `Float32` bits. |
+| 20 | The channel: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
+
+The kernel samples a row as the host samples the texture. It reads a named level through `level_filter`, a fractional one through `plan_levels`, and a row through `row_coordinate`. `wrap_index` wraps each axis by its own mode. See [Textures](Textures#filter).
+
+A cube texture takes `CUBE_ROWS` rows, eight at present: its six faces, its PMREM and its panorama. A cube without a PMREM or a panorama has one white byte texel there. The kernel reads the panorama row's mapping. An equirectangular one means the cube samples its panorama at `equirect_uv`, and a refraction one means a basic, lambert or phong surface refracts.
 
 `_placement` reads a row back as a `UvPlacement`. The kernel places each map's pair with `UvPlacement.place`, the function the host calls. So both backends sample each map at the same coordinate. The table is the cheapest exact layout. It adds seven numbers per texture, where a matrix per map per triangle adds 132 per triangle.
 

@@ -63,8 +63,25 @@ is that conversion, on the host, once; the cube it returns is read like
 any other, so neither rasterizer learns a second way to look a direction
 up. A float panorama gives float faces, which is how an HDR sky lights a
 mirror with light above one.
+
+**Or a panorama is read as it is.** A texture whose `mapping` is
+`EQUIRECTANGULAR_REFLECTION_MAPPING` or its refraction twin, named as an
+environment, is sampled directly at `equirect_uv`, as three.js's
+`equirectUv` reads it. `cube_of_panorama` makes the cube that holds it:
+the panorama, which every reader but the PMREM samples, and the six faces
+beside it for the readers that walk texels. Both rasterizers read the
+panorama the same way; see `render.gpu._sample_cube`.
+
+**Reflection or refraction, and a turn.** A cube's `mapping` says how a
+basic, lambert or phong surface looks into it: along the view turned back
+by the normal, `reflected`, or bent through the surface by the material's
+`refraction_ratio`, `refracted`, as three.js's `envmap_fragment` does
+under `CubeRefractionMapping`. A material's `env_map_rotation` turns the
+lookup direction first, three.js's `envMapRotation`; `env_rotation` makes
+the matrix, and `Basis3.turn` applies it on both backends.
 """
 
+from math.euler import Euler
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.cube_uv import (
@@ -81,13 +98,15 @@ from render.texture import (
     BILINEAR,
     CLAMP,
     COVERAGE,
+    CUBE_REFLECTION_MAPPING,
     FLOAT_TYPE,
     Alpha,
     Filter,
+    Mapping,
     Texture,
     float_texture,
 )
-from std.math import asin, atan2, pi
+from std.math import asin, atan2, isfinite, pi, sqrt
 
 # How many faces a cube has, and the order they are held in: positive x,
 # negative x, positive y, negative y, positive z, negative z. three.js's
@@ -289,6 +308,153 @@ def reflected(toward_eye: Vector3, normal: Vector3) -> Vector3:
     )
 
 
+def refracted(toward_eye: Vector3, normal: Vector3, ratio: Float32) -> Vector3:
+    """Return the direction a clear surface bends the camera's view:
+    GLSL's `refract(-toward_eye, normal, ratio)`, which three.js's
+    `envmap_fragment` evaluates under a refraction mapping.
+
+        k = 1 - ratio^2 * (1 - dot(normal, view)^2)
+        refracted = ratio * view - (ratio * dot(normal, view) + sqrt(k)) * normal
+
+    with `view = -toward_eye`. When `k` is below zero the light is
+    reflected inside the surface instead, and GLSL answers the zero
+    vector; so does this, and the environment is read in the direction
+    `face_of` and `equirect_uv` give the zero vector. Shared by both
+    rasterizers.
+
+    Args:
+        toward_eye: Unit direction from the surface toward the camera.
+        normal: The surface's unit normal.
+        ratio: The ratio of the two indices of refraction, three.js's
+            `refractionRatio`.
+
+    Returns:
+        The refracted direction, or the zero vector.
+    """
+    var along = -normal.dot(toward_eye)
+    var k = 1 - ratio * ratio * (1 - along * along)
+    if k < 0:
+        return Vector3(0, 0, 0)
+    var bend = ratio * along + sqrt(k)
+    return Vector3(
+        -ratio * toward_eye.x - bend * normal.x,
+        -ratio * toward_eye.y - bend * normal.y,
+        -ratio * toward_eye.z - bend * normal.z,
+    )
+
+
+@fieldwise_init
+struct Basis3(Equatable, ImplicitlyCopyable, Writable):
+    """A 3x3 matrix as nine floats, in `Matrix3`'s column-major order, so
+    the kernel can carry one in its vertex lanes.
+
+    What turns an environment's lookup direction, three.js's
+    `envMapRotation` and `backgroundRotation` uniforms, which
+    `env_rotation` builds from an `Euler`; and what turns an object-space
+    normal map's texel into the world, three.js's `normalMatrix`.
+    """
+
+    var e0: Float32
+    var e1: Float32
+    var e2: Float32
+    var e3: Float32
+    var e4: Float32
+    var e5: Float32
+    var e6: Float32
+    var e7: Float32
+    var e8: Float32
+
+    def __init__(out self):
+        """Create the identity: the environment as it is."""
+        self.e0 = 1
+        self.e1 = 0
+        self.e2 = 0
+        self.e3 = 0
+        self.e4 = 1
+        self.e5 = 0
+        self.e6 = 0
+        self.e7 = 0
+        self.e8 = 1
+
+    def turn(self, direction: Vector3) -> Vector3:
+        """Return a lookup direction turned by this matrix, the product
+        `Matrix3.transform` makes. Shared by both rasterizers.
+
+        Args:
+            direction: The direction to read the environment in.
+
+        Returns:
+            The turned direction.
+        """
+        var x = direction.x
+        var y = direction.y
+        var z = direction.z
+        return Vector3(
+            self.e0 * x + self.e3 * y + self.e6 * z,
+            self.e1 * x + self.e4 * y + self.e7 * z,
+            self.e2 * x + self.e5 * y + self.e8 * z,
+        )
+
+
+def is_turned(euler: Euler) -> Bool:
+    """Return True if a rotation turns anything: any of its angles is not
+    zero.
+
+    Args:
+        euler: The rotation.
+
+    Returns:
+        Whether any angle is not zero.
+    """
+    return euler.x.value != 0 or euler.y.value != 0 or euler.z.value != 0
+
+
+def check_rotation(euler: Euler, what: String) raises:
+    """Refuse an environment rotation no matrix can be made from.
+
+    Args:
+        euler: The rotation.
+        what: What it rotates, for the message.
+
+    Raises:
+        Error: If an angle is not finite, or the order is none of the six.
+    """
+    if not isfinite(euler.x.value) or not isfinite(euler.y.value):
+        raise Error(what + "'s angles must be finite")
+    if not isfinite(euler.z.value):
+        raise Error(what + "'s angles must be finite")
+    if not euler.order.is_valid():
+        raise Error(what + "'s order must be one of the six")
+
+
+def env_rotation(euler: Euler) raises -> Basis3:
+    """Return the matrix that turns a lookup direction for an environment
+    turned by `euler`: three.js's `envMapRotation` uniform.
+
+    three.js negates the three angles, keeps the order, and makes the
+    rotation, "to accommodate a left-handed frame". For a cube loaded from
+    images it negates y and z back and reads through `flipEnvMap`; this
+    port swapped those images into the camera's layout when it loaded
+    them, and the two flips cancel there. So every environment here --
+    six images, a render, a panorama or a PMREM -- turns by the one
+    matrix.
+
+    Args:
+        euler: The environment's rotation, three.js's `envMapRotation`,
+            `backgroundRotation` or `environmentRotation`.
+
+    Returns:
+        The matrix.
+
+    Raises:
+        Error: If `check_rotation` refuses the rotation.
+    """
+    check_rotation(euler, "An environment rotation")
+    var negated = Euler(-euler.x, -euler.y, -euler.z, euler.order)
+    ref e = negated.to_matrix().elements
+    return Basis3(e[0], e[1], e[2], e[4], e[5], e[6], e[8], e[9], e[10])
+
+
 struct CubeTexture(Movable):
     """Six square textures, one per face of a cube, sampled by direction."""
 
@@ -301,6 +467,16 @@ struct CubeTexture(Movable):
     # layout, or the blank texture for a cube that has none. Only
     # `render.pmrem` fills it; see `sample_rough`.
     var cube_uv: Texture
+    # The equirectangular image the cube was made from, which every read
+    # but the PMREM's samples directly, or the blank texture for a cube of
+    # six images. `cube_of_panorama` fills it; see `sample`.
+    var panorama: Texture
+    # How the environment is read, three.js's `mapping`: along the
+    # reflected view or the refracted one, from six faces or a panorama.
+    # `CUBE_REFLECTION_MAPPING` by default, as three.js's `CubeTexture`.
+    # Only a basic, lambert or phong surface refracts; see
+    # `render.rasterizer`.
+    var mapping: Mapping
 
     def __init__(out self, var faces: List[Texture]) raises:
         """Adopt six faces.
@@ -319,6 +495,8 @@ struct CubeTexture(Movable):
         self.faces = faces^
         self.size = 0
         self.cube_uv = Texture()
+        self.panorama = Texture()
+        self.mapping = CUBE_REFLECTION_MAPPING
         self.validate()
         self.size = self.faces[0].width
 
@@ -330,6 +508,8 @@ struct CubeTexture(Movable):
             self.faces.append(Texture(copy=copy.faces[index]))
         self.size = copy.size
         self.cube_uv = Texture(copy=copy.cube_uv)
+        self.panorama = Texture(copy=copy.panorama)
+        self.mapping = copy.mapping
 
     def validate(self) raises:
         """Refuse faces that a sampler could not read as one cube.
@@ -343,7 +523,10 @@ struct CubeTexture(Movable):
                 square, the faces are not all one size, any is wrapped
                 other than `CLAMP`, or any face's own `Texture.validate`
                 refuses it; or the cube has a `cube_uv` image that is
-                refused by `validate_cube_uv`.
+                refused by `validate_cube_uv`; or the mapping is not a
+                cube mapping for a cube of six images, or not an
+                equirectangular mapping for a cube with a panorama, or the
+                panorama is refused by `Texture.validate`.
         """
         if len(self.faces) != FACE_COUNT:
             raise Error("A cube texture holds exactly six faces")
@@ -358,7 +541,7 @@ struct CubeTexture(Movable):
                 raise Error("A cube texture's faces must be square")
             if face.width != size:
                 raise Error("A cube texture's faces must all be one size")
-            if face.wrap != CLAMP:
+            if face.wrap_s != CLAMP or face.wrap_t != CLAMP:
                 raise Error(
                     "A cube texture's faces must be wrapped CLAMP: a"
                     " coordinate past a face's edge belongs to the next face,"
@@ -366,6 +549,23 @@ struct CubeTexture(Movable):
                 )
         if not self.cube_uv.is_blank():
             validate_cube_uv(self.cube_uv)
+        if self.has_panorama():
+            self.panorama.validate()
+            if not self.mapping.is_equirectangular():
+                raise Error(
+                    "A cube texture made from a panorama has an"
+                    " equirectangular mapping"
+                )
+        elif not self.mapping.is_cube():
+            raise Error(
+                "A cube texture of six images has a cube mapping:"
+                " CUBE_REFLECTION_MAPPING or CUBE_REFRACTION_MAPPING"
+            )
+
+    def has_panorama(self) -> Bool:
+        """Return True if the cube was made from a panorama, which it
+        samples directly."""
+        return not self.panorama.is_blank()
 
     def is_prefiltered(self) -> Bool:
         """Return True if the cube holds a PMREM, a `cube_uv` image."""
@@ -392,9 +592,11 @@ struct CubeTexture(Movable):
 
         `face_of` picks the face and `face_uv` the place on it, and the
         face is sampled there at its full size through its own filter,
-        never down a mip chain; see the module docstring. Does not raise,
-        for the reason `Texture.sample` does not: every direction has an
-        answer, the zero vector included.
+        never down a mip chain; see the module docstring. A cube made from
+        a panorama reads the panorama at `equirect_uv` instead, as
+        three.js's `equirectUv` reads one. Does not raise, for the reason
+        `Texture.sample` does not: every direction has an answer, the zero
+        vector included.
 
         Args:
             direction: Any vector; it need not be unit length.
@@ -402,6 +604,9 @@ struct CubeTexture(Movable):
         Returns:
             The color found there.
         """
+        if self.has_panorama():
+            var place = equirect_uv(direction)
+            return self.panorama.sample(place.x, place.y)
         var face = face_of(direction)
         var place = face_uv(face, direction)
         return self.faces[face].sample(place.x, place.y)
@@ -420,8 +625,12 @@ struct CubeTexture(Movable):
                 `reflection_level`.
 
         Returns:
-            The color found there.
+            The color found there. A cube made from a panorama reads down
+            the panorama's chain instead.
         """
+        if self.has_panorama():
+            var at = equirect_uv(direction)
+            return self.panorama.sample_level(at.x, at.y, level)
         var face = face_of(direction)
         var place = face_uv(face, direction)
         return self.faces[face].sample_level(place.x, place.y, level)
@@ -453,7 +662,9 @@ struct CubeTexture(Movable):
 
     def levels(self) -> Int:
         """Return how many mip levels each face holds, one for a cube built
-        without a chain."""
+        without a chain: or the panorama's, for a cube made from one."""
+        if self.has_panorama():
+            return self.panorama.levels
         return self.faces[0].levels
 
 
@@ -649,7 +860,7 @@ def cube_from_equirectangular(
                     edge,
                     floats^,
                     CLAMP,
-                    image.filter,
+                    image.mag_filter,
                     chained,
                     image.alpha,
                 )
@@ -661,7 +872,7 @@ def cube_from_equirectangular(
                     edge,
                     bytes^,
                     CLAMP,
-                    image.filter,
+                    image.mag_filter,
                     image.color_space,
                     chained,
                     image.alpha,
@@ -693,16 +904,22 @@ def validate_cube_uv(image: Texture) raises:
 
     Raises:
         Error: If `Texture.validate` refuses the image; it does not hold
-            floats, is not `CLAMP` and `BILINEAR`, or holds a mip chain; or
+            floats, is not `CLAMP` on both axes and `BILINEAR`, holds a mip
+            chain, or has no `flip_y`; or
             its height is not four times a power of two of at least sixteen,
             or its width is not `cube_uv_width` of that.
     """
     image.validate()
     if image.texel_type != FLOAT_TYPE:
         raise Error("A PMREM's cube UV image holds floats")
-    if image.wrap != CLAMP or image.filter != BILINEAR or image.levels != 1:
+    if image.wrap_s != CLAMP or image.wrap_t != CLAMP:
+        raise Error("A PMREM's cube UV image is CLAMP on both axes")
+    if image.mag_filter != BILINEAR or image.levels != 1:
+        raise Error("A PMREM's cube UV image is BILINEAR, with no mip chain")
+    if not image.flip_y:
         raise Error(
-            "A PMREM's cube UV image is CLAMP and BILINEAR, with no mip chain"
+            "A PMREM's cube UV image counts its rows up from the bottom:"
+            " flip_y is set"
         )
     var lod_max = cube_uv_lod_max(image.height)
     if lod_max < CUBE_UV_MIN_MIP or image.height != 4 << lod_max:
@@ -838,3 +1055,43 @@ def cube_texture_of(
             )
         )
     return CubeTexture(faces^)
+
+
+def cube_of_panorama(
+    image: Texture, size: Optional[Int] = None
+) raises -> CubeTexture:
+    """Return the environment an equirectangular panorama makes, which
+    every reader but a PMREM samples directly: three.js's texture with
+    `mapping = EquirectangularReflectionMapping` named as an env map, a
+    background or an environment.
+
+    The cube holds the panorama and reads it at `equirect_uv` of each
+    direction, as three.js's `equirectUv` reads it, so nothing is
+    resampled. It also holds `cube_from_equirectangular`'s six faces, for
+    the readers that walk a cube's texels -- a light probe, an exporter --
+    and `render.pmrem.pmrem_from_cube` prefilters it from the panorama.
+    Its mapping is the panorama's, so a panorama with
+    `EQUIRECTANGULAR_REFRACTION_MAPPING` is read along the refracted view.
+
+    Args:
+        image: The panorama, its `mapping` one of the two equirectangular
+            ones.
+        size: Each face's width and height, as `cube_from_equirectangular`
+            takes it. The panorama's height by default.
+
+    Returns:
+        The cube texture.
+
+    Raises:
+        Error: If the panorama's mapping is not equirectangular, or
+            `cube_from_equirectangular` refuses it.
+    """
+    if not image.mapping.is_equirectangular():
+        raise Error(
+            "A panorama read by direction has an equirectangular mapping"
+        )
+    var cube = cube_from_equirectangular(image, size)
+    cube.panorama = Texture(copy=image)
+    cube.mapping = image.mapping
+    cube.validate()
+    return cube^

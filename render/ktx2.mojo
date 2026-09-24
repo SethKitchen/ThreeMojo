@@ -503,6 +503,44 @@ struct KTX2Container(Movable):
         alpha: Alpha = COVERAGE,
     ) raises -> Texture:
         """Return one level of one face of one layer as a texture, in the
+        file's color space, with `flip_y` off.
+
+        three.js's `KTX2Loader` makes a `CompressedTexture` or a
+        `DataTexture`, and both have `flipY` off: the file's first row is
+        where `v` is zero. See `_decoded` for how each format decodes.
+
+        Args:
+            face: Zero, or up to five for a cube: +x, -x, +y, -y, +z, -z.
+            layer: Which array layer.
+            level: Which level, zero the largest.
+            wrap: How coordinates outside the unit square are resolved.
+            filter: `NEAREST` or `BILINEAR`.
+            mipmapped: Build the chain of halved copies from this level.
+            alpha: `COVERAGE` or `IGNORED`; see `render.texture`.
+
+        Returns:
+            The texture.
+
+        Raises:
+            Error: Everything `_decoded` raises.
+        """
+        var built = self._decoded(
+            face, layer, level, wrap, filter, mipmapped, alpha
+        )
+        built.flip_y = False
+        return built^
+
+    def _decoded(
+        self,
+        face: Int,
+        layer: Int,
+        level: Int,
+        wrap: Wrap,
+        filter: Filter,
+        mipmapped: Bool,
+        alpha: Alpha,
+    ) raises -> Texture:
+        """Return one level of one face of one layer as a texture, in the
         file's color space.
 
         UASTC and ETC1S data decode to a byte texture, as the Basis

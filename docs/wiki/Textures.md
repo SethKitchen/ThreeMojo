@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `channel`, `RGBELoader`, `EXRLoader`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `flipY`, `mapping`, `colorSpace`, `anisotropy`, `type`, `channel`, `RGBELoader`, `EXRLoader`.
 
 ## Make a texture
 
@@ -288,15 +288,26 @@ A channel holds halves or floats. A half widens to the float it spells, subnorma
 
 ### An equirectangular environment or background
 
-`cube_from_equirectangular(image, size=None, mipmapped=None)` turns a panorama into a `CubeTexture`. three.js does the same when a texture with `EquirectangularReflectionMapping` becomes a background or an environment. Each face texel reads the panorama at `equirect_uv` of its direction, three.js's `equirectUv`.
+A panorama with an equirectangular `mapping` is read directly, at `equirect_uv` of each direction. `equirect_uv` is three.js's `equirectUv`.
 
-The faces keep the panorama's texel type, color space, filter and alpha mode. A float panorama gives float faces. The face size is the panorama's height by default, as in three.js. The faces get a chain if the panorama has one, and `mipmapped=True` asks for one. A rough surface reads the chain, see [Materials](Materials#the-environment).
+```mojo
+var panorama = float_texture_from(decode_rgbe(bytes), mipmapped=True)
+panorama.mapping = EQUIRECTANGULAR_REFLECTION_MAPPING
+var sky = assets.cube_textures.add(cube_of_panorama(panorama))
+var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
+scene.background = texture_background(assets.textures.add(panorama^))
+```
+
+`cube_of_panorama(image, size=None)` makes the environment: a `CubeTexture` that holds the panorama. `sample` and `sample_level` read the panorama, and so does the GPU kernel. The cube also holds six faces from `cube_from_equirectangular`, for the readers that walk the texels, such as a light probe. Its mapping is the panorama's. A texture background with an equirectangular mapping is read by direction too, not stretched.
+
+`cube_from_equirectangular(image, size=None, mipmapped=None)` turns a panorama into six faces. three.js does the same in `WebGLCubeRenderTarget.fromEquirectangularTexture`. The faces keep the panorama's texel type, color space, filter and alpha mode. The face size is the panorama's height by default, as in three.js. The faces get a chain if the panorama has one.
+
+A standard or physical surface reads a PMREM. `prefilter_environments(scene, assets)` in `renderers/environment.mojo` builds one for each environment that needs it, as three.js's `WebGLCubeUVMaps` does. A panorama cube is prefiltered from the panorama. See [PMREM](#pmrem).
 
 ### What is not ported
 
 - Half-float storage. three.js's loaders default to `HalfFloatType`. Here a half widens to a float, which holds every half exactly.
-- The `mapping` field. Call `cube_from_equirectangular` and name the cube. The renderer does not convert a texture on its own.
-- The automatic PMREM. three.js prefilters an environment on its own. Here you call `pmrem_from_equirectangular`, see [PMREM](#pmrem).
+- The PMREM on first use. three.js builds it inside the renderer. Here the renderer only reads the assets, so you call `prefilter_environments` before the frame. The scene JSON reader calls it for you.
 - Light above one in a background. The backdrop crosses to both backends as sRGB bytes, so a background clips at one before tone mapping. A reflection keeps the floats.
 - RGBE: XYZE pixels, the old Radiance run-length scheme, and every orientation but `-Y +X`. The first is refused, and three.js reads none of them correctly.
 - EXR: tiled, deep and multi-part files, PXR24, B44, B44A, DWAA and DWAB compression, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name. three.js reads all but the last two.
@@ -388,7 +399,15 @@ Here `cube_texture_from` takes a `CubeLayout`. `SEEN_FROM_INSIDE`, the default, 
 
 A face is read at its full size, never down a mip chain. A reflection's direction changes across a surface at a rate that is not the surface's own texture footprint. The same rule keeps a matcap out of its chain. One reader asks for the chain by a number of its own: a physical surface reads it by its roughness. `sample_level(direction, level)` reads a face `level` down, and `levels()` says how many there are. See [Materials](Materials#the-environment).
 
-A face must be wrapped `CLAMP`. A coordinate past a face's edge belongs to the next face, and a flat image has no next face to read. The bilinear filter's neighbors at an edge hold that edge.
+A face must be wrapped `CLAMP` on both axes. A coordinate past a face's edge belongs to the next face, and a flat image has no next face to read. The bilinear filter's neighbors at an edge hold that edge.
+
+### Reflection, refraction and a turn
+
+A cube's `mapping` says how a basic, lambert or phong surface looks into it. `CUBE_REFLECTION_MAPPING`, the default, reads along `reflected(toward_eye, normal)`. `CUBE_REFRACTION_MAPPING` reads along `refracted(toward_eye, normal, ratio)`, GLSL's `refract`, by the material's `refraction_ratio`. A panorama cube takes the two equirectangular mappings. See [Materials](Materials#environment-map).
+
+`env_rotation(euler)` gives the `Basis3` that turns a lookup direction, three.js's `envMapRotation` uniform. three.js negates the three angles. It flips y and z back for a loaded cube and reads it through `flipEnvMap`.
+
+This port swapped those images when it loaded them, so every environment turns by one matrix. `Basis3.turn` applies it on both backends.
 
 ### CubeTextureStore
 
@@ -396,7 +415,9 @@ A face must be wrapped `CLAMP`. A coordinate past a face's edge belongs to the n
 
 ### Errors
 
-- A cube needs exactly six faces. Each must hold texels, be square, be the size of the others, and be wrapped `CLAMP`.
+- A cube needs exactly six faces. Each must hold texels, be square, be the size of the others, and be wrapped `CLAMP` on both axes.
+- A cube with a panorama needs an equirectangular mapping, and a cube of six images a cube mapping. `cube_of_panorama` refuses a panorama without an equirectangular mapping.
+- `env_rotation` refuses an angle that is not finite and an order that is none of the six.
 - `cube_texture_from` refuses a layout that is neither named value, and an empty image. It refuses a file whose color space cannot be interpreted when none is given.
 - `validate()` refuses a face edited into nonsense after the cube was built. The GPU upload calls it again.
 - The store refuses `NO_CUBE_TEXTURE`, `SCENE_ENVIRONMENT` and any id it does not hold.
@@ -546,26 +567,44 @@ The two ids are types. A bare number does not compile. `tests/compile_fail/` pro
 
 ## Wrap
 
-| Value | A coordinate of 1.5 reads |
-|---|---|
-| `REPEAT` | The same texel as 0.5. |
-| `CLAMP` | The edge texel. |
-| `MIRROR` | The image reflected, so tiles meet without a seam. |
+Each axis has its own wrap, as in three.js. `wrap_s` is three.js's `wrapS`, across. `wrap_t` is `wrapT`, up. The constructors take one `wrap` and set both. `set_wrap(mode)` sets both after construction.
+
+| Value | three.js | A coordinate of 1.5 reads |
+|---|---|---|
+| `REPEAT` | `RepeatWrapping` | The same texel as 0.5. |
+| `CLAMP` | `ClampToEdgeWrapping` | The edge texel. |
+| `MIRROR` | `MirroredRepeatWrapping` | The image reflected, so tiles meet without a seam. `MIRRORED_REPEAT` is the same value. |
 
 Under `REPEAT`, coordinates 0 and 1 name the same texel. Under `CLAMP` they name opposite edges.
 
 ## Filter
 
-| Value | Meaning |
-|---|---|
-| `NEAREST` | The texel the sample lands in. Hard edges. |
-| `BILINEAR` | The four nearest texels, blended by distance. |
+A texture has two filters, as in three.js. `mag_filter`, three.js's `magFilter`, reads a magnified sample. `min_filter`, three.js's `minFilter`, reads a minified sample.
+
+| Value | three.js | Inside a level | Level |
+|---|---|---|---|
+| `NEAREST` | `NearestFilter` | The texel the sample lands in. | The full-size image. |
+| `BILINEAR` | `LinearFilter` | The four nearest texels, blended by distance. | The full-size image. |
+| `NEAREST_MIPMAP_NEAREST` | `NearestMipmapNearestFilter` | The nearest texel. | The nearest level. |
+| `LINEAR_MIPMAP_NEAREST` | `LinearMipmapNearestFilter` | The four nearest texels. | The nearest level. |
+| `NEAREST_MIPMAP_LINEAR` | `NearestMipmapLinearFilter` | The nearest texel. | The two nearest levels, mixed. |
+| `LINEAR_MIPMAP_LINEAR` | `LinearMipmapLinearFilter` | The four nearest texels. | The two nearest levels, mixed. |
+
+`mag_filter` must be `NEAREST` or `BILINEAR`, because a magnified sample reads one level. `validate` refuses a mipmap filter there. `min_filter` can be any of the six.
+
+`plan_levels(level, levels, mag_filter, min_filter)` picks the levels and the filter inside them. At a level of zero or below, the sample is magnified and reads the full-size image through `mag_filter`. Above zero, `min_filter` decides. The nearest level is OpenGL's `ceil(level + 0.5) - 1`. Both rasterizers call `plan_levels`, and the kernel reads both filters from the texture table.
+
+OpenGL changes from magnification to minification at 0.5 for a linear `magFilter` and a nearest-mipmap `minFilter`. This port changes at zero for every pair.
 
 ## Mipmaps
 
-`mipmapped=True` builds a chain of halved copies down to one texel. Sampling then picks the level whose texels match the pixel footprint, and blends between the two nearest levels. This stops a distant surface from shimmering.
+`mipmapped=True` builds a chain of halved copies down to one texel. Sampling then picks the level whose texels match the pixel footprint. This stops a distant surface from shimmering.
 
-The chain is built by default, as three.js's `Texture` sets `generateMipmaps` and `LinearMipmapLinearFilter`, and the filter is bilinear by default, as three.js's `LinearFilter` is. Pass `mipmapped=False` or `NEAREST` to turn either off.
+The chain is built by default, as three.js's `Texture` sets `generateMipmaps`. The constructors take one `filter` and set `mag_filter` to it. `minifying(filter, mipmapped)` gives the `min_filter`.
+
+`BILINEAR` with a chain is `LINEAR_MIPMAP_LINEAR`, three.js's default. `NEAREST` with a chain is `NEAREST_MIPMAP_LINEAR`. Without a chain, `min_filter` is the filter itself. Pass `mipmapped=False` or `NEAREST` to turn either off.
+
+A mipmap `min_filter` on a texture without a chain reads its one image, with the filter's own rule inside it.
 
 The chain costs a third more memory. It is built in premultiplied linear light, unless the texture ignores its alpha.
 
@@ -594,7 +633,29 @@ An alpha map must ignore its alpha too, and must be `LINEAR`. Its green channel 
 
 ## Coordinates
 
-`u` runs from left to right and `v` from bottom to top. Rows in memory run from the top. Sampling flips once, as three.js's `flipY` does.
+`u` runs from left to right. Rows in memory run from the top. `flip_y`, three.js's `flipY`, says which way `v` runs.
+
+| `flip_y` | `v` of zero reads | Default for |
+|---|---|---|
+| `True` | The bottom row. | An image, as in three.js. |
+| `False` | The first row. | A glTF texture, a compressed texture and a KTX2 texture, as in three.js. |
+
+The texels do not move: `row_coordinate(v, flip_y)` gives the row a `v` lands on, and both rasterizers call it. three.js flips the image on upload instead, with the same result.
+
+## Mapping
+
+`mapping`, three.js's `Texture.mapping`, says how a texture is laid over what reads it. Its value is three.js's constant.
+
+| Value | three.js | Read |
+|---|---|---|
+| `UV_MAPPING` | `UVMapping` (300) | By a surface's texture coordinates. The default. |
+| `CUBE_REFLECTION_MAPPING` | `CubeReflectionMapping` (301) | Six faces, along the reflected view. |
+| `CUBE_REFRACTION_MAPPING` | `CubeRefractionMapping` (302) | Six faces, along the refracted view. |
+| `EQUIRECTANGULAR_REFLECTION_MAPPING` | `EquirectangularReflectionMapping` (303) | A panorama, along the reflected view. |
+| `EQUIRECTANGULAR_REFRACTION_MAPPING` | `EquirectangularRefractionMapping` (304) | A panorama, along the refracted view. |
+| `CUBE_UV_REFLECTION_MAPPING` | `CubeUVReflectionMapping` (306) | A PMREM's layout, at a roughness. |
+
+A map ignores its texture's mapping, as in three.js. A panorama with an equirectangular mapping can be a background or an environment. See [An equirectangular environment or background](#an-equirectangular-environment-or-background). `render.pmrem` gives its layout `CUBE_UV_REFLECTION_MAPPING`.
 
 `channel`, three.js's `Texture.channel`, says which set of the geometry's coordinates a texture reads. `UV_CHANNEL_0`, the default, reads `uv`. `UV_CHANNEL_1` reads `uv1`. Any map can read either set. See [Light map](Materials#light-map).
 
@@ -637,8 +698,9 @@ var id = assets.textures.add(board^)
 |---|---|
 | `data_texture(width, height, numbers, channels)` | A texture from fractions. See [From numbers](#from-numbers). |
 | `texture_of(framebuffer)`, `depth_texture_of(framebuffer)` | A texture from a render, and from its depth. See [From a render](#from-a-render). |
-| `sample(u, v) -> FloatColor` | The color at a coordinate, level zero. |
-| `sample_level(u, v, level) -> FloatColor` | Trilinear, between two mip levels. |
+| `sample(u, v) -> FloatColor` | The color at a coordinate, level zero, through `mag_filter`. |
+| `sample_level(u, v, level) -> FloatColor` | The color at a fractional level, through both filters. See [Filter](#filter). |
+| `sample_at(u, v, level) -> FloatColor` | One named level, through `filter_at(level)`. |
 | `texel(x, y) -> Color` | One stored texel. A float texture refuses it. |
 | `wrapped_texel(x, y, level=0) -> FloatColor` | One texel as light, wrapped. Floats as they are, bytes through the ramp. |
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
@@ -646,7 +708,10 @@ var id = assets.textures.add(board^)
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
 | `placement() -> UvPlacement` | The channel and the matrix, as the rasterizers read them. |
 | `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
-| `validate()` | Refuse a wrap, filter, color space, alpha mode, texel type or channel that is none of the named values, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
+| `validate()` | Refuse a wrap, filter, mapping, color space, alpha mode, texel type or channel that is none of the named values, a mipmap `mag_filter`, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
+| `wrap_s`, `wrap_t`, `set_wrap(mode)` | The wrap across and up. See [Wrap](#wrap). |
+| `mag_filter`, `min_filter` | The two filters. See [Filter](#filter). |
+| `flip_y`, `mapping` | Which way `v` runs, and how the texture is laid. See [Coordinates](#coordinates) and [Mapping](#mapping). |
 | `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
 | `channel` | Which coordinates the texture reads: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
 | `texel_type`, `pixels`, `data` | `UNSIGNED_BYTE_TYPE` with bytes in `pixels`, or `FLOAT_TYPE` with floats in `data`. See [HDR images](#hdr-images). |
@@ -659,7 +724,7 @@ var id = assets.textures.add(board^)
 ## Errors
 
 - Dimensions must be positive, and the buffer length must match.
-- A wrap, filter, color space, alpha mode or channel that is none of its named values raises. The GPU upload checks again.
+- A wrap, filter, mapping, color space, alpha mode or channel that is none of its named values raises. A mipmap `mag_filter` raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - A `float_texture` with a length that does not match, or a number that is not finite. A float texture that is not `LINEAR`, or a texel type that is none of the two, raises in `validate`.

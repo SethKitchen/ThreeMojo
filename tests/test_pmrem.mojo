@@ -373,7 +373,7 @@ def test_a_panorama_prefilters_too() raises:
 
 def test_a_source_refused_by_the_cube_is_refused() raises:
     var cube = a_colored_cube(4)
-    cube.faces[1].wrap = REPEAT
+    cube.faces[1].set_wrap(REPEAT)
     with assert_raises():
         _ = pmrem_from_cube(cube)
 
@@ -387,11 +387,11 @@ def test_a_layout_image_is_checked() raises:
         validate_cube_uv(Texture(336, 64, bytes^, CLAMP, BILINEAR, SRGB, False))
     # Wrapped, filtered or chained otherwise.
     var wrapped = Texture(copy=prefiltered.cube_uv)
-    wrapped.wrap = REPEAT
+    wrapped.set_wrap(REPEAT)
     with assert_raises():
         validate_cube_uv(wrapped)
     var nearest = Texture(copy=prefiltered.cube_uv)
-    nearest.filter = NEAREST
+    nearest.mag_filter = NEAREST
     with assert_raises():
         validate_cube_uv(nearest)
     var chained = Texture(copy=prefiltered.cube_uv)
@@ -405,7 +405,7 @@ def test_a_layout_image_is_checked() raises:
             validate_cube_uv(float_texture(size[0], size[1], data^))
     # A cube with a bad one is refused.
     var edited = CubeTexture(copy=prefiltered)
-    edited.cube_uv.filter = NEAREST
+    edited.cube_uv.mag_filter = NEAREST
     with assert_raises():
         edited.validate()
 

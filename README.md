@@ -191,7 +191,7 @@ The port is not at parity with three.js yet. 168 features are ported and 12 are 
 
 ### Textures
 
-- [ ] Texture sampling, environment mapping and background parameters [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
+- [x] [Texture sampling, environment mapping and background parameters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mapping): per-axis wrap, filters, flipY, equirectangular and cube mappings, and the scene's background and environment settings [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
 
 <details>
 <summary>Ported: 18</summary>

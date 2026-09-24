@@ -162,6 +162,9 @@ from render.rasterizer import (
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
+    env_direction,
+    object_space_normal,
+    TextureFrames,
     matcap_fallback,
     matcap_uv,
     packed_normal,
@@ -179,19 +182,24 @@ from materials.material import (
     LAMBERT,
     MATCAP,
     NORMALS,
+    OBJECT_SPACE_NORMAL_MAP,
     PHONG,
     PHYSICAL,
     SHADOW,
     STANDARD,
+    TANGENT_SPACE_NORMAL_MAP,
     TOON,
     Combine,
     combine_light,
 )
 from render.cube_texture import (
     FACE_COUNT,
+    Basis3,
+    equirect_uv,
     face_of,
     face_uv,
     reflected,
+    refracted,
     reflection_level,
     rough_reflection,
 )
@@ -248,12 +256,15 @@ from render.texture import (
     COVERAGE,
     FLOAT_TYPE,
     IGNORED,
+    LINEAR_MIPMAP_LINEAR,
     NEAREST,
     UNSIGNED_BYTE_TYPE,
     UV_CHANNEL_1,
+    UV_MAPPING,
     Alpha,
     Filter,
     Footprint,
+    Mapping,
     TexelType,
     Texture,
     UvChannel,
@@ -263,8 +274,11 @@ from render.texture import (
     blend_texels,
     float_from_bytes,
     float_texel,
+    level_filter,
     mix_color,
     mix_straight,
+    plan_levels,
+    row_coordinate,
     wrap_index,
 )
 from cameras.camera import Camera
@@ -479,7 +493,14 @@ comptime LANE_SPECULAR_COLOR_G = 70
 comptime LANE_SPECULAR_COLOR_B = 71
 comptime LANE_CLEARCOAT_NORMAL_SCALE_X = 72
 comptime LANE_CLEARCOAT_NORMAL_SCALE_Y = 73
-comptime FLOATS_PER_VERTEX = LANE_CLEARCOAT_NORMAL_SCALE_Y + 1
+# A triangle's `TextureFrames`: the nine numbers of the matrix that turns
+# an environment lookup, the refraction ratio, and the nine of the mesh's
+# normal matrix an object-space normal map is turned by, each in
+# `Basis3`'s order. Its normal map type rides in the state table.
+comptime LANE_ENV_ROTATION = LANE_CLEARCOAT_NORMAL_SCALE_Y + 1
+comptime LANE_REFRACTION_RATIO = LANE_ENV_ROTATION + 9
+comptime LANE_OBJECT_NORMAL = LANE_REFRACTION_RATIO + 1
+comptime FLOATS_PER_VERTEX = LANE_OBJECT_NORMAL + 9
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -580,7 +601,9 @@ comptime STATE_SPECULAR_COLOR_MAP = STATE_NODES + 2
 comptime STATE_CLEARCOAT_MAP = STATE_NODES + 3
 comptime STATE_CLEARCOAT_ROUGHNESS_MAP = STATE_NODES + 4
 comptime STATE_CLEARCOAT_NORMAL_MAP = STATE_NODES + 5
-comptime STATE_PER_TRIANGLE = STATE_CLEARCOAT_NORMAL_MAP + 1
+# The triangle's normal map type's value; see `TextureFrames`.
+comptime STATE_NORMAL_MAP_TYPE = STATE_CLEARCOAT_NORMAL_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_NORMAL_MAP_TYPE + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -671,12 +694,24 @@ comptime FURTHEST = Float32(1.0e30)
 # `UvPlacement`: six floats of the matrix, bit for bit, then the channel.
 # A texture's transform is its own, as in three.js, so a row per texture
 # holds every map's exactly, and a triangle carries no more than its ids.
-comptime TABLE_PLACEMENT = 10
+# The first ten columns are where the texels start, the size, `wrap_s`,
+# `mag_filter`, the color space, the level count, the alpha mode, the
+# anisotropy and the texel type. The next four are `wrap_t`, `min_filter`,
+# `flip_y` as one or zero, and the mapping.
+comptime TABLE_WRAP_T = 10
+comptime TABLE_MIN_FILTER = 11
+comptime TABLE_FLIP_Y = 12
+comptime TABLE_MAPPING = 13
+comptime TABLE_PLACEMENT = 14
 comptime TABLE_COLUMNS = TABLE_PLACEMENT + 7
 # How many table rows a cube texture takes: its six faces, then its PMREM
-# image, or one white byte texel for a cube that has none. The kernel tells
-# the two apart by the texel type, since a PMREM always holds floats.
-comptime CUBE_ROWS = FACE_COUNT + 1
+# image, or one white byte texel for a cube that has none, then its
+# panorama, or one white byte texel for a cube of six images. The kernel
+# tells a PMREM from none by the texel type, since a PMREM always holds
+# floats. The panorama's row carries the cube's own mapping, so the kernel
+# reads there whether the cube is a panorama and whether it refracts.
+comptime CUBE_ROWS = FACE_COUNT + 2
+comptime CUBE_PANORAMA = FACE_COUNT + 1
 
 
 def flatten_textures(
@@ -686,11 +721,12 @@ def flatten_textures(
     """Return every texture's bytes end to end, and the table describing them.
 
     The flat textures first, one row each in id order, then every cube
-    texture's six faces and its PMREM image in id order, one row each,
-    `CUBE_ROWS` in all: cube `c` begins at row
+    texture's six faces, its PMREM image and its panorama in id order, one
+    row each, `CUBE_ROWS` in all: cube `c` begins at row
     `textures.count() + c * CUBE_ROWS`, which is what `triangle_state`
-    writes for a triangle that reflects it. A cube with no PMREM has the
-    blank texture there, which crosses as one white byte texel.
+    writes for a triangle that reflects it. A cube with no PMREM, or no
+    panorama, has the blank texture there, which crosses as one white byte
+    texel. The panorama's row holds the cube's mapping.
 
     Args:
         textures: The store to upload.
@@ -698,9 +734,10 @@ def flatten_textures(
 
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
-        byte offset, width, height, wrap mode, filter mode, color space,
+        byte offset, width, height, `wrap_s`, `mag_filter`, color space,
         how many mip levels follow, the alpha mode, the anisotropy, the
-        texel type, then from `TABLE_PLACEMENT` the six numbers of its
+        texel type, `wrap_t`, `min_filter`, `flip_y` as one or zero, the
+        mapping, then from `TABLE_PLACEMENT` the six numbers of its
         `Texture.placement` as their bits and its channel. A float
         texture's numbers cross as four little-endian bytes each, so every
         texture shares one buffer.
@@ -722,6 +759,7 @@ def flatten_textures(
         for face in range(FACE_COUNT):  # pragma: no branch
             _flatten_one(six.face(face), texels, table)
         _flatten_one(six.cube_uv, texels, table)
+        _flatten_one(six.panorama, texels, table, six.mapping)
     # Never empty: a zero-length device buffer is not worth the special case,
     # and a vertex naming NO_TEXTURE never reads either of these.
     if len(texels) == 0:
@@ -733,9 +771,14 @@ def flatten_textures(
 
 
 def _flatten_one(
-    image: Texture, mut texels: List[UInt8], mut table: List[Int32]
+    image: Texture,
+    mut texels: List[UInt8],
+    mut table: List[Int32],
+    mapping: Optional[Mapping] = None,
 ) raises:
-    """Append one texture's bytes and its row of the table.
+    """Append one texture's bytes and its row of the table, with
+    `mapping` in place of the texture's own when one is given: a cube's
+    panorama row carries the cube's.
 
     Raises:
         Error: If the texture's wrap, filter, color space or alpha mode is
@@ -743,6 +786,10 @@ def _flatten_one(
     """
     image.validate()
     _flatten_row(image, texels, table)
+    table.append(Int32(image.wrap_t.value))
+    table.append(Int32(image.min_filter.value))
+    table.append(Int32(1 if image.flip_y else 0))
+    table.append(Int32(mapping.or_else(image.mapping).value))
     # Where it is sampled as a map, after the rest of the row: a blank
     # texture's is the identity, and a cube face's is never read.
     var placed = image.placement()
@@ -758,8 +805,8 @@ def _flatten_one(
 def _flatten_row(
     image: Texture, mut texels: List[UInt8], mut table: List[Int32]
 ):
-    """Append one texture's bytes and the first `TABLE_PLACEMENT` entries
-    of its row: everything but its placement."""
+    """Append one texture's bytes and the first `TABLE_WRAP_T` entries
+    of its row."""
     table.append(Int32(len(texels)))
     if image.is_blank():
         # A blank texture is a legitimate thing to store, and on the host
@@ -772,8 +819,8 @@ def _flatten_row(
         # GPU returned black where the CPU returned white.
         table.append(1)
         table.append(1)
-        table.append(Int32(image.wrap.value))
-        table.append(Int32(image.filter.value))
+        table.append(Int32(image.wrap_s.value))
+        table.append(Int32(image.mag_filter.value))
         table.append(Int32(image.color_space.value))
         table.append(1)
         table.append(Int32(COVERAGE.value))
@@ -784,8 +831,8 @@ def _flatten_row(
         return
     table.append(Int32(image.width))
     table.append(Int32(image.height))
-    table.append(Int32(image.wrap.value))
-    table.append(Int32(image.filter.value))
+    table.append(Int32(image.wrap_s.value))
+    table.append(Int32(image.mag_filter.value))
     table.append(Int32(image.color_space.value))
     table.append(Int32(image.levels))
     table.append(Int32(image.alpha.value))
@@ -907,7 +954,39 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.layers.specular_color.z)
         flat.append(corner.layers.clearcoat_normal_scale.x)
         flat.append(corner.layers.clearcoat_normal_scale.y)
+        _append_basis(flat, corner.frames.env_rotation)
+        flat.append(corner.frames.refraction_ratio)
+        _append_basis(flat, corner.frames.object_normal)
     return flat^
+
+
+def _append_basis(mut flat: List[Float32], basis: Basis3):
+    """Append a 3x3 matrix's nine numbers in `Basis3`'s order."""
+    flat.append(basis.e0)
+    flat.append(basis.e1)
+    flat.append(basis.e2)
+    flat.append(basis.e3)
+    flat.append(basis.e4)
+    flat.append(basis.e5)
+    flat.append(basis.e6)
+    flat.append(basis.e7)
+    flat.append(basis.e8)
+
+
+def _basis_at(corners: MutPointer[Float32, MutAnyOrigin], at: Int) -> Basis3:
+    """Return the 3x3 matrix whose nine numbers start at `at` in the
+    vertex buffer, as `_append_basis` wrote them."""
+    return Basis3(
+        corners[unsafe_offset=at],
+        corners[unsafe_offset=at + 1],
+        corners[unsafe_offset=at + 2],
+        corners[unsafe_offset=at + 3],
+        corners[unsafe_offset=at + 4],
+        corners[unsafe_offset=at + 5],
+        corners[unsafe_offset=at + 6],
+        corners[unsafe_offset=at + 7],
+        corners[unsafe_offset=at + 8],
+    )
 
 
 def _append_float(mut bytes: List[UInt8], value: Float32):
@@ -2074,7 +2153,12 @@ def _sample_cube_level(
     level: Float32,
 ) -> FloatColor:
     """Sample a cube texture in a direction, `level` down its chain: the
-    device counterpart of `CubeTexture.sample_level`."""
+    device counterpart of `CubeTexture.sample_level`. A cube made from a
+    panorama reads down the panorama's chain at `equirect_uv`."""
+    var panorama = _describe(table, first + CUBE_PANORAMA)
+    if panorama.mapping.is_equirectangular():
+        var at = equirect_uv(direction)
+        return _sample_level(texels, ramp, panorama, at.x, at.y, level)
     var face = face_of(direction)
     var place = face_uv(face, direction)
     return _sample_level(
@@ -2109,6 +2193,9 @@ def _sample_cube_rough(
         var mixed = mix_color(near, far, taps.blend)
         return FloatColor(mixed.r, mixed.g, mixed.b, 1.0)
     var levels = _describe(table, first).levels
+    var panorama = _describe(table, first + CUBE_PANORAMA)
+    if panorama.mapping.is_equirectangular():
+        levels = panorama.levels
     return _sample_cube_level(
         texels,
         ramp,
@@ -2470,13 +2557,17 @@ struct _Descriptor(ImplicitlyCopyable):
     var start: Int
     var width: Int
     var height: Int
-    var wrap: Wrap
-    var filter: Filter
+    var wrap_s: Wrap
+    var mag_filter: Filter
     var space: ColorSpace
     var levels: Int
     var alpha: Alpha
     var anisotropy: Int
     var texel_type: TexelType
+    var wrap_t: Wrap
+    var min_filter: Filter
+    var flip_y: Bool
+    var mapping: Mapping
 
 
 def _placement(
@@ -2512,6 +2603,10 @@ def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
         Alpha(Int(table[unsafe_offset=entry + 7])),
         Int(table[unsafe_offset=entry + 8]),
         TexelType(Int(table[unsafe_offset=entry + 9])),
+        Wrap(Int(table[unsafe_offset=entry + TABLE_WRAP_T])),
+        Filter(Int(table[unsafe_offset=entry + TABLE_MIN_FILTER])),
+        table[unsafe_offset=entry + TABLE_FLIP_Y] != 0,
+        Mapping(Int(table[unsafe_offset=entry + TABLE_MAPPING])),
     )
 
 
@@ -2542,8 +2637,8 @@ def _fetch(
     var channel = (
         _level_start(image.width, image.height, level)
         + (
-            wrap_index(y, tall, image.wrap) * wide
-            + wrap_index(x, wide, image.wrap)
+            wrap_index(y, tall, image.wrap_t) * wide
+            + wrap_index(x, wide, image.wrap_s)
         )
         * 4
     )
@@ -2685,7 +2780,8 @@ def triangle_state(
         iridescence, film thickness and anisotropy map ids, then where its
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
-        ids, per triangle, from its first corner.
+        ids, then the normal map type's value, per triangle, from its
+        first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2732,6 +2828,7 @@ def triangle_state(
         state.append(Int32(layers.clearcoat_map.value))
         state.append(Int32(layers.clearcoat_roughness_map.value))
         state.append(Int32(layers.clearcoat_normal_map.value))
+        state.append(Int32(corners[triangle * 3].frames.normal_map_type.value))
     return state^
 
 
@@ -2824,21 +2921,45 @@ def _sample_at(
     v: Float32,
     level: Int,
 ) -> FloatColor:
-    """Sample one mip level, the device counterpart of `Texture.sample_at`."""
+    """Sample one mip level, the device counterpart of `Texture.sample_at`:
+    through `level_filter`, the host's own choice."""
+    return _sample_filtered(
+        texels,
+        ramp,
+        image,
+        u,
+        v,
+        level,
+        level_filter(level, image.mag_filter, image.min_filter),
+    )
+
+
+def _sample_filtered(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    image: _Descriptor,
+    u: Float32,
+    v: Float32,
+    level: Int,
+    filter: Filter,
+) -> FloatColor:
+    """Sample one mip level through one filter, the device counterpart of
+    `Texture._sample_at`."""
     var wide = _extent(image.width, level)
     var tall = _extent(image.height, level)
-    if image.filter == NEAREST:
+    var from_top = row_coordinate(v, image.flip_y)
+    if filter == NEAREST:
         return _fetch(
             texels,
             ramp,
             image,
             Int(floor(u * Float32(wide))),
-            Int(floor((1 - v) * Float32(tall))),
+            Int(floor(from_top * Float32(tall))),
             level,
         )
     # Texel centers sit at half-integers; see Texture.sample.
     var across = u * Float32(wide) - 0.5
-    var down = (1 - v) * Float32(tall) - 0.5
+    var down = from_top * Float32(tall) - 0.5
     var column = Int(floor(across))
     var row = Int(floor(down))
     return blend_texels(
@@ -2859,15 +2980,20 @@ def _sample_level(
     v: Float32,
     level: Float32,
 ) -> FloatColor:
-    """Trilinear across two mip levels, matching `Texture.sample_level`."""
-    if image.levels == 1 or level <= 0:
-        return _sample_at(texels, ramp, image, u, v, 0)
-    if level >= Float32(image.levels - 1):
-        return _sample_at(texels, ramp, image, u, v, image.levels - 1)
-    var lower = Int(floor(level))
-    var near = _sample_at(texels, ramp, image, u, v, lower)
-    var far = _sample_at(texels, ramp, image, u, v, lower + 1)
-    return mix_color(near, far, level - Float32(lower))
+    """Read at a fractional level through the texture's two filters,
+    matching `Texture.sample_level`: `plan_levels`, the host's own plan."""
+    var plan = plan_levels(
+        level, image.levels, image.mag_filter, image.min_filter
+    )
+    var near = _sample_filtered(
+        texels, ramp, image, u, v, plan.lower, plan.filter
+    )
+    if plan.upper == plan.lower:
+        return near
+    var far = _sample_filtered(
+        texels, ramp, image, u, v, plan.upper, plan.filter
+    )
+    return mix_color(near, far, plan.blend)
 
 
 def _sample_cube(
@@ -2884,8 +3010,13 @@ def _sample_cube(
     `POSITIVE_X` through `NEGATIVE_Z` order, as `flatten_textures` laid
     them out. `face_of` picks the row and `face_uv` the place on it, both
     the host's own functions, and the face is read at its full size as the
-    host reads it.
+    host reads it. A cube made from a panorama reads the panorama, its row
+    after the PMREM's, at `equirect_uv` instead.
     """
+    var panorama = _describe(table, first + CUBE_PANORAMA)
+    if panorama.mapping.is_equirectangular():
+        var at = equirect_uv(direction)
+        return _sample_at(texels, ramp, panorama, at.x, at.y, 0)
     var face = face_of(direction)
     var place = face_uv(face, direction)
     return _sample_at(
@@ -3363,6 +3494,10 @@ def _transmitted(
         COVERAGE,
         1,
         FLOAT_TYPE,
+        CLAMP,
+        LINEAR_MIPMAP_LINEAR,
+        True,
+        UV_MAPPING,
     )
     return volume_refraction(
         _DeviceSource(backdrop, ramp, image),
@@ -4251,39 +4386,55 @@ def rasterize_kernel(
                 var uv_along_x = steps[0]
                 var uv_along_y = steps[1]
                 var facing = Vector3(nx, ny, nz)
+                var object_space = maps[
+                    unsafe_offset=index * STATE_PER_TRIANGLE
+                    + STATE_NORMAL_MAP_TYPE
+                ] == Int32(OBJECT_SPACE_NORMAL_MAP.value)
                 if normal_slot >= 0:
-                    facing = mapped_normal(
-                        Vector3(nx, ny, nz),
-                        along_x,
-                        along_y,
-                        uv_along_x,
-                        uv_along_y,
-                        _sample_slot(
-                            texels,
-                            ramp,
-                            table,
-                            Int(normal_slot),
-                            corners,
-                            base,
-                            sax,
-                            say,
-                            sbx,
-                            sby,
-                            scx,
-                            scy,
-                            span_inv,
-                            swapped,
-                            px,
-                            py,
-                            at.x,
-                            at.y,
-                            framed,
-                        ),
-                        Vector2(
-                            corners[unsafe_offset=base + LANE_NORMAL_SCALE_X],
-                            corners[unsafe_offset=base + LANE_NORMAL_SCALE_Y],
-                        ),
+                    var texel = _sample_slot(
+                        texels,
+                        ramp,
+                        table,
+                        Int(normal_slot),
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                        at.x,
+                        at.y,
+                        framed,
                     )
+                    if object_space:
+                        facing = object_space_normal(
+                            Vector3(nx, ny, nz),
+                            texel,
+                            _basis_at(corners, base + LANE_OBJECT_NORMAL),
+                        )
+                    else:
+                        facing = mapped_normal(
+                            Vector3(nx, ny, nz),
+                            along_x,
+                            along_y,
+                            uv_along_x,
+                            uv_along_y,
+                            texel,
+                            Vector2(
+                                corners[
+                                    unsafe_offset=base + LANE_NORMAL_SCALE_X
+                                ],
+                                corners[
+                                    unsafe_offset=base + LANE_NORMAL_SCALE_Y
+                                ],
+                            ),
+                        )
                 else:
                     var bump_scale = corners[
                         unsafe_offset=base + LANE_BUMP_SCALE
@@ -5745,20 +5896,32 @@ def rasterize_kernel(
                         var strength = corners[
                             unsafe_offset=base + LANE_ENV_INTENSITY
                         ]
+                        # Turned by the env map's rotation, as the host
+                        # turns every direction; see `rasterize_shaded`.
+                        var spin = _basis_at(corners, base + LANE_ENV_ROTATION)
                         var seen = _sample_cube_rough(
                             texels,
                             ramp,
                             table,
                             Int(env_slot),
-                            rough_reflection(
-                                toward_eye,
-                                bent_normal(facing, toward_eye, layers, rough),
-                                rough,
+                            spin.turn(
+                                rough_reflection(
+                                    toward_eye,
+                                    bent_normal(
+                                        facing, toward_eye, layers, rough
+                                    ),
+                                    rough,
+                                )
                             ),
                             rough,
                         )
                         var around = _sample_cube_rough(
-                            texels, ramp, table, Int(env_slot), facing, 1
+                            texels,
+                            ramp,
+                            table,
+                            Int(env_slot),
+                            spin.turn(facing),
+                            1,
                         )
                         radiance = Vector3(
                             seen.r * strength,
@@ -5776,8 +5939,10 @@ def rasterize_kernel(
                                 ramp,
                                 table,
                                 Int(env_slot),
-                                rough_reflection(
-                                    toward_eye, coat_normal, coat_rough
+                                spin.turn(
+                                    rough_reflection(
+                                        toward_eye, coat_normal, coat_rough
+                                    )
                                 ),
                                 coat_rough,
                             )
@@ -5875,7 +6040,10 @@ def rasterize_kernel(
                     # `envmap_fragment` takes it under `isOrthographic`.
                     # See `rasterize_shaded`.
                     if reflects:
-                        var bounce = reflected(
+                        # A refraction mapping, read off the cube's
+                        # panorama row, bends the view instead; see
+                        # `env_direction`.
+                        var bounce = env_direction(
                             toward_eye_at(
                                 Vector3(
                                     lights[unsafe_offset=LIGHTS_EYE],
@@ -5890,6 +6058,17 @@ def rasterize_kernel(
                                 Vector3(wx, wy, wz),
                             ),
                             Vector3(nx, ny, nz),
+                            _describe(
+                                table, Int(env_slot) + CUBE_PANORAMA
+                            ).mapping.refracts(),
+                            TextureFrames(
+                                _basis_at(corners, base + LANE_ENV_ROTATION),
+                                corners[
+                                    unsafe_offset=base + LANE_REFRACTION_RATIO
+                                ],
+                                TANGENT_SPACE_NORMAL_MAP,
+                                Basis3(),
+                            ),
                         )
                         var joined = combine_light(
                             FloatColor(red, green, blue, alpha),

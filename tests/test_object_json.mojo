@@ -568,15 +568,15 @@ def test_round_trip() raises:
     ref color = read.textures.get(first.map)
     assert_equal(color.alpha, COVERAGE)
     assert_equal(color.color_space, SRGB)
-    assert_equal(color.wrap, CLAMP)
-    assert_equal(color.filter, NEAREST)
+    assert_equal(color.wrap_s, CLAMP)
+    assert_equal(color.mag_filter, NEAREST)
     assert_true(color.levels > 1)
     for at in range(16):
         assert_equal(color.pixels[at], _pixels()[at])
     ref data = read.textures.get(first.normal_map)
     assert_equal(data.alpha, IGNORED)
     assert_equal(data.color_space, LINEAR)
-    assert_equal(data.wrap, MIRROR)
+    assert_equal(data.wrap_s, MIRROR)
     assert_equal(data.levels, 1)
     assert_equal(first.roughness_map, first.normal_map)
     assert_equal(read.textures.count(), 2)
@@ -1139,8 +1139,8 @@ def test_texture_settings_are_read() raises:
     )
     ref assets = read[1]
     ref texture = assets.textures.get(TextureId(0))
-    assert_equal(texture.wrap, CLAMP)
-    assert_equal(texture.filter, NEAREST)
+    assert_equal(texture.wrap_s, CLAMP)
+    assert_equal(texture.mag_filter, NEAREST)
     assert_equal(texture.levels, 1)
     assert_equal(texture.color_space, SRGB)
     assert_equal(texture.alpha, COVERAGE)
@@ -1149,9 +1149,10 @@ def test_texture_settings_are_read() raises:
     assert_equal(texture.center.y, 0.5)
     assert_equal(texture.rotation.value, 1)
     assert_equal(texture.anisotropy, 4)
-    # Upside down: the bottom row of the file is the first row here.
-    assert_equal(texture.pixels[0], 0)
-    assert_equal(texture.pixels[2], 255)
+    # The rows as the file has them, and `v` reading them from the top.
+    assert_false(texture.flip_y)
+    assert_equal(texture.pixels[0], 255)
+    assert_equal(texture.pixels[2], 0)
 
 
 def test_a_one_row_image_flips_to_itself() raises:
@@ -1168,8 +1169,8 @@ def test_texture_defaults_are_three_js_defaults() raises:
     mipmaps and is not decoded."""
     var read = _read(_textured(""))
     ref texture = read[1].textures.get(TextureId(0))
-    assert_equal(texture.wrap, CLAMP)
-    assert_equal(texture.filter, BILINEAR)
+    assert_equal(texture.wrap_s, CLAMP)
+    assert_equal(texture.mag_filter, BILINEAR)
     assert_true(texture.levels > 1)
     assert_equal(texture.color_space, LINEAR)
     assert_equal(texture.pixels[0], 255)
@@ -1230,8 +1231,10 @@ def test_an_image_file_beside_the_document() raises:
 def test_texture_refusals() raises:
     """A texture the renderer has no counterpart for is refused."""
     _refuses(_textured(',"mapping":301'))
+    _refuses(_textured(',"mapping":306'))
+    _refuses(_textured(',"mapping":305'))
     _refuses(_textured(',"channel":2'))
-    _refuses(_textured(',"wrap":[1000,1001]'))
+    _refuses(_textured(',"wrap":[1000,999]'))
     _refuses(_textured(',"wrap":[999,999]'))
     _refuses(_textured(',"magFilter":1008'))
     _refuses(_textured(',"minFilter":1002'))

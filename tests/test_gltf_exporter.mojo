@@ -226,8 +226,8 @@ def assert_same_matrix(got: Matrix4, expected: Matrix4) raises:
 
 
 def assert_flipped(got: Texture, expected: Texture) raises:
-    """Assert a texture read back holds the other's rows upside down, and
-    samples the same."""
+    """Assert a texture read back holds the other's rows upside down, reads
+    them from the top, and samples the same."""
     assert_equal(got.width, expected.width)
     assert_equal(got.height, expected.height)
     var row = expected.width * 4
@@ -237,8 +237,10 @@ def assert_flipped(got: Texture, expected: Texture) raises:
                 got.pixels[y * row + x],
                 expected.pixels[(expected.height - 1 - y) * row + x],
             )
-    assert_equal(got.repeat.y, -1)
-    assert_equal(got.offset.y, 1)
+    assert_true(expected.flip_y)
+    assert_false(got.flip_y)
+    assert_equal(got.repeat.y, 1)
+    assert_equal(got.offset.y, 0)
 
 
 def assert_same_texels(got: Texture, expected: Texture) raises:
@@ -434,11 +436,11 @@ def check_round_trip(container: GltfContainer) raises:
         built.assets.textures.get(original.emissive_map),
     )
     ref data = assets.textures.get(shiny.roughness_map)
-    assert_equal(data.filter, NEAREST)
-    assert_equal(data.wrap, CLAMP)
+    assert_equal(data.mag_filter, NEAREST)
+    assert_equal(data.wrap_s, CLAMP)
     assert_true(data.levels > 1)
     ref bumps = assets.textures.get(shiny.normal_map)
-    assert_equal(bumps.wrap, MIRROR)
+    assert_equal(bumps.wrap_s, MIRROR)
     assert_equal(bumps.levels, 1)
     # The Phong material comes back with three.js's metalness and
     # roughness for a material that is not physical.
@@ -756,7 +758,7 @@ def test_what_glTF_cannot_hold_is_refused() raises:
     with assert_raises(contains="float texture"):
         _ = export_gltf(bright_map, assets)
     var odd_texture = image(2, 2, 4)
-    odd_texture.wrap = Wrap(9)
+    odd_texture.set_wrap(Wrap(9))
     var odd = assets.textures.add(odd_texture^)
     var odd_map = one_mesh(
         assets, Material(Color(1, 2, 3), map=odd), quad(True)

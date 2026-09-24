@@ -52,7 +52,14 @@ from render.cube_uv import (
     cube_uv_copy,
     cube_uv_direction,
 )
-from render.texture import BILINEAR, CLAMP, IGNORED, Texture, float_texture
+from render.texture import (
+    BILINEAR,
+    CLAMP,
+    CUBE_UV_REFLECTION_MAPPING,
+    IGNORED,
+    Texture,
+    float_texture,
+)
 from std.math import cos, exp, floor, log2, pi, sin, sqrt
 
 # The most taps either side of the center a blur takes: three.js's
@@ -205,7 +212,12 @@ def _blank_layout(lod_max: Int) raises -> Texture:
     var width = cube_uv_width(lod_max)
     var height = 4 << lod_max
     var data = List[Float32](length=width * height * 4, fill=0)
-    return float_texture(width, height, data^, CLAMP, BILINEAR, False, IGNORED)
+    var layout = float_texture(
+        width, height, data^, CLAMP, BILINEAR, False, IGNORED
+    )
+    # three.js's PMREM texture is `CubeUVReflectionMapping`.
+    layout.mapping = CUBE_UV_REFLECTION_MAPPING
+    return layout^
 
 
 def blur_axis(latitudinal: Bool, pole: Vector3, direction: Vector3) -> Vector3:
@@ -474,7 +486,10 @@ def pmrem_from_equirectangular(image: Texture) raises -> CubeTexture:
         image: The panorama, byte or float.
 
     Returns:
-        The cube texture, with its PMREM in `cube_uv`.
+        The cube texture, with its PMREM in `cube_uv`. A panorama whose
+        `mapping` is equirectangular is kept in the cube too, as
+        `cube_of_panorama` keeps it, so every reader but the PMREM's
+        samples it directly.
 
     Raises:
         Error: If the panorama is blank or refused by `Texture.validate`.
@@ -483,5 +498,8 @@ def pmrem_from_equirectangular(image: Texture) raises -> CubeTexture:
     var faces = cube_from_equirectangular(image, 1 << lod_max, False)
     var layout = _layout(faces, lod_max, image, True)
     faces.cube_uv = layout^
+    if image.mapping.is_equirectangular():
+        faces.panorama = Texture(copy=image)
+        faces.mapping = image.mapping
     faces.validate()
     return faces^

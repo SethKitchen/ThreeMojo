@@ -217,7 +217,7 @@ def test_a_probe_from_a_cube_is_a_light() raises:
 
 def test_a_cube_edited_into_nonsense_is_refused() raises:
     var cube = a_float_cube(4, [1, 1, 1, 1, 1, 1])
-    cube.faces[2].wrap = REPEAT
+    cube.faces[2].set_wrap(REPEAT)
     with assert_raises():
         _ = sh_from_cube(cube)
     with assert_raises():

@@ -736,7 +736,8 @@ def compressed_texture(
 
     A color format is `SRGB` unless you say `LINEAR`. Every other format
     holds data, not color, and is `LINEAR`. A float format gives a float
-    texture.
+    texture. `flip_y` is off, as three.js's `CompressedTexture` has it: the
+    file's first row is where `v` is zero.
 
     Args:
         width: The image's width in texels.
@@ -769,8 +770,9 @@ def compressed_texture(
             String(format)
             + " holds data, not color: its texture must be LINEAR, not SRGB"
         )
+    var texture: Texture
     if format.is_float():
-        return float_texture(
+        texture = float_texture(
             width,
             height,
             decoded^.take_floats(),
@@ -779,16 +781,21 @@ def compressed_texture(
             mipmapped,
             alpha,
         )
-    return Texture(
-        width,
-        height,
-        decoded^.take_pixels(),
-        wrap,
-        filter,
-        space,
-        mipmapped,
-        alpha,
-    )
+    else:
+        texture = Texture(
+            width,
+            height,
+            decoded^.take_pixels(),
+            wrap,
+            filter,
+            space,
+            mipmapped,
+            alpha,
+        )
+    # A block cannot be turned upside down on upload, so three.js's
+    # `CompressedTexture` has `flipY` off: `v` reads the first row first.
+    texture.flip_y = False
+    return texture^
 
 
 def level_bytes(width: Int, height: Int, format: CompressedFormat) -> Int:

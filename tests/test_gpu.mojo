@@ -7327,9 +7327,9 @@ def test_flattening_lays_the_cube_faces_out_after_the_textures() raises:
     _ = textures.add(a_gpu_face(Color(1, 2, 3)))
     var flat = flatten_textures(textures, a_cube_store())
     ref table = flat[1]
-    # One flat texture, then two cubes of six faces and a PMREM row each:
-    # fifteen rows.
-    assert_equal(len(table), 15 * TABLE_COLUMNS)
+    # One flat texture, then two cubes of six faces, a PMREM row and a
+    # panorama row each: seventeen rows.
+    assert_equal(len(table), 17 * TABLE_COLUMNS)
     # The +x face of the first cube is the second row, red, 2x2, clamped.
     assert_equal(table[TABLE_COLUMNS + 1], Int32(2))
     assert_equal(table[TABLE_COLUMNS + 3], Int32(CLAMP.value))
@@ -7341,7 +7341,7 @@ def test_flattening_lays_the_cube_faces_out_after_the_textures() raises:
     assert_equal(flat[0][next + 1], UInt8(255))
     # A cube edited into nonsense is refused, as a texture is.
     var store = a_cube_store()
-    store.textures[1].faces[3].wrap = REPEAT
+    store.textures[1].faces[3].set_wrap(REPEAT)
     with assert_raises():
         _ = flatten_textures(textures, store)
 
@@ -9459,17 +9459,26 @@ def probe_lighting() raises -> Lighting:
 def test_flattening_lays_a_pmrem_row_after_the_faces() raises:
     var flat = flatten_textures(TextureStore(), a_pmrem_store())
     ref table = flat[1]
-    # Two cubes of seven rows.
-    assert_equal(len(table), 14 * TABLE_COLUMNS)
+    # Two cubes of eight rows.
+    assert_equal(len(table), 16 * TABLE_COLUMNS)
     # The first cube's seventh row is its PMREM: floats, 336 by 64.
     var layout = 6 * TABLE_COLUMNS
     assert_equal(table[layout + 1], Int32(336))
     assert_equal(table[layout + 2], Int32(64))
     assert_equal(table[layout + 9], Int32(FLOAT_TYPE.value))
+    assert_equal(
+        table[layout + TABLE_MAPPING], Int32(CUBE_UV_REFLECTION_MAPPING.value)
+    )
     # The second cube has none: one white byte texel.
-    var none = 13 * TABLE_COLUMNS
+    var none = 14 * TABLE_COLUMNS
     assert_equal(table[none + 1], Int32(1))
     assert_equal(table[none + 9], Int32(UNSIGNED_BYTE_TYPE.value))
+    # Nor a panorama: its row is one white texel with the cube's mapping.
+    var bare = 15 * TABLE_COLUMNS
+    assert_equal(table[bare + 1], Int32(1))
+    assert_equal(
+        table[bare + TABLE_MAPPING], Int32(CUBE_REFLECTION_MAPPING.value)
+    )
 
 
 def test_flattening_the_lights_carries_the_probes() raises:
@@ -11774,3 +11783,295 @@ def test_both_backends_agree_on_geometric_roughness() raises:
         count_background(cpu, BACKGROUND) < 40 * 40, "the ball drew nothing"
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- samplers, panoramas, refraction and the environment's turn ---------------
+
+from render.cube_texture import Basis3, cube_of_panorama, env_rotation
+from render.gpu import (
+    CUBE_PANORAMA,
+    CUBE_ROWS,
+    TABLE_FLIP_Y,
+    TABLE_MAPPING,
+    TABLE_MIN_FILTER,
+    TABLE_WRAP_T,
+)
+from render.texture import (
+    CUBE_REFLECTION_MAPPING,
+    CUBE_REFRACTION_MAPPING,
+    CUBE_UV_REFLECTION_MAPPING,
+    EQUIRECTANGULAR_REFLECTION_MAPPING,
+    EQUIRECTANGULAR_REFRACTION_MAPPING,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
+    NEAREST_MIPMAP_LINEAR,
+    NEAREST_MIPMAP_NEAREST,
+    Filter,
+    Mapping,
+)
+from render.rasterizer import TextureFrames
+from materials.material import (
+    DEFAULT_REFRACTION_RATIO,
+    MIX_OPERATION,
+    OBJECT_SPACE_NORMAL_MAP,
+)
+from math.euler import XYZ, Euler
+from units.si import RADIAN
+
+
+def a_gpu_panorama(mapping: Mapping) raises -> Texture:
+    """Return a 6x3 panorama whose every texel differs, with a chain."""
+    var pixels = List[UInt8]()
+    for texel in range(18):
+        pixels.append(UInt8((texel * 41) % 256))
+        pixels.append(UInt8((texel * 97 + 30) % 256))
+        pixels.append(UInt8((texel * 13 + 90) % 256))
+        pixels.append(255)
+    var image = Texture(6, 3, pixels^, CLAMP, BILINEAR, SRGB, True)
+    image.mapping = mapping
+    return image^
+
+
+def test_the_texture_table_carries_the_sampler_and_the_mapping() raises:
+    var textures = TextureStore()
+    var image = checkerboard(
+        8, 2, Color(240, 60, 20), Color(20, 40, 200), REPEAT, BILINEAR
+    )
+    image.wrap_t = MIRROR
+    image.mag_filter = NEAREST
+    image.min_filter = LINEAR_MIPMAP_NEAREST
+    image.flip_y = False
+    image.mapping = EQUIRECTANGULAR_REFLECTION_MAPPING
+    _ = textures.add(image^)
+    var cubes = CubeTextureStore()
+    _ = cubes.add(
+        cube_of_panorama(a_gpu_panorama(EQUIRECTANGULAR_REFRACTION_MAPPING))
+    )
+    var refracting = a_gpu_cube()
+    refracting.mapping = CUBE_REFRACTION_MAPPING
+    _ = cubes.add(refracting^)
+    var flat = flatten_textures(textures, cubes)
+    ref table = flat[1]
+    assert_equal(len(table), (1 + 2 * CUBE_ROWS) * TABLE_COLUMNS)
+    assert_equal(TABLE_PLACEMENT, TABLE_MAPPING + 1)
+    assert_equal(table[3], Int32(REPEAT.value))
+    assert_equal(table[4], Int32(NEAREST.value))
+    assert_equal(table[TABLE_WRAP_T], Int32(MIRROR.value))
+    assert_equal(table[TABLE_MIN_FILTER], Int32(LINEAR_MIPMAP_NEAREST.value))
+    assert_equal(table[TABLE_FLIP_Y], Int32(0))
+    assert_equal(
+        table[TABLE_MAPPING], Int32(EQUIRECTANGULAR_REFLECTION_MAPPING.value)
+    )
+    # The first cube's panorama row: the panorama, with the cube's mapping.
+    var panorama = (1 + CUBE_PANORAMA) * TABLE_COLUMNS
+    assert_equal(table[panorama + 1], Int32(6))
+    assert_equal(table[panorama + TABLE_FLIP_Y], Int32(1))
+    assert_equal(
+        table[panorama + TABLE_MAPPING],
+        Int32(EQUIRECTANGULAR_REFRACTION_MAPPING.value),
+    )
+    # The second cube has none: one white texel carrying its mapping.
+    var bare = (1 + CUBE_ROWS + CUBE_PANORAMA) * TABLE_COLUMNS
+    assert_equal(table[bare + 1], Int32(1))
+    assert_equal(
+        table[bare + TABLE_MAPPING], Int32(CUBE_REFRACTION_MAPPING.value)
+    )
+
+
+def test_both_backends_sample_each_axis_and_each_filter_alike() raises:
+    # A board tiled past the unit square both ways, far enough to be
+    # minified: each pair of wraps, each way `v` runs, and each filter.
+    if skipped_for_lack_of_a_gpu("both backends sample each axis alike"):
+        return
+    var minifiers: List[Filter] = [
+        NEAREST,
+        BILINEAR,
+        NEAREST_MIPMAP_NEAREST,
+        LINEAR_MIPMAP_NEAREST,
+        NEAREST_MIPMAP_LINEAR,
+        LINEAR_MIPMAP_LINEAR,
+    ]
+    for index in range(len(minifiers)):
+        for flipped in [True, False]:
+            var textures = TextureStore()
+            var board = checkerboard(
+                64,
+                8,
+                Color(240, 60, 20),
+                Color(20, 40, 200),
+                REPEAT,
+                BILINEAR,
+                mipmapped=True,
+            )
+            board.wrap_t = MIRROR
+            board.mag_filter = NEAREST if index % 2 == 0 else BILINEAR
+            board.min_filter = minifiers[index]
+            board.flip_y = flipped
+            var id = textures.add(board^)
+            var corners = List[RasterVertex]()
+            corners.append(lit_corner(0, 0, 1, -1.5, 3.5, id))
+            corners.append(lit_corner(24, 0, 1, 3.5, 3.5, id))
+            corners.append(lit_corner(24, 24, 1, 3.5, -1.5, id))
+            corners.append(lit_corner(0, 0, 1, -1.5, 3.5, id))
+            corners.append(lit_corner(24, 24, 1, 3.5, -1.5, id))
+            corners.append(lit_corner(0, 24, 1, -1.5, -1.5, id))
+            var cpu = cpu_textured(corners, 24, textures)
+            var gpu = render_triangles(
+                corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def turned_frames(
+    corners: List[RasterVertex], ratio: Float32
+) raises -> List[RasterVertex]:
+    """Return corners with their environment turned and a refraction
+    ratio, the same on every corner."""
+    var frames = TextureFrames()
+    frames.env_rotation = env_rotation(
+        Euler(Angle(0.3, RADIAN), Angle(1.1, RADIAN), Angle(-0.4, RADIAN), XYZ)
+    )
+    frames.refraction_ratio = ratio
+    var out = List[RasterVertex]()
+    for index in range(len(corners)):
+        var corner = corners[index]
+        corner.frames = frames
+        out.append(corner)
+    return out^
+
+
+def test_both_backends_refract_and_turn_an_environment_alike() raises:
+    # A cube read by reflection and by refraction, and a panorama read
+    # both ways, each turned, on basic surfaces facing every way.
+    if skipped_for_lack_of_a_gpu("both backends refract alike"):
+        return
+    var cubes = CubeTextureStore()
+    _ = cubes.add(a_gpu_cube())
+    var refracting = a_gpu_cube()
+    refracting.mapping = CUBE_REFRACTION_MAPPING
+    _ = cubes.add(refracting^)
+    _ = cubes.add(
+        cube_of_panorama(a_gpu_panorama(EQUIRECTANGULAR_REFLECTION_MAPPING))
+    )
+    _ = cubes.add(
+        cube_of_panorama(a_gpu_panorama(EQUIRECTANGULAR_REFRACTION_MAPPING))
+    )
+    for cube in range(4):
+        for ratio in [Float32(0.66), Float32(1.5)]:
+            var corners = turned_frames(
+                mirror_pair(CubeTextureId(cube), 0.8, MIX_OPERATION), ratio
+            )
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners,
+                target,
+                SHADE_TEXTURE,
+                TextureStore(),
+                watching(),
+                1,
+                cubes=cubes,
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                TextureStore(),
+                watching(),
+                cubes=cubes,
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_turn_a_physical_environment_alike() raises:
+    # The rough reflection, the irradiance and the coat, each turned: from
+    # a PMREM, down a cube's chain, and down a panorama's.
+    if skipped_for_lack_of_a_gpu("both backends turn a physical env alike"):
+        return
+    var lighting = phong_lighting()
+    var cubes = a_pmrem_store()
+    _ = cubes.add(
+        cube_of_panorama(a_gpu_panorama(EQUIRECTANGULAR_REFLECTION_MAPPING))
+    )
+    for cube in range(3):
+        var pairs = List[List[RasterVertex]]()
+        pairs.append(
+            turned_frames(
+                physical_pair(STANDARD, 0.2, 1.0, env=CubeTextureId(cube)),
+                DEFAULT_REFRACTION_RATIO,
+            )
+        )
+        pairs.append(
+            turned_frames(
+                physical_pair(
+                    PHYSICAL, 0.6, 0.3, 1.0, 0.2, env=CubeTextureId(cube)
+                ),
+                DEFAULT_REFRACTION_RATIO,
+            )
+        )
+        for index in range(len(pairs)):
+            ref corners = pairs[index]
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners,
+                target,
+                SHADE_TEXTURE,
+                TextureStore(),
+                lighting,
+                cubes=cubes,
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                TextureStore(),
+                lighting,
+                cubes=cubes,
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_read_an_object_space_normal_map_alike() raises:
+    # The texel turned by the mesh's normal matrix, and by its negation
+    # for a face turned round, on a lit and a physical surface.
+    if skipped_for_lack_of_a_gpu("both backends read object normals alike"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var frames = TextureFrames()
+    frames.normal_map_type = OBJECT_SPACE_NORMAL_MAP
+    frames.object_normal = Basis3(0.8, 0, -0.6, 0, 1, 0, 0.6, 0, 0.8)
+    var turned = frames
+    turned.object_normal = Basis3(-0.8, 0, 0.6, 0, -1, 0, -0.6, 0, -0.8)
+    var choices = [frames, turned]
+    for kind in [LAMBERT, STANDARD]:
+        for choice in range(2):
+            var corners = physical_pair(kind, 0.5, 0.5, normal_map=map)
+            for index in range(len(corners)):
+                if kind != STANDARD:
+                    corners[index].roughness = 1
+                    corners[index].metalness = 0
+                corners[index].frames = choices[choice]
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(corners, target, SHADE_TEXTURE, textures, lighting)
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                textures,
+                lighting,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 36 * 30,
+                "the triangles drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)

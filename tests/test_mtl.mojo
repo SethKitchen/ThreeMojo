@@ -176,7 +176,7 @@ def test_each_map_is_read_in_the_space_its_use_asks() raises:
     ref color = assets.textures.get(built.map)
     assert_true(color.color_space == SRGB)
     assert_true(color.alpha == COVERAGE)
-    assert_true(color.wrap == REPEAT)
+    assert_true(color.wrap_s == REPEAT)
     ref glow = assets.textures.get(built.emissive_map)
     assert_true(glow.color_space == SRGB)
     assert_true(glow.alpha == IGNORED)
@@ -252,9 +252,9 @@ def test_scale_and_offset_set_repeat_and_offset() raises:
 def test_clamp_and_the_displacement_option() raises:
     var assets = Assets()
     var clamped = one("newmtl a\nmap_Kd -clamp on -mm 0 1 brick.png\n", assets)
-    assert_true(assets.textures.get(clamped.map).wrap == CLAMP)
+    assert_true(assets.textures.get(clamped.map).wrap_s == CLAMP)
     var repeated = one("newmtl a\nmap_Kd -clamp off brick.png\n", assets)
-    assert_true(assets.textures.get(repeated.map).wrap == REPEAT)
+    assert_true(assets.textures.get(repeated.map).wrap_s == REPEAT)
 
 
 def test_a_file_name_can_hold_spaces() raises:

@@ -259,6 +259,8 @@ var tinted = Material(Color(150, 150, 150), env_map=SCENE_ENVIRONMENT, reflectiv
 | `env_map` | `envMap` | `NO_CUBE_TEXTURE` | The cube texture to reflect. `SCENE_ENVIRONMENT` reflects the scene's `environment`. |
 | `reflectivity` | `reflectivity` | `1.0` | How much of the reflection joins, from zero to one. |
 | `combine` | `combine` | `MULTIPLY_OPERATION` | How it joins. See the table below. |
+| `refraction_ratio` | `refractionRatio` | `0.98` | The ratio of the two indices of refraction, read under a refraction mapping. |
+| `env_map_rotation` | `envMapRotation` | no turn | An `Euler` that turns the environment before it is read. |
 
 | `combine` | three.js | The surface's light becomes |
 |---|---|---|
@@ -269,6 +271,10 @@ var tinted = Material(Color(150, 150, 150), env_map=SCENE_ENVIRONMENT, reflectiv
 `combine_light` in `materials/material.mojo` is that arithmetic, three.js's `envmap_fragment`. Both rasterizers call it. The reflection joins after the lights, the highlight and the emissive term, and before the fog, where three.js joins it. Alpha is coverage and is left alone. A white `BASIC` surface with a multiply is a plain mirror. A colored one is a mirror tinted by its color.
 
 The reflected direction is `reflected(toward_eye, normal)` in `render/cube_texture.mojo`, GLSL's `reflect`. It is measured from where the camera stands under either projection, as three.js reads `cameraPosition` here. The cube is read at its full size, never down a mip chain; see [Textures](Textures#cube-textures).
+
+A cube with `CUBE_REFRACTION_MAPPING`, or a panorama with `EQUIRECTANGULAR_REFRACTION_MAPPING`, is read along the view bent through the surface. `refracted(toward_eye, normal, refraction_ratio)` is GLSL's `refract`. Past the critical angle it gives the zero vector, as GLSL does. Only a `BASIC`, `LAMBERT` or `PHONG` material has a refraction ratio. Every other kind refuses one that is not the default.
+
+`env_map_rotation` turns the direction last, as three.js's `envMapRotation` does, on each kind that reflects. `env_direction` in `render/rasterizer.mojo` is the whole choice, and both rasterizers call it. A kind that does not reflect refuses a turn. A physical surface that reflects the scene's environment is turned by `Scene.environment_rotation` instead, as in three.js.
 
 A reflection is a texture. `SHADE_TEXTURE` draws it and the other two shading modes ignore it, as they ignore every map.
 
@@ -307,7 +313,7 @@ The defaults are three.js's own: a roughness of one and a metalness of zero, a c
 | `roughness_map` | `roughnessMap` | `NO_TEXTURE` | Its green channel multiplies the roughness. Data: `LINEAR` and `IGNORED`. |
 | `metalness_map` | `metalnessMap` | `NO_TEXTURE` | Its blue channel multiplies the metalness. Data: `LINEAR` and `IGNORED`. |
 | `env_map` | `envMap` | `NO_CUBE_TEXTURE` | The cube texture the surface reflects, or `SCENE_ENVIRONMENT`. |
-| `env_map_intensity` | `envMapIntensity` | `1.0` | What the environment is multiplied by. |
+| `env_map_intensity` | `envMapIntensity` | `1.0` | What the environment is multiplied by. The scene's `environment_intensity` replaces it for `SCENE_ENVIRONMENT`, as in three.js. |
 | `ior` | `ior` | `1.5` | The index of refraction, from one to 2.333. `PHYSICAL` only. |
 | `specular_color` | `specularColor` | white | What the reflectance head on is tinted by. `PHYSICAL` only. |
 | `specular_intensity` | `specularIntensity` | `1.0` | What that reflectance is scaled by, from zero to one. `PHYSICAL` only. |
@@ -330,7 +336,7 @@ The number you set is the *authored* roughness, from zero to one, times any map.
 
 A physical surface reflects its environment by its roughness, not by a `combine`. Both refuse a `reflectivity` or a `combine`. The reflection is three.js's split sum: `dfg_approx` fits the lobe's integral, and `physical_outgoing` in `lights/lighting.mojo` joins the radiance and the irradiance with Fdez-Aguera's multiple scattering. The radiance is read along `rough_reflection`, the view turned back and bent toward the normal by the square of the roughness. The irradiance is read around the normal at the coarsest level.
 
-A [PMREM](Textures#pmrem) gives both as three.js gives them. The radiance is the environment blurred for the roughness. The irradiance is the blurriest copy, which three.js reads for the light around a normal. Build one with `pmrem_from_cube` and name it as the env map.
+A [PMREM](Textures#pmrem) gives both as three.js gives them. The radiance is the environment blurred for the roughness. The irradiance is the blurriest copy, which three.js reads for the light around a normal. Build one with `pmrem_from_cube`, or call `prefilter_environments(scene, assets)` before the frame, which builds each one the scene needs. A panorama gets its PMREM from the panorama itself.
 
 A cube without a PMREM gives two approximations. The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. Its contract is monotonic: a rising roughness moves a reflection steadily toward its face's average. The irradiance is the coarsest level, each face's average, not the cosine-weighted integral. Under a sky that is one bright patch on black it reads high. A cube built without a chain reflects sharply at every roughness.
 
@@ -527,6 +533,9 @@ var leather = assets.materials.add(
 | `normal_scale` | `normalScale` | `Vector2(1, 1)` | What the unpacked x and y are multiplied by. |
 | `bump_map` | `bumpMap` | `NO_TEXTURE` | Its red channel is a height. |
 | `bump_scale` | `bumpScale` | `1.0` | What the height is multiplied by. |
+| `normal_map_type` | `normalMapType` | `TANGENT_SPACE_NORMAL_MAP` | Which frame the normal map's texels are in. |
+
+`OBJECT_SPACE_NORMAL_MAP`, three.js's `ObjectSpaceNormalMap`, holds each normal in the mesh's own space. The texel replaces the geometry's normal, turned into the world by the mesh's normal matrix. `normal_scale` is not read, as in three.js. A face seen from behind negates it, as three.js's `faceDirection` does. `object_space_normal` in `render/rasterizer.mojo` is that arithmetic, and both rasterizers call it. A material refuses `OBJECT_SPACE_NORMAL_MAP` without a normal map.
 
 Both are data. A texture named as either must be `LINEAR` and `IGNORED`, as an alpha map must. Both are sampled at the same coordinate as `map`, so their transforms must agree with it. A material names one or the other, not both: three.js reads the normal map and ignores the bump map.
 

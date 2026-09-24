@@ -155,6 +155,7 @@ from materials.material import (
     NO_ATTENUATION,
     NO_DASH,
     NORMALS,
+    OBJECT_SPACE_NORMAL_MAP,
     PHYSICAL,
     Blending,
     Combine,
@@ -164,7 +165,15 @@ from materials.material import (
     Side,
 )
 from render.antialias import SUPERSAMPLE
-from render.cube_texture import FACE_COUNT, CubeTexture, cube_texture_of
+from render.cube_texture import (
+    FACE_COUNT,
+    Basis3,
+    CubeTexture,
+    cube_texture_of,
+    env_rotation,
+    equirect_uv,
+    reflection_level,
+)
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -217,6 +226,7 @@ from render.rasterizer import (
     LayerFactors,
     RasterVertex,
     ShadeMode,
+    TextureFrames,
     check_alpha_data_map,
     check_alpha_map,
     check_channel,
@@ -1355,6 +1365,9 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         -corner.normal_scale.x, -corner.normal_scale.y
     )
     turned.bump_scale = -corner.bump_scale
+    # An object-space normal map's normal is the mesh's, turned by its
+    # normal matrix, and three.js multiplies it by `faceDirection` too.
+    turned.frames.object_normal = _negated(corner.frames.object_normal)
     turned.layers.anisotropy = Vector2(
         -corner.layers.anisotropy.x, -corner.layers.anisotropy.y
     )
@@ -1764,10 +1777,13 @@ struct _Paint(ImplicitlyCopyable):
     var offset: PolygonOffset
     # The fog switch, the depth packing and the distance range.
     var shown: _Shown
+    # The frames the environment and the normal map are read in; see
+    # `_frames_of`.
+    var frames: TextureFrames
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
-        return _to_raster(
+        var corner = _to_raster(
             vertex,
             self.to_screen,
             self.map,
@@ -1788,6 +1804,8 @@ struct _Paint(ImplicitlyCopyable):
             state=self.state,
             shown=self.shown,
         )
+        corner.frames = self.frames
+        return corner^
 
     def emit(
         self,
@@ -2234,6 +2252,73 @@ def _resolved_env(
     return env
 
 
+def _env_intensity(scene: Scene, material: Material) -> Float32:
+    """Return what a physical surface's environment is multiplied by: the
+    scene's `environment_intensity` when the surface reflects the scene's
+    environment, as three.js's renderer sets `envMapIntensity` from
+    `scene.environmentIntensity`, and its own `env_map_intensity`
+    otherwise."""
+    if material.env_map == SCENE_ENVIRONMENT:
+        return scene.environment_intensity
+    return material.env_map_intensity
+
+
+def _negated(basis: Basis3) -> Basis3:
+    """Return a 3x3 matrix times minus one."""
+    return Basis3(
+        -basis.e0,
+        -basis.e1,
+        -basis.e2,
+        -basis.e3,
+        -basis.e4,
+        -basis.e5,
+        -basis.e6,
+        -basis.e7,
+        -basis.e8,
+    )
+
+
+def _frames_of(
+    scene: Scene, material: Material, world: Matrix4
+) raises -> TextureFrames:
+    """Return the frames a draw's environment and normal map are read in.
+
+    The env map's rotation, or the scene's `environment_rotation` when the
+    surface reflects the scene's environment, as three.js's renderer picks
+    `envMapRotation`; the material's refraction ratio and normal map type;
+    and, for an object-space normal map, the mesh's normal matrix into the
+    world, three.js's `normalMatrix` without the view.
+
+    Args:
+        scene: The scene, for its environment's rotation.
+        material: The draw's material.
+        world: The draw's world matrix.
+
+    Returns:
+        The frames.
+
+    Raises:
+        Error: If `Scene.validate_environment` refuses the scene's
+            settings, the rotation is refused by `env_rotation`, or an
+            object-space normal map's mesh has a world matrix that
+            flattens an axis.
+    """
+    scene.validate_environment()
+    var frames = TextureFrames()
+    var rotation = material.env_map_rotation
+    if material.env_map == SCENE_ENVIRONMENT:
+        rotation = scene.environment_rotation
+    frames.env_rotation = env_rotation(rotation)
+    frames.refraction_ratio = material.refraction_ratio
+    frames.normal_map_type = material.normal_map_type
+    if material.normal_map_type == OBJECT_SPACE_NORMAL_MAP:
+        ref e = Matrix3.normal_matrix(world).elements
+        frames.object_normal = Basis3(
+            e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8]
+        )
+    return frames^
+
+
 def _emit_sprite(
     mut corners: List[RasterVertex],
     assets: Assets,
@@ -2384,6 +2469,7 @@ def _emit_sprite(
         _draw_state(material, casters_only),
         _draw_offset(material, casters_only),
         _shown_of(material),
+        TextureFrames(),
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -2783,6 +2869,7 @@ def _emit_wide_line(
         _draw_state(material, False),
         _draw_offset(material, False),
         _shown_of(material),
+        TextureFrames(),
     )
     var no_planes = List[Plane]()
     for segment in range(segments):
@@ -3013,6 +3100,40 @@ def _set_backdrop(
     """
     var shown = color.encode()
     image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
+
+
+def _brightened(color: FloatColor, factor: Float32) -> FloatColor:
+    """Return a color's light times a factor, its alpha kept: three.js's
+    `texColor.rgb *= backgroundIntensity`."""
+    return FloatColor(
+        color.r * factor, color.g * factor, color.b * factor, color.a
+    )
+
+
+def _sky_seen(
+    sky: CubeTexture, direction: Vector3, blurriness: Float32
+) -> FloatColor:
+    """Return what a cube background shows in a direction: its faces, or
+    above a blurriness of zero the environment read at that roughness,
+    from its PMREM when it has one, as three.js's `backgroundCube` shader
+    reads `textureCubeUV` at `backgroundBlurriness`."""
+    if blurriness > 0:
+        return sky.sample_rough(direction, blurriness)
+    return sky.sample(direction)
+
+
+def _panorama_seen(
+    picture: Texture, direction: Vector3, blurriness: Float32
+) -> FloatColor:
+    """Return what a panorama background shows in a direction: the image
+    at `equirect_uv`, or above a blurriness of zero read down its chain at
+    `reflection_level`, the stand-in a cube with no PMREM takes."""
+    var at = equirect_uv(direction)
+    if blurriness > 0:
+        return picture.sample_level(
+            at.x, at.y, reflection_level(blurriness, picture.levels)
+        )
+    return picture.sample(at.x, at.y)
 
 
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:
@@ -3945,7 +4066,7 @@ struct Renderer(Movable):
             var physics = _Physics(
                 material.roughness,
                 material.metalness,
-                material.env_map_intensity,
+                _env_intensity(scene, material),
                 _checked_data_map(
                     assets, material.roughness_map, "A roughness map"
                 ),
@@ -4202,6 +4323,7 @@ struct Renderer(Movable):
                 _draw_state(material, casters_only),
                 _draw_offset(material, casters_only),
                 _shown_of(material),
+                _frames_of(scene, material, world),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -5950,13 +6072,22 @@ struct Renderer(Movable):
 
         A texture background is stretched over the viewport, as three.js
         draws one, and read at its full size through its own filter; its
-        transform is not applied. A cube background is read in the
+        transform is not applied. A texture with an equirectangular
+        mapping is not stretched: it is read at `equirect_uv` of each
+        pixel's direction, as a cube is. A cube background is read in the
         direction each pixel's ray leaves the camera along: the near and
         the far point of the ray are unprojected into *view* space through
         the inverse projection, and their difference is turned into the
         world by the camera's rotation alone. So any camera serves, a
         parallel one sees one direction everywhere, and moving a camera
         without turning it changes no pixel of the sky.
+
+        The direction is turned by `Scene.background_rotation` before it
+        is read. Above a `background_blurriness` of zero a cube is read at
+        that roughness, from its PMREM when it has one, and a panorama
+        down its chain; see `CubeTexture.sample_rough`. Every background
+        image is multiplied by `background_intensity` before it is
+        encoded, as three.js's shaders multiply it.
 
         Only `SHADE_TEXTURE` draws an image background: the other two
         modes ignore every texture, and a background is one. Under either
@@ -5972,13 +6103,17 @@ struct Renderer(Movable):
 
         Raises:
             Error: If the background is refused by `Background.validate`,
+                the scene by `Scene.validate_environment`, the background
                 names a texture or a cube texture that is not there, or
                 the camera's matrices cannot be built.
         """
         scene.background.validate()
+        scene.validate_environment()
         var backdrop = scene.background
         if not backdrop.is_image() or self.shading != SHADE_TEXTURE:
             return None
+        # three.js's `backgroundIntensity`, on every background image.
+        var shown = scene.background_intensity
         var image = Framebuffer(self.width, self.height, Color(0, 0, 0, 0))
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
@@ -5989,25 +6124,35 @@ struct Renderer(Movable):
             if backdrop.texture.value >= assets.textures.count():
                 raise Error("A background names a texture that is not there")
             ref picture = assets.textures.get(backdrop.texture)
-            for y in range(self.height):  # pragma: no branch
-                for x in range(self.width):  # pragma: no branch
-                    if not kept.contains_pixel(
-                        x, y, self.height
-                    ) or not viewport.contains_pixel(x, y, self.height):
-                        continue
-                    # Stretched over the viewport: the pixel's center as a
-                    # fraction of the rectangle, `v` counting up.
-                    var u = (Float32(x - viewport.x) + 0.5) / Float32(
-                        viewport.width
-                    )
-                    var v = 1 - (Float32(y - top) + 0.5) / Float32(
-                        viewport.height
-                    )
-                    _set_backdrop(image, x, y, picture.sample(u, v))
-            return image^
-        if backdrop.cube.value >= assets.cube_textures.count():
+            # A panorama is read by direction, as a cube is: three.js
+            # turns an equirectangular background into a cube first.
+            if not picture.mapping.is_equirectangular():
+                for y in range(self.height):  # pragma: no branch
+                    for x in range(self.width):  # pragma: no branch
+                        if not kept.contains_pixel(
+                            x, y, self.height
+                        ) or not viewport.contains_pixel(x, y, self.height):
+                            continue
+                        # Stretched over the viewport: the pixel's center
+                        # as a fraction of the rectangle, `v` counting up.
+                        var u = (Float32(x - viewport.x) + 0.5) / Float32(
+                            viewport.width
+                        )
+                        var v = 1 - (Float32(y - top) + 0.5) / Float32(
+                            viewport.height
+                        )
+                        _set_backdrop(
+                            image,
+                            x,
+                            y,
+                            _brightened(picture.sample(u, v), shown),
+                        )
+                return image^
+        elif backdrop.cube.value >= assets.cube_textures.count():
             raise Error("A background names a cube texture that is not there")
-        ref sky = assets.cube_textures.get(backdrop.cube)
+        # three.js's `backgroundRotation` and `backgroundBlurriness`.
+        var spin = env_rotation(scene.background_rotation)
+        var blur = scene.background_blurriness
         # From pixels back to the camera's own space, and only then out
         # into the world as a *direction*. Unprojecting through the
         # projection and the view together puts the near and the far point
@@ -6038,12 +6183,17 @@ struct Renderer(Movable):
                 )
                 var near = unproject.transform_point(Vector3(ndc_x, ndc_y, -1))
                 var far = unproject.transform_point(Vector3(ndc_x, ndc_y, 1))
-                _set_backdrop(
-                    image,
-                    x,
-                    y,
-                    sky.sample(to_world.transform_direction(far - near)),
-                )
+                var looked = spin.turn(to_world.transform_direction(far - near))
+                var seen: FloatColor
+                if backdrop.kind == TEXTURE_BACKGROUND:
+                    seen = _panorama_seen(
+                        assets.textures.get(backdrop.texture), looked, blur
+                    )
+                else:
+                    seen = _sky_seen(
+                        assets.cube_textures.get(backdrop.cube), looked, blur
+                    )
+                _set_backdrop(image, x, y, _brightened(seen, shown))
         return image^
 
     def render_cube(

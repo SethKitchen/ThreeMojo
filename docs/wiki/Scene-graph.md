@@ -211,7 +211,19 @@ A background is behind everything and claims no depth. A surface at any depth co
 
 A texture background is read at its full size through its own filter. Its transform is not applied, and its alpha is not read: three.js draws the plane opaque. A cube background turns as the camera turns and holds still as the camera moves. A parallel camera sees one direction everywhere. An image background is a texture, so only `SHADE_TEXTURE` draws it. The other two shading modes clear to the color.
 
-An equirectangular panorama becomes a sky or an environment through `cube_from_equirectangular`. three.js does the same for `EquirectangularReflectionMapping`. See [HDR images](Textures#hdr-images).
+A texture with an equirectangular mapping is not stretched. The renderer reads it by direction, as a sky. Name it as an environment through `cube_of_panorama`. See [An equirectangular environment or background](Textures#an-equirectangular-environment-or-background).
+
+The scene holds five more settings, as three.js's `Scene` does:
+
+| Field | three.js | Default | Meaning |
+|---|---|---|---|
+| `background_blurriness` | `backgroundBlurriness` | `0` | Above zero, a cube or a panorama background is read at this roughness, from zero to one. A cube reads its PMREM when it has one. |
+| `background_intensity` | `backgroundIntensity` | `1` | What every background image is multiplied by. |
+| `background_rotation` | `backgroundRotation` | no turn | An `Euler` that turns a cube or a panorama background. |
+| `environment_intensity` | `environmentIntensity` | `1` | What a physical surface multiplies the scene's environment by. |
+| `environment_rotation` | `environmentRotation` | no turn | An `Euler` that turns the scene's environment. |
+
+`validate_environment()` refuses a blurriness outside zero to one, a negative intensity, and a rotation that is not finite or has no valid order. The renderer asks it every frame. A blurred background is read from a PMREM, so call `prefilter_environments(scene, assets)` first. Without one, a cube reads down its chain instead.
 
 `Renderer.backdrop(scene, assets, camera)` returns the image background as the camera sees it, as an opaque `Framebuffer`, or none. `Renderer.render` paints it under the scene, and `GpuRenderer.draw` takes it, so both backends start a frame from the same bytes. See [Renderer](Renderer#what-render-does) and [GPU backend](GPU-backend).
 

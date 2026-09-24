@@ -742,7 +742,8 @@ def check_transform(
     json: String,
 ) raises:
     """Assert that the transform `json` names carries glTF coordinates
-    where three.js's matrix carries them, then flips `v`."""
+    where three.js's matrix carries them: every glTF texture has `flip_y`
+    off, so no flip follows."""
     var assets = Assets()
     var index = moved_map(json, assets)
     assert_true(index >= 0)
@@ -764,7 +765,7 @@ def check_transform(
             matrix.get(1, 0) * u + matrix.get(1, 1) * v + matrix.get(1, 2)
         )
         assert_almost_equal(got_u, want_u, atol=1e-5)
-        assert_almost_equal(got_v, 1 - want_v, atol=1e-5)
+        assert_almost_equal(got_v, want_v, atol=1e-5)
 
 
 def test_a_texture_transform_moves_turns_and_scales_the_map() raises:

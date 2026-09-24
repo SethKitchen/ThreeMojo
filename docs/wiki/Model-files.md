@@ -328,7 +328,9 @@ The model says what went where, by the file's own indices.
 
 A primitive without a material draws with one default `standard_material`. A primitive with `COLOR_0` draws with a copy of its material that has `vertex_colors` on, one copy per material. An accessor without a buffer view reads as zeros. A normalized integer accessor divides by its largest value, as the specification has it.
 
-glTF's texture coordinates run down from an image's top left. This renderer's `v` runs up from the bottom. Each glTF texture is given a `repeat` of `(1, -1)` and an `offset` of `(0, 1)`, which flips `v`, as three.js sets `flipY = false`. The geometry's coordinates are kept as the file has them.
+glTF's texture coordinates run down from an image's top left. Each glTF texture has `flip_y` off, as three.js sets `flipY = false`. So `v` reads down from the first row, and the geometry's coordinates and any `KHR_texture_transform` are kept as the file has them. The writer writes a texture with `flip_y` upside down, as three.js's `GLTFExporter` writes a `flipY` texture, and one without it as it is.
+
+A texture takes its sampler's `wrapS`, `wrapT`, `magFilter` and `minFilter`, as three.js's `GLTFLoader` reads them. A mipmap `minFilter` builds the chain. The reader refuses a mipmap `magFilter` and a filter that is none of glTF's six. The writer writes the four, and writes a mipmap `minFilter` on a texture without a chain as the filter it reads inside a level.
 
 ### Occlusion
 

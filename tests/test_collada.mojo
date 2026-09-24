@@ -754,10 +754,10 @@ def test_textures() raises:
     assert_equal(built.normal_map, model.textures[2])
     ref color = assets.textures.get(built.map)
     assert_equal(color.color_space, SRGB)
-    assert_equal(color.wrap, REPEAT)
+    assert_equal(color.wrap_s, REPEAT)
     assert_equal(color.alpha, COVERAGE)
     ref glow = assets.textures.get(built.emissive_map)
-    assert_equal(glow.wrap, CLAMP)
+    assert_equal(glow.wrap_s, CLAMP)
     assert_equal(glow.alpha, IGNORED)
     assert_almost_equal(glow.repeat.x, 2)
     assert_almost_equal(glow.repeat.y, 1)
@@ -765,7 +765,7 @@ def test_textures() raises:
     assert_almost_equal(glow.offset.y, 0.25)
     ref bump = assets.textures.get(built.normal_map)
     assert_equal(bump.color_space, LINEAR)
-    assert_equal(bump.wrap, REPEAT)
+    assert_equal(bump.wrap_s, REPEAT)
     # A number turns wrapping on when it is not zero; the extra `bump`
     # replaces the parameter's; an image the file does not have is left out.
     var other = material_of(

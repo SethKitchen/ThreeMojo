@@ -76,9 +76,12 @@ from core.object3d import NO_PARENT, NodeId, Object3D, facing, scale_of
 from lights.light import Light
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
+from math.euler import XYZ, Euler
 from math.vector3 import Vector3
+from render.cube_texture import check_rotation
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
-from units.si import Length, METER
+from std.math import isfinite
+from units.si import RADIAN, Angle, Length, METER
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
 from objects.line_segments2 import LineSegments2
@@ -87,6 +90,9 @@ from objects.mesh import Mesh
 from objects.points import Points
 from objects.skinned_mesh import SkinnedMesh
 from objects.sprite import Sprite
+
+# No turn at all: the angle an environment rotation starts at.
+comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
 struct _Links(Movable):
@@ -183,6 +189,20 @@ struct Scene(Movable):
     # `SCENE_ENVIRONMENT`, three.js's `scene.environment`, or
     # `NO_CUBE_TEXTURE` for none. Public and assignable for the same reason.
     var environment: CubeTextureId
+    # How blurred a cube or panorama background is, from zero to one,
+    # three.js's `backgroundBlurriness`: above zero the background is read
+    # from its PMREM at this roughness. What it is multiplied by,
+    # `backgroundIntensity`, and how it is turned, `backgroundRotation`.
+    # Checked by `validate_environment`.
+    var background_blurriness: Float32
+    var background_intensity: Float32
+    var background_rotation: Euler
+    # What a standard or physical surface that reflects the scene's
+    # environment multiplies it by, three.js's `environmentIntensity`, in
+    # place of its own `env_map_intensity`, and how it is turned,
+    # `environmentRotation`, in place of its own `env_map_rotation`.
+    var environment_intensity: Float32
+    var environment_rotation: Euler
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -206,8 +226,39 @@ struct Scene(Movable):
         self.fog = no_fog()
         self.background = no_background()
         self.environment = NO_CUBE_TEXTURE
+        self.background_blurriness = 0
+        self.background_intensity = 1
+        self.background_rotation = Euler(
+            ZERO_ANGLE, ZERO_ANGLE, ZERO_ANGLE, XYZ
+        )
+        self.environment_intensity = 1
+        self.environment_rotation = Euler(
+            ZERO_ANGLE, ZERO_ANGLE, ZERO_ANGLE, XYZ
+        )
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
+
+    def validate_environment(self) raises:
+        """Refuse a background or environment setting the renderer could
+        not use. The fields are open, so the renderer asks this every
+        frame, as it asks `Background.validate`.
+
+        Raises:
+            Error: If `background_blurriness` is outside zero to one or not
+                finite, either intensity is negative or not finite, or
+                either rotation is refused by `check_rotation`.
+        """
+        var blur = self.background_blurriness
+        if not isfinite(blur) or blur < 0 or blur > 1:
+            raise Error("A background blurriness must be between zero and one")
+        var shown = self.background_intensity
+        if not isfinite(shown) or shown < 0:
+            raise Error("A background intensity cannot be negative")
+        var lit = self.environment_intensity
+        if not isfinite(lit) or lit < 0:
+            raise Error("An environment intensity cannot be negative")
+        check_rotation(self.background_rotation, "A background rotation")
+        check_rotation(self.environment_rotation, "An environment rotation")
 
     def count(self) -> Int:
         """Return how many nodes the scene holds, removed ones included.

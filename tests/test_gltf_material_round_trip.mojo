@@ -37,10 +37,20 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
+    BILINEAR,
+    CLAMP,
     COVERAGE,
     IGNORED,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
+    MIRROR,
+    NEAREST,
+    NEAREST_MIPMAP_LINEAR,
+    NEAREST_MIPMAP_NEAREST,
+    REPEAT,
     UV_CHANNEL_0,
     UV_CHANNEL_1,
+    Filter,
     Texture,
 )
 from render.texture_store import TextureId
@@ -254,12 +264,13 @@ def test_an_ao_map_on_the_first_set_writes_no_set_and_no_strength() raises:
 def check_same_sampling(got: Texture, expected: Texture) raises:
     """Assert a texture read back samples where the original samples.
 
-    An original whose `repeat.y` is not negative is written upside down,
-    so the texture read back holds its rows the other way up and its
-    coordinate `v` is the original's `1 - v`. Any other original is
-    written as it is and read back the same.
+    An original with `flip_y` is written upside down, so the texture read
+    back holds its rows the other way up and reads them from the top, at
+    the same coordinates. Any other original is written as it is and read
+    back the same.
     """
-    var flipped = expected.repeat.y >= 0
+    var flipped = expected.flip_y
+    assert_false(got.flip_y)
     var mine = got.uv_transform()
     var theirs = expected.uv_transform()
     var corners: List[Float32] = [0, 0, 1, 0, 0.25, 0.75, 1, 1]
@@ -268,9 +279,7 @@ def check_same_sampling(got: Texture, expected: Texture) raises:
         var want = theirs.transform_point(point)
         var have = mine.transform_point(point)
         assert_almost_equal(have.x, want.x, atol=TOLERANCE)
-        assert_almost_equal(
-            have.y, 1 - want.y if flipped else want.y, atol=TOLERANCE
-        )
+        assert_almost_equal(have.y, want.y, atol=TOLERANCE)
     var row = expected.width * 4
     for y in range(expected.height):
         var source = expected.height - 1 - y if flipped else y
@@ -405,13 +414,12 @@ def test_a_transform_names_only_what_moves() raises:
     tiled.repeat = Vector2(2, 1)
     parts = transform_of(tiled)
     assert_true(parts[3])
-    # A texture whose `v` already runs down is written as it is, and its
-    # transform folds the flip in: here that is a move of one in `v`.
+    # A texture whose `v` already runs down is written as it is, with no
+    # transform: `flip_y` is what says which way `v` reads the rows.
     var mirrored = image(2)
-    mirrored.repeat = Vector2(1, -1)
+    mirrored.flip_y = False
     parts = transform_of(mirrored)
-    assert_true(parts[0] and parts[1])
-    assert_false(parts[2] or parts[3])
+    assert_false(parts[0])
     mirrored.repeat = Vector2(1, -2)
     parts = transform_of(mirrored)
     assert_true(parts[3])
@@ -421,9 +429,9 @@ def test_the_placement_folds_the_flip_in() raises:
     var upright = image(4)
     var plain = GltfPlacement.of(upright)
     assert_false(plain.moves())
+    # `flip_y` decides how the image is written, not the transform.
     var flipped = image(4)
-    flipped.repeat = Vector2(1, -1)
-    flipped.offset = Vector2(0, 1)
+    flipped.flip_y = False
     assert_true(GltfPlacement.of(flipped) == plain)
     flipped.channel = UV_CHANNEL_1
     assert_false(GltfPlacement.of(flipped) == plain)
@@ -911,6 +919,49 @@ def test_a_layer_is_written_only_when_its_amount_is_not_zero() raises:
         )
     )
     assert_equal(len(only), 0)
+
+
+def test_a_sampler_keeps_both_wraps_and_both_filters() raises:
+    # three.js's `processSampler` writes `wrapS`, `wrapT`, `magFilter` and
+    # `minFilter`, and `GLTFLoader` reads the four back.
+    var filters: List[Filter] = [
+        NEAREST_MIPMAP_NEAREST,
+        LINEAR_MIPMAP_NEAREST,
+        NEAREST_MIPMAP_LINEAR,
+        LINEAR_MIPMAP_LINEAR,
+    ]
+    for index in range(len(filters)):
+        var assets = Assets()
+        var original = image(index + 1)
+        original.wrap_s = REPEAT
+        original.wrap_t = MIRROR
+        original.mag_filter = NEAREST
+        original.min_filter = filters[index]
+        var map = assets.textures.add(Texture(copy=original))
+        var trip = Trip(
+            one_mesh(assets, standard_material(Color(9, 9, 9), map=map)),
+            assets,
+        )
+        ref back = trip.assets.textures.get(trip.material().map)
+        assert_equal(back.wrap_s, REPEAT)
+        assert_equal(back.wrap_t, MIRROR)
+        assert_equal(back.mag_filter, NEAREST)
+        assert_equal(back.min_filter, filters[index])
+        assert_true(back.levels > 1)
+    # A mipmap filter with no chain to read is written as the filter it
+    # reads inside a level.
+    var assets = Assets()
+    var flat = Texture(3, 2, List[UInt8](length=24, fill=120), mipmapped=False)
+    flat.min_filter = LINEAR_MIPMAP_LINEAR
+    flat.set_wrap(CLAMP)
+    var map = assets.textures.add(Texture(copy=flat))
+    var trip = Trip(
+        one_mesh(assets, standard_material(Color(9, 9, 9), map=map)), assets
+    )
+    ref back = trip.assets.textures.get(trip.material().map)
+    assert_equal(back.min_filter, BILINEAR)
+    assert_equal(back.levels, 1)
+    assert_equal(back.wrap_t, CLAMP)
 
 
 def main() raises:

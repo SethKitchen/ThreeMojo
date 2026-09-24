@@ -41,10 +41,15 @@ the channel `UV_CHANNEL_1`, so the renderer samples it at `uv1`, and a
 other maps of the material say, as three.js's `assignTexture` does.
 
 **Texture coordinates run down in glTF.** `(0, 0)` is an image's top
-left, where this renderer's `v` runs up from the bottom. three.js answers
-with `flipY = false` on every glTF texture; this answers with the texture's
-own `repeat` and `offset` set to flip `v`, so the geometry's coordinates
-are kept as the file has them.
+left, where an image texture's `v` runs up from the bottom. three.js
+answers with `flipY = false` on every glTF texture, and so does this: each
+texture's `flip_y` is off, so `v` reads down from the first row, and the
+geometry's coordinates and any `KHR_texture_transform` are kept as the file
+has them.
+
+**Samplers.** A texture takes its sampler's `wrapS` and `wrapT` and its
+`magFilter` and `minFilter`, as three.js's `GLTFLoader` reads them; see
+`GltfSampler`. A mipmap `minFilter` builds the chain.
 
 **Skins, morph targets and animations.** A node with a `skin` draws each
 primitive as a `SkinnedMesh`, its skeleton made of the joints' nodes and
@@ -197,6 +202,10 @@ from render.texture import (
     MIRROR,
     NEAREST,
     REPEAT,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
+    NEAREST_MIPMAP_LINEAR,
+    NEAREST_MIPMAP_NEAREST,
     UV_CHANNEL_1,
     Filter,
     Texture,
@@ -237,7 +246,82 @@ comptime FILTER_NEAREST = 9728
 comptime FILTER_LINEAR = 9729
 # The four minification filters that read a mipmap chain.
 comptime FILTER_NEAREST_MIPMAP_NEAREST = 9984
+comptime FILTER_LINEAR_MIPMAP_NEAREST = 9985
+comptime FILTER_NEAREST_MIPMAP_LINEAR = 9986
 comptime FILTER_LINEAR_MIPMAP_LINEAR = 9987
+
+
+@fieldwise_init
+struct GltfSampler(ImplicitlyCopyable):
+    """A glTF sampler as a texture reads it: its two wraps and its two
+    filters, three.js's `wrapS`, `wrapT`, `magFilter` and `minFilter`.
+
+    What `read_gltf` gives every texture of the sampler, and what the
+    exporter writes one from.
+    """
+
+    var wrap_s: Wrap
+    var wrap_t: Wrap
+    var mag_filter: Filter
+    var min_filter: Filter
+
+    def __init__(out self):
+        """Create glTF's sampler when a texture names none: repeated both
+        ways, linear, and trilinear down a chain, as three.js reads it."""
+        self.wrap_s = REPEAT
+        self.wrap_t = REPEAT
+        self.mag_filter = BILINEAR
+        self.min_filter = LINEAR_MIPMAP_LINEAR
+
+
+def gl_filter(filter: Filter) -> Int:
+    """Return a filter as glTF's GL constant.
+
+    Args:
+        filter: Any of the six named filters.
+
+    Returns:
+        The constant: `FILTER_NEAREST` for `NEAREST`, and so on.
+    """
+    if filter == NEAREST:
+        return FILTER_NEAREST
+    if filter == BILINEAR:
+        return FILTER_LINEAR
+    if filter == NEAREST_MIPMAP_NEAREST:
+        return FILTER_NEAREST_MIPMAP_NEAREST
+    if filter == LINEAR_MIPMAP_NEAREST:
+        return FILTER_LINEAR_MIPMAP_NEAREST
+    if filter == NEAREST_MIPMAP_LINEAR:
+        return FILTER_NEAREST_MIPMAP_LINEAR
+    return FILTER_LINEAR_MIPMAP_LINEAR
+
+
+def filter_of_gl(code: Int) raises -> Filter:
+    """Return a glTF filter constant as a filter.
+
+    Args:
+        code: One of glTF's six filter constants.
+
+    Returns:
+        The filter.
+
+    Raises:
+        Error: If the constant is none of the six.
+    """
+    if code == FILTER_NEAREST:
+        return NEAREST
+    if code == FILTER_LINEAR:
+        return BILINEAR
+    if code == FILTER_NEAREST_MIPMAP_NEAREST:
+        return NEAREST_MIPMAP_NEAREST
+    if code == FILTER_LINEAR_MIPMAP_NEAREST:
+        return LINEAR_MIPMAP_NEAREST
+    if code == FILTER_NEAREST_MIPMAP_LINEAR:
+        return NEAREST_MIPMAP_LINEAR
+    if code == FILTER_LINEAR_MIPMAP_LINEAR:
+        return LINEAR_MIPMAP_LINEAR
+    raise Error("glTF: a filter that is not known")
+
 
 # What a material's `alphaCutoff` is when `MASK` names none.
 comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
@@ -765,9 +849,7 @@ struct _Loader(Movable):
     # Each glTF texture's image index and sampler settings, resolved once
     # and read twice when both a color and a data map ask for it.
     var texture_images: List[Int]
-    var texture_wraps: List[Wrap]
-    var texture_filters: List[Filter]
-    var texture_mipmapped: List[Bool]
+    var texture_samplers: List[GltfSampler]
     # Each glTF texture read linear with its alpha kept, as a sheen
     # roughness texture is, or `NO_TEXTURE` until one asks for it.
     var alpha_textures: List[TextureId]
@@ -800,9 +882,7 @@ struct _Loader(Movable):
         self.tinted_materials = List[MaterialId]()
         self.has_tinted = List[Bool]()
         self.texture_images = List[Int]()
-        self.texture_wraps = List[Wrap]()
-        self.texture_filters = List[Filter]()
-        self.texture_mipmapped = List[Bool]()
+        self.texture_samplers = List[GltfSampler]()
         self.alpha_textures = List[TextureId]()
         self.morph_counts = List[Int]()
         self.node_meshes = List[List[Int]]()
@@ -1151,26 +1231,30 @@ struct _Loader(Movable):
             var image = self.required_integer(texture, "source")
             if image < 0 or image >= self.count("images"):
                 raise Error("glTF: a texture names an image that is not there")
-            var wrap = REPEAT
-            var filter = BILINEAR
-            var mipmapped = True
+            # glTF's defaults, three.js's `GLTFLoader` reads them: repeat
+            # both ways, linear, and trilinear down a chain.
+            var sampling = GltfSampler()
             var sampler_index = self.integer(texture, "sampler", -1)
             if sampler_index >= 0:
                 var sampler = self.entry("samplers", sampler_index)
-                wrap = _wrap_of(self.integer(sampler, "wrapS", WRAP_REPEAT))
-                if (
-                    self.integer(sampler, "magFilter", FILTER_LINEAR)
-                    == FILTER_NEAREST
-                ):
-                    filter = NEAREST
-                var minifier = self.integer(
-                    sampler, "minFilter", FILTER_LINEAR_MIPMAP_LINEAR
+                sampling.wrap_s = _wrap_of(
+                    self.integer(sampler, "wrapS", WRAP_REPEAT)
                 )
-                mipmapped = minifier >= FILTER_NEAREST_MIPMAP_NEAREST
+                sampling.wrap_t = _wrap_of(
+                    self.integer(sampler, "wrapT", WRAP_REPEAT)
+                )
+                sampling.mag_filter = filter_of_gl(
+                    self.integer(sampler, "magFilter", FILTER_LINEAR)
+                )
+                if not sampling.mag_filter.magnifies():
+                    raise Error("glTF: a magFilter must be NEAREST or LINEAR")
+                sampling.min_filter = filter_of_gl(
+                    self.integer(
+                        sampler, "minFilter", FILTER_LINEAR_MIPMAP_LINEAR
+                    )
+                )
             self.texture_images.append(image)
-            self.texture_wraps.append(wrap)
-            self.texture_filters.append(filter)
-            self.texture_mipmapped.append(mipmapped)
+            self.texture_samplers.append(sampling)
             self.alpha_textures.append(NO_TEXTURE)
             self.model.color_textures.append(NO_TEXTURE)
             self.model.data_textures.append(NO_TEXTURE)
@@ -1224,18 +1308,20 @@ struct _Loader(Movable):
         # normal, occlusion -- and its alpha is not coverage: the renderer
         # refuses a data map that reads alpha as coverage, so one built
         # with the default could not be drawn.
+        ref sampling = self.texture_samplers[index]
         var built = texture_from(
             image,
-            self.texture_wraps[index],
-            self.texture_filters[index],
+            sampling.wrap_s,
+            sampling.mag_filter,
             space,
-            self.texture_mipmapped[index],
+            sampling.min_filter.is_mipmap(),
             alpha=IGNORED if space == LINEAR and not keep_alpha else COVERAGE,
         )
-        # glTF's `v` runs down from the top: flipped here, as three.js
-        # flips it with `flipY = false`.
-        built.repeat = Vector2(1, -1)
-        built.offset = Vector2(0, 1)
+        built.wrap_t = sampling.wrap_t
+        built.min_filter = sampling.min_filter
+        # glTF's `v` runs down from the top, as the image's rows do: three.js
+        # reads it with `flipY = false`, and so does this.
+        built.flip_y = False
         var id = assets.textures.add(built^)
         if keep_alpha:
             self.alpha_textures[index] = id
@@ -1301,9 +1387,9 @@ struct _Loader(Movable):
 
         A `KHR_texture_transform` that moves, turns or scales it makes a
         copy of the texture, as three.js's `GLTFTextureTransformExtension`
-        clones it. The copy's transform is the file's followed by the
-        flip of `v` every glTF texture has here: `offset` `(x, 1 - y)`,
-        `repeat` `(x, -y)`, and the `rotation` as it is. A reference that
+        clones it. The copy's transform is the file's, as three.js's
+        `offset`, `repeat` and `rotation`: every glTF texture has
+        `flip_y` off, so glTF's coordinates need no flip. A reference that
         reads the second set of coordinates makes a copy whose `channel`
         is `UV_CHANNEL_1`, as three.js's `assignTexture` clones one. Each
         map keeps its own transform and channel, as in three.js.
@@ -1331,8 +1417,8 @@ struct _Loader(Movable):
         if len(scale) == 0:
             scale = [1, 1]
         var moved = Texture(copy=assets.textures.get(id))
-        moved.offset = Vector2(offset[0], 1 - offset[1])
-        moved.repeat = Vector2(scale[0], -scale[1])
+        moved.offset = Vector2(offset[0], offset[1])
+        moved.repeat = Vector2(scale[0], scale[1])
         moved.rotation = Angle(self.number(transform, "rotation", 0), RADIAN)
         return assets.textures.add(moved^)
 

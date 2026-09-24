@@ -157,6 +157,8 @@ def test_a_block_compressed_file_decodes_each_level() raises:
     assert_false(container.premultiplied)
     var top = container.texture()
     assert_equal(top.color_space, SRGB)
+    # three.js's `KTX2Loader` makes textures with `flipY` off.
+    assert_false(top.flip_y)
     assert_equal(top.texel(0, 0).r, UInt8(255))
     assert_equal(top.texel(7, 3).b, UInt8(255))
     var small = container.texture(level=1)

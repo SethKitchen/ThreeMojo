@@ -395,7 +395,7 @@ def _check_modes(
         raise Error(
             "A volume texture's wrap modes must be REPEAT, CLAMP or MIRROR"
         )
-    if not filter.is_valid():
+    if not filter.magnifies():
         raise Error("A volume texture's filter must be NEAREST or BILINEAR")
     if not space.is_decodable():
         raise Error(
