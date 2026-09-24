@@ -1922,7 +1922,7 @@ struct _Loader(Movable):
         """Return an attribute's numbers: from the Draco data when the
         primitive's `KHR_draco_mesh_compression` names it, and from its
         accessor otherwise."""
-        if draco is not None:
+        if Bool(draco):
             ref found = draco.value()
             for slot in range(len(found.names)):
                 if found.names[slot] == name:
@@ -2030,7 +2030,7 @@ struct _Loader(Movable):
         self.read_targets(primitive, geometry, len(positions[0]))
         var indices = self.integer(primitive, "indices", -1)
         # three.js keeps a Draco mesh's own triangles over the accessor's.
-        if draco is not None and (
+        if Bool(draco) and (
             draco.value().geometry.geometry_type == DRACO_TRIANGULAR_MESH
         ):
             geometry.set_index(draco.value().geometry.faces.copy())

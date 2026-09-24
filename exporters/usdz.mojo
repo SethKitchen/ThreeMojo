@@ -397,9 +397,7 @@ def usda_geometry(geometry: BufferGeometry) raises -> String:
             threes.append("3")
         indices.append(String(geometry.index[i] if indexed else i))
     mesh.add_property("int[] faceVertexCounts = [" + ", ".join(threes) + "]")
-    mesh.add_property(
-        "int[] faceVertexIndices = [" + ", ".join(indices) + "]"
-    )
+    mesh.add_property("int[] faceVertexIndices = [" + ", ".join(indices) + "]")
     var normals: String
     if geometry.has_attribute(String(NORMAL)):
         normals = _vector3s(geometry.clone_attribute(String(NORMAL)))
@@ -491,9 +489,7 @@ struct _Exporter(Movable):
         """Return three.js's `buildXform`."""
         var out = _UsdNode(self.name(node, name, "Object"), "Xform")
         out.add_property("matrix4d xformOp:transform = " + _matrix(matrix))
-        out.add_property(
-            'uniform token[] xformOpOrder = ["xformOp:transform"]'
-        )
+        out.add_property('uniform token[] xformOpOrder = ["xformOp:transform"]')
         return out^
 
     def mesh(
@@ -544,9 +540,7 @@ struct _Exporter(Movable):
         """Return the transform, projection and clipping of a camera."""
         var out = _UsdNode(self.name(node, name, "Camera"), "Camera")
         out.add_property("matrix4d xformOp:transform = " + _matrix(matrix))
-        out.add_property(
-            'uniform token[] xformOpOrder = ["xformOp:transform"]'
-        )
+        out.add_property('uniform token[] xformOpOrder = ["xformOp:transform"]')
         out.add_property('token projection = "' + projection + '"')
         out.add_property(
             "float2 clippingRange = ("
@@ -665,9 +659,7 @@ struct _Exporter(Movable):
             ox += sx * rx
             oy += (1 - cy) * ry
         var reader = _UsdNode("PrimvarReader_" + map_type, "Shader")
-        reader.add_property(
-            'uniform token info:id = "UsdPrimvarReader_float2"'
-        )
+        reader.add_property('uniform token info:id = "UsdPrimvarReader_float2"')
         reader.add_property("float2 inputs:fallback = (0.0, 0.0)")
         reader.add_property('token inputs:varname = "' + uv + '"')
         reader.add_property("float2 outputs:result")
@@ -790,8 +782,7 @@ struct _Exporter(Movable):
                     "float inputs:opacity.connect = " + texture + "a>"
                 )
                 surface.add_property(
-                    "float inputs:opacityThreshold = "
-                    + _f(material.alpha_test)
+                    "float inputs:opacityThreshold = " + _f(material.alpha_test)
                 )
             var c = _channels(material.color)
             self.texture_nodes(
@@ -1026,7 +1017,7 @@ def _build(
             var still = Matrix4()
             for m in carried:
                 var item = exporter.mesh(child, "", still, m, scene, assets)
-                if item is not None:
+                if Bool(item):
                     group.add_child(item.value())
             for i in perspective:
                 group.add_child(
@@ -1041,7 +1032,7 @@ def _build(
                     )
                 )
             out = group^
-        if out is not None:
+        if Bool(out):
             var built = out.take()
             _build(exporter, built, child, scene, assets, cameras, meshes)
             parent.add_child(built)
@@ -1113,9 +1104,7 @@ def usdz_files(
     files.add("model.usda", List[UInt8](model.as_bytes()))
     for i in range(len(exporter.geometry_ids)):
         files.add(
-            "geometries/Geometry_"
-            + String(exporter.geometry_ids[i])
-            + ".usda",
+            "geometries/Geometry_" + String(exporter.geometry_ids[i]) + ".usda",
             List[UInt8](exporter.geometry_files[i].as_bytes()),
         )
     for id in exporter.textures:

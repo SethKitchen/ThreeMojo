@@ -930,7 +930,7 @@ struct PredictionScheme(Copyable, Movable):
             Error: If the prediction runs out of data or its numbers
                 overflow, as Draco refuses them.
         """
-        if mesh is None:
+        if not Bool(mesh):
             self._difference(values, components)
             return
         var data = mesh.value().copy()
@@ -977,7 +977,7 @@ struct PredictionScheme(Copyable, Movable):
             var found = List[List[Int]]()
             if self.method == DRACO_PARALLELOGRAM:
                 var one = _parallelogram(p, start, data, values, components)
-                if one is not None:
+                if Bool(one):
                     found.append(one.value().copy())
             elif self.method == DRACO_MULTI_PARALLELOGRAM:
                 var corner = start
@@ -985,7 +985,7 @@ struct PredictionScheme(Copyable, Movable):
                     var one = _parallelogram(
                         p, corner, data, values, components
                     )
-                    if one is not None:
+                    if Bool(one):
                         found.append(one.value().copy())
                     corner = table.swing_right(corner)
                     if corner == start:
@@ -1034,7 +1034,7 @@ struct PredictionScheme(Copyable, Movable):
         var first_pass = True
         while corner != NONE:
             var one = _parallelogram(p, corner, data, values, components)
-            if one is not None:
+            if Bool(one):
                 found.append(one.value().copy())
                 if len(found) == 4:
                     break

@@ -655,7 +655,7 @@ struct _Decoder(Movable):
             scheme = self._scheme(method, transform, coding, components)
         var positions: Optional[DracoPortable] = None
         var position_map = List[Int]()
-        if scheme is not None and scheme.value().needs_positions():
+        if Bool(scheme) and scheme.value().needs_positions():
             var parent = self.geometry.named_attribute(DRACO_POSITION)
             draco_require(parent != NONE, "a prediction needs positions")
             draco_require(
@@ -680,13 +680,13 @@ struct _Decoder(Movable):
             for _ in range(count):  # pragma: no branch
                 values.append(self.buffer.read_unsigned(size))
         var positive = False
-        if scheme is not None:
+        if Bool(scheme):
             positive = scheme.value().transform.positive()
         if not positive:
             # There are values here. The loop always runs.
             for k in range(count):  # pragma: no branch
                 values[k] = symbol_to_signed(values[k])
-        if scheme is not None:
+        if Bool(scheme):
             var edges = 0
             if self.edgebreaker():
                 edges = self.connectivity.value().table.corners()
