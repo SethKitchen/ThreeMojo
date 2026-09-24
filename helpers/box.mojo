@@ -48,6 +48,24 @@ def box_helper(box: Box3) raises -> BufferGeometry:
     """
     if box.is_empty():
         raise Error("A box helper needs a box that holds something")
+    var positions = List[Float32]()
+    append_box_edges(positions, box)
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
+    return geometry^
+
+
+def append_box_edges(mut positions: List[Float32], box: Box3):
+    """Append the twelve edges of `box` to `positions`, as twenty-four
+    points of three floats: the far square, the near square, then the four
+    edges joining them, in three.js's order.
+
+    `box_helper` and `helpers.octree.octree_helper` both draw boxes so.
+
+    Args:
+        positions: The floats to append to.
+        box: The box. Its corners are read as they are, empty or not.
+    """
     var lower = box.min
     var upper = box.max
     # three.js's eight corners, in its numbering.
@@ -88,12 +106,8 @@ def box_helper(box: Box3) raises -> BufferGeometry:
         3,
         7,
     ]
-    var positions = List[Float32]()
     for index in range(len(edges)):  # pragma: no branch
         var corner = corners[edges[index]]
         positions.append(corner.x)
         positions.append(corner.y)
         positions.append(corner.z)
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    return geometry^

@@ -72,6 +72,7 @@ An `Octree` sorts triangles into nested boxes. A game builds it from a level onc
 | `ray_triangles`, `sphere_triangles`, `capsule_triangles` | The triangles a shape can reach, each once. |
 | `triangles_per_leaf`, `max_level` | Eight triangles to a box, and sixteen levels, by default. |
 | `layers` | Which layers `from_graph_node` reads. |
+| `boxes()` | The box of every node below the root, each box before the boxes in it. The [octree helper](Helpers#octreehelper) draws them. |
 | `clear()` | Empty the tree. |
 
 `triangle_capsule_intersect`, `triangle_sphere_intersect` and `box_intersects_triangle` answer for one triangle. A contact gives the push direction, the point met and the depth.

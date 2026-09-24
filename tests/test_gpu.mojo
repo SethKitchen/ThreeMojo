@@ -12273,3 +12273,128 @@ def test_both_backends_read_an_object_space_normal_map_alike() raises:
                 "the triangles drew nothing",
             )
             assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- helpers drawn as meshes --------------------------------------------------
+
+from animation.keyframe_track import LightIndex
+from geometries.box import box
+from helpers.light_probe import LightProbeHelper
+from helpers.shadow_map_viewer import ShadowMapViewer
+from helpers.texture import texture_helper
+from render.target import RenderTarget as HudTarget
+
+
+def test_both_backends_draw_the_texture_and_probe_helpers_alike() raises:
+    # A stack of a volume's slices, translucent and baked to float maps,
+    # beside a light probe's sphere, which runs three.js's shader.
+    if skipped_for_lack_of_a_gpu("both backends draw the texture helpers"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var texels = List[UInt8]()
+    for z in range(3):
+        for y in range(4):
+            for x in range(4):
+                texels.append(UInt8(40 + 60 * x))
+                texels.append(UInt8(30 + 50 * y))
+                texels.append(UInt8(60 + 80 * z))
+                texels.append(255)
+    var volume = assets.data_3d_textures.add(
+        Data3DTexture(VolumeImage.of_bytes(4, 4, 3, texels^), filter=BILINEAR)
+    )
+    var stack = texture_helper(volume, assets)
+    var sh = SphericalHarmonics3()
+    sh.set_coefficient(0, Vector3(0.6, 0.5, 0.4))
+    sh.set_coefficient(1, Vector3(0.2, 0.1, 0.0))
+    sh.set_coefficient(5, Vector3(0.0, 0.1, 0.2))
+    var probe = LightProbeHelper(
+        light_probe(sh, 1.5), assets, Length(0.5, METER)
+    )
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.6, 0, 0)
+    left.set_euler(Angle(20.0, DEGREE), Angle(30.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.8, 0, 0)
+    var right_node = scene.add(right^)
+    scene.update()
+    stack.add_to(scene, left_node)
+    scene.add_mesh(probe.mesh(right_node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    assert_true(count_background(cpu, BACKGROUND) < 48 * 36, "nothing drawn")
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_the_shadow_map_viewer_alike() raises:
+    # The viewer's plane, drawn inside its rectangle by the scissor.
+    if skipped_for_lack_of_a_gpu("both backends draw the shadow map viewer"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0.5, 4, 0.2)
+    var lamp_node = scene.add(lamp^)
+    var block = scene.add(Object3D())
+    scene.update()
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(
+                box(Length(1.0, METER), Length(1.0, METER), Length(1.0, METER))
+            ),
+            assets.materials.add(Material(Color(200, 200, 200))),
+            block,
+            cast_shadow=True,
+        )
+    )
+    var sun = directional_light(Color(255, 255, 255), lamp_node)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 32
+    scene.add_light(sun)
+    var viewer = ShadowMapViewer(LightIndex(0))
+    viewer.x = 6
+    viewer.y = 3
+    viewer.width = 28
+    viewer.height = 24
+    var target = HudTarget(48, 36, BACKGROUND)
+    viewer.render(renderer, target, scene, assets)
+    var cpu = target.resolve(1, renderer.tone_curve(), 1)
+    assert_true(count_background(cpu, BACKGROUND) < 48 * 36, "nothing drawn")
+    var hud = viewer.hud(renderer, scene, assets)
+    var frame = renderer.prepare_frame(hud.scene, hud.assets, hud.camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(hud.assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        lines=frame.segments,
+        draws=frame.draws,
+        scissor=viewer.rect(48, 36),
+        points=frame.points,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)

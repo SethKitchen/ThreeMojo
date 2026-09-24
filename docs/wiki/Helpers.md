@@ -1,10 +1,12 @@
 # Helpers
 
-`helpers/`. A helper is a line geometry that shows something about the scene. Each builder returns a `BufferGeometry` for a [`Line`](Lines) in `SEGMENTS` mode. There are helpers for axes, grids, boxes, cameras, arrows, planes, skeletons, lights, and vertex normals and tangents.
+`helpers/`. A helper shows something about the scene. Most helpers are a line geometry: each builder returns a `BufferGeometry` for a [`Line`](Lines) in `SEGMENTS` mode. There are line helpers for axes, grids, boxes, octrees, cameras, arrows, planes, skeletons, lights, and vertex normals and tangents.
+
+Four helpers draw more than lines. The light probe helper and the texture helper are meshes. The view helper and the shadow map viewer draw over a part of the image.
 
 ![A camera circles a cube outlined in yellow, over a grid, beside the axes and a second camera's frustum](out/helpers.png)
 
-three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`.
+three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`. From `examples/jsm`: `OctreeHelper`, `LightProbeHelper`, `TextureHelper`, `ViewHelper` and `ShadowMapViewer`.
 
 ## A helper is a geometry
 
@@ -206,6 +208,141 @@ The result is two points for each vertex, in world space, so put the `Line` on a
 
 A geometry holds any attribute by name. `TANGENT` is `"tangent"`, the name that three.js uses, with four floats for each vertex. The helper reads the first three. This port has no `computeTangents`, so the tangents must come from a loader or from you.
 
+## OctreeHelper
+
+`octree_helper(octree)` is the twelve edges of every box of an [`Octree`](Math-addons#octree) below its root. It gives twenty-four points for each box, in the order of `Octree.boxes()`: each box, then the boxes in it. The root box is not drawn, as in three.js.
+
+The geometry carries no `color` attribute. three.js draws it yellow, and `DEFAULT_OCTREE_COLOR` is that yellow. An octree that is not built, or that holds no triangle, gives an empty geometry.
+
+```mojo
+from helpers.octree import DEFAULT_OCTREE_COLOR, octree_helper
+
+var yellow = assets.materials.add(Material(DEFAULT_OCTREE_COLOR, kind=BASIC))
+var boxes = assets.geometries.add(octree_helper(level))
+scene.add_line(Line(boxes, yellow, root, mode=SEGMENTS))
+```
+
+The points are in world space, so put the `Line` on a node at the origin. After the octree changes, build the helper again. three.js calls `update()` for the same reason.
+
+## LightProbeHelper
+
+`LightProbeHelper(light, assets, size)` is a sphere that shows the light of a light probe. Each point shows the light that a matte white surface catches from the probe alone when it faces that way. No other light reaches the sphere.
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `light` | | A light probe, from `light_probe`. |
+| `assets` | | Where the sphere, its material and its program go. |
+| `size` | `Length(1.0, METER)` | The radius of the sphere. Must be positive. |
+
+The sphere uses the shader of three.js. `materials.glsl` compiles it to a node program, and both rasterizers run it for each pixel. The GLSL subset has no arrays, so the nine coefficients are nine uniforms, `sh0` to `sh8`. See [node materials](Node-materials).
+
+```mojo
+from helpers.light_probe import LightProbeHelper
+
+var helper = LightProbeHelper(probe, assets, Length(0.5, METER))
+scene.add_mesh(helper.mesh(where))
+```
+
+A light probe here has no node. Put the mesh on the node where you want to see the probe. three.js copies the position of the probe to its helper. The rotation of the node does not change what the sphere shows, because each normal of a sphere points away from its center.
+
+After the probe changes, call `helper.update(light, assets)`. It writes the coefficients and the intensity into the program again. three.js reads them before each frame.
+
+## TextureHelper
+
+`texture_helper(texture, assets, width, height, depth)` shows a texture as it is. There is one function for each kind of texture id. It returns a `TextureHelper`: a list of meshes on one node.
+
+| Texture | Shape | Alpha |
+|---|---|---|
+| `TextureId` | A plane of `width` by `height`. | One. |
+| `Data3DTextureId` | One plane for each slice, from `-depth / 2` to `depth / 2` along z. | `max(1 / slices, 0.25)`. |
+| `DataArrayTextureId` | One plane for each layer, spread the same way. | `max(1 / layers, 0.25)`. |
+| `CubeTextureId` | A box of `width` by `height` by `depth`. | One. |
+
+Each size is a `Length` of one meter by default, and must be positive. The color is the color of the texel. The alpha of the texel is not used. Both sides of each plane are drawn.
+
+```mojo
+from helpers.texture import texture_helper
+
+var helper = texture_helper(lut_volume, assets)
+helper.add_to(scene, node)
+```
+
+three.js reads the texture in a shader, at a `uvw` attribute. The rasterizers here sample a 2D map at `uv`. So each plane or face is a mesh of its own. It has an unlit `BASIC` material and a 2D map that holds what the shader of three.js reads:
+
+- A 2D texture is copied with its alpha ignored. The copy has no offset, repeat, rotation or channel, because the shader reads the coordinates as they are. The image is upright for each value of `flip_y`.
+- A slice of a 3D texture is read at each texel center with `Data3DTexture.sample`, at the third coordinate of three.js. A bilinear sample of that image is the trilinear sample of the volume.
+- A layer of an array texture is read the same way with `DataArrayTexture.sample`.
+- A face of a cube is read with `CubeTexture.sample` on a grid of the size of the cube. Each point is read in its direction from the center.
+
+The helper differs from three.js in two places:
+
+- For a box whose three sides are not equal, a face is a resampling of the cube. It can differ from three.js by a filter step between texels.
+- A surface that blends here writes no depth. So a plane or a cube with an alpha of one is drawn opaque, and the nearer face hides the far one, as in three.js. The slices of a stack blend in order from the most negative z. Seen from +z, that is what three.js draws. Seen from -z, three.js shows only the nearest slice, and here each slice blends over the slice before it.
+
+A blank texture, a size that is not positive, and an id that is not in its store are refused.
+
+## ViewHelper
+
+`ViewHelper()` shows the axes of the world in a square of 128 pixels in the bottom right corner of the image. It turns against the camera. A click on one of its six disks turns the camera to look along that axis.
+
+The helper reads and writes a [`CameraFrame`](Windowing-and-controls), not a camera. A camera here has a position, a target and an up. The helper of three.js writes a quaternion.
+
+```mojo
+from controls.camera_frame import CameraFrame
+from helpers.view import ViewHelper
+
+var gizmo = ViewHelper()
+var frame = CameraFrame.of(camera)
+gizmo.render(target, frame)
+_ = gizmo.handle_click(x, y, width, height, frame)
+if gizmo.animating:
+    gizmo.update(Duration(0.016, SECOND), frame)
+    frame.place(camera)
+```
+
+| Member | Meaning |
+|---|---|
+| `render(target, camera, workers)` | Draw the helper over the bottom right corner of a `RenderTarget`. |
+| `axis_at(x, y, width, height, camera)` | The disk under a point of the image, or none. |
+| `handle_click(x, y, width, height, camera)` | Start a turn toward the disk under a click. False while a turn runs, or when no disk is hit. |
+| `turn_toward(axis, camera)` | Start a turn toward one `ViewAxis`, from `POSITIVE_X` to `NEGATIVE_Z`. |
+| `update(delta, camera)` | Turn the camera by a `Duration`, a full turn in a second at most. It clears `animating` when the turn ends. |
+| `center` | The point the camera turns around. The origin by default. |
+
+`x` and `y` are pixels from the top left corner of the image, as the `clientX` and `clientY` of three.js are. The click finds the disk nearest to the camera of the helper, as the `Raycaster` of three.js does.
+
+The helper draws into a target of its own, cleared to transparent black. Then it blends that image over the corner of your image. Each translucent disk then looks the same as when it is drawn over your image directly. A target smaller than 128 pixels gets the part of the corner that fits.
+
+The disks have no labels. The `setLabels` and `setLabelStyle` of three.js write text with a 2D canvas, and this port has no canvas text.
+
+## ShadowMapViewer
+
+`ShadowMapViewer(light)` shows the shadow map of one light in a rectangle over the image. The map is gray: white at the near plane of the light, black at the far plane and where nothing was drawn. It works for a directional light and a spot light, as in three.js.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `light` | | The `LightIndex` of the light in `scene.lights`. |
+| `x`, `y` | `10`, `10` | The pixels from the top left corner of the image to the rectangle. |
+| `width`, `height` | `256`, `256` | The size of the rectangle in pixels. |
+| `enabled` | `True` | Whether `render` draws. |
+
+```mojo
+from animation.keyframe_track import LightIndex
+from helpers.shadow_map_viewer import ShadowMapViewer
+
+var viewer = ShadowMapViewer(LightIndex(0))
+renderer.render_into(target, scene, assets, camera)
+viewer.render(renderer, target, scene, assets)
+```
+
+`render` draws the shadow map with `Renderer.shadow_maps`. Then it draws a plane with that map inside the rectangle, with the scissor test on. After that, it puts back the scissor of the renderer. A rectangle that is partly outside the image is clipped.
+
+The gray is `1 - depth`, as the `UnpackDepthRGBAShader` of three.js gives it. three.js writes it to the canvas with no conversion to sRGB. So the map is kept as sRGB bytes, and each byte comes out of the resolve as it went in.
+
+To draw on the GPU, use `hud(renderer, scene, assets)`. It gives the scene, the assets and the camera of the plane. Prepare the scene with `Renderer.prepare_frame`, and upload its textures. Then give `rect(width, height)` to the draw as its scissor.
+
+The viewer refuses a point light, a light that casts no shadow, and a variance shadow map. The shader of three.js reads none of these. It also refuses a light index that is not in the scene, and a size that is not positive. The label with the name of the light is not ported, because this port has no canvas text.
+
 ## Members
 
 | Function | Returns |
@@ -226,6 +363,11 @@ A geometry holds any attribute by name. `TANGENT` is `"tangent"`, the name that 
 | `rect_area_light_helper(light, scene, color)` | Eight points with colors. |
 | `vertex_normals_helper(geometry, world, size, color)` | Two points for each vertex, with colors. |
 | `vertex_tangents_helper(geometry, world, size, color)` | Two points for each vertex, with colors. |
+| `octree_helper(octree)` | Twenty-four points for each box below the root, no colors. |
+| `LightProbeHelper(light, assets, size)` | A sphere in `assets`, with `mesh(node)` and `update(light, assets)`. |
+| `texture_helper(texture, assets, width, height, depth)` | A `TextureHelper`, with `meshes(node)` and `add_to(scene, node)`. |
+| `ViewHelper()` | The axes in the corner, with `render`, `handle_click` and `update`. |
+| `ShadowMapViewer(light)` | The shadow map in a rectangle, with `render`, `hud` and `rect`. |
 
 ## What raises
 
@@ -238,3 +380,8 @@ A geometry holds any attribute by name. `TANGENT` is `"tangent"`, the name that 
 - A scene that changed after its last `update`, on a helper that reads world positions.
 - An empty box.
 - An opacity outside zero to one, or a blending that is neither named value, on the material.
+- A light that is not a light probe, on the light probe helper.
+- A blank texture, or an id that is not in its store, on the texture helper.
+- A `ViewAxis` that is not one of the six, an image with no size, or a negative `Duration`, on the view helper.
+- A light index that is not in the scene, or a light with no shadow map, on the shadow map viewer.
+- A light that is not a directional or a spot light, or a variance shadow map, on the shadow map viewer.

@@ -485,6 +485,28 @@ struct Octree(Movable):
                 pending.append(child)
         return count
 
+    def boxes(self) -> List[Box3]:
+        """Return the box of every node below the root, in the order
+        three.js's `OctreeHelper` walks `subTrees`: each box, then the
+        boxes below it, depth first.
+
+        Returns:
+            The boxes. None for a tree that is not built or holds no
+            triangle.
+        """
+        var found = List[Box3]()
+        # The boxes still to visit, the next one last.
+        var pending = List[Int]()
+        for index in range(len(self._nodes[0].sub_trees) - 1, -1, -1):
+            pending.append(self._nodes[0].sub_trees[index])
+        while len(pending) > 0:
+            var node = pending.pop()
+            found.append(self._nodes[node].box)
+            ref below = self._nodes[node].sub_trees
+            for index in range(len(below) - 1, -1, -1):
+                pending.append(below[index])
+        return found^
+
     def add_triangle(mut self, triangle: Triangle):
         """Add a triangle and grow the bounds around it. three.js:
         `addTriangle`.
