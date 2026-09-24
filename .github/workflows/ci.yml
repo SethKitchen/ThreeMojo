@@ -33,8 +33,10 @@ jobs:
     name: check-cpu (standard library only)
     runs-on: ubuntu-latest
     # The CPU suites took about 35 minutes once the library passed 150
-    # modules. This is a hang detector, not a speed target.
-    timeout-minutes: 90
+    # modules, and 87 of the 90 allowed at 273: lint alone is an hour.
+    # The next suites ran past it with every step still progressing.
+    # This is a hang detector, not a speed target.
+    timeout-minutes: 150
 
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +66,7 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
 
     steps:
       - uses: actions/checkout@v4
@@ -101,8 +103,10 @@ jobs:
       #
       # 900 then went the same way at 149 instrumented modules: the run was
       # stopped at fifteen minutes with every suite still progressing.
+      # 3600 went the same way at 273: the run for 0e0b997 was stopped at
+      # the hour, and the next passed with minutes to spare.
       - name: coverage
-        run: make -B coverage COV_BUDGET=3600
+        run: make -B coverage COV_BUDGET=6000
 
   # The GPU backend's host side: the suites that import render/gpu.mojo but
   # open no device. They lay out the vertex lanes, the state tables, the
