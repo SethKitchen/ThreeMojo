@@ -1,0 +1,8 @@
+# A colored cloud
+0 0 0 255 0 0
+1.5 -2 3e1 0 128 255
+	-0.25   0.5  7   10 20 30  
+
+# four values are skipped
+1 2 3 4
+9 8 7 255 255 255

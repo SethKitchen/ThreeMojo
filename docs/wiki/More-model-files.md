@@ -10,6 +10,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [SVG](#svg) | `loaders/svg.mojo` | `read_svg(path) -> SvgData` | `SVGLoader` |
 | [BVH](#bvh) | `loaders/bvh.mojo` | `read_bvh(path, scene) -> BvhModel` | `BVHLoader` |
 | [3DS](#3ds) | `loaders/tds.mojo` | `read_3ds(path, scene, assets) -> TdsModel` | `TDSLoader` |
+| [XYZ](#xyz) | `loaders/xyz.mojo` | `read_xyz(path) -> BufferGeometry` | `XYZLoader` |
 
 ## PCD
 
@@ -355,3 +356,32 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/3ds/fixture.3ds` has two materials with every property and four maps, and four meshes. One mesh has a matrix, and the meshes have material groups in the orders that three.js reads in its own way. `assets/3ds/fixture.json` has what three.js 0.180 gives for it. `tests/test_tds.mojo` compares each node, attribute, group and material.
+
+## XYZ
+
+`loaders/xyz.mojo`. `read_xyz(path)` reads an XYZ point cloud into a geometry. three.js: `XYZLoader`.
+
+```mojo
+var cloud = read_xyz("assets/xyz/colored.xyz")
+var shape = assets.geometries.add(cloud^)
+```
+
+| Function | What it does |
+|---|---|
+| `read_xyz(path) -> BufferGeometry` | Read a file. |
+| `parse_xyz(text) -> BufferGeometry` | Read the text of one. |
+
+Each line is one point: `x y z`, or `x y z r g b` with channels from 0 to 255. A line that starts with `#` is a comment. The geometry has `position`, and `color` when the points have colors. The loader divides each channel by 255 and decodes it from sRGB, as three.js does.
+
+As in three.js, the loader steps over a line that does not have three or six values. It reads a value as `parseFloat` does, so `2m` is 2.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A value that is not a number. three.js keeps `NaN`.
+- A file with some points that have colors and some that do not. three.js makes a `color` attribute that is shorter than `position`.
+
+### Example
+
+`assets/xyz/colored.xyz` and `assets/xyz/plain.xyz` have comments, CRLF line ends, tabs and a line of four values. `tests/test_xyz.mojo` compares both with three.js 0.180.
