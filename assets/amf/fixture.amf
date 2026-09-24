@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<amf unit="Inch">
+  <metadata type="name">Fixture</metadata>
+  <metadata type="author">ThreeMojo</metadata>
+  <metadata type="other">skipped</metadata>
+  <material id="red">
+    <metadata type="name">Red plastic</metadata>
+    <color><r>0.9</r><g>0.1</g><b>0.2</b></color>
+  </material>
+  <material id="glass">
+    <color><r>0.2</r><g>0.4</g><b>0.8</b><a>1</a></color>
+  </material>
+  <object id="b">
+    <metadata type="name">Letter</metadata>
+    <mesh>
+      <vertices>
+        <vertex><coordinates><x>0</x><y>0</y><z>0</z></coordinates></vertex>
+        <vertex><coordinates><x>1</x><y>0</y><z>0</z></coordinates></vertex>
+        <vertex><coordinates><x>0</x><y>1</y><z>0</z></coordinates></vertex>
+      </vertices>
+      <volume><triangle><v1>0</v1><v2>1</v2><v3>2</v3></triangle></volume>
+    </mesh>
+  </object>
+  <object id="2">
+    <color><r>0.5</r><g>0.5</g><b>0.1</b><a>0.5</a></color>
+    <mesh>
+      <vertices>
+        <vertex><coordinates><x>0</x><y>0</y><z>0</z></coordinates>
+          <normal><nx>0</nx><ny>0</ny><nz>2</nz></normal></vertex>
+        <vertex><coordinates><x>2</x><y>0</y><z>0</z></coordinates>
+          <normal><nx>0</nx><ny>3</ny><nz>4</nz></normal></vertex>
+        <vertex><coordinates><x>0</x><y> 2 </y><z>1.5</z></coordinates>
+          <normal><nx>1</nx><ny>0</ny><nz>0</nz></normal></vertex>
+        <vertex><coordinates><x>2</x><y>2</y><z></z></coordinates>
+          <normal><nx>0</nx><ny>0</ny><nz>1</nz></normal></vertex>
+      </vertices>
+      <volume materialid="red">
+        <metadata type="name">first</metadata>
+        <triangle><v1>0</v1><v2>1</v2><v3>2</v3></triangle>
+      </volume>
+      <volume materialid="nothing"><triangle><v1>1</v1><v2>3</v2><v3>2</v3></triangle></volume>
+      <volume materialid="glass"><triangle><v3>0</v3><v1>2</v1><v2>3</v2></triangle></volume>
+    </mesh>
+  </object>
+  <object id="1">
+    <mesh>
+      <vertices>
+        <vertex><coordinates><x>5</x><y>5</y><z>5</z></coordinates></vertex>
+        <vertex><coordinates><x>6</x><y>5</y><z>5</z></coordinates></vertex>
+        <vertex><coordinates><x>5</x><y>6</y><z>5</z></coordinates></vertex>
+      </vertices>
+      <volume><triangle><v1>0</v1><v2>2</v2><v3>1</v3></triangle></volume>
+    </mesh>
+    <mesh>
+      <vertices>
+        <vertex><coordinates><x>7</x><y>7</y><z>7</z></coordinates></vertex>
+      </vertices>
+      <volume/>
+    </mesh>
+  </object>
+</amf>

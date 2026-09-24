@@ -11,6 +11,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [BVH](#bvh) | `loaders/bvh.mojo` | `read_bvh(path, scene) -> BvhModel` | `BVHLoader` |
 | [3DS](#3ds) | `loaders/tds.mojo` | `read_3ds(path, scene, assets) -> TdsModel` | `TDSLoader` |
 | [XYZ](#xyz) | `loaders/xyz.mojo` | `read_xyz(path) -> BufferGeometry` | `XYZLoader` |
+| [AMF](#amf) | `loaders/amf.mojo` | `read_amf(path, scene, assets) -> AmfModel` | `AMFLoader` |
 
 ## PCD
 
@@ -385,3 +386,56 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/xyz/colored.xyz` and `assets/xyz/plain.xyz` have comments, CRLF line ends, tabs and a line of four values. `tests/test_xyz.mojo` compares both with three.js 0.180.
+
+## AMF
+
+`loaders/amf.mojo`. `read_amf(path, scene, assets)` reads an Additive Manufacturing File into a scene and its assets. The file is XML, or a ZIP archive that holds the XML. three.js: `AMFLoader`.
+
+```mojo
+var scene = Scene()
+var assets = Assets()
+var model = read_amf("assets/amf/fixture.amf", scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_amf(path, scene, assets, parent) -> AmfModel` | Read a file. |
+| `parse_amf(bytes, scene, assets, parent) -> AmfModel` | Read the bytes of one. |
+| `amf_unit_scale(unit) -> Float64` | The millimeters in one unit: `inch`, `feet`, `meter`, `micron`, or one for any other. |
+| `amf_material(color) -> Material` | The flat-shaded `PHONG` material of a color. |
+
+### AmfModel
+
+| Field | What it holds |
+|---|---|
+| `root`, `name`, `author` | The node that three.js returns as its `Group`, and the `name` and `author` metadata. |
+| `scale` | The millimeters in one unit of the file. |
+| `objects`, `object_names`, `object_ids` | One node for each object, in the order in which a JavaScript object walks their ids. |
+| `geometries`, `materials`, `material_names` | One entry for each mesh, with its geometry, its material and the three.js name of the material. |
+| `first_mesh`, `mesh_count` | Where the meshes of the file start in `scene.meshes`, and how many there are. |
+
+### What is built
+
+Each volume of a mesh becomes one mesh on the node of its object. The mesh has the vertices and normals of its `<mesh>` and the triangles of its `<volume>`. The unit scales the vertices. three.js scales the normals too, and makes them unit length again.
+
+The material is flat-shaded `PHONG`. It comes from the volume's `materialid`, or from the object's `<color>`, or it is three.js's default, `0xaaaaff`. three.js reads the text of `<r>`, `<g>` and `<b>` as linear light. The material keeps the sRGB bytes of that light.
+
+three.js compares the text of an `<a>` with the number 1, and the two are never equal. Thus a color with an `<a>` gives a transparent material, whatever the alpha is. This port does the same.
+
+In an archive, the loader reads the first file whose name ends in `.amf`. When there is no such file, it reads the last file, as three.js does.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- An archive with no files, a file that is not XML, and a root that is not `<amf>`.
+- An object or a material with no `id`.
+- A coordinate, a normal or a vertex index that is missing or not a number. An empty value is zero, as in JavaScript.
+- A vertex index that is not a whole number, or that is past the last vertex.
+- A mesh with normals for only some of its vertices.
+
+three.js logs a root that is not `<amf>` and returns nothing. It throws a `TypeError` for a missing `id` or value, and it reads `NaN` for a value that is not a number.
+
+### Example
+
+`assets/amf/fixture.amf` has metadata, two materials, and three objects whose ids are not in order. It has object colors, normals, a volume with a material that is not there, and an empty volume. `assets/amf/fixture.zip` has the same model in an archive, in microns. `tests/test_amf.mojo` compares both with three.js 0.180.
