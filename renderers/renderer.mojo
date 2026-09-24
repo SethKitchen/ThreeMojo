@@ -203,7 +203,8 @@ from render.pointrule import attenuated_size
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.target import RenderTarget
+from render.layered_target import TARGET_CUBE, LayeredRenderTarget
+from render.target import RenderTarget, check_samples, sample_grid
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     NO_OFFSET,
@@ -3940,12 +3941,9 @@ struct Renderer(Movable):
 
         What `render` draws with when `antialias` is on, and what a caller
         drawing on the GPU uses to prepare a frame it will `downsample`
-        itself. Its `render_scale` is this one's times `SUPERSAMPLE`, so a
-        point's size and a line's thickness -- the two things a caller
-        gives in pixels -- come out the size they were asked for once the
-        frame is averaged down. A caller driving `GpuRenderer.draw` by
-        hand has to pass that `render_scale` as the draw's `line_width`
-        for the same reason.
+        itself. It is `scaled(SUPERSAMPLE)`; see `scaled` for why a
+        point's size and a line's thickness come out the size they were
+        asked for.
 
         Returns:
             The larger renderer.
@@ -3953,15 +3951,66 @@ struct Renderer(Movable):
         Raises:
             Error: If the larger renderer cannot be built.
         """
+        return self.scaled(SUPERSAMPLE)
+
+    def multisampled(self, samples: Int) raises -> Renderer:
+        """Return the renderer a draw into a target with `samples` takes
+        its samples with: `scaled(sample_grid(samples))`.
+
+        What `render_into` draws with when its target has samples, and
+        what a caller drawing on the GPU prepares a frame with before
+        `GpuRenderer.read_back_target` resolves it. Pass its
+        `render_scale` as the draw's `line_width`.
+
+        Args:
+            samples: The target's sample count; see
+                `render.target.check_samples`.
+
+        Returns:
+            The larger renderer, or a copy of this one's settings at this
+            size for zero or one sample.
+
+        Raises:
+            Error: If `check_samples` refuses the count, or the larger
+                renderer cannot be built.
+        """
+        check_samples(samples)
+        return self.scaled(sample_grid(samples))
+
+    def scaled(self, factor: Int) raises -> Renderer:
+        """Return a renderer `factor` times this one's size each way, with
+        the same settings, its viewport and scissor scaled to match, and
+        no supersampling of its own.
+
+        Its `render_scale` is this one's times `factor`, so a point's size
+        and a line's thickness -- the two things a caller gives in pixels
+        -- come out the size they were asked for once the frame is
+        averaged down. A caller driving `GpuRenderer.draw` by hand has to
+        pass that `render_scale` as the draw's `line_width` for the same
+        reason.
+
+        Args:
+            factor: How many raster pixels across and down stand for one
+                pixel of this renderer.
+
+        Returns:
+            The larger renderer.
+
+        Raises:
+            Error: If the factor is below one, or the larger renderer
+                cannot be built.
+        """
+        if factor < 1:
+            raise Error("A renderer is scaled by at least one")
         var big = Renderer(
-            self.width * SUPERSAMPLE, self.height * SUPERSAMPLE, self.workers
+            self.width * factor, self.height * factor, self.workers
         )
         big.background = self.background
         big.shading = self.shading
         big.tone_mapping = self.tone_mapping
         big.tone_mapping_exposure = self.tone_mapping_exposure
-        big.viewport = _scaled(self.viewport, SUPERSAMPLE)
-        big.scissor = _scaled(self.scissor, SUPERSAMPLE)
+        big.viewport = _scaled(self.viewport, factor)
+        big.scissor = _scaled(self.scissor, factor)
         big.scissor_test = self.scissor_test
         # The planes cut in camera space, and the shadow filter reads the
         # light's own map, so neither changes with the frame's size.
@@ -3980,12 +4029,13 @@ struct Renderer(Movable):
         big._transparent_sort = self._transparent_sort
         # Counted into this renderer's info, not a copy of it.
         big._state = self._state
+        big.ltc = self.ltc.copy()
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this
         # renderer has, and the larger one converts them once. See
         # `render_scale`.
-        big.render_scale = self.render_scale * SUPERSAMPLE
+        big.render_scale = self.render_scale * factor
         return big^
 
     def set_viewport(mut self, rect: Rect) raises:
@@ -6165,7 +6215,10 @@ struct Renderer(Movable):
                 size. Its type and outputs are its own: a target with an
                 `OUTPUT_NORMAL` attachment receives every opaque
                 triangle's view-space normal in the same pass, three.js's
-                multiple render targets. See `render.target`.
+                multiple render targets. A target with `samples` is drawn
+                by `multisampled(samples)` into its `multisample_buffer`
+                and resolved into the pixels the draw may touch, three.js's
+                multisampled render target. See `render.target`.
             scene: The transform hierarchy, and the meshes and lights in it.
             assets: The geometry, materials and textures the meshes name.
             camera: The camera to project through.
@@ -6184,6 +6237,22 @@ struct Renderer(Movable):
         """
         if target.width != self.width or target.height != self.height:
             raise Error("A target must be the renderer's size")
+        if target.samples > 1:
+            # three.js's multisampled render target: the samples are drawn
+            # by a renderer `sample_grid` times the size, which refuses a
+            # scene before its buffer is touched, and resolved into the
+            # target once the draw is done. Only the pixels the draw may
+            # touch are resolved, so a scissor keeps the rest.
+            var buffer = target.multisample_buffer()
+            self.multisampled(target.samples)._draw_into(
+                hooks, buffer, scene, assets, camera, first
+            )
+            var drawn = Rect.whole(self.width, self.height)
+            if self.scissor_test:
+                drawn = self.scissor
+            target.resolve_samples(buffer, drawn)
+            target.set_scissor(drawn)
+            return
         hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
@@ -7016,3 +7085,82 @@ struct Renderer(Movable):
                 side.render(scene, assets, camera.face_camera(face, scene))
             )
         return cube_texture_of(faces)
+
+    def render_into_layer[
+        C: Camera
+    ](
+        self,
+        mut target: LayeredRenderTarget,
+        layer: Int,
+        level: Int,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+    ) raises:
+        """Draw the scene into one layer and one level of a layered
+        target: three.js's `setRenderTarget(target, activeCubeFace,
+        activeMipmapLevel)` followed by `render`.
+
+        `render_into` on `target.image(layer, level)`, so the image's own
+        samples, type and outputs apply. The renderer must be the level's
+        size. three.js asks the same of the viewport, which a caller sets
+        to the level's size by hand.
+
+        Args:
+            target: The layered target.
+            layer: The layer of a 3D or array target, the face of a cube,
+                or zero for a 2D target.
+            level: The mip level, zero for the largest.
+            scene: The transform hierarchy, and what it draws.
+            assets: The geometry, materials and textures it names.
+            camera: The camera to project through.
+
+        Raises:
+            Error: If the target has no such layer or level, fails
+                `LayeredRenderTarget.validate`, or anything `render_into`
+                raises, a level of another size included.
+        """
+        self.render_into(target.image(layer, level), scene, assets, camera)
+
+    def render_cube_into(
+        self,
+        mut target: LayeredRenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: CubeCamera,
+    ) raises:
+        """Draw the scene six times from one point into the first level of
+        a cube target's faces: three.js's `CubeCamera.update(renderer,
+        scene)` with a `WebGLCubeRenderTarget`.
+
+        Each face is drawn by a renderer of the face's size with this
+        one's background, shading, workers and depth mode, as
+        `render_cube` draws them, into `target.image(face, 0)`. The faces
+        keep the light as the target's type stores it. Call
+        `target.generate_mipmaps` to fill the levels below.
+
+        Args:
+            target: A cube target.
+            scene: The transform hierarchy, and what it draws.
+            assets: The geometry, materials and textures it names.
+            camera: Where to stand and how far to see. Its size is not
+                read: the target's faces say how big a face is.
+
+        Raises:
+            Error: If the target is not a cube or fails `validate`, or
+                anything `render_into` raises for one of the six faces.
+        """
+        target.validate()
+        if target.kind != TARGET_CUBE:
+            raise Error("A cube camera draws into a cube target")
+        var side = Renderer(target.width, target.width, self.workers)
+        side.background = self.background
+        side.shading = self.shading
+        side.depth_mode = self.depth_mode
+        for face in range(FACE_COUNT):  # pragma: no branch
+            side.render_into(
+                target.image(face, 0),
+                scene,
+                assets,
+                camera.face_camera(face, scene),
+            )

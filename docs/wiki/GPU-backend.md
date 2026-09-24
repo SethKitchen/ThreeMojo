@@ -34,7 +34,9 @@ Hold one across frames. The device buffers survive between draws.
 | `set_textures(store, cubes=CubeTextureStore())` | Upload every texture, then every cube texture's six faces and its [PMREM](Textures#pmrem) after them, seven rows a cube. All or nothing. |
 | `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, backdrop, line_width, transmission, programs)` | Rasterize into the device target. `programs` is `Frame.programs` from `Renderer.prepare_frame`: the node programs, with the frame's time and view. `transmission` is what `Renderer.transmission_target` returns, or an empty target when nothing transmits. `backdrop` is what `Renderer.backdrop` returns, or none: the scene's image background, painted before anything is drawn. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment, `points` are one corner a [point](Points-and-sprites), and `draws` is the order, all from `Renderer.prepare_frame`. An empty order draws every triangle, then every segment, then every point. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
-| `read_back_target(type=UNSIGNED_BYTE_TARGET, outputs=color_only()) -> RenderTarget` | Copy the light before the tone mapping, the normal, the depth and the data flag into a host target. See [Float render targets](Render-target-and-framebuffer#float-render-targets) and [Multiple render targets](Render-target-and-framebuffer#multiple-render-targets). |
+| `read_back_target(type=UNSIGNED_BYTE_TARGET, outputs=color_only(), samples=0) -> RenderTarget` | Copy the light before the tone mapping, the normal, the depth and the data flag into a host target. With `samples`, resolve the samples on the device first. See [Float render targets](Render-target-and-framebuffer#float-render-targets), [Multiple render targets](Render-target-and-framebuffer#multiple-render-targets) and [Multisampled targets on the GPU](#multisampled-targets-on-the-gpu). |
+| `read_back_layer(target, layer, level=0)` | Read back into one layer and one level of a [layered target](Render-target-and-framebuffer#layered-render-targets), with that image's type, outputs and samples. |
+| `copy_framebuffer_to_texture(texture, position=TexelPoint(0, 0, 0), level=0)` | `read_back`, then the host's [copy](Render-target-and-framebuffer#texture-copies) into a texture. |
 
 `draw` checks every triangle's state, every segment's state, every point's state and every draw's run on the host before it launches. It checks every texture id, the alpha test, the tone mapping curve and the exposure the same way. The kernel cannot raise.
 
@@ -43,6 +45,22 @@ An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors
 `set_textures` builds the new buffers first and replaces the old ones together with the count. A failed upload leaves the previous upload whole.
 
 An antialiased frame is drawn at `Renderer.supersampled()`'s size and shrunk with `render.antialias.downsample`. Pass that renderer's `render_scale` as the draw's `line_width`, or every line thins out when the frame is averaged down. The CPU renderer resolves in linear light instead, which the GPU cannot do while it returns bytes; see [Renderer](Renderer#anti-aliasing). A texture's `anisotropy` crosses in the descriptor table, and the kernel takes the same taps the host takes; see [Textures](Textures#anisotropy).
+
+### Multisampled targets on the GPU
+
+A multisampled target is drawn at the size of its sample grid and resolved by a second kernel. The rasterize kernel gains no argument. It binds thirty-one, which is the most Metal allows.
+
+To draw one, prepare the frame with `Renderer.multisampled(samples)`. Hold a `GpuRenderer` of that renderer's size, and pass its `render_scale` as the draw's `line_width`. Then call `read_back_target(type, outputs, samples)`.
+
+`read_back_target` launches `resolve_kernel` with one thread for each resolved pixel. The kernel reads the samples from the depth buffer's planes, where the rasterize kernel left them. It calls `resolve_block`, the function the host's `RenderTarget.resolve_samples` calls. It writes the result into a buffer in the same plane layout, and only that buffer comes back. So the two backends resolve with the same arithmetic, and `tests/test_gpu.mojo` compares them.
+
+This layout was chosen for three reasons:
+
+- A resolve is a second launch after the draw, as a GPU's resolve is. So it takes its own seven arguments and leaves the rasterize kernel's thirty-one alone.
+- The samples already sit in the depth buffer's planes. A per-target sample buffer inside the rasterize kernel needs an argument or a second layout in an existing buffer, and neither buys a thing.
+- The resolved buffer lives for one read back. The draw's buffers keep their size, and a frame with no samples pays nothing.
+
+The stencil is not read back. The rasterize kernel keeps it in a local number per pixel.
 
 ## Parity with the CPU
 

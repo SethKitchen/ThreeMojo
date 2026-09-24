@@ -65,10 +65,16 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import (
     UNSIGNED_BYTE_TARGET,
     RenderTarget,
+    SampleSource,
     TargetOutput,
     TargetType,
+    check_samples,
     color_only,
+    resolve_block,
+    sample_grid,
 )
+from render.layered_target import LayeredRenderTarget
+from render.texture_copy import TexelPoint, copy_framebuffer_to_texture
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     BASIC_SHADOW_MAP,
@@ -7654,9 +7660,11 @@ struct GpuRenderer(Movable):
         self,
         type: TargetType = UNSIGNED_BYTE_TARGET,
         outputs: List[TargetOutput] = color_only(),
+        samples: Int = 0,
     ) raises -> RenderTarget:
         """Copy the device's attachments into a host render target, before
-        any curve or encode: three.js's float and multiple render targets.
+        any curve or encode: three.js's float, multiple and multisampled
+        render targets.
 
         The kernel leaves the premultiplied light, the view-space normal
         and the data flag of every pixel beside its depth, so what comes
@@ -7665,37 +7673,83 @@ struct GpuRenderer(Movable):
         resolve it with `RenderTarget.resolve`. A pixel outside the last
         draw's scissor holds whatever the draw before it left.
 
+        With `samples` above one, the device target holds the samples:
+        draw a frame prepared by `Renderer.multisampled(samples)` into a
+        `GpuRenderer` of that renderer's size. `resolve_kernel` resolves
+        each block on the device with `resolve_block`, the function
+        `RenderTarget.resolve_samples` calls on the host, and only the
+        resolved target comes back. The stencil is not read back.
+
         Args:
             type: What the target's attachments store; see
                 `render.target.TargetType`.
             outputs: What each of its color attachments holds; see
                 `render.target.TargetOutput`.
+            samples: The target's sample count, three.js's `samples`.
+                Zero, the default, reads the device target as it is.
 
         Returns:
-            The target, cleared to the last draw's background, in the
-            last draw's depth mode.
+            The target, `sample_grid(samples)` times smaller each way than
+            the device target, cleared to the last draw's background, in
+            the last draw's depth mode.
 
         Raises:
-            Error: If nothing has been drawn yet, or `check_target`
-                refuses the type or the outputs.
+            Error: If nothing has been drawn yet, `check_target` refuses
+                the type or the outputs, `check_samples` refuses the
+                sample count, or the sample grid does not divide the
+                device target's size.
         """
         if not self.drawn:
             raise Error(
                 "Nothing has been drawn yet; call draw() before"
                 " read_back_target()"
             )
+        check_samples(samples)
+        var grid = sample_grid(samples)
+        if self.width % grid != 0 or self.height % grid != 0:
+            raise Error("The sample grid must divide the device target's size")
+        var width = self.width // grid
+        var height = self.height // grid
         var target = RenderTarget(
-            self.width, self.height, self.cleared, type, outputs
+            width, height, self.cleared, type, outputs, samples
         )
         target.depth_mode = self.depth_mode
-        var planes = self.width * self.height
+        var planes = width * height
         var flat = List[Float32](length=planes * PLANE_FLOATS, fill=0)
-        with self.depth.map_to_host() as host:
-            unsafe_memcpy(
-                dest=flat.unsafe_ptr(),
-                src=host.unsafe_ptr(),
-                count=planes * PLANE_FLOATS,
+        if grid == 1:
+            with self.depth.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=flat.unsafe_ptr(),
+                    src=host.unsafe_ptr(),
+                    count=planes * PLANE_FLOATS,
+                )
+        else:
+            # A buffer of its own, for one read back: the rasterize kernel
+            # gains no argument, and the draw's buffers keep their size.
+            var resolved = self.context.enqueue_create_buffer[DType.float32](
+                planes * PLANE_FLOATS
             )
+            self.context.enqueue_function[resolve_kernel](
+                resolved.unsafe_ptr(),
+                self.depth.unsafe_ptr(),
+                Int32(width),
+                Int32(height),
+                Int32(grid),
+                Int32(self.depth_mode.value),
+                Int32(Int(target.has_normals())),
+                grid_dim=(ceildiv(width, TILE), ceildiv(height, TILE)),
+                block_dim=(TILE, TILE),
+            )
+            self.context.synchronize()
+            with resolved.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=flat.unsafe_ptr(),
+                    src=host.unsafe_ptr(),
+                    count=planes * PLANE_FLOATS,
+                )
+            # Released before the context is next used, while the context
+            # lives; see `__deinit__` for why the order matters.
+            _ = resolved^
         var keeps = target.has_normals()
         var reversed = self.depth_mode == REVERSED_DEPTH
         for slot in range(planes):
@@ -7716,6 +7770,59 @@ struct GpuRenderer(Movable):
                     flat[normal_at], flat[normal_at + 1], flat[normal_at + 2]
                 )
         return target^
+
+    def read_back_layer(
+        self, mut target: LayeredRenderTarget, layer: Int, level: Int = 0
+    ) raises:
+        """Copy the device's attachments into one layer and one level of a
+        layered target: what `Renderer.render_into_layer` fills on the
+        host, three.js's `setRenderTarget(target, activeCubeFace,
+        activeMipmapLevel)`.
+
+        `read_back_target` with the image's type, outputs and samples, so
+        a multisampled layer is resolved on the device as a plain target
+        is.
+
+        Args:
+            target: The layered target.
+            layer: The layer of a 3D or array target, the face of a cube,
+                or zero for a 2D target.
+            level: The mip level, zero for the largest.
+
+        Raises:
+            Error: If the target has no such layer or level, or anything
+                `read_back_target` or `LayeredRenderTarget.set_image`
+                raises, a device target of the wrong size included.
+        """
+        ref held = target.image(layer, level)
+        var image = self.read_back_target(held.type, held.outputs, held.samples)
+        target.set_image(layer, level, image^)
+
+    def copy_framebuffer_to_texture(
+        self,
+        mut texture: Texture,
+        position: TexelPoint = TexelPoint(0, 0, 0),
+        level: Int = 0,
+    ) raises:
+        """Copy a rectangle of the device's displayed image into a texture:
+        three.js's `copyFramebufferToTexture`.
+
+        `read_back` and then `render.texture_copy.
+        copy_framebuffer_to_texture`, the function the host calls on the
+        image `Renderer.render` returns.
+
+        Args:
+            texture: The byte texture to fill, as
+                `render.texture_copy.framebuffer_texture` builds it.
+            position: The framebuffer pixel the copy starts at, counted up
+                from the bottom left.
+            level: The texture's mip level to fill.
+
+        Raises:
+            Error: Everything `read_back` and `copy_framebuffer_to_texture`
+                raise.
+        """
+        copy_framebuffer_to_texture(self.read_back(), texture, position, level)
 
 
 def render_triangles(
@@ -7888,6 +7995,104 @@ def copy_bytes_kernel(
     if at >= Int(count):
         return
     destination[unsafe_offset=at] = source[unsafe_offset=at]
+
+
+struct _DeviceSamples[origin: Origin[mut=True]](SampleSource):
+    """The resolve kernel's `SampleSource`: the device target's planes, as
+    `rasterize_kernel` leaves them, read by `resolve_block` as the host's
+    target is read."""
+
+    var planes: MutPointer[Float32, Self.origin]
+    # How many samples a plane holds.
+    var count: Int
+    # Whether the depth is reversed, where an unclaimed depth reads as
+    # minus infinity.
+    var reversed: Bool
+
+    def __init__(
+        out self,
+        planes: MutPointer[Float32, Self.origin],
+        count: Int,
+        reversed: Bool,
+    ):
+        """Read the samples in `planes`, `count` a plane."""
+        self.planes = planes
+        self.count = count
+        self.reversed = reversed
+
+    def light_at(self, slot: Int) -> FloatColor:
+        """Return one sample's premultiplied light."""
+        var at = self.count * PLANE_COLOR + slot * 4
+        return FloatColor(
+            self.planes[unsafe_offset=at],
+            self.planes[unsafe_offset=at + 1],
+            self.planes[unsafe_offset=at + 2],
+            self.planes[unsafe_offset=at + 3],
+        )
+
+    def depth_in(self, slot: Int) -> Float32:
+        """Return one sample's depth. The kernel leaves infinity where
+        nothing claimed it, which under `REVERSED_DEPTH` is the mode's
+        clear, as `read_back_target` has it."""
+        var z = self.planes[unsafe_offset=slot]
+        if self.reversed and z == inf[DType.float32]():
+            return cleared_depth(REVERSED_DEPTH)
+        return z
+
+    def data_in(self, slot: Int) -> Bool:
+        """Return True if one sample holds data."""
+        return self.planes[unsafe_offset=self.count * PLANE_DATA + slot] != 0
+
+    def normal_in(self, slot: Int) -> Vector3:
+        """Return one sample's view-space normal."""
+        var at = self.count * PLANE_NORMAL + slot * 3
+        return Vector3(
+            self.planes[unsafe_offset=at],
+            self.planes[unsafe_offset=at + 1],
+            self.planes[unsafe_offset=at + 2],
+        )
+
+
+def resolve_kernel(
+    destination: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    factor: Int32,
+    depth_mode: Int32,
+    normals: Int32,
+):
+    """Resolve a multisampled device target, one thread per resolved
+    pixel: `render.target.resolve_block` over the samples, written in the
+    same planes, `width` by `height`. See `GpuRenderer.read_back_target`.
+    """
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var grid = Int(factor)
+    var wide = Int(width) * grid
+    var mode = DepthMode(Int(depth_mode))
+    var samples = _DeviceSamples(
+        source, wide * Int(height) * grid, mode == REVERSED_DEPTH
+    )
+    var resolved = resolve_block(samples, wide, grid, x, y, mode, normals != 0)
+    var planes = Int(width) * Int(height)
+    var slot = y * Int(width) + x
+    destination[unsafe_offset=slot] = resolved.depth
+    var at = planes * PLANE_COLOR + slot * 4
+    destination[unsafe_offset=at] = resolved.color.r
+    destination[unsafe_offset=at + 1] = resolved.color.g
+    destination[unsafe_offset=at + 2] = resolved.color.b
+    destination[unsafe_offset=at + 3] = resolved.color.a
+    var normal_at = planes * PLANE_NORMAL + slot * 3
+    destination[unsafe_offset=normal_at] = resolved.normal.x
+    destination[unsafe_offset=normal_at + 1] = resolved.normal.y
+    destination[unsafe_offset=normal_at + 2] = resolved.normal.z
+    var flag = Float32(0)
+    if resolved.data:
+        flag = 1
+    destination[unsafe_offset=planes * PLANE_DATA + slot] = flag
 
 
 def post_pixel_kernel(

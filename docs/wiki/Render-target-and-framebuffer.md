@@ -6,6 +6,8 @@
 
 three.js: `WebGLRenderTarget` and the canvas. A render target can be read back as a texture; see [Textures](Textures#from-a-render). A target can keep light above one; see [Float render targets](#float-render-targets). A target can also keep a normal beside the light in the same pass; see [Multiple render targets](#multiple-render-targets).
 
+A target can take several samples a pixel; see [Multisampled render targets](#multisampled-render-targets). A target can have layers, faces and mip levels; see [Layered render targets](#layered-render-targets). A texture can be copied into another texture; see [Texture copies](#texture-copies).
+
 ## Color and FloatColor
 
 `Color(r, g, b, a=255)` is four bytes, as authored in sRGB. `Color(hex=0xFF8000)` builds one from a 24-bit value, and `hex()` gives it back. A value outside 24 bits raises.
@@ -59,7 +61,7 @@ This port differs from three.js in three ways:
 
 | Member | Meaning |
 |---|---|
-| `RenderTarget(width, height, clear, type=UNSIGNED_BYTE_TARGET, outputs=color_only())` | A target cleared to a color. See [Float render targets](#float-render-targets) and [Multiple render targets](#multiple-render-targets). |
+| `RenderTarget(width, height, clear, type=UNSIGNED_BYTE_TARGET, outputs=color_only(), samples=0)` | A target cleared to a color. See [Float render targets](#float-render-targets), [Multiple render targets](#multiple-render-targets) and [Multisampled render targets](#multisampled-render-targets). |
 | `write(x, y, color, data=False, normal=Vector3(0, 0, 0))` | Replace a pixel. The normal attachment keeps `normal`. |
 | `blend(x, y, color)` | Source-over in premultiplied linear light. |
 | `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
@@ -79,6 +81,9 @@ This port differs from three.js in three ways:
 | `attachment(index) -> FloatImage` | One color attachment, as the target's type stores it. |
 | `attachment_texture(index, wrap=CLAMP, filter=BILINEAR, mipmapped=False) -> Texture` | One color attachment as a float texture. three.js's `textures[index]`. |
 | `has_normals() -> Bool`, `normal_at(x, y) -> Vector3` | Whether the target has a normal attachment, and the normal at a pixel. |
+| `downsampled(factor) -> RenderTarget` | Each block of `factor` by `factor` pixels averaged into one, in linear light. |
+| `multisample_buffer() -> RenderTarget` | The buffer a draw takes its samples in. |
+| `resolve_samples(buffer, rect)` | Resolve a sample buffer into the pixels inside `rect`. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
 
@@ -160,6 +165,105 @@ This port differs from three.js in three ways:
 - Only two outputs exist. three.js lets a shader write anything to any attachment.
 - A blend does not touch the normal. WebGL blends every attachment with the same equation. A blended normal means nothing, so the port keeps the normal of the surface that owns the depth.
 - A clear sets the normal to zero. WebGL clears every attachment to the clear color.
+
+## Multisampled render targets
+
+A target with `samples` takes several samples a pixel and resolves them into its own pixels. three.js: `WebGLRenderTarget` with `samples: 4`. Pass the count to the constructor and draw with `Renderer.render_into`.
+
+```mojo
+var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET, samples=4)
+renderer.render_into(target, scene, assets, camera)
+```
+
+The samples lie on a regular grid inside each pixel. So the count must be zero, one, or a square: 4, 9 or 16. `check_samples` refuses any other count, and `MAX_SAMPLES` is 16. `sample_grid(samples)` gives the side of the grid.
+
+`render_into` draws the frame with `Renderer.multisampled(samples)`, a renderer `sample_grid(samples)` times the size. It draws into `multisample_buffer()`, then calls `resolve_samples`. Each sample of that buffer starts as its pixel. Only the pixels inside the scissor are resolved, so a scissored draw keeps the other pixels.
+
+`resolve_block` is the resolve. It is one function, and three callers share it: `resolve_samples`, `downsampled` and the GPU's resolve kernel. For each pixel it does these steps:
+
+- It adds the premultiplied light of the samples, row by row, and scales the sum by the share of one sample.
+- It keeps the nearest depth, in the target's depth mode.
+- It marks the pixel as data only if every sample holds data.
+- It adds the normals and makes the sum unit length again.
+
+The stencil takes the first sample of each block. A blit of a stencil takes one sample and never an average.
+
+This port differs from three.js in three ways:
+
+- The samples live only while one draw lasts. three.js keeps a multisampled renderbuffer between draws. Here, each sample starts as the pixel it belongs to. So a draw with `auto_clear` off draws over what the target holds, but an edge resolved by an earlier draw stays resolved.
+- Each sample is shaded. A GPU's multisampling shades a pixel once and tests coverage per sample. The result is the supersampled image, which is at least as sharp.
+- three.js accepts any count and the driver rounds it. Here, a count that is not a square is refused.
+
+## Layered render targets
+
+A `LayeredRenderTarget` holds one `RenderTarget` for each layer and each mip level. A draw goes into one of those images. three.js: `setRenderTarget(target, activeCubeFace, activeMipmapLevel)`.
+
+| Function | three.js | Layers | Levels |
+|---|---|---|---|
+| `render_target_3d(width, height, depth, clear, type, samples)` | `WebGL3DRenderTarget`, `RenderTarget3D` | `depth` slices of a volume | One |
+| `array_render_target(width, height, depth, clear, type, samples)` | `WebGLArrayRenderTarget` | `depth` images | One |
+| `cube_render_target(size, clear, type, samples, levels=1)` | `WebGLCubeRenderTarget` | Six faces | One or more |
+| `mipmapped_render_target(size, levels, clear, type, samples)` | `WebGLRenderTarget` with a mip chain | One | One or more |
+
+`TargetKind` is a type. `is_valid` names the four values: `TARGET_2D`, `TARGET_3D`, `TARGET_ARRAY` and `TARGET_CUBE`. A bare integer does not compile. `validate` refuses any other value.
+
+```mojo
+var stack = array_render_target(64, 64, 4, Color(0, 0, 0), FLOAT_TARGET)
+renderer.render_into_layer(stack, 2, 0, scene, assets, camera)
+var layers = stack.array_texture()
+```
+
+| Member | Meaning |
+|---|---|
+| `image(layer, level=0) -> RenderTarget` | The image of one layer and one level, by reference. A draw goes into it. |
+| `set_image(layer, level, image)` | Replace one image. The GPU read back uses it. The new image must match the old one in size, type, outputs and samples. |
+| `clear(color)` | Clear every image. three.js's `WebGLCubeRenderTarget.clear`. |
+| `generate_mipmaps()` | Fill every level from the level above it, with `downsampled(2)`. |
+| `from_equirectangular_texture(panorama)` | Fill every face and level of a cube from a panorama. three.js's `fromEquirectangularTexture`. |
+| `texture(filter=BILINEAR) -> Texture` | A 2D target's levels as one texture. |
+| `cube_texture(filter=BILINEAR) -> CubeTexture` | A cube target's faces, each with the target's levels. |
+| `texture_3d(filter=BILINEAR) -> Data3DTexture` | A 3D target's layers as a volume. |
+| `array_texture(filter=BILINEAR) -> DataArrayTexture` | An array target's layers as an array texture. |
+
+Each texture holds `attachment(0)` of each image: the light as the type stores it. A byte target gives `LINEAR` bytes. A half float or float target gives floats. A volume's rows run up, as three.js stores a 3D texture. So the bottom row of a drawn layer is row zero of that layer.
+
+`Renderer.render_into_layer(target, layer, level, scene, assets, camera)` draws into one image. The renderer must be the size of that level. three.js has the same rule for its viewport, which you set by hand. `Renderer.render_cube_into(target, scene, assets, cube_camera)` draws the six faces of level zero, as three.js's `CubeCamera.update` does.
+
+`from_equirectangular_texture` samples the panorama at `equirect_uv` of the direction through each pixel center. It uses the panorama's filter at full size, as `cube_from_equirectangular` does. three.js draws a box from the cube's center with the same shader.
+
+This port differs from three.js in four ways:
+
+- A mip chain needs a square target whose side is a power of two, so that each level halves exactly. three.js also allows other sizes.
+- `generate_mipmaps` is a call you make. three.js generates the chain after each draw into a target whose texture has `generateMipmaps` on.
+- `from_equirectangular_texture` keeps the target's type. three.js copies the panorama's type and color space onto the target's texture.
+- `from_equirectangular_texture` samples each level at its own size. It does not average the level above.
+
+## Texture copies
+
+`render/texture_copy.mojo` copies texels from one texture into another. It copies stored numbers and converts nothing, as WebGL does. So a byte texture takes bytes and a float texture takes floats, and a copy between the two is refused.
+
+| Function | three.js |
+|---|---|
+| `copy_texture_to_texture(source, destination, region=None, position=TexelPoint(0, 0, 0), source_level=0, destination_level=0)` | `copyTextureToTexture` between two 2D textures. |
+| `copy_texture_to_volume(source, destination.image, region=None, position, source_level=0)` | `copyTextureToTexture` from a 2D texture into a layer of a `Data3DTexture` or a `DataArrayTexture`. |
+| `copy_volume_to_volume(source.image, destination.image, region=None, position)` | `copyTextureToTexture` between two volumes, with a `Box3` source region. |
+| `framebuffer_texture(width, height, texel_type=UNSIGNED_BYTE_TYPE, color_space=SRGB)` | `new FramebufferTexture(width, height)`: nearest, no chain, clamped. |
+| `copy_framebuffer_to_texture(source, texture, position=TexelPoint(0, 0, 0), level=0)` | `copyFramebufferToTexture`. The source is a displayed `Framebuffer` or a `RenderTarget`. |
+
+The coordinates are WebGL's. A row counts up from `v = 0`. For a `Texture` with `flip_y`, the default for an image, row zero is the last stored row. A volume's rows already run up. A framebuffer's rows count up from its bottom, as a scissor's do.
+
+A 2D source region is a `Rect`. A volume source region is a `TexelBox`: a corner and a size in three dimensions. A destination is a `TexelPoint`. A region that is empty or reaches outside either image is refused.
+
+A copy into level zero of a texture with a chain rebuilds the chain with `Texture.regenerate_mipmaps`. three.js calls `generateMipmap` in the same case.
+
+`copy_framebuffer_to_texture` copies a rectangle the size of the texture's level. From a `Framebuffer` it copies the sRGB bytes into a byte texture. The default `SRGB` color space of `framebuffer_texture` reads them back as the light they show. From a `RenderTarget` it copies `attachment(0)`: a byte target fills a byte texture, and a half float or float target fills a float texture.
+
+`GpuRenderer.copy_framebuffer_to_texture(texture, position, level)` does the same copy from the device's image. See [GPU backend](GPU-backend#gpurenderer).
+
+This port differs from three.js in two ways:
+
+- A compressed texture is not a copy source. The port has no compressed textures on the device.
+- A copy from a volume into a 2D texture is not ported.
 
 ## Tone mapping
 

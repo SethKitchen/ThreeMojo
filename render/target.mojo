@@ -261,6 +261,194 @@ def stored(value: Float32, type: TargetType) -> Float32:
     return value
 
 
+# The most samples a pixel of a multisampled target can take: a grid of
+# four by four. WebGL 2 promises at least four, and sixteen is what a
+# desktop GPU usually allows.
+comptime MAX_SAMPLES = 16
+
+
+def sample_grid(samples: Int) -> Int:
+    """Return how many samples across and down each pixel of a target
+    with `samples` takes.
+
+    Args:
+        samples: The target's sample count, as `check_samples` accepts it.
+
+    Returns:
+        The side of the grid: one for zero or one sample, two for four,
+        three for nine and four for sixteen.
+    """
+    var side = 1
+    while (side + 1) * (side + 1) <= samples:
+        side += 1
+    return side
+
+
+def check_samples(samples: Int) raises:
+    """Refuse a sample count no target here can take.
+
+    The port takes its samples on a regular grid inside the pixel, so the
+    count is a square. three.js takes any count, and the driver rounds it
+    to one the hardware has.
+
+    Args:
+        samples: Three.js's `samples`: zero or one for none, or a square
+            from four to `MAX_SAMPLES`.
+
+    Raises:
+        Error: If the count is negative, above `MAX_SAMPLES`, or neither
+            zero nor a square.
+    """
+    if samples < 0 or samples > MAX_SAMPLES:
+        raise Error("A render target takes zero through sixteen samples")
+    var side = sample_grid(samples)
+    if samples > 1 and side * side != samples:
+        raise Error("A render target's samples must be a square: 4, 9 or 16")
+
+
+trait SampleSource:
+    """Where a multisample resolve reads its samples: a host target, or
+    the kernel's planes. `resolve_block` asks these four things and
+    nothing else, so both backends resolve with one function."""
+
+    def light_at(self, slot: Int) -> FloatColor:
+        """Return one sample's premultiplied linear light.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The light, scaled by its alpha.
+        """
+        ...
+
+    def depth_in(self, slot: Int) -> Float32:
+        """Return one sample's depth, as its depth mode stores it.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The depth. The mode's clear value where nothing was drawn.
+        """
+        ...
+
+    def data_in(self, slot: Int) -> Bool:
+        """Return True if one sample holds data rather than light.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The sample's flag.
+        """
+        ...
+
+    def normal_in(self, slot: Int) -> Vector3:
+        """Return one sample's view-space normal.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The normal, or zero where no surface wrote one.
+        """
+        ...
+
+
+@fieldwise_init
+struct ResolvedSample(ImplicitlyCopyable):
+    """One pixel of a resolved multisample block, as a target stores it."""
+
+    # Premultiplied light, or straight for a pixel that is data.
+    var color: FloatColor
+    # The nearest depth of the block, in the block's depth mode.
+    var depth: Float32
+    # True only if every sample of the block is data.
+    var data: Bool
+    # The block's normals summed and made unit length, or zero.
+    var normal: Vector3
+
+
+def resolve_block[
+    S: SampleSource
+](
+    source: S,
+    width: Int,
+    factor: Int,
+    x: Int,
+    y: Int,
+    depth_mode: DepthMode,
+    normals: Bool,
+) -> ResolvedSample:
+    """Return the pixel a `factor` by `factor` block of samples resolves
+    to: three.js's multisample resolve, and the supersampling average.
+
+    The one function both backends resolve with. `RenderTarget.
+    downsampled` and `RenderTarget.resolve_samples` call it on the host,
+    and `render.gpu`'s resolve kernel calls it on the device, so the two
+    resolves cannot differ. The samples are added row by row, then
+    scaled once by the share of each. The light is premultiplied, so a
+    sample that covers nothing adds nothing. The depth is the nearest of
+    the block. The pixel is data only if every sample is, and a data
+    pixel is stored straight. The normals are summed and made unit length
+    again.
+
+    Args:
+        source: Where the samples are read.
+        width: How many samples a row of `source` holds.
+        factor: How many samples across and down become one pixel.
+        x: The pixel's column in the resolved image.
+        y: The pixel's row in the resolved image, from the top.
+        depth_mode: How the depth is stored, which says what is nearest.
+        normals: Whether to resolve the normals too.
+
+    Returns:
+        The resolved pixel.
+    """
+    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var nearest = cleared_depth(depth_mode)
+    # Counted rather than flagged: a `Bool` raised in a nested loop and
+    # read after it hangs codegen; see `docs/wiki/The-Mojo-compiler-hang.md`.
+    var datas = 0
+    var normal = Vector3(0, 0, 0)
+    # One loop over the block, row by row, and not two nested ones: the
+    # nested spelling inside a caller's own loop sends codegen into the
+    # hang `downsampled` once hit. A factor is at least one, so the loop
+    # runs.
+    for sample in range(factor * factor):  # pragma: no branch
+        var row = sample // factor
+        var column = sample % factor
+        var slot = (y * factor + row) * width + x * factor + column
+        var sampled = source.light_at(slot)
+        total = FloatColor(
+            total.r + sampled.r,
+            total.g + sampled.g,
+            total.b + sampled.b,
+            total.a + sampled.a,
+        )
+        var z = source.depth_in(slot)
+        if is_nearer(depth_mode, z, nearest):
+            nearest = z
+        if source.data_in(slot):
+            datas += 1
+        if normals:
+            normal = normal + source.normal_in(slot)
+    var share = 1 / Float32(factor * factor)
+    var color = FloatColor(
+        total.r * share, total.g * share, total.b * share, total.a * share
+    )
+    var data = datas == factor * factor
+    # A data pixel is stored straight; see the module docstring.
+    if data:
+        color = color.unpremultiplied()
+    # The average of two unit vectors is shorter than either. A block no
+    # surface reached sums to zero and keeps no normal.
+    if normal.length() != 0:
+        normal.normalize()
+    return ResolvedSample(color, nearest, data, normal)
+
+
 def _encode_run(
     colors: Pointer[FloatColor, ImmutAnyOrigin],
     data: Pointer[Bool, ImmutAnyOrigin],
@@ -337,7 +525,7 @@ async def _encode_band(
     )
 
 
-struct RenderTarget(Movable):
+struct RenderTarget(Movable, SampleSource):
     """A width x height buffer of premultiplied linear color, plus depth."""
 
     var width: Int
@@ -376,6 +564,11 @@ struct RenderTarget(Movable):
     # where none wrote one: the `OUTPUT_NORMAL` attachment. Empty when the
     # target has no such output, so a plain target pays nothing for it.
     var normals: List[Vector3]
+    # How many samples each pixel takes when the renderer draws into it,
+    # three.js's `samples`: zero or one for none, or a square up to
+    # `MAX_SAMPLES`. The samples live only while one draw lasts; the
+    # target keeps what they resolve to. See `resolve_samples`.
+    var samples: Int
 
     def __init__(
         out self,
@@ -384,6 +577,7 @@ struct RenderTarget(Movable):
         clear: Color,
         type: TargetType = UNSIGNED_BYTE_TARGET,
         outputs: List[TargetOutput] = color_only(),
+        samples: Int = 0,
     ) raises:
         """Create a target cleared to `clear`.
 
@@ -399,14 +593,20 @@ struct RenderTarget(Movable):
             outputs: What each color attachment holds, in order: three.js's
                 `count` and the shader's outputs. The color alone by
                 default. Add `OUTPUT_NORMAL` for a normal attachment.
+            samples: How many samples each pixel takes when the renderer
+                draws into the target, three.js's `samples`. Zero, the
+                default, takes one.
 
         Raises:
-            Error: If either dimension is not positive, or `check_target`
-                refuses the type or the outputs.
+            Error: If either dimension is not positive, `check_target`
+                refuses the type or the outputs, or `check_samples`
+                refuses the sample count.
         """
         if width <= 0 or height <= 0:
             raise Error("Render target dimensions must be positive")
         check_target(type, outputs)
+        check_samples(samples)
+        self.samples = samples
         self.type = type
         self.outputs = outputs.copy()
         self.normals = List[Vector3]()
@@ -621,6 +821,42 @@ struct RenderTarget(Movable):
         if self.data[slot]:
             return self.colors[slot].premultiplied()
         return self.colors[slot]
+
+    def depth_in(self, slot: Int) -> Float32:
+        """Return the depth in slot `slot`, as the depth mode stores it.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The depth.
+        """
+        return self.depth[slot]
+
+    def data_in(self, slot: Int) -> Bool:
+        """Return True if slot `slot` holds data rather than light.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The pixel's flag.
+        """
+        return self.data[slot]
+
+    def normal_in(self, slot: Int) -> Vector3:
+        """Return the view-space normal in slot `slot`.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The normal, or zero where no surface wrote one or the target
+            has no normal attachment.
+        """
+        if not self.has_normals():
+            return Vector3(0, 0, 0)
+        return self.normals[slot]
 
     def is_data(self, x: Int, y: Int) raises -> Bool:
         """Return True if pixel (x, y) holds data rather than light, and
@@ -876,8 +1112,10 @@ struct RenderTarget(Movable):
                 returns a copy.
 
         Returns:
-            The smaller target, its clear color, depth mode, type and
-            outputs carried over, the scissor widened to the whole of it.
+            The smaller target, its clear color, depth mode, type,
+            outputs and samples carried over, the scissor widened to the
+            whole of it. Each pixel is `resolve_block` of its block, and
+            its stencil is the block's first sample's.
 
         Raises:
             Error: If the factor is less than one or does not divide both
@@ -887,86 +1125,130 @@ struct RenderTarget(Movable):
             raise Error("A downsample factor is at least one")
         if self.width % factor != 0 or self.height % factor != 0:
             raise Error("A downsample factor must divide the target's size")
-        var width = self.width // factor
-        var height = self.height // factor
-        var count = width * height
-        var colors = List[FloatColor](
-            length=count, fill=FloatColor(0.0, 0.0, 0.0, 0.0)
-        )
-        var depths = List[Float32](
-            length=count, fill=cleared_depth(self.depth_mode)
-        )
-        # Counted rather than flagged: a `Bool` raised in a loop and read
-        # after it is the shape that hangs codegen; see
-        # `docs/wiki/The-Mojo-compiler-hang.md`.
-        var counts = List[Int](length=count, fill=0)
-        # **Walked flat, over the source pixels, and not as four nested
-        # loops over the blocks.** The nested spelling is the one this
-        # reads like and the one `render.antialias.downsample` uses, and
-        # it sends *this* function into the same codegen hang: a twenty
-        # line program that called it stopped building, where the flat
-        # walk compiles in a second. The arithmetic is the same either
-        # way -- each source pixel belongs to exactly one block, so
-        # adding it to that block's running total visits every sample
-        # once, in a different order.
-        # Both dimensions are positive, so this never runs zero times.
-        for source in range(self.width * self.height):  # pragma: no branch
-            var slot = (
-                source // self.width // factor
-            ) * width + source % self.width // factor
-            var sampled = self.light_at(source)
-            var running = colors[slot]
-            colors[slot] = FloatColor(
-                running.r + sampled.r,
-                running.g + sampled.g,
-                running.b + sampled.b,
-                running.a + sampled.a,
-            )
-            var z = self.depth[source]
-            if is_nearer(self.depth_mode, z, depths[slot]):
-                depths[slot] = z
-            if self.data[source]:
-                counts[slot] += 1
-        # The average, taken once per output pixel rather than per sample,
-        # so the sum is exact before anything divides it.
-        var share = 1 / Float32(factor * factor)
-        var flags = List[Bool](length=count, fill=False)
-        var samples = factor * factor
-        for slot in range(count):  # pragma: no branch
-            var total = colors[slot]
-            colors[slot] = FloatColor(
-                total.r * share,
-                total.g * share,
-                total.b * share,
-                total.a * share,
-            )
-            flags[slot] = counts[slot] == samples
-            # A block that is data throughout stays data, and a data
-            # pixel is stored straight.
-            if flags[slot]:
-                colors[slot] = colors[slot].unpremultiplied()
         var small = RenderTarget(
-            width, height, Color(0, 0, 0, 0), self.type, self.outputs
+            self.width // factor,
+            self.height // factor,
+            Color(0, 0, 0, 0),
+            self.type,
+            self.outputs,
+            self.samples,
         )
-        small.clear = self.clear
-        small.depth_mode = self.depth_mode
-        small.colors = colors^
-        small.depth = depths^
-        small.data = flags^
-        if self.has_normals():
-            # Summed like the light and made a unit vector again, as a
-            # normal interpolated across a triangle is: the average of two
-            # unit vectors is shorter than either. A block no surface
-            # reached sums to zero and keeps no normal.
-            for source in range(self.width * self.height):  # pragma: no branch
-                var slot = (
-                    source // self.width // factor
-                ) * width + source % self.width // factor
-                small.normals[slot] = small.normals[slot] + self.normals[source]
-            for slot in range(count):  # pragma: no branch
-                if small.normals[slot].length() != 0:
-                    small.normals[slot].normalize()
+        small._resolve_blocks(
+            self, factor, Rect.whole(small.width, small.height)
+        )
         return small^
+
+    def multisample_buffer(self) raises -> RenderTarget:
+        """Return the buffer a draw into this target takes its samples in:
+        three.js's multisampled renderbuffer.
+
+        `sample_grid(samples)` times this target's size each way, with its
+        type and its outputs and no samples of its own.
+        `Renderer.render_into` draws into it and then calls
+        `resolve_samples`.
+
+        Every sample starts as its pixel: its color, depth, data flag,
+        stencil and normal. So a draw that clears nothing, with the
+        renderer's `auto_clear` off, draws over what the target holds, as
+        three.js draws over its multisampled renderbuffer. The clear color
+        and the depth mode are the target's too.
+
+        Returns:
+            The larger target.
+
+        Raises:
+            Error: If the larger target cannot be built.
+        """
+        var grid = sample_grid(self.samples)
+        var buffer = RenderTarget(
+            self.width * grid,
+            self.height * grid,
+            Color(0, 0, 0, 0),
+            self.type,
+            self.outputs,
+        )
+        buffer.clear = self.clear
+        buffer.depth_mode = self.depth_mode
+        var keeps = self.has_normals()
+        # Walked flat, over the samples; both sides are positive, so it
+        # runs.
+        for sample in range(buffer.width * buffer.height):  # pragma: no branch
+            var x = sample % buffer.width // grid
+            var y = sample // buffer.width // grid
+            var slot = y * self.width + x
+            buffer.colors[sample] = self.colors[slot]
+            buffer.depth[sample] = self.depth[slot]
+            buffer.data[sample] = self.data[slot]
+            buffer.stencil[sample] = self.stencil[slot]
+            if keeps:
+                buffer.normals[sample] = self.normals[slot]
+        return buffer^
+
+    def resolve_samples(mut self, buffer: RenderTarget, rect: Rect) raises:
+        """Resolve a multisample buffer into the pixels inside `rect`:
+        three.js's resolve of `samples` into the target's textures.
+
+        Each pixel inside `rect` becomes `resolve_block` of its block of
+        samples: the average light, the nearest depth, the unit normal
+        and the data flag, as `downsampled` resolves them. The stencil
+        takes the first sample of the block, as a blit of a stencil takes
+        one sample and never an average. Pixels outside `rect` are left
+        as they were. The target takes the buffer's clear color and depth
+        mode.
+
+        Args:
+            buffer: The samples, as `multisample_buffer` shapes them.
+            rect: The pixels to resolve, its corner at the bottom left.
+
+        Raises:
+            Error: If the buffer is not `sample_grid(samples)` times this
+                target's size each way, its outputs differ from this
+                target's, or the rectangle is empty or reaches outside
+                the target.
+        """
+        var grid = sample_grid(self.samples)
+        if (
+            buffer.width != self.width * grid
+            or buffer.height != self.height * grid
+        ):
+            raise Error(
+                "A multisample buffer must be the sample grid times the"
+                " target's size"
+            )
+        if buffer.has_normals() != self.has_normals():
+            raise Error("A multisample buffer must have the target's outputs")
+        if not rect.fits(self.width, self.height):
+            raise Error("A resolve must lie inside the target")
+        self._resolve_blocks(buffer, grid, rect)
+
+    def _resolve_blocks(
+        mut self, source: RenderTarget, factor: Int, rect: Rect
+    ):
+        """Set every pixel inside `rect` to `resolve_block` of its block
+        in `source`, which is `factor` times this target's size and holds
+        the same outputs. See `resolve_samples`."""
+        self.clear = source.clear
+        self.depth_mode = source.depth_mode
+        var keeps = self.has_normals()
+        var top = rect.top(self.height)
+        # Walked flat, over the rectangle's pixels: two loops around the
+        # two inside `resolve_block` is the nesting that has hung codegen
+        # before. A rectangle that fits holds a pixel, so this runs.
+        for index in range(rect.width * rect.height):  # pragma: no branch
+            var x = rect.x + index % rect.width
+            var y = top + index // rect.width
+            var resolved = resolve_block(
+                source, source.width, factor, x, y, source.depth_mode, keeps
+            )
+            var slot = y * self.width + x
+            self.colors[slot] = resolved.color
+            self.depth[slot] = resolved.depth
+            self.data[slot] = resolved.data
+            self.stencil[slot] = source.stencil[
+                y * factor * source.width + x * factor
+            ]
+            if keeps:
+                self.normals[slot] = resolved.normal
 
     def resolve(
         self,

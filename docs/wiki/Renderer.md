@@ -19,6 +19,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_workers(workers)` | Change the thread count. At least one. |
 | `set_antialias(enabled)` | Supersample `render`, `render_array` and `render_cube`. See below. |
 | `supersampled() -> Renderer` | A renderer `SUPERSAMPLE` times this one's size each way, viewport, scissor and `render_scale` scaled. |
+| `scaled(factor) -> Renderer` | The same, `factor` times the size. |
+| `multisampled(samples) -> Renderer` | `scaled(sample_grid(samples))`: what a draw into a [multisampled target](Render-target-and-framebuffer#multisampled-render-targets) takes its samples with. |
 | `set_background(color)` | The clear color. |
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
@@ -29,7 +31,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare_points(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [points](Points-and-sprites). A [sprite](Points-and-sprites#sprites) is two triangles, and `prepare` makes them. |
 | `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
 | `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
-| `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
+| `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. A target with `samples` is drawn at its sample grid and resolved into its pixels. See below. |
 | `render_with(hooks, scene, assets, camera)`, `render_into_with(hooks, target, scene, assets, camera)` | The same, with render hooks. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags). |
 | `set_opaque_sort(method)`, `set_transparent_sort(method)` | Your order for the opaque and the translucent runs. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#sorts). |
 | `auto_clear`, `auto_clear_color`, `auto_clear_depth`, `auto_clear_stencil`, `clear(target)` | What `render_into` clears. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags#automatic-clear). |
@@ -38,6 +40,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `render_array(scene, assets, array) -> Framebuffer` | Once per camera of an [ArrayCamera](Cameras#arraycamera), each into its own rectangle. |
 | `render_array_into(target, scene, assets, array)` | The same into a target you hold. |
 | `render_cube(scene, assets, camera) -> CubeTexture` | Six faces through a [CubeCamera](Cameras#cubecamera), as a cube texture. |
+| `render_into_layer(target, layer, level, scene, assets, camera)` | `render_into` one layer and one level of a [layered target](Render-target-and-framebuffer#layered-render-targets). three.js's `setRenderTarget(target, activeCubeFace, activeMipmapLevel)`. |
+| `render_cube_into(target, scene, assets, camera)` | Six faces through a CubeCamera, into level zero of a cube target. |
 | `clear_color(scene) -> Color` | What a frame is cleared to: the scene's color background, or `background`. |
 | `backdrop(scene, assets, camera) -> Optional[Framebuffer]` | The scene's image background as the camera sees it, or none. See [Scene graph](Scene-graph#background-and-environment). |
 | `tone_curve() -> ToneMapping` | The curve `render` resolves through: the one set, or none in the uv view. |
@@ -90,7 +94,7 @@ A world-space length is not scaled: a triangle is projected onto whatever grid i
 
 Supersampling rather than a multisampled fill rule keeps both backends on one coverage rule. `render/antialias.mojo` holds `downsample(Framebuffer, factor)`, which resizes a finished picture: it decodes bytes, averages premultiplied and encodes once. That is what a caller driving `GpuRenderer` must use, because the GPU hands back a resolved image rather than the linear target behind it.
 
-That path loses the range described above. It is the best that can be done with bytes, and it is named here rather than left to be found. Prepare with `supersampled()`, pass that renderer's `render_scale` as the draw's `line_width`, draw at its size, and downsample. Giving the GPU the same linear resolve means keeping its target long enough to average it.
+That path loses the range described above. It is the best that can be done with bytes, and it is named here rather than left to be found. Prepare with `supersampled()`, pass that renderer's `render_scale` as the draw's `line_width`, draw at its size, and downsample. Giving the GPU the same linear resolve means keeping its target long enough to average it. A multisampled target does that: `GpuRenderer.read_back_target` resolves its samples in linear light, on the device. See [GPU backend](GPU-backend#multisampled-targets-on-the-gpu).
 
 `render_cube` has the same boundary. It captures its six faces through byte-oriented `Framebuffer` images. Supersampling them does not restore range that was already gone.
 

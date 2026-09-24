@@ -8816,6 +8816,139 @@ def test_both_backends_fill_a_float_target_and_its_normals_alike() raises:
             assert_equal(target.depth_at(x, y), device.depth_at(x, y))
 
 
+# --- multisampled and layered render targets ---------------------------------
+
+from render.layered_target import array_render_target
+from render.target import color_only as only_color
+from render.texture_copy import (
+    TexelPoint,
+    copy_framebuffer_to_texture as host_framebuffer_copy,
+    framebuffer_texture,
+)
+
+
+def a_turned_square_frame(
+    renderer: Renderer,
+) raises -> Tuple[List[RasterVertex], Lighting]:
+    """Return the corners and the lights of a lit square turned about z,
+    its edges crossing pixels, prepared by `renderer`."""
+    var assets = Assets()
+    var square = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER))
+    )
+    var scene = Scene()
+    var stand = Object3D()
+    stand.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(30.0, DEGREE))
+    var node = scene.add(stand^)
+    var lamp = Object3D()
+    lamp.set_position(0.3, 0.5, 1)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 3.0))
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(square, assets.materials.add(Material(Color(250, 200, 120))), node)
+    )
+    var camera = centered(
+        Length(2.0, METER), 1.0, Length(0.1, METER), Length(10.0, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+    )
+    return (corners^, lighting^)
+
+
+def assert_targets_agree(cpu: RenderTarget, gpu: RenderTarget) raises:
+    """Assert two targets hold the same light, depth and data flags."""
+    assert_equal(cpu.width, gpu.width)
+    assert_equal(cpu.height, gpu.height)
+    var cpu_image = cpu.attachment(0)
+    var gpu_image = gpu.attachment(0)
+    for at in range(len(cpu_image.pixels)):
+        var want = cpu_image.pixels[at]
+        assert_true(
+            abs(want - gpu_image.pixels[at])
+            <= 1e-3 * max(Float32(1), abs(want)),
+            "the backends' resolved light differs",
+        )
+    for y in range(cpu.height):
+        for x in range(cpu.width):
+            assert_equal(cpu.is_data(x, y), gpu.is_data(x, y))
+            assert_equal(cpu.depth_at(x, y), gpu.depth_at(x, y))
+
+
+def test_both_backends_resolve_a_multisampled_target_alike() raises:
+    # The samples are drawn at twice the size each way on both backends,
+    # and each resolves them with `resolve_block`: the host through
+    # `RenderTarget.resolve_samples`, the device in its resolve kernel.
+    if skipped_for_lack_of_a_gpu("both backends resolve samples alike"):
+        return
+    var renderer = Renderer(12, 12)
+    var big = renderer.multisampled(4)
+    var frame = a_turned_square_frame(big)
+    var samples = RenderTarget(24, 24, BACKGROUND, FLOAT_TARGET)
+    rasterize_all(frame[0], samples, SHADE_LIT, TextureStore(), frame[1])
+    var cpu = RenderTarget(12, 12, BACKGROUND, FLOAT_TARGET, samples=4)
+    cpu.resolve_samples(samples, Rect.whole(12, 12))
+    var gpu = GpuRenderer(24, 24)
+    gpu.draw(
+        frame[0], BACKGROUND, SHADE_LIT, frame[1], line_width=big.render_scale
+    )
+    var device = gpu.read_back_target(FLOAT_TARGET, only_color(), 4)
+    assert_equal(device.samples, 4)
+    var between = 0
+    for y in range(12):
+        for x in range(12):
+            var alpha = cpu.color_at(x, y).a
+            if (
+                alpha > 0.99
+                and cpu.color_at(x, y).r < 0.9 * cpu.color_at(6, 6).r
+            ):
+                between += 1
+    assert_true(between > 2, "no edge pixel was averaged")
+    assert_targets_agree(cpu, device)
+    with assert_raises(contains="a square"):
+        _ = gpu.read_back_target(FLOAT_TARGET, only_color(), 2)
+
+
+def test_both_backends_fill_a_layer_of_an_array_target_alike() raises:
+    if skipped_for_lack_of_a_gpu("both backends fill a layer alike"):
+        return
+    var renderer = Renderer(12, 12)
+    var frame = a_turned_square_frame(renderer)
+    var cpu = array_render_target(12, 12, 3, BACKGROUND, FLOAT_TARGET)
+    rasterize_all(frame[0], cpu.image(1), SHADE_LIT, TextureStore(), frame[1])
+    var device = array_render_target(12, 12, 3, BACKGROUND, FLOAT_TARGET)
+    var gpu = GpuRenderer(12, 12)
+    gpu.draw(frame[0], BACKGROUND, SHADE_LIT, frame[1])
+    gpu.read_back_layer(device, 1)
+    assert_targets_agree(cpu.image(1), device.image(1))
+    with assert_raises(contains="no such layer"):
+        gpu.read_back_layer(device, 3)
+
+
+def test_both_backends_copy_their_framebuffer_to_a_texture_alike() raises:
+    if skipped_for_lack_of_a_gpu("both backends copy a framebuffer alike"):
+        return
+    var renderer = Renderer(12, 12)
+    var frame = a_turned_square_frame(renderer)
+    var gpu = GpuRenderer(12, 12)
+    gpu.draw(frame[0], BACKGROUND, SHADE_LIT, frame[1])
+    var want = framebuffer_texture(6, 6)
+    host_framebuffer_copy(gpu.read_back(), want, TexelPoint(3, 3, 0))
+    var got = framebuffer_texture(6, 6)
+    gpu.copy_framebuffer_to_texture(got, TexelPoint(3, 3, 0))
+    for at in range(len(want.pixels)):
+        assert_equal(want.pixels[at], got.pixels[at])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 

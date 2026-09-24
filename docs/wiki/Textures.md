@@ -56,6 +56,8 @@ var screen = Material(Color(255, 255, 255), picture, kind=BASIC)
 
 The texture is a copy, not a view. Drawing into the target again changes nothing the texture holds. The edges are clamped by default, as three.js clamps a render target's texture.
 
+A 3D, array or cube target reads back as a `Data3DTexture`, a `DataArrayTexture` or a `CubeTexture`. See [Layered render targets](Render-target-and-framebuffer#layered-render-targets). To copy part of one texture into another, or part of a frame into a texture, see [Texture copies](Render-target-and-framebuffer#texture-copies).
+
 It is a snapshot in bytes. Light above one was clamped or tone mapped when the image was resolved, and a later exposure cannot bring it back. That suits a picture on a screen in the scene. A linear texture that keeps a render's range for a later pass is a different thing, and this is not it.
 
 `depth_texture_of` takes the depth the framebuffer carries and returns it as a texture: a preview of three.js's `DepthTexture`, at eight bits. Each texel is the window-space depth a GPU stores, as one gray byte in every channel. It is zero at the near plane and one at the far plane. A pixel nothing was drawn into is at the far plane. The texture is `LINEAR`, ignores its alpha, and is read nearest with no chain: two depths averaged are the depth of nothing.

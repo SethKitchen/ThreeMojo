@@ -1299,6 +1299,27 @@ struct Texture(Movable):
             )
         return offset
 
+    def regenerate_mipmaps(mut self) raises:
+        """Rebuild the whole chain from the full-size image: WebGL's
+        `generateMipmap`, after the first level was written.
+
+        The levels below the first are dropped and averaged again, as the
+        constructor builds them. A texture with no chain is left alone.
+
+        Raises:
+            Error: If the chain cannot be built.
+        """
+        if self.levels < 2:
+            return
+        var first = self.width * self.height * Self.CHANNELS
+        if self.texel_type == FLOAT_TYPE:
+            self.data.resize(first, 0)
+        else:
+            self.pixels.resize(first, 0)
+        self.levels = 1
+        self.offsets = [0]
+        self._build_mipmaps()
+
     def _build_mipmaps(mut self) raises:
         """Append each halved copy of the image to the texel buffer.
 
