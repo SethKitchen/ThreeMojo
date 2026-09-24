@@ -122,7 +122,9 @@ def main() raises:
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
-        var seconds = Float32(2) * Float32(pi) * Float32(index) / Float32(FRAMES)
+        var seconds = (
+            Float32(2) * Float32(pi) * Float32(index) / Float32(FRAMES)
+        )
         frames.append(
             frame_at(renderer, camera, assets, scene, node, step, seconds)
         )

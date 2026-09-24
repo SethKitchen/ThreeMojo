@@ -73,9 +73,7 @@ def main() raises:
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))
     var assets = Assets()
-    var model = assets.geometries.add(
-        teapot(Length(0.85, METER), segments=6)
-    )
+    var model = assets.geometries.add(teapot(Length(0.85, METER), segments=6))
     var clay = assets.materials.add(Material(Color(196, 154, 118)))
 
     var scene = Scene()

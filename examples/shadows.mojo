@@ -109,7 +109,7 @@ def main() raises:
     sun.shadow.map_size = 256
     sun.shadow.bias = -0.001
     sun.shadow.normal_bias = 0.02
-    sun.shadow.extent = Length(3.0, METER)
+    sun.shadow.set_extent(Length(3.0, METER))
     sun.shadow.near = Length(0.2, METER)
     sun.shadow.far = Length(12.0, METER)
     scene.add_light(sun)

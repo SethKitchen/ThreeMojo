@@ -32,6 +32,7 @@ well; see `render.gpu.GpuComposer`.
 """
 
 from core.layers import Layers
+from math.arc_tangent import atan2_float32
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from postprocessing.screen_space import DepthView
@@ -49,7 +50,7 @@ from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
-from std.math import atan2, cos, floor, isfinite, pi, sin, sqrt
+from std.math import cos, floor, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 # --- bokeh ------------------------------------------------------------------
@@ -839,7 +840,7 @@ def dot_radius_distance(
         dist = _hypot(normal.x * dot_p, normal.y * dot_p)
     else:
         # `HALFTONE_SQUARE`, the only shape left once it is checked.
-        var theta = atan2(p.y - coord.y, p.x - coord.x) - angle
+        var theta = atan2_float32(p.y - coord.y, p.x - coord.x) - angle
         var sin_t = abs(sin(theta))
         var cos_t = abs(cos(theta))
         rad = abs(rad) ** 1.4

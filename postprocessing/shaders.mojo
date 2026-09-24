@@ -35,13 +35,14 @@ Each effect's arithmetic for one pixel is a function the GPU backend's
 kernels call as well; see `render.gpu.GpuComposer`.
 """
 
+from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import Color, FloatColor
 from render.target import RenderTarget
-from std.math import atan2, cos, floor, isfinite, pow, sin, sqrt
+from std.math import cos, floor, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
 
 
@@ -836,7 +837,7 @@ def kaleido_pixel(
     var px = u - 0.5
     var py = v - 0.5
     var r = sqrt(px * px + py * py)
-    var a = atan2(py, px) + angle.value
+    var a = atan2_float32(py, px) + angle.value
     var wedge = KALEIDO_TAU / sides
     a = _glsl_mod(a, wedge)
     a = abs(a - wedge / 2)

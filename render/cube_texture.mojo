@@ -81,6 +81,7 @@ lookup direction first, three.js's `envMapRotation`; `env_rotation` makes
 the matrix, and `Basis3.turn` applies it on both backends.
 """
 
+from math.arc_tangent import atan2_float32
 from math.euler import Euler
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -106,7 +107,7 @@ from render.texture import (
     Texture,
     float_texture,
 )
-from std.math import asin, atan2, isfinite, pi, sqrt
+from std.math import asin, isfinite, pi, sqrt
 
 # How many faces a cube has, and the order they are held in: positive x,
 # negative x, positive y, negative y, positive z, negative z. three.js's
@@ -751,7 +752,8 @@ def equirect_uv(direction: Vector3) -> Vector2:
     # is within one bar a rounding, and `asin` of a hair past one is NaN.
     var up = max(Float32(-1), min(Float32(1), direction.y / length))
     return Vector2(
-        atan2(direction.z / length, direction.x / length) / (2 * Float32(pi))
+        atan2_float32(direction.z / length, direction.x / length)
+        / (2 * Float32(pi))
         + 0.5,
         asin(up) / Float32(pi) + 0.5,
     )

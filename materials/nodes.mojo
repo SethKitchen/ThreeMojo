@@ -78,6 +78,7 @@ its image at the level the surface's own coordinates pick, where WebGPU
 measures the derivatives of the coordinate the node computes.
 """
 
+from math.arc_tangent import atan2_float32, atan_float32
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
@@ -4267,51 +4268,6 @@ def perlin_noise(p: Lanes, count: Int) -> Float32:
     return 0.9820 * ((1.0 - w) * near + w * far)
 
 
-def _atan(x: Float32) -> Float32:
-    """Return the arc tangent of one number, Cephes's `atanf`: the
-    argument folded to below tan(pi / 8) and a polynomial there. Written
-    out, because a GPU target has no libm."""
-    var sign = Float32(1)
-    var a = x
-    if a < 0:
-        sign = -1
-        a = -a
-    var offset = Float32(0)
-    if a > 2.414213562373095:
-        offset = Float32(1.5707963267948966)
-        a = -1 / a
-    elif a > 0.41421356237309503:
-        offset = Float32(0.7853981633974483)
-        a = (a - 1) / (a + 1)
-    var z = a * a
-    var y = (
-        (
-            (Float32(8.05374449538e-2) * z - Float32(1.38776856032e-1)) * z
-            + Float32(1.99777106478e-1)
-        )
-        * z
-        - Float32(3.33329491539e-1)
-    ) * z * a + a
-    return sign * (offset + y)
-
-
-def _atan2(y: Float32, x: Float32) -> Float32:
-    """Return the angle of `(x, y)` from minus pi to pi, by `_atan`."""
-    if x != x or y != y:
-        return x + y
-    if x > 0:
-        return _atan(y / x)
-    if x < 0:
-        return _atan(y / x) + Float32(
-            3.141592653589793 if y >= 0 else -3.141592653589793
-        )
-    if y > 0:
-        return Float32(1.5707963267948966)
-    if y < 0:
-        return Float32(-1.5707963267948966)
-    return 0
-
-
 def _round(x: Float32) -> Float32:
     """Return the whole number nearest `x`, a half to the even one."""
     var low = floor(x)
@@ -4341,13 +4297,13 @@ def _per_lane(op: Int, x: Lanes, y: Lanes) -> Lanes:
     for lane in range(4):  # pragma: no branch
         var a = x[lane]
         if op == NODE_ATAN.value:
-            out[lane] = _atan(a)
+            out[lane] = atan_float32(a)
         elif op == NODE_ATAN2.value:
-            out[lane] = _atan2(a, y[lane])
+            out[lane] = atan2_float32(a, y[lane])
         elif op == NODE_ASIN.value:
-            out[lane] = _atan2(a, sqrt(1 - a * a))
+            out[lane] = atan2_float32(a, sqrt(1 - a * a))
         elif op == NODE_ACOS.value:
-            out[lane] = _atan2(sqrt(1 - a * a), a)
+            out[lane] = atan2_float32(sqrt(1 - a * a), a)
         else:
             out[lane] = _round(a)
     return out
