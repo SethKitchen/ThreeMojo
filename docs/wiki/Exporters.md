@@ -306,11 +306,17 @@ The writers raise for:
 - A roughness map and a metalness map that are not one size, or that do not share one transform and one channel.
 - A number that is not finite.
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
-- An EXR image with no texels, data that is not four values a texel, a compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
+- An EXR image with no texels, or data that is not four values a texel.
+- An EXR compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
 - A DEFLATE level that is not from 0 to 9.
-- A KTX2 texture that is blank, a channel count that is not 1, 2 or 4, a byte texture asked for halves, or a float texture that is `SRGB`.
-- A USDZ mesh that names a node that is not in the scene, a geometry with no position or that is not whole triangles, or a texture with a wrap or a channel that is not valid.
+- A KTX2 texture that is blank, or a channel count that is not 1, 2 or 4.
+- A KTX2 byte texture asked for halves, or a float texture that is `SRGB`.
+- A USDZ mesh that names a node that is not in the scene.
+- A USDZ geometry with no position, or that is not whole triangles.
+- A USDZ texture with a wrap or a channel that is not valid.
 
 ## Example
 
-`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`. `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
+
+`tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
