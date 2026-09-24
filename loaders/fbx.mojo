@@ -32,8 +32,21 @@ geometry, with a group per run of one material. A mesh here draws one
 material, so each material index a geometry uses is its own geometry and
 its own `Mesh`, in the order the indices first appear.
 
-**Not ported.** Skin deformers, blend shapes and animation: a skinned mesh
-draws unskinned, in the pose its vertices are stored in. NURBS curves, a
+**Skins and blend shapes.** A `Skin` deformer on a geometry makes each
+mesh that draws it a `SkinnedMesh`, as three.js's `parseDeformers`,
+`buildSkeleton` and `bindSkeleton` bind it. Each `Cluster` of the skin is
+a bone: the model connected to it. The inverse of its `TransformLink` is
+the bone's inverse bind, and its `Indexes` and `Weights` are the
+`skinIndex` and `skinWeight` of the vertices. A vertex with more than four
+weights keeps its four largest, and the weights are normalized. The mesh
+model's matrix in a `BindPose` is the bind matrix, or the identity when
+there is none. A `BlendShape` deformer's channels are morph targets, held
+as offsets, so `morph_relative` is set, and named by the channel. A
+geometry of more than `MAX_MORPH_TARGETS` targets is refused: a mesh here
+wears at most that many. `loaders.fbx_animation` reads the animation
+stacks into clips.
+
+**Not ported.** NURBS curves, a
 `LookAtProperty`, an orthographic camera, layered textures past their
 first layer, a second set of texture coordinates, and the ambient
 occlusion, displacement, reflection and specular maps. A point light that
@@ -41,10 +54,23 @@ casts a shadow is drawn without one: this renderer has no point-light
 shadow.
 """
 
+from animation.animation_clip import AnimationClip
+from animation.keyframe_track import (
+    MORPH_INFLUENCE,
+    SKINNED_MORPH_INFLUENCE,
+    TrackTarget,
+)
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    MAX_MORPH_TARGETS,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+)
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -63,6 +89,7 @@ from loaders.fbx_tree import (
     object_name,
     parse_fbx,
 )
+from loaders.fbx_animation import FbxAnimatedModel, read_fbx_animations
 from loaders.gltf import decode_base64
 from loaders.model_nodes import (
     authored_color,
@@ -84,6 +111,13 @@ from math.matrix4 import Matrix4, scaling, translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from objects.skeleton import Bone, Skeleton
+from objects.skinned_mesh import (
+    SKIN_INDEX,
+    SKIN_WEIGHT,
+    SkinnedMesh,
+    normalized_skin_weights,
+)
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha
@@ -581,6 +615,8 @@ struct _Part(Movable):
     var normals: List[Float32]
     var colors: List[Float32]
     var uvs: List[Float32]
+    # The position each corner names, for its skin and morph targets.
+    var vertices: List[Int]
 
     def __init__(out self, material: Int):
         self.material = material
@@ -588,6 +624,7 @@ struct _Part(Movable):
         self.normals = List[Float32]()
         self.colors = List[Float32]()
         self.uvs = List[Float32]()
+        self.vertices = List[Int]()
 
 
 @fieldwise_init
@@ -605,6 +642,112 @@ struct _Piece(Copyable, Movable):
 
     var material: Int
     var geometry: GeometryId
+
+
+@fieldwise_init
+struct _Cluster(Copyable, Movable):
+    """One `Cluster` of a skin: the vertices it carries, how much of each,
+    and where its bone stood at bind time."""
+
+    var id: Int
+    var indices: List[Int]
+    var weights: List[Float64]
+    var link: Matrix4
+
+
+@fieldwise_init
+struct _Waiting(Copyable, Movable):
+    """A piece of a skinned model's geometry, waiting for its bones to be
+    placed."""
+
+    var model: Int
+    var source: Int
+    var geometry: GeometryId
+    var material: MaterialId
+    var node: NodeId
+
+
+struct _RigRows(Movable):
+    """A geometry's skin and morph targets, one row per position: four
+    bones and four weights each, and each target's offset, moved by the
+    geometric transform."""
+
+    var skinned: Bool
+    var bones: List[Float32]
+    var weights: List[Float32]
+    var morphs: List[List[Vector3]]
+
+    def __init__(out self):
+        self.skinned = False
+        self.bones = List[Float32]()
+        self.weights = List[Float32]()
+        self.morphs = List[List[Vector3]]()
+
+    def apply(self, vertices: List[Int], mut geometry: BufferGeometry) raises:
+        """Give a piece of the geometry its skin and morph attributes, one
+        value per corner, read by the position each corner names."""
+        if self.skinned:
+            var bones = List[Float32]()
+            var weights = List[Float32]()
+            # A piece has the corners of a triangle at least.
+            for vertex in vertices:  # pragma: no branch
+                for lane in range(4):  # pragma: no branch
+                    bones.append(self.bones[vertex * 4 + lane])
+                    weights.append(self.weights[vertex * 4 + lane])
+            geometry.set_attribute(
+                String(SKIN_INDEX), BufferAttribute(bones^, 4)
+            )
+            geometry.set_attribute(
+                String(SKIN_WEIGHT), BufferAttribute(weights^, 4)
+            )
+        if len(self.morphs) == 0:
+            return
+        geometry.morph_relative = True
+        # There is a target, or the function returned above; and a piece
+        # has the corners of a triangle at least.
+        for target in self.morphs:  # pragma: no branch
+            var offsets = List[Float32]()
+            for vertex in vertices:  # pragma: no branch
+                var moved = target[vertex]
+                offsets.append(moved.x)
+                offsets.append(moved.y)
+                offsets.append(moved.z)
+            geometry.add_morph_target(BufferAttribute(offsets^, 3))
+
+
+struct _Rig(Movable):
+    """What a file's deformers, bind poses and pieces say about skins,
+    blend shapes and animation."""
+
+    # Each skin's clusters, in the order connected, by the skin's id.
+    var clusters: Dict[Int, List[_Cluster]]
+    # The skin of each geometry: the last one connected to it.
+    var skin_of: Dict[Int, Int]
+    # Each geometry's blend shape channels that have a shape, in order,
+    # and each channel's shape geometry node.
+    var channels: Dict[Int, List[Int]]
+    var shapes: Dict[Int, Int]
+    # Each channel's morph target, by the channel's id.
+    var slots: Dict[Int, Int]
+    # Every model connected to a cluster: three.js makes it a `Bone`.
+    var bones: Dict[Int, Bool]
+    # Each model's matrix in a `BindPose`.
+    var poses: Dict[Int, Matrix4]
+    # The skinned pieces, waiting for every bone.
+    var waiting: List[_Waiting]
+    # Each model's meshes and skinned meshes that wear morph targets.
+    var morphs: Dict[Int, List[TrackTarget]]
+
+    def __init__(out self):
+        self.clusters = Dict[Int, List[_Cluster]]()
+        self.skin_of = Dict[Int, Int]()
+        self.channels = Dict[Int, List[Int]]()
+        self.shapes = Dict[Int, Int]()
+        self.slots = Dict[Int, Int]()
+        self.bones = Dict[Int, Bool]()
+        self.poses = Dict[Int, Matrix4]()
+        self.waiting = List[_Waiting]()
+        self.morphs = Dict[Int, List[TrackTarget]]()
 
 
 struct FbxModel(Copyable, Movable):
@@ -640,6 +783,11 @@ struct FbxModel(Copyable, Movable):
     var mesh_count: Int
     var first_light: Int
     var light_count: Int
+    # The same for the skinned meshes, in `scene.skinned_meshes`.
+    var first_skinned_mesh: Int
+    var skinned_mesh_count: Int
+    # One clip per animation stack that makes a track.
+    var animations: List[AnimationClip]
 
     def __init__(out self, format: FbxFormat, version: Int):
         """Start empty.
@@ -665,6 +813,9 @@ struct FbxModel(Copyable, Movable):
         self.mesh_count = 0
         self.first_light = 0
         self.light_count = 0
+        self.first_skinned_mesh = 0
+        self.skinned_mesh_count = 0
+        self.animations = List[AnimationClip]()
 
     def model(self, name: String) raises -> NodeId:
         """Return the node of the first model of a name.
@@ -735,7 +886,10 @@ def load_fbx(
             not there; a polygon is not closed, has no area or crosses
             itself; models are connected in a loop or nest deeper than
             `MAX_MODEL_DEPTH`; a mesh model has no geometry; or a camera,
-            a light or a material is refused by its builder.
+            a light or a material is refused by its builder; or a skin, a
+            blend shape or an animation stack is malformed or names what
+            is not there, or a geometry has more blend shape channels than
+            `MAX_MORPH_TARGETS`.
     """
     if not document.format.is_valid():
         raise Error("FBX: a format that is neither ASCII nor binary")
@@ -745,9 +899,16 @@ def load_fbx(
     var loader = _Loader(document^, directory, objects)
     loader.model.first_mesh = len(scene.meshes)
     loader.model.first_light = len(scene.lights)
+    loader.model.first_skinned_mesh = len(scene.skinned_meshes)
     loader.read_materials(assets)
+    loader.read_deformers()
     loader.read_models(scene, assets)
+    loader.bind_skins(scene)
     loader.read_global_settings(scene)
+    loader.read_animations(scene)
+    loader.model.skinned_mesh_count = (
+        len(scene.skinned_meshes) - loader.model.first_skinned_mesh
+    )
     loader.model.mesh_count = len(scene.meshes) - loader.model.first_mesh
     loader.model.light_count = len(scene.lights) - loader.model.first_light
     return loader.model.copy()
@@ -780,6 +941,8 @@ struct _Loader(Movable):
     # in that list.
     var model_nodes: List[Int]
     var model_children: List[List[Int]]
+    # The skins, blend shapes and bind poses, and what they are on.
+    var rig: _Rig
 
     def __init__(
         out self, var document: FbxDocument, directory: String, objects: Int
@@ -797,6 +960,7 @@ struct _Loader(Movable):
         self.defaults = Dict[String, MaterialId]()
         self.model_nodes = List[Int]()
         self.model_children = List[List[Int]]()
+        self.rig = _Rig()
         for node in document.children(objects):
             if document.property_count(node) > 0:
                 self.objects[document.integer(node, 0)] = node
@@ -1289,6 +1453,7 @@ struct _Loader(Movable):
                 vertex = -vertex - 1
             if vertex * 3 + 3 > len(positions):
                 raise Error("FBX: a polygon names a position that is not there")
+            face.vertices.append(vertex)
             face.points.append(
                 pre.transform_point(
                     Vector3(
@@ -1341,6 +1506,7 @@ struct _Loader(Movable):
             raise Error(
                 "FBX: the last polygon is not closed by a negative index"
             )
+        var rows = self.rig_rows(id, len(positions) // 3, pre)
         var built = List[_Piece]()
         for index in range(len(parts)):
             ref part = parts[index]
@@ -1360,6 +1526,7 @@ struct _Loader(Movable):
                 geometry.set_attribute(
                     String(UV), BufferAttribute(part.uvs.copy(), 2)
                 )
+            rows.apply(part.vertices, geometry)
             var made = assets.geometries.add(geometry^)
             self.model.geometries.append(made)
             built.append(_Piece(part.material, made))
@@ -1422,6 +1589,10 @@ struct _Loader(Movable):
         var node = self.model_nodes[place]
         var id = self.document.integer(node, 0)
         var kind = self.subtype(node)
+        if id in self.rig.bones:
+            # three.js makes a model connected to a cluster a `Bone`,
+            # whatever it was.
+            kind = "LimbNode"
         var data = FbxTransform()
         data.translation = self.vector(
             node, "Lcl Translation", Vector3(0, 0, 0)
@@ -1629,7 +1800,7 @@ struct _Loader(Movable):
                     ),
                     assets,
                 )
-            scene.add_mesh(Mesh(piece.geometry, material, node))
+            self.add_piece(id, geometry, piece.geometry, material, node, scene)
 
     def read_global_settings(mut self, mut scene: Scene) raises:
         """Read `GlobalSettings`: an ambient light for an `AmbientColor`
@@ -1649,6 +1820,349 @@ struct _Loader(Movable):
             Float32(self.value(settings, "UnitScaleFactor", 1)), CENTIMETER
         )
 
+    # --- skins, blend shapes and animation --------------------------------
+
+    def matrix_of(self, node: Int, name: String) raises -> Matrix4:
+        """Return the matrix a child node holds, sixteen numbers column by
+        column, as three.js's `Matrix4.fromArray` reads them.
+
+        Raises:
+            Error: If the node has no such child, or it does not hold
+                sixteen numbers.
+        """
+        var found = self.document.child(node, name)
+        if found == NO_FBX_NODE:
+            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        var values = self.document.numbers(found)
+        if len(values) != 16:
+            raise Error("FBX: a " + name + " needs sixteen numbers")
+        var out = Matrix4()
+        for at in range(16):  # pragma: no branch
+            out.elements[at] = Float32(values[at])
+        return out^
+
+    def read_deformers(mut self) raises:
+        """Read every skin, its clusters and their bones, every blend
+        shape and its channels, and every bind pose, as three.js's
+        `parseDeformers` and `parsePoseNodes` read them."""
+        for node in self.document.children_named(self.objects_node, "Deformer"):
+            var id = self.document.integer(node, 0)
+            var kind = self.subtype(node)
+            if kind == "Skin":
+                self.read_skin(id)
+            elif kind == "BlendShape":
+                self.read_blend_shape(id)
+        for node in self.document.children_named(self.objects_node, "Pose"):
+            if self.subtype(node) != "BindPose":
+                continue
+            for entry in self.document.children_named(node, "PoseNode"):
+                var model = self.document.integer(
+                    self.document.child(entry, "Node"), 0
+                )
+                self.rig.poses[model] = self.matrix_of(entry, "Matrix")
+
+    def read_skin(mut self, id: Int) raises:
+        """Read one skin's clusters, the geometry it deforms, and the model
+        each cluster names as its bone.
+
+        Raises:
+            Error: If the skin deforms no geometry, or a cluster has no
+                `TransformLink`, or not as many `Weights` as `Indexes`.
+        """
+        var clusters = List[_Cluster]()
+        for link in self.links(self.children, id):
+            if self.kind(link.id) != "Deformer":
+                continue
+            var node = self.objects[link.id]
+            if self.subtype(node) != "Cluster":
+                continue
+            var indices = List[Int]()
+            var weights = List[Float64]()
+            var found = self.document.child(node, "Indexes")
+            if found != NO_FBX_NODE:
+                indices = self.document.integers(found)
+                found = self.document.child(node, "Weights")
+                if found != NO_FBX_NODE:
+                    weights = self.document.numbers(found)
+                if len(weights) != len(indices):
+                    raise Error("FBX: a cluster needs one weight per index")
+            clusters.append(
+                _Cluster(
+                    link.id,
+                    indices^,
+                    weights^,
+                    self.matrix_of(node, "TransformLink"),
+                )
+            )
+            for bone in self.links(self.children, link.id):
+                if self.kind(bone.id) == "Model":
+                    self.rig.bones[bone.id] = True
+        var owners = self.links(self.parents, id)
+        if len(owners) == 0:
+            raise Error("FBX: a skin deforms no geometry")
+        self.rig.clusters[id] = clusters^
+        # A geometry keeps the last skin connected to it, as three.js's
+        # `parseMeshGeometry` keeps it. The skin is a child of its owner:
+        # the loop always runs.
+        for link in self.links(  # pragma: no branch
+            self.children, owners[0].id
+        ):
+            if link.id in self.rig.clusters:
+                self.rig.skin_of[owners[0].id] = link.id
+
+    def read_blend_shape(mut self, id: Int) raises:
+        """Read one blend shape's channels onto the geometries it deforms,
+        as three.js's `parseMorphTargets` reads them.
+
+        Raises:
+            Error: If a child of the blend shape is not a
+                `BlendShapeChannel`, or a channel has no shape.
+        """
+        var channels = List[Int]()
+        for link in self.links(self.children, id):
+            if not self.is_channel(link.id):
+                raise Error(
+                    "FBX: a blend shape holds what is not a BlendShapeChannel"
+                )
+            var shape = -1
+            for below in self.links(self.children, link.id):
+                if below.relation == "":
+                    shape = below.id
+                    break
+            if shape < 0:
+                raise Error("FBX: a blend shape channel has no shape")
+            # three.js adds the channel only when its shape is a geometry.
+            if self.kind(shape) == "Geometry":
+                self.rig.shapes[link.id] = self.objects[shape]
+                channels.append(link.id)
+        for owner in self.links(self.parents, id):
+            if owner.id not in self.rig.channels:
+                self.rig.channels[owner.id] = List[Int]()
+            self.rig.channels[owner.id].extend(channels.copy())
+
+    def is_channel(self, id: Int) raises -> Bool:
+        """Return True if an object is a `BlendShapeChannel` deformer."""
+        return (
+            self.kind(id) == "Deformer"
+            and self.subtype(self.objects[id]) == "BlendShapeChannel"
+        )
+
+    def rig_rows(
+        mut self, id: Int, count: Int, pre: Matrix4
+    ) raises -> _RigRows:
+        """Return a geometry's skin and morph targets, one row per
+        position, as three.js's `parseGeoNode`, `genBuffers` and
+        `genMorphGeometry` work them out.
+
+        A vertex with more than four weights keeps the four largest, as
+        three.js's insertion keeps them, and the weights are normalized as
+        `normalizeSkinWeights` scales them. A morph target is moved by the
+        whole geometric transform, its translation too, as three.js's
+        `applyMatrix4` moves it.
+
+        Raises:
+            Error: If the geometry has more morph targets than a mesh
+                wears, a shape names a position the geometry does not
+                have, or a shape has not three numbers per index.
+        """
+        var rows = _RigRows()
+        if id in self.rig.skin_of:
+            rows.skinned = True
+            var bones = List[List[Int]](length=count, fill=List[Int]())
+            var shares = List[List[Float64]](length=count, fill=List[Float64]())
+            var clusters = self.rig.clusters[self.rig.skin_of[id]].copy()
+            for bone in range(len(clusters)):
+                ref cluster = clusters[bone]
+                for at in range(len(cluster.indices)):
+                    var vertex = cluster.indices[at]
+                    # three.js looks up only the positions a polygon names.
+                    if _within(vertex, count):
+                        bones[vertex].append(bone)
+                        shares[vertex].append(cluster.weights[at])
+            for vertex in range(count):
+                var four = _four_largest(bones[vertex], shares[vertex])
+                var scaled = normalized_skin_weights(
+                    SIMD[DType.float32, 4](
+                        Float32(four[1][0]),
+                        Float32(four[1][1]),
+                        Float32(four[1][2]),
+                        Float32(four[1][3]),
+                    )
+                )
+                for lane in range(4):  # pragma: no branch
+                    rows.bones.append(Float32(four[0][lane]))
+                    rows.weights.append(scaled[lane])
+        if id not in self.rig.channels:
+            return rows^
+        var channels = self.rig.channels[id].copy()
+        if len(channels) > MAX_MORPH_TARGETS:
+            raise Error(
+                "FBX: a geometry has "
+                + String(len(channels))
+                + " blend shape targets, and a mesh wears at most "
+                + String(MAX_MORPH_TARGETS)
+            )
+        for slot in range(len(channels)):
+            var shape = self.rig.shapes[channels[slot]]
+            self.rig.slots[channels[slot]] = slot
+            var offsets = List[Vector3](length=count, fill=Vector3(0, 0, 0))
+            var indices = List[Int]()
+            var found = self.document.child(shape, "Indexes")
+            if found != NO_FBX_NODE:
+                indices = self.document.integers(found)
+            var moved = List[Float64]()
+            found = self.document.child(shape, "Vertices")
+            if found != NO_FBX_NODE:
+                moved = self.document.numbers(found)
+            if len(moved) != len(indices) * 3:
+                raise Error("FBX: a shape needs three numbers per index")
+            for at in range(len(indices)):
+                var vertex = indices[at]
+                if not _within(vertex, count):
+                    raise Error(
+                        "FBX: a shape names a position that is not there"
+                    )
+                offsets[vertex] = Vector3(
+                    Float32(moved[at * 3]),
+                    Float32(moved[at * 3 + 1]),
+                    Float32(moved[at * 3 + 2]),
+                )
+            for vertex in range(count):
+                offsets[vertex] = pre.transform_point(offsets[vertex])
+            rows.morphs.append(offsets^)
+        return rows^
+
+    def add_piece(
+        mut self,
+        model: Int,
+        source: Int,
+        geometry: GeometryId,
+        material: MaterialId,
+        node: NodeId,
+        mut scene: Scene,
+    ) raises:
+        """Add one piece of a model's geometry: a mesh, or, for a skinned
+        geometry, a skinned mesh once every bone is placed."""
+        if source in self.rig.skin_of:
+            self.rig.waiting.append(
+                _Waiting(model, source, geometry, material, node)
+            )
+            return
+        if source in self.rig.channels:
+            self.morph_target_of(
+                model, TrackTarget(MORPH_INFLUENCE, len(scene.meshes), 0)
+            )
+        scene.add_mesh(Mesh(geometry, material, node))
+
+    def morph_target_of(mut self, model: Int, target: TrackTarget) raises:
+        """Record a mesh of a model that wears morph targets."""
+        if model not in self.rig.morphs:
+            self.rig.morphs[model] = List[TrackTarget]()
+        self.rig.morphs[model].append(target)
+
+    def bind_skins(mut self, mut scene: Scene) raises:
+        """Add every skinned piece, bound to its skin's bones, as three.js's
+        `bindSkeleton` binds it.
+
+        Raises:
+            Error: If a cluster has no bone, or a bind matrix or an inverse
+                bind is one `SkinnedMesh` or `Skeleton` refuses.
+        """
+        if len(self.rig.waiting) == 0:
+            return
+        var placed = Dict[Int, NodeId]()
+        # A piece waits for a model that drew it, and the list is not
+        # empty: both loops run.
+        for at in range(len(self.model.model_ids)):  # pragma: no branch
+            placed[self.model.model_ids[at]] = self.model.models[at]
+        for waiting in self.rig.waiting:  # pragma: no branch
+            var skin = self.rig.skin_of[waiting.source]
+            var bones = List[Bone]()
+            for cluster in self.rig.clusters[skin]:
+                var bone = -1
+                for link in self.links(self.children, cluster.id):
+                    if link.id in placed:
+                        bone = link.id
+                if bone < 0:
+                    raise Error("FBX: a cluster has no bone")
+                bones.append(Bone(placed[bone], _inverse(cluster.link)))
+            var bind = Matrix4()
+            if waiting.model in self.rig.poses:
+                bind = self.rig.poses[waiting.model]
+            if waiting.source in self.rig.channels:
+                self.morph_target_of(
+                    waiting.model,
+                    TrackTarget(
+                        SKINNED_MORPH_INFLUENCE, len(scene.skinned_meshes), 0
+                    ),
+                )
+            scene.add_skinned_mesh(
+                SkinnedMesh(
+                    waiting.geometry,
+                    waiting.material,
+                    waiting.node,
+                    Skeleton(bones^),
+                    bind,
+                )
+            )
+
+    def read_animations(mut self, scene: Scene) raises:
+        """Read the animation stacks into clips on the placed models."""
+        var models = Dict[Int, FbxAnimatedModel]()
+        for at in range(len(self.model.model_ids)):
+            var id = self.model.model_ids[at]
+            var node = self.objects[id]
+            var placed = scene.get(self.model.models[at])
+            var animated = FbxAnimatedModel(
+                self.model.models[at],
+                placed.position,
+                placed.scale,
+                fbx_euler_order(Int(self.value(node, "RotationOrder", 0))),
+                self.vector(node, "PreRotation", Vector3(0, 0, 0)),
+                self.vector(node, "PostRotation", Vector3(0, 0, 0)),
+            )
+            if id in self.rig.morphs:
+                animated.morphs = self.rig.morphs[id].copy()
+            models[id] = animated^
+        self.model.animations = read_fbx_animations(
+            self.document, self.objects_node, models, self.rig.slots
+        )
+
+
+def _within(index: Int, count: Int) -> Bool:
+    """Return True if an index is from zero to below a count."""
+    return index >= 0 and index < count
+
+
+def _four_largest(
+    bones: List[Int], weights: List[Float64]
+) -> Tuple[List[Int], List[Float64]]:
+    """Return a vertex's bones and weights, four of each: as they come when
+    there are four or fewer, padded with bone zero at weight zero, and the
+    four largest, largest first, when there are more, as three.js's
+    `genBuffers` keeps them."""
+    if len(weights) <= 4:
+        var kept = bones.copy()
+        var shares = weights.copy()
+        while len(shares) < 4:
+            kept.append(0)
+            shares.append(0)
+        return (kept^, shares^)
+    var kept: List[Int] = [0, 0, 0, 0]
+    var shares: List[Float64] = [0, 0, 0, 0]
+    for at in range(len(weights)):  # pragma: no branch
+        var weight = weights[at]
+        var bone = bones[at]
+        for lane in range(4):  # pragma: no branch
+            if weight > shares[lane]:
+                var held = shares[lane]
+                shares[lane] = weight
+                weight = held
+                var named = kept[lane]
+                kept[lane] = bone
+                bone = named
+    return (kept^, shares^)
+
 
 struct _Face(Movable):
     """The corners of the polygon being read, and its material index."""
@@ -1657,6 +2171,7 @@ struct _Face(Movable):
     var normals: List[Vector3]
     var uvs: List[Vector2]
     var colors: List[Vector3]
+    var vertices: List[Int]
     var material: Int
 
     def __init__(out self):
@@ -1664,6 +2179,7 @@ struct _Face(Movable):
         self.normals = List[Vector3]()
         self.uvs = List[Vector2]()
         self.colors = List[Vector3]()
+        self.vertices = List[Int]()
         self.material = 0
 
     def emit(self, mut part: _Part) raises:
@@ -1679,6 +2195,7 @@ struct _Face(Movable):
         # Three corners or more: the loop always runs.
         for corner in order:  # pragma: no branch
             var p = self.points[corner]
+            part.vertices.append(self.vertices[corner])
             part.positions.append(p.x)
             part.positions.append(p.y)
             part.positions.append(p.z)

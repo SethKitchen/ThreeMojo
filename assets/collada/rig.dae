@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset>
+    <unit name="meter" meter="1"/>
+    <up_axis>Y_UP</up_axis>
+  </asset>
+  <library_animations>
+    <animation id="Knee-anim">
+      <source id="Knee-input">
+        <float_array id="Knee-input-array" count="3">0 1 2</float_array>
+        <technique_common>
+          <accessor source="#Knee-input-array" count="3" stride="1">
+            <param name="TIME" type="float"/>
+          </accessor>
+        </technique_common>
+      </source>
+      <source id="Knee-output">
+        <float_array id="Knee-output-array" count="48">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1 0 -1 0 1 1 0 0 0 0 0 1 0 0 0 0 1 2 0 0 1 0 2 0 0 0 0 2 0.5 0 0 0 1</float_array>
+        <technique_common>
+          <accessor source="#Knee-output-array" count="3" stride="16">
+            <param name="TRANSFORM" type="float4x4"/>
+          </accessor>
+        </technique_common>
+      </source>
+      <sampler id="Knee-sampler">
+        <input semantic="INPUT" source="#Knee-input"/>
+        <input semantic="OUTPUT" source="#Knee-output"/>
+        <input semantic="INTERPOLATION" source="#Knee-input"/>
+      </sampler>
+      <channel source="#Knee-sampler" target="Knee-node/transform"/>
+    </animation>
+    <animation id="Group-anim">
+      <animation id="Root-anim">
+        <source id="Root-input">
+          <float_array id="Root-input-array" count="2">0.5 1.5</float_array>
+          <technique_common>
+            <accessor source="#Root-input-array" count="2" stride="1">
+              <param name="TIME" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="Root-output">
+          <float_array id="Root-output-array" count="2">2 3</float_array>
+          <technique_common>
+            <accessor source="#Root-output-array" count="2" stride="1">
+              <param name="Y" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <sampler id="Root-sampler">
+          <input semantic="INPUT" source="#Root-input"/>
+          <input semantic="OUTPUT" source="#Root-output"/>
+        </sampler>
+        <channel source="#Root-sampler" target="Root-node/transform(3)(1)"/>
+      </animation>
+      <animation id="Tip-anim">
+        <source id="Tip-input">
+          <float_array id="Tip-input-array" count="2">0 1</float_array>
+          <technique_common>
+            <accessor source="#Tip-input-array" count="2" stride="1">
+              <param name="TIME" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="Tip-output">
+          <float_array id="Tip-output-array" count="2">0 45</float_array>
+          <technique_common>
+            <accessor source="#Tip-output-array" count="2" stride="1">
+              <param name="ANGLE" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <sampler id="Tip-sampler">
+          <input semantic="INPUT" source="#Tip-input"/>
+          <input semantic="OUTPUT" source="#Tip-output"/>
+        </sampler>
+        <channel source="#Tip-sampler" target="Tip-node/spin.ANGLE"/>
+      </animation>
+    </animation>
+  </library_animations>
+  <library_animation_clips>
+    <animation_clip id="Wave" start="0" end="2.5">
+      <instance_animation url="#Knee-anim"/>
+      <instance_animation url="#Root-anim"/>
+    </animation_clip>
+    <animation_clip id="Spin" start="0" end="1">
+      <instance_animation url="#Tip-anim"/>
+    </animation_clip>
+  </library_animation_clips>
+  <library_controllers>
+    <controller id="Blob-skin" name="Blob-skin">
+      <skin source="#Blob-mesh">
+        <bind_shape_matrix>1 0 0 0 0 1 0 0.5 0 0 1 0 0 0 0 1</bind_shape_matrix>
+        <source id="Blob-joints">
+          <Name_array id="Blob-joints-array" count="5">Hip Knee Root Toe Tip</Name_array>
+          <technique_common>
+            <accessor source="#Blob-joints-array" count="5" stride="1">
+              <param name="JOINT" type="name"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="Blob-bind">
+          <float_array id="Blob-bind-array" count="80">1 0 0 0 0 1 0 -1 0 0 1 0 0 0 0 1 1 0 0 -1 0 1 0 -1 0 0 1 0 0 0 0 1 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.5 0 0 -1 0 0.5 0 -0.5 0 0 0.5 0 0 0 0 1 1 0 0 -3 0 1 0 -1 0 0 1 0 0 0 0 1</float_array>
+          <technique_common>
+            <accessor source="#Blob-bind-array" count="5" stride="16">
+              <param name="TRANSFORM" type="float4x4"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <source id="Blob-weights">
+          <float_array id="Blob-weights-array" count="9">1 0.5 0.1 0.3 0.2 0.25 0.15 0.6 0.4</float_array>
+          <technique_common>
+            <accessor source="#Blob-weights-array" count="9" stride="1">
+              <param name="WEIGHT" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <joints>
+          <input semantic="JOINT" source="#Blob-joints"/>
+          <input semantic="INV_BIND_MATRIX" source="#Blob-bind"/>
+        </joints>
+        <vertex_weights count="5">
+          <input semantic="JOINT" source="#Blob-joints" offset="0"/>
+          <input semantic="WEIGHT" source="#Blob-weights" offset="1"/>
+          <vcount>1 2 2 1 5</vcount>
+          <v>0 0 0 1 1 1 0 7 1 8 0 0 0 2 1 3 2 4 3 5 4 6</v>
+        </vertex_weights>
+      </skin>
+    </controller>
+  </library_controllers>
+  <library_geometries>
+    <geometry id="Blob-mesh" name="Blob">
+      <mesh>
+        <source id="Blob-positions">
+          <float_array id="Blob-positions-array" count="15">0 0 0 1 0 0 1 1 0 0 1 0 2 0.5 0</float_array>
+          <technique_common>
+            <accessor source="#Blob-positions-array" count="5" stride="3">
+              <param name="X" type="float"/>
+              <param name="Y" type="float"/>
+              <param name="Z" type="float"/>
+            </accessor>
+          </technique_common>
+        </source>
+        <vertices id="Blob-vertices">
+          <input semantic="POSITION" source="#Blob-positions"/>
+        </vertices>
+        <polylist count="2">
+          <input semantic="VERTEX" source="#Blob-vertices" offset="0"/>
+          <vcount>4 3</vcount>
+          <p>0 1 2 3 1 4 2</p>
+        </polylist>
+      </mesh>
+    </geometry>
+  </library_geometries>
+  <library_visual_scenes>
+    <visual_scene id="Scene" name="Scene">
+      <node id="Armature" name="Armature" type="NODE">
+        <translate sid="location">0 0 0</translate>
+        <node id="Root-node" name="Root" sid="Root" type="JOINT">
+          <matrix sid="transform">1 0 0 0 0 1 0 1 0 0 1 0 0 0 0 1</matrix>
+          <node id="Hip-node" name="HipNode" sid="Hip" type="JOINT">
+            <translate sid="location">0 0 0</translate>
+            <node id="Knee-node" name="Knee" sid="Knee" type="JOINT">
+              <matrix sid="transform">1 0 0 1 0 1 0 0 0 0 1 0 0 0 0 1</matrix>
+              <node id="Toe-node" name="Toe" sid="Toe" type="JOINT">
+                <matrix sid="transform">0.5 0 0 1 0 0.5 0 0 0 0 0.5 0 0 0 0 1</matrix>
+                <node id="Tip-node" name="Tip" sid="Tip" type="JOINT">
+                  <translate sid="location">1 0 0</translate>
+                  <rotate sid="spin">0 0 1 0</rotate>
+                </node>
+              </node>
+            </node>
+          </node>
+          <node id="Spare-node" name="Spare" sid="Spare" type="JOINT">
+            <translate sid="location">0 0 1</translate>
+          </node>
+        </node>
+      </node>
+      <node id="Body" name="Body" type="NODE">
+        <translate sid="location">0 0.5 0</translate>
+        <instance_controller url="#Blob-skin">
+          <skeleton>#Root-node</skeleton>
+        </instance_controller>
+      </node>
+    </visual_scene>
+  </library_visual_scenes>
+  <scene>
+    <instance_visual_scene url="#Scene"/>
+  </scene>
+</COLLADA>

@@ -874,7 +874,7 @@ def test_geometry() raises:
             + "</triangles><trifans/><extra/>"
             + "</mesh></geometry></library_geometries>",
             '<node><instance_geometry url="#g"/><instance_geometry url="#g"/>'
-            + '<instance_controller/><instance_light url="#none"/>'
+            + '<instance_light url="#none"/>'
             + '<instance_camera url="#none"/><lookat/></node>',
         ),
         "",

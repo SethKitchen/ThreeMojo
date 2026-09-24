@@ -1,0 +1,296 @@
+; FBX 7.4.0 project file
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+Objects:  {
+	Geometry: 1000000000001, "Geometry::Blob", "Mesh" {
+		Vertices: *15 {
+			a: 0,0,0,1,0,0,1,1,0,0,1,0,2,0.5,0
+		}
+		PolygonVertexIndex: *7 {
+			a: 0,1,2,-4,1,4,-3
+		}
+		LayerElementNormal: 0 {
+			MappingInformationType: "ByVertice"
+			ReferenceInformationType: "Direct"
+			Normals: *15 {
+				a: 0,0,1,0,0,1,0,0,1,0,0,1,0,0,1
+			}
+		}
+	}
+	Geometry: 5000000000001, "Geometry::SmileShape", "Shape" {
+		Indexes: *2 {
+			a: 1,4
+		}
+		Vertices: *6 {
+			a: 0,0.5,0,0.25,0,1
+		}
+	}
+	Geometry: 5000000000002, "Geometry::FrownShape", "Shape" {
+		Indexes: *1 {
+			a: 3
+		}
+		Vertices: *3 {
+			a: 0,-0.5,0
+		}
+	}
+	Model: 2000000000001, "Model::Body", "Mesh" {
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,1,0
+		}
+	}
+	Model: 2000000000002, "Model::Hip", "LimbNode" {
+		Properties70:  {
+			P: "PreRotation", "Vector3D", "Vector", "",0,0,90
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,1,0
+		}
+	}
+	Model: 2000000000003, "Model::Knee", "LimbNode" {
+		Properties70:  {
+			P: "RotationOrder", "enum", "", "",4
+			P: "PostRotation", "Vector3D", "Vector", "",10,0,0
+			P: "Lcl Translation", "Lcl Translation", "", "A",1,0,0
+			P: "Lcl Rotation", "Lcl Rotation", "", "A",0,0,30
+		}
+	}
+	Model: 2000000000004, "Model::Ankle", "LimbNode" {
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",1,0,0
+			P: "Lcl Scaling", "Lcl Scaling", "", "A",2,2,2
+		}
+	}
+	Model: 2000000000005, "Model::Toe", "LimbNode" {
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0.5,0,0
+		}
+	}
+	Model: 2000000000006, "Model::Tip", "LimbNode" {
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0.25,0,0
+		}
+	}
+	Deformer: 3000000000001, "Deformer::Skin", "Skin" {
+		Version: 101
+		Link_DeformAcuracy: 50
+	}
+	Deformer: 3000000000002, "SubDeformer::Hip", "Cluster" {
+		Indexes: *5 {
+			a: 0,1,2,3,4
+		}
+		Weights: *5 {
+			a: 1,0.5,0.5,1,0.1
+		}
+		Transform: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+		TransformLink: *16 {
+			a: 0,1,0,0,-1,0,0,0,0,0,1,0,0,1,0,1
+		}
+	}
+	Deformer: 3000000000003, "SubDeformer::Knee", "Cluster" {
+		Indexes: *3 {
+			a: 1,2,4
+		}
+		Weights: *3 {
+			a: 0.5,0.5,0.3
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,1,1,0,1
+		}
+	}
+	Deformer: 3000000000004, "SubDeformer::Ankle", "Cluster" {
+		Indexes: *1 {
+			a: 4
+		}
+		Weights: *1 {
+			a: 0.2
+		}
+		TransformLink: *16 {
+			a: 2,0,0,0,0,2,0,0,0,0,2,0,2,1,0,1
+		}
+	}
+	Deformer: 3000000000005, "SubDeformer::Toe", "Cluster" {
+		Indexes: *1 {
+			a: 4
+		}
+		Weights: *1 {
+			a: 0.25
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,3,1,0,1
+		}
+	}
+	Deformer: 3000000000006, "SubDeformer::Tip", "Cluster" {
+		Indexes: *1 {
+			a: 4
+		}
+		Weights: *1 {
+			a: 0.15
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,3.5,1,0,1
+		}
+	}
+	Deformer: 4000000000001, "Deformer::Morpher", "BlendShape" {
+		Version: 100
+	}
+	Deformer: 4000000000002, "SubDeformer::Smile", "BlendShapeChannel" {
+		Version: 100
+		DeformPercent: 0
+		FullWeights: *1 {
+			a: 100
+		}
+	}
+	Deformer: 4000000000003, "SubDeformer::Frown", "BlendShapeChannel" {
+		Version: 100
+		DeformPercent: 0
+		FullWeights: *1 {
+			a: 100
+		}
+	}
+	Pose: 6000000000001, "Pose::BIND_POSES", "BindPose" {
+		Type: "BindPose"
+		Version: 100
+		NbPoseNodes: 2
+		PoseNode:  {
+			Node: 2000000000001
+			Matrix: *16 {
+				a: 1,0,0,0,0,1,0,0,0,0,1,0,0,1,0,1
+			}
+		}
+		PoseNode:  {
+			Node: 2000000000002
+			Matrix: *16 {
+				a: 0,1,0,0,-1,0,0,0,0,0,1,0,0,1,0,1
+			}
+		}
+	}
+	AnimationStack: 7000000000001, "AnimStack::Walk", "" {
+	}
+	AnimationLayer: 7000000000002, "AnimLayer::BaseLayer", "" {
+	}
+	AnimationCurveNode: 8000000000001, "AnimCurveNode::T", "" {
+	}
+	AnimationCurveNode: 8000000000002, "AnimCurveNode::R", "" {
+	}
+	AnimationCurveNode: 8000000000003, "AnimCurveNode::S", "" {
+	}
+	AnimationCurveNode: 8000000000004, "AnimCurveNode::DeformPercent", "" {
+	}
+	AnimationCurve: 9000000000001, "AnimCurve::", "" {
+		KeyTime: *3 {
+			a: 0,46186158000,92372316000
+		}
+		KeyValueFloat: *3 {
+			a: 0,2,4
+		}
+	}
+	AnimationCurve: 9000000000002, "AnimCurve::", "" {
+		KeyTime: *2 {
+			a: 0,23093079000
+		}
+		KeyValueFloat: *2 {
+			a: 1,3
+		}
+	}
+	AnimationCurve: 9000000000003, "AnimCurve::", "" {
+		KeyTime: *3 {
+			a: 0,46186158000,92372316000
+		}
+		KeyValueFloat: *3 {
+			a: 0,90,-200
+		}
+	}
+	AnimationCurve: 9000000000004, "AnimCurve::", "" {
+		KeyTime: *3 {
+			a: 0,46186158000,92372316000
+		}
+		KeyValueFloat: *3 {
+			a: 10,20,30
+		}
+	}
+	AnimationCurve: 9000000000005, "AnimCurve::", "" {
+		KeyTime: *3 {
+			a: 0,46186158000,92372316000
+		}
+		KeyValueFloat: *3 {
+			a: 30,30,45
+		}
+	}
+	AnimationCurve: 9000000000006, "AnimCurve::", "" {
+		KeyTime: *2 {
+			a: 0,46186158000
+		}
+		KeyValueFloat: *2 {
+			a: 1,3
+		}
+	}
+	AnimationCurve: 9000000000007, "AnimCurve::", "" {
+		KeyTime: *3 {
+			a: 0,23093079000,46186158000
+		}
+		KeyValueFloat: *3 {
+			a: 0,50,100
+		}
+	}
+	AnimationStack: 7000000000003, "AnimStack::Idle", "" {
+	}
+	AnimationLayer: 7000000000004, "AnimLayer::IdleLayer", "" {
+	}
+	AnimationCurveNode: 8000000000005, "AnimCurveNode::T", "" {
+	}
+	AnimationCurve: 9000000000008, "AnimCurve::", "" {
+		KeyTime: *2 {
+			a: 0,46186158000
+		}
+		KeyValueFloat: *2 {
+			a: 1,1.5
+		}
+	}
+}
+Connections:  {
+	C: "OO",2000000000001,0
+	C: "OO",2000000000002,0
+	C: "OO",2000000000003,2000000000002
+	C: "OO",2000000000004,2000000000003
+	C: "OO",2000000000005,2000000000004
+	C: "OO",2000000000006,2000000000005
+	C: "OO",1000000000001,2000000000001
+	C: "OO",3000000000001,1000000000001
+	C: "OO",3000000000002,3000000000001
+	C: "OO",3000000000003,3000000000001
+	C: "OO",3000000000004,3000000000001
+	C: "OO",3000000000005,3000000000001
+	C: "OO",3000000000006,3000000000001
+	C: "OO",2000000000002,3000000000002
+	C: "OO",2000000000003,3000000000003
+	C: "OO",2000000000004,3000000000004
+	C: "OO",2000000000005,3000000000005
+	C: "OO",2000000000006,3000000000006
+	C: "OO",4000000000001,1000000000001
+	C: "OO",4000000000002,4000000000001
+	C: "OO",4000000000003,4000000000001
+	C: "OO",5000000000001,4000000000002
+	C: "OO",5000000000002,4000000000003
+	C: "OO",7000000000002,7000000000001
+	C: "OO",8000000000001,7000000000002
+	C: "OO",8000000000002,7000000000002
+	C: "OO",8000000000003,7000000000002
+	C: "OO",8000000000004,7000000000002
+	C: "OP",8000000000001,2000000000002, "Lcl Translation"
+	C: "OP",8000000000002,2000000000003, "Lcl Rotation"
+	C: "OP",8000000000003,2000000000006, "Lcl Scaling"
+	C: "OP",8000000000004,4000000000002, "DeformPercent"
+	C: "OP",9000000000001,8000000000001, "d|X"
+	C: "OP",9000000000002,8000000000001, "d|Y"
+	C: "OP",9000000000003,8000000000002, "d|X"
+	C: "OP",9000000000004,8000000000002, "d|Y"
+	C: "OP",9000000000005,8000000000002, "d|Z"
+	C: "OP",9000000000006,8000000000003, "d|X"
+	C: "OP",9000000000007,8000000000004, "d|DeformPercent"
+	C: "OO",7000000000004,7000000000003
+	C: "OO",8000000000005,7000000000004
+	C: "OP",8000000000005,2000000000003, "Lcl Translation"
+	C: "OP",9000000000008,8000000000005, "d|X"
+}

@@ -112,7 +112,7 @@ Negative weights are refused for the same reason. Two bones at minus one and two
 
 The renderer uses the weights as they are, as three.js's shader does. Weights summing to two put a vertex twice as far from the mesh's origin as the bones do. Weights of zero put it at the origin.
 
-`normalize_skin_weights(geometry)` is three.js's `SkinnedMesh.normalizeSkinWeights`. It divides each vertex's weights by the sum of their magnitudes. A vertex with no weight goes to its first bone. The glTF loader calls it, as three.js's glTF, FBX and Collada loaders do. The scene JSON loader does not, as three.js's `ObjectLoader` does not. Call it for a geometry that you build.
+`normalize_skin_weights(geometry)` is three.js's `SkinnedMesh.normalizeSkinWeights`. It divides each vertex's weights by the sum of their magnitudes. A vertex with no weight goes to its first bone. The glTF, FBX and Collada loaders call it, as three.js's loaders do. The scene JSON loader does not, as three.js's `ObjectLoader` does not. Call it for a geometry that you build.
 
 ## See also
 

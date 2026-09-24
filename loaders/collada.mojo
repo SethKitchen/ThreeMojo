@@ -33,13 +33,32 @@ primitive, with a group per primitive and an array of materials. A mesh
 here draws one material, so each primitive is its own geometry and its
 own `Mesh`, as `loaders.obj` makes one object per `usemtl`.
 
-**Not ported.** Skins and controllers, animations and animation clips,
-kinematics and physics, `<lookat>` and `<skew>` steps, `<trifans>`,
+**Skins.** An `<instance_controller>` of a `<skin>` controller draws the
+skin's geometry as `SkinnedMesh`es, as three.js's `buildNode`,
+`buildSkin` and `buildSkeleton` bind it. The bones are the `JOINT` nodes
+under each `<skeleton>` root, in the order of the controller's joint
+names, which match a joint's `sid`; a joint the controller does not name
+follows, at the identity. Each joint's `INV_BIND_MATRIX` is its bone's
+inverse bind, and the `bind_shape_matrix` is the bind matrix. A vertex
+keeps its four largest weights, and the weights are normalized.
+`loaders.collada_animation` reads the animations and the clips.
+
+**Where skins differ from three.js.** three.js adds the skin to the
+geometry itself, so every instance of the geometry is skinned; here only
+the controller's instances are. A `<skeleton>` that names neither a node
+nor a visual scene, a controller joint no bone has, and a joint index
+outside the joints are refused, where three.js reads a hole. A bone inside
+an `<instance_node>` copy is not a bone here. A joint source must be a
+`Name_array`, which is the one three.js reads. A `<morph>` controller is
+refused: three.js does not read one.
+
+**Not ported.** Kinematics and physics, `<lookat>` and `<skew>` steps, `<trifans>`,
 `<tristrips>` and polygons with holes, a second set of texture
 coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
+from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -54,6 +73,7 @@ from lights.light import (
     point_light,
     spot_light,
 )
+from loaders.collada_animation import read_collada_animations
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
@@ -78,6 +98,13 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
+from objects.skeleton import Bone, Skeleton
+from objects.skinned_mesh import (
+    SKIN_INDEX,
+    SKIN_WEIGHT,
+    SkinnedMesh,
+    normalized_skin_weights,
+)
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
@@ -180,6 +207,11 @@ struct ColladaModel(Copyable, Movable):
     var line_count: Int
     var first_light: Int
     var light_count: Int
+    # The same for the skinned meshes, in `scene.skinned_meshes`.
+    var first_skinned_mesh: Int
+    var skinned_mesh_count: Int
+    # One clip per animation clip that makes a track, or `default`.
+    var animations: List[AnimationClip]
 
     def __init__(out self):
         """Start empty."""
@@ -201,6 +233,9 @@ struct ColladaModel(Copyable, Movable):
         self.line_count = 0
         self.first_light = 0
         self.light_count = 0
+        self.first_skinned_mesh = 0
+        self.skinned_mesh_count = 0
+        self.animations = List[AnimationClip]()
 
     def material(self, id: String) raises -> MaterialId:
         """Return the material a `<material id>` became.
@@ -267,7 +302,9 @@ def load_collada(
             of range; an effect has no `profile_COMMON` technique; a
             camera or a light is refused by its builder; an image path is
             not relative or the image cannot be read; or `<instance_node>`
-            nests deeper than `MAX_INSTANCE_DEPTH`.
+            nests deeper than `MAX_INSTANCE_DEPTH`; or a controller, a skin,
+            its skeleton, an animation or a clip is malformed or names what
+            is not there.
     """
     var document = parse_xml(text)
     if document.name(document.root()) != "COLLADA":
@@ -275,7 +312,14 @@ def load_collada(
     var loader = _Loader(document^, directory)
     loader.read_asset()
     loader.read_materials(assets)
+    loader.model.first_skinned_mesh = len(scene.skinned_meshes)
     loader.read_scene(scene, assets)
+    loader.place_controllers(scene, assets)
+    loader.model.skinned_mesh_count = (
+        len(scene.skinned_meshes) - loader.model.first_skinned_mesh
+    )
+    loader.model.line_count = len(scene.lines) - loader.model.first_line
+    loader.read_animations()
     return loader.model.copy()
 
 
@@ -408,6 +452,8 @@ struct _Built(Copyable, Movable):
     # three.js makes one object per kind of primitive in a geometry, and
     # counts them to decide whether a node is one object.
     var kind: String
+    # The position each corner names, for a skin.
+    var vertices: List[Int]
 
 
 struct _Corners(Movable):
@@ -418,13 +464,120 @@ struct _Corners(Movable):
     var uvs: List[Float32]
     var colors: List[Float32]
     var color_size: Int
+    var vertices: List[Int]
 
     def __init__(out self):
+        self.vertices = List[Int]()
         self.positions = List[Float32]()
         self.normals = List[Float32]()
         self.uvs = List[Float32]()
         self.colors = List[Float32]()
         self.color_size = 0
+
+
+@fieldwise_init
+struct _Controlled(Copyable, Movable):
+    """An `<instance_controller>` and the scene node it rides, waiting for
+    its bones to be placed."""
+
+    var instance: Int
+    var node: NodeId
+
+
+struct _Skin(Movable):
+    """A `<skin>`, read: its bind shape matrix, its joints' names and
+    inverse binds, and each vertex's four bones and weights."""
+
+    var bind: Matrix4
+    var names: List[String]
+    var inverses: List[Matrix4]
+    var bones: List[Float32]
+    var weights: List[Float32]
+
+    def __init__(out self):
+        self.bind = Matrix4()
+        self.names = List[String]()
+        self.inverses = List[Matrix4]()
+        self.bones = List[Float32]()
+        self.weights = List[Float32]()
+
+    def apply(self, vertices: List[Int], mut geometry: BufferGeometry) raises:
+        """Give a primitive its skin, one value per corner, read by the
+        position each corner names.
+
+        Raises:
+            Error: If a corner names a position the skin has no weights
+                for.
+        """
+        var bones = List[Float32]()
+        var weights = List[Float32]()
+        # A primitive is built with a corner at least.
+        for vertex in vertices:  # pragma: no branch
+            if vertex * 4 + 4 > len(self.bones):
+                raise Error("Collada: a position has no skin weights")
+            for lane in range(4):  # pragma: no branch
+                bones.append(self.bones[vertex * 4 + lane])
+                weights.append(self.weights[vertex * 4 + lane])
+        geometry.set_attribute(String(SKIN_INDEX), BufferAttribute(bones^, 4))
+        geometry.set_attribute(
+            String(SKIN_WEIGHT), BufferAttribute(weights^, 4)
+        )
+
+
+struct _ColladaRig(Movable):
+    """The controllers, the nodes placed, and the controller instances
+    waiting for their bones."""
+
+    var controllers: Dict[String, Int]
+    # The scene node each `<node>` element became, placed itself and not
+    # as a copy.
+    var placed: Dict[Int, NodeId]
+    var waiting: List[_Controlled]
+    # Each skinned primitive built, by controller and primitive.
+    var skinned: Dict[String, GeometryId]
+
+    def __init__(out self):
+        self.controllers = Dict[String, Int]()
+        self.placed = Dict[Int, NodeId]()
+        self.waiting = List[_Controlled]()
+        self.skinned = Dict[String, GeometryId]()
+
+
+def _require(
+    inputs: Dict[String, Tuple[String, Int]], semantic: String, what: String
+) raises:
+    """Raise unless a skin's inputs have one of a semantic.
+
+    Raises:
+        Error: If they have none.
+    """
+    if semantic not in inputs:
+        raise Error("Collada: " + what + " needs " + semantic)
+
+
+def _within(index: Int, count: Int) -> Bool:
+    """Return True if an index is from zero to below a count."""
+    return index >= 0 and index < count
+
+
+def _sorted_place(amounts: List[Float64], amount: Float64) -> Int:
+    """Return where a weight goes in weights sorted largest first: after
+    every weight at least as large, as a stable sort puts it."""
+    var at = len(amounts)
+    for before in range(len(amounts) - 1, -1, -1):
+        if amounts[before] >= amount:
+            break
+        at = before
+    return at
+
+
+def _row_major(values: List[Float64], start: Int) -> Matrix4:
+    """Return the matrix sixteen numbers hold row by row, as Collada
+    writes one, from `start`."""
+    var out = Matrix4()
+    for at in range(16):  # pragma: no branch
+        out.elements[(at % 4) * 4 + at // 4] = Float32(values[start + at])
+    return out^
 
 
 struct _Loader(Movable):
@@ -453,6 +606,8 @@ struct _Loader(Movable):
     # phong for a mesh, a white basic for a line, and a magenta basic for
     # a symbol bound to nothing. Made once each, when first needed.
     var defaults: Dict[String, MaterialId]
+    # The controllers, the placed nodes and the skins waiting for them.
+    var rig: _ColladaRig
 
     def __init__(out self, var document: XmlDocument, directory: String) raises:
         self.document = document^
@@ -470,6 +625,7 @@ struct _Loader(Movable):
         self.built = List[_Built]()
         self.line_materials = Dict[Int, MaterialId]()
         self.defaults = Dict[String, MaterialId]()
+        self.rig = _ColladaRig()
         # A parsed document has its root at least: the loop always runs.
         for index in range(self.document.count()):  # pragma: no branch
             ref element = self.document.elements[index]
@@ -1063,6 +1219,10 @@ struct _Loader(Movable):
         var id = scene.attach(placed^, parent)
         self.model.nodes.append(id)
         self.model.node_names.append(name)
+        if depth == 0:
+            # The node itself, not a copy an `<instance_node>` placed: the
+            # one three.js animates and binds as a bone.
+            self.rig.placed[element] = id
         self.place_contents(element, id, scene, assets, depth)
 
     def place_contents(
@@ -1098,6 +1258,9 @@ struct _Loader(Movable):
                 self.place_light(instance, id, alone, scene)
             elif name == "instance_geometry":
                 self.place_geometry(instance, id, scene, assets)
+            elif name == "instance_controller":
+                # Placed once every bone is.
+                self.rig.waiting.append(_Controlled(instance, id))
             elif name == "instance_node":
                 var url = _reference(self.document.attribute(instance, "url"))
                 if url not in self.nodes:
@@ -1541,7 +1704,11 @@ struct _Loader(Movable):
         self.model.geometries.append(id)
         self.built.append(
             _Built(
-                id, lines, self.document.attribute(primitive, "material"), kind
+                id,
+                lines,
+                self.document.attribute(primitive, "material"),
+                kind,
+                corners.vertices.copy(),
             )
         )
 
@@ -1581,6 +1748,7 @@ struct _Loader(Movable):
                 "Collada: an index outside its source: " + String(index)
             )
         if name == "POSITION":
+            corners.vertices.append(index)
             for axis in range(3):  # pragma: no branch
                 corners.positions.append(Float32(found.values[start + axis]))
         elif name == "NORMAL":
@@ -1600,6 +1768,310 @@ struct _Loader(Movable):
                 if channel < 3:
                     value = srgb_to_linear(value)
                 corners.colors.append(value)
+
+    # --- skins and animations ---------------------------------------------
+
+    def place_controllers(
+        mut self, mut scene: Scene, mut assets: Assets
+    ) raises:
+        """Place every `<instance_controller>`, now that every bone is in
+        the scene, as three.js's `buildNode` places it.
+
+        Raises:
+            Error: If an instance names no controller, the controller is a
+                `<morph>` or has no `<skin>`, the skin is malformed, or its
+                skeleton cannot be built.
+        """
+        if len(self.rig.waiting) == 0:
+            return
+        for index in range(self.document.count()):  # pragma: no branch
+            if self.document.name(index) == "controller":
+                var id = self.document.attribute(index, "id")
+                if id != "":
+                    self.rig.controllers[id] = index
+        # The list is not empty, or the function returned above.
+        for waiting in self.rig.waiting.copy():  # pragma: no branch
+            var url = _reference(
+                self.document.attribute(waiting.instance, "url")
+            )
+            if url not in self.rig.controllers:
+                raise Error(
+                    "Collada: <instance_controller> names nothing: " + url
+                )
+            var controller = self.rig.controllers[url]
+            var skin = self.document.child(controller, "skin")
+            if skin == NO_ELEMENT:
+                if self.document.child(controller, "morph") != NO_ELEMENT:
+                    raise Error(
+                        "Collada: a morph controller is not read, as three.js"
+                        " does not read one"
+                    )
+                raise Error("Collada: a controller has no <skin>")
+            var geometry = _reference(self.document.attribute(skin, "source"))
+            self.build_geometry(geometry, assets)
+            var data = self.read_skin(skin)
+            var skeleton = self.skeleton_for(waiting.instance, data, assets)
+            var bindings = Dict[String, String]()
+            for bind in self.document.children_named(
+                waiting.instance, "bind_material"
+            ):
+                self.collect_bindings(bind, bindings)
+            for slot in range(self.built_count[geometry]):
+                var built = self.built[self.built_at[geometry] + slot].copy()
+                var material = self.material_for(
+                    built.symbol, bindings, built.lines, assets
+                )
+                if built.lines:
+                    # three.js draws a line of a skinned geometry unskinned.
+                    scene.add_line(
+                        Line(
+                            built.geometry,
+                            material,
+                            waiting.node,
+                            mode=SEGMENTS,
+                        )
+                    )
+                    continue
+                var key = url + "#" + String(slot)
+                if key not in self.rig.skinned:
+                    var shape = assets.geometries.get(built.geometry).clone()
+                    data.apply(built.vertices, shape)
+                    var made = assets.geometries.add(shape^)
+                    self.model.geometries.append(made)
+                    self.rig.skinned[key] = made
+                scene.add_skinned_mesh(
+                    SkinnedMesh(
+                        self.rig.skinned[key],
+                        material,
+                        waiting.node,
+                        skeleton.copy(),
+                        data.bind,
+                    )
+                )
+
+    def skin_source(self, sources: Dict[String, Int], id: String) raises -> Int:
+        """Return a skin's `<source>` of an id.
+
+        Raises:
+            Error: If the skin has none.
+        """
+        if id not in sources:
+            raise Error("Collada: a skin names no source: " + id)
+        return sources[id]
+
+    def skin_inputs(
+        self, element: Int
+    ) raises -> Dict[String, Tuple[String, Int]]:
+        """Return the `<input>`s of a `<joints>` or a `<vertex_weights>`:
+        each semantic's source and offset."""
+        var inputs = Dict[String, Tuple[String, Int]]()
+        for input in self.document.children_named(element, "input"):
+            var offset = _ints(self.document.attribute(input, "offset", "0"))
+            if len(offset) != 1:
+                raise Error("Collada: an input needs one offset")
+            inputs[self.document.attribute(input, "semantic")] = (
+                _reference(self.document.attribute(input, "source")),
+                offset[0],
+            )
+        return inputs^
+
+    def read_skin(self, skin: Int) raises -> _Skin:
+        """Read a `<skin>`: its bind shape matrix, its joints' names and
+        inverse binds, and each vertex's four bones and weights, as
+        three.js's `buildSkin` reads them.
+
+        Raises:
+            Error: If it has no `<joints>` or `<vertex_weights>`, an input
+                is missing or names no source, the joint names are not a
+                `Name_array`, a matrix or a weight is out of range, or an
+                index names no joint.
+        """
+        var data = _Skin()
+        var shape = self.document.child(skin, "bind_shape_matrix")
+        if shape != NO_ELEMENT:
+            data.bind = _row_major(
+                self.numbers(shape, 16, "<bind_shape_matrix>"), 0
+            )
+        var sources = Dict[String, Int]()
+        for source in self.document.children_named(skin, "source"):
+            sources[self.document.attribute(source, "id")] = source
+        var joints = self.document.child(skin, "joints")
+        var weights = self.document.child(skin, "vertex_weights")
+        if joints == NO_ELEMENT:
+            raise Error("Collada: a skin needs <joints>")
+        if weights == NO_ELEMENT:
+            raise Error("Collada: a skin needs <vertex_weights>")
+        var joint_inputs = self.skin_inputs(joints)
+        var weight_inputs = self.skin_inputs(weights)
+        _require(joint_inputs, "JOINT", "<joints>")
+        _require(joint_inputs, "INV_BIND_MATRIX", "<joints>")
+        _require(weight_inputs, "JOINT", "<vertex_weights>")
+        _require(weight_inputs, "WEIGHT", "<vertex_weights>")
+        var names = self.document.child(
+            self.skin_source(sources, joint_inputs["JOINT"][0]), "Name_array"
+        )
+        if names == NO_ELEMENT:
+            raise Error("Collada: a skin's joints must be a Name_array")
+        for piece in self.document.text(names).split():
+            data.names.append(String(piece))
+        var inverses = self.source_of(
+            self.skin_source(sources, joint_inputs["INV_BIND_MATRIX"][0])
+        )
+        for joint in range(len(data.names)):
+            var start = joint * inverses.stride
+            if start + 16 > len(inverses.values):
+                raise Error("Collada: a joint has no inverse bind matrix")
+            data.inverses.append(_row_major(inverses.values, start))
+        var shares = self.source_of(
+            self.skin_source(sources, weight_inputs["WEIGHT"][0])
+        ).values.copy()
+        var joint_at = weight_inputs["JOINT"][1]
+        var weight_at = weight_inputs["WEIGHT"][1]
+        var counts = List[Int]()
+        var found = self.document.child(weights, "vcount")
+        if found != NO_ELEMENT:
+            counts = _ints(self.document.text(found))
+        var pairs = List[Int]()
+        found = self.document.child(weights, "v")
+        if found != NO_ELEMENT:
+            pairs = _ints(self.document.text(found))
+        var stride = 0
+        for count in counts:
+            var bones = List[Int]()
+            var amounts = List[Float64]()
+            for _ in range(count):
+                # three.js steps two numbers per influence, whatever the
+                # inputs are.
+                if stride + max(joint_at, weight_at) >= len(pairs):
+                    raise Error("Collada: <v> is shorter than <vcount> needs")
+                var bone = pairs[stride + joint_at]
+                var share = pairs[stride + weight_at]
+                if not _within(bone, len(data.names)):
+                    raise Error(
+                        "Collada: a joint index outside the joints: "
+                        + String(bone)
+                    )
+                if not _within(share, len(shares)):
+                    raise Error("Collada: a weight index outside the weights")
+                # Largest first, equal weights keeping their order, as
+                # three.js's stable sort keeps them.
+                var at = _sorted_place(amounts, shares[share])
+                bones.insert(at, bone)
+                amounts.insert(at, shares[share])
+                stride += 2
+            var four = SIMD[DType.float32, 4](0)
+            for lane in range(4):  # pragma: no branch
+                var bone = 0
+                if lane < len(amounts):
+                    bone = bones[lane]
+                    four[lane] = Float32(amounts[lane])
+                data.bones.append(Float32(bone))
+            var scaled = normalized_skin_weights(four)
+            for lane in range(4):  # pragma: no branch
+                data.weights.append(scaled[lane])
+        return data^
+
+    def source_of(self, element: Int) raises -> _Source:
+        """Return a skin `<source>`'s numbers and stride, three when it
+        names none, as three.js's `parseSource` reads them."""
+        var values = List[Float64]()
+        var array = self.document.child(element, "float_array")
+        if array != NO_ELEMENT:
+            values = _floats(self.document.text(array))
+        var stride = 3
+        var common = self.document.child(element, "technique_common")
+        if common != NO_ELEMENT:
+            var accessor = self.document.child(common, "accessor")
+            if accessor != NO_ELEMENT:
+                stride = _ints(
+                    self.document.attribute(accessor, "stride", "3")
+                )[0]
+        if stride < 1:
+            raise Error("Collada: a source's stride must be positive")
+        return _Source(values^, stride)
+
+    def is_bone(mut self, element: Int, mut assets: Assets) raises -> Bool:
+        """Return True if three.js makes a node a `Bone`: a `JOINT` that
+        is not one object alone."""
+        if self.document.attribute(element, "type") != "JOINT":
+            return False
+        return not (
+            len(self.document.children_named(element, "node")) == 0
+            and self.object_count(element, assets) == 1
+        )
+
+    def collect_bones(
+        mut self, element: Int, mut bones: List[Int], mut assets: Assets
+    ) raises:
+        """Gather the bones under a node, itself first, as three.js's
+        `traverse` meets them."""
+        if self.is_bone(element, assets):
+            bones.append(element)
+        for child in self.document.children_named(element, "node"):
+            self.collect_bones(child, bones, assets)
+
+    def skeleton_for(
+        mut self, instance: Int, data: _Skin, mut assets: Assets
+    ) raises -> Skeleton:
+        """Build an instance's skeleton, as three.js's `buildSkeleton` and
+        `buildBoneHierarchy` build it.
+
+        Raises:
+            Error: If a `<skeleton>` names neither a node nor a visual
+                scene, a joint names no bone, a bone is not in the scene,
+                or the skeleton has no bone.
+        """
+        var found = List[Int]()
+        for root in self.document.children_named(instance, "skeleton"):
+            var id = _reference(String(self.document.text(root).strip()))
+            if id in self.nodes:
+                self.collect_bones(self.nodes[id], found, assets)
+            elif id in self.visual_scenes:
+                for child in self.document.children_named(
+                    self.visual_scenes[id], "node"
+                ):
+                    if self.document.attribute(child, "type") == "JOINT":
+                        self.collect_bones(child, found, assets)
+            else:
+                raise Error("Collada: a <skeleton> names no node: " + id)
+        var used = List[Bool](length=len(found), fill=False)
+        var order = List[Int]()
+        for name in data.names:
+            var hit = -1
+            for at in range(len(found)):
+                if self.document.attribute(found[at], "sid") == name:
+                    hit = at
+                    break
+            if hit < 0:
+                raise Error("Collada: a joint names no bone: " + name)
+            used[hit] = True
+            order.append(hit)
+        for at in range(len(found)):
+            if not used[at]:
+                order.append(at)
+        var bones = List[Bone]()
+        for at in order:
+            var element = found[at]
+            if element not in self.rig.placed:
+                raise Error("Collada: a bone is not in the scene")
+            # The inverse of the first joint of the bone's name, or the
+            # identity for a bone the controller does not name.
+            var inverse = Matrix4()
+            var sid = self.document.attribute(element, "sid")
+            for joint in range(len(data.names) - 1, -1, -1):
+                if data.names[joint] == sid:
+                    inverse = data.inverses[joint]
+            bones.append(Bone(self.rig.placed[element], inverse))
+        return Skeleton(bones^)
+
+    def read_animations(mut self) raises:
+        """Read the animations and the clips onto the placed nodes."""
+        var matrices = Dict[Int, Matrix4]()
+        for element in self.rig.placed.keys():
+            matrices[element] = self.node_matrix(element)
+        self.model.animations = read_collada_animations(
+            self.document, self.nodes, self.rig.placed, matrices
+        )
 
 
 def _polygon_order(counts: List[Int], mut order: List[Int]):

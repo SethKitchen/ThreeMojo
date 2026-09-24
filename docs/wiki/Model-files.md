@@ -469,7 +469,7 @@ The loader raises for:
 
 ## Collada
 
-`loaders/collada.mojo`. `read_collada(path, scene, assets)` reads a Collada `.dae` file into the scene and the assets it is handed. It reads the geometries, the materials and their textures, the node hierarchy, the cameras and the lights. three.js: `ColladaLoader`.
+`loaders/collada.mojo`. `read_collada(path, scene, assets)` reads a Collada `.dae` file into the scene and the assets it is handed. It reads the geometries, the materials and their textures, the node hierarchy, the cameras, the lights, the skins and the animations. three.js: `ColladaLoader`.
 
 ```mojo
 from loaders.collada import read_collada
@@ -501,6 +501,8 @@ The model tells what went where.
 | `textures` | One `TextureId` for each map that a material reads. |
 | `perspective_cameras`, `orthographic_cameras` | Each camera that an `<instance_camera>` places. Each camera rides its node. |
 | `first_mesh`, `mesh_count`, `first_line`, `line_count`, `first_light`, `light_count` | Where the meshes, lines and lights of the file start in the scene, and how many there are. |
+| `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes of the file start in `scene.skinned_meshes`, and how many there are. |
+| `animations` | One `AnimationClip` for each clip that makes a track. See [Skins and animations](#skins-and-animations). |
 
 `UpAxis` is a type: `X_UP`, `Y_UP` or `Z_UP`. A bare integer does not compile. `up_axis_rotation` refuses a value that is none of the three.
 
@@ -516,6 +518,8 @@ The model tells what went where.
 | `<node>` | An `Object3D`. Its `<matrix>`, `<translate>`, `<rotate>` and `<scale>` steps are multiplied in file order and decomposed. |
 | `<instance_geometry>` | A mesh or a line for each primitive, with the material that `<bind_material>` binds to its symbol. |
 | `<instance_node>` | The node from `<library_nodes>` or the visual scene, placed again. |
+| `<instance_controller>` of a `<skin>` | A `SkinnedMesh` for each primitive of the skin's geometry. See [Skins and animations](#skins-and-animations). |
+| `<animation>`, `<animation_clip>` | An `AnimationClip`. |
 | `<instance_camera>` | A `PerspectiveCamera` or an `OrthographicCamera` that rides the node. |
 | `<instance_light>` | A directional, point, spot or ambient light at the node. |
 | `<visual_scene>` | The root node. A `Z_UP` file turns it by -90 degrees about x. The root is scaled by `<unit meter>`. The vertices do not change, as in three.js. |
@@ -562,6 +566,28 @@ A light reads its `color`. A point or spot light reads `quadratic_attenuation`, 
 
 A node with no child nodes and one object becomes that object in three.js, at the transform of the node. A node with more objects becomes a group, and each object keeps its own transform. Only a directional or spot light shows the difference. When such a light is one object of several, three.js places it one unit up the y axis of the node. This loader does the same.
 
+### Skins and animations
+
+A skin controller makes a `SkinnedMesh`. The loader reads the controller after it places every node, so a bone can come after the mesh in the file. `loaders/collada.mojo` reads the skins, and `loaders/collada_animation.mojo` reads the animations. three.js: `buildSkin`, `buildSkeleton`, `buildAnimation` and `buildAnimationClip`.
+
+| Collada | ThreeMojo |
+|---|---|
+| `<bind_shape_matrix>` | The bind matrix of the mesh. The identity when the skin has none. |
+| `<joints>` `JOINT` | The bone order. Each name matches the `sid` of a `JOINT` node. |
+| `<joints>` `INV_BIND_MATRIX` | The inverse bind of each bone. |
+| `<vertex_weights>` | `skinIndex` and `skinWeight`. Each vertex keeps its four largest weights, largest first. The loader normalizes the weights. |
+| `<skeleton>` | The root of the bones. Each `JOINT` node under it is a bone. A `<skeleton>` can also name the visual scene. Then each `JOINT` node at the top of the scene is a root. |
+| A channel on a `<matrix>` step | A `POSITION`, a `QUATERNION` and a `SCALE` track on the node. |
+| `<animation_clip>` | A clip that plays the animations it names. Its length is `end - start`. When that is not above zero, the tracks give the length. |
+
+A bone that the controller does not name follows the named bones, with the identity as its inverse bind, as in three.js. A `JOINT` node with no child nodes and one object is not a bone, because three.js makes it that object.
+
+A channel target is `node-id/sid`. `sid(i)(j)` gives entry `i + 4j` of the matrix, row by row. `sid.member` and `sid` give all 16 entries.
+
+Each key is decomposed into a position, a rotation and a scale. When a key does not give an entry, the loader interpolates it from the keys around it. When no key gives an entry, the node's own matrix gives it. Every track is `LINEAR`.
+
+A file with animations and no clips gives one clip, `default`, of every animation. An `<animation>` that holds other animations is a folder, and its own channels are not read, as in three.js.
+
 ### Differences from three.js
 
 - Each primitive is its own geometry and its own `Mesh`. three.js makes one geometry for each kind of primitive, with groups and an array of materials. A mesh here draws one material.
@@ -571,10 +597,16 @@ A node with no child nodes and one object becomes that object in three.js, at th
 - A `<linestrips>` element gives point pairs, so each strip is drawn alone. three.js joins every strip into one line.
 - An image path must be relative. A path with `:` is refused.
 - A color channel outside zero to one is refused.
+- three.js adds a skin to the geometry, so each instance of the geometry is skinned. Here only the instances of the controller are skinned.
+- A bone inside an `<instance_node>` copy is not a bone. three.js reads it.
+- A channel on a node that the scene does not reach makes no track. A clip that makes no track is not a clip. three.js makes a clip of no length.
+- A controller joint that names no bone, and a joint index outside the joints, are refused. three.js reads a hole.
 
 ### Not read
 
-Controllers and skins, animations and animation clips, kinematics and physics are not read. `<instance_controller>` is skipped. `<lookat>` and `<skew>` steps are skipped. `<trifans>`, `<tristrips>` and polygons with holes are not read. A second set of texture coordinates is skipped. The specular map and the ambient map are skipped, because no material here has a specular map or a light map.
+Kinematics and physics are not read. A `<morph>` controller is refused, because three.js does not read one. A channel on a `<translate>`, `<rotate>` or `<scale>` step makes no track, as in three.js.
+
+`<lookat>` and `<skew>` steps are skipped. `<trifans>`, `<tristrips>` and polygons with holes are not read. A second set of texture coordinates is skipped. The specular map and the ambient map are skipped, because no material here has a specular map or a light map.
 
 ### Errors
 
@@ -591,10 +623,14 @@ The loader raises for:
 - A node that `<instance_node>` names and the file does not have. Nodes that instance each other more than `MAX_INSTANCE_DEPTH` deep.
 - A step with the wrong count of numbers. A transform that flattens an axis.
 - A camera or a light that its builder refuses, or a light with no technique.
+- An `<instance_controller>` that names no controller. A `<morph>` controller, or a controller with no `<skin>`.
+- A skin with no `<joints>` or `<vertex_weights>`, or an input that is missing or names no source. Joint names that are not a `Name_array`. A joint with no inverse bind matrix. A `<v>` that is too short. A joint or weight index outside its source. A position with no weights.
+- A `<skeleton>` that names no node and no visual scene. A joint that names no bone. A bone that the scene does not reach.
+- A clip that names no animation. A channel that names no sampler or node, a sampler that names no source, or a target with no `sid`. A matrix index outside the matrix. A key that flattens an axis.
 
 ## FBX
 
-`loaders/fbx.mojo` and `loaders/fbx_tree.mojo`. `read_fbx(path, scene, assets)` reads an FBX file into the scene and the assets it is handed. The file can be binary or ASCII. It reads the meshes, the materials and their textures, the model hierarchy, the cameras and the lights. three.js: `FBXLoader`.
+`loaders/fbx.mojo` and `loaders/fbx_tree.mojo`. `read_fbx(path, scene, assets)` reads an FBX file into the scene and the assets it is handed. The file can be binary or ASCII. It reads the meshes, the materials and their textures, the model hierarchy, the cameras, the lights, the skins, the blend shapes and the animation stacks. three.js: `FBXLoader`.
 
 ```mojo
 from loaders.fbx import read_fbx
@@ -624,6 +660,8 @@ print(model.mesh_count, len(model.materials))
 | `cameras` | Each `PerspectiveCamera`, riding its model. |
 | `unit` | The length of one unit of the file, a `Length`: `UnitScaleFactor` from `GlobalSettings`, in centimeters. Like three.js, the loader keeps it and does not apply it. |
 | `first_mesh`, `mesh_count`, `first_light`, `light_count` | Where the meshes and lights of the file start in the scene, and how many there are. |
+| `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes of the file start in `scene.skinned_meshes`, and how many there are. |
+| `animations` | One `AnimationClip` for each animation stack that makes a track. See [Skins, blend shapes and animation](#skins-blend-shapes-and-animation). |
 
 A name is sanitized as three.js's `PropertyBinding.sanitizeNodeName` does it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are removed.
 
@@ -716,6 +754,29 @@ A light reads `LightType`: 0 is a point light, 1 a directional light and 2 a spo
 
 A directional or spot light stands one unit up its own y axis before the model transform applies, as in three.js. It shines toward the world origin.
 
+### Skins, blend shapes and animation
+
+A `Skin` deformer on a geometry makes each mesh of the geometry a `SkinnedMesh`. `loaders/fbx.mojo` reads the skins and blend shapes, and `loaders/fbx_animation.mojo` reads the animation stacks. three.js: `parseDeformers`, `bindSkeleton` and `AnimationParser`.
+
+| FBX | ThreeMojo |
+|---|---|
+| `Cluster` of a `Skin` | A bone: the model that connects to the cluster. The inverse of `TransformLink` is its inverse bind. |
+| `Indexes`, `Weights` of a `Cluster` | `skinIndex` and `skinWeight`. A vertex with more than four weights keeps the four largest. The loader normalizes the weights. |
+| `BindPose` | The matrix of the mesh model is the bind matrix. Without one, the bind matrix is the identity. |
+| `BlendShapeChannel` of a `BlendShape` | A morph target of the geometry, as offsets, so `morph_relative` is set. |
+| `AnimationStack` | An `AnimationClip`, named after the stack. Its first `AnimationLayer` gives the tracks. |
+| `AnimationCurveNode` `T`, `S` | A `POSITION` or `SCALE` track on the model. |
+| `AnimationCurveNode` `R` | A `QUATERNION` track on the model. |
+| `AnimationCurveNode` `DeformPercent` | A morph influence track on each mesh of the model. The value is divided by 100. |
+
+A mesh here wears at most `MAX_MORPH_TARGETS` morph targets. The loader refuses a geometry with more blend shape channels, and the message gives the count. The influences start at zero, as in three.js, which does not read `DeformPercent`.
+
+A curve time is in FBX ticks, 46186158000 each second. A key comes at each time that any axis has a key. An axis with no key at that time keeps its last value, and the first value is the model's own.
+
+The angles of an `R` curve node are in degrees and turn in the `RotationOrder` of the model. The pre-rotation turns first, and the post-rotation is undone last, in `ZYX`, as `generateTransform` does. When an angle changes by 180 degrees or more between two keys, three.js adds keys between them by `slerp` and drops the second key. This loader does the same. Every track is `LINEAR`, as in three.js.
+
+The stacks come in the order that three.js meets them. A JavaScript object puts an id from 0 to 2^32 - 2 first, in numeric order. `js_key_order` gives that order.
+
 ### Differences from three.js
 
 - Each material index of a geometry is its own geometry and its own `Mesh`. three.js makes one geometry with groups.
@@ -727,10 +788,16 @@ A directional or spot light stands one unit up its own y axis before the model t
 - A texture with no image is `NO_TEXTURE`. three.js makes an empty texture.
 - A bump scale without a bump map is dropped, because `Material` refuses it.
 - An image path must be relative. A path with `:` is refused.
+- A track drives the model that its curve node connects to. three.js finds the model by its name, so two models of one name differ.
+- A morph track drives the target of its channel. three.js finds the target by the name of the channel.
+- three.js adds a slerp key at the time of the key before it, a second time. This loader drops a key whose time does not rise. The rotation is the same.
+- An `R` curve node without a curve for each axis makes no track. three.js makes a track of one number, which is not a rotation.
+- A stack that makes no track is not a clip. three.js makes a clip of no length.
+- A geometric translation moves the offsets of a blend shape, as in three.js.
 
 ### Not read
 
-Skin deformers, blend shapes and animation are not read. A skinned mesh draws without its skin, in the pose that its vertices are stored in. NURBS curves, `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
+Animation layers after the first of a stack are not read, as in three.js. NURBS curves, `LookAtProperty`, orthographic cameras, a second set of texture coordinates, and the ambient occlusion, displacement, reflection and specular maps are skipped.
 
 ### Errors
 
@@ -751,6 +818,9 @@ The loader raises for:
 - A position index outside `Vertices`. A last polygon with no negative index. A polygon of four or more corners with no area, or one that crosses itself so that no ear is left.
 - A mesh model with no mesh geometry. Models connected in a loop, or nested deeper than `MAX_MODEL_DEPTH`. A transform that flattens an axis.
 - A camera, a light or a material that its builder refuses.
+- A skin that deforms no geometry. A cluster with no `TransformLink`, a `TransformLink` that is not 16 numbers, or a cluster with not one weight for each index. A cluster with no bone.
+- A blend shape that holds something other than a `BlendShapeChannel`, or a channel with no shape. A shape with not three numbers for each index, or an index outside the positions. More blend shape channels than `MAX_MORPH_TARGETS`.
+- An animation curve with no `KeyTime` or `KeyValueFloat`, or not one value for each time. A curve on a curve node that is not read. A curve node that drives nothing. A stack with no layer. A blend shape channel with no model. A rotation curve with no keys.
 
 ## Fonts
 
