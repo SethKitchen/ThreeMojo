@@ -2520,6 +2520,7 @@ struct _Loader(Movable):
             built.shadow.bias = self.number(shadow, "bias", 0)
             built.shadow.normal_bias = self.number(shadow, "normalBias", 0)
             built.shadow.radius = self.number(shadow, "radius", 1)
+            built.shadow.intensity = self.number(shadow, "intensity", 1)
             var size = self.numbers(shadow, "mapSize", 2)
             if len(size) == 2:
                 if size[0] != size[1]:
@@ -2533,27 +2534,25 @@ struct _Loader(Movable):
                 built.shadow.far = Length(
                     self.number(camera, "far", 500), METER
                 )
-                var top = self.number(camera, "top", 5)
-                if not self.is_square_around(camera, top):
-                    raise Error(
-                        "Object JSON: a shadow camera must be square about its"
-                        " axis"
-                    )
-                built.shadow.extent = Length(top, METER)
+                built.shadow.left = Length(
+                    self.number(camera, "left", -5), METER
+                )
+                built.shadow.right = Length(
+                    self.number(camera, "right", 5), METER
+                )
+                built.shadow.top = Length(self.number(camera, "top", 5), METER)
+                built.shadow.bottom = Length(
+                    self.number(camera, "bottom", -5), METER
+                )
+            # Asked whether the light casts or not: a shadow a document
+            # gives is refused here, not when a later edit turns it on.
+            built.shadow.validate()
         built.validate()
         var target = self.document.get(item, "target")
         if target != NO_NODE:
             self.aimed.append(len(scene.lights))
             self.targets.append(self.document.string(target))
         scene.add_light(built)
-
-    def is_square_around(self, camera: Int, top: Float32) raises -> Bool:
-        """Return True if a shadow camera's four edges are `top` apart
-        from its axis."""
-        var left = self.number(camera, "left", -top)
-        var right = self.number(camera, "right", top)
-        var bottom = self.number(camera, "bottom", -top)
-        return left == -top and right == top and bottom == -top
 
     def perspective(
         self, item: Int, id: NodeId, mask: Int

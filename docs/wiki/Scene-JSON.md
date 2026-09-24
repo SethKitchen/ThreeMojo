@@ -68,7 +68,9 @@ A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number i
 
 A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for each morph target of the geometry. The reader reads eight at most, because a mesh here holds eight.
 
-A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera must be square about its axis, because `LightShadow` holds one `extent`.
+A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `intensity`, `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera gives `left`, `right`, `top` and `bottom`.
+
+The writer writes a shadow's `intensity` only when it is not one, as three.js's `LightShadow.toJSON` does. Neither three.js nor this port writes `autoUpdate`, `needsUpdate` or a light's `power`, which follows from its intensity.
 
 The writer makes the same objects. A node that carries one thing becomes that thing. A node that carries more than one thing becomes an `Object3D`, with one child object for each thing at the identity. A light or a camera on other layers than its node is also a child object. A light with no node, as an ambient light usually is, is a child of the scene. The reader then gives that light a node of its own.
 
@@ -265,7 +267,9 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 
 - A uuid that is named two times, or that names nothing.
 - An object, geometry, material or fog type that has no counterpart here.
-- A shadow map that is not square, or a shadow camera that is not square about its axis.
+- A shadow map that is not square.
+- A shadow camera whose right edge is not beyond its left edge, or whose top is not above its bottom.
+- A shadow that `LightShadow.validate` refuses, when the light does not cast too.
 - An LOD level that is not a child `Mesh` at the identity without children.
 - A bone uuid that no object has.
 - A skeleton with a `boneInverses` list that is not empty and has fewer entries than bones. three.js's `Skeleton.fromJSON` fails on it too.

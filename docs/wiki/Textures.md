@@ -428,7 +428,7 @@ This port swapped those images when it loaded them, so every environment turns b
 
 `render/pmrem.mojo` and `render/cube_uv.mojo`. A PMREM is an environment prefiltered for every roughness. A rough `STANDARD` or `PHYSICAL` surface reads it and sees the environment blurred by its own lobe. Without one, the surface reads the cube's box-filtered chain.
 
-three.js: `PMREMGenerator.fromCubemap`, `PMREMGenerator.fromEquirectangular`, `cube_uv_reflection_fragment`.
+three.js: `PMREMGenerator.fromCubemap`, `PMREMGenerator.fromEquirectangular`, `PMREMGenerator.fromScene`, `cube_uv_reflection_fragment`.
 
 ```mojo
 var sky = pmrem_from_cube(cube_texture_from(images, SEEN_FROM_OUTSIDE))
@@ -441,8 +441,29 @@ var hdr = assets.cube_textures.add(pmrem_from_equirectangular(panorama))
 |---|---|
 | `pmrem_from_cube(cube)` | A copy of `cube` with its PMREM in `cube_uv`. Byte or float faces. |
 | `pmrem_from_equirectangular(image)` | The faces of `cube_from_equirectangular`, with a PMREM read straight from the panorama. |
+| `pmrem_from_scene(renderer, scene, assets, sigma=0, near=0.1 m, far=100 m, size=256, position=origin)` | A scene drawn into six float faces around a point, then prefiltered. See [Environments from a scene](#environments-from-a-scene). |
+| `pmrem_from_faces(cube, sigma)` | `pmrem_from_cube` with the sharpest copy blurred by `sigma` first. |
 
-The result is an ordinary `CubeTexture`. Name it as an env map, as a scene's `environment` or as a background. `is_prefiltered()` says whether a cube holds a PMREM. three.js's `fromScene` is `Renderer.render_cube` and then `pmrem_from_cube`.
+The result is an ordinary `CubeTexture`. Name it as an env map, as a scene's `environment` or as a background. `is_prefiltered()` says whether a cube holds a PMREM.
+
+### Environments from a scene
+
+`pmrem_from_scene` in `renderers/environment.mojo` is three.js's `PMREMGenerator.fromScene`. It draws the scene six times from `position`, one face for each axis, into float targets. Light above one stays: a panel that glows at fifty stays at fifty. There is no tone mapping, as in three.js. Where nothing is drawn, a face shows the scene's color background, or else the renderer's background. `sigma`, an angle, blurs the sharpest copy before the other copies are made.
+
+`environments/room_environment.mojo` holds two scenes made for it. `room_environment(assets)` is three.js's `RoomEnvironment`: a white room with six boxes, six glowing panels and one bulb. `debug_environment(assets)` is three.js's `DebugEnvironment`: a room with a red, a green and a blue panel.
+
+```mojo
+var room = room_environment(assets)
+var studio = pmrem_from_scene(renderer, room, assets, sigma=Angle(0.04, RADIAN))
+scene.environment = assets.cube_textures.add(studio^)
+```
+
+These are the differences from three.js:
+
+- Each face is a `CubeCamera` face, and `pmrem_from_faces` reads it in the direction of each texel. three.js draws straight into the cube UV layout with its own face cameras. The image is the same environment.
+- three.js's blur for `sigma` keeps the pole of the last blur it ran. Here the pole is +y, the pole the blur starts with.
+- The room keeps the box's texture coordinates. three.js deletes them, and nothing reads them.
+- `pmrem_from_faces` refuses a `sigma` that is negative or not finite.
 
 ### The layout
 
@@ -475,6 +496,7 @@ Each pass finds its weights, the sine and cosine of each tap, and the position o
 
 - `pmrem_from_cube` refuses a cube that `CubeTexture.validate` refuses.
 - `pmrem_from_equirectangular` refuses a blank panorama.
+- `pmrem_from_scene` refuses what `CubeCamera` refuses: a size below one, or planes out of order.
 - `validate_cube_uv` refuses a layout image that is not float, `CLAMP` and `BILINEAR` with no chain. It refuses a size that is not three.js's layout. `CubeTexture.validate` calls it, and so does the GPU upload.
 
 ## 3D textures

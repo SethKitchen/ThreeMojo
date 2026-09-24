@@ -203,7 +203,7 @@ var sun = directional_light(Color(255, 255, 255), lamp_node, 3.0)
 sun.cast_shadow = True
 sun.shadow.map_size = 1024
 sun.shadow.bias = -0.002
-sun.shadow.extent = Length(8.0, METER)
+sun.shadow.set_extent(Length(8.0, METER))
 scene.add_light(sun)
 scene.add_mesh(Mesh(box, paint, node, cast_shadow=True, receive_shadow=True))
 ```
@@ -219,15 +219,39 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 | `shadow.radius` | `shadow.radius` | `1.0` | How many texels the PCF taps spread over. Under `VSM_SHADOW_MAP`, how many texels the blur spreads over. |
 | `shadow.blur_samples` | `shadow.blurSamples` | `8` | How many samples each pass of a variance map's blur takes, one to 256. |
 | `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. A point or spot light with a `distance` puts the far plane at that distance, as three.js does. |
-| `shadow.extent` | `shadow.camera.left` through `top` | `5 m` | How far to each side a directional light's camera sees. A spot light's camera is as wide as its cone. |
+| `shadow.left`, `shadow.right`, `shadow.top`, `shadow.bottom` | `shadow.camera.left`, `right`, `top`, `bottom` | `-5 m`, `5 m`, `5 m`, `-5 m` | Where the edges of a directional light's camera are, from its axis. `set_extent` sets all four to one distance. A spot light's camera is as wide as its cone. |
+| `shadow.intensity` | `shadow.intensity` | `1.0` | How much of the light the shadow takes away, from zero to one. See [Shadow intensity](#shadow-intensity). |
+| `shadow.auto_update` | `shadow.autoUpdate` | `True` | Whether the map is drawn again for each frame. See [Frozen shadows](#frozen-shadows). |
+| `shadow.needs_update` | `shadow.needsUpdate` | `False` | Whether a frozen map is drawn one more time. |
 
 ### How a shadow is drawn
 
-The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, `extent` meters to each side. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh, an LOD and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
+The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, between its `left`, `right`, `top` and `bottom` edges. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh, an LOD and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
 
 Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Seventeen taps are compared on their own and averaged: three.js's `PCFShadowMap`, its default. Nine taps are `radius` texels apart, and eight more are at half that spread. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
 
 Every lit sum reads the map: the diffuse term, the toon ramp, the highlight and the physical lobe. Each is scaled by what the light's map lets through, as three.js scales `directLight.color`. A surface that does not receive skips every map.
+
+### Shadow intensity
+
+`shadow.intensity` weakens a shadow. At one, the default, the shadow takes all of the light. At zero, it takes none. Between them, `shadow_strength` mixes what the map lets through toward full light, as three.js's `getShadow` ends with `mix( 1.0, shadow, shadowIntensity )`. `LightShadow.validate` refuses an intensity outside zero to one. three.js does not check it.
+
+### Frozen shadows
+
+A light with `auto_update` and `needs_update` both off keeps the map it has. three.js keeps the map in the light. This renderer keeps no map between frames, so the caller keeps it. Give last frame's maps back to `Renderer.shadow_maps` as `kept`. A frozen light takes its map from `kept`. Every other light draws a new map.
+
+```mojo
+sun.shadow.auto_update = False
+var maps = renderer.shadow_maps(scene, assets)
+# The next frame reuses the sun's map.
+maps = renderer.shadow_maps(scene, assets, kept=maps^)
+# Set needs_update to draw it one more time, then clear the flag.
+scene.lights[0].shadow.needs_update = True
+maps = renderer.shadow_maps(scene, assets, kept=maps^)
+shadows_drawn(scene.lights, maps)
+```
+
+`shadows_drawn` clears `needs_update` on every light that has a map, as three.js clears it after it draws. A frozen light with no map in `kept` draws a map. `Renderer.render` keeps no maps, so it draws every map for each frame.
 
 ### Acne and the two biases
 
@@ -315,6 +339,55 @@ This port reads the picture at its full size, with its filter and its wrap mode.
 The maps ride in the light buffer after the lights, each its header and its depths. The last float of the header is the map's `ShadowMapType`. A variance map holds its means and then its standard deviations. Each directional, point and spot light carries where its map begins. A point light's cube holds the bulb's position and its two planes where a frame would be, then six faces. The spot light maps follow the shadow maps: the texture's slot, the normal bias and the frame.
 
 The kernel reads the picture from the texture buffer it already has. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+
+## Power
+
+A point, a spot or a rect area light has a luminous power in lumens: three.js's `power`. `Light.power()` returns a `LuminousPower`. `Light.set_power` sets the intensity that gives a power. The conversion is three.js's:
+
+| Kind | Power |
+|---|---|
+| Point | Intensity times four pi. |
+| Spot | Intensity times pi. |
+| Rect area | Intensity times the width, the height and pi. |
+
+```mojo
+var bulb = point_light(Color(255, 255, 255), bulb_node)
+bulb.set_power(LuminousPower(800))     # a 60 W bulb, about 63.7 candela
+```
+
+Any other kind of light raises, as three.js gives it no `power`. `set_power` raises and changes nothing when the intensity it gives is refused.
+
+## Cascaded shadow maps
+
+`lights/csm.mojo`. A `CSM` cuts the camera's depth into slices and gives each slice a directional light with its own shadow map. The near slice is small, so its shadow is sharp. This is three.js's `CSM` from `examples/jsm/csm`.
+
+```mojo
+var csm = CSM(scene, camera, cascades=3, max_far=Length(200.0, METER), shadow_map_size=1024)
+# For each frame, after the camera moves:
+csm.update(scene, camera)
+var frame = renderer.render(scene, assets, camera)
+```
+
+The constructor adds one casting directional light for each cascade to the scene, each with a node and a target node under `parent`. `update` moves each light behind its slice and snaps it to whole texels of its map, so the shadow does not crawl. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `remove` takes the lights off their parent. `dispose` makes them plain directional lights.
+
+| Mode | three.js | Breaks |
+|---|---|---|
+| `UNIFORM_SPLIT` | `'uniform'` | Even steps from the near plane. |
+| `LOGARITHMIC_SPLIT` | `'logarithmic'` | Each step a fixed ratio past the last. |
+| `PRACTICAL_SPLIT` | `'practical'` | Halfway between the two above. The default. |
+| `CUSTOM_SPLIT` | `'custom'` | The `custom_breaks` you give: one for each cascade, rising from zero to one. |
+
+A break is a fraction of the depth from the camera to its far plane, or to `max_far` when that is nearer. `CsmMode` is a type, so a bare integer does not compile. The constructor refuses a mode that is none of the four.
+
+Each light carries its slice as a `ShadowCascade`. Both rasterizers measure the fragment's depth in front of the camera and weigh each cascade light by `cascade_reach`, as three.js's `CSMShader` does. Without `fade`, a fragment takes the light and the shadow of its own slice. A fragment past the last slice takes the last light with no shadow. With `fade`, each slice reaches a margin into its neighbors, and the light blends across the margin.
+
+These are the differences from three.js:
+
+- three.js gates the cascades only in materials set up with `setupMaterial`. Here the slice is on the light, so every surface reads it. There is no `setupMaterial`.
+- A custom split is a list of breaks, not a callback.
+- An argument of zero is kept. three.js's `data.x || default` replaces it with the default.
+- `update` also updates the scene's world matrices.
+- `CSMHelper` and `CSMShadowNode` are not ported.
 
 ## Highlights
 

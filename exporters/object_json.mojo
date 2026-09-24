@@ -2176,6 +2176,9 @@ def _shadow(mut writer: JsonWriter, light: Light) raises:
     ref shadow = light.shadow
     writer.key("shadow")
     writer.begin_object()
+    if shadow.intensity != 1:
+        writer.key("intensity")
+        writer.number(shadow.intensity)
     writer.key("bias")
     writer.number(shadow.bias)
     writer.key("normalBias")
@@ -2190,17 +2193,16 @@ def _shadow(mut writer: JsonWriter, light: Light) raises:
     writer.key("camera")
     writer.begin_object()
     if light.kind == DIRECTIONAL:
-        var extent = shadow.extent.to(METER)
         writer.key("type")
         writer.string("OrthographicCamera")
         writer.key("left")
-        writer.number(-extent)
+        writer.number(shadow.left.to(METER))
         writer.key("right")
-        writer.number(extent)
+        writer.number(shadow.right.to(METER))
         writer.key("top")
-        writer.number(extent)
+        writer.number(shadow.top.to(METER))
         writer.key("bottom")
-        writer.number(-extent)
+        writer.number(shadow.bottom.to(METER))
     else:
         var fov = Float32(90)
         if light.kind == SPOT:

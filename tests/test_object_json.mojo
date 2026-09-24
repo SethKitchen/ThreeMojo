@@ -397,7 +397,11 @@ def _scene(mut assets: Assets) raises -> Tuple[Scene, ObjectCameras]:
     sun.shadow.map_size = 1024
     sun.shadow.near = Length(1, METER)
     sun.shadow.far = Length(50, METER)
-    sun.shadow.extent = Length(8, METER)
+    sun.shadow.left = Length(-8, METER)
+    sun.shadow.right = Length(6, METER)
+    sun.shadow.top = Length(7, METER)
+    sun.shadow.bottom = Length(-3, METER)
+    sun.shadow.intensity = 0.25
     scene.add_light(sun)
     scene.add_light(ambient_light(Color(20, 20, 20), 0.5))
     var red = point_light(
@@ -601,7 +605,11 @@ def test_round_trip() raises:
     assert_equal(sun.shadow.map_size, 1024)
     assert_equal(sun.shadow.near.to(METER), 1)
     assert_equal(sun.shadow.far.to(METER), 50)
-    assert_equal(sun.shadow.extent.to(METER), 8)
+    assert_equal(sun.shadow.left.to(METER), -8)
+    assert_equal(sun.shadow.right.to(METER), 6)
+    assert_equal(sun.shadow.top.to(METER), 7)
+    assert_equal(sun.shadow.bottom.to(METER), -3)
+    assert_equal(sun.shadow.intensity, 0.25)
     ref bulb = scene.lights[1]
     assert_equal(bulb.kind, POINT)
     assert_equal(bulb.decay, 1)
@@ -1035,7 +1043,8 @@ def test_a_document_as_three_js_writes_it() raises:
     assert_equal(sun.kind, DIRECTIONAL)
     assert_equal(sun.target, rig)
     assert_equal(sun.shadow.map_size, 2048)
-    assert_equal(sun.shadow.extent.to(METER), 10)
+    assert_equal(sun.shadow.top.to(METER), 10)
+    assert_equal(sun.shadow.left.to(METER), -10)
     assert_equal(scene.lights[1].kind, AMBIENT)
     assert_equal(scene.lights[1].color.hex(), 0x404040)
     ref eye = model.cameras.perspective[0]
@@ -1514,7 +1523,9 @@ def test_lights_read_with_three_js_defaults() raises:
     assert_almost_equal(Float64(lights[0].angle.to(DEGREE)), 60, atol=TOLERANCE)
     assert_equal(lights[0].decay, 2)
     assert_equal(lights[0].target, NO_PARENT)
-    assert_equal(lights[0].shadow.extent.to(METER), 5)
+    assert_equal(lights[0].shadow.top.to(METER), 5)
+    assert_equal(lights[0].shadow.left.to(METER), -5)
+    assert_equal(lights[0].shadow.intensity, 1)
     assert_equal(lights[1].ground.hex(), 0xFFFFFF)
     assert_equal(lights[2].width.to(METER), 10)
     assert_equal(lights[3].kind, POINT)
@@ -1551,24 +1562,32 @@ def test_a_light_probe_round_trips_its_27_numbers() raises:
 
 
 def test_light_refusals() raises:
-    """A shadow that is not square, and a light the renderer refuses, are
-    refused."""
+    """A shadow map that is not square, a shadow camera turned inside
+    out, and a light the renderer refuses, are refused."""
     _refuses(
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
         + '{"mapSize":[512,256]}}'
     )
     _refuses(
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
-        + '{"camera":{"left":-5,"right":5,"top":4,"bottom":-4}}}'
+        + '{"camera":{"left":5,"right":-5,"top":4,"bottom":-4}}}'
     )
     _refuses(
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
-        + '{"camera":{"left":-4,"right":4,"top":4,"bottom":-5}}}'
+        + '{"intensity":2}}'
     )
-    _refuses(
+    # An off-center shadow camera is read as it is.
+    var aside = _read(
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
-        + '{"camera":{"left":-4,"right":5,"top":4,"bottom":-4}}}'
+        + '{"intensity":0.5,"camera":{"left":-4,"right":5,"top":4,'
+        + '"bottom":-6}}}'
     )
+    ref shadow = aside[0].lights[0].shadow
+    assert_equal(shadow.left.to(METER), -4)
+    assert_equal(shadow.right.to(METER), 5)
+    assert_equal(shadow.top.to(METER), 4)
+    assert_equal(shadow.bottom.to(METER), -6)
+    assert_equal(shadow.intensity, 0.5)
     _refuses('"object":{"uuid":"a","type":"HemisphereLight","castShadow":true}')
     _refuses('"object":{"uuid":"a","type":"AmbientLight","intensity":-1}')
 

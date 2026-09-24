@@ -41,7 +41,14 @@ from lights.physical_layers import (
     ibl_sheen,
     sheen_scaling,
 )
-from lights.shadow import ShadowMap, SpotLightMap
+from lights.shadow import (
+    ShadowCascade,
+    ShadowMap,
+    SpotLightMap,
+    cascade_reach,
+    shadow_strength,
+    view_depth,
+)
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
@@ -1127,6 +1134,10 @@ struct Lighting(Movable):
     var direction_shadows: List[Int]
     var point_shadows: List[Int]
     var spot_shadows: List[Int]
+    # Which slice of the camera's depth each directional light lights, or
+    # `ShadowCascade.none()` for one that lights every depth. See
+    # `direction_through`.
+    var cascades: List[ShadowCascade]
     # The pictures the spot lights project this frame, and which of them
     # each spot light carries, or -1 for none. See `lights.shadow`.
     var spot_maps: List[SpotLightMap]
@@ -1250,6 +1261,7 @@ struct Lighting(Movable):
         self.direction_shadows = List[Int]()
         self.point_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.cascades = List[ShadowCascade]()
         self.spot_maps = spot_maps^
         self.spot_map_slots = List[Int]()
         self.rect_positions = List[Vector3]()
@@ -1316,6 +1328,7 @@ struct Lighting(Movable):
                 self.directions.append(pointing)
                 self.radiances.append(light.radiance())
                 self.direction_shadows.append(self._shadow_of(index))
+                self.cascades.append(light.cascade)
             elif light.kind == POINT:
                 # Its node's position is the answer itself, and the origin
                 # is as good a place for a bulb as any.
@@ -1422,6 +1435,7 @@ struct Lighting(Movable):
         self.direction_shadows = List[Int]()
         self.point_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.cascades = List[ShadowCascade]()
         self.spot_maps = List[SpotLightMap]()
         self.spot_map_slots = List[Int]()
         self.rect_positions = List[Vector3]()
@@ -1488,6 +1502,45 @@ struct Lighting(Movable):
         if slot < 0 or not receives:
             return 1
         return self.shadows[slot].lit(position, normal)
+
+    def direction_through(
+        self, index: Int, position: Vector3, normal: Vector3, receives: Bool
+    ) -> Float32:
+        """Return how much of one directional light reaches a surface:
+        what its shadow lets through, and for a cascade of a `CSM`, how
+        much of its light and its shadow fall at the surface's depth.
+
+        A light that is no cascade gives `shadow_at`. A cascade measures
+        the surface's depth in front of the camera, `view_depth` over the
+        cascade's span, and weighs the light and its shadow as
+        `cascade_reach` says.
+
+        Args:
+            index: Which directional light, in the order they were
+                resolved.
+            position: Where the surface is, in world space.
+            normal: Its unit normal, for the map's normal bias.
+            receives: Whether shadows fall on this surface at all.
+
+        Returns:
+            The fraction of the light that arrives.
+        """
+        var slot = self.direction_shadows[index]
+        ref band = self.cascades[index]
+        if not band.is_cascade():
+            return self.shadow_at(slot, position, normal, receives)
+        var reach = cascade_reach(
+            view_depth(position, self.eye, self.back) / band.span.to(METER),
+            band.start,
+            band.end,
+            band.last,
+            band.fade,
+        )
+        if reach[0] == 0:
+            return 0
+        return reach[0] * shadow_strength(
+            self.shadow_at(slot, position, normal, receives), reach[1]
+        )
 
     def shadow_mask(self, position: Vector3, normal: Vector3) -> Float32:
         """Return how much of every shadowing light reaches a surface, the
@@ -1594,9 +1647,7 @@ struct Lighting(Movable):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
                 continue
-            lambert *= self.shadow_at(
-                self.direction_shadows[index], position, normal, receives
-            )
+            lambert *= self.direction_through(index, position, normal, receives)
             ref light = self.radiances[index]
             total = FloatColor(
                 total.r + light.r * lambert,
@@ -1729,9 +1780,7 @@ struct Lighting(Movable):
         for index in range(len(self.directions)):
             var tone = toon_tone(
                 normal.dot(self.directions[index]), ramp
-            ) * self.shadow_at(
-                self.direction_shadows[index], position, normal, receives
-            )
+            ) * self.direction_through(index, position, normal, receives)
             ref light = self.radiances[index]
             total = FloatColor(
                 total.r + light.r * tone,
@@ -1859,9 +1908,7 @@ struct Lighting(Movable):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
                 continue
-            lambert *= self.shadow_at(
-                self.direction_shadows[index], position, normal, receives
-            )
+            lambert *= self.direction_through(index, position, normal, receives)
             var sent = blinn_phong(
                 self.directions[index],
                 toward_eye,
@@ -2050,8 +2097,8 @@ struct Lighting(Movable):
             if lambert == 0 and coat_lambert == 0:
                 continue
             ref light = self.radiances[index]
-            var through = self.shadow_at(
-                self.direction_shadows[index], position, normal, receives
+            var through = self.direction_through(
+                index, position, normal, receives
             )
             sum = physical_light(
                 sum,

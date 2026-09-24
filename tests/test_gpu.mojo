@@ -49,10 +49,13 @@ from lights.shadow import (
     PCF_SHADOW_MAP,
     PCF_SOFT_SHADOW_MAP,
     SHADOW_HEADER,
+    SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
     SPOT_MAP_FLOATS,
     VSM_SHADOW_MAP,
+    ShadowCascade,
 )
+from lights.csm import CSM
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
@@ -222,6 +225,8 @@ from render.gpu import (
     line_state,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
+    CASCADE_AT,
+    DIRECTIONAL_FLOATS,
     LIGHTS_BACK,
     LIGHTS_EYE,
     LIGHTS_FIRST,
@@ -4874,7 +4879,7 @@ def test_the_light_buffer_begins_with_the_camera_and_its_direction() raises:
     scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
     scene.update()
     var flat = flatten_lights(Lighting(scene, Layers.all(), Vector3(7, 8, 9)))
-    assert_equal(len(flat), LIGHTS_FIRST + 7)
+    assert_equal(len(flat), LIGHTS_FIRST + DIRECTIONAL_FLOATS)
     assert_equal(flat[LIGHTS_EYE], Float32(7))
     assert_equal(flat[LIGHTS_EYE + 1], Float32(8))
     assert_equal(flat[LIGHTS_EYE + 2], Float32(9))
@@ -8348,12 +8353,14 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     assert_equal(len(maps), 2)
     var lighting = Lighting(scene, shadows=maps^)
     var flat = flatten_lights(lighting)
-    var lights_end = LIGHTS_FIRST + 7 + 15
+    var lights_end = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
     var first_map = lights_end
     var second_map = first_map + SHADOW_HEADER + 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
     assert_equal(flat[LIGHTS_FIRST + 6], Float32(first_map))
-    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(
+        flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13], Float32(second_map)
+    )
     assert_equal(flat[first_map], Float32(48))
     assert_equal(flat[first_map + 1], Float32(-0.002))
     assert_equal(flat[first_map + 3], Float32(1.5))
@@ -8368,7 +8375,7 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     var bare = flatten_lights(Lighting(scene))
     assert_equal(len(bare), lights_end)
     assert_equal(bare[LIGHTS_FIRST + 6], NO_SHADOW)
-    assert_equal(bare[LIGHTS_FIRST + 7 + 13], NO_SHADOW)
+    assert_equal(bare[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13], NO_SHADOW)
     # And the state table says whether a triangle receives.
     var corners = renderer.prepare(
         scene,
@@ -8656,10 +8663,12 @@ def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() r
     renderer.shadow_map_type = VSM_SHADOW_MAP
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
     var flat = flatten_lights(lighting)
-    var first_map = LIGHTS_FIRST + 7 + 15
+    var first_map = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
     var second_map = first_map + SHADOW_HEADER + 2 * 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 2 * 32 * 32)
-    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(
+        flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13], Float32(second_map)
+    )
     assert_equal(
         flat[first_map + SHADOW_TYPE_AT], Float32(VSM_SHADOW_MAP.value)
     )
@@ -8745,6 +8754,101 @@ def test_both_backends_agree_under_every_shadow_map_type() raises:
             )
 
 
+def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
+    # A directional light's last five floats are its cascade, and every
+    # shadow map's header ends with its intensity.
+    var assets = Assets()
+    var scene = a_shadowed_scene(assets)
+    scene.lights[0].shadow.intensity = 0.4
+    scene.lights[0].cascade = ShadowCascade(
+        0.25, 0.75, Length(20.0, METER), True, True
+    )
+    var renderer = Renderer(24, 18)
+    var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
+    var flat = flatten_lights(lighting)
+    assert_equal(DIRECTIONAL_FLOATS, CASCADE_AT + 5)
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT], Float32(0.25))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 1], Float32(0.75))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 2], Float32(20))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 3], Float32(1))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 4], Float32(1))
+    var first_map = Int(flat[LIGHTS_FIRST + 6])
+    assert_equal(flat[first_map + SHADOW_INTENSITY_AT], Float32(0.4))
+    var second_map = Int(flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13])
+    assert_equal(flat[second_map + SHADOW_INTENSITY_AT], Float32(1))
+    # A light that is no cascade carries a span of zero.
+    var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
+    assert_equal(bare[LIGHTS_FIRST + CASCADE_AT + 2], Float32(0))
+    assert_equal(bare[LIGHTS_FIRST + CASCADE_AT + 3], Float32(0))
+
+
+def test_both_backends_agree_on_cascades_and_shadow_intensity() raises:
+    # A CSM's three lights over the bulb and slide scene, with and without
+    # fade, every map at a partial intensity: the phong, standard, toon
+    # and lambert sums each weigh the cascades by the host's own
+    # `cascade_reach` and `shadow_strength`.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on cascades and shadow intensity"
+    ):
+        return
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(14.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    for fade in [False, True]:
+        for kind in [PCF_SHADOW_MAP, BASIC_SHADOW_MAP]:
+            var assets = Assets()
+            var scene = a_bulb_and_slide_scene(assets)
+            scene.lights[0].shadow.intensity = 0.6
+            scene.lights[1].shadow.intensity = 0.3
+            var csm = CSM(
+                scene,
+                camera,
+                shadow_map_size=24,
+                light_intensity=1.5,
+                light_near=Length(0.5, METER),
+                light_far=Length(40.0, METER),
+                light_margin=Length(10.0, METER),
+            )
+            csm.fade = fade
+            csm.update_frustums(scene, camera)
+            csm.update(scene, camera)
+            for index in range(3):
+                scene.lights[csm.lights[index]].shadow.intensity = 0.8
+            var renderer = Renderer(48, 36)
+            renderer.set_background(BACKGROUND)
+            renderer.shadow_map_type = kind
+            var corners = renderer.prepare(scene, assets, camera)
+            var lighting = Lighting(
+                scene,
+                camera.visible_layers(),
+                camera_position(scene, camera),
+                toward_camera(scene, camera),
+                camera_up(scene, camera),
+                back=camera_back(scene, camera),
+                shadows=renderer.shadow_maps(scene, assets),
+                spot_maps=renderer.spot_light_maps(scene, assets),
+            )
+            var cpu = renderer.render(scene, assets, camera)
+            var gpu = render_triangles(
+                corners,
+                48,
+                36,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                assets.textures,
+                lighting,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 48 * 36,
+                "the scene drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_a_spot_lights_map_must_be_uploaded() raises:
     # The kernel samples the map through the texture table, so a map past
     # what was uploaded is refused before the launch.
@@ -8795,7 +8899,7 @@ def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
     assert_equal(flat[LIGHTS_RECT_COUNT], Float32(1))
     assert_equal(LIGHTS_FIRST, LIGHTS_RECT_COUNT + 1)
     assert_equal(RECT_FLOATS, 12)
-    var first_rect = LIGHTS_FIRST + 7 + 15
+    var first_rect = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
     var first_table = first_rect + RECT_FLOATS
     var first_map = first_table + 2 * LTC_FLOATS
     assert_equal(flat[first_rect + 1], Float32(3))
@@ -8810,7 +8914,9 @@ def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
     assert_equal(flat[LIGHTS_FIRST + 6], Float32(first_map))
     assert_equal(flat[first_map], Float32(48))
     var second_map = first_map + SHADOW_HEADER + 48 * 48
-    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(
+        flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13], Float32(second_map)
+    )
     assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
     var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
     assert_equal(bare[LIGHTS_RECT_COUNT], Float32(0))

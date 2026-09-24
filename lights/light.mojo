@@ -74,16 +74,23 @@ one facing the ground. It has no position and no node. Its `color` is not
 read, as three.js does not read it; its `intensity` scales every
 coefficient. `lights.light_probe.light_probe_from_cube` builds one from a
 cube texture, three.js's `LightProbeGenerator.fromCubeTexture`.
+
+**A point, spot or rect area light has a power.** three.js's `power` is
+the light's luminous power in lumens, worked out from its intensity: four
+pi times it for a point light, which shines every way, pi times it for a
+spot light, by three.js's convention, and pi times the rectangle's area
+for a rect area light. `Light.power` reads it and `Light.set_power` sets
+the intensity from it, as three.js's setter does.
 """
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
-from lights.shadow import LightShadow
+from lights.shadow import LightShadow, ShadowCascade, ShadowMap
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import cos, isfinite
+from std.math import cos, isfinite, pi
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 
@@ -160,6 +167,17 @@ comptime _BLACK = Color(0, 0, 0)
 
 
 @fieldwise_init
+struct LuminousPower(ImplicitlyCopyable):
+    """A luminous power, in lumens: what three.js's `power` measures.
+
+    A type of its own rather than a bare number, so a power is not
+    mistaken for the intensity it is worked out from.
+    """
+
+    var lumens: Float32
+
+
+@fieldwise_init
 struct Light(ImplicitlyCopyable):
     """One light in a scene: a kind, a color, a strength, and maybe a node.
 
@@ -229,6 +247,55 @@ struct Light(ImplicitlyCopyable):
     # only by a light probe, and scaled by `intensity` as three.js scales
     # it; darkness, every coefficient zero, on every other kind.
     var sh: SphericalHarmonics3
+    # Which slice of the camera's depth a directional light lights, when
+    # it is one cascade of a `lights.csm.CSM`. `ShadowCascade.none()`
+    # everywhere else, which lights every depth.
+    var cascade: ShadowCascade
+
+    def _power_share(self) raises -> Float32:
+        """Return what the intensity is multiplied by to give the power."""
+        if self.kind == POINT:
+            return 4 * Float32(pi)
+        if self.kind == SPOT:
+            return Float32(pi)
+        if self.kind == RECT_AREA:
+            return self.width.to(METER) * self.height.to(METER) * Float32(pi)
+        raise Error(
+            "Only a point, a spot or a rect area light has a power, as only"
+            " three.js's three have one"
+        )
+
+    def power(self) raises -> LuminousPower:
+        """Return the light's luminous power, three.js's `power`.
+
+        Four pi times the intensity for a point light, pi times it for a
+        spot light, and pi times it times the rectangle's area for a rect
+        area light, as three.js works each out.
+
+        Returns:
+            The power, in lumens.
+
+        Raises:
+            Error: If the light is not a point, a spot or a rect area
+                light.
+        """
+        return LuminousPower(self.intensity * self._power_share())
+
+    def set_power(mut self, power: LuminousPower) raises:
+        """Set the intensity that gives a luminous power, three.js's
+        `power` setter.
+
+        Args:
+            power: The power, in lumens.
+
+        Raises:
+            Error: If the light is not a point, a spot or a rect area
+                light, or the intensity it gives is refused by `validate`.
+        """
+        var changed = self
+        changed.intensity = power.lumens / self._power_share()
+        changed.validate()
+        self.intensity = changed.intensity
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -268,13 +335,18 @@ struct Light(ImplicitlyCopyable):
                 map; the light casts or names a map and its `shadow` is
                 refused by `LightShadow.validate`; such a point or spot
                 light has a distance that does not lie beyond its shadow's
-                near plane, where three.js puts the far plane; or a light
-                probe's coefficients are not all finite.
+                near plane, where three.js puts the far plane; a light
+                probe's coefficients are not all finite; or the light's
+                `cascade` is refused by `ShadowCascade.validate`, or is a
+                cascade on a light that is not directional.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
         if self.kind == LIGHT_PROBE and not self.sh.is_finite():
             raise Error("A light probe's coefficients must be finite")
+        self.cascade.validate()
+        if self.cascade.is_cascade() and self.kind != DIRECTIONAL:
+            raise Error("Only a directional light can be a shadow cascade")
         if self.kind == RECT_AREA:
             var width = self.width.to(METER)
             var height = self.height.to(METER)
@@ -397,6 +469,7 @@ def _bare(
         _NO_LENGTH,
         NO_TEXTURE,
         SphericalHarmonics3(),
+        ShadowCascade.none(),
     )
 
 
@@ -651,3 +724,24 @@ def light_probe(
     light.sh = sh
     light.validate()
     return light
+
+
+def shadows_drawn(mut lights: List[Light], maps: List[ShadowMap]) raises:
+    """Clear `needs_update` on every light that has a map in `maps`, as
+    three.js's `WebGLShadowMap` clears it once it draws the map.
+
+    Call it with what `Renderer.shadow_maps` returned, so a frozen light
+    that asked for one more map is frozen again.
+
+    Args:
+        lights: The scene's lights, `Scene.lights`.
+        maps: The maps drawn, each naming its light by index.
+
+    Raises:
+        Error: If a map names a light that is not there.
+    """
+    for slot in range(len(maps)):
+        var light = maps[slot].light
+        if light < 0 or light >= len(lights):
+            raise Error("A shadow map names a light that is not there")
+        lights[light].shadow.needs_update = False

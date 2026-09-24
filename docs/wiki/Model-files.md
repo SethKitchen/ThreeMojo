@@ -761,7 +761,7 @@ A camera reads `FieldOfView` in degrees, 45 by default, and `AspectWidth` over `
 
 A light reads `LightType`: 0 is a point light, 1 a directional light and 2 a spot light. Any other type is a point light with three.js's defaults. `Color` is sRGB. `Intensity` is divided by 100. `CastLightOnObject` of 0 sets the intensity to zero.
 
-`FarAttenuationEnd` is the distance, unless `EnableFarAttenuation` is 0. The decay is 1. A spot light reads `InnerAngle` in degrees, 60 by default. `OuterAngle` sets the penumbra to 1. `CastShadows` of 1 casts a shadow from a directional or spot light.
+`FarAttenuationEnd` is the distance, unless `EnableFarAttenuation` is 0. The decay is 1. A spot light reads `InnerAngle` in degrees, 60 by default. `OuterAngle` sets the penumbra to 1. `CastShadows` of 1 casts a shadow from any light, a point light too, as in three.js.
 
 A directional or spot light stands one unit up its own y axis before the model transform applies, as in three.js. It shines toward the world origin.
 
@@ -793,7 +793,6 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 - A polygon of four or more corners is cut by ear clipping. three.js uses earcut, which picks other diagonals. A flat polygon gives the same surface.
 - The ASCII reader reads tokens, not lines and tabs. A file that three.js reads, this reader reads the same way.
 - three.js sets the penumbra of a spot light to the outer angle in radians, at least 1. This loader uses 1, because a penumbra above 1 is refused.
-- A point light that casts a shadow draws without one. This renderer has no shadow for a point light.
 - `ByVertex` and `Index` are read as `ByVertice` and `IndexToDirect`. three.js does not read them.
 - A texture with no image is `NO_TEXTURE`. three.js makes an empty texture.
 - A bump scale without a bump map is dropped, because `Material` refuses it.

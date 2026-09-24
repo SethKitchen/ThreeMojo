@@ -3179,6 +3179,14 @@ def _panorama_seen(
     return picture.sample(at.x, at.y)
 
 
+def _kept_for(kept: List[ShadowMap], light: Int) -> Int:
+    """Return which of `kept` a light drew, or -1 for none."""
+    for slot in range(len(kept)):
+        if kept[slot].light == light:
+            return slot
+    return -1
+
+
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:
     """Return where a directional or spot light's camera looks, in world
     space: its target's position, or the origin when it names none.
@@ -5808,17 +5816,21 @@ struct Renderer(Movable):
         return LtcTables(copy=self.ltc)
 
     def shadow_maps(
-        self, scene: Scene, assets: Assets, visible: Layers = Layers.all()
+        self,
+        scene: Scene,
+        assets: Assets,
+        visible: Layers = Layers.all(),
+        var kept: List[ShadowMap] = List[ShadowMap](),
     ) raises -> List[ShadowMap]:
         """Draw the scene's depth from every light that casts a shadow,
         and return the maps for `Lighting` to compare against.
 
         One map per directional, point or spot light on the camera's
         layers whose `cast_shadow` is set, drawn through the camera the
-        light's `shadow` describes: an orthographic one `extent` meters to
-        each side for a directional light, three.js's
-        `DirectionalLightShadow`, and a perspective one twice the cone's
-        angle wide for a spot light, three.js's `SpotLightShadow`, each at
+        light's `shadow` describes: an orthographic one between its
+        `left`, `right`, `top` and `bottom` edges for a directional light,
+        three.js's `DirectionalLightShadow`, and a perspective one twice
+        the cone's angle wide for a spot light, three.js's `SpotLightShadow`, each at
         the light's node looking at its target, between the shadow's near
         and far planes. A point light draws six square ninety-degree
         views from its node, one along each of `cube_direction`'s six
@@ -5839,6 +5851,18 @@ struct Renderer(Movable):
         in its `blur_samples` steps. A point light's cube draws the
         receiving meshes too but is not blurred, as three.js blurs none.
 
+        Each map carries its light's `shadow.intensity`, which weakens
+        what the map takes away; see `lights.shadow.shadow_strength`.
+
+        A light whose shadow is frozen, three.js's `autoUpdate` and
+        `needsUpdate` both false, takes its map from `kept` rather than
+        drawing it again, as three.js keeps the map it drew last. One
+        with no map in `kept` is drawn: this renderer keeps nothing
+        between frames, so `render_into` draws every map every frame.
+        Hand last frame's maps back as `kept` to freeze one, and clear
+        each drawn light's `needs_update` with
+        `lights.light.shadows_drawn`, as three.js clears it.
+
         `render_into` draws these itself. Call this to hand the same maps
         to `GpuRenderer.draw`, through `Lighting`.
 
@@ -5847,6 +5871,8 @@ struct Renderer(Movable):
             assets: The geometry and materials the casters name.
             visible: The camera's layers; a light on none of them draws
                 nothing, as `Lighting` leaves it out.
+            kept: Maps drawn before, each naming its light. Only a frozen
+                light's is used; the rest are dropped.
 
         Returns:
             The maps, each naming its light by index.
@@ -5868,20 +5894,24 @@ struct Renderer(Movable):
                 continue
             if not scene.light_shown(light):
                 continue
+            ref shadow = light.shadow
+            var reused = _kept_for(kept, index)
+            if shadow.is_frozen() and reused >= 0:
+                maps.append(kept.pop(reused))
+                continue
             if light.kind == POINT:
                 maps.append(self._cube_shadow(scene, assets, light, index))
                 continue
             var at = scene.world_position(light.node)
             var aimed = _light_aim(scene, light)
-            ref shadow = light.shadow
             var corners: List[RasterVertex]
             var frame: Matrix4
             if light.kind == DIRECTIONAL:
                 var camera = OrthographicCamera(
-                    Length(-shadow.extent.to(METER), METER),
-                    shadow.extent,
-                    shadow.extent,
-                    Length(-shadow.extent.to(METER), METER),
+                    shadow.left,
+                    shadow.right,
+                    shadow.top,
+                    shadow.bottom,
                     shadow.near,
                     shadow.far,
                 )
@@ -5930,6 +5960,7 @@ struct Renderer(Movable):
                     shadow.normal_bias,
                     shadow.radius,
                     self.shadow_map_type,
+                    shadow.intensity,
                 )
             )
         return maps^
@@ -5989,6 +6020,7 @@ struct Renderer(Movable):
             normal_bias=shadow.normal_bias,
             radius=shadow.radius,
             shadow_type=self.shadow_map_type,
+            intensity=shadow.intensity,
         )
 
     def _projected(

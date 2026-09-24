@@ -1657,12 +1657,13 @@ def test_models() raises:
     assert_almost_equal(plain.far.value, 1000)
     assert_almost_equal(model.cameras[1].fov.to(DEGREE), 53.130102, atol=1e-3)
     # Lights: an unknown type is a point light at three.js's defaults; a
-    # light with no attribute is none; a point light's shadow is dropped.
+    # light with no attribute is none; a point light casts its shadow.
     assert_equal(model.light_count, 4)
     assert_equal(scene.lights[0].kind, POINT)
     assert_almost_equal(scene.lights[0].decay, 2)
     assert_equal(scene.lights[1].kind, POINT)
-    assert_false(scene.lights[1].cast_shadow)
+    assert_true(scene.lights[1].cast_shadow)
+    assert_false(scene.lights[0].cast_shadow)
     assert_almost_equal(scene.lights[1].distance, 4)
     assert_equal(scene.lights[2].kind, SPOT)
     assert_almost_equal(scene.lights[2].penumbra, 0)

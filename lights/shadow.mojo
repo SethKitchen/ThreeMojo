@@ -17,8 +17,9 @@ a world position into it.
 
 **How a light draws its map.** A directional light is infinitely far
 away, so its rays are parallel and it draws through an orthographic
-camera placed at its node, looking at its target, `extent` meters to
-each side: three.js's `DirectionalLightShadow`. A spot light draws
+camera placed at its node, looking at its target, its `left`, `right`,
+`top` and `bottom` edges meters from its axis: three.js's
+`DirectionalLightShadow`. A spot light draws
 through a perspective camera at its node with a field of view twice its
 cone's angle, three.js's `SpotLightShadow`. Both take their near and far
 planes from `LightShadow`, except that a light with a `distance` puts its
@@ -133,6 +134,8 @@ comptime MAX_BLUR_SAMPLES = 256
 comptime DEFAULT_SHADOW_NEAR = Length(0.5, METER)
 comptime DEFAULT_SHADOW_FAR = Length(500.0, METER)
 comptime DEFAULT_SHADOW_EXTENT = Length(5.0, METER)
+# three.js's default `shadow.intensity`: the shadow takes all the light.
+comptime FULL_SHADOW = Float32(1.0)
 # The largest map this project builds: a square of this many texels a
 # side is sixty-four million depths.
 comptime MAX_MAP_SIZE = 8192
@@ -170,13 +173,14 @@ comptime VSM_DARK = Float32(0.3)
 comptime VSM_LIT = Float32(0.95)
 # How many floats a shadow map's header takes in the flat light buffer:
 # its size, its bias, its normal bias, its radius, its sixteen-float
-# frame, then its `ShadowMapType`; the depths follow. See
+# frame, then its `ShadowMapType` and its intensity; the depths follow. See
 # `render.gpu.flatten_lights`. A point light's cube puts its bulb's
 # position, its near plane and its far plane in the first five of the
 # frame's floats instead, and zeros after them.
-comptime SHADOW_HEADER = 21
-# Where in the header the `ShadowMapType` is.
+comptime SHADOW_HEADER = 22
+# Where in the header the `ShadowMapType` is, and the intensity.
 comptime SHADOW_TYPE_AT = 20
+comptime SHADOW_INTENSITY_AT = 21
 # How many faces a point light's cube has, and how many texels of one
 # face of its map the nine taps spread `radius` over: three.js lays the six
 # out on a texture four faces wide and two high and offsets a tap by the
@@ -213,13 +217,26 @@ struct LightShadow(ImplicitlyCopyable):
     # `far`.
     var near: Length
     var far: Length
-    # How far to each side a directional light's camera sees, three.js's
-    # `shadow.camera.left` through `top` as one number. A spot light's
-    # camera takes its width from the cone instead.
-    var extent: Length
+    # Where a directional light's camera sees to, three.js's
+    # `shadow.camera.left`, `right`, `top` and `bottom`: each edge's
+    # distance from the camera's axis, left and bottom negative. A spot
+    # light's camera takes its width from the cone instead.
+    var left: Length
+    var right: Length
+    var top: Length
+    var bottom: Length
     # How many samples each of a variance map's two blur passes takes,
     # three.js's `blurSamples`. Read only under `VSM_SHADOW_MAP`.
     var blur_samples: Int
+    # How much of the light the shadow takes away, three.js's
+    # `shadow.intensity`: one for all of it, zero for none. See
+    # `shadow_strength`.
+    var intensity: Float32
+    # Whether the map is drawn again every frame, three.js's
+    # `shadow.autoUpdate`, and whether a map that is not is drawn once
+    # more, three.js's `shadow.needsUpdate`. See `Renderer.shadow_maps`.
+    var auto_update: Bool
+    var needs_update: Bool
 
     def __init__(out self):
         """Start at three.js's defaults."""
@@ -229,8 +246,35 @@ struct LightShadow(ImplicitlyCopyable):
         self.radius = DEFAULT_SHADOW_RADIUS
         self.near = DEFAULT_SHADOW_NEAR
         self.far = DEFAULT_SHADOW_FAR
-        self.extent = DEFAULT_SHADOW_EXTENT
+        self.left = -DEFAULT_SHADOW_EXTENT
+        self.right = DEFAULT_SHADOW_EXTENT
+        self.top = DEFAULT_SHADOW_EXTENT
+        self.bottom = -DEFAULT_SHADOW_EXTENT
         self.blur_samples = DEFAULT_BLUR_SAMPLES
+        self.intensity = FULL_SHADOW
+        self.auto_update = True
+        self.needs_update = False
+
+    def set_extent(mut self, extent: Length):
+        """Make a directional light's camera see `extent` to each side of
+        its axis: the square three.js's defaults make, at another size.
+
+        Args:
+            extent: How far each edge lies from the axis.
+        """
+        self.left = -extent
+        self.right = extent
+        self.top = extent
+        self.bottom = -extent
+
+    def is_frozen(self) -> Bool:
+        """Return True if the map is kept as it was rather than drawn
+        again: three.js's `autoUpdate` and `needsUpdate` both false.
+
+        Returns:
+            Whether `Renderer.shadow_maps` reuses a kept map.
+        """
+        return not self.auto_update and not self.needs_update
 
     def validate(self) raises:
         """Refuse numbers a shadow map cannot be built from.
@@ -257,9 +301,28 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error(
                 "A shadow camera's far plane must lie beyond its near plane"
             )
-        var extent = self.extent.to(METER)
-        if not isfinite(extent) or extent <= 0:
-            raise Error("A shadow camera's extent must be a positive length")
+        var left = self.left.to(METER)
+        var right = self.right.to(METER)
+        var top = self.top.to(METER)
+        var bottom = self.bottom.to(METER)
+        if (
+            not isfinite(left)
+            or not isfinite(right)
+            or not isfinite(top)
+            or not isfinite(bottom)
+            or right <= left
+            or top <= bottom
+        ):
+            raise Error(
+                "A shadow camera's right edge must lie beyond its left and"
+                " its top above its bottom"
+            )
+        if (
+            not isfinite(self.intensity)
+            or self.intensity < 0
+            or self.intensity > 1
+        ):
+            raise Error("A shadow's intensity must be between zero and one")
 
 
 struct ShadowMap(Movable):
@@ -299,6 +362,9 @@ struct ShadowMap(Movable):
     var origin: Vector3
     var near: Float32
     var far: Float32
+    # How much of the light the shadow takes away, the light's
+    # `shadow.intensity`; see `shadow_strength`.
+    var intensity: Float32
 
     def __init__(
         out self,
@@ -310,6 +376,7 @@ struct ShadowMap(Movable):
         normal_bias: Float32,
         radius: Float32,
         shadow_type: ShadowMapType = PCF_SHADOW_MAP,
+        intensity: Float32 = FULL_SHADOW,
     ) raises:
         """Adopt a rendered depth square.
 
@@ -325,6 +392,7 @@ struct ShadowMap(Movable):
                 meters, before it is projected.
             radius: How many texels the taps spread over.
             shadow_type: Which filter reads the map.
+            intensity: How much of the light the shadow takes away.
 
         Raises:
             Error: If the size is not positive, the type is none of the
@@ -352,6 +420,7 @@ struct ShadowMap(Movable):
         self.origin = Vector3(0, 0, 0)
         self.near = 0
         self.far = 0
+        self.intensity = intensity
 
     def __init__(
         out self,
@@ -366,6 +435,7 @@ struct ShadowMap(Movable):
         normal_bias: Float32,
         radius: Float32,
         shadow_type: ShadowMapType = PCF_SHADOW_MAP,
+        intensity: Float32 = FULL_SHADOW,
     ) raises:
         """Adopt a point light's six rendered faces, three.js's
         `PointLightShadow` map.
@@ -386,6 +456,7 @@ struct ShadowMap(Movable):
             radius: How far the taps spread; see `point_shadow_tap`.
             shadow_type: Which filter reads the cube: one tap under
                 `BASIC_SHADOW_MAP` and nine under the other three.
+            intensity: How much of the light the shadow takes away.
 
         Raises:
             Error: If the size is not positive, the type is none of the
@@ -414,6 +485,7 @@ struct ShadowMap(Movable):
         self.origin = origin
         self.near = near
         self.far = far
+        self.intensity = intensity
 
     def lit(self, position: Vector3, normal: Vector3) -> Float32:
         """Return how much of the light reaches a surface, one for all of
@@ -426,8 +498,15 @@ struct ShadowMap(Movable):
 
         Returns:
             The fraction of the light that found nothing in the way, by
-            the map's `shadow_type`.
+            the map's `shadow_type`, weakened by its `intensity` as
+            `shadow_strength` weakens it.
         """
+        return shadow_strength(
+            self._unweakened(position, normal), self.intensity
+        )
+
+    def _unweakened(self, position: Vector3, normal: Vector3) -> Float32:
+        """Return what the map lets through at full intensity."""
         if self.cube:
             return self._cube_lit(position, normal)
         var place = shadow_coordinate(
@@ -501,6 +580,171 @@ struct ShadowMap(Movable):
             )
             total += cube_tap(self.depths[texel], depth)
         return total / Float32(POINT_SHADOW_TAPS)
+
+
+@fieldwise_init
+struct ShadowCascade(ImplicitlyCopyable):
+    """Which slice of a camera's depth one directional light lights, as
+    three.js's `CSMShader` gates each light of a `CSM`.
+
+    Every light carries one; only a directional light reads it, and one
+    whose `span` is zero is no cascade and lights every depth. A fragment's
+    depth is its distance in front of the camera over `span`, three.js's
+    `linearDepth`, and `cascade_reach` says how much of the light it gets
+    and how much of the light's shadow falls on it. `lights.csm.CSM` fills
+    these in.
+    """
+
+    # Where the slice begins and ends, as fractions of `span`: three.js's
+    # `CSM_cascades[ i ].x` and `.y`.
+    var start: Float32
+    var end: Float32
+    # What a depth is divided by, three.js's `shadowFar - cameraNear`.
+    # Zero for a light that is no cascade.
+    var span: Length
+    # Whether this is the furthest slice, which also lights every depth
+    # beyond its end, as three.js's `CSM_CASCADES - 1` does.
+    var last: Bool
+    # Whether the slices blend into each other, three.js's `CSM.fade`.
+    var fade: Bool
+
+    @staticmethod
+    def none() -> ShadowCascade:
+        """Return what a light that is no cascade carries.
+
+        Returns:
+            A slice with a span of zero.
+        """
+        return ShadowCascade(0, 0, Length(0.0, METER), False, False)
+
+    def is_cascade(self) -> Bool:
+        """Return True if this gates its light by depth.
+
+        Returns:
+            Whether the span is not zero.
+        """
+        return self.span.value != 0
+
+    def validate(self) raises:
+        """Refuse a slice no depth can be measured against.
+
+        A light that is no cascade is not checked further.
+
+        Raises:
+            Error: If the span is not zero and is negative or not finite,
+                or the start or end is not finite, the start is negative
+                or the end lies before the start.
+        """
+        if not self.is_cascade():
+            return
+        var span = self.span.to(METER)
+        if not isfinite(span) or span < 0:
+            raise Error("A shadow cascade's span must be a positive length")
+        if (
+            not isfinite(self.start)
+            or not isfinite(self.end)
+            or self.start < 0
+            or self.end < self.start
+        ):
+            raise Error(
+                "A shadow cascade must start at zero or later and end no"
+                " sooner than it starts"
+            )
+
+
+def view_depth(position: Vector3, eye: Vector3, back: Vector3) -> Float32:
+    """Return how far in front of a camera a position lies, along the way
+    it looks: three.js's `vViewPosition.z`.
+
+    Args:
+        position: The world position.
+        eye: Where the camera is, in world space.
+        back: The camera's +z axis in world space, unit length.
+
+    Returns:
+        The depth, positive in front of the camera.
+    """
+    return -(
+        (position.x - eye.x) * back.x
+        + (position.y - eye.y) * back.y
+        + (position.z - eye.z) * back.z
+    )
+
+
+def cascade_reach(
+    depth: Float32, start: Float32, end: Float32, last: Bool, fade: Bool
+) -> SIMD[DType.float32, 2]:
+    """Return how much of a cascade's light reaches a depth and how much of
+    its shadow falls there: three.js's `CSMShader` `lights_fragment_begin`
+    for one directional light.
+
+    Without fade, a depth in the slice gets the light and its shadow, a
+    depth past the last slice gets the light with no shadow, and any other
+    depth gets nothing. With fade, each slice reaches a margin further
+    either way, a quarter of its nearer edge squared, and the light ramps
+    across that margin, as three.js's `ratio` ramps it. The last slice
+    fades its shadow out, not its light, past its middle.
+
+    Args:
+        depth: The fragment's depth over the span, three.js's
+            `linearDepth`.
+        start: Where the slice begins, `ShadowCascade.start`.
+        end: Where it ends, `ShadowCascade.end`.
+        last: Whether it is the furthest slice.
+        fade: Whether the slices blend, three.js's `CSM.fade`.
+
+    Returns:
+        The share of the light, then the share of its shadow: what three.js
+        blends `reflectedLight` by and mixes `directLight.color` by. A
+        margin of zero ramps at once, a ratio of one.
+    """
+    if not fade:
+        var inside = depth >= start and depth < end
+        var lit = inside or (last and depth >= start)
+        return SIMD[DType.float32, 2](
+            Float32(1) if lit else Float32(0),
+            Float32(1) if inside else Float32(0),
+        )
+    var center = (start + end) / 2
+    var edge = start if depth < center else end
+    var margin = Float32(0.25) * edge * edge
+    var low = start - margin / 2
+    var high = end + margin / 2
+    var reached = depth >= low and (depth < high or last)
+    if not reached:
+        return SIMD[DType.float32, 2](0, 0)
+    var ratio = Float32(1)
+    if margin > 0:
+        ratio = max(
+            Float32(0), min(Float32(1), min(depth - low, high - depth) / margin)
+        )
+    return SIMD[DType.float32, 2](
+        ratio if (not last or depth < center) else Float32(1),
+        ratio if (last and depth > center) else Float32(1),
+    )
+
+
+def shadow_strength(through: Float32, intensity: Float32) -> Float32:
+    """Return what a shadow lets through, weakened by its intensity:
+    three.js's `mix( 1.0, shadow, shadowIntensity )`, the last line of
+    `getShadow` and `getPointShadow`.
+
+    Written as one plus the shadow's part of the gap, so a fragment the
+    map leaves lit stays at exactly one whatever the intensity. A full
+    intensity returns the shadow as it is, as `mix` does at one, with no
+    rounding through the gap.
+
+    Args:
+        through: What the map lets through, one for all the light.
+        intensity: How much of the light the shadow takes away, from zero
+            to one.
+
+    Returns:
+        The fraction of the light that arrives.
+    """
+    if intensity == FULL_SHADOW:
+        return through
+    return 1 + (through - 1) * intensity
 
 
 def biased_position(

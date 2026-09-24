@@ -56,9 +56,7 @@ stacks into clips.
 **Not ported.** NURBS curves, a
 `LookAtProperty`, an orthographic camera, layered textures past their
 first layer, a second set of texture coordinates, and the ambient
-occlusion, displacement, reflection and specular maps. A point light that
-casts a shadow is drawn without one: this renderer has no point-light
-shadow.
+occlusion, displacement, reflection and specular maps.
 """
 
 from animation.animation_clip import AnimationClip
@@ -1722,12 +1720,18 @@ struct _Loader(Movable):
             light.validate()
             scene.add_light(light)
         elif light_type == 0:
-            scene.add_light(
-                point_light(color, node, intensity, decay=1, distance=distance)
+            var light = point_light(
+                color, node, intensity, decay=1, distance=distance
             )
+            light.cast_shadow = shadow
+            light.validate()
+            scene.add_light(light)
         else:
-            # An unknown type is a point light at three.js's defaults.
-            scene.add_light(point_light(color, node, intensity))
+            # An unknown type is a point light at three.js's defaults, and
+            # casts as three.js's `createLight` lets any light cast.
+            var light = point_light(color, node, intensity)
+            light.cast_shadow = shadow
+            scene.add_light(light)
 
     def default_material(
         mut self, key: String, material: Material, mut assets: Assets

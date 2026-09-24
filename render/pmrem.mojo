@@ -17,7 +17,8 @@ layout, and how a roughness picks its rungs, is `render.cube_uv`.
 holds the source's six faces, which every reader but a physical surface
 still reads, and the prefiltered image in `cube_uv`. Name it as an env map
 or as a scene's environment as any cube is named. three.js's `fromScene`
-is `Renderer.render_cube` followed by `pmrem_from_cube`.
+is `renderers.environment.pmrem_from_scene`, which draws six float faces
+and hands them to `pmrem_from_faces`.
 
 **The arithmetic is three.js's, run on the host.** The sharpest copy is the
 source read in every texel's own direction. Each copy after it is the one
@@ -60,7 +61,8 @@ from render.texture import (
     Texture,
     float_texture,
 )
-from std.math import cos, exp, floor, log2, pi, sin, sqrt
+from std.math import cos, exp, floor, isfinite, log2, pi, sin, sqrt
+from units.si import Angle, RADIAN
 
 # The most taps either side of the center a blur takes: three.js's
 # `MAX_SAMPLES`.
@@ -373,9 +375,10 @@ def _half_blur(
                 var red = weight * center.r
                 var green = weight * center.g
                 var blue = weight * center.b
-                # At least four taps for every copy's sigma, so this loop
-                # never runs zero times.
-                for index in range(1, samples):  # pragma: no branch
+                # At least four taps for every copy's own sigma; only a
+                # `pmrem_from_faces` blur below one sample's width runs
+                # this zero times, which the tests exercise.
+                for index in range(1, samples):
                     weight = taps.weights[index]
                     var minus = _tap(
                         source,
@@ -405,14 +408,20 @@ def _half_blur(
 
 
 def _layout(
-    source: CubeTexture, lod_max: Int, panorama: Texture, from_panorama: Bool
+    source: CubeTexture,
+    lod_max: Int,
+    panorama: Texture,
+    from_panorama: Bool,
+    blur: Float32 = 0,
 ) raises -> Texture:
     """Return the PMREM image: the sharpest copy filled from the source,
     then every copy after it blurred from the one before: three.js's
     `_textureToCubeUV` and `_applyPMREM`.
 
     The sharpest copy reads `panorama` at `equirect_uv` when
-    `from_panorama`, and `source` in each direction otherwise."""
+    `from_panorama`, and `source` in each direction otherwise. A `blur`
+    above zero blurs the sharpest copy in place by that many radians
+    first, three.js's `fromScene` with a `sigma`."""
     var ladder = _ladder(lod_max)
     var layout = _blank_layout(lod_max)
     var ping = _blank_layout(lod_max)
@@ -430,6 +439,12 @@ def _layout(
                 else:
                     seen = source.sample(direction)
                 _store(layout, left + x, bottom + y, seen.r, seen.g, seen.b)
+    if blur > 0:
+        # three.js's `_blur( cubeUVRenderTarget, 0, 0, sigma )` names no
+        # pole, so the blur shader keeps the one it was made with, +y.
+        var up = Vector3(0, 1, 0)
+        _half_blur(layout, ping, ladder, lod_max, 0, 0, blur, True, up)
+        _half_blur(ping, layout, ladder, lod_max, 0, 0, blur, False, up)
     var count = len(ladder.sizes)
     # Seven copies at the least, so this never runs zero times.
     for index in range(1, count):  # pragma: no branch
@@ -468,6 +483,39 @@ def pmrem_from_cube(cube: CubeTexture) raises -> CubeTexture:
     cube.validate()
     var out = CubeTexture(copy=cube)
     out.cube_uv = _layout(cube, pmrem_lod_max(cube.size), Texture(), False)
+    out.validate()
+    return out^
+
+
+def pmrem_from_faces(cube: CubeTexture, sigma: Angle) raises -> CubeTexture:
+    """Return a cube texture prefiltered for every roughness, its sharpest
+    copy blurred first: the second half of three.js's
+    `PMREMGenerator.fromScene`, after the six faces are drawn.
+
+    `renderers.environment.pmrem_from_scene` draws the faces and calls
+    this. The copies are sized from the faces, as `pmrem_from_cube` sizes
+    them.
+
+    Args:
+        cube: The six drawn faces, byte or float.
+        sigma: How far to blur the sharpest copy, three.js's `sigma`, a
+            standard deviation on the sphere. Zero blurs nothing.
+
+    Returns:
+        A copy of the cube, with its PMREM in `cube_uv`.
+
+    Raises:
+        Error: If the cube is refused by `CubeTexture.validate`, or the
+            sigma is negative or not finite.
+    """
+    var blur = sigma.to(RADIAN)
+    if not isfinite(blur) or blur < 0:
+        raise Error("A PMREM blur must be a finite angle, not negative")
+    cube.validate()
+    var out = CubeTexture(copy=cube)
+    out.cube_uv = _layout(
+        cube, pmrem_lod_max(cube.size), Texture(), False, blur
+    )
     out.validate()
     return out^
 

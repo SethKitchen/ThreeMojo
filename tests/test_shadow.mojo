@@ -22,6 +22,7 @@ from lights.lighting import Lighting, Reflected, physical_surface
 from lights.shadow import (
     DEFAULT_MAP_SIZE,
     DEFAULT_SHADOW_EXTENT,
+    FULL_SHADOW,
     DEFAULT_SHADOW_FAR,
     DEFAULT_SHADOW_NEAR,
     DEFAULT_SHADOW_RADIUS,
@@ -30,6 +31,7 @@ from lights.shadow import (
     PCF_TAPS,
     POINT_SHADOW_TAPS,
     SHADOW_HEADER,
+    SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
     SOFT_TAPS,
     SPOT_MAP_FLOATS,
@@ -143,8 +145,24 @@ def test_a_light_shadow_starts_at_three_js_defaults() raises:
     assert_equal(shadow.radius, DEFAULT_SHADOW_RADIUS)
     assert_equal(shadow.near.to(METER), DEFAULT_SHADOW_NEAR.to(METER))
     assert_equal(shadow.far.to(METER), DEFAULT_SHADOW_FAR.to(METER))
-    assert_equal(shadow.extent.to(METER), DEFAULT_SHADOW_EXTENT.to(METER))
+    assert_equal(shadow.left.to(METER), -DEFAULT_SHADOW_EXTENT.to(METER))
+    assert_equal(shadow.right.to(METER), DEFAULT_SHADOW_EXTENT.to(METER))
+    assert_equal(shadow.top.to(METER), 5)
+    assert_equal(shadow.bottom.to(METER), -5)
+    assert_equal(shadow.intensity, FULL_SHADOW)
+    assert_true(shadow.auto_update)
+    assert_false(shadow.needs_update)
+    assert_false(shadow.is_frozen())
+    shadow.auto_update = False
+    assert_true(shadow.is_frozen())
+    shadow.needs_update = True
+    assert_false(shadow.is_frozen())
     shadow.validate()
+    shadow.set_extent(Length(8, METER))
+    assert_equal(shadow.left.to(METER), -8)
+    assert_equal(shadow.right.to(METER), 8)
+    assert_equal(shadow.top.to(METER), 8)
+    assert_equal(shadow.bottom.to(METER), -8)
     # And a light carries one, not casting.
     var scene = scene_with_sun(False)
     assert_false(scene.lights[0].cast_shadow)
@@ -183,10 +201,22 @@ def test_a_light_shadow_refuses_what_no_map_can_be_built_from() raises:
         far.far = Length(wrong, METER)
         with assert_raises():
             far.validate()
-        var extent = LightShadow()
-        extent.extent = Length(wrong, METER)
+        for edge_at in range(4):
+            var sides = LightShadow()
+            if edge_at == 0:
+                sides.left = Length(wrong, METER)
+            elif edge_at == 1:
+                sides.right = Length(wrong, METER)
+            elif edge_at == 2:
+                sides.top = Length(wrong, METER)
+            else:
+                sides.bottom = Length(wrong, METER)
+            with assert_raises():
+                sides.validate()
+        var strength = LightShadow()
+        strength.intensity = wrong
         with assert_raises():
-            extent.validate()
+            strength.validate()
     var negative = LightShadow()
     negative.radius = -1
     with assert_raises():
@@ -200,9 +230,26 @@ def test_a_light_shadow_refuses_what_no_map_can_be_built_from() raises:
     with assert_raises():
         crossed.validate()
     var thin = LightShadow()
-    thin.extent = Length(0.0, METER)
+    thin.right = thin.left
     with assert_raises():
         thin.validate()
+    var flat = LightShadow()
+    flat.top = flat.bottom
+    with assert_raises():
+        flat.validate()
+    for wrong in [Float32(-0.1), Float32(1.1)]:
+        var strength = LightShadow()
+        strength.intensity = wrong
+        with assert_raises():
+            strength.validate()
+    # An off-center camera is allowed, as three.js allows one.
+    var aside = LightShadow()
+    aside.left = Length(1, METER)
+    aside.right = Length(3, METER)
+    aside.bottom = Length(-2, METER)
+    aside.top = Length(0.5, METER)
+    aside.intensity = 0
+    aside.validate()
     # A negative bias is allowed: it moves the fragment toward the light.
     var toward = LightShadow()
     toward.bias = -0.01
@@ -349,7 +396,7 @@ def test_a_tap_is_lit_when_the_fragment_is_not_beyond_the_stored_depth() raises:
     assert_equal(shadow_tap(-0.5, 0.2, 0.1), Float32(0))
     # Nothing stored is nothing in the way.
     assert_equal(shadow_tap(inf[DType.float32](), 1, 0), Float32(1))
-    assert_equal(SHADOW_HEADER, 21)
+    assert_equal(SHADOW_HEADER, 22)
 
 
 def test_a_map_lights_a_surface_by_how_many_taps_find_nothing() raises:
@@ -1048,7 +1095,8 @@ def test_a_shadow_map_type_is_one_of_three_js_four() raises:
     assert_false(ShadowMapType(-1).is_valid())
     # A map is PCF unless it says otherwise, as three.js's default is.
     assert_true(half_map(2).shadow_type == PCF_SHADOW_MAP)
-    assert_equal(SHADOW_TYPE_AT, SHADOW_HEADER - 1)
+    assert_equal(SHADOW_TYPE_AT, SHADOW_HEADER - 2)
+    assert_equal(SHADOW_INTENSITY_AT, SHADOW_HEADER - 1)
     # A type that is none of the four is refused, square or cube.
     with assert_raises():
         _ = ShadowMap(

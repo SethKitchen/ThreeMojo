@@ -15,7 +15,7 @@ half-strength white lights come to a full one and not to byte 128.
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from lights.shadow import LightShadow
+from lights.shadow import LightShadow, ShadowCascade
 from lights.light import (
     AMBIENT,
     DEFAULT_SPOT_ANGLE,
@@ -557,6 +557,7 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
             Length(0.0, METER),
             NO_TEXTURE,
             SphericalHarmonics3(),
+            ShadowCascade.none(),
         )
     )
     with assert_raises():

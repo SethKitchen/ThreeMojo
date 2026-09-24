@@ -76,6 +76,7 @@ from lights.shadow import (
     PCF_TAPS,
     POINT_SHADOW_TAPS,
     SHADOW_HEADER,
+    SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
     SOFT_TAPS,
     SPOT_MAP_FLOATS,
@@ -83,6 +84,7 @@ from lights.shadow import (
     biased_position,
     bilinear,
     bilinear_texel,
+    cascade_reach,
     cube_tap,
     cube_texel,
     inside_point_shadow,
@@ -92,11 +94,13 @@ from lights.shadow import (
     point_shadow_spread,
     point_shadow_tap,
     shadow_coordinate,
+    shadow_strength,
     shadow_tap,
     shadow_texel,
     soft_fraction,
     soft_shadow,
     soft_texel,
+    view_depth,
     vsm_shadow,
 )
 from lights.ltc import (
@@ -693,13 +697,18 @@ comptime PLANE_DATA = PLANE_NORMAL + 3
 comptime PLANE_FLOATS = PLANE_DATA + 1
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
-# where its shadow map begins in the same buffer, or -1 for none: the maps
+# where its shadow map begins in the same buffer, or -1 for none. A
+# directional light's last five are its `ShadowCascade`: its start, its
+# end, its span in meters, zero for no cascade, and whether it is the
+# last and whether it fades, as one or zero. The maps
 # ride after the lights, each `SHADOW_HEADER` floats and then its depths,
 # rather than in a buffer of their own, because Metal binds at most
 # thirty-one arguments to a kernel and this one has thirty-one. A spot
 # light's fifteenth is where its map's `SPOT_MAP_FLOATS` begin, after the
 # shadow maps, or -1 for none.
-comptime DIRECTIONAL_FLOATS = 7
+comptime DIRECTIONAL_FLOATS = 12
+# Where a directional light's cascade begins in its record.
+comptime CASCADE_AT = 7
 comptime POINT_FLOATS = 9
 comptime HEMISPHERE_FLOATS = 9
 comptime SPOT_FLOATS = 15
@@ -1055,9 +1064,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     under a parallel projection, three of the camera's own up axis, then
     three of ambient, one of `Lighting.scale`, one of how many rect area
     lights there are, 27 of the light probes' coefficients, three of the
-    camera's back axis, then six per
+    camera's back axis, then twelve per
     directional light -- a unit
-    direction and the light it carries -- then nine per point light: where
+    direction, the light it carries, its shadow and its cascade -- then
+    nine per point light: where
     it is, the light it carries, its decay, its cutoff and its shadow. Then
     nine per
     hemisphere light: which way the sky is, what the sky carries and what
@@ -1081,7 +1091,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     ninth and each spot light a fourteenth: where its shadow map begins in
     this same buffer, or `NO_SHADOW`. The maps follow the lights, each its
     size, its bias, its normal bias, its radius, its sixteen-float frame,
-    its `ShadowMapType` and then its depths, row-major from the top, or
+    its `ShadowMapType`, its intensity and then its depths, row-major from the top, or
     under `VSM_SHADOW_MAP` its means and then its spreads; see
     `lights.shadow.ShadowMap`. A point light's cube holds its bulb's
     position, its near plane and its far plane where the frame would be,
@@ -1091,7 +1101,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     sixteen-float frame; see `lights.shadow.SpotLightMap`.
 
     Returns:
-        `LIGHTS_FIRST + 7 * count + 9 * point_count + 9 * hemisphere_count
+        `LIGHTS_FIRST + 12 * count + 9 * point_count + 9 * hemisphere_count
         + 15 * spot_count + 12 * rect_count` floats, then the two LTC
         tables when `rect_count` is not zero, then the shadow maps, then
         the spot light maps.
@@ -1146,6 +1156,12 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(radiance.g)
         flat.append(radiance.b)
         flat.append(_shadow_start(starts, lighting.direction_shadows[index]))
+        ref band = lighting.cascades[index]
+        flat.append(band.start)
+        flat.append(band.end)
+        flat.append(band.span.to(METER))
+        flat.append(Float32(1) if band.last else Float32(0))
+        flat.append(Float32(1) if band.fade else Float32(0))
     for index in range(lighting.point_count()):
         ref position = lighting.positions[index]
         flat.append(position.x)
@@ -1228,6 +1244,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         for element in range(16):  # pragma: no branch
             flat.append(frame[element])
         flat.append(Float32(map.shadow_type.value))
+        flat.append(map.intensity)
         for texel in range(len(map.depths)):
             flat.append(map.depths[texel])
     for slot in range(len(lighting.spot_maps)):
@@ -1256,11 +1273,24 @@ def _shadow_at(
     """Return how much of one light reaches a surface past its shadow
     map: the device counterpart of `ShadowMap.lit`, from the same
     functions under each `ShadowMapType`, held to the same answer by the
-    parity tests.
+    parity tests, weakened by the map's intensity by `shadow_strength`.
 
     `block` is where the map begins in the light buffer, as
     `flatten_lights` laid it out.
     """
+    return shadow_strength(
+        _unweakened_shadow_at(lights, block, position, normal),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
+def _unweakened_shadow_at(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Float32:
+    """Return what one light's shadow map lets through at full intensity."""
     var size = Int(lights[unsafe_offset=block])
     var bias = lights[unsafe_offset=block + 1]
     var normal_bias = lights[unsafe_offset=block + 2]
@@ -1326,11 +1356,24 @@ def _cube_shadow_at(
 ) -> Float32:
     """Return how much of a point light reaches a surface past its cube:
     the device counterpart of `ShadowMap.lit` on a cube, from the same
-    functions in the same order.
+    functions in the same order, weakened by the cube's intensity.
 
     `block` is where the cube begins in the light buffer, as
     `flatten_lights` laid it out.
     """
+    return shadow_strength(
+        _unweakened_cube_at(lights, block, position, normal),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
+def _unweakened_cube_at(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Float32:
+    """Return what a point light's cube lets through at full intensity."""
     var size = Int(lights[unsafe_offset=block])
     var bias = lights[unsafe_offset=block + 1]
     var normal_bias = lights[unsafe_offset=block + 2]
@@ -1434,6 +1477,46 @@ def _through(
     if block < 0 or not receives:
         return 1
     return _shadow_at(lights, Int(block), position, normal)
+
+
+def _direction_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    at: Int,
+    receives: Bool,
+    position: Vector3,
+    normal: Vector3,
+) -> Float32:
+    """Return how much of one directional light reaches a surface: the
+    device counterpart of `Lighting.direction_through`, reading the
+    light's shadow and cascade from its record at `at`."""
+    var span = lights[unsafe_offset=at + CASCADE_AT + 2]
+    if span == 0:
+        return _through(lights, at + 6, receives, position, normal)
+    var reach = cascade_reach(
+        view_depth(
+            position,
+            Vector3(
+                lights[unsafe_offset=LIGHTS_EYE],
+                lights[unsafe_offset=LIGHTS_EYE + 1],
+                lights[unsafe_offset=LIGHTS_EYE + 2],
+            ),
+            Vector3(
+                lights[unsafe_offset=LIGHTS_BACK],
+                lights[unsafe_offset=LIGHTS_BACK + 1],
+                lights[unsafe_offset=LIGHTS_BACK + 2],
+            ),
+        )
+        / span,
+        lights[unsafe_offset=at + CASCADE_AT],
+        lights[unsafe_offset=at + CASCADE_AT + 1],
+        lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+        lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
+    )
+    if reach[0] == 0:
+        return 0
+    return reach[0] * shadow_strength(
+        _through(lights, at + 6, receives, position, normal), reach[1]
+    )
 
 
 def _shadow_mask(
@@ -1588,8 +1671,8 @@ def _arriving(
         )
         if lambert <= 0:
             continue
-        lambert *= _through(
-            lights, at + 6, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
+        lambert *= _direction_through(
+            lights, at, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
         )
         red += lights[unsafe_offset=at + 3] * lambert
         green += lights[unsafe_offset=at + 4] * lambert
@@ -1789,8 +1872,8 @@ def _toon_arriving(
             + ny * lights[unsafe_offset=at + 1]
             + nz * lights[unsafe_offset=at + 2],
         )
-        tone *= _through(
-            lights, at + 6, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
+        tone *= _direction_through(
+            lights, at, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
         )
         red += lights[unsafe_offset=at + 3] * tone
         green += lights[unsafe_offset=at + 4] * tone
@@ -1969,8 +2052,8 @@ def _highlight(
         var lambert = normal.dot(toward)
         if lambert <= 0:
             continue
-        lambert *= _through(
-            lights, at + 6, receives, Vector3(px, py, pz), normal
+        lambert *= _direction_through(
+            lights, at, receives, Vector3(px, py, pz), normal
         )
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
         red += lights[unsafe_offset=at + 3] * lambert * sent.x
@@ -2338,7 +2421,7 @@ def _physical(
             coat_lambert = max(Float32(0), coat_normal.dot(toward))
         if lambert == 0 and coat_lambert == 0:
             continue
-        var through = _through(lights, at + 6, receives, position, normal)
+        var through = _direction_through(lights, at, receives, position, normal)
         sum = physical_light(
             sum,
             Vector3(
