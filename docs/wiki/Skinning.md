@@ -119,4 +119,4 @@ The renderer uses the weights as they are, as three.js's shader does. Weights su
 - [Animation](Animation) poses the bones.
 - [Scene graph](Scene-graph) holds them.
 - [Geometry](Geometry#morph-targets) has morph targets, the other way a vertex moves.
-- [Raycasting](Raycasting) picks morphed meshes, and does not pick rigs yet.
+- [Raycasting](Raycasting) picks morphed meshes and skinned meshes where their bones carry them.

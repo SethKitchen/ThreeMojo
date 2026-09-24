@@ -210,11 +210,14 @@ A point on the axis is a pole. The half of each cell against it that has no area
 ```mojo
 var pipe = tube(path, Length(0.2, METER), 8)                         # a path of Vector3, cells around
 var loop = tube(path, Length(0.2, METER), 8, closed=True)
+var bent = tube(curve, Length(0.2, METER), 64, 8)                   # a Curve3, cells along, cells around
 ```
 
 A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it.
 
-three.js samples its path from a curve. There are no curve types here yet, so the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
+With a list of points, the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
+
+With a `Curve3`, the tube is three.js's `TubeGeometry`. It samples `tubular_segments + 1` rings at equal distances along the curve, in the curve's Frenet frames. A closed tube puts its last ring on its first. See [Curves](Curves).
 
 ## Shape
 
@@ -546,7 +549,7 @@ The fourth number is the handedness. It is minus one where the `v` sum points ag
 
 A triangle whose texture coordinates have no area gives no direction, and is skipped. A vertex that no triangle uses gets four zeros. With groups, only the triangles in the groups are visited, as in three.js.
 
-three.js refuses a geometry without an index. This port reads one three corners at a time, as the renderer does. It is three.js's `computeTangents` and not MikkTSpace: three.js's `computeMikkTSpaceTangents` needs a WebAssembly module and is not ported.
+three.js refuses a geometry without an index. This port reads one three corners at a time, as the renderer does. It is three.js's `computeTangents` and not MikkTSpace. For the tangents that normal-map bakers use, call `compute_mikktspace_tangents`. See [Geometry addons](Geometry-addons#mikktspace).
 
 ## Morph targets
 

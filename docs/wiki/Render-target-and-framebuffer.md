@@ -141,7 +141,7 @@ renderer.render_into(target, scene, assets, camera)
 var normals = target.attachment_texture(1)
 ```
 
-This port has no user shaders, so `TargetOutput` names what a fragment can write. `is_valid` names the two values. A bare integer does not compile.
+A [shader material](Node-materials) has one `out vec4`, its color, and cannot declare another output. So `TargetOutput` names what a fragment can write. `is_valid` names the two values. A bare integer does not compile.
 
 | Output | Attachment holds |
 |---|---|

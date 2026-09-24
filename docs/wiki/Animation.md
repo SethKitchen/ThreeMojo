@@ -257,7 +257,7 @@ Give `duration` to the constructor to set a length other than the longest track'
 | `create_clips_from_morph_target_sequences(names, targets, fps, no_loop)` | `CreateClipsFromMorphTargetSequences` | One clip per animation that the names hold. |
 | `get_keyframe_order(times)`, `sorted_array(values, stride, order)` | `AnimationUtils.getKeyframeOrder`, `sortedArray` | The order that sorts keys by time, and values put in that order. |
 
-A morph target sequence takes the targets, made with `morph_target` or `skinned_morph_target`. three.js takes the targets' names. The geometry here has no morph target names, so `create_clips_from_morph_target_sequences` takes a name for each target. Names such as `Walk_001` and `Walk_002` go into one clip, `Walk_`, as in three.js.
+A morph target sequence takes the targets, made with `morph_target` or `skinned_morph_target`. three.js takes the targets' names. A target does not carry its geometry's `morph_names`, so `create_clips_from_morph_target_sequences` takes a name for each target. Names such as `Walk_001` and `Walk_002` go into one clip, `Walk_`, as in three.js.
 
 ## AnimationAction
 
@@ -609,7 +609,7 @@ A clip of no length is refused where clips are built. That is what lets an actio
 - `AnimationUtils.convertArray`, `flattenJSON` and `isTypedArray`. A track holds `List[Float32]` and nothing else, so there is no array type to convert.
 - `AnimationClip.parseAnimation`, which three.js deprecates, and a clip's `userData`.
 - Tracks on other properties. A track drives only the properties in the table of kinds. A path to one number of a vector, such as `.position[x]`, and the `materials` and `map` objects of a path, are refused.
-- A morph target named by its name in a path. The geometry here has no morph target names, so a path names a morph target by its index.
+- A morph target named by its name in a path. A path does not look up the geometry's `morph_names`, so a path names a morph target by its index.
 
 ## Where this port differs from three.js
 

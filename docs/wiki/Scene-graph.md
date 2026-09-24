@@ -227,7 +227,7 @@ The scene holds five more settings, as three.js's `Scene` does:
 
 `Renderer.backdrop(scene, assets, camera)` returns the image background as the camera sees it, as an opaque `Framebuffer`, or none. `Renderer.render` paints it under the scene, and `GpuRenderer.draw` takes it, so both backends start a frame from the same bytes. See [Renderer](Renderer#what-render-does) and [GPU backend](GPU-backend).
 
-`environment` is the cube texture a material reflects when its `env_map` is `SCENE_ENVIRONMENT`. three.js applies `scene.environment` to every physically based material without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Materials](Materials#environment-map).
+`environment` is the cube texture a material reflects when its `env_map` is `SCENE_ENVIRONMENT`. three.js applies `scene.environment` to every physically based material without asking. Here a `STANDARD` or `PHYSICAL` material reflects nothing unless told to, so a material asks. See [Materials](Materials#environment-map).
 
 The fields of a `Background` are open. `validate()` refuses a kind that is none of the four, and a texture or cube background that names no id. The renderer calls it every frame, and refuses an id the assets do not hold. `tests/compile_fail/` proves a bare `Color` is not a background.
 

@@ -50,7 +50,9 @@ The mix is a weighted sum: `surface * (1 - veil) + fog * veil`. A lerp, `surface
 
 The mix is in linear light, before the tone curve and the encoding. three.js's WebGL renderer mixes after both, on the encoded color, and has an open issue about it. Its WebGPU renderer mixes before both, and that is the order kept here. Halfway into the fog here is half the light of each color. See [Why color is linear](Why-color-is-linear).
 
-Every material that shows light is fogged, lit or unlit. three.js's `Material.fog` flag is not ported. A `NORMALS` or `DEPTH` material is never fogged, because it shows data. The `SHADE_UV` debug view is never fogged either. It shows coordinates, not light. Pixels that no triangle covers keep the background color.
+Every material that shows light is fogged by default, lit or unlit. Set `fog=False` on a material to keep it clear, as three.js's `Material.fog` does. See [Materials](Materials#fog-switch). A `NORMALS`, `DEPTH` or `DISTANCE` material is never fogged, because it shows data.
+
+The `SHADE_UV` debug view is never fogged either. It shows coordinates, not light. Pixels that no triangle covers keep the background color.
 
 ## FogView
 

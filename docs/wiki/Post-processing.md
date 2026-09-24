@@ -258,7 +258,8 @@ With a `pulse_period` above zero, the edge colors pulse. three.js reads the cloc
 - SSR's `selects`, its metalness pass, `bouncing` and `groundReflector`.
 - The outline's `usePatternTexture` and `patternTexture`, and its `downSampleRatio`, which is fixed at two as in three.js.
 - A pass that the renderer's viewport or scissor narrows. The passes take the camera to fill the whole frame.
-- `GTAOPass`.
+
+`GTAOPass` is ported. See [GTAO](#gtao).
 
 ## More passes
 
@@ -385,7 +386,8 @@ Put the LUT pass after the output pass, as three.js's example does. Then the tab
 - A mask pass with its own scene, and the `clear` flag of a mask pass or a texture pass.
 - `HalftonePass.setSize`. The halftone always uses the frame's size.
 - The LUT pass's 2D table, which three.js once used for WebGL 1.
-- `LUT3dlLoader` and `LUTImageLoader`, which read `.3dl` files and image strips.
+
+`LUT3dlLoader` and `LUTImageLoader` are ported. They read `.3dl` files and image strips into a 3D texture for `lut_pass`. See [More model files](More-model-files#3dl) and [LUT image](More-model-files#lut-image).
 
 ## Scene, GTAO and shader passes
 
@@ -567,4 +569,4 @@ The outline meshes, their materials and their programs are added to the scene an
 
 The passes run on the host. `GpuComposer` runs the same composer with the frame on the GPU. See [GPU backend](GPU-backend#post-processing-on-the-gpu).
 
-The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA pass jitters the camera with no view offset of its own, because the cameras here have none.
+The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA or TAA pass moves the camera's projection by the jitter, after the camera's own view offset. three.js adds the jitter to the view offset instead. The two agree when the view's `width` and `height` are the frame's size.

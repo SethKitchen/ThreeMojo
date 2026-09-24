@@ -75,7 +75,7 @@ A point light with a cone. The light shines from the node's world position towar
 
 The cone must be wide enough to resolve. The fragment compares cosines, and the cosine of a half-angle below about 0.014 degrees rounds to one in `Float32`. Such a light lit nothing on its own axis. `spot_light` and `Lighting` refuse it.
 
-three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `SpotLight.target`. The spot light's `map` and shadow are not ported.
+three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `SpotLight.target`. A spot light can cast a shadow and project a map. See [Shadows](#shadows) and [Spot light maps](#spot-light-maps).
 
 ## Rect area
 

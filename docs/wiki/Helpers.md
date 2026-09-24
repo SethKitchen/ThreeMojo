@@ -206,7 +206,7 @@ A helper refuses a light of a different kind, and a light kind that `is_valid` r
 
 The result is two points for each vertex, in world space, so put the `Line` on a node at the origin. The normal matrix carries a normal, so the normal stays perpendicular to a stretched surface. The world matrix carries a tangent, as three.js's `transformDirection` does. A normal or tangent of zero length gives a stick of zero length.
 
-A geometry holds any attribute by name. `TANGENT` is `"tangent"`, the name that three.js uses, with four floats for each vertex. The helper reads the first three. This port has no `computeTangents`, so the tangents must come from a loader or from you.
+A geometry holds any attribute by name. `TANGENT` is `"tangent"`, the name that three.js uses, with four floats for each vertex. The helper reads the first three. The tangents come from a loader, from `BufferGeometry.compute_tangents`, or from `compute_mikktspace_tangents`. See [Geometry](Geometry#tangents).
 
 ## OctreeHelper
 

@@ -278,7 +278,7 @@ A cube with `CUBE_REFRACTION_MAPPING`, or a panorama with `EQUIRECTANGULAR_REFRA
 
 A reflection is a texture. `SHADE_TEXTURE` draws it and the other two shading modes ignore it, as they ignore every map.
 
-`SCENE_ENVIRONMENT` is not an id. The renderer replaces it with whatever the scene's `environment` names when it prepares the frame. A scene with no environment gives the material nothing to reflect, as three.js's `material.envMap || scene.environment` gives nothing. three.js applies the environment to its physically based materials without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Scene graph](Scene-graph#background-and-environment).
+`SCENE_ENVIRONMENT` is not an id. The renderer replaces it with whatever the scene's `environment` names when it prepares the frame. A scene with no environment gives the material nothing to reflect, as three.js's `material.envMap || scene.environment` gives nothing. three.js applies the environment to its physically based materials without asking. Here a `STANDARD` or `PHYSICAL` material reflects nothing unless told to, so a material asks. See [Scene graph](Scene-graph#background-and-environment).
 
 No other kind reflects this way. A toon surface steps through a ramp, a matcap surface is an image already, and the data kinds show no light. Each refuses an env map, a reflectivity that is not one, and a combine that is not the default. A physical kind takes an env map and refuses the other two. A wireframe refuses an env map too. So do a line, a point and a sprite, in their own passes: none has a surface to reflect from.
 
@@ -715,7 +715,7 @@ A `BASIC` or `SHADOW` material refuses a displacement map, as three.js gives nei
 - three.js's raycaster picks the geometry and ignores the map. This port picks the displaced surface, so a click agrees with the image.
 - three.js culls a displaced mesh by the bound of its geometry. This port keeps it, so the culling does not change the image.
 - Points, lines and sprites do not read the map. Their materials are `BASIC`, as in three.js.
-- The loaders and the exporters do not read or write the three properties yet.
+- Object JSON reads and writes the three properties. See [Scene JSON](Scene-JSON#materials). The other loaders and exporters do not read or write them.
 
 ## Transmission
 

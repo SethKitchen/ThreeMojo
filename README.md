@@ -361,6 +361,16 @@ The port is not at parity with three.js yet. 179 features are ported and 23 are 
 
 Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.
 
+These addons are out of scope too. Each line gives the reason.
+
+- `physics/` (Ammo, Rapier and Jolt) and `RapierHelper`: each wraps a physics engine built as WebAssembly. A Mojo program can call a physics library directly.
+- `3DMLoader` and `LottieLoader`: the first needs the rhino3dm WebAssembly module, and the second plays its animation with lottie-web on a browser canvas.
+- `HTMLMesh`, `InteractiveGroup` and `SelectionHelper`: each draws or reads DOM elements, and this port has no DOM.
+- `LoadingManager`, `Cache`, `FileLoader`, `ImageBitmapLoader`, `LoaderUtils` and `EventDispatcher`: they fetch, cache and signal in a browser. Here each loader reads a path or bytes, and a call returns its result.
+- The transpiler's `TSLEncoder` and `WGSLEncoder`: they write JavaScript and WGSL source. This port compiles its shaders to node programs and writes no source.
+- `TiledLightsNode`, `TileShadowNode` and the `*GPU` helpers, such as `LightProbeHelperGPU`: they exist only for the WebGPU renderer.
+- `EXT_texture_avif`: it needs an AV1 decoder, and this port has none.
+
 ## Contributing
 
 Open an issue before a large change. Run `make check` before you commit. Coverage must stay at 100%. Documentation must pass `make docs-check`. [CONTRIBUTING.md](CONTRIBUTING.md) has the rules and the steps to add a feature.

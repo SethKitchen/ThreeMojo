@@ -526,7 +526,7 @@ Each pass finds its weights, the sine and cosine of each tap, and the position o
 - The image holds 32-bit floats. three.js renders half floats.
 - A face smaller than sixteen texels is read at sixteen. three.js's layout does not work below sixteen.
 - A mirror read of a prefiltered cube reads its faces, not the sharpest copy. The two hold the same image.
-- A background reads the faces. three.js's `backgroundBlurriness` is not ported.
+- A sharp background reads the faces. A background with a `background_blurriness` above zero reads the copy at that roughness, as three.js's `backgroundBlurriness` does. See [Scene graph](Scene-graph#background-and-environment).
 
 ### Errors
 
@@ -619,7 +619,7 @@ The two ids are types. A bare number does not compile. `tests/compile_fail/` pro
 
 ### Not ported in the 3D and array textures
 
-- The GPU backend samples neither kind. three.js reads them only from a custom shader or from `LUTPass`, and this port has no custom shaders.
+- A shader material reads neither kind, because a node program has no `sampler3D` and no array sampler. three.js reads them from a custom shader or from `LUTPass`. The LUT pass is ported, and `GpuComposer` also runs it on the device. See [Post-processing](Post-processing#lut).
 - `layerUpdates`, `addLayerUpdate` and `unpackAlignment` control the upload to WebGL. They have no counterpart here.
 - Mip chains, separate `magFilter` and `minFilter`, and the formats other than red, RG, RGB and RGBA.
 

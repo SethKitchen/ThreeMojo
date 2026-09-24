@@ -162,6 +162,6 @@ scene.update()
 
 ## What is not ported
 
-- Multisampled targets: three.js's `multisample` option.
+- The `multisample` option of the reflectors and refractors. Their targets take one sample a pixel. A [render target](Render-target-and-framebuffer#multisampled-render-targets) can take more.
 - `ReflectorForSSRPass`, and the node versions for WebGPU: `SkyMesh`, `WaterMesh`, `Water2Mesh` and `LensflareMesh`.
 - The textures that `Water2` loads by default. Pass the two normal maps.

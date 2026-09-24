@@ -142,15 +142,15 @@ A texture line has options, then a file name. The file name can contain spaces.
 | `-s u v w` | The texture's `repeat`. `w` is ignored. When `v` is missing, it is one. |
 | `-o u v w` | The texture's `offset`. `w` is ignored. When `v` is missing, it is zero. |
 | `-bm n` | The material's `bump_scale`, on any texture line, as three.js reads it. |
-| `-mm base gain` | Read and ignored. It scales a displacement map, which is not ported. |
+| `-mm base gain` | Read and ignored. It scales a displacement map, and this loader skips `disp`. |
 | `-clamp on`, `-clamp off` | `CLAMP` or `REPEAT` wrap. three.js always repeats. |
 
 A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and TGA images, and tells them apart by their first bytes. A color map is `SRGB`, and its alpha is coverage. An emissive map is `SRGB`, and its alpha is `IGNORED`. An alpha map, a bump map and a normal map are `LINEAR`, and their alpha is `IGNORED`. One image read the same way twice gives one texture.
 
 ### Differences from three.js
 
-- `map_Ks`, the specular map, is skipped. `Material` has no specular map.
-- `disp`, the displacement map, is skipped. No material moves its vertices.
+- `map_Ks`, the specular map, is skipped. `Material.specular_map` can hold one, but this loader does not read it.
+- `disp`, the displacement map, is skipped. `Material.displacement_map` can hold one, but this loader does not read it.
 - The options of `MTLLoader` are not ported: `side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs` and `invertTrProperty`.
 - An unknown texture option is refused. three.js reads it as part of the file name, and then cannot load the file.
 - A color above one is refused. `Color` holds eight bits for each channel.
@@ -679,7 +679,7 @@ A file with animations and no clips gives one clip, `default`, of every animatio
 
 Kinematics and physics are not read. A `<morph>` controller is refused, because three.js does not read one. A channel on a `<translate>`, `<rotate>` or `<scale>` step makes no track, as in three.js.
 
-`<lookat>` and `<skew>` steps are skipped. `<trifans>`, `<tristrips>` and polygons with holes are not read. A second set of texture coordinates is skipped. The specular map and the ambient map are skipped, because no material here has a specular map or a light map.
+`<lookat>` and `<skew>` steps are skipped. `<trifans>`, `<tristrips>` and polygons with holes are not read. A second set of texture coordinates is skipped. The specular map and the ambient map are skipped. three.js reads them as `specularMap` and `lightMap`. `Material` has both fields, but this loader does not fill them.
 
 ### Errors
 

@@ -46,7 +46,7 @@ three.js gives each thing a random uuid. The writer makes each uuid from the kin
 
 ## Objects
 
-Each object becomes one scene node. The node gets the `name`, `visible`, `layers`, `renderOrder` and `matrix` of the object. The reader decomposes the matrix as three.js's `Matrix4.decompose` does. Without a matrix, the reader reads `position`, `rotation`, `quaternion` and `scale`. An object with `matrixAutoUpdate` false keeps its matrix as it is.
+Each object becomes one scene node. The node gets the `name`, `visible`, `layers`, `renderOrder`, `userData` and `matrix` of the object. See [User data](Scene-graph#user-data). The reader decomposes the matrix as three.js's `Matrix4.decompose` does. Without a matrix, the reader reads `position`, `rotation`, `quaternion` and `scale`. An object with `matrixAutoUpdate` false keeps its matrix as it is.
 
 The type of the object tells what the node carries:
 
@@ -242,7 +242,8 @@ The writer does not write these things, and the reader refuses them:
 The writer does not write these things, and the reader ignores them:
 
 - An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
-- `shapes`, `skeletons`, `up` and `userData`.
+- `shapes`.
+- An `up` other than the default. The writer writes `up` as `[0, 1, 0]` on each object, and the reader ignores it.
 - The material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
 - An instanced mesh's `morphTexture` and `morphTargetInfluences`. An `InstancedMesh` here wears no morph targets. See [Meshes and assets](Meshes-and-assets#instance-colors).
