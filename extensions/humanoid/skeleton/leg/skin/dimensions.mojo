@@ -448,6 +448,9 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         )
         self.s8 = _fit_section(points, p8, S, self.calf_subcutaneous)
         self.s9 = _fit_section(points, ankle_center, S, self.calf_subcutaneous)
+        # The fitted malleolar section is as deep as the calf, so a side
+        # view has no ankle. Keep the measured width. Limit the depth.
+        self.s9.ap = min(self.s9.ap, Float32(0.068))
         self.s0.ml = max(self.s0.ml, Float32(0.90) * self.s1.ml)
         self.s0.ap = max(self.s0.ap, Float32(0.90) * self.s1.ap)
         var box = empty_bounds()

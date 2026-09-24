@@ -5,8 +5,8 @@
 
 """Skin envelope derived from the modeled anatomy of one foot.
 
-Six sections run from the heel to the metatarsal heads. Five toe
-sections continue to the tips. Each section is fitted to the bones,
+Seven sections run from the malleoli to the metatarsal heads. Five
+toe sections continue to the tips. Each section is fitted to the bones,
 ligaments, muscles, vessels, lymphatic trunks and nerves. A separate
 shell is the dermis for occupancy and mass.
 
@@ -82,6 +82,7 @@ struct _Env(ImplicitlyCopyable):
 struct SkinField(DistanceField, ImplicitlyCopyable):
     """The outer skin surface around the modeled foot anatomy."""
 
+    var ankle: _Section
     var s0: _Section
     var s1: _Section
     var s2: _Section
@@ -122,6 +123,15 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         # Wide enough that both neighboring sections see each station.
         var slab = 0.25 * foot.length.value
         var cover = 0.0032 * S + Float32(0.0018)
+        var mal = mix_point(foot.medial_malleolus, foot.lateral_malleolus, 0.5)
+        sole.append(_Env(foot.medial_malleolus, 0.010, 0.010))
+        sole.append(_Env(foot.lateral_malleolus, 0.010, 0.010))
+        sole.append(_Env(Vector3(0, 0, 0), 0.012, 0.012))
+        self.ankle = _fit(sole, mal, 0.045 * foot.length.value, cover)
+        # The two malleoli are close in height. A real ankle is rounder
+        # than that span, and this cuff is what meets the leg skin.
+        self.ankle.ml = max(self.ankle.ml, Float32(0.022) * S)
+        self.ankle.ap = max(self.ankle.ap, Float32(0.020) * S)
         var heel_z = foot.heel.z
         self.s0 = _fit(
             sole, Vector3(foot.heel.x, foot.heel.y, heel_z), slab, cover
@@ -154,6 +164,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         self.dermis = 0.0015 * S
         self.epsilon = 0.0008 * S
         var box = empty_bounds()
+        _include(box, self.ankle)
         _include(box, self.s0)
         _include(box, self.s1)
         _include(box, self.s2)
@@ -180,7 +191,9 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         Negative is inside. Zero is the surface.
         """
         var axis = Vector3(1, 0, 0)
-        var d = _span(point, self.s0, self.s1, axis)
+        var d = _span(point, self.ankle, self.s0, axis)
+        d = smin(d, _span(point, self.ankle, self.s2, axis), self.blend)
+        d = smin(d, _span(point, self.s0, self.s1, axis), self.blend)
         d = smin(d, _span(point, self.s1, self.s2, axis), self.blend)
         d = smin(d, _span(point, self.s2, self.s3, axis), self.blend)
         d = smin(d, _span(point, self.s3, self.s4, axis), self.blend)
