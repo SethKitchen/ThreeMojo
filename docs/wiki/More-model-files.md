@@ -8,6 +8,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [3MF](#3mf) | `loaders/three_mf.mojo` | `read_3mf(path, scene, assets) -> ThreeMfModel` | `ThreeMFLoader` |
 | [ZIP](#zip) | `loaders/zip.mojo` | `unzip(bytes) -> List[ZipEntry]` | fflate's `unzipSync` |
 | [SVG](#svg) | `loaders/svg.mojo` | `read_svg(path) -> SvgData` | `SVGLoader` |
+| [BVH](#bvh) | `loaders/bvh.mojo` | `read_bvh(path, scene) -> BvhModel` | `BVHLoader` |
 
 ## PCD
 
@@ -239,3 +240,58 @@ three.js throws for most of these, or continues with `NaN`. A fill that three.js
 ### Example
 
 `assets/svg/fixture.svg` has each element, each path command, styles from CSS, transforms, `use` and `defs`. `assets/svg/fixture.json` has what three.js 0.180 gives for it: colors, styles, curves, points, shapes and strokes. `assets/svg/strokes.json` has three.js's strokes for each join and cap. `tests/test_svg.mojo` compares all of them.
+
+## BVH
+
+`loaders/bvh.mojo`. `read_bvh(path, scene)` reads a Biovision Hierarchy motion capture file into a skeleton and an animation clip. three.js: `BVHLoader`.
+
+```mojo
+var scene = Scene()
+var model = read_bvh("assets/bvh/fixture.bvh", scene)
+var mixer = AnimationMixer()
+var which = mixer.add(AnimationAction(model.clip.value().copy()))
+```
+
+| Function | What it does |
+|---|---|
+| `read_bvh(path, scene, parent, animate_positions, animate_rotations) -> BvhModel` | Read a file. |
+| `parse_bvh(text, scene, parent, animate_positions, animate_rotations) -> BvhModel` | Read the text of one. |
+| `bvh_channel(name) -> BvhChannel` | The channel that a `CHANNELS` line names. |
+| `axis_rotation(channel, degrees) -> Rotation` | A turn about one axis, as a quaternion in `Float64`. |
+
+`BvhChannel` is a type. A bare integer does not compile. `axis_rotation` refuses a channel that is not a rotation.
+
+### BvhModel
+
+| Field | What it holds |
+|---|---|
+| `joints` | Each joint and end site, in file order: its name, parent, offset, channels and the values of each frame. |
+| `nodes` | One scene node for each joint, at its offset under its parent. |
+| `skeleton` | The nodes as bones. Each inverse bind is the identity, as in three.js. |
+| `frame_count`, `frame_time` | The number of frames, and the `Duration` of one frame. |
+| `clip` | The `AnimationClip` named `animation`, or none. |
+
+For each joint, the clip has a `POSITION` track and a `QUATERNION` track. The position is the offset plus the position channels. The rotation is the product of the rotation channels, in file order. An end site has no track. `animate_positions` and `animate_rotations` turn the two kinds of track off, as three.js's `animateBonePositions` and `animateBoneRotations` do.
+
+### Differences from three.js
+
+- The joints are nodes in a scene. three.js returns `Bone` objects that are not in a scene.
+- A clip must last longer than no time. A file with fewer than two frames, or a frame time of zero or less, has no clip. A file with both kinds of track turned off has no clip.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A file with no `HIERARCHY` or no `MOTION`.
+- A joint with no name, no `{`, no `OFFSET` or no `CHANNELS`. An end site with a joint under it.
+- An `OFFSET` that does not have three numbers.
+- A `CHANNELS` count that is not the number of names after it, and a channel that is not known.
+- A number of frames or a frame time that is not a number.
+- A frame with too few values, or a value that is not a number.
+- A file that ends early, and joints nested more than 256 deep.
+
+three.js logs most of these problems and continues, or throws a `TypeError`.
+
+### Example
+
+`assets/bvh/fixture.bvh` has a root with six channels, joints with channels in different orders, and end sites. It has three frames and uses CRLF line ends. `assets/bvh/fixture.json` has what three.js 0.180 gives for it. `tests/test_bvh.mojo` compares the bones and each track.

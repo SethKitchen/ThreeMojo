@@ -12,6 +12,7 @@ compares all of it. The others reach every branch and every refusal.
 """
 
 from core.buffer_geometry import NORMAL, POSITION, UV
+from loaders.js_number import js_parse_float
 from loaders.json import JsonDocument, parse_json
 from loaders.svg import (
     SVG_CM,
@@ -21,7 +22,6 @@ from loaders.svg import (
     SVG_PT,
     SVG_PX,
     SvgUnit,
-    js_parse_float,
     parse_arc_command,
     parse_css_declarations,
     parse_css_rules,

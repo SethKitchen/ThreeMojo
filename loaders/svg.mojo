@@ -64,9 +64,10 @@ from loaders.svg_path import (
     svg_translation,
     transform_path,
 )
+from loaders.js_number import js_parse_float
 from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
-from std.math import acos, cos, inf, isnan, nan, pi, sin, sqrt, tan
+from std.math import acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
 
 # The namespace an `xlink:href` attribute is in.
@@ -166,11 +167,6 @@ def _is_digit(byte: UInt8) -> Bool:
     return byte >= 48 and byte <= 57
 
 
-def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and _is_space(bytes[i])
-
-
 def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a digit at `i`."""
     return i < len(bytes) and _is_digit(bytes[i])
@@ -179,60 +175,6 @@ def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
 def _in_number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a byte a number can hold at `i`."""
     return i < len(bytes) and _in_number(bytes[i])
-
-
-def js_parse_float(text: String) -> Float64:
-    """Return JavaScript's `parseFloat(text)`: the longest number at the
-    start, after white space, or NaN.
-
-    Args:
-        text: The text.
-
-    Returns:
-        The number, `Infinity` included, or NaN when there is none.
-    """
-    var b = text.as_bytes()
-    var n = len(b)
-    var i = 0
-    while _space_at(b, i):
-        i += 1
-    var start = i
-    var signed = i < n and (b[i] == 43 or b[i] == 45)
-    if signed:
-        i += 1
-    var rest = String(text[byte=i:])
-    if rest.startswith("Infinity"):
-        return -inf[DType.float64]() if b[start] == 45 else inf[DType.float64]()
-    var digits = 0
-    while _digit_at(b, i):
-        i += 1
-        digits += 1
-    var point = i < n and b[i] == 46
-    if point:
-        i += 1
-        while _digit_at(b, i):
-            i += 1
-            digits += 1
-    if digits == 0:
-        return nan[DType.float64]()
-    var end = i
-    var exp = i < n and (b[i] == 101 or b[i] == 69)
-    if exp:
-        i += 1
-        var exp_signed = i < n and (b[i] == 43 or b[i] == 45)
-        if exp_signed:
-            i += 1
-        var exponent = 0
-        while _digit_at(b, i):
-            i += 1
-            exponent += 1
-        if exponent > 0:
-            end = i
-    var number = String(text[byte=start:end])
-    try:
-        return Float64(number)
-    except:
-        return nan[DType.float64]()
 
 
 def _number(text: String) raises -> Float64:
