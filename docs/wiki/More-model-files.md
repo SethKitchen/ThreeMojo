@@ -9,6 +9,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [ZIP](#zip) | `loaders/zip.mojo` | `unzip(bytes) -> List[ZipEntry]` | fflate's `unzipSync` |
 | [SVG](#svg) | `loaders/svg.mojo` | `read_svg(path) -> SvgData` | `SVGLoader` |
 | [BVH](#bvh) | `loaders/bvh.mojo` | `read_bvh(path, scene) -> BvhModel` | `BVHLoader` |
+| [3DS](#3ds) | `loaders/tds.mojo` | `read_3ds(path, scene, assets) -> TdsModel` | `TDSLoader` |
 
 ## PCD
 
@@ -295,3 +296,62 @@ three.js logs most of these problems and continues, or throws a `TypeError`.
 ### Example
 
 `assets/bvh/fixture.bvh` has a root with six channels, joints with channels in different orders, and end sites. It has three frames and uses CRLF line ends. `assets/bvh/fixture.json` has what three.js 0.180 gives for it. `tests/test_bvh.mojo` compares the bones and each track.
+
+## 3DS
+
+`loaders/tds.mojo`. `read_3ds(path, scene, assets)` reads an Autodesk 3D Studio file into a scene and its assets. three.js: `TDSLoader`.
+
+```mojo
+var scene = Scene()
+var assets = Assets()
+var model = read_3ds("assets/3ds/fixture.3ds", scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_3ds(path, scene, assets, parent) -> TdsModel` | Read a file. The maps come from the directory of the file. |
+| `parse_3ds(bytes, scene, assets, resource_path, parent) -> TdsModel` | Read the bytes of one. The maps come from `resource_path`. |
+
+### TdsModel
+
+| Field | What it holds |
+|---|---|
+| `root` | The node that three.js returns as its `Group`. The master scale scales it. |
+| `nodes`, `names` | One node for each triangle mesh, under `root`, and its name. |
+| `geometries` | The geometry of each mesh, with its material groups. |
+| `mesh_materials` | The materials of each mesh, as three.js lists them. |
+| `materials`, `material_ids` | Each material entry as a `TdsMaterial`, and its `Material` in the assets. |
+| `textures` | Each texture that the loader read. |
+| `first_mesh`, `mesh_count` | Where the meshes of the file start in `scene.meshes`, and how many there are. |
+
+### What is read
+
+- A material entry becomes a `PHONG` material. The loader reads the name, the diffuse and ambient colors, the specular color, the shininess and the transparency. It also reads two sides, additive blending, the wireframe flag and width, and the color, bump, opacity and specular maps.
+- A named object with a triangle mesh becomes a node. The loader reads the points, the texture coordinates, the faces, the material groups and the matrix.
+- The matrix places the node. The inverse of the matrix moves the points, as in three.js.
+- The loader computes the vertex normals, as three.js does.
+
+three.js reads the bytes of a color over 255 as linear light. The material keeps the sRGB bytes of that light.
+
+A mesh takes the materials that its groups name, in order. It skips a name that no material entry has had before it. Each group starts where the group before it ends, and it has three index entries for each face. three.js makes the same assumption.
+
+### Differences from three.js
+
+- A mesh here draws one material. A mesh with more than one material becomes one mesh for each group that has a material.
+- A `Material` draws a wireframe only when it is `BASIC`. The wireframe flag and width stay in `TdsMaterial`, and the material draws the surface.
+- three.js loads a map with `TextureLoader`. This port reads the file with `decode_image`, as a linear texture, because three.js does not set the color space. A map whose file is missing has no texture.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A chunk or a value that runs past the end of the file.
+- A chunk whose size is less than its six-byte header. three.js reads such a file forever.
+- A color or a percentage chunk with no value.
+- A map that sets an offset or a scale before its file name, and a map with no file name.
+- A mesh with no points, and a face that names a point that is not there.
+- A map file that `decode_image` does not read.
+
+### Example
+
+`assets/3ds/fixture.3ds` has two materials with every property and four maps, and four meshes. One mesh has a matrix, and the meshes have material groups in the orders that three.js reads in its own way. `assets/3ds/fixture.json` has what three.js 0.180 gives for it. `tests/test_tds.mojo` compares each node, attribute, group and material.
