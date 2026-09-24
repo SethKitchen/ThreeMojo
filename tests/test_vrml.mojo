@@ -511,11 +511,13 @@ def test_counts_and_names() raises:
     assert_equal(model.count(VRML_GROUP), 7)
     with assert_raises(contains="not valid"):
         _ = model.count(VrmlObjectKind(7))
-    # The file's image was read, and repeats on neither axis.
+    # The file's image was read. `repeatS FALSE` clamps across, and it
+    # repeats up, as three.js sets `wrapS` and `wrapT`.
     var texture = model.textures[0].id
     assert_true(texture != NO_TEXTURE)
     assert_equal(assets.textures.get(texture).width, 2)
-    assert_equal(assets.textures.get(texture).wrap, CLAMP)
+    assert_equal(assets.textures.get(texture).wrap_s, CLAMP)
+    assert_equal(assets.textures.get(texture).wrap_t, REPEAT)
     # A file with no objects.
     var empty = parse_vrml("#VRML V2.0\nColor { color [ ] }", scene, assets)
     assert_equal(empty.object_of(empty.root), -1)

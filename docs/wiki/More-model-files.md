@@ -135,7 +135,6 @@ The loader walks each dictionary in JavaScript key order, as three.js does. Keys
 
 ### Differences from three.js
 
-- A texture has one wrap mode. The loader uses `tilestyleu`. three.js also reads `tilestylev`.
 - A material has no name in this port. The names are in `material_names`.
 - The loader does not read three.js's extensions or implicit functions.
 - three.js logs and skips a `pid` that names no resource, a missing root model and a missing texture file. This port refuses them.
@@ -706,7 +705,6 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - three.js builds a geometry with `NaN` in it from a missing number. This port refuses it.
 - A field of the wrong kind is refused. So is a `USE` of a name that no `DEF` gives, and a node that uses itself.
 - A texture transform with no `rotation` turns by zero.
-- A `Texture` here has one wrap. It repeats only when `repeatS` and `repeatT` are both true.
 - An `ImageTexture` is decoded at once, when its file is there.
 - A number too big for a double is refused.
 

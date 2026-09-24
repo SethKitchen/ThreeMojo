@@ -188,6 +188,7 @@ def check_fixture(path: String) raises:
         assert_true(map_material.map != NO_TEXTURE)
         ref texture = assets.textures.get(map_material.map)
         assert_true(texture.wrap_s == MIRROR)
+        assert_true(texture.wrap_t == REPEAT)
         assert_true(texture.mag_filter == NEAREST)
         assert_equal(texture.levels, 1)
         assert_equal(texture.width, 2)

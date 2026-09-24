@@ -55,8 +55,7 @@ that are array indices first, by value, then the rest in the order they
 were added. This walks them the same way, so the meshes come out in
 three.js's order.
 
-**Where this port differs.** A texture here has one wrap mode, and it
-takes `tilestyleu`; three.js also sets `tilestylev`. A material has no
+**Where this port differs.** A material has no
 name here, so the names are in `ThreeMfModel.material_names`. three.js's
 extensions and implicit functions are not read. three.js logs and
 skips a `pid` that names no resource, a missing `.model` root and a
@@ -177,7 +176,7 @@ def three_mf_unit(name: String) raises -> Length:
 
 
 def three_mf_wrap(style: String) -> Wrap:
-    """Return the wrap a `tilestyleu` names, as three.js's `buildTexture`
+    """Return the wrap a `tilestyleu` or a `tilestylev` names, as three.js's `buildTexture`
     reads it.
 
     Args:
@@ -880,6 +879,7 @@ struct _Loader(Movable):
                 mipmapped,
                 COVERAGE,
             )
+            texture.wrap_t = three_mf_wrap(doc.attribute(element, "tilestylev"))
             id = assets.textures.add(texture^)
             self.model.textures.append(id)
         self.texture_cache[cache] = id

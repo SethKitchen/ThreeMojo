@@ -78,7 +78,7 @@ def _texture(
     var space = SRGB if srgb else LINEAR
     var texture = Texture(2, 2, pixels^, REPEAT, BILINEAR, space, False)
     # Set after, so that a test can make one that is not valid.
-    texture.wrap = wrap
+    texture.set_wrap(wrap)
     texture.channel.value = channel
     texture.repeat = repeat
     texture.offset = offset

@@ -53,9 +53,7 @@ a `TypeError` or reads nonsense, and so is a `USE` of a name that no
 `DEF` gives, and a node that uses itself. A cross section of odd length
 and a spine that is not whole points are refused. A texture transform
 with no `rotation` turns by zero; three.js sets a `Vector2` as the
-rotation. A `Texture` here has one wrap: it repeats when both
-`repeatS` and `repeatT` are true, and clamps otherwise. The records in
-`VrmlModel` keep both. A `PixelTexture`'s rows are stored from the top,
+rotation. A `PixelTexture`'s rows are stored from the top,
 reversed, so that it samples as three.js's `DataTexture` samples.
 three.js loads an `ImageTexture` later; this decodes the file at once
 when it is there, and keeps no image when it is not. A `PointSet`
@@ -1232,10 +1230,11 @@ struct _Builder(Movable):
                 image.width,
                 image.height,
                 image.pixels.copy(),
-                _wrap(wrap_s, wrap_t),
+                wrap_s,
                 BILINEAR,
                 SRGB,
             )
+            texture.wrap_t = wrap_t
             record.id = assets.textures.add(texture^)
         self.model.textures.append(record^)
         return len(self.model.textures) - 1
@@ -1272,17 +1271,17 @@ struct _Builder(Movable):
                 # Both sizes are above zero here. The loop always runs.
                 for x in range(row):  # pragma: no branch
                     pixels.append(texture.data[y * row + x])
-            texture.id = assets.textures.add(
-                Texture(
-                    texture.width,
-                    texture.height,
-                    pixels^,
-                    _wrap(wrap_s, wrap_t),
-                    NEAREST,
-                    SRGB,
-                    mipmapped=False,
-                )
+            var image = Texture(
+                texture.width,
+                texture.height,
+                pixels^,
+                wrap_s,
+                NEAREST,
+                SRGB,
+                mipmapped=False,
             )
+            image.wrap_t = wrap_t
+            texture.id = assets.textures.add(image^)
         self.model.textures.append(texture^)
         return len(self.model.textures) - 1
 
@@ -1790,12 +1789,6 @@ def _pair(field: VrmlField) raises -> Vector2:
     """Return the first two numbers of a field."""
     var v = _first_numbers(field, 2)
     return Vector2(Float32(v[0]), Float32(v[1]))
-
-
-def _wrap(s: Wrap, t: Wrap) -> Wrap:
-    """Return the one wrap a texture here has: repeat when both repeat."""
-    var both = s == REPEAT and t == REPEAT
-    return REPEAT if both else CLAMP
 
 
 def _spread(

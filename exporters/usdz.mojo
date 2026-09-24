@@ -89,7 +89,7 @@ from math.matrix4 import Matrix4
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from render.srgb import SRGB
-from render.texture import CLAMP, MIRROR, REPEAT, Texture
+from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
 from render.texture_store import TextureId
 from std.math import cos, pi, sin, tan
 from units.si import DEGREE, METER
@@ -436,13 +436,13 @@ def usda_geometry(geometry: BufferGeometry) raises -> String:
     return usda_header() + "\n" + node.text()
 
 
-def _wrap_name(texture: Texture) raises -> String:
-    """Return three.js's `WRAPPINGS` of a texture's wrap."""
-    if texture.wrap == REPEAT:
+def _wrap_name(wrap: Wrap) raises -> String:
+    """Return three.js's `WRAPPINGS` of a wrap."""
+    if wrap == REPEAT:
         return "repeat"
-    if texture.wrap == CLAMP:
+    if wrap == CLAMP:
         return "clamp"
-    if texture.wrap == MIRROR:
+    if wrap == MIRROR:
         return "mirror"
     raise Error("USDZ: a texture's wrap is none of the three")
 
@@ -640,7 +640,8 @@ struct _Exporter(Movable):
         ref texture = assets.textures.get(id)
         if not texture.channel.is_valid():
             raise Error("USDZ: a texture's channel is not valid")
-        var wrap = _wrap_name(texture)
+        var wrap_s = _wrap_name(texture.wrap_s)
+        var wrap_t = _wrap_name(texture.wrap_t)
         if not _has(self.textures, id.value):
             self.textures.append(id.value)
         var uv = "st"
@@ -718,8 +719,8 @@ struct _Exporter(Movable):
             node.add_property("float4 inputs:scale = " + color)
         var space = "sRGB" if texture.color_space == SRGB else "raw"
         node.add_property('token inputs:sourceColorSpace = "' + space + '"')
-        node.add_property('token inputs:wrapS = "' + wrap + '"')
-        node.add_property('token inputs:wrapT = "' + wrap + '"')
+        node.add_property('token inputs:wrapS = "' + wrap_s + '"')
+        node.add_property('token inputs:wrapT = "' + wrap_t + '"')
         node.add_property("float outputs:r")
         node.add_property("float outputs:g")
         node.add_property("float outputs:b")

@@ -40,8 +40,9 @@ def test_faces_match_three_js() raises:
         ref texture = cube.faces[face]
         assert_equal(texture.width, doc.integer(doc.get(entry, "width")))
         assert_equal(texture.texel_type, FLOAT_TYPE)
-        assert_equal(texture.wrap, CLAMP)
-        assert_equal(texture.filter, BILINEAR)
+        assert_equal(texture.wrap_s, CLAMP)
+        assert_equal(texture.wrap_t, CLAMP)
+        assert_equal(texture.mag_filter, BILINEAR)
         assert_equal(texture.color_space, LINEAR)
         assert_equal(texture.levels, 1)
         var data = doc.get(entry, "data")
