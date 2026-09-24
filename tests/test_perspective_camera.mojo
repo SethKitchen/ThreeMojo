@@ -190,6 +190,29 @@ def test_a_non_positive_aspect_ratio_is_rejected() raises:
         )
 
 
+def test_a_zoom_of_two_halves_the_height_seen() raises:
+    """A zoom of two divides the top edge by two, as three.js's
+    `updateProjectionMatrix` does: 2.5 m up at 5 m lands on the top edge.
+    """
+    var camera = square_camera()
+    camera.zoom = 2
+    assert_almost_equal(
+        camera.project(Vector3(0, 2.5, 0), 200, 200).y,
+        Float32(0),
+        atol=TOLERANCE,
+    )
+
+
+def test_a_zoom_that_is_not_above_zero_is_refused() raises:
+    var camera = square_camera()
+    camera.zoom = 0
+    with assert_raises(contains="zoom"):
+        _ = camera.projection_matrix()
+    camera.zoom = Float32.MAX * 2
+    with assert_raises(contains="zoom"):
+        _ = camera.projection_matrix()
+
+
 def test_a_non_positive_field_of_view_is_rejected() raises:
     with assert_raises():
         _ = PerspectiveCamera(

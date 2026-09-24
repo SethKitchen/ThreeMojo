@@ -87,6 +87,20 @@ around again. It bounced near the end for ever, and moving the same
 elapsed time in smaller steps gave a different answer from moving it in
 one.
 
+## Repetitions
+
+A `REPEAT` or `PING_PONG` action runs through its clip `repetitions`
+times and then finishes, as a `ONCE` action does at its end: it holds
+its last frame if `clamp_when_finished`, and lets go of the node if not.
+None, the default, repeats without end, three.js's `Infinity`. A
+`PING_PONG` leg is one repetition. Run backward from the start, the first
+pass through zero is not a repetition, as three.js counts it.
+
+A finished `PING_PONG` action stops at the end its last leg was running
+to. three.js reads the other end in the update it finishes in, and the
+right one from the next update on; the counter it reads the leg from is
+the one it has not yet stored. Here the right end is read in both.
+
 ## Smooth tracks and the ends of a clip
 
 A `SMOOTH` track needs a key past each end of the track, and the action
@@ -141,6 +155,24 @@ A cross-fade needs two actions at once, and one action cannot reach
 another through the list that holds them both. So `cross_fade_from` and
 `cross_fade_to` are the mixer's, and take two indices.
 
+## The mixer's clock, root and cache
+
+`time_scale` is three.js's mixer `timeScale`: every update's delta is
+multiplied by it before any action sees it, so a mixer at one half plays
+every action at half speed and its fades and warps with them.
+
+A mixer is made for a root node, three.js's `root`, and `add` can file an
+action under another. Here a track names its target by index, so the root
+does not scope a lookup as three.js's does. It is what `get_root`,
+`existing_action` and `uncache_root` find actions by.
+
+`uncache_action`, `uncache_clip` and `uncache_root` forget actions, as
+three.js's do. An uncached action keeps its index, and `action` refuses
+it, so no other index moves. Its tracks are let go. Then every binding
+that nothing drove in the last update is dropped: a property is read
+again whenever something starts to drive it, so such a binding holds
+nothing the mixer needs.
+
 ## Events are drained, not dispatched
 
 three.js's mixer dispatches `loop` and `finished` to listeners. Here each
@@ -151,15 +183,17 @@ ends count, as they do in three.js.
 
 ## Properties other than a node's transform
 
-A track can also drive a node's `visible` flag, a mesh's morph target
-influences, a material's colors and numbers, and a light's color and
-intensity; see `animation.keyframe_track`. Each is a property with its own
+A track can also drive a node's `visible` flag and name, a mesh's or a
+skinned mesh's morph target influences, a material's colors, numbers and
+flags, a light's color, intensity, distance, angle and penumbra, and a
+camera's field of view, zoom, near plane and far plane; see
+`animation.keyframe_track`. Each is a property with its own
 binding and its own pile, and the piles mix the way three.js's
 `PropertyMixer` mixes each type of value:
 
     numbers and colors    by weight, one number at a time
     rotations             by weight, along the arc
-    flags                 the value whose share is at least one half
+    flags and strings     the value whose share is at least one half
 
 A flag is three.js's `_select`: each value in takes the pile if its share
 of the weight so far is at least one half, and the original takes it back
@@ -172,9 +206,17 @@ mixed, as three.js mixes its `Color`'s own numbers. A material's and a
 light's colors are stored as sRGB bytes here, so the mixer decodes them
 when it binds and encodes the result when it writes.
 
+A string pile holds the place of a string in the mixer's own list of
+strings, so a string is chosen as a flag is, and three.js mixes its
+strings with the same `_select`.
+
 `update(scene, delta)` drives nodes, meshes and lights, which are all in
 the scene. A material is in the assets, so a clip with a material track
-needs `update(scene, assets, delta)`.
+needs `update(scene, assets, delta)`. A camera is in a `CameraList`
+beside the scene, so a clip with a camera track needs
+`update(scene, assets, cameras, delta)`. three.js leaves a camera's
+projection to be updated by hand after a track moves it; here the
+projection is worked out when it is asked for, so it follows the track.
 
 A node that `Scene.remove` took out of the scene is not driven, nor is a
 mesh or a light on it or under it: its values stay as they were until it
@@ -210,16 +252,21 @@ same nodes as any other action does.
 ## What is refused
 
 A weight below zero, which is not a share of anything. A weight, a time
-scale or a frame time that is not a number. A loop mode that is none of
+scale, the mixer's time scale or a frame time that is not a number.
+Repetitions below zero, and a duration of zero for `set_duration`. An
+uncached action. A loop mode that is none of
 the three. An action index the mixer does not have, or a cross-fade from
 an action to itself. A fade, a warp or a cross-fade that lasts less than no
 time, or a time that is not a number. A warp on an action whose time scale
 is zero. A track naming a node, a mesh, a light or a material the scene
 or the assets do not have, and a material track played without the assets.
-A group member that is not in the scene. A value written that the property
-cannot hold: a color channel outside zero to one, a light intensity below
-zero, or a material number outside the range `Material` accepts for it,
-which an additive action can reach. A blend mode that is neither of the
+A camera track played without the cameras. A group member that is not in
+the scene. A value written that the property cannot hold: a color channel
+outside zero to one, a light intensity below zero, a light distance, angle
+or penumbra that `Light.validate` refuses, a material number outside the
+range `Material` accepts for it, which an additive action can reach, a
+field of view outside zero to half a turn, a zoom of zero or less, and
+planes that cross. A blend mode that is neither of the
 two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
@@ -231,9 +278,17 @@ from animation.animation_clip import (
 )
 from animation.animation_object_group import AnimationObjectGroup
 from animation.keyframe_track import (
+    KeyframeTrack,
+    CAMERA_FAR,
+    CAMERA_FOV,
+    CAMERA_NEAR,
+    CAMERA_ZOOM,
     Ending,
+    LIGHT_ANGLE,
     LIGHT_COLOR,
+    LIGHT_DISTANCE,
     LIGHT_INTENSITY,
+    LIGHT_PENUMBRA,
     MATERIAL_ALPHA_TEST,
     MATERIAL_CLEARCOAT,
     MATERIAL_CLEARCOAT_ROUGHNESS,
@@ -249,6 +304,10 @@ from animation.keyframe_track import (
     MATERIAL_SHININESS,
     MATERIAL_SPECULAR,
     MATERIAL_SPECULAR_INTENSITY,
+    MATERIAL_TRANSPARENT,
+    MATERIAL_WIREFRAME,
+    NODE_NAME,
+    ORTHOGRAPHIC_SLOT,
     POSITION,
     QUATERNION,
     SCALE,
@@ -259,6 +318,7 @@ from animation.keyframe_track import (
     ZERO_CURVATURE_ENDING,
     ZERO_SLOPE_ENDING,
 )
+from cameras.camera_list import CameraList
 from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
@@ -267,7 +327,7 @@ from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import floor, inf, isfinite
-from units.si import Duration, SECOND
+from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
 # How many numbers a pile holds: four, which is what the widest value, a
 # rotation, needs. A position uses three of them and leaves the fourth.
@@ -715,25 +775,37 @@ def material_number(kind: TrackKind, top: Bool) -> Float32:
 
 
 def read_target(
-    scene: Scene, assets: Assets, target: TrackTarget
+    scene: Scene,
+    assets: Assets,
+    target: TrackTarget,
+    cameras: CameraList = CameraList(),
 ) raises -> List[Float32]:
     """Return what one property holds, as the `PILE` numbers a pile holds.
 
     The one place a property is read, beside `write_target`, the one place
-    it is written, so the two cannot drift apart.
+    it is written, so the two cannot drift apart. A node's name is a
+    string, which the mixer reads into its own table of strings instead.
 
     Args:
         scene: The scene the nodes, meshes and lights are in.
         assets: The assets the materials are in.
         target: The property. The caller has checked its index.
+        cameras: The cameras a camera target names.
 
     Returns:
-        The numbers, zero after the property's own.
+        The numbers, zero after the property's own. A camera's field of
+        view is in degrees and its planes in meters, a light's distance in
+        meters and its angle in radians, as three.js keeps them.
 
     Raises:
-        Error: If the scene has no such node.
+        Error: If the scene has no such node, or the target is a string,
+            which is not numbers.
     """
     var kind = target.kind
+    if kind.is_string():
+        raise Error("A string property is read into the mixer's strings")
+    if kind.is_camera():
+        return _read_camera(cameras, target)
     if kind.is_node():
         ref held = scene.get(NodeId(target.index))
         if kind == QUATERNION:
@@ -748,6 +820,13 @@ def read_target(
         if kind == POSITION:
             return [held.position.x, held.position.y, held.position.z, 0]
         return [Float32(1) if held.visible else Float32(0), 0, 0, 0]
+    if kind.is_skinned():
+        return [
+            scene.skinned_meshes[target.index].morph_influence(target.slot),
+            0,
+            0,
+            0,
+        ]
     if kind.is_morph():
         return [
             scene.meshes[target.index].morph_influence(target.slot),
@@ -759,8 +838,19 @@ def read_target(
         ref light = scene.lights[target.index]
         if kind == LIGHT_COLOR:
             return color_to_pile(light.color)
-        return [light.intensity, 0, 0, 0]
+        var number = light.intensity
+        if kind == LIGHT_DISTANCE:
+            number = light.distance
+        elif kind == LIGHT_ANGLE:
+            number = light.angle.to(RADIAN)
+        elif kind == LIGHT_PENUMBRA:
+            number = light.penumbra
+        return [number, 0, 0, 0]
     ref material = assets.materials.materials[target.index]
+    if kind == MATERIAL_TRANSPARENT:
+        return [Float32(1) if material.transparent else Float32(0), 0, 0, 0]
+    if kind == MATERIAL_WIREFRAME:
+        return [Float32(1) if material.wireframe else Float32(0), 0, 0, 0]
     if kind == MATERIAL_COLOR:
         return color_to_pile(material.color)
     if kind == MATERIAL_EMISSIVE:
@@ -795,12 +885,101 @@ def read_target(
     return [number, 0, 0, 0]
 
 
-def _node_of(scene: Scene, target: TrackTarget) -> NodeId:
+def _read_camera(cameras: CameraList, target: TrackTarget) -> List[Float32]:
+    """Return a camera's field of view in degrees, its zoom, or one of its
+    planes in meters, as the `PILE` numbers a pile holds."""
+    var kind = target.kind
+    var number: Float32
+    if target.slot == ORTHOGRAPHIC_SLOT:
+        ref lens = cameras.orthographic[target.index]
+        number = lens.zoom
+        if kind == CAMERA_NEAR:
+            number = lens.near.to(METER)
+        elif kind == CAMERA_FAR:
+            number = lens.far.to(METER)
+        return [number, 0, 0, 0]
+    ref eye = cameras.perspective[target.index]
+    number = eye.zoom
+    if kind == CAMERA_FOV:
+        number = eye.fov.to(DEGREE)
+    elif kind == CAMERA_NEAR:
+        number = eye.near.to(METER)
+    elif kind == CAMERA_FAR:
+        number = eye.far.to(METER)
+    return [number, 0, 0, 0]
+
+
+def _write_camera(
+    mut cameras: CameraList, target: TrackTarget, value: Float32
+) raises:
+    """Write a camera's field of view, zoom or plane, refusing a value the
+    camera cannot hold.
+
+    A field of view must be above zero and below half a turn, a zoom above
+    zero, a near plane in front of a perspective camera, and the far plane
+    beyond the near plane. three.js leaves the camera's projection to be
+    updated by hand after a track moves it; here the projection is worked
+    out when it is asked for, so it follows the track.
+    """
+    var kind = target.kind
+    if not isfinite(value):
+        raise Error("An animation drove a camera to a value it cannot hold")
+    if kind == CAMERA_ZOOM and value <= 0:
+        raise Error("An animation drove a camera's zoom to zero or below")
+    if target.slot == ORTHOGRAPHIC_SLOT:
+        ref lens = cameras.orthographic[target.index]
+        var near = lens.near.to(METER)
+        var far = lens.far.to(METER)
+        if kind == CAMERA_ZOOM:
+            lens.zoom = value
+        elif kind == CAMERA_NEAR:
+            near = value
+        else:
+            far = value
+        if far <= near:
+            raise Error("An animation drove a camera's far plane to its near")
+        lens.near = Length(near, METER)
+        lens.far = Length(far, METER)
+        return
+    ref eye = cameras.perspective[target.index]
+    var near = eye.near.to(METER)
+    var far = eye.far.to(METER)
+    if kind == CAMERA_FOV:
+        if value <= 0 or value >= 180:
+            raise Error(
+                "An animation drove a camera's field of view outside zero to"
+                " half a turn"
+            )
+        eye.fov = Angle(value, DEGREE)
+    elif kind == CAMERA_ZOOM:
+        eye.zoom = value
+    elif kind == CAMERA_NEAR:
+        near = value
+    else:
+        far = value
+    if near <= 0 or far <= near:
+        raise Error(
+            "An animation drove a camera's near plane behind it or its far"
+            " plane to its near"
+        )
+    eye.near = Length(near, METER)
+    eye.far = Length(far, METER)
+
+
+def _node_of(
+    scene: Scene, target: TrackTarget, cameras: CameraList = CameraList()
+) -> NodeId:
     """Return the node a target's property rides: its own node, a mesh's
-    node, a light's node, or `NO_PARENT` for a material, which rides
-    none."""
+    node, a light's node, a camera's node, or `NO_PARENT` for a material,
+    which rides none."""
     if target.kind.is_node():
         return NodeId(target.index)
+    if target.kind.is_camera():
+        if target.slot == ORTHOGRAPHIC_SLOT:
+            return cameras.orthographic[target.index].node
+        return cameras.perspective[target.index].node
+    if target.kind.is_skinned():
+        return scene.skinned_meshes[target.index].node
     if target.kind.is_morph():
         return scene.meshes[target.index].node
     if target.kind.is_light():
@@ -815,11 +994,7 @@ def write_target(
     values: List[Float32],
     at: Int,
 ) raises:
-    """Write one property from the numbers of a pile.
-
-    The one place a property is set, so the pose the actions make and the
-    pose a released binding goes back to cannot drift apart. Nothing is
-    written to a node out of the scene, or to a mesh or a light on one.
+    """Write one property from the numbers of a pile, with no cameras.
 
     Args:
         scene: The scene the nodes, meshes and lights are in.
@@ -829,14 +1004,60 @@ def write_target(
         at: Where this property's numbers start in `values`.
 
     Raises:
+        Error: As the version that takes the cameras does.
+    """
+    var none = CameraList()
+    write_target(scene, assets, none, target, values, at)
+
+
+def write_target(
+    mut scene: Scene,
+    mut assets: Assets,
+    mut cameras: CameraList,
+    target: TrackTarget,
+    values: List[Float32],
+    at: Int,
+    strings: List[String] = List[String](),
+) raises:
+    """Write one property from the numbers of a pile.
+
+    The one place a property is set, so the pose the actions make and the
+    pose a released binding goes back to cannot drift apart. Nothing is
+    written to a node out of the scene, or to a mesh, a light or a camera
+    on one.
+
+    Args:
+        scene: The scene the nodes, meshes and lights are in.
+        assets: The assets the materials are in.
+        cameras: The cameras a camera target names.
+        target: The property. The caller has checked its index.
+        values: The numbers to write, `PILE` of them per entry.
+        at: Where this property's numbers start in `values`.
+        strings: The mixer's strings, which a string property's number
+            is the place of.
+
+    Raises:
         Error: If the scene has no such node, or the value is one the
             property cannot hold: a morph influence that is not a number,
             a color channel outside zero to one, a light intensity below
-            zero, or a material number outside the range `Material`
-            accepts for it.
+            zero, a light distance, angle or penumbra that `Light.validate`
+            refuses, a material number outside the range `Material`
+            accepts for it, a camera number the camera cannot hold, or a
+            string that is not in `strings`.
     """
     var kind = target.kind
-    if not scene.in_scene(_node_of(scene, target)):
+    if not scene.in_scene(_node_of(scene, target, cameras)):
+        return
+    if kind.is_camera():
+        _write_camera(cameras, target, values[at])
+        return
+    if kind.is_string():
+        var place = Int(values[at])
+        if place < 0 or place >= len(strings):
+            raise Error(
+                "An animation drove a name to a string it does not hold"
+            )
+        scene.node(NodeId(target.index)).name = strings[place]
         return
     if kind.is_node():
         ref placed = scene.node(NodeId(target.index))
@@ -853,6 +1074,11 @@ def write_target(
         else:
             placed.visible = values[at] >= 0.5
         return
+    if kind.is_skinned():
+        scene.skinned_meshes[target.index].set_morph_influence(
+            target.slot, values[at]
+        )
+        return
     if kind.is_morph():
         scene.meshes[target.index].set_morph_influence(target.slot, values[at])
         return
@@ -862,12 +1088,26 @@ def write_target(
             light.color = pile_to_color(
                 values, at, light.color.a, "a light's color"
             )
-        else:
+        elif kind == LIGHT_INTENSITY:
             light.intensity = checked_value(
                 values[at], 0, inf[DType.float32](), "a light's intensity"
             )
+        else:
+            if kind == LIGHT_DISTANCE:
+                light.distance = values[at]
+            elif kind == LIGHT_ANGLE:
+                light.angle = Angle(values[at], RADIAN)
+            else:
+                light.penumbra = values[at]
+            light.validate()
         return
     ref material = assets.materials.materials[target.index]
+    if kind == MATERIAL_TRANSPARENT:
+        material.transparent = values[at] >= 0.5
+        return
+    if kind == MATERIAL_WIREFRAME:
+        material.wireframe = values[at] >= 0.5
+        return
     if kind == MATERIAL_COLOR:
         material.color = pile_to_color(
             values, at, material.color.a, "a material's color"
@@ -916,9 +1156,15 @@ def write_target(
 
 
 def check_target(
-    scene: Scene, assets: Assets, has_assets: Bool, target: TrackTarget
+    scene: Scene,
+    assets: Assets,
+    has_assets: Bool,
+    target: TrackTarget,
+    cameras: CameraList = CameraList(),
+    has_cameras: Bool = False,
 ) raises:
-    """Refuse a target that names nothing in the scene or the assets.
+    """Refuse a target that names nothing in the scene, the assets or the
+    cameras.
 
     Args:
         scene: The scene the nodes, meshes and lights are in.
@@ -926,18 +1172,32 @@ def check_target(
         has_assets: False when the caller gave no assets, so a material
             cannot be driven at all.
         target: The target to check.
+        cameras: The cameras a camera target names.
+        has_cameras: False when the caller gave no cameras, so a camera
+            cannot be driven at all.
 
     Raises:
         Error: If the target's kind is none of the named ones or its slot
             does not fit it, or its index is below zero or past the end of
             the list it indexes, or it drives a material and there are no
-            assets.
+            assets, or a camera and there are no cameras.
     """
     if not target.is_valid():
         raise Error("A track needs a kind that exists and fits its slot")
     var kind = target.kind
     var count = scene.count()
-    if kind.is_morph():
+    if kind.is_camera():
+        if not has_cameras:
+            raise Error(
+                "A camera track needs the cameras: call update(scene,"
+                " assets, cameras, delta)"
+            )
+        count = len(cameras.perspective)
+        if target.slot == ORTHOGRAPHIC_SLOT:
+            count = len(cameras.orthographic)
+    elif kind.is_skinned():
+        count = len(scene.skinned_meshes)
+    elif kind.is_morph():
         count = len(scene.meshes)
     elif kind.is_light():
         count = len(scene.lights)
@@ -950,27 +1210,33 @@ def check_target(
         count = assets.materials.count()
     if target.index < 0 or target.index >= count:
         raise Error(
-            "A track must name a node, a mesh, a light or a material that"
-            " is there"
+            "A track must name a node, a mesh, a light, a material or a"
+            " camera that is there"
         )
 
 
 def resolve_targets(
-    scene: Scene, target: TrackTarget, group: AnimationObjectGroup
+    scene: Scene,
+    target: TrackTarget,
+    group: AnimationObjectGroup,
+    cameras: CameraList = CameraList(),
 ) raises -> List[TrackTarget]:
     """Return the targets one track drives on the members of a group.
 
     Each member is to the track what the object is to a three.js path: the
     member node for a node kind, every mesh at the member for a morph
-    influence, the material of every such mesh for a material kind, and
-    every light at the member for a light kind. A target reached twice is
-    listed once.
+    influence, every skinned mesh at the member for a skinned morph
+    influence, the material of every mesh at the member for a material
+    kind, every light at the member for a light kind, and every camera at
+    the member, of the list the track names, for a camera kind. A target
+    reached twice is listed once.
 
     Args:
         scene: The scene the members are in.
         target: What the track names. Its kind and slot are kept, and its
             index is replaced.
         group: The members.
+        cameras: The cameras a camera kind reaches.
 
     Returns:
         The targets, in the order of the members.
@@ -991,6 +1257,17 @@ def resolve_targets(
             for light in range(len(scene.lights)):
                 if scene.lights[light].node.value == node:
                     reached.append(TrackTarget(kind, light, 0))
+        elif kind.is_camera():
+            for which in range(_camera_count(cameras, target.slot)):
+                var lens = _node_of(
+                    scene, TrackTarget(kind, which, target.slot), cameras
+                )
+                if lens.value == node:
+                    reached.append(TrackTarget(kind, which, target.slot))
+        elif kind.is_skinned():
+            for mesh in range(len(scene.skinned_meshes)):
+                if scene.skinned_meshes[mesh].node.value == node:
+                    reached.append(TrackTarget(kind, mesh, target.slot))
         else:
             for mesh in range(len(scene.meshes)):
                 if scene.meshes[mesh].node.value != node:
@@ -1005,6 +1282,13 @@ def resolve_targets(
             if find_target(found, reached[index]) < 0:
                 found.append(reached[index])
     return found^
+
+
+def _camera_count(cameras: CameraList, slot: Int) -> Int:
+    """Return how many cameras the list a camera slot names holds."""
+    if slot == ORTHOGRAPHIC_SLOT:
+        return len(cameras.orthographic)
+    return len(cameras.perspective)
 
 
 struct Binding(Copyable, Movable):
@@ -1116,6 +1400,17 @@ struct AnimationAction(Copyable, Movable):
     # three.js's `_loopCount` being other than -1: a `ONCE` action once it
     # moves, a repeating one once it first wraps.
     var started: Bool
+    # How many ends of the clip a repeating action has run past, three.js's
+    # `_loopCount`: -1 until it first wraps. Kept in step with `started`.
+    var loop_count: Int
+    # How many times a `REPEAT` or `PING_PONG` action runs through its
+    # clip before it finishes, three.js's `repetitions`. None, the
+    # default, repeats without end, three.js's `Infinity`. A `PING_PONG`
+    # leg is one repetition.
+    var repetitions: Optional[Int]
+    # The node the action was filed under, three.js's `_localRoot`, or
+    # `NO_PARENT` for the mixer's own root. See `AnimationMixer.add`.
+    var root: NodeId
 
     def __init__(
         out self,
@@ -1180,6 +1475,9 @@ struct AnimationAction(Copyable, Movable):
         self.ending_start = ZERO_CURVATURE_ENDING
         self.ending_end = ZERO_CURVATURE_ENDING
         self.started = False
+        self.loop_count = -1
+        self.repetitions = None
+        self.root = NO_PARENT
 
     def __init__(out self, *, copy: Self):
         """Copy another action, its clip included."""
@@ -1211,6 +1509,9 @@ struct AnimationAction(Copyable, Movable):
         self.ending_start = copy.ending_start
         self.ending_end = copy.ending_end
         self.started = copy.started
+        self.loop_count = copy.loop_count
+        self.repetitions = copy.repetitions
+        self.root = copy.root
 
     def use_group(mut self, var group: AnimationObjectGroup):
         """Play every track on every member of a group instead of on the
@@ -1238,17 +1539,83 @@ struct AnimationAction(Copyable, Movable):
 
     def stop(mut self):
         """Stop the action, rewind it, and take it out of the pose,
-        three.js's `stop`.
-
-        Like three.js's `reset`, it also drops any fade, warp or start
-        time that was scheduled.
+        three.js's `stop`: `reset`, and no longer active.
         """
         self.active = False
+        self.reset()
+
+    def reset(mut self):
+        """Rewind the action and forget its loops, three.js's `reset`.
+
+        It unpauses the action, drops any fade, warp or start time that
+        was scheduled, and leaves whether it is active as it is. three.js's
+        `reset` also enables the action; here `active` is both three.js's
+        `enabled` and its being scheduled, so `play` does that.
+        """
         self.paused = False
         self.phase = 0
         self.started = False
+        self.loop_count = -1
         self.scheduled = False
         self.stop_fading()
+        self.stop_warping()
+
+    def set_loop(
+        mut self, loop: Loop, repetitions: Optional[Int] = None
+    ) raises:
+        """Set what the action does at the end of its clip, and how many
+        times it repeats, three.js's `setLoop`.
+
+        Args:
+            loop: `ONCE`, `REPEAT` or `PING_PONG`.
+            repetitions: How many times a `REPEAT` or `PING_PONG` action
+                runs through its clip, a `PING_PONG` leg being one. None,
+                the default, repeats without end, as three.js's `Infinity`
+                does. A `ONCE` action ignores it.
+
+        Raises:
+            Error: If the loop mode is none of the three, or the
+                repetitions are below zero.
+        """
+        if not loop.is_valid():
+            raise Error("An action needs a loop mode that exists")
+        if Bool(repetitions):
+            if repetitions.value() < 0:
+                raise Error("An action cannot repeat fewer than zero times")
+        self.loop = loop
+        self.repetitions = repetitions
+
+    def set_duration(mut self, duration: Duration) raises:
+        """Set the time scale so that one run through the clip lasts
+        `duration`, and stop any warp, three.js's `setDuration`.
+
+        Args:
+            duration: How long one run through the clip lasts; not zero. A
+                negative duration runs the clip backward, as the time
+                scale it makes does in three.js.
+
+        Raises:
+            Error: If the duration is zero or is not a number.
+        """
+        var seconds = duration.to(SECOND)
+        if not isfinite(seconds) or seconds == 0:
+            raise Error("An action's duration must be a number other than zero")
+        self.time_scale = self.clip.duration().to(SECOND) / seconds
+        self.stop_warping()
+
+    def sync_with(mut self, other: AnimationAction):
+        """Take another action's place in its clip and its time scale, and
+        stop any warp, three.js's `syncWith`.
+
+        The place is the other action's phase. For `PING_PONG` that says
+        which leg it is on as well; three.js copies the time alone and
+        keeps its own leg.
+
+        Args:
+            other: The action to keep in step with.
+        """
+        self.phase = other.phase
+        self.time_scale = other.time_scale
         self.stop_warping()
 
     def is_active(self) -> Bool:
@@ -1526,6 +1893,7 @@ struct AnimationAction(Copyable, Movable):
         if self.loop == ONCE:
             if not self.started:
                 self.started = True
+                self.loop_count = 0
                 self._set_endings(True, True, False)
             if moved >= length:
                 moved = length
@@ -1542,22 +1910,42 @@ struct AnimationAction(Copyable, Movable):
         # leg's worth of phase: without it the pass turned round, and the
         # clip ran forward under a negative time scale.
         var wraps_first = ping_pong and not self.started and moved_by < 0
+        var none_left = Bool(self.repetitions) and self.repetitions.value() == 0
+        # three.js's `_loopCount`: a clip run forward counts from zero as it
+        # starts, and one run backward from -1, so its first pass through
+        # zero is not a repetition.
+        var count = self.loop_count
         if not self.started:
-            # A clip that repeats without end runs on past the end it is
-            # heading for, and is flat at the end it left.
+            # A clip that repeats runs on past the end it is heading for,
+            # unless it repeats no times at all, and is flat at the end it
+            # left.
             if moved_by > 0:
-                self._set_endings(True, False, ping_pong)
+                count = 0
+                self._set_endings(True, none_left, ping_pong)
             else:
-                self._set_endings(False, True, ping_pong)
+                self._set_endings(none_left, True, ping_pong)
         # Each end of the clip passed is one of three.js's loops, for
         # `PING_PONG` as much as for `REPEAT`: the phase has one end every
         # clip's length, whichever leg it is on.
-        self.loop_delta = Int(floor(moved / length)) - Int(
-            floor(self.phase / length)
-        )
+        var from_end = Int(floor(self.phase / length))
+        self.loop_delta = Int(floor(moved / length)) - from_end
         if self.loop_delta != 0:
+            if Bool(self.repetitions):
+                var pending = self.repetitions.value() - count
+                if pending <= abs(self.loop_delta):
+                    self._finish_repeating(moved_by, from_end, pending)
+                    return
+                if pending == abs(self.loop_delta) + 1:
+                    # Entering the last run, which does not run on past
+                    # the end it is heading for.
+                    var at_start = moved_by < 0
+                    self._set_endings(at_start, not at_start, ping_pong)
+                else:
+                    self._set_endings(False, False, ping_pong)
+            else:
+                self._set_endings(False, False, ping_pong)
             self.started = True
-            self._set_endings(False, False, ping_pong)
+            self.loop_count = count + abs(self.loop_delta)
             if wraps_first:
                 moved += length
         self.direction = -1 if moved_by < 0 else 1
@@ -1568,6 +1956,42 @@ struct AnimationAction(Copyable, Movable):
             period = length * 2
         moved -= floor(moved / period) * period
         self.phase = moved
+
+    def _finish_repeating(
+        mut self, moved_by: Float32, from_end: Int, pending: Int
+    ):
+        """End a `REPEAT` or `PING_PONG` action whose last repetition ran
+        out during this move, three.js's `finished` branch of
+        `_updateTime`.
+
+        The action stops at the end of the clip it ran to: the end for a
+        `REPEAT` action run forward, the start run backward. A
+        `PING_PONG` action stops at whichever end the leg that ran out was
+        heading for. three.js reads the other end in the update that
+        finishes a `PING_PONG` action, and the right one from the next
+        update on; here the right one is read in both.
+
+        Args:
+            moved_by: The move, in seconds of clip time.
+            from_end: Which end of the clip, counted in clip lengths, the
+                phase was past before the move.
+            pending: How many ends the action had left to run past, the
+                last of them the one it stops at; at least zero.
+        """
+        var length = self.clip.duration().to(SECOND)
+        self.loop_delta = 0
+        self._finish(moved_by)
+        if self.loop != PING_PONG:
+            self.phase = length if moved_by > 0 else Float32(0)
+            return
+        # The ends the move runs past are at whole clip lengths of phase,
+        # the next one forward `from_end + 1` and the next one back
+        # `from_end`. The one it stops at is the last it had left, and at
+        # least the first. An even end is the start of the clip and an odd
+        # one its end, since the phase runs there and back.
+        var ends = max(pending, 1)
+        var stop = from_end + ends if moved_by > 0 else from_end - ends + 1
+        self.phase = length if stop % 2 != 0 else Float32(0)
 
     def _update_time_scale(mut self, time: Float32) -> Float32:
         """Return the time scale for this update with any warp applied,
@@ -1633,37 +2057,226 @@ struct AnimationMixer(Movable):
 
     var actions: List[AnimationAction]
     var bindings: List[Binding]
-    # How much time the mixer has been given, in seconds.
+    # How much time the mixer has been given, in seconds, after its time
+    # scale.
     var elapsed: Float32
     # What happened to the actions during the last update, three.js's
     # `loop` and `finished` events. Each update starts a new list.
     var events: List[AnimationEvent]
+    # How fast the mixer's clock runs, three.js's `timeScale`: every
+    # update's delta is multiplied by it. Zero stops every action, and a
+    # negative number runs them all backward.
+    var time_scale: Float32
+    # The node the mixer was made for, three.js's `_root`, or `NO_PARENT`
+    # for the whole scene. A track names its target by index, so the root
+    # does not scope a lookup as three.js's does; it is what actions are
+    # filed under.
+    var root: NodeId
+    # Whether each action has been uncached, by index. An uncached action
+    # keeps its index, so no other index moves, and cannot be reached.
+    var uncached: List[Bool]
+    # Every string a string property has held or been driven to, each
+    # once. A string pile holds a place here, so a string mixes as a flag
+    # does.
+    var strings: List[String]
 
-    def __init__(out self):
-        """Create a mixer with nothing playing."""
+    def __init__(out self, root: NodeId = NO_PARENT):
+        """Create a mixer with nothing playing.
+
+        Args:
+            root: The node the mixer is for, three.js's `root`, or
+                `NO_PARENT`, the default, for the whole scene.
+        """
         self.actions = List[AnimationAction]()
         self.bindings = List[Binding]()
         self.elapsed = 0
         self.events = List[AnimationEvent]()
+        self.time_scale = 1
+        self.root = root
+        self.uncached = List[Bool]()
+        self.strings = List[String]()
 
-    def add(mut self, var action: AnimationAction) -> Int:
+    def add(
+        mut self, var action: AnimationAction, root: NodeId = NO_PARENT
+    ) -> Int:
         """Add an action and return the index it was given.
 
         Args:
             action: The action, consumed. three.js's `clipAction` makes one
                 and remembers it; here the caller makes it and this keeps
                 it.
+            root: The node the action is filed under, three.js's
+                `optionalRoot`, or `NO_PARENT`, the default, for the
+                mixer's own root. `existing_action` and `uncache_root`
+                find it by it.
 
         Returns:
             Which action it is, for `action`.
         """
         action.now = self.elapsed
+        action.root = root
         self.actions.append(action^)
+        self.uncached.append(False)
         return len(self.actions) - 1
 
     def action_count(self) -> Int:
-        """Return how many actions the mixer holds."""
+        """Return how many actions the mixer holds, the uncached ones
+        included, since they keep their indices."""
         return len(self.actions)
+
+    def get_root(self) -> NodeId:
+        """Return the node the mixer was made for, three.js's `getRoot`, or
+        `NO_PARENT` for the whole scene."""
+        return self.root
+
+    def _check_index(self, index: Int) raises:
+        """Refuse an index that names no action, or an uncached one."""
+        if index < 0 or index >= len(self.actions):
+            raise Error("The mixer has no action at that index")
+        if self.uncached[index]:
+            raise Error("The mixer uncached the action at that index")
+
+    def existing_action(
+        self, clip_name: String, root: NodeId = NO_PARENT
+    ) -> Optional[Int]:
+        """Return the action on a clip, three.js's `existingAction`.
+
+        Args:
+            clip_name: The clip's name. three.js finds a clip by its uuid or
+                by its name; a clip here has no uuid.
+            root: The node the action was filed under by `add`, or
+                `NO_PARENT`, the default, for the mixer's own root.
+
+        Returns:
+            The first action on a clip of that name filed under that root
+            and not uncached, or None if there is none.
+        """
+        for index in range(len(self.actions)):
+            if self.uncached[index]:
+                continue
+            if self.actions[index].root != root:
+                continue
+            if self.actions[index].clip.name == clip_name:
+                return index
+        return None
+
+    def stop_all_action(mut self):
+        """Stop every action that is active, three.js's `stopAllAction`;
+        see `AnimationAction.stop`."""
+        for index in range(len(self.actions)):
+            if self.actions[index].active:
+                self.actions[index].stop()
+
+    def sync_with(mut self, index: Int, with_index: Int) raises:
+        """Put one action in step with another, three.js's `syncWith`; see
+        `AnimationAction.sync_with`.
+
+        Args:
+            index: The action to move.
+            with_index: The action to keep in step with.
+
+        Raises:
+            Error: If either index names no action or an uncached one.
+        """
+        self._check_index(index)
+        self._check_index(with_index)
+        var other = self.actions[with_index].copy()
+        self.actions[index].sync_with(other)
+
+    def uncache_action(mut self, index: Int) raises:
+        """Forget one action, three.js's `uncacheAction`.
+
+        The action stops contributing, and its clip's tracks are let go.
+        Its index stays its own, so no other action's index moves, and
+        `action` refuses it. A property it drove goes back to what it held
+        in the next update, as it does after `stop`. Then every property
+        that nothing drives is forgotten; see `uncache_clip`.
+
+        Args:
+            index: Which action, as `add` returned it.
+
+        Raises:
+            Error: If there is no action at that index, or it is already
+                uncached.
+        """
+        self._check_index(index)
+        self.actions[index].active = False
+        self.actions[index].clip.tracks = List[KeyframeTrack]()
+        self.uncached[index] = True
+        self._prune()
+
+    def uncache_action(
+        mut self, clip_name: String, root: NodeId = NO_PARENT
+    ) raises:
+        """Forget the action `existing_action` finds, three.js's
+        `uncacheAction(clip, root)`.
+
+        Args:
+            clip_name: The clip's name.
+            root: The node the action was filed under.
+
+        Raises:
+            Error: If there is no such action.
+        """
+        var found = self.existing_action(clip_name, root)
+        if not Bool(found):
+            raise Error("The mixer has no action on a clip of that name")
+        self.uncache_action(found.value())
+
+    def uncache_clip(mut self, clip_name: String):
+        """Forget every action on a clip, three.js's `uncacheClip`.
+
+        Each action is forgotten as `uncache_action` forgets it. Then
+        every binding that nothing drove in the last update is dropped: it
+        holds nothing the mixer needs, since a property is read again when
+        something next drives it. three.js drops only the bindings of the
+        actions it forgets.
+
+        Args:
+            clip_name: The clip's name.
+        """
+        for index in range(len(self.actions)):
+            if self.uncached[index]:
+                continue
+            if self.actions[index].clip.name == clip_name:
+                self.actions[index].active = False
+                self.actions[index].clip.tracks = List[KeyframeTrack]()
+                self.uncached[index] = True
+        self._prune()
+
+    def uncache_root(mut self, root: NodeId):
+        """Forget every action filed under a root, three.js's
+        `uncacheRoot`; see `uncache_clip`.
+
+        Args:
+            root: The node the actions were filed under by `add`, or
+                `NO_PARENT` for the mixer's own root.
+        """
+        for index in range(len(self.actions)):
+            if self.uncached[index]:
+                continue
+            if self.actions[index].root == root:
+                self.actions[index].active = False
+                self.actions[index].clip.tracks = List[KeyframeTrack]()
+                self.uncached[index] = True
+        self._prune()
+
+    def _prune(mut self):
+        """Drop every binding that nothing drove in the last update."""
+        var kept = List[Binding]()
+        for slot in range(len(self.bindings)):
+            if self.bindings[slot].driven:
+                kept.append(self.bindings[slot].copy())
+        self.bindings = kept^
+
+    def _intern(mut self, text: String) -> Float32:
+        """Return the place of a string in the mixer's strings, adding it
+        the first time it is seen."""
+        for place in range(len(self.strings)):
+            if self.strings[place] == text:
+                return Float32(place)
+        self.strings.append(text)
+        return Float32(len(self.strings) - 1)
 
     def binding_count(self) -> Int:
         """Return how many node properties the mixer has taken over."""
@@ -1683,12 +2296,12 @@ struct AnimationMixer(Movable):
         Raises:
             Error: If there is no action at that index.
         """
-        if index < 0 or index >= len(self.actions):
-            raise Error("The mixer has no action at that index")
+        self._check_index(index)
         return self.actions[index]
 
     def time(self) -> Duration:
-        """Return how much time the mixer has been given in all."""
+        """Return how much time the mixer has been given in all, after its
+        time scale."""
         return Duration(self.elapsed, SECOND)
 
     def cross_fade_from(
@@ -1714,15 +2327,13 @@ struct AnimationMixer(Movable):
             warp: True to warp the two time scales as well.
 
         Raises:
-            Error: If either index names no action, the two are the same
-                action, `duration` is negative or is not a number, or
-                `warp` is True and either time scale is zero. Nothing is
-                changed when it raises.
+            Error: If either index names no action or an uncached one, the
+                two are the same action, `duration` is negative or is not
+                a number, or `warp` is True and either time scale is zero.
+                Nothing is changed when it raises.
         """
-        if index < 0 or index >= len(self.actions):
-            raise Error("The mixer has no action at that index")
-        if from_index < 0 or from_index >= len(self.actions):
-            raise Error("The mixer has no action at that index")
+        self._check_index(index)
+        self._check_index(from_index)
         if index == from_index:
             raise Error("An action cannot cross-fade from itself")
         _ = checked_span(duration, "A cross-fade")
@@ -1812,6 +2423,8 @@ struct AnimationMixer(Movable):
         scene: Scene,
         assets: Assets,
         has_assets: Bool,
+        cameras: CameraList,
+        has_cameras: Bool,
         target: TrackTarget,
     ) raises -> Int:
         """Remember what one property holds, each time something starts to
@@ -1825,13 +2438,23 @@ struct AnimationMixer(Movable):
         threw the caller's edit away.
 
         Raises:
-            Error: If the target names nothing in the scene or the assets.
+            Error: If the target names nothing in the scene, the assets or
+                the cameras.
         """
-        check_target(scene, assets, has_assets, target)
+        check_target(scene, assets, has_assets, target, cameras, has_cameras)
         var known = self._binding(target)
         if known >= 0 and self.bindings[known].driven:
             return known
-        var original = read_target(scene, assets, target)
+        var original: List[Float32]
+        if target.kind.is_string():
+            original = [
+                self._intern(scene.get(NodeId(target.index)).name),
+                0,
+                0,
+                0,
+            ]
+        else:
+            original = read_target(scene, assets, target, cameras)
         if known >= 0:
             self.bindings[known].original = original^
             self.bindings[known].driven = True
@@ -1859,7 +2482,8 @@ struct AnimationMixer(Movable):
                 drives a material, which is in the assets.
         """
         var none = Assets()
-        self._update(scene, none, False, delta)
+        var no_cameras = CameraList()
+        self._update(scene, none, False, no_cameras, False, delta)
 
     def update(
         mut self, mut scene: Scene, mut assets: Assets, delta: Duration
@@ -1887,22 +2511,53 @@ struct AnimationMixer(Movable):
             delta: How much real time has passed since the last update.
 
         Raises:
-            Error: If `delta` is not a number, an action's blend mode is
-                neither of the two, a track names something the scene or
-                the assets do not have, a group member is not in the scene,
-                or a value written is one its property cannot hold.
+            Error: If `delta` or the mixer's time scale is not a number, an
+                action's blend mode is neither of the two, a track names
+                something the scene or the assets do not have, a track
+                drives a camera, a group member is not in the scene, or a
+                value written is one its property cannot hold.
         """
-        self._update(scene, assets, True, delta)
+        var no_cameras = CameraList()
+        self._update(scene, assets, True, no_cameras, False, delta)
+
+    def update(
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        mut cameras: CameraList,
+        delta: Duration,
+    ) raises:
+        """Move every playing action on by `delta`, and write what the
+        actions make into the scene, the assets and the cameras.
+
+        Args:
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            assets: The assets whose materials the tracks name.
+            cameras: The cameras whose field of view, zoom and planes the
+                tracks name.
+            delta: How much real time has passed since the last update.
+
+        Raises:
+            Error: As the update that takes the assets does, but for a
+                track that drives a camera.
+        """
+        self._update(scene, assets, True, cameras, True, delta)
 
     def _update(
         mut self,
         mut scene: Scene,
         mut assets: Assets,
         has_assets: Bool,
+        mut cameras: CameraList,
+        has_cameras: Bool,
         delta: Duration,
     ) raises:
         """Run one update; see `update`."""
-        var seconds = delta.to(SECOND)
+        if not isfinite(self.time_scale):
+            raise Error("A mixer's time scale must be a number")
+        # three.js's `update` multiplies the delta by the time scale
+        # before anything else sees it.
+        var seconds = delta.to(SECOND) * self.time_scale
         if not isfinite(seconds):
             raise Error("A mixer cannot advance by a time that is not a number")
         self.elapsed += seconds
@@ -1915,6 +2570,8 @@ struct AnimationMixer(Movable):
         var additive = List[Float32]()
 
         for index in range(len(self.actions)):  # pragma: no branch
+            if self.uncached[index]:
+                continue
             if not self.actions[index].active:
                 # Kept in step all the same, so a fade or a warp scheduled
                 # on it before it plays starts at the mixer's time now.
@@ -1943,14 +2600,22 @@ struct AnimationMixer(Movable):
                         self.actions[index].ending_end,
                     )
                 )
+                if kind.is_string():
+                    var place = Int(value[0])
+                    var text = String(
+                        self.actions[index].clip.tracks[which].strings[place]
+                    )
+                    value[0] = self._intern(text)
                 var reached: List[TrackTarget] = [named]
                 if self.actions[index].grouped:
                     reached = resolve_targets(
-                        scene, named, self.actions[index].group
+                        scene, named, self.actions[index].group, cameras
                     )
                 for each in range(len(reached)):
                     var target = reached[each]
-                    var held = self._bind(scene, assets, has_assets, target)
+                    var held = self._bind(
+                        scene, assets, has_assets, cameras, has_cameras, target
+                    )
                     var slot = find_target(targets, target)
                     if slot < 0:
                         slot = len(targets)
@@ -2002,7 +2667,15 @@ struct AnimationMixer(Movable):
                 )
             if added[slot] > 0:
                 add_onto_pile(piles, slot, additive, kind)
-            write_target(scene, assets, targets[slot], piles, slot * PILE)
+            write_target(
+                scene,
+                assets,
+                cameras,
+                targets[slot],
+                piles,
+                slot * PILE,
+                self.strings,
+            )
 
         # Anything that was driven last frame and is not driven now goes
         # back to what it held before the mixer touched it, once, and is
@@ -2017,8 +2690,10 @@ struct AnimationMixer(Movable):
             write_target(
                 scene,
                 assets,
+                cameras,
                 self.bindings[slot].target(),
                 self.bindings[slot].original,
                 0,
+                self.strings,
             )
             self.bindings[slot].driven = False

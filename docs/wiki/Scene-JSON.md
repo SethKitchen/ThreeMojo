@@ -222,12 +222,13 @@ The writer does not write these things, and the reader refuses them:
 - A cube texture that does not have six images, or a mapping that is not `CubeReflectionMapping`. A cube texture with float faces.
 - More than eight clipping planes on a material, or more than eight morph influences on a mesh.
 - A depth function, a stencil function or a stencil operation that is not one of three.js's.
+- A clip with a track that the reader cannot bind. See [Animation](Animation#scene-json).
 
 The writer does not write these things, and the reader ignores them:
 
 - A background's `backgroundBlurriness`, `backgroundIntensity` and `backgroundRotation`, and the scene's `environmentIntensity` and `environmentRotation`.
 - An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
-- `animations`, `shapes`, `skeletons`, `up` and `userData`.
+- `shapes`, `skeletons`, `up` and `userData`.
 - The material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
 - An instanced mesh's `morphTexture` and `morphTargetInfluences`. An `InstancedMesh` here wears no morph targets. See [Meshes and assets](Meshes-and-assets#instance-colors).

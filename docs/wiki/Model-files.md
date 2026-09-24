@@ -351,7 +351,7 @@ The loader reads a skin into a `Skeleton`, a morph target into the geometry, and
 | `weights` | The morph influences of each mesh. A node's `weights` replace its mesh's `weights`. |
 | An animation | An `AnimationClip`, named by the file or `animation_` and its index. |
 | A `translation`, `rotation` or `scale` channel | A `POSITION`, `QUATERNION` or `SCALE` track on the node. |
-| A `weights` channel | One `MORPH_INFLUENCE` track for each mesh on the node and each morph target. |
+| A `weights` channel | One morph influence track for each morph target of each mesh, plain or skinned, on the node and below it. |
 | `STEP`, `LINEAR` | The track's `STEP` or `LINEAR` interpolation. |
 | `CUBICSPLINE` | The track's `CUBIC_SPLINE` interpolation. Each key's in-tangent, value and out-tangent go to `in_tangents`, `values` and `out_tangents`. |
 
@@ -374,8 +374,6 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 ### Differences from three.js
 
 - A morph target without `POSITION` moves no position. three.js adds the base positions to it as offsets.
-- A `weights` channel drives the meshes on its own node. three.js also drives the meshes of the node's children.
-- A `weights` channel does not drive a skinned mesh. The mixer drives morph influences on `scene.meshes` only.
 - A channel on a node that the default scene does not reach is left out. An animation left with no track is left out.
 - A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
 - A morph target of colors is refused. three.js reads it.

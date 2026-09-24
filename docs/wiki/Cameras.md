@@ -32,6 +32,8 @@ camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
 
 The field of view is an `Angle`. A bare number does not compile. The near plane must be positive, and the far plane beyond it.
 
+`zoom` magnifies the view, three.js's `zoom`. The height of the view at the near plane is divided by it. It is one by default and must be above zero. An animation can drive it; see [Animation](Animation#materials-need-the-assets-and-cameras-need-the-cameras).
+
 `PerspectiveCamera(fov, aspect, near, far, view_shift=Length(0.02, METER))` moves the frustum's two side edges along x at the near plane, keeping their distance apart. The camera then looks a little to one side without turning. Zero, the default, looks straight ahead. A `StereoCamera` sets it on each eye. The shift is a `Length`, and must be finite.
 
 | Member | Meaning |

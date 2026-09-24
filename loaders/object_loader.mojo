@@ -33,7 +33,8 @@ the object's type says what the node carries:
     Sprite                     a `Sprite`
     LOD                        an `Lod` of its levels
     AmbientLight ... RectAreaLight   a `Light` of that kind
-    PerspectiveCamera          a `PerspectiveCamera` attached to the node
+    PerspectiveCamera          a `PerspectiveCamera` attached to the node,
+                               with its `zoom`
     OrthographicCamera         an `OrthographicCamera` attached to it
 
 A root of type `Scene` is not a node: its children are the scene's roots,
@@ -114,8 +115,19 @@ not a bare mesh child, a skeleton with fewer `boneInverses` than bones, a batch
 whose info names what is not there, and every number the builders
 refuse.
 
-**What is read without effect.** `up`, `matrixWorldAutoUpdate`
-and `animations`; the background's blurriness and intensity, and the
+**Animations.** Every object's `animations` names clips of the
+document's `animations` library by uuid, and each is read with
+`animation.animation_json.read_clip`, as three.js's `parseAnimations`
+reads it. A track's name is found below the object that names the clip,
+as three.js's `PropertyBinding.findNode` finds it: the object itself for
+no name or its own name or uuid, then a bone of its skeleton by name,
+then the first object below it, depth first, by name or uuid. A track
+whose object is not found, or does not have the property, is left out, as
+three.js binds it to nothing; a clip left with no track is left out too.
+A track on the scene itself is refused, since the scene is not a node.
+
+**What is read without effect.** `up` and `matrixWorldAutoUpdate`;
+the background's blurriness and intensity, and the
 rotations of the background and the environment; a cube texture's wrap; an
 `envMap` on a class whose shader reads none; the material keys this port
 has no field for; a texture's `format`, `type`,
@@ -143,6 +155,30 @@ from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.user_data import user_data_of
 from cameras.camera import ViewOffset
+from animation.animation_clip import AnimationClip
+from animation.animation_json import (
+    parse_track_name,
+    property_kind,
+    read_clip,
+    track_names,
+)
+from animation.keyframe_track import (
+    CAMERA_FOV,
+    LightIndex,
+    MORPH_INFLUENCE,
+    ORTHOGRAPHIC_SLOT,
+    OrthographicCameraIndex,
+    PERSPECTIVE_SLOT,
+    PerspectiveCameraIndex,
+    SKINNED_MORPH_INFLUENCE,
+    TrackTarget,
+    light_target,
+    material_target,
+    node_target,
+    orthographic_camera_target,
+    perspective_camera_target,
+)
+from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from geometries.box import box
@@ -586,20 +622,10 @@ def bind_mode_of(name: String) raises -> BindMode:
     return DETACHED
 
 
-struct ObjectCameras(Copyable, Movable):
-    """The cameras a document holds, or that a caller hands the writer.
-
-    A camera is not a scene node here, so it is held beside the scene
-    rather than in it. Each one rides a node, by `attach`.
-    """
-
-    var perspective: List[PerspectiveCamera]
-    var orthographic: List[OrthographicCamera]
-
-    def __init__(out self):
-        """Start with no cameras."""
-        self.perspective = List[PerspectiveCamera]()
-        self.orthographic = List[OrthographicCamera]()
+# The cameras a document holds, or that a caller hands the writer. A camera
+# is not a scene node here, so it is held beside the scene rather than in
+# it, in a `CameraList`. Each one rides a node, by `attach`.
+comptime ObjectCameras = CameraList
 
 
 struct ObjectModel(Movable):
@@ -611,12 +637,19 @@ struct ObjectModel(Movable):
     # uuid of the object.
     var nodes: List[NodeId]
     var uuids: List[String]
+    # The clips the objects' `animations` name, each bound below the
+    # object that names it, and that object's node: `NO_PARENT` for the
+    # scene. A clip two objects name is read once for each.
+    var animations: List[AnimationClip]
+    var animation_roots: List[NodeId]
 
     def __init__(out self):
         """Start with nothing read."""
         self.cameras = ObjectCameras()
         self.nodes = List[NodeId]()
         self.uuids = List[String]()
+        self.animations = List[AnimationClip]()
+        self.animation_roots = List[NodeId]()
 
     def node(self, uuid: String) raises -> NodeId:
         """Return the node the object with a uuid became.
@@ -671,6 +704,7 @@ def read_object_json(
     loader.object(top, scene, assets)
     loader.bind_targets(scene)
     loader.bind_skeletons(scene)
+    loader.read_animations(top, scene)
     var model = ObjectModel()
     swap(model, loader.model)
     return model^
@@ -775,6 +809,19 @@ struct _Loader(Movable):
     # read.
     var rigged: List[Int]
     var rigged_nodes: List[NodeId]
+    # For each object read, in the order of `model.nodes`: its JSON object,
+    # the object it is a child of or -1, and what it became, each -1 when
+    # it is not that: a mesh, a skinned mesh by its place in `rigged`, a
+    # light, and a camera and the list it is in.
+    var items: List[Int]
+    var parents: List[Int]
+    var meshes: List[Int]
+    var skins: List[Int]
+    var lamps: List[Int]
+    var lenses: List[Int]
+    var lens_slots: List[Int]
+    # Where the skinned meshes start in `scene.skinned_meshes`.
+    var first_skin: Int
 
     def __init__(out self, var document: JsonDocument, directory: String):
         self.document = document^
@@ -792,6 +839,14 @@ struct _Loader(Movable):
         self.seen = Dict[String, Int]()
         self.rigged = List[Int]()
         self.rigged_nodes = List[NodeId]()
+        self.items = List[Int]()
+        self.parents = List[Int]()
+        self.meshes = List[Int]()
+        self.skins = List[Int]()
+        self.lamps = List[Int]()
+        self.lenses = List[Int]()
+        self.lens_slots = List[Int]()
+        self.first_skin = 0
 
     # --- reading values -----------------------------------------------------
 
@@ -1818,6 +1873,18 @@ struct _Loader(Movable):
         self.transform(item, node)
         node.parent = parent
         var id = scene.add(node^)
+        self.items.append(item)
+        var above = -1
+        for at in range(len(self.model.nodes)):
+            if self.model.nodes[at] == parent:
+                above = at
+        self.parents.append(above)
+        self.meshes.append(-1)
+        self.skins.append(-1)
+        self.lamps.append(-1)
+        self.lenses.append(-1)
+        self.lens_slots.append(-1)
+        var mine = len(self.model.nodes)
         self.model.nodes.append(id)
         self.model.uuids.append(uuid)
         var light = _position_of(light_type_names(), kind)
@@ -1834,16 +1901,22 @@ struct _Loader(Movable):
                 receive_shadow=self.flag(item, "receiveShadow", False),
             )
             mesh.morph_influences = self.influences(item)
+            self.meshes[mine] = len(scene.meshes)
             scene.add_mesh(mesh)
         elif kind == "InstancedMesh":
             scene.add_instanced_mesh(self.instanced(item, id))
         elif light >= 0:
+            self.lamps[mine] = len(scene.lights)
             self.light(item, LightKind(light), id, mask, scene)
         elif kind == "PerspectiveCamera":
+            self.lenses[mine] = len(self.model.cameras.perspective)
+            self.lens_slots[mine] = PERSPECTIVE_SLOT
             self.model.cameras.perspective.append(
                 self.perspective(item, id, mask)
             )
         elif kind == "OrthographicCamera":
+            self.lenses[mine] = len(self.model.cameras.orthographic)
+            self.lens_slots[mine] = ORTHOGRAPHIC_SLOT
             self.model.cameras.orthographic.append(
                 self.orthographic(item, id, mask)
             )
@@ -1852,6 +1925,7 @@ struct _Loader(Movable):
         elif kind == "SkinnedMesh":
             # Bound once every object is read, as its bones can come after
             # it, as three.js's `bindSkeletons` does.
+            self.skins[mine] = len(self.rigged)
             self.rigged.append(item)
             self.rigged_nodes.append(id)
         elif line >= 0:
@@ -2317,6 +2391,171 @@ struct _Loader(Movable):
         camera.layers = Layers(UInt32(mask))
         return camera^
 
+    def read_animations(mut self, top: Int, scene: Scene) raises:
+        """Read the clips each object's `animations` names, three.js's
+        `ObjectLoader.parseAnimations` and `getAnimations`, and bind each
+        track below the object that names the clip."""
+        var library = self.index_library("animations")
+        var list = self.library("animations")
+        var roots: List[Int] = [-1]
+        var owners: List[Int] = [top]
+        for at in range(len(self.items)):
+            roots.append(at)
+            owners.append(self.items[at])
+        if self.text(top, "type", "") != "Scene":
+            # The root object is the first object read, not the scene.
+            _ = roots.pop(0)
+            _ = owners.pop(0)
+        # The scene, or the root object, which is the first read.
+        for at in range(len(roots)):  # pragma: no branch
+            var named = self.array(owners[at], "animations")
+            if named == NO_NODE:
+                continue
+            for index in range(self.document.length(named)):
+                var uuid = self.document.string(self.document.at(named, index))
+                if uuid not in library:
+                    raise Error(
+                        "Object JSON: no animation has the uuid " + uuid
+                    )
+                var clip = self.document.at(list, library[uuid])
+                var names = track_names(self.document, clip)
+                var targets = List[Optional[TrackTarget]]()
+                for track in range(len(names)):
+                    targets.append(
+                        self.track_target(
+                            roots[at], owners[at], names[track], scene
+                        )
+                    )
+                var read = read_clip(self.document, clip, targets)
+                if not Bool(read):
+                    continue
+                self.model.animations.append(read.take())
+                self.model.animation_roots.append(
+                    NO_PARENT if roots[at] < 0 else self.model.nodes[roots[at]]
+                )
+
+    def find_object(
+        self, root: Int, owner: Int, name: String, scene: Scene
+    ) raises -> Int:
+        """Return the object a track's node name names below a root,
+        three.js's `PropertyBinding.findNode`: the root itself for no name
+        or its own name or uuid, then a bone of the root's skeleton by name,
+        then the first object below it, depth first, by name or uuid.
+
+        Returns:
+            The object's place in `model.nodes`, -1 for the scene, or -2
+            when nothing has the name.
+        """
+        if (
+            name == ""
+            or name == "."
+            or name == self.text(owner, "name", "")
+            or name == self.text(owner, "uuid", "")
+        ):
+            return root
+        if root >= 0 and self.skins[root] >= 0:
+            var skin = self.first_skin + self.skins[root]
+            # A skeleton has at least one bone; `Skeleton` refuses none.
+            ref bones = scene.skinned_meshes[skin].skeleton.bones
+            for bone in bones:  # pragma: no branch
+                if scene.get(bone.node).name == name:
+                    return self.object_of(bone.node)
+        return self.search_below(root, name)
+
+    def object_of(self, node: NodeId) -> Int:
+        """Return the place in `model.nodes` of an object's node, which
+        the caller knows is there."""
+        var found = -1
+        for at in range(len(self.model.nodes)):  # pragma: no branch
+            if self.model.nodes[at] == node:
+                found = at
+        return found
+
+    def search_below(self, root: Int, name: String) raises -> Int:
+        """Return the first object below `root`, depth first and in
+        document order, whose name or uuid is `name`, or -2."""
+        for at in range(len(self.parents)):
+            if self.parents[at] != root:
+                continue
+            var item = self.items[at]
+            if (
+                self.text(item, "name", "") == name
+                or self.model.uuids[at] == name
+            ):
+                return at
+            var below = self.search_below(at, name)
+            if below != -2:
+                return below
+        return -2
+
+    def track_target(
+        self, root: Int, owner: Int, name: String, scene: Scene
+    ) raises -> Optional[TrackTarget]:
+        """Return what a track's name drives below a root, or None when
+        three.js would bind it to nothing: no object has the node's name,
+        or the object has no such property, material or bone.
+
+        A `morphTargetInfluences` with no index is every morph target, as
+        a glTF clip's weights track is: the target's slot is -1, and
+        `read_clip` makes a track per target.
+        """
+        var path = parse_track_name(name)
+        var kind = property_kind(path)
+        var at = self.find_object(root, owner, path.node_name, scene)
+        if at == -2:
+            return None
+        if at == -1:
+            raise Error("Object JSON: a track on the scene itself is not read")
+        if path.object_name == "bones":
+            if self.skins[at] < 0:
+                return None
+            var skin = self.first_skin + self.skins[at]
+            # A skeleton has at least one bone; `Skeleton` refuses none.
+            ref bones = scene.skinned_meshes[skin].skeleton.bones
+            for bone in bones:  # pragma: no branch
+                if scene.get(bone.node).name == path.object_index:
+                    return node_target(bone.node, kind)
+            return None
+        if path.object_name == "material":
+            var item = self.items[at]
+            if self.document.get(item, "material") == NO_NODE:
+                return None
+            return material_target(self.material_named(item), kind)
+        if kind.is_morph():
+            var slot = -1
+            if path.property_index != "":
+                slot = atol(path.property_index)
+                if slot < 0 or slot >= MAX_MORPH_TARGETS:
+                    raise Error(
+                        "Object JSON: a mesh has eight morph influences"
+                    )
+            if self.meshes[at] >= 0:
+                return TrackTarget(MORPH_INFLUENCE, self.meshes[at], slot)
+            if self.skins[at] >= 0:
+                return TrackTarget(
+                    SKINNED_MORPH_INFLUENCE,
+                    self.first_skin + self.skins[at],
+                    slot,
+                )
+            return None
+        if kind.is_light():
+            if self.lamps[at] < 0:
+                return None
+            return light_target(LightIndex(self.lamps[at]), kind)
+        if kind.is_camera():
+            if self.lenses[at] < 0:
+                return None
+            if self.lens_slots[at] == ORTHOGRAPHIC_SLOT:
+                if kind == CAMERA_FOV:
+                    return None
+                return orthographic_camera_target(
+                    OrthographicCameraIndex(self.lenses[at]), kind
+                )
+            return perspective_camera_target(
+                PerspectiveCameraIndex(self.lenses[at]), kind
+            )
+        return node_target(self.model.nodes[at], kind)
+
     def bind_targets(self, mut scene: Scene) raises:
         """Point each light that names a target at that object's node, or
         at the origin when the target is not in the document."""
@@ -2327,7 +2566,7 @@ struct _Loader(Movable):
                 target = self.model.nodes[found]
             scene.lights[self.aimed[at]].target = target
 
-    def bind_skeletons(self, mut scene: Scene) raises:
+    def bind_skeletons(mut self, mut scene: Scene) raises:
         """Build each skinned mesh on its skeleton, as three.js's
         `bindSkeletons` binds it once every bone is read.
 
@@ -2338,6 +2577,7 @@ struct _Loader(Movable):
         """
         var skeletons = self.index_library("skeletons")
         var list = self.library("skeletons")
+        self.first_skin = len(scene.skinned_meshes)
         if len(self.rigged) > 0:
             # The bones' world matrices, for a skeleton without inverses.
             scene.update()

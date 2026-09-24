@@ -76,6 +76,12 @@ standard or physical material has no `envMap`. A mesh writes its
 `dashOffset`: three.js's `Material.toJSON` writes none of these, and its
 loader ignores them.
 
+**Animations.** The clips handed to `object_to_json` are the scene's
+`animations`, written with `animation.animation_json.write_clip` into an
+`animations` library as `Object3D.toJSON` writes a scene's. Each track is
+named by the uuid of the object its target is written as, and the path of
+the property: a material's on the first mesh that draws with it.
+
 **Not written.** Wide lines, which are an addon of three.js with no class
 `ObjectLoader` reads; a cube's PMREM, which the reader builds again where
 three.js's renderer would; and a texture's alpha mode, which three.js has
@@ -92,6 +98,9 @@ their attributes and index, or carry morph targets, which three.js's
 `BatchedMesh` cannot join.
 """
 
+from animation.animation_clip import AnimationClip
+from animation.animation_json import property_path, write_clip
+from animation.keyframe_track import ORTHOGRAPHIC_SLOT, TrackTarget
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -199,6 +208,7 @@ comptime _MATERIAL_UUID = 5
 comptime _TEXTURE_UUID = 6
 comptime _IMAGE_UUID = 7
 comptime _SKELETON_UUID = 8
+comptime _CLIP_UUID = 9
 # The largest vertex count whose index three.js writes as a `Uint16Array`.
 comptime _MAX_SHORT_INDEX = 65535
 comptime _HEX = "0123456789abcdef"
@@ -1476,10 +1486,14 @@ struct _Writer(Movable):
     """The libraries being filled while the object tree is written."""
 
     var library: _Library
+    # The uuid each thing was written with, by its category and position,
+    # which a track on it is named by.
+    var named: Dict[Int, String]
 
     def __init__(out self):
         """Start with empty libraries."""
         self.library = _Library()
+        self.named = Dict[Int, String]()
 
     def thing(
         mut self,
@@ -2011,6 +2025,7 @@ struct _Writer(Movable):
         writer.begin_object()
         var levels = List[String]()
         if chosen >= 0:
+            self.named[chosen] = header.uuid
             levels = self.thing(writer, header^, chosen, scene, cameras, assets)
         else:
             header.write(writer)
@@ -2054,9 +2069,11 @@ struct _Writer(Movable):
         elif category == _ORTHOGRAPHIC:
             own = cameras.orthographic[which].layers
         writer.begin_object()
+        var uuid = self.library.part_uuid()
+        self.named[thing] = uuid
         var levels = self.thing(
             writer,
-            _Header(self.library.part_uuid(), own),
+            _Header(uuid, own),
             thing,
             scene,
             cameras,
@@ -2151,6 +2168,48 @@ def _shadow(mut writer: JsonWriter, light: Light) raises:
     writer.end_object()
 
 
+def _track_name(
+    target: TrackTarget, named: Dict[Int, String], scene: Scene
+) raises -> String:
+    """Return a track's name: the uuid of the object its target is on, and
+    the path of the property, as three.js's `PropertyBinding` reads it
+    below the scene."""
+    var kind = target.kind
+    var thing = -1
+    if kind.is_node():
+        return object_uuid(
+            _NODE_UUID, _node_of(NodeId(target.index), scene.count())
+        ) + property_path(target)
+    if kind.is_skinned():
+        thing = _SKINNED * _STRIDE + target.index
+    elif kind.is_morph():
+        thing = _MESH * _STRIDE + target.index
+    elif kind.is_light():
+        thing = _LIGHT * _STRIDE + target.index
+    elif kind.is_camera():
+        thing = (
+            _ORTHOGRAPHIC if target.slot == ORTHOGRAPHIC_SLOT else _PERSPECTIVE
+        ) * _STRIDE + target.index
+    else:
+        # A material is not an object: the track is on a mesh that draws
+        # with it, as three.js's `.material` path is.
+        for mesh in range(len(scene.meshes)):
+            if scene.meshes[mesh].material.value == target.index:
+                thing = _MESH * _STRIDE + mesh
+                break
+        if thing < 0:
+            for mesh in range(len(scene.skinned_meshes)):
+                if scene.skinned_meshes[mesh].material.value == target.index:
+                    thing = _SKINNED * _STRIDE + mesh
+                    break
+    if thing not in named:
+        raise Error(
+            "Object JSON: a track names something the document does not hold: "
+            + property_path(target)
+        )
+    return named[thing] + property_path(target)
+
+
 def _library(mut writer: JsonWriter, key: String, entries: List[String]) raises:
     """Write a library under `key`, or nothing when it is empty."""
     if len(entries) == 0:
@@ -2163,7 +2222,10 @@ def _library(mut writer: JsonWriter, key: String, entries: List[String]) raises:
 
 
 def object_to_json(
-    scene: Scene, assets: Assets, cameras: ObjectCameras = ObjectCameras()
+    scene: Scene,
+    assets: Assets,
+    cameras: ObjectCameras = ObjectCameras(),
+    animations: List[AnimationClip] = List[AnimationClip](),
 ) raises -> String:
     """Return a scene and what it draws with as a three.js JSON Object
     document, as `scene.toJSON()` returns it.
@@ -2176,6 +2238,11 @@ def object_to_json(
             their own transforms.
         assets: Where its geometries, materials and textures are.
         cameras: The cameras to write, each riding a node of the scene.
+        animations: The clips to write as the scene's `animations`, as
+            three.js writes a scene's. Each track is named by the uuid of
+            the object its target is on, so `ObjectLoader` binds it below
+            the scene. A material track is named on the first mesh that
+            draws with the material.
 
     Returns:
         The document.
@@ -2188,8 +2255,9 @@ def object_to_json(
             docstring says or by its own checks of its open fields, a line
             material is not `BASIC`, a line's mode or a skinned mesh's bind
             mode is none of its named values, a batch's geometries cannot
-            be joined, a camera has a view shift, or a number is not
-            finite.
+            be joined, a camera has a view shift, a number is not
+            finite, or a clip is refused by `animation_json.write_clip` or
+            has a track on a thing the document does not hold.
     """
     var carried = _Carried(scene, cameras)
     var out = _Writer()
@@ -2267,6 +2335,23 @@ def object_to_json(
             assets,
         )
     tree.end_array()
+    var clips = List[String]()
+    if len(animations) > 0:
+        tree.key("animations")
+        tree.begin_array()
+        for index in range(len(animations)):  # pragma: no branch
+            ref clip = animations[index]
+            var names = List[String]()
+            for track in range(len(clip.tracks)):  # pragma: no branch
+                names.append(
+                    _track_name(clip.tracks[track].target, out.named, scene)
+                )
+            var entry = JsonWriter()
+            var uuid = object_uuid(_CLIP_UUID, index)
+            write_clip(entry, clip, names, uuid)
+            clips.append(entry.finish())
+            tree.string(uuid)
+        tree.end_array()
     tree.end_object()
     var writer = JsonWriter()
     writer.begin_object()
@@ -2284,6 +2369,7 @@ def object_to_json(
     _library(writer, "textures", out.library.textures)
     _library(writer, "images", out.library.images)
     _library(writer, "skeletons", out.library.skeletons)
+    _library(writer, "animations", clips)
     writer.key("object")
     writer.raw(tree.finish())
     writer.end_object()
@@ -2295,6 +2381,7 @@ def write_object_json(
     scene: Scene,
     assets: Assets,
     cameras: ObjectCameras = ObjectCameras(),
+    animations: List[AnimationClip] = List[AnimationClip](),
 ) raises:
     """Write a scene and its assets to a three.js JSON Object file.
 
@@ -2303,9 +2390,10 @@ def write_object_json(
         scene: The scene.
         assets: Where its geometries, materials and textures are.
         cameras: The cameras to write; see `object_to_json`.
+        animations: The clips to write; see `object_to_json`.
 
     Raises:
         Error: If the file cannot be written, or anything `object_to_json`
             raises.
     """
-    Path(path).write_text(object_to_json(scene, assets, cameras))
+    Path(path).write_text(object_to_json(scene, assets, cameras, animations))

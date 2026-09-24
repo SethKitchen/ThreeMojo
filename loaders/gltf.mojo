@@ -56,7 +56,9 @@ glTF holds as offsets, so `morph_relative` is set; `weights` on the node,
 or on the mesh when the node has none, become the influences. Each
 animation becomes an `AnimationClip`: a `translation`, `rotation` or
 `scale` channel a track on the node, and a `weights` channel one
-`MORPH_INFLUENCE` track per mesh and target. `STEP` and `LINEAR` samplers
+morph influence track per mesh and target. A `weights` channel drives
+every mesh, plain or skinned, at its node and at every node below it that
+has morph targets, as three.js's `GLTFLoader` traverses the node. `STEP` and `LINEAR` samplers
 keep their names, and `CUBICSPLINE` becomes `CUBIC_SPLINE` with the
 tangents split out of the keys.
 
@@ -71,9 +73,7 @@ elements of its buffer view, or of zeros when it has none.
 
 **Where this differs from three.js.** A morph target without a `POSITION`
 moves nothing here, where three.js adds the base positions to it as if
-they were offsets. A `weights` channel drives the meshes on its own node,
-not those of the node's children, and none of a skinned mesh's, since the
-mixer drives morph influences on `scene.meshes` alone. A channel on a node
+they were offsets. A channel on a node
 the default scene does not reach is left out, and so is an animation left
 with no channel. A skin joint the scene does not reach, a morph color, and
 more than `MAX_MORPH_TARGETS` targets are refused. So are a specular
@@ -121,10 +121,12 @@ from animation.keyframe_track import (
     KeyframeTrack,
     MORPH_INFLUENCE,
     MeshIndex,
+    SkinnedMeshIndex,
     TrackKind,
     TrackTarget,
     morph_target,
     node_target,
+    skinned_morph_target,
     POSITION as TRANSLATION,
 )
 from cameras.orthographic_camera import OrthographicCamera
@@ -774,6 +776,9 @@ struct _Loader(Movable):
     # Per glTF node, the indices in `scene.meshes` of the meshes drawn at
     # it, which a `weights` channel drives.
     var node_meshes: List[List[Int]]
+    # Per glTF node, the indices in `scene.skinned_meshes` of the skinned
+    # meshes drawn at it, which a `weights` channel drives too.
+    var node_skins: List[List[Int]]
     # Each skinned node waiting for every joint to be placed: its glTF
     # index and the scene node it became.
     var skinned_nodes: List[Int]
@@ -801,6 +806,7 @@ struct _Loader(Movable):
         self.alpha_textures = List[TextureId]()
         self.morph_counts = List[Int]()
         self.node_meshes = List[List[Int]]()
+        self.node_skins = List[List[Int]]()
         self.skinned_nodes = List[Int]()
         self.skinned_ids = List[NodeId]()
 
@@ -1899,6 +1905,7 @@ struct _Loader(Movable):
             self.model.nodes.append(NO_PARENT)
             self.model.node_names.append(String())
             self.node_meshes.append(List[Int]())
+            self.node_skins.append(List[Int]())
         for index in range(count):
             self.model.node_names[index] = self.text(
                 self.entry("nodes", index), "name"
@@ -2288,6 +2295,7 @@ struct _Loader(Movable):
             var drawn = SkinnedMesh(geometry, material, node, skeleton.copy())
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
+            self.node_skins[index].append(len(scene.skinned_meshes))
             scene.add_skinned_mesh(drawn^)
 
     # --- cameras ------------------------------------------------------------
@@ -2383,8 +2391,10 @@ struct _Loader(Movable):
         )
         if input[1] != 1:
             raise Error("glTF: a sampler's input must be a SCALAR")
+        if len(input[0]) == 0:
+            raise Error("glTF: a sampler needs at least one key")
         var times = List[Duration]()
-        for key in range(len(input[0])):
+        for key in range(len(input[0])):  # pragma: no branch
             times.append(Duration(input[0][key], SECOND))
         var how = _interpolation_of(self.text(sampler, "interpolation"))
         var output = self.accessor_floats(
@@ -2402,26 +2412,63 @@ struct _Loader(Movable):
             return
         if output[1] != 1:
             raise Error("glTF: a weights output must be a SCALAR")
-        var drawn = self.node_meshes[node].copy()
-        if len(drawn) == 0:
-            # No plain mesh at the node: none, or a skinned one, whose
-            # influences the mixer does not drive.
-            return
-        var morphs = self.morph_counts[
-            self.required_integer(self.entry("nodes", node), "mesh")
-        ]
-        for at in range(len(drawn)):  # pragma: no branch
-            for slot in range(morphs):
-                tracks.append(
-                    _track(
-                        morph_target(MeshIndex(drawn[at]), slot),
-                        times,
-                        output[0],
-                        how,
-                        morphs,
-                        slot,
+        var parts = 3 if how == CUBIC_SPLINE else 1
+        var keys = len(times) * parts
+        if len(output[0]) % keys != 0:
+            raise Error(
+                "glTF: a weights output must hold the same number of weights"
+                " for every key"
+            )
+        var stride = len(output[0]) // keys
+        # Every mesh, plain or skinned, at the node and at every node below
+        # it that has morph targets, as three.js's `GLTFLoader` traverses
+        # the node for `morphTargetInfluences`. Each takes as many weights
+        # as it has targets, and as the sampler has.
+        var below: List[Int] = [node]
+        var at = 0
+        while at < len(below):
+            var children = self.document.get(
+                self.entry("nodes", below[at]), "children"
+            )
+            at += 1
+            if children == NO_NODE:
+                continue
+            for slot in range(self.document.length(children)):
+                below.append(
+                    self.document.integer(self.document.at(children, slot))
+                )
+        for each in range(len(below)):  # pragma: no branch
+            var reached = below[each]
+            var mesh = self.integer(self.entry("nodes", reached), "mesh", -1)
+            if mesh < 0:
+                continue
+            var morphs = min(self.morph_counts[mesh], stride)
+            var drawn = List[TrackTarget]()
+            for slot in range(len(self.node_meshes[reached])):
+                drawn.append(
+                    morph_target(MeshIndex(self.node_meshes[reached][slot]), 0)
+                )
+            for slot in range(len(self.node_skins[reached])):
+                drawn.append(
+                    skinned_morph_target(
+                        SkinnedMeshIndex(self.node_skins[reached][slot]), 0
                     )
                 )
+            # A node with a mesh draws at least one primitive of it.
+            for slot in range(len(drawn)):  # pragma: no branch
+                for target in range(morphs):
+                    tracks.append(
+                        _track(
+                            TrackTarget(
+                                drawn[slot].kind, drawn[slot].index, target
+                            ),
+                            times,
+                            output[0],
+                            how,
+                            stride,
+                            target,
+                        )
+                    )
 
 
 def _path_kind(path: String) raises -> TrackKind:
@@ -2477,7 +2524,8 @@ def _track(
     var runs = List[List[Float32]]()
     for part in range(parts):  # pragma: no branch
         var run = List[Float32]()
-        for key in range(len(times)):
+        # A sampler has at least one key; `channel_tracks` refuses none.
+        for key in range(len(times)):  # pragma: no branch
             var at = (key * parts + part) * stride + lane
             for offset in range(width):  # pragma: no branch
                 run.append(output[at + offset])

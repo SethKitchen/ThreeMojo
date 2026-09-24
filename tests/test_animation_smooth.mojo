@@ -131,7 +131,7 @@ def test_every_interpolation_is_valid_and_no_other() raises:
     assert_true(LINEAR.is_valid())
     assert_true(SMOOTH.is_valid())
     assert_true(CUBIC_SPLINE.is_valid())
-    assert_false(Interpolation(4).is_valid())
+    assert_false(Interpolation(5).is_valid())
     assert_false(Interpolation(-1).is_valid())
 
 
@@ -283,7 +283,7 @@ def test_a_flag_track_cannot_be_smooth() raises:
 def test_an_interpolation_that_is_not_named_is_refused() raises:
     with assert_raises(contains="CUBIC_SPLINE"):
         _ = KeyframeTrack(
-            NodeId(0), POSITION, seconds([0]), [0, 0, 0], Interpolation(4)
+            NodeId(0), POSITION, seconds([0]), [0, 0, 0], Interpolation(5)
         )
 
 

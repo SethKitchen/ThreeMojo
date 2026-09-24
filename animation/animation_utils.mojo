@@ -6,6 +6,12 @@
 """Cutting a clip down and making it additive, from three.js
 `src/animation/AnimationUtils.js`: `subclip` and `makeClipAdditive`.
 
+`getKeyframeOrder` and `sortedArray` are in `animation.animation_clip`,
+beside the morph target sequences that use them. `convertArray`,
+`isTypedArray` and `flattenJSON` are not ported: a track holds a
+`List[Float32]` and nothing else, so there is no other array to convert
+from, and three.js's `keys` form of a track is not read.
+
 ## subclip
 
 A file often holds every move a model makes in one long clip, and a frame

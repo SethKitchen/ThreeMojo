@@ -1,10 +1,10 @@
 # Animation
 
-`animation/keyframe_track.mojo`, `animation/animation_clip.mojo`, `animation/animation_mixer.mojo`, `animation/animation_object_group.mojo` and `animation/animation_utils.mojo`. A track gives one property a value at a list of times. The property is on a node, a mesh, a material or a light. A clip plays tracks together. A mixer plays clips and writes the result into a scene and its assets.
+`animation/keyframe_track.mojo`, `animation/animation_clip.mojo`, `animation/animation_mixer.mojo`, `animation/animation_object_group.mojo`, `animation/animation_utils.mojo` and `animation/animation_json.mojo`. A track gives one property a value at a list of times. The property is on a node, a mesh, a material, a light or a camera. A clip plays tracks together. A mixer plays clips and writes the result into a scene, its assets and its cameras.
 
 ![A mixer slides and turns a cube from keyframes](out/keyframes.png)
 
-three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`, `ColorKeyframeTrack`, `BooleanKeyframeTrack`, `PropertyBinding`, `PropertyMixer`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, `AnimationObjectGroup`, `AnimationUtils.subclip`, `AnimationUtils.makeClipAdditive`, `AdditiveAnimationBlendMode`, and the mixer's `loop` and `finished` events. The smooth and cubic spline modes port `CubicInterpolant` and the glTF loader's `GLTFCubicSplineInterpolant`.
+three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`, `ColorKeyframeTrack`, `BooleanKeyframeTrack`, `StringKeyframeTrack`, `PropertyBinding`, `PropertyMixer`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, `AnimationObjectGroup`, `AnimationUtils.subclip`, `AnimationUtils.makeClipAdditive`, `AnimationUtils.getKeyframeOrder`, `AnimationUtils.sortedArray` and `AdditiveAnimationBlendMode`. The mixer's `loop` and `finished` events are ported too. The smooth, cubic spline and Bezier modes port `CubicInterpolant`, the glTF loader's `GLTFCubicSplineInterpolant` and `BezierInterpolant` from three.js r186. `AnimationClip.parse`, `AnimationClip.toJSON` and `PropertyBinding.parseTrackName` are in `animation_json.mojo`.
 
 ## KeyframeTrack
 
@@ -30,23 +30,44 @@ var slide = KeyframeTrack(
 | `SCALE` | 3 | How big it is. |
 | `QUATERNION` | 4 | Which way it is turned. |
 | `VISIBLE` | 1, zero or one | Whether the node is drawn. |
+| `NODE_NAME` | A string | The node's name. |
 | `MORPH_INFLUENCE` | 1 | How much of one morph target a mesh wears. |
+| `SKINNED_MORPH_INFLUENCE` | 1 | How much of one morph target a skinned mesh wears. |
 | `MATERIAL_COLOR`, `MATERIAL_EMISSIVE`, `MATERIAL_SPECULAR` | 3 | A material's colors, as linear channels. |
 | `MATERIAL_OPACITY` and the other `MATERIAL_` numbers | 1 | One number field of a material. |
+| `MATERIAL_TRANSPARENT`, `MATERIAL_WIREFRAME` | 1, zero or one | A flag of a material. |
 | `LIGHT_COLOR` | 3 | A light's color, as linear channels. |
 | `LIGHT_INTENSITY` | 1 | How bright a light is. |
+| `LIGHT_DISTANCE`, `LIGHT_ANGLE`, `LIGHT_PENUMBRA` | 1 | A light's range in meters, cone in radians, and soft rim. |
+| `CAMERA_FOV` | 1 | A perspective camera's field of view, in degrees. |
+| `CAMERA_ZOOM`, `CAMERA_NEAR`, `CAMERA_FAR` | 1 | A camera's zoom, and its planes in meters. |
 
-The material numbers are `OPACITY`, `EMISSIVE_INTENSITY`, `ROUGHNESS`, `METALNESS`, `SHININESS`, `ALPHA_TEST`, `REFLECTIVITY`, `ENV_MAP_INTENSITY`, `CLEARCOAT`, `CLEARCOAT_ROUGHNESS`, `SPECULAR_INTENSITY` and `IOR`, each with the `MATERIAL_` prefix.
+The material numbers are `OPACITY`, `EMISSIVE_INTENSITY`, `ROUGHNESS`, `METALNESS`, `SHININESS`, `ALPHA_TEST`, `REFLECTIVITY`, `ENV_MAP_INTENSITY`, `CLEARCOAT`, `CLEARCOAT_ROUGHNESS`, `SPECULAR_INTENSITY` and `IOR`, each with the `MATERIAL_` prefix. The units are three.js's: a field of view in degrees and a spot light's angle in radians.
 
-This port has no `StringKeyframeTrack`. Nothing in the port has a string property for it to drive.
+### Flags and strings
+
+A flag or a string track is discrete, as three.js's `BooleanKeyframeTrack` and `StringKeyframeTrack` are. `STEP` is the only interpolation it has. A string track has its own constructor:
+
+```mojo
+from animation.keyframe_track import NODE_NAME, node_target
+
+var rename = KeyframeTrack(
+    node_target(NodeId(0), NODE_NAME), times, ["idle", "busy"]
+)
+```
+
+The track keeps each string once, in `strings`. The value of a key is the place of its string there. `sample_string(at)` returns the string, and `key_strings()` returns the string of each key.
 
 | Member | Meaning |
 |---|---|
 | `key_count() -> Int` | How many keys the track holds. |
+| `value_size() -> Int` | How many numbers one key holds, three.js's `getValueSize`. |
 | `duration() -> Duration` | When the last key is. |
 | `sample(at, start, end) -> List[Float32]` | The value at a time, as numbers. `start` and `end` are the [ending modes](#ending-modes) of a `SMOOTH` track. |
 | `sample_vector3(at, start, end) -> Vector3` | The value of a `POSITION` or `SCALE` track. |
 | `sample_quaternion(at) -> Quaternion` | The value of a `QUATERNION` track. |
+| `sample_string(at) -> String` | The value of a string track. |
+| `shift(offset)`, `scale(factor)`, `trim(start, end)`, `optimize()`, `validate() -> Bool` | See [Editing a track](#editing-a-track). |
 
 Before the first key the value is the first key's. After the last it is the last key's. three.js's interpolants do the same at their ends.
 
@@ -74,10 +95,13 @@ var dim = KeyframeTrack(
 
 | Function | Id it takes | Kinds |
 |---|---|---|
-| `node_target(node, kind)` | `NodeId` | `POSITION`, `SCALE`, `QUATERNION`, `VISIBLE` |
+| `node_target(node, kind)` | `NodeId` | `POSITION`, `SCALE`, `QUATERNION`, `VISIBLE`, `NODE_NAME` |
 | `morph_target(mesh, target)` | `MeshIndex`, into `scene.meshes` | `MORPH_INFLUENCE`, target 0 to 7 |
+| `skinned_morph_target(mesh, target)` | `SkinnedMeshIndex`, into `scene.skinned_meshes` | `SKINNED_MORPH_INFLUENCE`, target 0 to 7 |
 | `material_target(material, kind)` | `MaterialId`, into `assets.materials` | The `MATERIAL_` kinds |
-| `light_target(light, kind)` | `LightIndex`, into `scene.lights` | `LIGHT_COLOR`, `LIGHT_INTENSITY` |
+| `light_target(light, kind)` | `LightIndex`, into `scene.lights` | The `LIGHT_` kinds |
+| `perspective_camera_target(camera, kind)` | `PerspectiveCameraIndex`, into `cameras.perspective` | The `CAMERA_` kinds |
+| `orthographic_camera_target(camera, kind)` | `OrthographicCameraIndex`, into `cameras.orthographic` | `CAMERA_ZOOM`, `CAMERA_NEAR`, `CAMERA_FAR` |
 
 `KeyframeTrack(node, kind, times, values)` is the short form of a node track.
 
@@ -89,7 +113,7 @@ A color key holds three linear channels from 0 to 1, as three.js's `Color` holds
 
 ### How two keys are mixed
 
-There are four interpolations.
+There are five interpolations.
 
 | Interpolation | three.js | Between two keys |
 |---|---|---|
@@ -97,8 +121,9 @@ There are four interpolations.
 | `STEP` | `InterpolateDiscrete` | Holds the first key's value. |
 | `SMOOTH` | `InterpolateSmooth` | A cubic curve through the keys. See [Smooth tracks](#smooth-tracks). |
 | `CUBIC_SPLINE` | glTF's `CUBICSPLINE` | A cubic curve from values and tangents. See [Cubic spline tracks](#cubic-spline-tracks). |
+| `BEZIER` | `InterpolateBezier` | A cubic Bezier curve from values and control points. See [Bezier tracks](#bezier-tracks). |
 
-A `VISIBLE` track is always `STEP`, as three.js's `BooleanKeyframeTrack` is. Leave `interpolation` out, or give `STEP`. A key must be 0 or 1.
+A flag or a string track is always `STEP`, as three.js's `BooleanKeyframeTrack` and `StringKeyframeTrack` are. Leave `interpolation` out, or give `STEP`. A flag key must be 0 or 1.
 
 Two rotations are mixed by `slerp`, not one number at a time. A rotation is not four numbers to average. Averaging them makes a turn that speeds up in the middle. It also makes a quaternion that is no longer a rotation. three.js keeps `QuaternionLinearInterpolant` apart for the same reason.
 
@@ -163,6 +188,43 @@ Every kind except `VISIBLE` can be `CUBIC_SPLINE`. A `QUATERNION` track is run o
 
 `subclip` keeps the tangents of each key that it keeps. `make_clip_additive` changes the values and keeps the tangents, as three.js does.
 
+### Bezier tracks
+
+A `BEZIER` track is three.js's `InterpolateBezier`, the key of COLLADA and Maya. Each number of each key has two control points. A control point is two numbers: a time in seconds and a value. three.js keeps them in the track's `settings.inTangents` and `settings.outTangents`. Here they are `in_tangents` and `out_tangents`, laid out the same way.
+
+```mojo
+from animation.keyframe_track import BEZIER
+
+var ease = KeyframeTrack(
+    material_target(MaterialId(0), MATERIAL_OPACITY),
+    times,
+    in_tangents=[0, 0, 1.5, 1],
+    values=[0, 1],
+    out_tangents=[0.5, 0, 2, 1],
+    interpolation=BEZIER,
+)
+```
+
+Between two keys, the curve starts at the first key and ends at the second key. The out control point of the first key and the in control point of the second key bend it. The mixer finds the curve parameter at the time by eight steps of Newton's method, as three.js does. Then it reads the value there. The arithmetic is in double precision, as in three.js.
+
+Every kind except a flag or a string can be `BEZIER`. A `QUATERNION` track is run one number at a time and then made of unit length.
+
+### Editing a track
+
+These are three.js's methods. They change the track in place.
+
+| Member | three.js | What it does |
+|---|---|---|
+| `shift(offset)` | `shift` | Moves every key by `offset`. |
+| `scale(factor)` | `scale` | Multiplies every time by `factor`. |
+| `trim(start, end)` | `trim` | Removes the keys before `start` and after `end`. It keeps at least one key. |
+| `optimize()` | `optimize` | Removes each key that holds the same value as the keys on both sides of it. |
+| `validate() -> Bool` | `validate` | True if the constructors would build the track. |
+
+`optimize` keeps the first and the last key, and every key of a `SMOOTH` track. A `CUBIC_SPLINE` or `BEZIER` key stays unless its tangents also match.
+
+A Bezier track's control points move with `shift`, and `trim` and `optimize` keep the control points of the keys they keep. `scale` multiplies the times of the control points, as three.js does. It divides the tangents of a `CUBIC_SPLINE` track by the factor, because a tangent is a value per second.
+
 ## AnimationClip
 
 ```mojo
@@ -180,7 +242,22 @@ Nothing in a clip says which node it drives. Every track says that for itself, s
 | Member | Meaning |
 |---|---|
 | `track_count() -> Int` | How many tracks the clip plays. |
-| `duration() -> Duration` | How long the clip runs. |
+| `duration() -> Duration` | How long the clip runs, three.js's `duration`. |
+| `reset_duration()` | Sets the length to the longest track's. |
+| `trim()` | Trims every track to the clip's length. |
+| `optimize()` | Optimizes every track. |
+| `validate() -> Bool` | True if every track is valid. |
+
+Give `duration` to the constructor to set a length other than the longest track's. `trim` then cuts the tracks to it.
+
+| Function | three.js | What it returns |
+|---|---|---|
+| `find_by_name(clips, name) -> Optional[Int]` | `AnimationClip.findByName` | The place of the first clip with that name, or None. |
+| `create_from_morph_target_sequence(name, targets, fps, no_loop)` | `CreateFromMorphTargetSequence` | A clip that shows each morph target in turn. |
+| `create_clips_from_morph_target_sequences(names, targets, fps, no_loop)` | `CreateClipsFromMorphTargetSequences` | One clip per animation that the names hold. |
+| `get_keyframe_order(times)`, `sorted_array(values, stride, order)` | `AnimationUtils.getKeyframeOrder`, `sortedArray` | The order that sorts keys by time, and values put in that order. |
+
+A morph target sequence takes the targets, made with `morph_target` or `skinned_morph_target`. three.js takes the targets' names. The geometry here has no morph target names, so `create_clips_from_morph_target_sequences` takes a name for each target. Names such as `Walk_001` and `Walk_002` go into one clip, `Walk_`, as in three.js.
 
 ## AnimationAction
 
@@ -189,6 +266,10 @@ An action is one clip being played.
 | Member | Meaning |
 |---|---|
 | `play()`, `pause()`, `stop()` | Start, hold where it is, or stop and rewind. |
+| `reset()` | Rewind, and forget the loops, the fade, the warp and the start time. |
+| `set_loop(loop, repetitions)` | Set the loop mode, and how many times it repeats. |
+| `set_duration(duration)` | Set the time scale so that one run through the clip lasts `duration`. |
+| `sync_with(other)` | Take the phase and the time scale of another action. |
 | `is_active() -> Bool` | True if it contributes to the pose. |
 | `is_playing() -> Bool` | True if its clock is running: active and not paused. |
 | `clamp_when_finished` | True if a `ONCE` action holds its last frame. |
@@ -211,6 +292,12 @@ An action is one clip being played.
 
 `ONCE` stops at the end and stays there. `REPEAT` starts over. `PING_PONG` runs back the way it came. A negative `time_scale` runs a clip backward, and each mode handles that going the other way.
 
+### Repetitions
+
+`set_loop(REPEAT, 3)` runs the clip three times and then finishes, as three.js's `setLoop` does. A `PING_PONG` leg is one repetition. None, the default, repeats without end, as three.js's `Infinity` does. A finished action holds its last frame if `clamp_when_finished` is True. If not, it lets go of the node. It records a `FINISHED` event.
+
+When the clip runs backward from its start, the first pass through zero is not a repetition. three.js counts it the same way.
+
 An action carries a *phase*, not the time it is read at. For `PING_PONG` the phase runs to twice the clip's length, and the read time folds out of it. The return leg is therefore a different phase from the outward one. Storing the folded time loses which leg it is on, and the action bounces near the end instead of coming back.
 
 Three states are kept apart. `active` says the action contributes to the pose; `paused` says its clock has stopped. A paused action still contributes, which is what holding a pose has to mean. `clamp_when_finished` says whether a `ONCE` action holds its last frame or lets the node settle back; it is False by default, as in three.js.
@@ -229,12 +316,20 @@ mixer.update(scene, clock.delta())
 
 | Member | Meaning |
 |---|---|
-| `add(action) -> Int` | Add an action and return its index. |
+| `AnimationMixer(root)` | A mixer for a root node, or for the whole scene. |
+| `add(action, root) -> Int` | Add an action, filed under a root node, and return its index. |
 | `action(index)` | The action, for playing or reweighting. |
 | `action_count() -> Int` | How many actions the mixer holds. |
 | `time() -> Duration` | How much time the mixer has been given. |
+| `time_scale` | How fast the mixer's clock runs, three.js's `timeScale`. |
+| `get_root() -> NodeId` | The root node, three.js's `getRoot`. |
+| `existing_action(clip_name, root) -> Optional[Int]` | The action on a clip of that name, filed under that root. |
+| `stop_all_action()` | Stop every active action. |
+| `sync_with(index, with_index)` | Put one action in step with another. |
+| `uncache_action(index)`, `uncache_clip(name)`, `uncache_root(root)` | Forget actions. See [The cache](#the-cache). |
 | `update(scene, delta)` | Move every playing action on, and set the nodes, meshes and lights. |
 | `update(scene, assets, delta)` | The same, and set the materials too. |
+| `update(scene, assets, cameras, delta)` | The same, and set the cameras too. |
 | `cross_fade_from(index, from_index, duration, warp)` | Fade one action in and another out. |
 | `cross_fade_to(index, to_index, duration, warp)` | Fade one action out and another in. |
 | `event_count() -> Int` | How many events the last update recorded. |
@@ -274,9 +369,27 @@ The mixer mixes each type of value the way three.js's `PropertyMixer` does.
 
 The flag rule is three.js's `_select`. With two actions, the heavier action wins. With three or more, the order of the actions can decide a near tie, as it does in three.js.
 
-### Materials need the assets
+### Materials need the assets, and cameras need the cameras
 
 A material is in the assets, not in the scene. Use `update(scene, assets, delta)` for a clip that drives a material. `update(scene, delta)` raises on a material track.
+
+A camera is not a scene node here. It is in a `CameraList` beside the scene, which the loaders return. Use `update(scene, assets, cameras, delta)` for a clip that drives a camera. The other updates raise on a camera track. three.js tells you to call `updateProjectionMatrix` after a track moves a camera. Here a camera works out its projection when you ask for it, so the projection follows the track.
+
+A `PerspectiveCamera` has a `zoom`, as in three.js. It divides the height of the view.
+
+### The mixer's clock
+
+`time_scale` multiplies every delta before any action sees it, as three.js's mixer `timeScale` does. A mixer at 0.5 plays every action, fade and warp at half speed.
+
+### The root
+
+A mixer is made for a root node, and `add` can file an action under another root. In three.js, the root is where a track's name is looked up. Here a track names its target by index, so the root does not change what a track drives. It is the key that `get_root`, `existing_action` and `uncache_root` use.
+
+### The cache
+
+`uncache_action`, `uncache_clip` and `uncache_root` forget actions, as three.js's methods of those names do. A forgotten action stops. Its tracks are released. It keeps its index, so the index of no other action changes. `action` then raises on it.
+
+After an uncache, the mixer drops each binding that nothing drove in the last update. Such a binding holds nothing that the mixer needs. The mixer reads a property again when something starts to drive it.
 
 ### Values a property cannot hold
 
@@ -395,6 +508,30 @@ A cross-fade is a mixer call, not an action call. It changes two actions, and on
 
 `start_at(time)` holds the action's clock until the mixer's clock reaches `time`. The action contributes its pose while it waits. The update that passes `time` runs only the part after it.
 
+## Clips in files
+
+### glTF
+
+The glTF loader makes one clip per animation. A `weights` channel drives the morph targets of every mesh at its node and at every node below it, plain or skinned. three.js's `GLTFLoader` does the same traversal. Each mesh takes as many weights as it has targets and the sampler holds.
+
+### Scene JSON
+
+`object_to_json(scene, assets, cameras, animations)` writes a list of clips as the scene's `animations`, as three.js's `Object3D.toJSON` does. `read_object_json` reads the `animations` of every object, as three.js's `ObjectLoader.parseAnimations` does. It returns them in `model.animations`, and the node of the object that holds each clip in `model.animation_roots`. The node is `NO_PARENT` for the scene.
+
+three.js names each track's target with a path, such as `Cube.position` or `.material.opacity`. The writer names each target by the uuid of the object that it writes, and the property:
+
+| Target | Path |
+|---|---|
+| A node | `<uuid>.position` and the other node properties |
+| A mesh's or a skinned mesh's morph target | `<uuid>.morphTargetInfluences[2]` |
+| A material | `<uuid>.material.opacity`, on the first mesh that draws with it |
+| A light | `<uuid>.intensity`, `.color`, `.distance`, `.angle`, `.penumbra` |
+| A camera | `<uuid>.fov`, `.zoom`, `.near`, `.far` |
+
+The reader finds the node of a path as three.js's `PropertyBinding.findNode` does. It tries the object that holds the clip, then a bone of its skeleton by name, then each object below it, by name or uuid. It reads `.bones[name]` on a skinned mesh, and `.morphTargetInfluences` with no index as one track per morph target. The reader leaves out a track that names no object, or a property that the object does not have. It also leaves out a clip with no tracks left. three.js binds such a track to nothing.
+
+`animation_json.mojo` holds the parts: `parse_track_name` is three.js's `parseTrackName`, `write_clip` is `AnimationClip.toJSON`, and `read_clip` is `AnimationClip.parse`.
+
 ## Events
 
 The mixer records what happens to each action during an update. Read the events with `drain_events` after each update.
@@ -448,7 +585,16 @@ three.js dispatches `loop` and `finished` to listener functions. A Mojo closure 
 | A value that its property cannot hold. | An error at `update`. |
 | A target function given a kind of another thing. | An error. |
 | A morph target below 0 or above 7. | An error. |
-| A `VISIBLE` track that is not `STEP`, or a key of one that is not 0 or 1. | An error at construction. |
+| A flag or a string track that is not `STEP`, or a flag key that is not 0 or 1. | An error at construction. |
+| A `BEZIER` track without control points, or with a number of them that is not two per value. | An error at construction. |
+| A `shift` that moves a key before zero, or a `scale` that is not above zero. | An error. |
+| A camera track given to an update without the cameras. | An error. |
+| A camera number that the camera cannot hold: a field of view outside 0 to 180 degrees, a zoom of 0 or less, planes that cross. | An error at `update`. |
+| A light distance, angle or penumbra that `Light.validate` refuses. | An error at `update`. |
+| Repetitions below zero, or a `set_duration` of zero. | An error. |
+| An uncached action. | An error. |
+| A clip in JSON with a cubic spline track, a track in the older `keys` form, or a track whose `type` is not the type of its property. | An error. |
+| A track in JSON on the scene itself, or on a property that this port does not drive. | An error. |
 | A blend mode that is not named. | An error. |
 | A frame rate that is not above zero, or a frame below zero. | An error. |
 | A subclip range that ends before it starts, or that keeps no clip. | An error. |
@@ -457,24 +603,33 @@ A clip of no length is refused where clips are built. That is what lets an actio
 
 ## Not ported
 
-- `StringKeyframeTrack`: nothing in the port has a string property.
-- `InterpolateBezier`, three.js's cubic Bezier keys with 2D control points.
-- Tracks on other properties. A track drives only the properties in the table of kinds.
+- `AnimationMixer.clipAction`: make the action and give it to `add`.
+- `AnimationMixer.setTime`.
 - `AnimationObjectGroup.uncache` and its statistics. An action keeps no binding per member to release.
-- `repetitions`: a `REPEAT` or `PING_PONG` action loops without end. So a `FINISHED` event comes only from `ONCE`.
-- The mixer's own `timeScale`.
-- `setDuration` and `syncWith`.
+- `AnimationUtils.convertArray`, `flattenJSON` and `isTypedArray`. A track holds `List[Float32]` and nothing else, so there is no array type to convert.
+- `AnimationClip.parseAnimation`, which three.js deprecates, and a clip's `userData`.
+- Tracks on other properties. A track drives only the properties in the table of kinds. A path to one number of a vector, such as `.position[x]`, and the `materials` and `map` objects of a path, are refused.
+- A morph target named by its name in a path. The geometry here has no morph target names, so a path names a morph target by its index.
 
 ## Where this port differs from three.js
 
 - A `SMOOTH` rotation track is an error. three.js prints a warning and uses `LINEAR`.
 - A `SMOOTH` track reads the action's endings on every frame. three.js keeps the weights of a pair of keys until the time moves to a different pair. On a track with two keys it keeps the endings of the first frame, so a `REPEAT` clip never wraps.
 - `make_clip_additive` with a `CUBIC_SPLINE` reference read between two keys takes off the value of the curve. three.js reads the wrong numbers from its result there, and every key of the target becomes not a number.
-
 - `make_clip_additive` returns a new clip. three.js changes the clip that you give it.
 - A frame rate of zero or less is an error. three.js uses 30 frames a second in its place.
 - A subclip must last longer than no time. three.js returns a clip of no length, which nothing can play.
 - An action keeps its own copy of a group. three.js shares the group between actions.
+- A finished `PING_PONG` action reads the end its last leg ran to. three.js reads the other end in the update that finishes it, and this end from the next update on.
+- A `BEZIER` track without control points is an error. three.js uses `LINEAR`. A Bezier rotation is made of unit length, which three.js does not do.
+- `shift` moves a Bezier track's control points, and `trim` and `optimize` keep the control points of the keys that they keep. three.js leaves them where they were, so they no longer match the keys.
+- `scale` divides a cubic spline track's tangents by the factor. three.js leaves them, which makes the curve bulge more between keys that move apart.
+- `validate` checks what the constructors check. three.js checks less: it accepts two keys at one time, and a key before zero.
+- `reset` does not make an action active. `play` does that. In three.js, `reset` sets `enabled` to true.
+- `sync_with` copies the phase, which for `PING_PONG` also says which leg the action is on. three.js copies the time, and each action keeps its own leg.
+- An uncached action keeps its index. After an uncache, the mixer drops every binding that nothing drove in the last update. three.js drops the bindings of the actions that it forgets.
+- A morph target sequence of one or two targets makes keys at one time in three.js. Here only the later key is kept. It reads the same.
+- A clip in JSON with a track whose `type` is not the type of its property is an error. three.js builds a track of that type and binds it anyway.
 
 ## See also
 

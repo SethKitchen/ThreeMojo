@@ -198,4 +198,5 @@ def _eye(
     eye.place(position, position + forward)
     eye.up = up
     eye.layers = camera.layers
+    eye.zoom = camera.zoom
     return eye^

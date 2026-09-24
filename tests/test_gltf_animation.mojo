@@ -16,6 +16,7 @@ from animation.keyframe_track import (
     CUBIC_SPLINE,
     LINEAR,
     MORPH_INFLUENCE,
+    SKINNED_MORPH_INFLUENCE,
     POSITION as TRANSLATION,
     QUATERNION,
     SCALE,
@@ -1043,6 +1044,14 @@ def test_a_malformed_animation_is_refused() raises:
         ),
         "must rise",
     )
+    bin = Bin()
+    refuses(
+        animated(
+            bin,
+            sampler + 'scale"}}],"samplers":[{"input":14,"output":13}]}]',
+        ),
+        "at least one key",
+    )
     # A weights channel: its output, and one on a node whose mesh has no
     # targets, which makes no track.
     var weights = '[{"channels":[{"sampler":0,"target":{"node":'
@@ -1060,10 +1069,26 @@ def test_a_malformed_animation_is_refused() raises:
         animated(
             bin,
             weights
+            + '0,"path":"weights"}}],"samplers":[{"input":3,"output":9}]}]',
+        ),
+        "same number of weights for every key",
+    )
+    # One weight a key for a mesh of two targets drives the first, as
+    # three.js's binding copies what the sampler has.
+    var one_scene = Scene()
+    var one_assets = Assets()
+    bin = Bin()
+    var single = loaded(
+        animated(
+            bin,
+            weights
             + '0,"path":"weights"}}],"samplers":[{"input":3,"output":3}]}]',
         ),
-        "one value per key",
+        one_scene,
+        one_assets,
     )
+    assert_equal(single.animations[0].track_count(), 1)
+    assert_equal(single.animations[0].tracks[0].target.slot, 0)
     var scene = Scene()
     var assets = Assets()
     bin = Bin()
@@ -1087,6 +1112,51 @@ def test_a_malformed_animation_is_refused() raises:
         ),
         "longer than no time",
     )
+
+
+def test_a_weights_channel_drives_every_mesh_below_its_node() raises:
+    """A weights channel on a node with no mesh drives the skinned mesh
+    and the plain mesh below it, each as many targets as it has and the
+    sampler holds, as three.js's `GLTFLoader` traverses the node."""
+    var bin = Bin()
+    _ = bin.floats(triangle(), "VEC3")
+    _ = bin.ints([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], UBYTE, "VEC4")
+    _ = bin.floats([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], "VEC4")
+    _ = bin.floats([0, 0, 1, 0, 0, 1, 0, 0, 1], "VEC3")
+    _ = bin.floats([0, 2], "SCALAR")
+    _ = bin.floats([0, 1, 1, 0], "SCALAR")
+    var text = bin.document(
+        ',"meshes":[{"primitives":['
+        + '{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2},"targets":[{"POSITION":3}]},'
+        + '{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2},"targets":[{"POSITION":3}]}]},'
+        + '{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":3},{"POSITION":3}]}]},'
+        + '{"primitives":[{"attributes":{"POSITION":0}}]}]'
+        + ',"skins":[{"joints":[2]}]'
+        + ',"nodes":[{"name":"Top","children":[1,3]},{"mesh":0,"skin":0},'
+        + '{"name":"Bone"},{"name":"Group","children":[4,5]},{"mesh":1},{"mesh":2,"children":[]}]'
+        + ',"scenes":[{"nodes":[0,2]}]'
+        + ',"animations":[{"samplers":[{"input":4,"output":5}],'
+        + '"channels":[{"sampler":0,"target":{"node":0,"path":"weights"}}]}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(text, scene, assets)
+    ref clip = model.animations[0]
+    assert_equal(clip.track_count(), 4)
+    assert_equal(clip.tracks[0].target.kind, SKINNED_MORPH_INFLUENCE)
+    assert_equal(clip.tracks[0].target.index, 0)
+    assert_equal(clip.tracks[1].target.index, 1)
+    assert_equal(clip.tracks[2].target.kind, MORPH_INFLUENCE)
+    assert_equal(clip.tracks[3].target.slot, 1)
+    assert_equal(clip.tracks[3].values[0], 1)
+    var mixer = AnimationMixer()
+    var action = mixer.add(AnimationAction(clip.copy()))
+    mixer.action(action).play()
+    mixer.update(scene, assets, Duration(1, SECOND))
+    assert_almost_equal(
+        scene.skinned_meshes[1].morph_influence(0), 0.5, atol=TOLERANCE
+    )
+    assert_almost_equal(scene.meshes[0].morph_influence(1), 0.5, atol=TOLERANCE)
 
 
 def test_a_document_without_a_scene_places_no_animation() raises:
