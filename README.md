@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 165 features are ported and 15 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 166 features are ported and 14 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -130,10 +130,9 @@ The port is not at parity with three.js yet. 165 features are ported and 15 are 
 
 ### Materials
 
-- [ ] Per-map texture transforms and geometric roughness [#161](https://github.com/SethKitchen/ThreeMojo/issues/161)
 
 <details>
-<summary>Ported: 29</summary>
+<summary>Ported: 30</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -163,6 +162,7 @@ The port is not at parity with three.js yet. 165 features are ported and 15 are 
 - [x] [Node materials and ShaderMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials): expression graphs compiled to bytecode, run by both rasterizers. [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
 - [x] [Node library and GLSL source](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): the rest of the TSL library, control flow, varyings, derivatives, noise, and a GLSL subset for ShaderMaterial. [#162](https://github.com/SethKitchen/ThreeMojo/issues/162)
 - [x] [Specular and clearcoat maps](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-and-clearcoat-maps): specular intensity and color, clear coat, roughness and normal maps on both rasterizers, in glTF and in scene JSON. [#159](https://github.com/SethKitchen/ThreeMojo/issues/159)
+- [x] [Per-map texture transforms](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): each map samples at its own transform and channel, and physical materials add three.js's geometric roughness. [#161](https://github.com/SethKitchen/ThreeMojo/issues/161)
 - [x] [MeshDistanceMaterial, depth packings and Material.fog](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#meshdistancematerial): distance from a point, the four depth packings, and a per-material fog switch [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 
 </details>
