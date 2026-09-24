@@ -80,6 +80,16 @@ def test_the_defaults_are_three_js_s() raises:
     var geometry = text_geometry("A8", font, Length(2, METER))
     assert_equal(geometry.vertex_count(), 324)
     assert_box(geometry, 0, 0, 0, 2.04, 1.6, 50)
+    # Two groups a shape, caps then walls, as three.js's `ExtrudeGeometry`.
+    ref groups = geometry.groups
+    # Three shapes: the A, and the 8 as two.
+    assert_equal(len(groups), 6)
+    var start = 0
+    for index in range(6):
+        assert_equal(groups[index].start, start)
+        assert_equal(groups[index].material_index.value, index % 2)
+        start += groups[index].count
+    assert_equal(start, 324)
     var round = text_geometry(
         "O", font, Length(1, METER), Length(0.1, METER), curve_segments=3
     )

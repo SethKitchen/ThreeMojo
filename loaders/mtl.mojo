@@ -12,7 +12,9 @@ to a `.mtl` file it names by `mtllib`. `parse_mtl` reads one into an
 store, as three.js's `MTLLoader.MaterialCreator` builds a
 `MeshPhongMaterial`, and `read_mtl` reads a file first.
 `read_obj_with_materials` reads an OBJ file, every library it names, and
-gives each object its `MaterialId`.
+gives each object its `MaterialId`s, one for each of its materials.
+`obj_mesh` builds the mesh three.js builds from them: a material list for
+an object with several.
 
 **What is read.** A keyword is read in any case, as three.js lowercases
 it. Each key keeps the last value a material gives it, at the place it
@@ -66,10 +68,13 @@ found on. Text before the first `newmtl` is skipped, as three.js skips it.
 """
 
 from core.assets import Assets
+from core.geometry_store import GeometryId
+from core.object3d import NodeId
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
 from materials.material import Material, MaterialId, PHONG
 from math.vector2 import Vector2
+from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, texture_from
@@ -869,13 +874,12 @@ def read_mtl(path: String, mut assets: Assets) raises -> MtlLibrary:
 
 def set_materials(
     model: ObjModel, mut library: MtlLibrary, mut assets: Assets
-) raises -> List[MaterialId]:
-    """Return the material each object of an OBJ model draws with, three.js's
-    `OBJLoader.setMaterials`.
+) raises -> List[List[MaterialId]]:
+    """Return the materials each object of an OBJ model draws with,
+    three.js's `OBJLoader.setMaterials`.
 
-    An object whose `usemtl` name the library does not have, or that has
-    none, gets a default `PHONG` material, one per name; see
-    `MtlLibrary.create`.
+    A `usemtl` name the library does not have, or no name, gets a default
+    `PHONG` material, one per name; see `MtlLibrary.create`.
 
     Args:
         model: The OBJ model.
@@ -883,16 +887,45 @@ def set_materials(
         assets: Where a default material is added.
 
     Returns:
-        One id per object, in the model's order.
+        One list per object, in the model's order, with one id per entry
+        of the object's `materials`: group `i` of its geometry wears
+        entry `i`. See `obj_mesh`.
 
     Raises:
         Error: Never for a store that takes a default material; see
             `MtlLibrary.create`.
     """
-    var ids = List[MaterialId]()
+    var ids = List[List[MaterialId]]()
     for index in range(model.count()):
-        ids.append(library.create(model.objects[index].material, assets))
+        var own = List[MaterialId]()
+        ref names = model.objects[index].materials
+        for entry in range(len(names)):  # pragma: no branch
+            own.append(library.create(names[entry], assets))
+        ids.append(own^)
     return ids^
+
+
+def obj_mesh(
+    materials: List[MaterialId], geometry: GeometryId, node: NodeId
+) raises -> Mesh:
+    """Return the mesh three.js's `OBJLoader.parse` builds for an object:
+    one material, or a material list for an object with several.
+
+    Args:
+        materials: The object's materials, from `set_materials`.
+        geometry: Its geometry, in a store.
+        node: Where it is drawn.
+
+    Returns:
+        A mesh with one material when the list has one entry, and with
+        the list otherwise.
+
+    Raises:
+        Error: If the list is empty or an id is negative.
+    """
+    if len(materials) == 1:
+        return Mesh(geometry, materials[0], node)
+    return Mesh(geometry, materials, node)
 
 
 struct ObjWithMaterials(Movable):
@@ -901,21 +934,21 @@ struct ObjWithMaterials(Movable):
 
     var model: ObjModel
     var library: MtlLibrary
-    # One per object of `model`, in its order.
-    var materials: List[MaterialId]
+    # One list per object of `model`, in its order; see `set_materials`.
+    var materials: List[List[MaterialId]]
 
     def __init__(
         out self,
         var model: ObjModel,
         var library: MtlLibrary,
-        var materials: List[MaterialId],
+        var materials: List[List[MaterialId]],
     ):
         """Bundle a model with its materials.
 
         Args:
             model: The OBJ model.
             library: Its materials.
-            materials: One id per object.
+            materials: One list of ids per object.
         """
         self.model = model^
         self.library = library^
@@ -938,7 +971,8 @@ def read_obj_with_materials(
         assets: Where the materials and textures are added.
 
     Returns:
-        The model, the combined library, and one `MaterialId` per object.
+        The model, the combined library, and one list of `MaterialId`s
+        per object.
 
     Raises:
         Error: If the OBJ file or a library cannot be read, or for anything

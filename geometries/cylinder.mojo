@@ -30,10 +30,21 @@ A zero radius at one end makes that end a point. Its row of vertices all sit
 on the axis, one per column so that each carries its own normal, and the
 cells against it are triangles rather than quads: three.js skips the half of
 each cell that has no area, and so does this. That end gets no cap.
+
+The side and each cap are groups, three.js's `addGroup` in
+`generateTorso` and `generateCap`: the side wears material 0, the top cap
+1 and the bottom cap 2. So a mesh that wears a list of three materials
+dresses each part in its own.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+)
 from geometries.circle import FULL_TURN, check_sweep
 from std.math import cos, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -132,7 +143,8 @@ def cylinder(
         index buffer, wound counter-clockwise seen from outside. The side
         comes first, in rows from the top down, `radial_segments + 1`
         vertices to a row; then the top cap, then the bottom, each one
-        center vertex per segment and a rim.
+        center vertex per segment and a rim. A group per part: the side,
+        then each cap it has.
 
     Raises:
         Error: If either radius is negative or both are zero, the height is
@@ -208,6 +220,10 @@ def cylinder(
                 index.append(c)
                 index.append(d)
 
+    var runs = List[Int]()
+    var dressed = List[Int]()
+    runs.append(len(index))
+    dressed.append(0)
     if not open_ended:
         if top > 0:
             _append_cap(
@@ -222,6 +238,8 @@ def cylinder(
                 theta_length.value,
                 True,
             )
+            runs.append(len(index))
+            dressed.append(1)
         if bottom > 0:
             _append_cap(
                 data,
@@ -235,12 +253,22 @@ def cylinder(
                 theta_length.value,
                 False,
             )
+            runs.append(len(index))
+            dressed.append(2)
 
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    # One group per part, each from where the last one ended. There is a
+    # side, so this runs.
+    var begin = 0
+    for part in range(len(runs)):  # pragma: no branch
+        geometry.add_group(
+            begin, runs[part] - begin, MaterialIndex(dressed[part])
+        )
+        begin = runs[part]
     return geometry^
 
 

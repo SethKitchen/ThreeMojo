@@ -61,6 +61,7 @@ from std.math import cos, inf, isinf, max, pi, sin
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
+    MaterialId,
     LineWidth,
     PointSize,
     line_dashed_material,
@@ -2338,6 +2339,72 @@ def test_both_backends_draw_a_frame_in_its_one_order() raises:
             frame.segments,
             [Draw(DRAW_SEGMENTS, 0, 99)],
         )
+
+
+def test_both_backends_draw_each_group_in_its_own_material() raises:
+    # A lit box that wears six materials, one of them blended, turned so
+    # three faces show. `prepare_frame` reads the groups once, sorts the
+    # blended face after the opaque ones, and both backends walk that one
+    # order to the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends draw a multi-material mesh"):
+        return
+    var renderer = Renderer(40, 40)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.2, METER)))
+    var dressed = List[MaterialId]()
+    for face in range(6):
+        dressed.append(
+            assets.materials.add(
+                Material(
+                    Color(UInt8(40 + 40 * face), 120, UInt8(250 - 40 * face))
+                )
+            )
+        )
+    dressed[4] = assets.materials.add(
+        Material(
+            Color(255, 255, 0),
+            kind=BASIC,
+            side=DOUBLE_SIDE,
+            opacity=0.5,
+            transparent=True,
+        )
+    )
+    var scene = Scene()
+    var turned = Object3D()
+    turned.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var node = scene.add(turned^)
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(Mesh(box, dressed, node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 1.0, Length(0.5, METER), Length(12.0, METER)
+    )
+    camera.place(Vector3(0, 0.4, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    # A run per group that shows, not one for the whole mesh.
+    assert_true(len(frame.draws) > 1)
+    var device = GpuRenderer(40, 40)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        frame.segments,
+        frame.draws,
+    )
+    var gpu = device.read_back()
+    assert_true(
+        count_background(cpu, BACKGROUND) < 40 * 40, "the box drew nothing"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:

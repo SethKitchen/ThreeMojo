@@ -21,7 +21,10 @@ and nothing shared between them. It comes in two encodings, and
 The geometry comes out non-indexed, as three.js's does: three corners a
 face, each with the face's normal as its `normal`, since the format has
 no other. A file with several solids gives one geometry, and `StlModel`
-says where each solid's corners start, as three.js adds a group a solid.
+says where each solid's corners start. A text file's geometry also has
+one group a solid, and solid `i` wears material `i`, as three.js's
+`parseASCII` adds them. A binary file has one solid and no group, as in
+three.js.
 
 Color is the binary format's, in the convention three.js reads: a header
 that holds `COLOR=` and four bytes gives a default color and an alpha,
@@ -39,7 +42,13 @@ face or the line.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    NORMAL,
+    POSITION,
+    BufferGeometry,
+    MaterialIndex,
+)
 from render.srgb import srgb_to_linear
 from std.math import isfinite
 from std.memory import bitcast
@@ -519,6 +528,10 @@ def parse_stl_text(text: String) raises -> StlModel:
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    for index in range(len(solids)):  # pragma: no branch
+        geometry.add_group(
+            solids[index].start, solids[index].count, MaterialIndex(index)
+        )
     return StlModel(geometry^, solids^, Float32(1))
 
 

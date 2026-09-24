@@ -144,6 +144,8 @@ def test_a_binary_face_comes_out_as_three_corners_with_its_normal() raises:
     assert_equal(model.solids[0].name, String(""))
     assert_equal(model.solids[0].start, 0)
     assert_equal(model.solids[0].count, 3)
+    # three.js's `parseBinary` adds no group.
+    assert_equal(len(shape.groups), 0)
 
 
 def test_a_binary_file_can_have_no_faces() raises:
@@ -311,6 +313,12 @@ def test_several_solids_make_one_geometry_and_a_solid_each() raises:
     assert_equal(model.solids[2].name, String(""))
     assert_equal(model.solids[2].start, 9)
     assert_equal(model.solids[2].count, 0)
+    # A group a solid, as three.js's `parseASCII` adds them.
+    ref groups = model.geometry.groups
+    assert_equal(len(groups), 3)
+    assert_equal(groups[1].start, 3)
+    assert_equal(groups[1].count, 6)
+    assert_equal(groups[2].material_index.value, 2)
     assert_point(
         model.geometry.attribute_view(String(NORMAL)).vector3(4), 1, 0, 0
     )

@@ -108,6 +108,7 @@ A three.js group holds its children. Here a group is a scene node, and a mesh na
 | Function | Meaning |
 |---|---|
 | `create_meshes_from_instanced_mesh(scene, i)` | One mesh for each instance, under a copy of the instanced mesh's node. |
+| `create_meshes_from_multi_material_mesh(scene, assets, i)` | One mesh for each material of a mesh that wears a list, under a copy of its node. three.js: `createMeshesFromMultiMaterialMesh`. |
 | `create_multi_material_object(scene, geometry, materials)` | One mesh for each material, all of one geometry. |
 | `sort_instanced_mesh(scene, assets, i, keys)` | Sort the instances by one key each, and move the per-instance attributes too. |
 | `reduce_vertices[func](scene, assets, root, initial)` | Fold `func` over every vertex under a node, in world space. |
@@ -164,6 +165,5 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 
 ## What is not ported
 
-- `createMeshesFromMultiMaterialMesh` needs a mesh with more than one material, which is issue #167.
 - `traverseGenerator` and its kin are JavaScript generators. `Scene.descendants` and `visible_nodes` walk the scene.
 - `CurveModifierGPU` is the WebGPU form of `Flow`. `Flow.deform` does its work on the CPU.

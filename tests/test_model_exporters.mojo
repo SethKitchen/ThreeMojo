@@ -13,7 +13,14 @@ geometry, in world space.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+    MaterialIndex,
+)
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from exporters.common import WorldMesh, world_meshes
@@ -36,7 +43,7 @@ from loaders.ply import (
     read_ply,
 )
 from loaders.stl import parse_stl, read_stl
-from materials.material import Material
+from materials.material import Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -236,6 +243,44 @@ def test_an_obj_reads_back_to_the_same_world_geometry() raises:
                 assert_equal(uv.data[slot * 2 + 1], mesh.uvs[vertex * 2 + 1])
     write_obj("out/export.obj", built.scene, built.assets)
     assert_equal(read_obj("out/export.obj").count(), 4)
+
+
+def test_an_obj_writes_a_material_list_as_runs_that_read_back() raises:
+    var assets = Assets()
+    var pair = BufferGeometry()
+    pair.set_attribute(
+        String(POSITION),
+        BufferAttribute(
+            [0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0, 0, 3, 0, 0, 2, 1, 0], 3
+        ),
+    )
+    pair.set_index([0, 1, 2, 3, 4, 5])
+    # Written in the groups' order, and a group with no material in the
+    # list is left out, as it is not drawn.
+    pair.add_group(3, 3, MaterialIndex(0))
+    pair.add_group(0, 3, MaterialIndex(1))
+    pair.add_group(0, 3, MaterialIndex(5))
+    # A group of no whole triangle writes its `usemtl` and no face.
+    pair.add_group(0, 2, MaterialIndex(0))
+    var shape = assets.geometries.add(pair^)
+    var red = assets.materials.add(Material(Color(255, 0, 0)))
+    var blue = assets.materials.add(Material(Color(0, 0, 255)))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_mesh(Mesh(shape, [red, blue], node))
+    var text = export_obj(scene, assets)
+    assert_true(text.find("usemtl material0\nf 4 5 6\n") >= 0)
+    assert_true(text.find("usemtl material1\nf 1 2 3\n") >= 0)
+    var model = parse_obj(text)
+    assert_equal(model.count(), 1)
+    assert_equal(len(model.objects[0].materials), 2)
+    assert_equal(model.objects[0].materials[1], String("material1"))
+    assert_equal(len(model.objects[0].geometry.groups), 2)
+    # A list whose groups name nothing writes no face.
+    scene.meshes[0] = Mesh(shape, [MaterialId(9)], node)
+    assets.geometries.geometries[0].clear_groups()
+    assert_equal(export_obj(scene, assets).find("f "), -1)
 
 
 def test_an_obj_name_that_would_not_read_back_is_refused() raises:

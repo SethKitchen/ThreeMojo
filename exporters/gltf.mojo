@@ -85,7 +85,11 @@ displacement, environment, matcap and gradient maps. An ao map on a
 `BASIC` material is written, as three.js writes it, but `read_gltf` reads
 no occlusion for an unlit material. A `BACK_SIDE` material is written single-sided, as three.js
 writes it, since glTF has no back side. A geometry's groups are not split
-into primitives: a mesh here has one material.
+into primitives for a mesh with one material, as three.js's are not. A
+mesh that wears a material list writes one primitive a group, each with
+its own slice of the index; see `_Exporter.mesh`. A group whose material
+the list does not have, or that holds no whole triangle, writes nothing,
+as nothing is drawn for it. three.js writes it with no material.
 """
 
 from core.assets import Assets
@@ -1140,50 +1144,99 @@ struct _Exporter(Movable):
         mut self, scene: Scene, drawn: List[Int], assets: Assets
     ) raises -> Int:
         """Write the meshes on one node as one glTF mesh, a primitive
-        each, and return its index."""
+        each, and return its index.
+
+        A mesh that wears a material list writes a primitive for each
+        group it draws, with the group's slice of the index, as three.js's
+        `processMesh` does. A mesh whose list draws nothing writes no
+        primitive, and a node whose meshes write none gets no mesh: -1.
+        """
         var writer = JsonWriter()
         writer.begin_object()
         writer.key("primitives")
         writer.begin_array()
+        var primitives = 0
         # `export_gltf` asks only for a node that carries a mesh.
         for which in drawn:  # pragma: no branch
             ref mesh = scene.meshes[which]
-            var material = assets.materials.get(mesh.material)
-            var colored = material.vertex_colors and assets.geometries.get(
-                mesh.geometry
-            ).has_attribute(COLOR)
-            var slot = self.geometry(mesh.geometry, colored, assets)
-            var index = self.material(mesh.material, assets)
-            writer.begin_object()
-            writer.key("attributes")
-            writer.begin_object()
-            writer.key("POSITION")
-            writer.integer(self.positions[slot])
-            if self.normals[slot] >= 0:
-                writer.key("NORMAL")
-                writer.integer(self.normals[slot])
-            if self.uvs[slot] >= 0:
-                writer.key("TEXCOORD_0")
-                writer.integer(self.uvs[slot])
-            if self.uv1s[slot] >= 0:
-                writer.key("TEXCOORD_1")
-                writer.integer(self.uv1s[slot])
-            if colored:
-                writer.key("COLOR_0")
-                writer.integer(self.colors[slot])
-            writer.end_object()
-            if self.indices[slot] >= 0:
-                writer.key("indices")
-                writer.integer(self.indices[slot])
-            writer.key("material")
-            writer.integer(index)
-            writer.key("mode")
-            writer.integer(MODE_TRIANGLES)
-            writer.end_object()
+            if not mesh.is_multi_material():
+                self.primitive(
+                    writer, mesh.geometry, mesh.material, List[Int](), assets
+                )
+                primitives += 1
+                continue
+            ref geometry = assets.geometries.get(mesh.geometry)
+            for group in geometry.groups:
+                var worn = mesh.group_material(group.material_index)
+                var run = geometry.triangle_run(group.start, group.count)
+                if not Bool(worn) or run[1] == 0:
+                    continue
+                # A geometry without an index is given one here, as
+                # three.js's `didForceIndices` gives it one.
+                # A run of no whole triangle was skipped above, so this
+                # always runs.
+                var slice = List[Int]()
+                var last = run[0] + run[1] * 3
+                for slot in range(run[0], last):  # pragma: no branch
+                    slice.append(geometry.vertex_at(slot))
+                self.primitive(
+                    writer, mesh.geometry, worn.value(), slice, assets
+                )
+                primitives += 1
         writer.end_array()
         writer.end_object()
+        if primitives == 0:
+            return -1
         self.meshes.append(writer.finish())
         return len(self.meshes) - 1
+
+    def primitive(
+        mut self,
+        mut writer: JsonWriter,
+        id: GeometryId,
+        material_id: MaterialId,
+        slice: List[Int],
+        assets: Assets,
+    ) raises:
+        """Write one primitive: a geometry drawn in one material, over its
+        own index or, when `slice` is not empty, over that slice of it."""
+        var material = assets.materials.get(material_id)
+        var colored = material.vertex_colors and assets.geometries.get(
+            id
+        ).has_attribute(COLOR)
+        var slot = self.geometry(id, colored, assets)
+        var index = self.material(material_id, assets)
+        var indices = self.indices[slot]
+        if len(slice) > 0:
+            indices = self.index_accessor(
+                slice, assets.geometries.get(id).vertex_count()
+            )
+        writer.begin_object()
+        writer.key("attributes")
+        writer.begin_object()
+        writer.key("POSITION")
+        writer.integer(self.positions[slot])
+        if self.normals[slot] >= 0:
+            writer.key("NORMAL")
+            writer.integer(self.normals[slot])
+        if self.uvs[slot] >= 0:
+            writer.key("TEXCOORD_0")
+            writer.integer(self.uvs[slot])
+        if self.uv1s[slot] >= 0:
+            writer.key("TEXCOORD_1")
+            writer.integer(self.uv1s[slot])
+        if colored:
+            writer.key("COLOR_0")
+            writer.integer(self.colors[slot])
+        writer.end_object()
+        if indices >= 0:
+            writer.key("indices")
+            writer.integer(indices)
+        writer.key("material")
+        writer.integer(index)
+        writer.key("mode")
+        writer.integer(MODE_TRIANGLES)
+        writer.end_object()
 
     def document(
         self, roots: List[Int], nodes: List[String], uri: String

@@ -103,7 +103,8 @@ both ways is built twice.
 **What is refused.** A document that is not JSON, a `metadata.type` that
 is not `Object`, a version that is not 4, an object, geometry or material
 type this port has no counterpart for, an attribute that is not a
-`Float32Array`, a mesh with more than one material, a
+`Float32Array`, an object other than a mesh with more than one
+material, a mesh with an empty material list, a
 uuid named twice or named and not there, a `CustomBlending` material, a
 depth function, stencil function or stencil operation that is none of
 three.js's, a flat texture whose mapping is neither `UVMapping` nor an
@@ -2077,14 +2078,27 @@ struct _Loader(Movable):
         var culled = self.flag(item, "frustumCulled", True)
         var levels = List[String]()
         if kind == "Mesh":
-            var mesh = Mesh(
-                self.geometry_named(item),
-                self.material_named(item),
-                id,
-                frustum_culled=culled,
-                cast_shadow=self.flag(item, "castShadow", False),
-                receive_shadow=self.flag(item, "receiveShadow", False),
-            )
+            var geometry = self.geometry_named(item)
+            var list = self.material_list(item)
+            var mesh: Mesh
+            if len(list) > 0:
+                mesh = Mesh(
+                    geometry,
+                    list,
+                    id,
+                    frustum_culled=culled,
+                    cast_shadow=self.flag(item, "castShadow", False),
+                    receive_shadow=self.flag(item, "receiveShadow", False),
+                )
+            else:
+                mesh = Mesh(
+                    geometry,
+                    self.material_named(item),
+                    id,
+                    frustum_culled=culled,
+                    cast_shadow=self.flag(item, "castShadow", False),
+                    receive_shadow=self.flag(item, "receiveShadow", False),
+                )
             mesh.morph_influences = self.influences(item)
             self.meshes[mine] = len(scene.meshes)
             scene.add_mesh(mesh)
@@ -2381,11 +2395,43 @@ struct _Loader(Movable):
             raise Error("Object JSON: an object names no geometry: " + uuid)
         return GeometryId(self.geometries[uuid])
 
+    def material_list(self, item: Int) raises -> List[MaterialId]:
+        """Return the materials a mesh's `material` array names, three.js's
+        `getMaterial` over an array, or none when it names one material.
+
+        Args:
+            item: The object.
+
+        Returns:
+            The materials, in order, or none.
+
+        Raises:
+            Error: If the array is empty, or an entry names no material.
+        """
+        var list = List[MaterialId]()
+        var found = self.document.get(item, "material")
+        if found == NO_NODE or self.document.kind(found) != ARRAY:
+            return list^
+        var count = self.document.length(found)
+        if count == 0:
+            raise Error("Object JSON: a mesh with an empty material list")
+        for at in range(count):  # pragma: no branch
+            var uuid = self.document.string(self.document.at(found, at))
+            if uuid not in self.materials:
+                raise Error("Object JSON: an object names no material: " + uuid)
+            list.append(MaterialId(self.materials[uuid]))
+        return list^
+
     def material_named(self, item: Int) raises -> MaterialId:
-        """Return the one material an object's `material` uuid names."""
+        """Return the one material an object's `material` uuid names.
+
+        Only a mesh reads a list of materials; see `material_list`.
+        """
         var found = self.document.get(item, "material")
         if found != NO_NODE and self.document.kind(found) == ARRAY:
-            raise Error("Object JSON: a mesh with more than one material")
+            raise Error(
+                "Object JSON: only a mesh can have more than one material"
+            )
         var uuid = self.text(item, "material", "")
         if uuid not in self.materials:
             raise Error("Object JSON: an object names no material: " + uuid)

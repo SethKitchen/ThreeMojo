@@ -751,7 +751,8 @@ def test_edge_rigs() raises:
     var third = Scene()
     var held = load(empty, third, assets)
     assert_list(held.animations[1].tracks[0].values, [1, 0, 0, 1.5, 0, 0])
-    # Two material indices: two meshes, and a morph track on each.
+    # Two material indices and one material: one mesh that wears it over
+    # every polygon, as three.js makes, and one morph track.
     var split = swap(
         rig(), '"Deformer::Skin", "Skin"', '"Deformer::Skin", "Skinny"'
     )
@@ -765,8 +766,73 @@ def test_edge_rigs() raises:
     )
     var fourth = Scene()
     var two = load(split, fourth, assets)
-    assert_equal(two.mesh_count, 2)
-    assert_equal(two.animations[0].track_count(), 5)
+    assert_equal(two.mesh_count, 1)
+    assert_equal(
+        len(assets.geometries.get(fourth.meshes[0].geometry).groups), 2
+    )
+    assert_equal(two.animations[0].track_count(), 4)
+
+
+def test_a_skinned_mesh_of_several_materials_is_cut_by_group() raises:
+    # A skinned mesh here wears one material, so each group whose
+    # material is connected becomes a skinned mesh of its own. The group
+    # of index 2 names no material and is left out, as it draws nothing.
+    var text = two_materials("ByPolygon", "0,2")
+    var scene = Scene()
+    var assets = Assets()
+    var model = load(text, scene, assets)
+    assert_equal(model.skinned_mesh_count, 1)
+    ref skinned = scene.skinned_meshes[0]
+    assert_equal(skinned.material, model.materials[0])
+    ref part = assets.geometries.get(skinned.geometry)
+    assert_equal(len(part.groups), 0)
+    assert_true(part.has_attribute(String(SKIN_INDEX)))
+    # The first polygon, a quad of two triangles.
+    assert_equal(part.vertex_count(), 6)
+    # Both groups drawn: two skinned meshes of one model.
+    var both = Scene()
+    var pair = load(two_materials("ByPolygon", "0,1"), both, assets)
+    assert_equal(pair.skinned_mesh_count, 2)
+    assert_equal(both.skinned_meshes[1].material, pair.materials[1])
+    # One material over every polygon writes no group, and a list with
+    # no group draws nothing, as in three.js.
+    var none = Scene()
+    var bare = load(two_materials("AllSame", "0,1"), none, assets)
+    assert_equal(bare.skinned_mesh_count, 0)
+
+
+def two_materials(mapping: String, indices: String) raises -> String:
+    """Return the rig with two materials on its skinned model and a
+    material layer of a mapping and two polygon indices."""
+    var text = swap(
+        rig(),
+        "\t\t\t\ta: 0,0,1,0,0,1,0,0,1,0,0,1,0,0,1\n\t\t\t}\n\t\t}\n",
+        "\t\t\t\ta: 0,0,1,0,0,1,0,0,1,0,0,1,0,0,1\n\t\t\t}\n\t\t}\n"
+        + "\t\tLayerElementMaterial: 0 {\n\t\t\tMappingInformationType:"
+        + ' "'
+        + mapping
+        + '"\n\t\t\tReferenceInformationType: "IndexToDirect"\n'
+        + "\t\t\tMaterials: *2 {\n\t\t\t\ta: "
+        + indices
+        + "\n\t\t\t}\n\t\t}\n",
+    )
+    text = swap(
+        text,
+        "\tAnimationStack: 7000000000003",
+        '\tMaterial: 5000000000001, "Material::Red", "" {\n'
+        + '\t\tShadingModel: "phong"\n\t}\n'
+        + '\tMaterial: 5000000000002, "Material::Blue", "" {\n'
+        + '\t\tShadingModel: "lambert"\n\t}\n'
+        + "\tAnimationStack: 7000000000003",
+    )
+    text = swap(
+        text,
+        '\tC: "OO",1000000000001,2000000000001\n',
+        '\tC: "OO",1000000000001,2000000000001\n'
+        + '\tC: "OO",5000000000001,2000000000001\n'
+        + '\tC: "OO",5000000000002,2000000000001\n',
+    )
+    return text^
 
 
 def test_js_key_order() raises:

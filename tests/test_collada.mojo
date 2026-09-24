@@ -945,6 +945,100 @@ def test_geometry() raises:
     assert_equal(model.light_count, 0)
 
 
+def test_primitives_of_one_kind_are_one_mesh_with_groups() raises:
+    """A group per primitive, as three.js's `buildGeometryType` adds, and group
+    `i` wears material `i` of the symbols the primitives name."""
+    var geometry = String(
+        '<library_geometries><geometry id="g"><mesh><source id="p">'
+        + "<float_array>0 0 0 1 0 0 0 1 0</float_array><technique_common>"
+        + '<accessor stride="3"/></technique_common></source><vertices'
+        + ' id="v"><input semantic="POSITION" source="#p"/></vertices>'
+    )
+    var triangle = String(
+        '<input semantic="VERTEX" source="#v" offset="0"/><p>0 1 2</p>'
+    )
+    var library = (
+        geometry
+        + '<triangles material="a">'
+        + triangle
+        + "</triangles><triangles>"
+        + triangle
+        + '</triangles><triangles material="b">'
+        + triangle
+        + "</triangles></mesh></geometry></library_geometries>"
+    )
+    var materials = String(
+        '<library_effects><effect id="fx"><profile_COMMON><technique'
+        ' sid="t"><constant/></technique></profile_COMMON></effect>'
+        + '</library_effects><library_materials><material id="one">'
+        + '<instance_effect url="#fx"/></material><material id="two">'
+        + '<instance_effect url="#fx"/></material></library_materials>'
+    )
+    var node = String(
+        '<node><instance_geometry url="#g"><bind_material><technique_common>'
+        + '<instance_material symbol="a" target="#one"/>'
+        + '<instance_material symbol="b" target="#two"/>'
+        + "</technique_common></bind_material></instance_geometry></node>"
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_collada(dae(materials + library, node), "", scene, assets)
+    assert_equal(model.mesh_count, 1)
+    ref mesh = scene.meshes[0]
+    assert_equal(len(mesh.materials), 2)
+    assert_equal(mesh.materials[0], model.material("one"))
+    assert_equal(mesh.materials[1], model.material("two"))
+    ref groups = assets.geometries.get(mesh.geometry).groups
+    assert_equal(len(groups), 3)
+    assert_equal(groups[1].start, 3)
+    assert_equal(groups[2].start, 6)
+    # The primitive with no symbol adds a group and no material, so the
+    # last group names a material the list does not have.
+    assert_equal(groups[2].material_index.value, 2)
+    assert_false(Bool(mesh.group_material(groups[2].material_index)))
+    # One symbol makes a plain mesh, and a symbol bound to nothing is
+    # the fallback.
+    var single = (
+        geometry
+        + '<triangles material="a">'
+        + triangle
+        + "</triangles><triangles>"
+        + triangle
+        + '</triangles><lines><input semantic="VERTEX" source="#v"'
+        + ' offset="0"/></lines>'
+        + "</mesh></geometry></library_geometries>"
+    )
+    var plain = Scene()
+    var plain_assets = Assets()
+    _ = load_collada(dae(materials + single, node), "", plain, plain_assets)
+    assert_false(plain.meshes[0].is_multi_material())
+    # A line primitive of no corners draws nothing.
+    assert_equal(len(plain.lines), 0)
+    # A line primitive with no positions is refused.
+    refused(
+        dae(
+            geometry
+            + '<lines><input semantic="NORMAL" source="#p" offset="0"/>'
+            + "<p>0 1</p></lines></mesh></geometry></library_geometries>",
+            '<node><instance_geometry url="#g"/></node>',
+        )
+    )
+    # Two primitives that disagree about normals are refused.
+    refused(
+        dae(
+            geometry
+            + '<source id="n"><float_array>0 0 1</float_array>'
+            + '<technique_common><accessor stride="3"/></technique_common>'
+            + '</source><triangles><input semantic="VERTEX" source="#v"'
+            + ' offset="0"/><input semantic="NORMAL" source="#n"'
+            + ' offset="1"/><p>0 0 1 0 2 0</p></triangles><triangles>'
+            + triangle
+            + "</triangles></mesh></geometry></library_geometries>",
+            '<node><instance_geometry url="#g"/></node>',
+        )
+    )
+
+
 def test_cameras_and_lights() raises:
     var libraries = String(
         "<library_cameras>"

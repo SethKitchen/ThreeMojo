@@ -79,6 +79,13 @@ curve. This is the same, because the texture coordinates on a wall are not
 shared either: a wall is measured along x or along y, whichever it runs
 further in, and two walls that meet at a corner disagree about which.
 
+## Two groups
+
+The caps are one group and the walls another, three.js's `addGroup` in
+`buildLidFaces` and `buildSideFaces`: the caps wear material 0 and the
+walls material 1. So a mesh that wears a list of two materials gives the
+faces one and the sides the other, as a three.js text mesh does.
+
 ## Along a path
 
 three.js can also sweep a shape along a curve, its `extrudePath`, and the
@@ -101,7 +108,7 @@ is split along is part of the surface. Both forms split it as three.js's
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION, UV
+from core.buffer_geometry import BufferGeometry, MaterialIndex, POSITION, UV
 from geometries.shape import Contours, triangulate
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.path import Shape
@@ -274,6 +281,8 @@ def _faces(
             uvs.append(flat.x)
             uvs.append(flat.y)
 
+    var lids = len(data) // 3
+
     # The walls: one quad per edge per layer, two triangles each.
     for contour in range(cut.contour_count()):  # pragma: no branch
         var start = cut.starts[contour]
@@ -315,10 +324,15 @@ def _faces(
                         uvs.append(placed[vertex * 3 + 1])
                     uvs.append(1 - placed[vertex * 3 + 2])
 
+    var walls = len(data) // 3 - lids
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.compute_vertex_normals()
+    # The caps wear material 0 and the walls material 1, three.js's
+    # `addGroup` in `buildLidFaces` and `buildSideFaces`.
+    geometry.add_group(0, lids, MaterialIndex(0))
+    geometry.add_group(lids, walls, MaterialIndex(1))
     return geometry^
 
 

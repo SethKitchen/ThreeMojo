@@ -18,14 +18,21 @@ differently is refused: one with a `#`, which starts a comment, or with
 white space other than single spaces between words, which the reader
 folds.
 
-Not written: materials and a material library, as three.js writes none,
-and lines and points, which three.js writes as `l` and `p` and
-`read_obj` skips.
+A mesh that wears a material list writes each group it draws as a run
+of faces after a `usemtl` line, in the order of the groups, so
+`read_obj` reads the groups back. The material is named `material` and
+its id in the store, since a material here has no name. three.js's
+exporter writes a `usemtl` only for one named material, and no groups.
+
+Not written: the materials themselves and a material library, as
+three.js writes none, and lines and points, which three.js writes as `l`
+and `p` and `read_obj` skips.
 """
 
 from core.assets import Assets
 from core.scene import Scene
-from exporters.common import format_float32, world_meshes
+from core.buffer_geometry import GeometryGroup
+from exporters.common import WorldMesh, format_float32, world_meshes
 from std.pathlib import Path
 
 
@@ -50,6 +57,38 @@ def _write_triples(
             out += " "
             out += format_float32(values[vertex * width + lane])
         out += "\n"
+
+
+def _triangle_run(mesh: WorldMesh, group: GeometryGroup) -> Tuple[Int, Int]:
+    """Return where a group begins in a mesh's triangles and how many
+    whole triangles it holds, as `BufferGeometry.triangle_run` reads it.
+    """
+    var total = len(mesh.triangles)
+    var first = min(group.start, total)
+    var end = min(group.start + group.count, total)
+    return (first, max(0, end - first) // 3)
+
+
+def _write_face(
+    mut out: String,
+    mesh: WorldMesh,
+    slot: Int,
+    vertex_base: Int,
+    uv_base: Int,
+    normal_base: Int,
+):
+    """Write one `f` line: the triangle whose first corner is `slot`."""
+    out += "f"
+    for corner in range(3):  # pragma: no branch
+        var number = mesh.triangles[slot + corner] + 1
+        out += " " + String(vertex_base + number)
+        if mesh.with_uvs or mesh.with_normals:
+            out += "/"
+            if mesh.with_uvs:
+                out += String(uv_base + number)
+            if mesh.with_normals:
+                out += "/" + String(normal_base + number)
+    out += "\n"
 
 
 def export_obj(scene: Scene, assets: Assets) raises -> String:
@@ -83,18 +122,28 @@ def export_obj(scene: Scene, assets: Assets) raises -> String:
             _write_triples(out, "vt", mesh.uvs, 2)
         if mesh.with_normals:
             _write_triples(out, "vn", mesh.normals, 3)
-        for triangle in range(len(mesh.triangles) // 3):
-            out += "f"
-            for corner in range(3):  # pragma: no branch
-                var number = mesh.triangles[triangle * 3 + corner] + 1
-                out += " " + String(vertex_base + number)
-                if mesh.with_uvs or mesh.with_normals:
-                    out += "/"
-                    if mesh.with_uvs:
-                        out += String(uv_base + number)
-                    if mesh.with_normals:
-                        out += "/" + String(normal_base + number)
-            out += "\n"
+        if mesh.multi_material:
+            for run in range(len(mesh.runs)):
+                out += (
+                    "usemtl material"
+                    + String(mesh.run_materials[run].value)
+                    + "\n"
+                )
+                var span = _triangle_run(mesh, mesh.runs[run])
+                for step in range(span[1]):
+                    _write_face(
+                        out,
+                        mesh,
+                        span[0] + step * 3,
+                        vertex_base,
+                        uv_base,
+                        normal_base,
+                    )
+        else:
+            for triangle in range(len(mesh.triangles) // 3):
+                _write_face(
+                    out, mesh, triangle * 3, vertex_base, uv_base, normal_base
+                )
         var count = mesh.vertex_count()
         vertex_base += count
         if mesh.with_uvs:

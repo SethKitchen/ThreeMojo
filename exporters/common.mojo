@@ -24,7 +24,15 @@ scene changed since `update`.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+    GeometryGroup,
+)
+from materials.material import MaterialId
 from core.scene import Scene
 from std.math import isfinite
 from std.memory import bitcast
@@ -171,6 +179,13 @@ struct WorldMesh(Copyable, Movable):
     var color_size: Int
     # Three vertices a triangle: the index, or every vertex in order.
     var triangles: List[Int]
+    # Whether the mesh wears a material list. If it does, `runs` are the
+    # groups it draws, each beside the material it wears: `runs[i]`
+    # counts in `triangles` and wears `run_materials[i]`. A group whose
+    # material the list does not have is left out, as it is not drawn.
+    var multi_material: Bool
+    var runs: List[GeometryGroup]
+    var run_materials: List[MaterialId]
 
     def __init__(out self, var name: String):
         """Start a mesh with no vertices.
@@ -187,6 +202,9 @@ struct WorldMesh(Copyable, Movable):
         self.colors = List[Float32]()
         self.color_size = 0
         self.triangles = List[Int]()
+        self.multi_material = False
+        self.runs = List[GeometryGroup]()
+        self.run_materials = List[MaterialId]()
 
     def vertex_count(self) -> Int:
         """Return how many vertices the mesh has."""
@@ -246,5 +264,12 @@ def world_meshes(scene: Scene, assets: Assets) raises -> List[WorldMesh]:
         else:
             for vertex in range(count):
                 world.triangles.append(vertex)
+        world.multi_material = mesh.is_multi_material()
+        if world.multi_material:
+            for group in geometry.groups:
+                var worn = mesh.group_material(group.material_index)
+                if Bool(worn):
+                    world.runs.append(group)
+                    world.run_materials.append(worn.value())
         found.append(world^)
     return found^

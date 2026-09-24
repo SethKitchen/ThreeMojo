@@ -33,6 +33,13 @@ ray, and the triangles are met as they were wound. A hit's point and
 distance are in world space, and a hit nearer than `near` or further than
 `far` is dropped. three.js's `Mesh.raycast`, step for step.
 
+**Several materials.** A mesh that wears a material list is picked
+group by group, each group with the side of the material it wears, as
+three.js's `Mesh.raycast` reads the groups. A group whose material index
+is past the end of the list is not picked, as it is not drawn. A hit's
+`mesh.material` is the material of the group struck, and its
+`face.material_index` the group's index, three.js's `face.materialIndex`.
+
 **Layers.** A raycaster has layers as a camera has, three.js's
 `Raycaster.layers`, and a mesh whose node shares none is not tested.
 Layer zero alone by default, as everywhere.
@@ -112,6 +119,7 @@ from core.deform import (
 from core.layers import Layers
 from core.buffer_geometry import (
     BufferGeometry,
+    GeometryGroup,
     MaterialIndex,
     NORMAL,
     POSITION,
@@ -127,7 +135,7 @@ from math.triangle import Triangle
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from core.geometry_store import GeometryId
-from materials.material import BACK_SIDE, FRONT_SIDE
+from materials.material import BACK_SIDE, FRONT_SIDE, MaterialId
 from objects.line import SEGMENTS, segment_count, segment_ends
 from objects.mesh import Mesh
 from std.math import cos, inf, isnan, max, min, sin
@@ -192,8 +200,9 @@ struct HitFace(ImplicitlyCopyable):
     # Its unit normal, in the mesh's own space, from the corners as wound:
     # three.js's `Triangle.getNormal`. Zero for a triangle with no area.
     var normal: Vector3
-    # Which of the mesh's materials it wears. A mesh here wears one, so
-    # this is zero, as three.js leaves it for a mesh of one material.
+    # Which of the mesh's materials it wears: the index of the group
+    # struck on a mesh that wears a material list, and zero for a mesh of
+    # one material, as three.js writes `face.materialIndex`.
     var material_index: MaterialIndex
 
 
@@ -326,7 +335,8 @@ def _uv_at(attribute: BufferAttribute, vertex: Int) raises -> Vector2:
 def _describe_face(
     mut hit: Hit,
     geometry: BufferGeometry,
-    triangle: Int,
+    slot: Int,
+    material_index: MaterialIndex,
     a: Vector3,
     b: Vector3,
     c: Vector3,
@@ -339,7 +349,10 @@ def _describe_face(
     Args:
         hit: The hit to fill in.
         geometry: The geometry struck.
-        triangle: Which of its triangles.
+        slot: The first slot of the triangle in the triangle stream: a
+            group need not start at a multiple of three.
+        material_index: The index of the group struck, or zero for a mesh
+            with one material, as three.js writes it.
         a: The triangle's first corner, in the mesh's own space, as picked.
         b: Its second.
         c: Its third.
@@ -351,9 +364,9 @@ def _describe_face(
             attribute's items are too short.
     """
     var corners: List[Int] = [
-        geometry.corner_index(triangle, 0),
-        geometry.corner_index(triangle, 1),
-        geometry.corner_index(triangle, 2),
+        geometry.vertex_at(slot),
+        geometry.vertex_at(slot + 1),
+        geometry.vertex_at(slot + 2),
     ]
     var weights = _barycoord(point, a, b, c)
     if geometry.has_attribute(UV):
@@ -373,38 +386,38 @@ def _describe_face(
     var front = Triangle(a, b, c).raw_normal()
     front.normalize()
     hit.face = HitFace(
-        corners[0], corners[1], corners[2], front, MaterialIndex(0)
+        corners[0], corners[1], corners[2], front, material_index
     )
     hit.barycoord = weights
 
 
-def _worn_corner(
+def _worn_vertex(
     geometry: BufferGeometry,
     worn: List[Vector3],
-    triangle: Int,
-    corner: Int,
+    slot: Int,
 ) raises -> Vector3:
-    """Return one corner of one triangle, worn targets included.
+    """Return the vertex one slot of the triangle stream reads, worn
+    targets included.
 
-    `worn` is empty for a mesh wearing nothing, and then this is
-    `BufferGeometry.corner` exactly. It exists so the triangle loop reads
-    the same whichever the mesh is.
+    `worn` is empty for a mesh wearing nothing, and then this is the
+    geometry's own position. It exists so the triangle loop reads the
+    same whichever the mesh is. It counts by slot, as a group does.
 
     Args:
         geometry: The geometry being picked.
         worn: Every vertex once its targets are worn, or empty.
-        triangle: Which triangle.
-        corner: Which of its three corners.
+        slot: An index entry, or a vertex for a geometry without an index.
 
     Returns:
-        The corner, in the geometry's own space.
+        The vertex, in the geometry's own space.
 
     Raises:
-        Error: If either index is out of range.
+        Error: If the slot is outside the stream.
     """
+    var vertex = geometry.vertex_at(slot)
     if len(worn) == 0:
-        return geometry.corner(triangle, corner)
-    return worn[geometry.corner_index(triangle, corner)]
+        return geometry.attribute_view(String(POSITION)).vector3(vertex)
+    return worn[vertex]
 
 
 struct Raycaster(ImplicitlyCopyable):
@@ -1078,7 +1091,80 @@ struct Raycaster(ImplicitlyCopyable):
         if not scene.shows(mesh.node, self.layers):
             return hits^
         ref geometry = assets.geometries.get(mesh.geometry)
-        var material = assets.materials.get(mesh.material)
+        # A mesh wearing a material list is picked group by group, each
+        # with the side of the material its index names, as three.js's
+        # `Mesh.raycast` reads the groups. A group past the end of the
+        # list is not picked, as it is not drawn. A mesh with one material
+        # is one run over the whole stream.
+        var runs = List[GeometryGroup]()
+        var wears = List[MaterialId]()
+        if mesh.is_multi_material():
+            for group in geometry.groups:
+                var worn = mesh.group_material(group.material_index)
+                if Bool(worn):
+                    runs.append(group)
+                    wears.append(worn.value())
+        else:
+            runs.append(GeometryGroup(0, -1, MaterialIndex(0)))
+            wears.append(mesh.material)
+        for run in range(len(runs)):
+            self._intersect_run(
+                hits,
+                assets,
+                mesh,
+                geometry,
+                wears[run],
+                runs[run],
+                world,
+                kind,
+                index,
+                instance,
+                carriers,
+            )
+        _sort_by_distance(hits)
+        return hits^
+
+    def _intersect_run(
+        self,
+        mut hits: List[Hit],
+        assets: Assets,
+        mesh: Mesh,
+        geometry: BufferGeometry,
+        wears: MaterialId,
+        run: GeometryGroup,
+        world: Matrix4,
+        kind: HitKind,
+        index: Int,
+        instance: Int,
+        carriers: List[Matrix4],
+    ) raises:
+        """Add every place this ray meets one run of a shape's triangles
+        in one material to `hits`.
+
+        Args:
+            hits: The hits so far; this run's are appended.
+            assets: The geometry and materials the mesh names.
+            mesh: The shape: its node, geometry, material and worn targets.
+            geometry: The shape's geometry.
+            wears: The material the run is picked with.
+            run: The run of the triangle stream, or a count of minus one
+                for the whole stream.
+            world: Where it is, in world space.
+            kind: Which list the hits say `index` counts in.
+            index: The position in that list.
+            instance: Which instance or level, or -1 for a plain mesh.
+            carriers: One matrix per vertex that the bones carry it by, or
+                none for a mesh no skeleton moves.
+
+        Raises:
+            Error: If the material is not there, the geometry has no
+                positions, or `world` flattens a dimension.
+        """
+        var material = assets.materials.get(wears)
+        # The hit names the material the run wears, so a pick on a mesh
+        # with a material list says which one it struck.
+        var struck = mesh
+        struck.material = wears
         # The whole mesh first, in world space: a miss here is the common
         # case and costs six multiplies. An empty sphere, of a geometry
         # with no vertices, is met nowhere.
@@ -1120,7 +1206,7 @@ struct Raycaster(ImplicitlyCopyable):
             bound = sphere_of(worn)
         bound.apply_matrix4(world)
         if not self.ray.intersects_sphere(bound):
-            return hits^
+            return
         # Then into the mesh's own space, where its triangles are.
         var into = Matrix4(copy=world)
         into.invert()
@@ -1139,14 +1225,16 @@ struct Raycaster(ImplicitlyCopyable):
         # and the geometry's own box describes the shape it has left.
         if len(worn) == 0:
             if not local.intersects_box(geometry.bounding_box()):
-                return hits^
+                return
         var mirrored = world.determinant() < 0
         var near = self.near.value
         var far = self.far.value
-        for triangle in range(geometry.triangle_count()):
-            var a = _worn_corner(geometry, worn, triangle, 0)
-            var b = _worn_corner(geometry, worn, triangle, 1)
-            var c = _worn_corner(geometry, worn, triangle, 2)
+        var span = geometry.triangle_run(run.start, run.count)
+        for step in range(span[1]):
+            var slot = span[0] + step * 3
+            var a = _worn_vertex(geometry, worn, slot)
+            var b = _worn_vertex(geometry, worn, slot + 1)
+            var c = _worn_vertex(geometry, worn, slot + 2)
             var met: Optional[Vector3]
             if material.side == BACK_SIDE:
                 # Wound the other way, so the back is the side that counts.
@@ -1171,12 +1259,20 @@ struct Raycaster(ImplicitlyCopyable):
             if mirrored:
                 normal = -normal
             var hit = Hit(
-                distance, point, normal, kind, index, instance, mesh, triangle
+                distance,
+                point,
+                normal,
+                kind,
+                index,
+                instance,
+                struck,
+                slot // 3,
             )
             _describe_face(
                 hit,
                 geometry,
-                triangle,
+                slot,
+                run.material_index,
                 a,
                 b,
                 c,
@@ -1184,8 +1280,6 @@ struct Raycaster(ImplicitlyCopyable):
                 local.direction,
             )
             hits.append(hit)
-        _sort_by_distance(hits)
-        return hits^
 
     def intersect_wide_line[
         C: Camera

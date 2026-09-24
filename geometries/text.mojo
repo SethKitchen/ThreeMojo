@@ -17,11 +17,12 @@ The defaults are three.js's: a size of 100, a depth of 50, a bevel 10
 thick and 8 out when it is turned on. They are in meters here, so a
 caller sets `size` to the height it wants.
 
-## Where this differs
+## Groups
 
 three.js's `ExtrudeGeometry` adds two groups per shape, one for the caps
-and one for the walls, so a caller can give them two materials. `extrude`
-here writes no groups, so neither does this.
+and one for the walls, so a caller can give them two materials. This does
+the same: each shape's two groups from `extrude` are kept, moved to where
+the shape starts. The caps wear material 0 and the walls material 1.
 
 A text with nothing to draw, such as spaces, is a geometry with empty
 `position`, `normal` and `uv` attributes, as it is in three.js. The
@@ -71,7 +72,8 @@ def text_geometry(
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and no
-        index buffer, as `extrude` builds it, one shape after another.
+        index buffer, as `extrude` builds it, one shape after another,
+        with each shape's two groups.
 
     Raises:
         Error: If an option is refused by `check_extrusion`, if the size is
@@ -113,4 +115,14 @@ def text_geometry(
                 bevel_segments,
             )
         )
-    return merge_geometries(parts)
+    var merged = merge_geometries(parts)
+    # Each shape's caps and walls, moved to where the shape starts, as
+    # three.js's `ExtrudeGeometry` adds them shape after shape.
+    var offset = 0
+    for index in range(len(parts)):  # pragma: no branch
+        for group in parts[index].groups:  # pragma: no branch
+            merged.add_group(
+                offset + group.start, group.count, group.material_index
+            )
+        offset += parts[index].vertex_count()
+    return merged^

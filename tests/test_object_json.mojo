@@ -274,6 +274,7 @@ def _scene(mut assets: Assets) raises -> Tuple[Scene, ObjectCameras]:
     var data_map = assets.textures.add(_texture(MIRROR, False, True))
     var geometry = assets.geometries.add(_triangle())
     var indexed = box(Length(1, METER), Length(2, METER), Length(3, METER))
+    indexed.clear_groups()
     indexed.add_group(0, 6, MaterialIndex(1))
     indexed.add_morph_target(
         indexed.clone_attribute(POSITION), indexed.clone_attribute(NORMAL)
@@ -1349,6 +1350,54 @@ def test_material_refusals() raises:
     )
 
 
+comptime TWO_MATERIALS = (
+    '"geometries":[{"uuid":"g","type":"BufferGeometry","data":{"attributes":'
+    '{"position":{"itemSize":3,"type":"Float32Array","array":[0,0,0,1,0,0,'
+    '0,1,0],"normalized":false}},"groups":[{"start":0,"count":3,'
+    '"materialIndex":1}]}}],'
+    '"materials":[{"uuid":"m","type":"MeshBasicMaterial","color":16711680},'
+    '{"uuid":"n","type":"MeshBasicMaterial","color":255}],'
+)
+
+
+def test_a_mesh_reads_and_writes_a_material_list() raises:
+    """A mesh's `material` can be a list of uuids, as three.js writes it
+    for a material array, and it comes back as a list."""
+    var read = _read(
+        TWO_MATERIALS
+        + '"object":{"uuid":"o","type":"Mesh","geometry":"g",'
+        + '"material":["m","n","m"]}'
+    )
+    ref mesh = read[0].meshes[0]
+    assert_true(mesh.is_multi_material())
+    assert_equal(len(mesh.materials), 3)
+    assert_true(mesh.materials[2] == mesh.materials[0])
+    assert_false(mesh.materials[1] == mesh.materials[0])
+    var text = object_to_json(read[0], read[1])
+    assert_true('"material":["' in text)
+    var scene = Scene()
+    var assets = Assets()
+    _ = read_object_json(text, scene, assets)
+    assert_equal(len(scene.meshes[0].materials), 3)
+    assert_equal(assets.materials.count(), 2)
+    # A list that is empty or names nothing is refused, and only a mesh
+    # reads a list.
+    _refuses(
+        TWO_MATERIALS
+        + '"object":{"uuid":"o","type":"Mesh","geometry":"g","material":[]}'
+    )
+    _refuses(
+        TWO_MATERIALS
+        + '"object":{"uuid":"o","type":"Mesh","geometry":"g",'
+        + '"material":["m","x"]}'
+    )
+    _refuses(
+        TWO_MATERIALS
+        + '"object":{"uuid":"o","type":"Points","geometry":"g",'
+        + '"material":["m"]}'
+    )
+
+
 def test_the_helpers() raises:
     """The constant tables map three.js's numbers both ways."""
     assert_equal(wrap_of(1002), MIRROR)
@@ -1393,7 +1442,7 @@ def test_object_refusals() raises:
     )
     _refuses(
         MESH_LIBRARY
-        + '"object":{"uuid":"o","type":"Mesh","geometry":"g",'
+        + '"object":{"uuid":"o","type":"Line","geometry":"g",'
         '"material":["m","m"]}'
     )
     _refuses('"object":{"uuid":"o","type":"Line"}')

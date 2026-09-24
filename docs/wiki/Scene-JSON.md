@@ -32,6 +32,8 @@ A document has four parts. The writer writes them, and the reader reads them, as
 | `geometries`, `materials`, `textures`, `images`, `skeletons` | The libraries. Each entry has a `uuid`. Each thing is written one time, also when two meshes use it. |
 | `object` | The root object. The writer writes a `Scene`. Its children are the root nodes of the scene. |
 
+A mesh that wears a list of materials writes `material` as a list of uuids, as three.js's `toJSON` does. The reader reads the list back. See [Several materials](Meshes-and-assets#several-materials).
+
 three.js gives each thing a random uuid. The writer makes each uuid from the kind of the thing and its position. Thus the same scene always gives the same text. Node `k` has the uuid `object_uuid(2, k)`.
 
 `ObjectModel` tells you what the reader made:
@@ -225,7 +227,8 @@ The writer does not write these things, and the reader refuses them:
 - Wide lines (`LineSegments2`), which are a three.js addon that `ObjectLoader` does not read. The writer ignores them.
 - `CustomBlending`, and a line width in world units.
 - A batched mesh with geometries that do not have the same attributes and index, or that have morph targets.
-- A mesh with more than one material, and an attribute or an interleaved buffer that is not a `Float32Array`.
+- An object other than a mesh with more than one material, and a mesh with an empty material list.
+- An attribute or an interleaved buffer that is not a `Float32Array`.
 - A flat texture with a mapping that is not `UVMapping` or equirectangular, or a `channel` that is not 0 or 1. A float texture.
 - A cube texture that does not have six images, or a mapping that is not a cube mapping. A cube texture with float faces.
 - An `envMap`, an `environment` or a blurred background that names a flat texture without an equirectangular mapping.

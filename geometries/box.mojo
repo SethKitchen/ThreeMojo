@@ -15,10 +15,22 @@ crisp when the renderer interpolates normals across a triangle.
 Faces are emitted in a fixed order, two triangles each, so triangle index
 divided by two identifies the face. `examples/cubes.mojo` uses exactly that to
 shade the sides differently.
+
+Each face is also a group, three.js's `addGroup` in `buildPlane`, so a
+mesh that wears a list of six materials gives each face its own. The
+material index of a face is three.js's, not its place in this order:
++x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. So a list of
+materials written for a three.js box dresses this box the same way.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+)
 from math.vector3 import Vector3
 from units.si import Length
 
@@ -82,9 +94,9 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
         depth: Extent along z.
 
     Returns:
-        A geometry with `position`, `normal` and `uv` attributes and an
-        index buffer, its faces ordered front, back, left, right, top,
-        bottom.
+        A geometry with `position`, `normal` and `uv` attributes, an
+        index buffer, and a group per face, its faces ordered front, back,
+        left, right, top, bottom.
 
     Raises:
         Error: If any extent is not positive.
@@ -183,6 +195,11 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    # three.js's material index of each face, in the order the faces are
+    # built here: front, back, left, right, top, bottom.
+    var dressed: List[Int] = [4, 5, 1, 0, 2, 3]
+    for face in range(6):  # pragma: no branch
+        geometry.add_group(face * 6, 6, MaterialIndex(dressed[face]))
     return geometry^
 
 

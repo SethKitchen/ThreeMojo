@@ -661,14 +661,25 @@ def test_scene() raises:
     assert_true(green.transparent)
     assert_almost_equal(green.bump_scale, 1)
     assert_true(green.vertex_colors)
-    # Two pieces: the quad and the pentagon in the first material, the
-    # triangle in the second.
-    assert_equal(model.mesh_count, 2)
-    assert_equal(len(model.geometries), 2)
-    assert_equal(scene.meshes[0].material, model.materials[0])
-    assert_equal(scene.meshes[1].material, model.materials[1])
-    var first = scene.meshes[0].geometry
-    assert_equal(assets.geometries.get(first).vertex_count(), 15)
+    # One mesh that wears both materials: the quad and the pentagon are a
+    # group in the first, and the triangle a group in the second.
+    assert_equal(model.mesh_count, 1)
+    assert_equal(len(model.geometries), 1)
+    ref mesh = scene.meshes[0]
+    assert_equal(len(mesh.materials), 2)
+    assert_equal(mesh.materials[0], model.materials[0])
+    assert_equal(mesh.materials[1], model.materials[1])
+    var first = mesh.geometry
+    ref groups = assets.geometries.get(first).groups
+    assert_equal(len(groups), 3)
+    assert_equal(groups[0].count, 6)
+    assert_equal(groups[1].start, 6)
+    assert_equal(groups[1].count, 3)
+    assert_equal(groups[1].material_index.value, 1)
+    assert_equal(groups[2].start, 9)
+    assert_equal(groups[2].material_index.value, 0)
+    assert_equal(assets.geometries.get(first).vertex_count(), 18)
+    # In polygon order: the quad, the triangle and the pentagon.
     assert_list(
         values(assets, first, POSITION),
         [
@@ -689,6 +700,15 @@ def test_scene() raises:
             1,
             0,
             1,
+            1,
+            1,
+            0,
+            1,
+            2,
+            0,
+            1,
+            2,
+            2,
             1,
             2,
             0,
@@ -719,14 +739,13 @@ def test_scene() raises:
             1,
         ],
     )
-    var second = scene.meshes[1].geometry
-    assert_list(values(assets, second, POSITION), [1, 0, 1, 2, 0, 1, 2, 2, 1])
-    assert_list(
-        values(assets, second, COLOR),
-        [0, 1, 0, 0.21404, 0.21404, 0.21404, 0, 1, 1],
-    )
-    assert_list(values(assets, second, UV), [0, 0, 1, 0, 1, 1])
-    assert_list(values(assets, second, NORMAL), [0, 0, 1, 0, 0, 1, 0, 0, 1])
+    var middle = values(assets, first, COLOR)
+    var colors = List[Float32]()
+    for index in range(18, 27):
+        colors.append(middle[index])
+    assert_list(colors, [0, 1, 0, 0.21404, 0.21404, 0.21404, 0, 1, 1])
+    var normals = values(assets, first, NORMAL)
+    assert_list([normals[18], normals[19], normals[20]], [Float32(0), 0, 1])
 
 
 def test_pivots() raises:
@@ -1324,6 +1343,56 @@ def test_embedded_binary() raises:
 # --- models, meshes, cameras and lights ---------------------------------------
 
 
+def test_material_groups_follow_three_js() raises:
+    """A layer mapped `AllSame` adds no group, and a geometry with a
+    material layer and no polygon gets one empty group, as three.js's
+    `genGeometry` adds them."""
+    var same = String(
+        '\tGeometry: 10, "Geometry::S", "Mesh" {\n\t\tVertices: *9 {\n'
+        + "\t\t\ta: 0,0,0,1,0,0,0,1,0\n\t\t}\n"
+        + "\t\tPolygonVertexIndex: *3 {\n\t\t\ta: 0,1,-3\n\t\t}\n"
+        + "\t\tLayerElementMaterial: 0 {\n"
+        + '\t\t\tMappingInformationType: "AllSame"\n'
+        + "\t\t\tMaterials: *1 {\n\t\t\t\ta: 1\n\t\t\t}\n\t\t}\n\t}\n"
+    )
+    var bare = String(
+        '\tGeometry: 11, "Geometry::E", "Mesh" {\n'
+        + "\t\tLayerElementMaterial: 0 {\n"
+        + '\t\t\tMappingInformationType: "ByPolygon"\n'
+        + "\t\t\tMaterials: *0 {\n\t\t\t}\n\t\t}\n\t}\n"
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_text(
+        objects(
+            same
+            + bare
+            + '\tModel: 20, "Model::A", "Mesh" {\n\t}\n'
+            + '\tModel: 21, "Model::B", "Mesh" {\n\t}\n'
+            + '\tModel: 22, "Model::C", "Mesh" {\n\t}\n'
+            + '\tModel: 23, "Model::D", "Mesh" {\n\t}\n'
+            + '\tMaterial: 30, "Material::One", "" {\n\t\tShadingModel:'
+            ' "phong"\n\t}\n'
+            + '\tMaterial: 31, "Material::Two", "" {\n\t\tShadingModel:'
+            ' "phong"\n\t}\n',
+            '\tC: "OO",10,20\n\tC: "OO",30,20\n\tC: "OO",31,20\n'
+            + '\tC: "OO",10,21\n\tC: "OO",10,22\n\tC: "OO",11,23\n',
+        ),
+        scene,
+        assets,
+    )
+    # D's geometry has no triangle, and gets no mesh.
+    assert_equal(model.mesh_count, 3)
+    # Two meshes with no material share one default.
+    assert_equal(scene.meshes[2].material, scene.meshes[1].material)
+    # A list of two and no group: three.js draws nothing of it.
+    assert_equal(len(scene.meshes[0].materials), 2)
+    assert_equal(len(assets.geometries.get(scene.meshes[0].geometry).groups), 0)
+    ref empty = assets.geometries.get(model.geometries[1]).groups
+    assert_equal(len(empty), 1)
+    assert_equal(empty[0].count, 0)
+
+
 def test_meshes() raises:
     # A concave hexagon, cut by ear clipping; a polygon of two corners,
     # which draws nothing; material indices past the connected ones and
@@ -1349,16 +1418,21 @@ def test_meshes() raises:
             geometry
             + '\tModel: 20, "Model::A", "Mesh" {\n\t}\n'
             + '\tModel: 21, "Model::B", "Mesh" {\n\t}\n'
+            + '\tModel: 22, "Model::C", "Mesh" {\n\t}\n'
             + '\tMaterial: 30, "Material::Mat", "" {\n\t\tShadingModel:'
-            ' "phong"\n\t}\n',
-            '\tC: "OO",10,20\n\tC: "OO",10,21\n\tC: "OO",30,21\n',
+            ' "phong"\n\t}\n'
+            + '\tMaterial: 31, "Material::Two", "" {\n\t\tShadingModel:'
+            ' "lambert"\n\t}\n',
+            '\tC: "OO",10,20\n\tC: "OO",10,21\n\tC: "OO",30,21\n'
+            + '\tC: "OO",10,22\n\tC: "OO",31,22\n\tC: "OO",30,22\n',
         ),
         scene,
         assets,
     )
-    # One geometry of two pieces, drawn by two models.
-    assert_equal(len(model.geometries), 2)
-    assert_equal(model.mesh_count, 4)
+    # One geometry, a group a run of one material index, drawn by three
+    # models.
+    assert_equal(len(model.geometries), 1)
+    assert_equal(model.mesh_count, 3)
     var hexagon = scene.meshes[0].geometry
     assert_list(
         values(assets, hexagon, POSITION),
@@ -1399,22 +1473,42 @@ def test_meshes() raises:
             0,
             2,
             0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            2,
+            1,
+            0,
         ],
     )
     assert_false(assets.geometries.get(hexagon).has_attribute(String(NORMAL)))
     assert_false(assets.geometries.get(hexagon).has_attribute(String(UV)))
-    # Index 3 is past every model's materials: a white phong, shared.
-    var white = assets.materials.get(scene.meshes[0].material)
-    assert_equal(white.color.r, 255)
-    assert_false(white.vertex_colors)
-    assert_equal(scene.meshes[2].material, scene.meshes[0].material)
-    # Model A has no material: a gray phong with vertex colors on.
-    var gray = assets.materials.get(scene.meshes[1].material)
+    ref groups = assets.geometries.get(hexagon).groups
+    assert_equal(len(groups), 2)
+    assert_equal(groups[0].count, 12)
+    assert_equal(groups[0].material_index.value, 3)
+    # The negative index is the first material.
+    assert_equal(groups[1].start, 12)
+    assert_equal(groups[1].material_index.value, 0)
+    # Model A has no material: a gray phong with vertex colors on, over
+    # every polygon.
+    assert_false(scene.meshes[0].is_multi_material())
+    var gray = assets.materials.get(scene.meshes[0].material)
     assert_equal(gray.color.r, 204)
     assert_true(gray.vertex_colors)
-    # Model B's negative index is its first material.
-    assert_equal(scene.meshes[3].material, model.materials[0])
+    # Model B has one material, and wears it over every polygon.
+    assert_false(scene.meshes[1].is_multi_material())
+    assert_equal(scene.meshes[1].material, model.materials[0])
     assert_true(assets.materials.get(model.materials[0]).vertex_colors)
+    # Model C wears both, in the order connected; index 3 is past them,
+    # so that group draws nothing, as in three.js.
+    ref both = scene.meshes[2]
+    assert_equal(len(both.materials), 2)
+    assert_equal(both.materials[0], model.materials[1])
+    assert_false(Bool(both.group_material(groups[0].material_index)))
     # No material mapping, and an untinted mesh without a material.
     var plain = Scene()
     var plain_assets = Assets()
@@ -1454,6 +1548,7 @@ def test_meshes() raises:
         plain,
         plain_assets,
     )
+    # A geometry with no polygons gets no mesh.
     assert_equal(untinted.mesh_count, 1)
     var tri = plain.meshes[0].geometry
     assert_list(

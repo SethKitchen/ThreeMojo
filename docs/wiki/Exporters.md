@@ -49,6 +49,8 @@ The nodes keep the scene order. Node `k` of the file is the `k`th node that the 
 
 The meshes on one node become one glTF mesh with one primitive each. `read_gltf` reads each primitive back as one `Mesh` on that node.
 
+A mesh that wears a list of materials writes one primitive for each group, as three.js's `processMesh` writes it. Each primitive has the slice of the index that the group draws, and the material of the group. A geometry without an index gets one for the slice. A group whose material is not in the list writes nothing, because nothing is drawn for it. three.js writes it with no material. A node whose meshes write no primitive gets no mesh.
+
 | Attribute | Meaning |
 |---|---|
 | `POSITION` | Always. The accessor has `min` and `max`, as the specification requires. |
@@ -133,6 +135,8 @@ three.js writes the transform of the metalness map for both and only warns. This
 
 `export_obj` refuses a name that `read_obj` reads back differently: a name with `#`, or with spaces other than one space between words.
 
+A mesh that wears a list of materials writes each group that it draws as a run of faces, in the order of the groups. Each run starts with `usemtl material` and the id of its material, for example `usemtl material3`. A material here has no name, so the id names it. `read_obj` reads the runs back as groups. three.js writes a `usemtl` only for one named material, and no groups.
+
 ## STL
 
 `export_stl` writes each triangle as one facet. The facet normal is `(C - B) x (A - B)`, made unit length, as three.js calculates it. The vertex normals of the geometry are not written.
@@ -185,9 +189,9 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - Lights, cameras, animations, skins and morph targets.
 - Instanced, batched and skinned meshes, lines, points and sprites.
 - Bump maps, alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
-- The groups of a geometry. A mesh has one material.
+- The groups of a geometry of a mesh with one material, as in three.js.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
-- OBJ materials and a material library. three.js writes none.
+- OBJ materials and a material library. three.js writes none. Only the `usemtl` names of a mesh that wears a list are written.
 
 ## Errors
 

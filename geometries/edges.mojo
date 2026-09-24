@@ -310,7 +310,7 @@ def _as_segments(
 
 
 def triangle_edges(
-    geometry: BufferGeometry,
+    geometry: BufferGeometry, start: Int = 0, count: Int = -1
 ) raises -> Tuple[List[Int], List[Int]]:
     """Return each edge of a geometry's triangles once, by vertex index.
 
@@ -326,17 +326,25 @@ def triangle_edges(
     vertices with their own colors. Welding them would be a second
     opinion about what the mesh is.
 
+    A group of a mesh that wears a material list is drawn in its own
+    material, so its wireframe is the edges of its own triangles: `start`
+    and `count` name the run, read as `BufferGeometry.triangle_run` reads
+    it. three.js draws the same run of its wireframe index.
+
     Args:
         geometry: The surface, which must carry positions.
+        start: The first slot of the run of the triangle stream.
+        count: How many slots it holds, or minus one for all of them.
 
     Returns:
         The vertex index of each end of each unique edge.
 
     Raises:
-        Error: If the geometry has no positions, or an index entry points
-            past the last vertex.
+        Error: If the geometry has no positions, an index entry points
+            past the last vertex, or `start` is negative.
     """
-    var triangles = geometry.triangle_count()
+    var run = geometry.triangle_run(start, count)
+    var triangles = run[1]
     var buckets = max(1, triangles * 3)
     var bucketed = List[List[Int]](length=buckets, fill=List[Int]())
     var keys = List[Int]()
@@ -347,7 +355,7 @@ def triangle_edges(
     for triangle in range(triangles):
         var corners = List[Int]()
         for corner in range(3):  # pragma: no branch
-            corners.append(geometry.corner_index(triangle, corner))
+            corners.append(geometry.vertex_at(run[0] + triangle * 3 + corner))
         for corner in range(3):  # pragma: no branch
             var start = corners[corner]
             var finish = corners[(corner + 1) % 3]

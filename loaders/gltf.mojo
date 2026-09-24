@@ -25,7 +25,10 @@ handed and returns a `GltfModel` that says what went where.
 or an emissive map and as linear for a metallic-roughness, a normal or an
 occlusion map;
 a node becomes an `Object3D` at its translation, rotation and scale, or at
-its matrix decomposed; each primitive on a node becomes a `Mesh`. The
+its matrix decomposed; each primitive on a node becomes a `Mesh`. A glTF
+mesh of several primitives is a `Group` of meshes in three.js, and here
+the node is that group: its meshes are not joined into one mesh that
+wears a material list, as three.js does not join them. The
 metallic-roughness texture is one image read twice, as glTF stores it and
 as the standard material reads it: roughness from green, metalness from
 blue.

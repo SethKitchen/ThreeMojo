@@ -27,10 +27,17 @@ three.js makes a `MeshPhongMaterial` or a `MeshLambertMaterial`. A
 `Camera` model rides a `PerspectiveCamera`; a `Light` model carries a
 point, directional or spot light.
 
-**One geometry per material.** three.js builds one geometry per FBX
-geometry, with a group per run of one material. A mesh here draws one
-material, so each material index a geometry uses is its own geometry and
-its own `Mesh`, in the order the indices first appear.
+**One geometry, a group per material run.** Each FBX geometry is one
+geometry, with a group per run of polygons of one material index, as
+three.js's `genGeometry` adds them. A layer mapped `AllSame` writes no
+group. A model with more than one material connected is one `Mesh` that
+wears them as a list, in the order they are connected, and a group draws
+with the material its index names. A group whose index is past the
+materials connected draws nothing, and a list with no group draws nothing,
+as in three.js. A model with one material wears it over every polygon.
+A skinned model with more than one is cut into a `SkinnedMesh` a group,
+because a skinned mesh here wears one material. A geometry with no
+polygon gets no mesh; three.js adds a mesh of nothing.
 
 **Skins and blend shapes.** A `Skin` deformer on a geometry makes each
 mesh that draws it a `SkinnedMesh`, as three.js's `parseDeformers`,
@@ -70,6 +77,7 @@ from core.buffer_geometry import (
     POSITION,
     UV,
     BufferGeometry,
+    MaterialIndex,
 )
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -608,18 +616,19 @@ def _find_ear(flat: List[Vector2], ring: List[Int]) -> Int:
 
 
 struct _Part(Movable):
-    """The triangles of one material index of a geometry, gathered."""
+    """The triangles of a geometry, gathered, and the material index of
+    each corner, three.js's `buffers.materialIndex`."""
 
-    var material: Int
     var positions: List[Float32]
     var normals: List[Float32]
     var colors: List[Float32]
     var uvs: List[Float32]
     # The position each corner names, for its skin and morph targets.
     var vertices: List[Int]
+    var materials: List[Int]
 
-    def __init__(out self, material: Int):
-        self.material = material
+    def __init__(out self):
+        self.materials = List[Int]()
         self.positions = List[Float32]()
         self.normals = List[Float32]()
         self.colors = List[Float32]()
@@ -634,14 +643,6 @@ struct _Link(Copyable, Movable):
 
     var id: Int
     var relation: String
-
-
-@fieldwise_init
-struct _Piece(Copyable, Movable):
-    """One material index's geometry of an FBX geometry."""
-
-    var material: Int
-    var geometry: GeometryId
 
 
 @fieldwise_init
@@ -766,8 +767,7 @@ struct FbxModel(Copyable, Movable):
     var materials: List[MaterialId]
     var material_ids: List[Int]
     var material_names: List[String]
-    # One geometry per material index of each FBX geometry, in the order
-    # built.
+    # One geometry per FBX geometry, in the order built.
     var geometries: List[GeometryId]
     # One texture per texture and color space a material read.
     var textures: List[TextureId]
@@ -932,7 +932,7 @@ struct _Loader(Movable):
     # Each texture already made, by texture id and use.
     var textures: Dict[String, TextureId]
     # Each geometry built, by id, and whether it has vertex colors.
-    var pieces: Dict[Int, List[_Piece]]
+    var built: Dict[Int, GeometryId]
     var colored: Dict[Int, Bool]
     # The materials three.js makes for a mesh with none connected, and for
     # a material index past those connected, each made once.
@@ -955,7 +955,7 @@ struct _Loader(Movable):
         self.children = Dict[Int, List[_Link]]()
         self.material_at = Dict[Int, Int]()
         self.textures = Dict[String, TextureId]()
-        self.pieces = Dict[Int, List[_Piece]]()
+        self.built = Dict[Int, GeometryId]()
         self.colored = Dict[Int, Bool]()
         self.defaults = Dict[String, MaterialId]()
         self.model_nodes = List[Int]()
@@ -1374,16 +1374,16 @@ struct _Loader(Movable):
         return generate_transform(data)
 
     def build_geometry(mut self, id: Int, mut assets: Assets) raises:
-        """Build an FBX geometry's pieces, one per material index, the
-        first time a model draws it, as three.js's `genGeometry` builds
-        its buffers.
+        """Build an FBX geometry, with a group per run of one material
+        index, the first time a model draws it, as three.js's
+        `genGeometry` builds its buffers and `addGroup`s.
 
         Raises:
             Error: If a layer is malformed, an index is out of range, a
                 polygon has no area or crosses itself, or the last polygon
                 is not closed by a negative index.
         """
-        if id in self.pieces:
+        if id in self.built:
             return
         var node = self.objects[id]
         var pre = self.geometric_transform(self.first_model(id))
@@ -1442,8 +1442,7 @@ struct _Loader(Movable):
                     1,
                 )
                 has_material = True
-        var parts = List[_Part]()
-        var part_of = Dict[Int, Int]()
+        var part = _Part()
         var face = _Face()
         var polygon = 0
         for corner in range(len(polygons)):
@@ -1496,10 +1495,10 @@ struct _Loader(Movable):
                 # index.
                 face.material = max(Int(materials.values[at]), 0)
             if end:
-                if face.material not in part_of:
-                    part_of[face.material] = len(parts)
-                    parts.append(_Part(face.material))
-                face.emit(parts[part_of[face.material]])
+                var before = len(part.positions) // 3
+                face.emit(part)
+                for _ in range(before, len(part.positions) // 3):
+                    part.materials.append(face.material)
                 face = _Face()
                 polygon += 1
         if len(face.points) > 0:
@@ -1507,30 +1506,28 @@ struct _Loader(Movable):
                 "FBX: the last polygon is not closed by a negative index"
             )
         var rows = self.rig_rows(id, len(positions) // 3, pre)
-        var built = List[_Piece]()
-        for index in range(len(parts)):
-            ref part = parts[index]
-            var geometry = BufferGeometry()
+        var geometry = BufferGeometry()
+        geometry.set_attribute(
+            String(POSITION), BufferAttribute(part.positions.copy(), 3)
+        )
+        if has_normal:
             geometry.set_attribute(
-                String(POSITION), BufferAttribute(part.positions.copy(), 3)
+                String(NORMAL), BufferAttribute(part.normals.copy(), 3)
             )
-            if has_normal:
-                geometry.set_attribute(
-                    String(NORMAL), BufferAttribute(part.normals.copy(), 3)
-                )
-            if has_color:
-                geometry.set_attribute(
-                    String(COLOR), BufferAttribute(part.colors.copy(), 3)
-                )
-            if has_uv:
-                geometry.set_attribute(
-                    String(UV), BufferAttribute(part.uvs.copy(), 2)
-                )
-            rows.apply(part.vertices, geometry)
-            var made = assets.geometries.add(geometry^)
-            self.model.geometries.append(made)
-            built.append(_Piece(part.material, made))
-        self.pieces[id] = built^
+        if has_color:
+            geometry.set_attribute(
+                String(COLOR), BufferAttribute(part.colors.copy(), 3)
+            )
+        if has_uv:
+            geometry.set_attribute(
+                String(UV), BufferAttribute(part.uvs.copy(), 2)
+            )
+        rows.apply(part.vertices, geometry)
+        if has_material and materials.mapping != ALL_SAME:
+            _add_material_groups(geometry, part.materials)
+        var made = assets.geometries.add(geometry^)
+        self.model.geometries.append(made)
+        self.built[id] = made
         self.colored[id] = has_color
 
     # --- models ---------------------------------------------------------------
@@ -1744,9 +1741,9 @@ struct _Loader(Movable):
     def place_meshes(
         mut self, id: Int, node: NodeId, mut scene: Scene, mut assets: Assets
     ) raises:
-        """Add a mesh per piece of a `Mesh` model's geometry, each with the
-        material its index names among those connected to the model, as
-        three.js's `createMesh` binds them."""
+        """Add the mesh of a `Mesh` model: its geometry, with the one
+        material connected to it or the list of them, as three.js's
+        `parseMesh` binds them."""
         var geometry = -1
         var materials = List[MaterialId]()
         for link in self.links(self.children, id):
@@ -1785,22 +1782,12 @@ struct _Loader(Movable):
             # `materials` is not empty here: the loop always runs.
             for material in materials:  # pragma: no branch
                 assets.materials.materials[material.value].vertex_colors = True
-        for piece in self.pieces[geometry].copy():
-            var material: MaterialId
-            if piece.material < len(materials):
-                material = materials[piece.material]
-            else:
-                material = self.default_material(
-                    "white",
-                    Material(
-                        _WHITE,
-                        kind=PHONG,
-                        specular=Color(17, 17, 17),
-                        shininess=30,
-                    ),
-                    assets,
-                )
-            self.add_piece(id, geometry, piece.geometry, material, node, scene)
+        var made = self.built[geometry]
+        # A geometry of no triangles draws nothing, and is given no mesh.
+        # three.js adds a mesh of nothing.
+        if assets.geometries.get(made).vertex_count() == 0:
+            return
+        self.add_piece(id, geometry, made, materials, node, scene, assets)
 
     def read_global_settings(mut self, mut scene: Scene) raises:
         """Read `GlobalSettings`: an ambient light for an `AmbientColor`
@@ -2037,22 +2024,51 @@ struct _Loader(Movable):
         model: Int,
         source: Int,
         geometry: GeometryId,
-        material: MaterialId,
+        materials: List[MaterialId],
         node: NodeId,
         mut scene: Scene,
+        mut assets: Assets,
     ) raises:
-        """Add one piece of a model's geometry: a mesh, or, for a skinned
-        geometry, a skinned mesh once every bone is placed."""
+        """Add a model's geometry: a mesh with its one material or its
+        list, or, for a skinned geometry, a skinned mesh once every bone
+        is placed.
+
+        A skinned mesh here wears one material. A skinned geometry with
+        more than one material is cut into a geometry for each group it
+        draws, each a skinned mesh in its group's material. three.js
+        keeps one `SkinnedMesh` with the list.
+        """
         if source in self.rig.skin_of:
-            self.rig.waiting.append(
-                _Waiting(model, source, geometry, material, node)
-            )
+            if len(materials) == 1:
+                self.rig.waiting.append(
+                    _Waiting(model, source, geometry, materials[0], node)
+                )
+                return
+            var groups = assets.geometries.get(geometry).groups.copy()
+            for group in groups:
+                if group.material_index.value >= len(materials):
+                    continue
+                var cut = assets.geometries.get(geometry).group_part(group)
+                var made = assets.geometries.add(cut^)
+                self.model.geometries.append(made)
+                self.rig.waiting.append(
+                    _Waiting(
+                        model,
+                        source,
+                        made,
+                        materials[group.material_index.value],
+                        node,
+                    )
+                )
             return
         if source in self.rig.channels:
             self.morph_target_of(
                 model, TrackTarget(MORPH_INFLUENCE, len(scene.meshes), 0)
             )
-        scene.add_mesh(Mesh(geometry, material, node))
+        if len(materials) > 1:
+            scene.add_mesh(Mesh(geometry, materials, node))
+        else:
+            scene.add_mesh(Mesh(geometry, materials[0], node))
 
     def morph_target_of(mut self, model: Int, target: TrackTarget) raises:
         """Record a mesh of a model that wears morph targets."""
@@ -2162,6 +2178,38 @@ def _four_largest(
                 kept[lane] = bone
                 bone = named
     return (kept^, shares^)
+
+
+def _add_material_groups(
+    mut geometry: BufferGeometry, indices: List[Int]
+) raises:
+    """Add a group per run of corners of one material index, three.js's
+    `addGroup` loop in `genGeometry`.
+
+    A run ends where the index changes, and the last run is added after
+    the loop. A geometry with no corners gets one group of none, at the
+    first material, as three.js adds one when the loop added none.
+
+    Args:
+        geometry: The geometry, which the groups are added to.
+        indices: The material index of each corner.
+
+    Raises:
+        Error: Never: every run starts and counts at zero or more.
+    """
+    if len(indices) == 0:
+        geometry.add_group(0, 0, MaterialIndex(0))
+        return
+    var start = 0
+    # The corners come three a triangle, so there are three at least here
+    # and the loop always runs.
+    for at in range(1, len(indices)):  # pragma: no branch
+        if indices[at] != indices[at - 1]:
+            geometry.add_group(start, at - start, MaterialIndex(indices[start]))
+            start = at
+    geometry.add_group(
+        start, len(indices) - start, MaterialIndex(indices[start])
+    )
 
 
 struct _Face(Movable):

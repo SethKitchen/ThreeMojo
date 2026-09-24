@@ -56,7 +56,9 @@ state of every class, each under three.js's key and left out where
 `BASIC` material as three.js's class for it: `LineBasicMaterial`,
 `LineDashedMaterial` for a dashed material, `PointsMaterial` and
 `SpriteMaterial`, with their width, dashes, size, attenuation and turn.
-One material that a mesh and a line share is written once for each.
+One material that a mesh and a line share is written once for each. A
+mesh that wears a material list writes `material` as a list of uuids,
+as three.js's `Object3D.toJSON` does.
 **A texture** is its sampler's settings -- both wraps, both filters --
 its `flipY`, its `mapping`, its `channel` and an image, written as a PNG
 `data:` URL of its full-size level. The image is written as its rows are
@@ -1590,9 +1592,18 @@ struct _Writer(Movable):
         writer.key("geometry")
         writer.string(self.library.geometry(mesh.geometry, assets))
         writer.key("material")
-        writer.string(
-            self.library.material(mesh.material, assets, _SURFACE_USE)
-        )
+        if mesh.is_multi_material():
+            # three.js's `toJSON` writes a list of uuids for a list.
+            writer.begin_array()
+            for material in mesh.materials:  # pragma: no branch
+                writer.string(
+                    self.library.material(material, assets, _SURFACE_USE)
+                )
+            writer.end_array()
+        else:
+            writer.string(
+                self.library.material(mesh.material, assets, _SURFACE_USE)
+            )
         _influences(
             writer,
             mesh.morph_influences,

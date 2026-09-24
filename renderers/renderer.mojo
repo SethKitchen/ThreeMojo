@@ -103,6 +103,8 @@ from core.buffer_geometry import (
     UV,
     UV1,
     BufferGeometry,
+    GeometryGroup,
+    MaterialIndex,
 )
 from core.assets import Assets
 from core.geometry_store import GeometryId
@@ -733,6 +735,12 @@ struct _Draw(ImplicitlyCopyable):
     # when the geometry is not instanced. What a per-instance attribute is
     # read at; see `_instancing`.
     var instance: Int
+    # The run of the geometry's triangle stream this draw fills: one
+    # group of a mesh that wears a material list, three.js's `group` in
+    # `renderBufferDirect`. `group_count` is minus one for the whole
+    # stream, which is what every other draw fills.
+    var group_start: Int
+    var group_count: Int
 
 
 struct _Span(ImplicitlyCopyable):
@@ -846,6 +854,8 @@ def _gather(
     receive_shadow: Bool = False,
     colors: List[Color] = List[Color](),
     instances: List[Int] = List[Int](),
+    group_start: Int = 0,
+    group_count: Int = -1,
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -903,6 +913,10 @@ def _gather(
             the last draw is not read.
         instances: Which instance of an instanced geometry each draw is,
             or none when the geometry is not instanced.
+        group_start: The first slot of the triangle stream each draw
+            fills: a group's `start`, or zero for the whole stream.
+        group_count: How many slots each draw fills: a group's `count`,
+            or minus one for the whole stream.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -957,6 +971,8 @@ def _gather(
                 tint,
                 -1,
                 instance,
+                group_start,
+                group_count,
             )
         )
 
@@ -980,7 +996,11 @@ def _draws(
     read into draws by `_gather`, which also leaves out what the camera's
     layers and frustum leave out; an LOD contributes the one level its
     node's distance from the camera picks, three.js's `LOD.update`, or
-    nothing when it has no levels.
+    nothing when it has no levels. A mesh that wears a material list
+    contributes a draw per group, in the group's material, as three.js's
+    `projectObject` pushes a render item per group: each goes into the
+    opaque or the translucent list by its own material, at the mesh's
+    depth.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -1064,32 +1084,51 @@ def _draws(
         var geometry = List[GeometryId](
             length=len(placing[0]), fill=mesh.geometry
         )
+        # A mesh wearing a material list is drawn once per group, each
+        # in the material its index names, as three.js's `projectObject`
+        # pushes one render item per group. A group past the end of the
+        # list is not drawn. A mesh with one material is one run over the
+        # whole stream, whatever groups its geometry has.
+        var runs = List[GeometryGroup]()
+        var wears = List[MaterialId]()
+        if mesh.is_multi_material():
+            for group in assets.geometries.get(mesh.geometry).groups:
+                var worn = mesh.group_material(group.material_index)
+                if Bool(worn):
+                    runs.append(group)
+                    wears.append(worn.value())
+        else:
+            runs.append(GeometryGroup(0, -1, MaterialIndex(0)))
+            wears.append(mesh.material)
         # A mesh wearing a morph target is not where its geometry's bound
         # says it is, so it is not measured against the frustum. The bound
         # describes the face the mesh has stopped wearing. three.js culls
         # it anyway and clips morphed meshes at the edge of the view for
         # exactly this reason.
-        _gather(
-            draws,
-            depths,
-            clear,
-            scene,
-            assets,
-            mesh.node,
-            mesh.material,
-            geometry,
-            placing[0],
-            mesh.frustum_culled and not mesh.is_morphed(),
-            view,
-            visible,
-            frustum,
-            slack,
-            bounds,
-            known,
-            mesh.morph_influences,
-            receive_shadow=mesh.receive_shadow,
-            instances=placing[1],
-        )
+        for run in range(len(runs)):
+            _gather(
+                draws,
+                depths,
+                clear,
+                scene,
+                assets,
+                mesh.node,
+                wears[run],
+                geometry,
+                placing[0],
+                mesh.frustum_culled and not mesh.is_morphed(),
+                view,
+                visible,
+                frustum,
+                slack,
+                bounds,
+                known,
+                mesh.morph_influences,
+                receive_shadow=mesh.receive_shadow,
+                instances=placing[1],
+                group_start=runs[run].start,
+                group_count=runs[run].count,
+            )
     for index in range(len(scene.skinned_meshes)):
         if casters_only:
             continue
@@ -1239,6 +1278,8 @@ def _draws(
                 FloatColor(1, 1, 1, 1),
                 -1,
                 -1,
+                0,
+                -1,
             )
         )
     # The wide lines, sorted among the meshes by their own depth, as the
@@ -1275,6 +1316,8 @@ def _draws(
                 scene.render_order(line.node),
                 FloatColor(1, 1, 1, 1),
                 index,
+                -1,
+                0,
                 -1,
             )
         )
@@ -4294,7 +4337,13 @@ struct Renderer(Movable):
             for slot in range(len(indices)):
                 if indices[slot] >= vertex_count:
                     raise Error("An index entry points past the last vertex")
-            var triangles = geometry.triangle_count()
+            # The run this draw fills: a group of a mesh that wears a
+            # material list, or the whole stream. See `triangle_run`.
+            var run = geometry.triangle_run(
+                draws[slot].group_start, draws[slot].group_count
+            )
+            var run_start = run[0]
+            var triangles = run[1]
             # Grown once per draw rather than by doubling as corners arrive,
             # which copied the frame's whole list several times over: three
             # corners a triangle, before the clipper adds any or the facing
@@ -4335,7 +4384,9 @@ struct Renderer(Movable):
                 # lines, as three.js submits it, and a line has no facing
                 # to reject. A front-sided wireframe box shows the far
                 # side of itself, which is what a wireframe is for.
-                var ends = triangle_edges(geometry)
+                var ends = triangle_edges(
+                    geometry, draws[slot].group_start, draws[slot].group_count
+                )
                 for edge in range(len(ends[0])):
                     var from_end = ends[0][edge]
                     var to_end = ends[1][edge]
@@ -4384,13 +4435,13 @@ struct Renderer(Movable):
                 )
                 continue
             for triangle in range(triangles):
-                var first = triangle * 3
+                var first = run_start + triangle * 3
                 var second = first + 1
                 var third = first + 2
                 if indexed:
-                    first = indices[triangle * 3]
-                    second = indices[triangle * 3 + 1]
-                    third = indices[triangle * 3 + 2]
+                    first = indices[first]
+                    second = indices[second]
+                    third = indices[third]
 
                 var normal_a: Vector3
                 var normal_b: Vector3

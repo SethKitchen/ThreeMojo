@@ -488,7 +488,23 @@ With `use_groups`, the result gets one group per part, and part `i` wears materi
 
 A group is a run of the triangle stream that wears one material: three.js's `addGroup`. `start` and `count` count index entries, or vertices for a geometry without an index. `MaterialIndex` is a position in a list of materials. It is a type, so a bare integer cannot stand in for it.
 
-The renderer draws a mesh in one material. It does not read groups yet. `merge_geometries` writes them and `compute_tangents` reads them.
+A mesh that wears a list of materials draws each group with its own material. A mesh with one material ignores the groups. See [Meshes and assets](Meshes-and-assets#several-materials). `merge_geometries` writes groups and `compute_tangents` reads them.
+
+`triangle_run(start, count)` gives the first slot of a run and the number of whole triangles in it. It stops the run at the end of the stream, as three.js's `renderBufferDirect` stops a group. A `count` of minus one runs to the end. The renderer, the raycaster and the wireframe read a group this way.
+
+### Groups
+
+The built-in geometries write three.js's groups, so a list of materials dresses them as it dresses three.js's:
+
+| Geometry | Groups |
+|---|---|
+| `box`, `cube` | Six, one for each face. The material index is three.js's: +x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. |
+| `cylinder`, `cone` | The side wears 0. The top cap wears 1 and the bottom cap 2, when they are there. |
+| `extrude` | The caps wear 0 and the walls wear 1. |
+| `text_geometry` | Two for each shape: the caps wear 0 and the walls wear 1. |
+| STL text | One for each solid. Solid `i` wears `i`. |
+
+`lathe`, `capsule`, `shape_geometry` of one shape and the others write no groups, as in three.js.
 
 ### Weld
 

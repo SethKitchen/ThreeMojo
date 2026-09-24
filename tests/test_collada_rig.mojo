@@ -679,6 +679,51 @@ def test_lenient_animations() raises:
     assert_list(spin.tracks[2].values, [0.25, 0.5, 0.5, 0.25, 0.5, 0.5])
 
 
+def test_a_skinned_kind_of_several_materials_is_cut_by_group() raises:
+    # A skinned mesh here wears one material, so each group whose
+    # material is in the list becomes a skinned mesh of its own. The
+    # last primitive names no symbol, so its group names a material the
+    # list does not have and draws nothing. Two instances share the cut
+    # geometries.
+    var text = swap(
+        rig(),
+        '<polylist count="2">\n'
+        + '          <input semantic="VERTEX" source="#Blob-vertices"'
+        + ' offset="0"/>\n          <vcount>4 3</vcount>\n'
+        + "          <p>0 1 2 3 1 4 2</p>\n        </polylist>",
+        '<polylist count="1" material="a"><input semantic="VERTEX"'
+        + ' source="#Blob-vertices" offset="0"/><vcount>4</vcount>'
+        + '<p>0 1 2 3</p></polylist><polylist count="1" material="b">'
+        + '<input semantic="VERTEX" source="#Blob-vertices" offset="0"/>'
+        + '<vcount>3</vcount><p>1 4 2</p></polylist><polylist count="1">'
+        + '<input semantic="VERTEX" source="#Blob-vertices" offset="0"/>'
+        + "<vcount>3</vcount><p>1 4 2</p></polylist>",
+    )
+    text = swap(
+        text,
+        "        </instance_controller>\n      </node>\n",
+        "        </instance_controller>\n      </node>\n"
+        + '      <node id="Twin" name="Twin" type="NODE">'
+        + '<instance_controller url="#Blob-skin">'
+        + "<skeleton>#Root-node</skeleton></instance_controller></node>\n",
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = load(text, scene, assets)
+    assert_equal(model.skinned_mesh_count, 4)
+    ref first = scene.skinned_meshes[0]
+    ref twin = scene.skinned_meshes[2]
+    assert_equal(first.geometry, twin.geometry)
+    ref quad = assets.geometries.get(first.geometry)
+    assert_equal(quad.vertex_count(), 6)
+    assert_equal(len(quad.groups), 0)
+    assert_true(quad.has_attribute(String(SKIN_INDEX)))
+    assert_equal(
+        assets.geometries.get(scene.skinned_meshes[1].geometry).vertex_count(),
+        3,
+    )
+
+
 def test_refused_animations() raises:
     var text = rig()
     refused(

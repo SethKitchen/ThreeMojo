@@ -7,17 +7,16 @@
 the forms of `computeMorphedAttributes` that take a mesh.
 
 `create_meshes_from_instanced_mesh` turns each instance of an instanced
-mesh into a mesh of its own under one group. `create_multi_material_object`
+mesh into a mesh of its own under one group.
+`create_meshes_from_multi_material_mesh` turns each group of a mesh that
+wears a material list into a mesh of its own. `create_multi_material_object`
 draws one geometry once for each of several materials. `sort_instanced_mesh`
 reorders an instanced mesh's instances. `reduce_vertices` folds a function
 over every vertex under a node, in world space.
 
 ## What is not here
 
-three.js's `createMeshesFromMultiMaterialMesh` splits a mesh that wears
-one material per group into one mesh per group. A mesh here wears one
-material, until multi-material meshes are ported (issue #167), so there
-is nothing for it to split. three.js's `traverseGenerator` and its kin
+three.js's `traverseGenerator` and its kin
 are JavaScript generators over a tree; `Scene.descendants` and
 `Scene.children` walk this scene's array instead.
 
@@ -39,6 +38,7 @@ from core.scene import Scene
 from geometries.attribute_utils import (
     MorphedAttributes,
     compute_morphed_attributes,
+    merge_groups,
 )
 from materials.material import MaterialId
 from core.geometry_store import GeometryId
@@ -85,6 +85,81 @@ def create_meshes_from_instanced_mesh(
         )
         var id = scene.attach(node^, group_id)
         scene.add_mesh(Mesh(instanced.geometry, instanced.material, id))
+    return group_id
+
+
+def create_meshes_from_multi_material_mesh(
+    mut scene: Scene, mut assets: Assets, index: Int
+) raises -> NodeId:
+    """Add a group of meshes, one for each material of a mesh that wears
+    a material list, three.js's `createMeshesFromMultiMaterialMesh`.
+
+    The geometry's groups are first sorted and joined by material, by
+    `merge_groups` on a copy. Each joined group then becomes a geometry
+    of its own, every attribute read through the index for the group's
+    slots, so the new geometry has no index. It is drawn with the
+    material the group's index names, at a node of its own under the
+    group. The group copies the mesh's node. As in three.js, the new
+    geometries carry no morph target and no group, and the node's
+    children are not copied under the group.
+
+    A group whose material index is past the end of the list gets a
+    mesh with no material in three.js. It is refused here, because a
+    mesh here must name a material.
+
+    A mesh with one material is not split. Its own node is returned, as
+    three.js warns and returns the mesh itself.
+
+    Args:
+        scene: The scene, which the group and the meshes are added to.
+        assets: Where the mesh's geometry is, and where the new
+            geometries are added.
+        index: Which mesh, as its place in `scene.meshes`.
+
+    Returns:
+        The group's node, or the mesh's own node for a mesh with one
+        material.
+
+    Raises:
+        Error: If there is no mesh of that index, its node or geometry is
+            not there, a group reaches past the end of the index or names
+            a material the list does not have, or an index entry points
+            past the last vertex.
+    """
+    if index < 0 or index >= len(scene.meshes):
+        raise Error("No mesh has that index")
+    var mesh = scene.meshes[index]
+    if not mesh.is_multi_material():
+        return mesh.node
+    var geometry = assets.geometries.get(mesh.geometry).clone()
+    # Asked first, so a geometry without positions is refused here and
+    # every part below has an attribute to read.
+    _ = geometry.vertex_count()
+    merge_groups(geometry)
+    var parts = List[BufferGeometry]()
+    var wears = List[MaterialId]()
+    for group in geometry.groups:
+        var worn = mesh.group_material(group.material_index)
+        if not Bool(worn):
+            raise Error("A group names a material the mesh does not have")
+        var slots = List[Int]()
+        for slot in range(group.start, group.start + group.count):
+            slots.append(geometry.vertex_at(slot))
+        var part = BufferGeometry()
+        for attribute in range(len(geometry.names)):  # pragma: no branch
+            part.set_attribute(
+                geometry.names[attribute],
+                geometry.values[attribute].gather(slots),
+            )
+        parts.append(part^)
+        wears.append(worn.value())
+    var copied = scene.get(mesh.node)
+    copied.parent = NO_PARENT
+    var group_id = scene.add(copied^)
+    for part in range(len(parts)):
+        var node = scene.attach(Object3D(), group_id)
+        var id = assets.geometries.add(parts[part].clone())
+        scene.add_mesh(Mesh(id, wears[part], node))
     return group_id
 
 

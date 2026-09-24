@@ -31,8 +31,11 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | Field | Meaning |
 |---|---|
 | `name` | From `o` or `g`. Empty when the file has neither. Faces read before the first `o` or `g` belong to it, as three.js has it. |
-| `material` | The name from `usemtl`. Empty before one. See [Material libraries](#material-libraries). |
-| `geometry` | A non-indexed `BufferGeometry` with `position`, and with `normal` and `uv` when the faces name them. |
+| `material` | The first name in `materials`. |
+| `materials` | The names from `usemtl`, one for each run of faces. It holds one entry, which is empty when no `usemtl` comes before the faces. See [Material libraries](#material-libraries). |
+| `geometry` | A non-indexed `BufferGeometry` with `position`, and with `normal` and `uv` when the faces name them. It has one group for each run when `materials` has more than one entry. Group `i` wears entry `i`. |
+
+`is_multi_material()` is true when the object uses more than one material.
 
 `take_geometry()` swaps the geometry out for an empty one, so it can go into a store. A `BufferGeometry` moves and does not copy.
 
@@ -45,7 +48,7 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `vn x y z` | A normal. |
 | `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
-| `usemtl name` | A new object under that material, with the same name. |
+| `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
 | `#` | A comment, to the end of the line. |
 
@@ -78,17 +81,18 @@ The parser raises, naming the line, for:
 var assets = Assets()
 var read = read_obj_with_materials("assets/cube.obj", assets)
 var shape = assets.geometries.add(read.model.objects[0].take_geometry())
-scene.add_mesh(Mesh(shape, read.materials[0], node))
+scene.add_mesh(obj_mesh(read.materials[0], shape, node))
 ```
 
 | Function | Meaning |
 |---|---|
 | `read_mtl(path, assets) -> MtlLibrary` | Read a file. Texture file names are relative to its directory. |
 | `parse_mtl(text, directory, assets) -> MtlLibrary` | Read the text of one. `directory` ends in `/`, or is empty. |
-| `set_materials(model, library, assets) -> List[MaterialId]` | One `MaterialId` for each object of an `ObjModel`, in its order. |
+| `set_materials(model, library, assets) -> List[List[MaterialId]]` | One list for each object of an `ObjModel`, in its order, with one `MaterialId` for each entry of the object's `materials`. |
+| `obj_mesh(materials, geometry, node) -> Mesh` | The mesh three.js builds for an object: one material, or a list when there are more. |
 | `read_obj_with_materials(path, assets) -> ObjWithMaterials` | Read an OBJ file and each library its `mtllib` lines name. |
 
-`ObjWithMaterials` has `model`, the `ObjModel`, `library`, the combined `MtlLibrary`, and `materials`, one `MaterialId` for each object. The loader reads each library relative to the OBJ file. A material in a later library replaces a material of the same name in an earlier one.
+`ObjWithMaterials` has `model`, the `ObjModel`, `library`, the combined `MtlLibrary`, and `materials`, one list of `MaterialId`s for each object. The loader reads each library relative to the OBJ file. A material in a later library replaces a material of the same name in an earlier one.
 
 ### MtlLibrary
 
@@ -194,7 +198,9 @@ A file exactly as long as its face count says is binary. Otherwise, a file with 
 | Field | Meaning |
 |---|---|
 | `geometry` | A non-indexed `BufferGeometry`. It has `position` and `normal`, and `color` when the binary header has `COLOR=`. Each corner gets the normal of its face. |
-| `solids` | One `StlSolid` for each solid, in file order: `name`, `start` and `count`. `start` and `count` count corners. A binary file has one solid with no name. These are the groups of three.js. |
+| `solids` | One `StlSolid` for each solid, in file order: `name`, `start` and `count`. `start` and `count` count corners. A binary file has one solid with no name. |
+
+An ASCII file's geometry has one group for each solid. Solid `i` wears material `i`, as three.js's `parseASCII` adds them. A binary file's geometry has no group.
 | `alpha` | The alpha of `COLOR=`, from zero to one. It is one when the file has no header color. |
 
 `has_colors()` is true when the geometry has a `color` attribute. `take_geometry()` swaps the geometry out for an empty one.
@@ -510,13 +516,15 @@ The model tells what went where.
 
 | Collada | ThreeMojo |
 |---|---|
-| `<triangles>`, `<polylist>`, `<polygons>` | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when the inputs give them. It is drawn as a `Mesh`. |
+| `<triangles>`, `<polylist>`, `<polygons>` | One `BufferGeometry` for each kind, with `position`, and `normal`, `uv` and `color` when the inputs give them. Each primitive of the kind is a group. It is drawn as a `Mesh`. |
 | `<lines>`, `<linestrips>` | A geometry of point pairs, drawn as a `Line` in `SEGMENTS` mode. |
 | `phong`, `blinn` | A `PHONG` material, three.js's `MeshPhongMaterial`. |
 | `lambert` | A `LAMBERT` material, three.js's `MeshLambertMaterial`. |
 | `constant` | A `BASIC` material, three.js's `MeshBasicMaterial`. |
 | `<node>` | An `Object3D`. Its `<matrix>`, `<translate>`, `<rotate>` and `<scale>` steps are multiplied in file order and decomposed. |
-| `<instance_geometry>` | A mesh or a line for each primitive, with the material that `<bind_material>` binds to its symbol. |
+| `<instance_geometry>` | A mesh for each kind of surface primitive and a line for each line primitive, with the materials that `<bind_material>` binds to their symbols. |
+
+Group `i` wears material `i` of the list of symbols that the primitives name. A primitive with no symbol adds a group and no material, as in three.js. A kind with more than one symbol is a mesh that wears a list. See [Several materials](Meshes-and-assets#several-materials). A skinned kind with more than one symbol is one `SkinnedMesh` for each group, because a skinned mesh here wears one material.
 | `<instance_node>` | The node from `<library_nodes>` or the visual scene, placed again. |
 | `<instance_controller>` of a `<skin>` | A `SkinnedMesh` for each primitive of the skin's geometry. See [Skins and animations](#skins-and-animations). |
 | `<animation>`, `<animation_clip>` | An `AnimationClip`. |
@@ -590,7 +598,8 @@ A file with animations and no clips gives one clip, `default`, of every animatio
 
 ### Differences from three.js
 
-- Each primitive is its own geometry and its own `Mesh`. three.js makes one geometry for each kind of primitive, with groups and an array of materials. A mesh here draws one material.
+- Each line primitive is its own geometry and its own `Line`. three.js makes one geometry for each kind, with groups and an array of materials. A line here draws one material.
+- Two surface primitives of one kind that do not agree about an attribute are refused. three.js fills the attribute in part.
 - `<polygons>` is read. three.js does not read it.
 - A vertex color is decoded from sRGB in each of its three channels. three.js decodes the wrong three values of each color.
 - A texture coordinate keeps its first two values. three.js keeps all the values of the source.
@@ -685,7 +694,7 @@ A binary file writes an object name as `Name\x00\x01Class`. three.js stops the s
 | FBX | ThreeMojo |
 |---|---|
 | `Model` | An `Object3D` under its parent model. |
-| `Geometry` of type `Mesh` | For each material index, a `BufferGeometry` with `position`, and `normal`, `uv` and `color` when the layer elements give them. |
+| `Geometry` of type `Mesh` | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when the layer elements give them. It has a group for each run of polygons of one material index, as three.js's `genGeometry` adds them. A layer mapped `AllSame` adds no group. |
 | `Material` | A `LAMBERT` material for the `lambert` shading model, and a `PHONG` material for any other, as in three.js. |
 | `Texture` and `Video` | A `Texture`. |
 | `NodeAttribute` of a `Camera` model | A `PerspectiveCamera`. |
@@ -711,7 +720,9 @@ The geometric translation, rotation and scale of the first model of a geometry m
 
 A reference of `Direct` reads the values directly. `IndexToDirect`, or the older `Index`, reads them through the indices. `FbxMapping` and `FbxReference` are types. `FbxLayer.start` refuses a value that is none of the named constants.
 
-A vertex color is decoded from sRGB. A material index below zero is zero, as in three.js. A mesh with no material draws with a gray `PHONG` material, `0xcccccc`. An index past the materials of a mesh draws with a white `PHONG` material. When the geometry has colors, each material of the mesh gets `vertex_colors`, as in three.js.
+A vertex color is decoded from sRGB. A material index below zero is zero, as in three.js. A mesh with no material draws with a gray `PHONG` material, `0xcccccc`. When the geometry has colors, each material of the mesh gets `vertex_colors`, as in three.js.
+
+A mesh with one material wears it on every polygon. A mesh with more is one `Mesh` that wears them as a list, in the order they connect. A group whose index is past the list draws nothing, as in three.js. A skinned mesh with more is one `SkinnedMesh` for each group, because a skinned mesh here wears one material. A geometry with no polygons gets no mesh. three.js adds a mesh of nothing.
 
 ### Materials
 
@@ -779,7 +790,6 @@ The stacks come in the order that three.js meets them. A JavaScript object puts 
 
 ### Differences from three.js
 
-- Each material index of a geometry is its own geometry and its own `Mesh`. three.js makes one geometry with groups.
 - A polygon of four or more corners is cut by ear clipping. three.js uses earcut, which picks other diagonals. A flat polygon gives the same surface.
 - The ASCII reader reads tokens, not lines and tabs. A file that three.js reads, this reader reads the same way.
 - three.js sets the penumbra of a spot light to the outer angle in radians, at least 1. This loader uses 1, because a penumbra above 1 is refused.

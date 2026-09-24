@@ -28,10 +28,18 @@ steps multiplied in order and decomposed; the visual scene becomes a root
 node, turned a quarter turn about x for a `Z_UP` file and scaled by the
 file's unit, as three.js turns and scales its `scene`.
 
-**One geometry per primitive.** three.js builds one geometry per kind of
-primitive, with a group per primitive and an array of materials. A mesh
-here draws one material, so each primitive is its own geometry and its
-own `Mesh`, as `loaders.obj` makes one object per `usemtl`.
+**One geometry per kind of primitive.** The `<triangles>` of a geometry
+are one geometry, its `<polylist>`s another and its `<polygons>` a third,
+each with a group per primitive, as three.js's `buildGeometryType` builds
+them. Group `i` wears material `i` of the list of the symbols the
+primitives name, as in three.js, where a primitive with no symbol adds a
+group and no material. A kind with more than one symbol is one `Mesh`
+that wears the bound materials as a list; with one, it wears that one;
+with none, the default. A skinned kind with more than one symbol is
+cut into a `SkinnedMesh` a group, because a skinned mesh here wears one
+material. Lines are the exception: a `Line` here draws one
+material, so each `<lines>` and `<linestrips>` is its own geometry and
+its own `Line`.
 
 **Skins.** An `<instance_controller>` of a `<skin>` controller draws the
 skin's geometry as `SkinnedMesh`es, as three.js's `buildNode`,
@@ -63,7 +71,14 @@ from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+    MaterialIndex,
+)
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -443,12 +458,14 @@ struct _Input(Copyable, Movable):
 
 @fieldwise_init
 struct _Built(Copyable, Movable):
-    """One primitive, built: its geometry, whether it is lines, and the
-    material symbol it names, or empty."""
+    """One object's geometry, built: a line primitive, or every surface
+    primitive of one kind. Whether it is lines, and the material symbols
+    its primitives name, in order, leaving out a primitive that names
+    none."""
 
     var geometry: GeometryId
     var lines: Bool
-    var symbol: String
+    var symbols: List[String]
     # three.js makes one object per kind of primitive in a geometry, and
     # counts them to decide whether a node is one object.
     var kind: String
@@ -578,6 +595,25 @@ def _row_major(values: List[Float64], start: Int) -> Matrix4:
     for at in range(16):  # pragma: no branch
         out.elements[(at % 4) * 4 + at // 4] = Float32(values[start + at])
     return out^
+
+
+struct _Surface(Movable):
+    """The surface primitives of one kind in one geometry, gathered: their
+    corners one after another, how many corners each has, and the
+    symbols of those that name one."""
+
+    var corners: _Corners
+    var counts: List[Int]
+    var symbols: List[String]
+
+    def __init__(out self):
+        self.corners = _Corners()
+        self.counts = List[Int]()
+        self.symbols = List[String]()
+
+    def count(self) -> Int:
+        """Return how many corners were gathered."""
+        return len(self.corners.positions) // 3
 
 
 struct _Loader(Movable):
@@ -1427,15 +1463,40 @@ struct _Loader(Movable):
             self.collect_bindings(bind, bindings)
         for slot in range(self.built_count[id]):
             var built = self.built[self.built_at[id] + slot].copy()
-            var material = self.material_for(
-                built.symbol, bindings, built.lines, assets
-            )
+            var materials = self.materials_for(built, bindings, assets)
             if built.lines:
                 scene.add_line(
-                    Line(built.geometry, material, node, mode=SEGMENTS)
+                    Line(built.geometry, materials[0], node, mode=SEGMENTS)
                 )
+            elif len(materials) == 1:
+                scene.add_mesh(Mesh(built.geometry, materials[0], node))
             else:
-                scene.add_mesh(Mesh(built.geometry, material, node))
+                scene.add_mesh(Mesh(built.geometry, materials, node))
+
+    def materials_for(
+        mut self,
+        built: _Built,
+        bindings: Dict[String, String],
+        mut assets: Assets,
+    ) raises -> List[MaterialId]:
+        """Return the materials an object's symbols are bound to, in
+        order, or the default when it names none, as three.js's
+        `resolveMaterialBinding` and `buildObjects` give them.
+
+        Raises:
+            Error: If a symbol is bound to a material id the file does
+                not have.
+        """
+        var materials = List[MaterialId]()
+        for symbol in built.symbols:
+            materials.append(
+                self.material_for(symbol, bindings, built.lines, assets)
+            )
+        if len(materials) == 0:
+            materials.append(
+                self.material_for(String(), bindings, built.lines, assets)
+            )
+        return materials^
 
     def collect_bindings(
         self, element: Int, mut bindings: Dict[String, String]
@@ -1570,6 +1631,11 @@ struct _Loader(Movable):
                     )
                 )
         self.built_at[id] = len(self.built)
+        # The kinds in the order they first appear, as three.js's
+        # `groupPrimitives` keys them, and what each gathered.
+        var kinds = List[String]()
+        var surfaces = List[_Surface]()
+        var line_built = List[List[_Built]]()
         for primitive in self.document.children(mesh):
             var kind = self.document.name(primitive)
             if (
@@ -1579,8 +1645,66 @@ struct _Loader(Movable):
                 or kind == "lines"
                 or kind == "linestrips"
             ):
-                self.build_primitive(primitive, kind, sources, vertices, assets)
+                var at = -1
+                for index in range(len(kinds)):
+                    if kinds[index] == kind:
+                        at = index
+                if at < 0:
+                    at = len(kinds)
+                    kinds.append(kind)
+                    surfaces.append(_Surface())
+                    line_built.append(List[_Built]())
+                self.build_primitive(
+                    primitive,
+                    kind,
+                    sources,
+                    vertices,
+                    assets,
+                    surfaces[at],
+                    line_built[at],
+                )
+        for index in range(len(kinds)):
+            if len(line_built[index]) > 0:
+                self.built.extend(line_built[index].copy())
+            elif surfaces[index].count() > 0:
+                self.built.append(
+                    self.surface_geometry(surfaces[index], kinds[index], assets)
+                )
         self.built_count[id] = len(self.built) - self.built_at[id]
+
+    def surface_geometry(
+        mut self, surface: _Surface, kind: String, mut assets: Assets
+    ) raises -> _Built:
+        """Build the geometry of every surface primitive of one kind, with
+        a group per primitive, as three.js's `buildGeometryType` does.
+
+        Raises:
+            Error: If an attribute covers some corners and not others.
+        """
+        var count = surface.count()
+        ref corners = surface.corners
+        var geometry = BufferGeometry()
+        geometry.set_attribute(
+            String(POSITION), BufferAttribute(corners.positions.copy(), 3)
+        )
+        _optional(geometry, NORMAL, corners.normals, 3, count)
+        _optional(geometry, COLOR, corners.colors, corners.color_size, count)
+        _optional(geometry, UV, corners.uvs, 2, count)
+        var start = 0
+        for index in range(len(surface.counts)):  # pragma: no branch
+            geometry.add_group(
+                start, surface.counts[index], MaterialIndex(index)
+            )
+            start += surface.counts[index]
+        var id = assets.geometries.add(geometry^)
+        self.model.geometries.append(id)
+        return _Built(
+            id,
+            False,
+            surface.symbols.copy(),
+            kind,
+            surface.corners.vertices.copy(),
+        )
 
     def build_primitive(
         mut self,
@@ -1589,8 +1713,11 @@ struct _Loader(Movable):
         sources: Dict[String, _Source],
         vertices: List[_Input],
         mut assets: Assets,
+        mut surface: _Surface,
+        mut lines_built: List[_Built],
     ) raises:
-        """Build one primitive's geometry and record it.
+        """Gather one primitive: a surface's corners into its kind's
+        `surface`, or a line's into a geometry of its own.
 
         Args:
             primitive: The `<triangles>`, `<polylist>`, `<polygons>`,
@@ -1598,7 +1725,9 @@ struct _Loader(Movable):
             kind: Its name.
             sources: The mesh's sources by id.
             vertices: The inputs its `<vertices>` gives.
-            assets: Where the geometry goes.
+            assets: Where a line's geometry goes.
+            surface: What the surface primitives of this kind gathered.
+            lines_built: The line primitives of this kind, built.
 
         Raises:
             Error: If it has no inputs, an input names no source, the
@@ -1669,22 +1798,34 @@ struct _Loader(Movable):
                         "Collada: a <polylist>'s vcount does not match its <p>"
                     )
             _polygon_order(counts, order)
+        var symbol = self.document.attribute(primitive, "material")
+        if not lines:
+            # Gathered onto the kind's corners, with a group of its own
+            # and its symbol, when it names one. three.js adds the group
+            # and not the symbol for a primitive that names none.
+            var before = len(surface.corners.positions)
+            for corner in order:
+                self.gather_corner(
+                    corner * stride,
+                    inputs,
+                    indices,
+                    sources,
+                    vertices,
+                    surface.corners,
+                )
+            if len(surface.corners.positions) - before != len(order) * 3:
+                raise Error(
+                    "Collada: a primitive's positions do not match its corners"
+                )
+            surface.counts.append(len(order))
+            if symbol != "":
+                surface.symbols.append(symbol)
+            return
         var corners = _Corners()
         for corner in order:
-            var base = corner * stride
-            # A primitive with no inputs was refused above: the loop always
-            # runs.
-            for input in inputs:  # pragma: no branch
-                var index = indices[base + input.offset]
-                if input.name == "VERTEX":
-                    for shared in vertices:
-                        self.gather(
-                            shared.name, sources, shared.source, index, corners
-                        )
-                else:
-                    self.gather(
-                        input.name, sources, input.source, index, corners
-                    )
+            self.gather_corner(
+                corner * stride, inputs, indices, sources, vertices, corners
+            )
         var count = len(order)
         if count == 0:
             return
@@ -1698,19 +1839,37 @@ struct _Loader(Movable):
         )
         _optional(geometry, NORMAL, corners.normals, 3, count)
         _optional(geometry, COLOR, corners.colors, corners.color_size, count)
-        if not lines:
-            _optional(geometry, UV, corners.uvs, 2, count)
         var id = assets.geometries.add(geometry^)
         self.model.geometries.append(id)
-        self.built.append(
-            _Built(
-                id,
-                lines,
-                self.document.attribute(primitive, "material"),
-                kind,
-                corners.vertices.copy(),
-            )
+        lines_built.append(
+            _Built(id, True, [symbol], kind, corners.vertices.copy())
         )
+
+    def gather_corner(
+        self,
+        base: Int,
+        inputs: List[_Input],
+        indices: List[Int],
+        sources: Dict[String, _Source],
+        vertices: List[_Input],
+        mut corners: _Corners,
+    ) raises:
+        """Append one corner's values of every input.
+
+        Raises:
+            Error: If an input's source is not there, or an index is
+                outside it.
+        """
+        # A primitive with no inputs was refused: the loop always runs.
+        for input in inputs:  # pragma: no branch
+            var index = indices[base + input.offset]
+            if input.name == "VERTEX":
+                for shared in vertices:
+                    self.gather(
+                        shared.name, sources, shared.source, index, corners
+                    )
+            else:
+                self.gather(input.name, sources, input.source, index, corners)
 
     def gather(
         self,
@@ -1818,9 +1977,8 @@ struct _Loader(Movable):
                 self.collect_bindings(bind, bindings)
             for slot in range(self.built_count[geometry]):
                 var built = self.built[self.built_at[geometry] + slot].copy()
-                var material = self.material_for(
-                    built.symbol, bindings, built.lines, assets
-                )
+                var materials = self.materials_for(built, bindings, assets)
+                var material = materials[0]
                 if built.lines:
                     # three.js draws a line of a skinned geometry unskinned.
                     scene.add_line(
@@ -1839,15 +1997,44 @@ struct _Loader(Movable):
                     var made = assets.geometries.add(shape^)
                     self.model.geometries.append(made)
                     self.rig.skinned[key] = made
-                scene.add_skinned_mesh(
-                    SkinnedMesh(
-                        self.rig.skinned[key],
-                        material,
-                        waiting.node,
-                        skeleton.copy(),
-                        data.bind,
+                if len(materials) == 1:
+                    scene.add_skinned_mesh(
+                        SkinnedMesh(
+                            self.rig.skinned[key],
+                            material,
+                            waiting.node,
+                            skeleton.copy(),
+                            data.bind,
+                        )
                     )
-                )
+                    continue
+                # A skinned mesh here wears one material, so a kind with
+                # several is cut into a skinned mesh a group. three.js
+                # keeps one `SkinnedMesh` with the list.
+                var groups = assets.geometries.get(
+                    self.rig.skinned[key]
+                ).groups.copy()
+                for index in range(len(groups)):  # pragma: no branch
+                    var worn = groups[index].material_index.value
+                    if worn >= len(materials):
+                        continue
+                    var part_key = key + "#" + String(index)
+                    if part_key not in self.rig.skinned:
+                        var part = assets.geometries.get(
+                            self.rig.skinned[key]
+                        ).group_part(groups[index])
+                        var made = assets.geometries.add(part^)
+                        self.model.geometries.append(made)
+                        self.rig.skinned[part_key] = made
+                    scene.add_skinned_mesh(
+                        SkinnedMesh(
+                            self.rig.skinned[part_key],
+                            materials[worn],
+                            waiting.node,
+                            skeleton.copy(),
+                            data.bind,
+                        )
+                    )
 
     def skin_source(self, sources: Dict[String, Int], id: String) raises -> Int:
         """Return a skin's `<source>` of an id.

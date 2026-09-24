@@ -52,12 +52,26 @@ implicitly copyable -- a scene adds one by value, and a list field would
 have made every `add_mesh` call consume its argument instead. The influence
 of a target the geometry does not have is simply never read.
 
+## Several materials
+
+A mesh can wear a list of materials, three.js's `Mesh.material` as an
+array. Each group of its geometry then draws with the material its
+`material_index` names, and a group whose index is past the end of the
+list draws nothing, as in three.js. A mesh with a list and a geometry
+without groups draws nothing either: three.js reads the groups and finds
+none. A mesh with one material ignores the groups and draws every
+triangle, as three.js does.
+
+`material` holds the first entry of the list, so code that reads one
+material reads a sensible one. `materials` is empty for a mesh with one
+material. See `is_multi_material` and `group_material`.
+
 Color used to live here, with a note saying a `Material` would be ceremony
 until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """
 
-from core.buffer_geometry import MAX_MORPH_TARGETS
+from core.buffer_geometry import MAX_MORPH_TARGETS, MaterialIndex
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
@@ -82,6 +96,10 @@ struct Mesh(ImplicitlyCopyable):
     # See `lights.shadow`.
     var cast_shadow: Bool
     var receive_shadow: Bool
+    # The materials the geometry's groups wear, three.js's `material`
+    # array, or empty for a mesh with one material. See the module
+    # docstring.
+    var materials: List[MaterialId]
 
     def __init__(
         out self,
@@ -127,6 +145,100 @@ struct Mesh(ImplicitlyCopyable):
         self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
         self.cast_shadow = cast_shadow
         self.receive_shadow = receive_shadow
+        self.materials = List[MaterialId]()
+
+    def __init__(
+        out self,
+        geometry: GeometryId,
+        materials: List[MaterialId],
+        node: NodeId,
+        *,
+        frustum_culled: Bool = True,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
+    ) raises:
+        """Bind a stored geometry and a list of materials to a scene node,
+        three.js's `new Mesh(geometry, [a, b, ...])`.
+
+        Each group of the geometry draws with the material its
+        `material_index` names. A list of one entry is still a list: the
+        groups are read, as three.js reads them for an array of one.
+
+        Args:
+            geometry: Id of the geometry to draw, from `GeometryStore.add`.
+            materials: The materials the groups wear, by position.
+            node: Index of the scene node giving its world transform.
+            frustum_culled: Whether the renderer may skip this mesh when
+                its bounds are out of view.
+            cast_shadow: Whether this mesh is drawn into the shadow maps.
+            receive_shadow: Whether the shadows fall on this mesh.
+
+        Raises:
+            Error: If the list is empty, or any id is negative.
+        """
+        if len(materials) == 0:
+            raise Error("A mesh with a material list needs one material")
+        for index in range(len(materials)):  # pragma: no branch
+            if materials[index].value < 0:
+                raise Error("A mesh must name a material")
+        self = Mesh(
+            geometry,
+            materials[0],
+            node,
+            frustum_culled=frustum_culled,
+            cast_shadow=cast_shadow,
+            receive_shadow=receive_shadow,
+        )
+        self.materials = materials.copy()
+
+    def __init__(out self, *, copy: Self):
+        """Copy a mesh, its material list included.
+
+        Written out because a list is not copied implicitly, and a mesh
+        is: a scene adds one by value.
+
+        Args:
+            copy: The mesh to copy.
+        """
+        self.geometry = copy.geometry
+        self.material = copy.material
+        self.node = copy.node
+        self.frustum_culled = copy.frustum_culled
+        self.morph_influences = copy.morph_influences
+        self.cast_shadow = copy.cast_shadow
+        self.receive_shadow = copy.receive_shadow
+        self.materials = copy.materials.copy()
+
+    def is_multi_material(self) -> Bool:
+        """Return True if the mesh wears a list of materials, three.js's
+        `Array.isArray(mesh.material)`.
+        """
+        return len(self.materials) > 0
+
+    def group_material(
+        self, index: MaterialIndex
+    ) raises -> Optional[MaterialId]:
+        """Return the material a group wears, three.js's
+        `material[group.materialIndex]`.
+
+        Args:
+            index: The group's material index.
+
+        Returns:
+            The material, or none when the index is past the end of the
+            list: three.js reads `undefined` and draws nothing.
+
+        Raises:
+            Error: If the mesh has one material and no list, or the index
+                is not valid.
+        """
+        if not self.is_multi_material():
+            raise Error("A mesh with one material has no material list")
+        if not index.is_valid():
+            raise Error("A group's material index cannot be negative")
+        if index.value >= len(self.materials):
+            return None
+        return self.materials[index.value]
 
     def set_morph_influence(mut self, target: Int, weight: Float32) raises:
         """Set how much of one morph target this mesh wears.

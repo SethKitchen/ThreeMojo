@@ -37,6 +37,42 @@ A mesh holds no transform. The node holds it. One geometry can be drawn at many 
 
 `cast_shadow` and `receive_shadow` are three.js's `castShadow` and `receiveShadow`, both off by default. See [Shadows](Lights#shadows).
 
+## Several materials
+
+A mesh can wear a list of materials. Each group of its geometry then draws with the material that its `material_index` names. three.js: `Mesh.material` as an array, with `BufferGeometry.groups`.
+
+```mojo
+var faces = List[MaterialId]()
+for face in range(6):
+    faces.append(assets.materials.add(Material(Color(40 * face, 90, 200))))
+scene.add_mesh(Mesh(box, faces, node))
+```
+
+| Member | Meaning |
+|---|---|
+| `Mesh(geometry, materials, node, ...)` | A mesh that wears a list. The list must hold one material or more. |
+| `materials` | The list, or empty for a mesh with one material. |
+| `material` | The one material, or the first entry of the list. |
+| `is_multi_material() -> Bool` | True when the mesh wears a list. three.js: `Array.isArray(mesh.material)`. |
+| `group_material(index) -> Optional[MaterialId]` | The material of a group's `MaterialIndex`, or none past the end of the list. |
+
+These rules are three.js's:
+
+- A group whose index is past the end of the list draws nothing.
+- A mesh with a list and a geometry without groups draws nothing.
+- A mesh with one material ignores the groups and draws every triangle.
+- A group that runs past the end of the index stops there. A part of a triangle is not drawn. See `BufferGeometry.triangle_run`.
+
+The renderer makes one draw for each group. The opaque groups and the blended groups go into their own lists, as three.js's `projectObject` puts them. So a blended group of a mesh draws after every opaque group of every mesh. Each group keeps the depth of its mesh. Both rasterizers take the same prepared triangles, so the GPU draws the groups as the CPU does.
+
+A wireframe group draws the edges of its own triangles. A shadow map draws each group that casts. The raycaster tests each group with the side of its own material. See [Raycasting](Raycasting).
+
+The built-in geometries write the groups that three.js writes. See [Geometry](Geometry#groups). `create_meshes_from_multi_material_mesh` splits a mesh that wears a list into one mesh for each material. See [Geometry addons](Geometry-addons).
+
+The loaders keep a list where three.js keeps one: OBJ `usemtl`, [Collada](Model-files#collada), [FBX](Model-files#fbx) and [Scene JSON](Scene-JSON). A glTF mesh of several primitives is a node of several meshes, as three.js makes a `Group` of them. The glTF, OBJ and Scene JSON exporters write a list. See [Exporters](Exporters).
+
+A skinned mesh, an instanced mesh, a batched mesh, an LOD level, a line and points wear one material. three.js lets each of them wear a list. The FBX and Collada loaders cut a skinned geometry of several materials into one skinned mesh for each group. `BufferGeometry.group_part` gives the corners of one group as a geometry of their own.
+
 ## InstancedMesh
 
 `objects/instanced_mesh.mojo`. An `InstancedMesh` draws one geometry with one material at many transforms, each relative to one node. three.js: `InstancedMesh`, `instanceMatrix`, `setMatrixAt`, `getMatrixAt`.

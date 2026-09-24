@@ -21,10 +21,13 @@ What is read is what three.js's loader reads and this renderer can draw:
   refused rather than drawn wrong, as three.js draws it. An index counts
   from one, and a negative one counts back from the last entry so far,
   as the format allows.
-- `o name` and `g name` start a new object; `usemtl name` starts a new
-  object under that material, keeping the name, since one geometry has one
-  material here where three.js's has groups. An object with no faces is
+- `o name` and `g name` start a new object. An object with no faces is
   left out, as three.js leaves it out.
+- `usemtl name` starts a new run of faces under that material, in the
+  same object. An object that uses more than one material gets a group
+  per run, and run `i` wears material `i` of `ObjObject.materials`, as
+  three.js's `startMaterial` and its multi-material mesh do. A run with
+  no faces is dropped. The material in force carries into a new object.
 - `mtllib name` names a material library, kept in `material_libraries`
   as three.js keeps it in `materialLibraries`. The rest of the line is one
   file name, as three.js reads it. `loaders.mtl` reads the library and
@@ -49,40 +52,58 @@ that names nothing are refused, with the line they were found on.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+    MaterialIndex,
+)
 from math.vector3 import Vector3
 from std.math import isfinite
 from std.pathlib import Path
 
 
 struct ObjObject(Movable):
-    """One object of an OBJ file: its name, the material it asks for by
+    """One object of an OBJ file: its name, the materials it asks for by
     name, and its geometry."""
 
     # From `o` or `g`; empty for faces before either.
     var name: String
-    # From `usemtl`; empty for faces before one. A name in the file's
-    # material library: `loaders.mtl.set_materials` matches it to a
-    # `MaterialId`.
+    # The first of `materials`: the one material of an object that uses
+    # one. Empty when no `usemtl` came before its faces.
     var material: String
+    # From `usemtl`, one a run of faces, in file order: names in the
+    # file's material library, which `loaders.mtl.set_materials` matches
+    # to `MaterialId`s. One entry, possibly empty, when the object uses
+    # one material. With more, the geometry has a group a run, and group
+    # `i` wears entry `i`.
+    var materials: List[String]
     var geometry: BufferGeometry
 
     def __init__(
         out self,
         var name: String,
-        var material: String,
+        var materials: List[String],
         var geometry: BufferGeometry,
     ):
         """Bundle a finished object.
 
         Args:
             name: Its name, from `o` or `g`.
-            material: The material it asks for, from `usemtl`.
+            materials: The materials it asks for, from `usemtl`, one a
+                run of faces; at least one.
             geometry: Its triangles.
         """
         self.name = name^
-        self.material = material^
+        self.material = materials[0]
+        self.materials = materials^
         self.geometry = geometry^
+
+    def is_multi_material(self) -> Bool:
+        """Return True if the object uses more than one material, and so
+        has a group a material."""
+        return len(self.materials) > 1
 
     def take_geometry(mut self) -> BufferGeometry:
         """Give up this object's geometry, to go into a `GeometryStore`.
@@ -118,11 +139,23 @@ struct ObjModel(Movable):
         return len(self.objects)
 
 
+@fieldwise_init
+struct _Run(Copyable, Movable):
+    """A run of an object's corners under one `usemtl`, three.js's
+    material entry in `startMaterial`."""
+
+    var name: String
+    var start: Int
+    # Minus one while the run is still open.
+    var end: Int
+
+
 struct _Part(Movable):
     """An object being read: its corners so far, and what each carries."""
 
     var name: String
-    var material: String
+    # The runs of corners under each material so far.
+    var runs: List[_Run]
     var positions: List[Float32]
     var normals: List[Float32]
     var uvs: List[Float32]
@@ -137,16 +170,53 @@ struct _Part(Movable):
 
         Args:
             name: Its name.
-            material: The material it asks for so far.
+            material: The material in force, carried from the object
+                before, or empty for none.
         """
         self.name = name^
-        self.material = material^
+        self.runs = List[_Run]()
+        if material != "":
+            self.runs.append(_Run(material^, 0, -1))
         self.positions = List[Float32]()
         self.normals = List[Float32]()
         self.uvs = List[Float32]()
         self.with_normal = False
         self.with_uv = False
         self.corners = 0
+
+    def material(self) -> String:
+        """Return the material in force: the last run's, or empty."""
+        if len(self.runs) == 0:
+            return String()
+        return self.runs[len(self.runs) - 1].name
+
+    def _close(mut self):
+        """Close the last run at the corners read so far, three.js's
+        `_finalize` of its last material. The last run is always open:
+        a run is closed only here, and only before a new one opens or the
+        part is finished."""
+        if len(self.runs) > 0:
+            self.runs[len(self.runs) - 1].end = self.corners
+
+    def use_material(mut self, var name: String):
+        """Start a run under a new material, three.js's `startMaterial`.
+
+        The run before it is dropped if it has no corners. The new one
+        starts where the run before it ended, dropped or not, as in
+        three.js: so a first `usemtl` after some faces takes those faces
+        too.
+
+        Args:
+            name: The material's name.
+        """
+        self._close()
+        var start = 0
+        if len(self.runs) > 0:
+            var last = self.runs.pop()
+            start = last.end
+            if last.end - last.start > 0:
+                self.runs.append(last^)
+        self.runs.append(_Run(name^, start, -1))
 
     def finish(mut self) raises -> ObjObject:
         """Return this part as an object, its corners as a non-indexed
@@ -165,8 +235,17 @@ struct _Part(Movable):
         """
         var name = String()
         swap(name, self.name)
-        var material = String()
-        swap(material, self.material)
+        # Runs with no corners are dropped when there is more than one,
+        # and an object with none still has one material, empty, as
+        # three.js's `_finalize( true )` leaves it.
+        self._close()
+        var kept = List[_Run]()
+        for run in self.runs:
+            if len(self.runs) == 1 or run.end - run.start > 0:
+                kept.append(run.copy())
+        if len(kept) == 0:
+            kept.append(_Run(String(), 0, self.corners))
+        self.runs.clear()
         var positions = List[Float32]()
         swap(positions, self.positions)
         var normals = List[Float32]()
@@ -179,8 +258,17 @@ struct _Part(Movable):
             geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
         if self.with_uv:
             geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+        var materials = List[String]()
+        for index in range(len(kept)):  # pragma: no branch
+            materials.append(kept[index].name)
+            if len(kept) > 1:
+                geometry.add_group(
+                    kept[index].start,
+                    kept[index].end - kept[index].start,
+                    MaterialIndex(index),
+                )
         self.corners = 0
-        return ObjObject(name^, material^, geometry^)
+        return ObjObject(name^, materials^, geometry^)
 
 
 def _where(line: Int) -> String:
@@ -564,16 +652,14 @@ def parse_obj(text: String) raises -> ObjModel:
                 # rather than starting afresh, as three.js's `startObject`
                 # renames the object it began with: a file that lists
                 # faces and then says `o Cube` means those faces are the
-                # cube's. Every part already finished came before this
-                # line too, so it takes the name as well.
+                # cube's. No part is finished before it: only an `o` or
+                # a `g` finishes one.
                 declared = True
                 part.name = _rest(fields)
-                for index in range(len(model.objects)):
-                    model.objects[index].name = part.name
                 continue
             # A new object, under the material in force, as three.js
             # carries it over. One with no faces is dropped.
-            var material = part.material
+            var material = part.material()
             if part.corners > 0:
                 model.objects.append(part.finish())
             part = _Part(_rest(fields), material^)
@@ -583,14 +669,8 @@ def parse_obj(text: String) raises -> ObjModel:
                 raise Error(_where(line) + "mtllib names no file")
             model.material_libraries.append(library^)
         elif keyword == "usemtl":
-            # A new material starts a new object under the same name,
-            # once the current one has faces to keep.
-            if part.corners > 0:
-                var name = part.name
-                model.objects.append(part.finish())
-                part = _Part(name^, _rest(fields))
-            else:
-                part.material = _rest(fields)
+            # A new material starts a new run of the same object.
+            part.use_material(_rest(fields))
     if part.corners > 0:
         model.objects.append(part.finish())
     return model^

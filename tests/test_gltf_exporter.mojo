@@ -13,7 +13,15 @@ every choice the writer makes and every refusal.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+    BufferGeometry,
+    MaterialIndex,
+)
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import (
@@ -555,6 +563,64 @@ def test_an_empty_scene_writes_a_file_that_reads() raises:
     assert_equal(len(glb.document) % 4, 0)
     var parts = split_glb(glb.document)
     assert_equal(len(parts[1]), 0)
+
+
+def test_a_material_list_is_written_as_a_primitive_a_group() raises:
+    # three.js's `processMesh`: one primitive a group, each with its slice
+    # of the index and its own material. They read back as one mesh a
+    # primitive on the node, as three.js reads them into a group.
+    for indexed in [True, False]:
+        var assets = Assets()
+        var shape = quad(indexed)
+        shape.clear_groups()
+        # A second set of coordinates rides along on every primitive.
+        shape.set_attribute(
+            String(UV1),
+            BufferAttribute(
+                List[Float32](length=shape.vertex_count() * 2, fill=0.5), 2
+            ),
+        )
+        shape.add_group(3, 3, MaterialIndex(1))
+        shape.add_group(0, 3, MaterialIndex(0))
+        # Nothing is drawn for these two, so nothing is written.
+        shape.add_group(0, 3, MaterialIndex(7))
+        shape.add_group(0, 2, MaterialIndex(0))
+        var geometry = assets.geometries.add(shape^)
+        var red = assets.materials.add(Material(Color(255, 0, 0)))
+        var blue = assets.materials.add(Material(Color(0, 0, 255)))
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.update()
+        scene.add_mesh(Mesh(geometry, [red, blue], node))
+        var files = export_gltf(scene, assets, GLTF_EMBEDDED)
+        var back = read_back(files.document, files.binary, GLTF_EMBEDDED)
+        ref read = back[0]
+        assert_equal(len(read.meshes), 2)
+        assert_true(read.meshes[0].node == read.meshes[1].node)
+        ref first = back[1].geometries.get(read.meshes[0].geometry)
+        assert_equal(first.triangle_count(), 1)
+        assert_true(first.has_attribute(String(UV1)))
+        assert_true(first.is_indexed())
+        var source = quad(indexed)
+        var expected = source.attribute_view(String(POSITION)).vector3(
+            source.vertex_at(3)
+        )
+        assert_equal(first.corner(0, 0).z, expected.z)
+        assert_equal(first.corner(0, 0).x, expected.x)
+        var color = back[1].materials.get(read.meshes[0].material).color
+        assert_equal(Int(color.b), 255)
+    # A list that draws nothing writes no mesh on the node.
+    var assets = Assets()
+    var geometry = assets.geometries.add(quad(True))
+    var red = assets.materials.add(Material(Color(255, 0, 0)))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_mesh(Mesh(geometry, [red], node))
+    var files = export_gltf(scene, assets, GLTF_EMBEDDED)
+    var back = read_back(files.document, files.binary, GLTF_EMBEDDED)
+    assert_equal(back[2].node_count(), 1)
+    assert_equal(len(back[0].meshes), 0)
 
 
 def test_a_texture_read_from_gltf_is_written_as_it_is() raises:

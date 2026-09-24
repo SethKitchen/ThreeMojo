@@ -336,10 +336,11 @@ struct BufferGeometry(Movable):
         """Add a run of triangles that wears one material, three.js's
         `addGroup`.
 
-        The renderer draws a whole mesh in one material and does not read
-        groups yet. They are kept so that `merge_geometries` can say where
-        each part begins, and so that `compute_tangents` visits what
-        three.js visits.
+        A mesh that wears a list of materials draws each group in the
+        material its index names; a mesh with one material draws every
+        triangle and ignores the groups, as in three.js. See
+        `objects.mesh`. `merge_geometries` writes groups and
+        `compute_tangents` visits what they hold, as three.js's does.
 
         Args:
             start: The first index entry of the run, or the first vertex
@@ -822,6 +823,73 @@ struct BufferGeometry(Movable):
         if self.is_indexed():
             return len(self.index)
         return self.vertex_count()
+
+    def group_part(self, group: GeometryGroup) raises -> BufferGeometry:
+        """Return the slots of one group as a geometry of their own, with
+        no index and no group.
+
+        Every attribute and every morph target is read for the group's
+        slots, as `to_non_indexed` reads them for all. What a loader uses
+        to give each group of a skinned mesh, which wears one material,
+        a mesh of its own. The group's `start` and `count` are read as
+        they are, so a group must lie within the stream.
+
+        Args:
+            group: The group.
+
+        Returns:
+            The group's corners.
+
+        Raises:
+            Error: If the group reaches past the end of the stream, or an
+                index entry points past the last vertex.
+        """
+        var slots = List[Int]()
+        for slot in range(group.start, group.start + group.count):
+            slots.append(self.vertex_at(slot))
+        var part = BufferGeometry()
+        for at in range(len(self.names)):
+            part.set_attribute(self.names[at], self.values[at].gather(slots))
+        for target in range(len(self.morph_positions)):
+            part.morph_positions.append(
+                self.morph_positions[target].gather(slots)
+            )
+        for target in range(len(self.morph_normals)):
+            part.morph_normals.append(self.morph_normals[target].gather(slots))
+        part.morph_relative = self.morph_relative
+        return part^
+
+    def triangle_run(self, start: Int, count: Int) raises -> Tuple[Int, Int]:
+        """Return where a run of the triangle stream begins and how many
+        whole triangles it holds, clamped to the stream.
+
+        three.js's `drawStart` and `drawEnd` in `renderBufferDirect`: a
+        group that runs past the end of the stream stops at it, and slots
+        left over after the last whole triangle are not drawn. The
+        renderer, the raycaster and the wireframe all read a group this
+        way, so they draw and pick the same triangles.
+
+        Args:
+            start: The first slot, a group's `start`.
+            count: How many slots, a group's `count`, or minus one for
+                every slot from `start` on.
+
+        Returns:
+            The first slot, and how many triangles follow it. Triangle
+            `t` reads slots `start + 3t` to `start + 3t + 2`.
+
+        Raises:
+            Error: If `start` is negative, or the geometry has no index and
+                no positions.
+        """
+        if start < 0:
+            raise Error("A run cannot start before the stream")
+        var total = self.stream_length()
+        var first = min(start, total)
+        var end = total
+        if count >= 0:
+            end = min(start + count, total)
+        return (first, max(0, end - first) // 3)
 
     def vertex_at(self, slot: Int) raises -> Int:
         """Return the vertex one slot of the triangle stream reads.

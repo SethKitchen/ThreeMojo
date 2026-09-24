@@ -185,16 +185,17 @@ def test_faces_before_the_first_declaration_belong_to_it() raises:
             "g Cube\nf 1 2 3\ng Other\nf 1 2 3\n"
         )
     )
-    assert_equal(split.count(), 3)
+    # A material starts a run of the same object, not a new object.
+    assert_equal(split.count(), 2)
     assert_equal(split.objects[0].name, String("Cube"))
     assert_equal(split.objects[0].material, String("red"))
-    assert_equal(split.objects[1].name, String("Cube"))
-    assert_equal(split.objects[1].material, String("blue"))
-    assert_equal(split.objects[1].geometry.triangle_count(), 2)
-    assert_equal(split.objects[2].name, String("Other"))
+    assert_equal(split.objects[0].materials[1], String("blue"))
+    assert_equal(split.objects[0].geometry.triangle_count(), 3)
+    assert_equal(split.objects[0].geometry.groups[1].count, 6)
+    assert_equal(split.objects[1].name, String("Other"))
 
 
-def test_a_material_splits_an_object_and_carries_into_the_next() raises:
+def test_materials_make_groups_and_carry_into_the_next_object() raises:
     var model = parse_obj(
         String(
             "v 0 0 0\nv 1 0 0\nv 0 1 0\n"
@@ -202,21 +203,56 @@ def test_a_material_splits_an_object_and_carries_into_the_next() raises:
             "o other\nf 1 2 3\n"
         )
     )
-    assert_equal(model.count(), 3)
-    assert_equal(model.objects[0].name, String("thing"))
-    assert_equal(model.objects[0].material, String("red"))
-    assert_equal(model.objects[0].geometry.triangle_count(), 1)
-    assert_equal(model.objects[1].name, String("thing"))
-    assert_equal(model.objects[1].material, String("blue"))
-    assert_equal(model.objects[1].geometry.triangle_count(), 2)
+    assert_equal(model.count(), 2)
+    ref thing = model.objects[0]
+    assert_equal(thing.name, String("thing"))
+    assert_true(thing.is_multi_material())
+    assert_equal(len(thing.materials), 2)
+    assert_equal(thing.materials[0], String("red"))
+    assert_equal(thing.materials[1], String("blue"))
+    # A group a run, as three.js's `addGroup` in `OBJLoader.parse`.
+    ref groups = thing.geometry.groups
+    assert_equal(len(groups), 2)
+    assert_equal(groups[0].start, 0)
+    assert_equal(groups[0].count, 3)
+    assert_equal(groups[1].start, 3)
+    assert_equal(groups[1].count, 6)
+    assert_equal(groups[1].material_index.value, 1)
     # The material in force carries into a new object, as three.js's does.
-    assert_equal(model.objects[2].name, String("other"))
-    assert_equal(model.objects[2].material, String("blue"))
+    assert_equal(model.objects[1].name, String("other"))
+    assert_equal(model.objects[1].material, String("blue"))
+    assert_false(model.objects[1].is_multi_material())
+    assert_equal(len(model.objects[1].geometry.groups), 0)
     # A material named before any face just sets it.
     var early = parse_obj(
         String("usemtl gold\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n")
     )
     assert_equal(early.objects[0].material, String("gold"))
+
+
+def test_a_run_with_no_faces_is_dropped() raises:
+    var points = String("v 0 0 0\nv 1 0 0\nv 0 1 0\n")
+    # A material replaced before any face, and one left with no face.
+    var model = parse_obj(
+        points + "usemtl a\nusemtl b\nf 1 2 3\nusemtl c\nusemtl d\n"
+    )
+    assert_equal(len(model.objects[0].materials), 1)
+    assert_equal(model.objects[0].material, String("b"))
+    assert_equal(len(model.objects[0].geometry.groups), 0)
+    # A carried material with faces is kept when a new one follows.
+    var carried = parse_obj(
+        points + "o x\nusemtl a\nf 1 2 3\no y\nf 1 2 3\nusemtl b\nf 1 2 3\n"
+    )
+    ref y = carried.objects[1]
+    assert_equal(len(y.materials), 2)
+    assert_equal(y.materials[0], String("a"))
+    assert_equal(y.geometry.groups[1].start, 3)
+    # A carried material replaced before any face is dropped.
+    var replaced = parse_obj(
+        points + "o x\nusemtl a\nf 1 2 3\no y\nusemtl b\nf 1 2 3\n"
+    )
+    assert_equal(len(replaced.objects[1].materials), 1)
+    assert_equal(replaced.objects[1].material, String("b"))
 
 
 def test_comments_blank_lines_and_unknown_keywords_are_skipped() raises:

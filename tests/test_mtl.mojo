@@ -12,13 +12,15 @@ The images are the project's own fixtures under `assets/`.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import Object3D
+from core.geometry_store import GeometryId
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light
 from loaders.mtl import (
     MtlLibrary,
     parse_mtl,
     read_mtl,
+    obj_mesh,
     read_obj_with_materials,
     set_materials,
 )
@@ -317,20 +319,31 @@ def test_a_library_finds_adds_merges_and_creates() raises:
         _ = library.get("c")
 
 
-def test_set_materials_gives_each_object_one() raises:
+def test_set_materials_gives_each_object_its_list() raises:
     var assets = Assets()
     var library = parse_mtl("newmtl red\nKd 1 0 0\n", "", assets)
     var model = parse_obj(
-        "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\nusemtl red\nf 1 2 3\n"
-        "usemtl blue\nf 1 2 3\n"
+        "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\no a\nusemtl red\nf 1 2 3\n"
+        "usemtl blue\nf 1 2 3\no b\nusemtl\nf 1 2 3\n"
     )
     var ids = set_materials(model, library, assets)
-    assert_equal(len(ids), 3)
-    # No `usemtl`, and an unknown name, each get a default of their own.
-    assert_true(ids[0] != ids[1])
-    assert_equal(ids[1], library.get("red"))
-    assert_true(ids[2] != ids[0])
+    assert_equal(len(ids), 2)
+    # The first `usemtl` takes the faces before it, as in three.js.
+    assert_equal(len(ids[0]), 2)
+    assert_equal(ids[0][0], library.get("red"))
+    # An unknown name, and no name, each get a default of their own.
+    assert_true(ids[0][1] != ids[0][0])
+    assert_equal(len(ids[1]), 1)
+    assert_true(ids[1][0] != ids[0][1])
     assert_equal(library.count(), 3)
+    # One material makes a plain mesh, and more make a material list.
+    var one = obj_mesh(ids[1], GeometryId(0), NodeId(0))
+    assert_false(one.is_multi_material())
+    assert_true(one.material == ids[1][0])
+    var two = obj_mesh(ids[0], GeometryId(0), NodeId(0))
+    assert_equal(len(two.materials), 2)
+    with assert_raises():
+        _ = obj_mesh(List[MaterialId](), GeometryId(0), NodeId(0))
 
 
 def test_read_mtl_reads_textures_beside_the_library() raises:
@@ -350,11 +363,13 @@ def test_read_obj_with_materials_reads_every_library() raises:
     assert_equal(read.model.count(), 3)
     assert_equal(len(read.materials), 3)
     # The second library's Shared replaces the first's.
-    assert_color(assets.materials.get(read.materials[0]).color, 0, 0, 255)
+    assert_color(assets.materials.get(read.materials[0][0]).color, 0, 0, 255)
     # A name neither library has is a default.
-    assert_color(assets.materials.get(read.materials[1]).color, 255, 255, 255)
+    assert_color(
+        assets.materials.get(read.materials[1][0]).color, 255, 255, 255
+    )
     # The first library's texture is read beside it, one directory up.
-    assert_true(assets.materials.get(read.materials[2]).map != NO_TEXTURE)
+    assert_true(assets.materials.get(read.materials[2][0]).map != NO_TEXTURE)
     var bare = read_obj_with_materials("assets/mtl/bare.obj", assets)
     assert_equal(bare.library.count(), 1)
     var empty = read_obj_with_materials("assets/mtl/empty.obj", assets)
@@ -379,7 +394,7 @@ def test_a_textured_cube_from_its_library_renders() raises:
     var node = scene.add(Object3D())
     scene.update()
     scene.add_light(ambient_light(Color(255, 255, 255), 1.0))
-    scene.add_mesh(Mesh(shape, read.materials[0], node))
+    scene.add_mesh(obj_mesh(read.materials[0], shape, node))
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(24) / Float32(18),
