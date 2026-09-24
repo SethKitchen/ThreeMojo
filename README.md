@@ -51,15 +51,14 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 166 features are ported and 14 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 167 features are ported and 13 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
-- [ ] The camera API and raycast hit data [#172](https://github.com/SethKitchen/ThreeMojo/issues/172)
 
 <details>
-<summary>Ported: 14</summary>
+<summary>Ported: 15</summary>
 
 - [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
 - [x] [Edit the scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#edit-the-graph): reparent, attach, remove, clone and traverse nodes; world-space queries; Group and userData in scene JSON. [#165](https://github.com/SethKitchen/ThreeMojo/issues/165)
@@ -75,6 +74,7 @@ The port is not at parity with three.js yet. 166 features are ported and 14 are 
 - [x] [Clock](https://github.com/SethKitchen/ThreeMojo/wiki/Units#clock): elapsed and delta time as Durations, from a monotonic counter [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
 - [x] [Object3D visibility, names, traversal and render order](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#visibility-names-and-render-order): a hidden node hides its subtree, and render order sorts before depth [#103](https://github.com/SethKitchen/ThreeMojo/issues/103)
 - [x] [Clipping planes](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#clipping-planes): the renderer's planes and each material's own, union or intersection, cut before projection so both rasterizers agree [#104](https://github.com/SethKitchen/ThreeMojo/issues/104)
+- [x] [Camera API and raycast hit data](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#view-offset): zoom, film, focal length and view offset, and raycast uv, face, barycoord and point-on-line data. [#172](https://github.com/SethKitchen/ThreeMojo/issues/172)
 
 </details>
 
