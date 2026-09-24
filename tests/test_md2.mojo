@@ -91,10 +91,7 @@ def compare(file: String) raises:
             with assert_raises(contains="fewer than three"):
                 _ = md2_clip(model, a, MeshIndex(0))
             continue
-        if geometry.morph_count() == 0:
-            with assert_raises():
-                _ = md2_clip(model, a, MeshIndex(0))
-            continue
+
         var clip = md2_clip(model, a, MeshIndex(2))
         assert_equal(clip.name, model.animations[a].name)
         near(

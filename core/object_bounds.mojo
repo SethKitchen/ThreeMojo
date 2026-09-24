@@ -10,14 +10,15 @@
 three.js asks an object for its geometry and its world matrix, and walks
 its children. Here an object is a node, and what is drawn at a node is in
 the scene's lists: meshes, lines, points, wide lines, instanced and batched
-meshes, levels of detail, skinned meshes and sprites. Each one that names
+meshes, skinned meshes and sprites. Each one that names
 a node of the subtree adds its bound, carried to world space by the node's
 world matrix. The scene must be updated first.
 
 The bound of each thing is three.js's. A mesh, a line, a set of points or a
 wide line adds its geometry's box. An instanced or a batched mesh adds the
 box of its instances' boxes, three.js's object-level `boundingBox`. A level
-of detail adds every level, since three.js's levels are children. A skinned
+of detail adds every level, shown or hidden, because each level is a child
+node, as in three.js. A skinned
 mesh adds the box of its posed vertices, as three.js's `SkinnedMesh`
 computes it. A sprite adds the unit square three.js's sprite geometry is.
 
@@ -31,9 +32,10 @@ The geometry's own box leaves its morph targets out, as
 """
 
 from core.assets import Assets
-from core.buffer_geometry import MAX_MORPH_TARGETS, POSITION
+from core.buffer_geometry import POSITION
 from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from core.scene import Scene
 from math.bounds import Box3, Sphere
@@ -96,7 +98,7 @@ def expand_by_object(
     var subtree = scene.descendants(node)
     for index in range(len(subtree)):  # pragma: no branch
         inside[subtree[index].value] = True
-    var none = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+    var none = MorphInfluences()
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
         if inside[mesh.node.value]:
@@ -142,20 +144,7 @@ def expand_by_object(
             _add_geometry(
                 box, scene, assets, wide.geometry, wide.node, False, False, none
             )
-    for index in range(len(scene.lods)):
-        ref lod = scene.lods[index]
-        if inside[lod.node.value]:
-            for level in range(len(lod.levels)):
-                _add_geometry(
-                    box,
-                    scene,
-                    assets,
-                    lod.levels[level].geometry,
-                    lod.node,
-                    precise,
-                    False,
-                    none,
-                )
+
     for index in range(len(scene.instanced_meshes)):
         ref instanced = scene.instanced_meshes[index]
         if inside[instanced.node.value]:
@@ -173,6 +162,10 @@ def expand_by_object(
             var local = Box3.empty()
             for instance in range(batched.count()):
                 ref placed = batched.instances[instance]
+                # three.js's `computeBoundingBox` skips a deleted instance
+                # and keeps a hidden one.
+                if not placed.active:
+                    continue
                 var one = assets.geometries.get(placed.geometry).bounding_box()
                 one.apply_matrix4(placed.matrix)
                 local.union(one)
@@ -207,7 +200,7 @@ def _add_geometry(
     node: NodeId,
     precise: Bool,
     morphs: Bool,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
 ) raises:
     """Grow a box by one geometry drawn at one node.
 

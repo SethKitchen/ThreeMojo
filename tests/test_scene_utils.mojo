@@ -12,7 +12,6 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
 )

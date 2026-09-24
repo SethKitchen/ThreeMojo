@@ -519,13 +519,13 @@ var clip = md2_clip(model, 0, MeshIndex(0))
 | `frames` | Each frame's name, and a position and a normal for each vertex of the geometry. |
 | `animations` | Each animation's name and frames. |
 
-Positions and normals turn from z up to y up, as in three.js. When there are `MAX_MORPH_TARGETS` frames or fewer, each frame is also a morph target of the geometry. The morph targets are whole, not relative.
+Positions and normals turn from z up to y up, as in three.js. Each frame is also a morph target of the geometry, named by the frame. The morph targets are whole, not relative.
 
 three.js puts frames in an animation by their names: `run1` to `run6` are the animation `run`. `md2_clip` makes one track for each frame of an animation, at ten frames each second. A track goes to one at the time of its frame, and to zero at the times of the frames next to it. When `loop` is True, a track whose first key is at zero gets one more key at the end, as three.js does.
 
 ### Differences from three.js
 
-- A mesh here has `MAX_MORPH_TARGETS` morph targets. A model with more frames keeps its frames, but its geometry has no morph targets, and `md2_clip` refuses its animations.
+
 - `md2_clip` refuses an animation of one or two frames. three.js makes tracks that have two keys at one time for these.
 
 ### Errors

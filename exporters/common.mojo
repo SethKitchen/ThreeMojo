@@ -39,7 +39,9 @@ points when an exporter asks for them. A skinned mesh is at rest, and
 posed by its bones only for STL, as three.js's `STLExporter` alone calls
 `applyBoneTransform`. An instanced mesh is its one geometry at its node:
 three.js's exporters read `matrixWorld` and never `instanceMatrix`.
-Batched meshes, LODs, sprites and wide lines are not written.
+An LOD's levels are nodes, so the meshes on every level are written,
+shown or hidden, as three.js's `traverse` reaches them. Batched
+meshes, sprites and wide lines are not written.
 """
 
 from core.assets import Assets

@@ -160,7 +160,6 @@ two lists still agree before it reads them -- the same argument
 it was built can be edited afterward.
 """
 
-from core.buffer_geometry import MAX_MORPH_TARGETS
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.quaternion import Quaternion
@@ -491,7 +490,7 @@ struct TrackTarget(Equatable, ImplicitlyCopyable, Writable):
         if not self.kind.is_valid():
             return False
         if self.kind.is_morph():
-            return self.slot >= 0 and self.slot < MAX_MORPH_TARGETS
+            return self.slot >= 0
         if self.kind == CAMERA_FOV:
             # An orthographic camera has no field of view.
             return self.slot == PERSPECTIVE_SLOT
@@ -532,11 +531,11 @@ def morph_target(mesh: MeshIndex, target: Int) raises -> TrackTarget:
         The target.
 
     Raises:
-        Error: If there is no such morph target: a mesh has
-            `MAX_MORPH_TARGETS` influences.
+        Error: If the target is negative. There is no upper limit: a mesh
+            wears as many targets as its geometry carries.
     """
-    if target < 0 or target >= MAX_MORPH_TARGETS:
-        raise Error("A mesh has eight morph target influences")
+    if target < 0:
+        raise Error("A morph target index cannot be negative")
     return TrackTarget(MORPH_INFLUENCE, mesh.value, target)
 
 
@@ -554,11 +553,10 @@ def skinned_morph_target(
         The target.
 
     Raises:
-        Error: If there is no such morph target: a mesh has
-            `MAX_MORPH_TARGETS` influences.
+        Error: If the target is negative. There is no upper limit.
     """
-    if target < 0 or target >= MAX_MORPH_TARGETS:
-        raise Error("A mesh has eight morph target influences")
+    if target < 0:
+        raise Error("A morph target index cannot be negative")
     return TrackTarget(SKINNED_MORPH_INFLUENCE, mesh.value, target)
 
 

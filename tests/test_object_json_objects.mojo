@@ -286,8 +286,12 @@ def _scene(mut assets: Assets) raises -> Scene:
     var near = assets.materials.add(Material(Color(240, 200, 60)))
     var far = assets.materials.add(Material(Color(60, 60, 240)))
     var lod = Lod(_placed(scene, -3.5, 0))
-    lod.add_level(cube, near)
-    lod.add_level(small, far, Length(50, METER), 0.25)
+    var near_node = scene.add(Object3D())
+    scene.add_mesh(Mesh(cube, near, near_node))
+    var far_node = scene.add(Object3D())
+    scene.add_mesh(Mesh(small, far, far_node))
+    lod.add_level(near_node)
+    lod.add_level(far_node, Length(50, METER), 0.25)
     scene.add_lod(lod^)
     # A batch of two geometries, one instance tinted.
     var batch = BatchedMesh(
@@ -389,7 +393,8 @@ def test_a_scene_read_back_renders_the_same() raises:
     # Something was drawn, so the match means something.
     assert_true(drawn > SIDE * SIDE // 8)
     # Every object is there again.
-    assert_equal(len(again.meshes), 3)
+    # Three meshes and the LOD's two levels.
+    assert_equal(len(again.meshes), 5)
     assert_equal(len(again.lods), 1)
     assert_equal(len(again.batched_meshes), 1)
     assert_equal(len(again.skinned_meshes), 1)
@@ -765,28 +770,35 @@ def test_line_points_and_sprite_classes() raises:
 
 
 def test_an_lod_round_trips_its_levels() raises:
-    """An LOD's levels are child meshes it names by uuid, with their
+    """An LOD's levels are child objects it names by uuid, with their
     distance and hysteresis."""
     var assets = Assets()
     var scene = Scene()
     var cube = assets.geometries.add(_cube(1))
     var material = assets.materials.add(Material(WHITE))
     var node = scene.add(Object3D())
-    var lod = Lod(node, frustum_culled=False)
-    lod.add_level(cube, material)
-    lod.add_level(cube, material, Length(20, METER), 0.5)
+    var lod = Lod(node, auto_update=False)
+    var first = scene.add(Object3D())
+    scene.add_mesh(Mesh(cube, material, first))
+    # A level can be any object: this one is a group.
+    var second = scene.add(Object3D())
+    lod.add_level(first)
+    lod.add_level(second, Length(20, METER), 0.5)
     scene.add_lod(lod^)
-    # A second LOD on the same node is a part, its levels its children.
+    # A second LOD on the same node is a part; its level is a child of
+    # the node, and read back under the part.
     var other = Lod(node)
-    other.add_level(cube, material, Length(5, METER))
+    var third = scene.add(Object3D())
+    other.add_level(third, Length(5, METER))
     scene.add_lod(other^)
-    _ = scene.attach(Object3D(), node)
     # An LOD with no levels is written with none.
     scene.add_lod(Lod(scene.add(Object3D())))
+    scene.update()
     var text = object_to_json(scene, assets)
     assert_true(text.find('"levels":[]') >= 0)
     assert_true(text.find('"type":"LOD"') >= 0)
     assert_true(text.find('"hysteresis":0.5') >= 0)
+    assert_true(text.find('"autoUpdate":false') >= 0)
     var read = _read(text)
     ref again = read[0]
     assert_equal(len(again.lods), 3)
@@ -795,17 +807,24 @@ def test_an_lod_round_trips_its_levels() raises:
     assert_equal(len(levels), 2)
     assert_equal(levels[1].distance.to(METER), 20)
     assert_equal(levels[1].hysteresis, 0.5)
-    assert_false(again.lods[0].frustum_culled)
+    assert_false(again.lods[0].auto_update)
+    assert_true(again.lods[1].auto_update)
     assert_equal(again.lods[1].levels[0].distance.to(METER), 5)
-    # The levels are not nodes: the node, its child and its two parts,
-    # and the empty LOD's node.
-    assert_equal(again.count(), 5)
-    assert_equal(len(again.meshes), 0)
+    assert_equal(
+        again.get(again.lods[1].levels[0].object).parent, again.lods[1].node
+    )
+    # The levels are nodes: the node, its three levels, a part for each of
+    # its two LODs, and the empty LOD's node. The hidden level stays
+    # hidden.
+    assert_equal(again.count(), 7)
+    assert_equal(len(again.meshes), 1)
+    assert_false(again.get(levels[1].object).visible)
 
 
 def test_an_lod_as_three_js_writes_it() raises:
     """A level at a negative distance is read at its size, as three.js's
-    `addLevel` takes it, and an LOD with no levels is empty."""
+    `addLevel` takes it; a level can be any object, placed anywhere under
+    the LOD; and an LOD with no levels is empty."""
     var library = (
         '"geometries":[{"uuid":"g","type":"BoxGeometry"}],'
         '"materials":[{"uuid":"m","type":"MeshBasicMaterial"}],'
@@ -814,14 +833,17 @@ def test_an_lod_as_three_js_writes_it() raises:
         _wrap(
             library
             + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a",'
-            '"distance":-4}],"children":[{"uuid":"a","type":"Mesh",'
-            '"geometry":"g","material":"m","children":[]},'
-            '{"uuid":"b","type":"Group"}]}'
+            '"distance":-4},{"object":"b","distance":9}],"children":['
+            '{"uuid":"a","type":"Mesh","geometry":"g","material":"m",'
+            '"position":[1,0,0],"children":[]},'
+            '{"uuid":"b","type":"Group","children":[{"uuid":"c",'
+            '"type":"Mesh","geometry":"g","material":"m"}]}]}'
         )
     )
     assert_equal(read[0].lods[0].levels[0].distance.to(METER), 4)
     assert_equal(read[0].lods[0].levels[0].hysteresis, 0)
-    assert_equal(read[0].count(), 2)
+    assert_equal(read[0].lods[0].levels[1].distance.to(METER), 9)
+    assert_equal(read[0].count(), 4)
     var empty = _read(_wrap('"object":{"uuid":"o","type":"LOD"}'))
     assert_equal(empty[0].lods[0].count(), 0)
     var none = _read(_wrap('"object":{"uuid":"o","type":"LOD","levels":[]}'))
@@ -830,46 +852,20 @@ def test_an_lod_as_three_js_writes_it() raises:
         library
         + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}],'
         '"children":[]}',
-        "names no child",
+        "no object has the uuid a",
     )
     _refuses('"object":{"uuid":"o","type":"Audio"}', "not read: Audio")
     _refuses(
         library
-        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}]}',
-        "names no child",
-    )
-    _refuses(
-        library
-        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}],'
-        '"children":[{"uuid":"b","type":"Group"}]}',
-        "names no child",
-    )
-    _refuses(
-        library
-        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}],'
-        '"children":[{"uuid":"a","type":"Group"}]}',
-        "a mesh at the",
-    )
-    _refuses(
-        library
-        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}],'
-        '"children":[{"uuid":"a","type":"Mesh","geometry":"g",'
-        '"material":"m","position":[1,0,0]}]}',
-        "a mesh at the",
-    )
-    _refuses(
-        library
-        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"}],'
-        '"children":[{"uuid":"a","type":"Mesh","geometry":"g",'
-        '"material":"m","children":[{"uuid":"c","type":"Group"}]}]}',
-        "a mesh at the",
+        + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"o"}]}',
+        "its own level",
     )
     _refuses(
         library
         + '"object":{"uuid":"o","type":"LOD","levels":[{"object":"a"},'
         '{"object":"a"}],"children":[{"uuid":"a","type":"Mesh",'
         '"geometry":"g","material":"m"}]}',
-        "named twice",
+        "one level of an LOD at most",
     )
     _refuses(
         library
@@ -929,19 +925,30 @@ def test_a_batch_without_an_index_or_a_tint_or_instances() raises:
     var strip = assets.geometries.add(_strip())
     var material = assets.materials.add(Material(WHITE))
     var batch = BatchedMesh(
-        material, scene.add(Object3D()), frustum_culled=False
+        material,
+        scene.add(Object3D()),
+        frustum_culled=False,
+        per_object_frustum_culled=False,
     )
     _ = batch.add_instance(strip)
     _ = batch.add_instance(strip, translation(0, 2, 0))
+    # A deleted instance is written inactive and left out on reading; a
+    # hidden one is kept hidden.
+    batch.delete_instance(batch.add_instance(strip))
+    batch.set_visible_at(0, False)
     scene.add_batched_mesh(batch^)
     scene.add_batched_mesh(BatchedMesh(material, scene.add(Object3D())))
     var text = object_to_json(scene, assets)
     assert_equal(text.find("colorsTexture"), -1)
     assert_true(text.find('"indexStart":-1') >= 0)
+    assert_true(text.find('"availableInstanceIds":[2]') >= 0)
     var read = _read(text)
     ref again = read[0].batched_meshes[0]
     assert_equal(again.count(), 2)
     assert_false(again.frustum_culled)
+    assert_false(again.per_object_frustum_culled)
+    assert_false(again.visible_at(0))
+    assert_true(again.visible_at(1))
     assert_equal(again.matrix_at(1).elements[13], 2)
     var strip_id = again.geometry_at(1)
     assert_false(read[1].geometries.get(strip_id).is_indexed())
@@ -988,8 +995,8 @@ comptime TWO_INFOS = (
 
 
 def test_a_batch_as_three_js_writes_it() raises:
-    """Inactive and hidden instances are left out, and the colors are
-    read from their linear floats."""
+    """Inactive instances are left out, hidden ones are kept hidden, and
+    the colors are read from their linear floats."""
     var read = _read(
         _wrap(
             _batch(
@@ -1001,8 +1008,9 @@ def test_a_batch_as_three_js_writes_it() raises:
         )
     )
     ref batch = read[0].batched_meshes[0]
-    assert_equal(batch.count(), 1)
+    assert_equal(batch.count(), 2)
     assert_equal(batch.color_at(0).hex(), 0xFF0000)
+    assert_false(batch.visible_at(1))
     var part = batch.geometry_at(0)
     assert_equal(read[1].geometries.get(part).index[2], 2)
     # A geometry of no triangles is read with no index.

@@ -43,11 +43,11 @@ not try to be clever about it.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
 )
+from core.morph import MorphInfluences
 from core.scene import Scene
 from materials.material import Material
 from math.bounds import Box3, Sphere
@@ -98,7 +98,7 @@ def morph_offset(
 
 def morphed_positions(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
 ) raises -> List[Vector3]:
     """Return where every vertex is once the morph targets are worn.
 
@@ -132,7 +132,7 @@ def morphed_positions(
 
 def morphed_normals(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
 ) raises -> List[Vector3]:
     """Return which way every vertex faces once the morph targets are worn.
 
@@ -168,6 +168,47 @@ def morphed_normals(
                 geometry.morph_relative,
             )
         out.append(facing)
+    return out^
+
+
+def morphed_colors(
+    geometry: BufferGeometry,
+    base: List[SIMD[DType.float32, 4]],
+    influences: MorphInfluences,
+) raises -> List[SIMD[DType.float32, 4]]:
+    """Return every vertex's color once the morph targets are worn,
+    three.js's `morphcolor_vertex`.
+
+    three.js scales the base color by `morphTargetBaseInfluence`, which is
+    one for relative targets and one less the sum of the weights for
+    absolute ones, and adds each target times its weight. That is the
+    base plus each target's `morph_offset`, which is how this writes it.
+    A geometry whose targets carry no colors keeps the base colors.
+
+    Args:
+        geometry: The geometry, for its color targets.
+        base: One color per vertex, as red, green, blue and alpha.
+        influences: How much of each of its targets the mesh wears.
+
+    Returns:
+        One color per vertex, as red, green, blue and alpha.
+
+    Raises:
+        Error: If a target does not cover a vertex of `base`.
+    """
+    var targets = len(geometry.morph_colors)
+    var out = List[SIMD[DType.float32, 4]](capacity=len(base))
+    for vertex in range(len(base)):
+        var rest = base[vertex]
+        var tint = rest
+        for target in range(targets):
+            var weight = influences[target]
+            var goal = geometry.morph_color(target, vertex)
+            if geometry.morph_relative:
+                tint = tint + goal * weight
+            else:
+                tint = tint + (goal - rest) * weight
+        out.append(tint)
     return out^
 
 
@@ -389,7 +430,7 @@ def skin_carriers(
 
 def displaced_positions(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
     carriers: List[Matrix4],
     material: Material,
     textures: TextureStore,

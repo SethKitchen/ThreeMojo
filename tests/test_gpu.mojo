@@ -5395,6 +5395,97 @@ def test_both_backends_agree_on_a_morphed_mesh() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_agree_on_many_color_morphs() raises:
+    # Twelve targets, past the eight this port once held, each moving the
+    # box a little and turning its vertex colors toward one hue. The
+    # colors are morphed in `prepare` too, so both backends read them.
+    if skipped_for_lack_of_a_gpu("both backends agree on many color morphs"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+
+    var shape = cube(Length(1.0, METER))
+    ref positions = shape.attribute_view(String(POSITION))
+    var count = positions.count()
+    var gray = List[Float32](length=count * 3, fill=0.5)
+    shape.set_attribute(String(COLOR), BufferAttribute(gray^, 3))
+    var tints = List[BufferAttribute]()
+    for target in range(12):
+        var moved = List[Float32]()
+        var hue = List[Float32]()
+        for vertex in range(count):
+            var point = shape.attribute_view(String(POSITION)).vector3(vertex)
+            moved.append(point.x * (1 + 0.05 * Float32(target)))
+            moved.append(point.y)
+            moved.append(point.z)
+            hue.append(Float32(1) if target % 3 == 0 else Float32(0))
+            hue.append(Float32(1) if target % 3 == 1 else Float32(0))
+            hue.append(Float32(1) if target % 3 == 2 else Float32(0))
+        shape.add_morph_target(BufferAttribute(moved^, 3))
+        tints.append(BufferAttribute(hue^, 3))
+    shape.set_morph_colors(tints^)
+    var box = assets.geometries.add(shape^)
+
+    var scene = Scene()
+    var node = Object3D()
+    node.set_euler(Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var placed = scene.add(node^)
+    var lamp = Object3D()
+    lamp.set_position(2, 3, 4)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(60, 60, 60)))
+    scene.add_light(directional_light(Color(220, 220, 220), lamp_node))
+    scene.update()
+
+    var meshes = List[Mesh]()
+    var worn = Mesh(
+        box,
+        assets.materials.add(
+            Material(Color(255, 255, 255), vertex_colors=True)
+        ),
+        placed,
+    )
+    for target in range(12):
+        worn.set_morph_influence(target, 0.06)
+    meshes.append(worn)
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.4), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the morphed scene prepared no triangles")
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        assets.textures,
+        lighting,
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 200, "the color-morphed box barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 # --- skinning, both backends ------------------------------------------------
 
 

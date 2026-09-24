@@ -682,9 +682,15 @@ def test_an_lod_is_hit_on_the_level_the_rays_origin_picks() raises:
     var large = assets.geometries.add(cube(Length(2.0, METER)))
     var paint = assets.materials.add(Material(Color(255, 255, 255)))
     var lod = Lod(node)
-    lod.add_level(small, paint)
-    lod.add_level(large, paint, Length(3.0, METER), 0.5)
+    var small_node = scene.add(Object3D())
+    var large_node = scene.add(Object3D())
+    scene.add_mesh(Mesh(small, paint, small_node))
+    scene.add_mesh(Mesh(large, paint, large_node))
+    lod.add_level(small_node)
+    lod.add_level(large_node, Length(3.0, METER), 0.5)
     scene.add_lod(lod^)
+    scene.update()
+    scene.update_lods(Vector3(0, 0, 5))
     var hits = down_z().intersect_lod(scene, assets, 0)
     assert_equal(len(hits), 1)
     assert_equal(hits[0].kind, LOD_HIT)
@@ -692,12 +698,35 @@ def test_an_lod_is_hit_on_the_level_the_rays_origin_picks() raises:
     assert_equal(hits[0].mesh.geometry, large)
     assert_almost_equal(hits[0].distance, Float32(4.0), atol=TOLERANCE)
     # From two meters out, the near level, whatever the LOD remembers:
-    # three.js's `LOD.raycast` goes by `getObjectForDistance`.
-    scene.update_lods(Vector3(0, 0, 5))
+    # three.js's `LOD.raycast` goes by `getObjectForDistance`. The scene
+    # hides it, so it is not picked until the scene shows it.
     var near = Raycaster(Vector3(0.1, 0.2, 2), Vector3(0, 0, -1))
+    assert_equal(len(near.intersect_lod(scene, assets, 0)), 0)
+    scene.update_lods(Vector3(0, 0, 1))
     hits = near.intersect_lod(scene, assets, 0)
     assert_equal(hits[0].instance, 0)
     assert_almost_equal(hits[0].distance, Float32(1.5), atol=TOLERANCE)
+    # A level that is a group is not struck itself: three.js's
+    # `LOD.raycast` calls the level object's own `raycast`.
+    var grouped = Scene()
+    var holder = grouped.add(Object3D())
+    var group = grouped.add(Object3D())
+    var inner = Object3D()
+    inner.parent = group
+    grouped.add_mesh(Mesh(small, paint, grouped.add(inner^)))
+    var nested = Lod(holder)
+    nested.add_level(group)
+    grouped.add_lod(nested^)
+    grouped.update()
+    assert_equal(len(down_z().intersect_lod(grouped, assets, 0)), 0)
+    # A scene with no meshes at all has nothing to strike.
+    var hollow = Scene()
+    var stand = hollow.add(Object3D())
+    var empty_level = Lod(stand)
+    empty_level.add_level(hollow.add(Object3D()))
+    hollow.add_lod(empty_level^)
+    hollow.update()
+    assert_equal(len(down_z().intersect_lod(hollow, assets, 0)), 0)
     # No levels, no hits; no such LOD, an error.
     var bare = Scene()
     _ = bare.add(Object3D())
@@ -730,12 +759,16 @@ def test_the_scene_answers_across_every_kind_of_object() raises:
     var raised = scene.add(Object3D())
     scene.node(raised).set_position(0, 0, 3)
     scene.update()
+    # An LOD's level is a node whose mesh is in the scene's meshes.
     var lod = Lod(raised)
-    lod.add_level(box, paint)
+    var shown = scene.add(Object3D())
+    scene.add_mesh(Mesh(box, paint, shown))
+    lod.add_level(shown)
     scene.add_lod(lod^)
+    scene.update()
     var hits = down_z().intersect_scene(scene, assets)
     assert_equal(len(hits), 4)
-    assert_equal(hits[0].kind, LOD_HIT)
+    assert_equal(hits[0].kind, MESH_HIT)
     assert_equal(hits[1].kind, BATCHED_HIT)
     assert_equal(hits[2].kind, INSTANCED_HIT)
     assert_equal(hits[3].kind, MESH_HIT)
@@ -746,7 +779,7 @@ def test_the_scene_answers_across_every_kind_of_object() raises:
     scene.update()
     hits = down_z().intersect_scene(scene, assets)
     assert_equal(len(hits), 1)
-    assert_equal(hits[0].kind, LOD_HIT)
+    assert_equal(hits[0].kind, MESH_HIT)
 
 
 def morphed_scene() raises -> Scene:

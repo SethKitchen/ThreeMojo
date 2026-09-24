@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 180 features are ported and 22 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 181 features are ported and 21 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -113,11 +113,11 @@ The port is not at parity with three.js yet. 180 features are ported and 22 are 
 ### Objects
 
 - [ ] MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
-- [ ] Skeleton, morph, batch and LOD tools [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 
 <details>
-<summary>Ported: 12</summary>
+<summary>Ported: 13</summary>
 
+- [x] [Skeleton, morph, batch and LOD tools](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#skeleton-tools): clone and retarget, CCD IK, uncapped morphs, batch deletion and sorting, any node as a level [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 - [x] [Multi-material meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#several-materials): geometry groups drawn with a material list by both rasterizers, the raycaster, loaders, exporters and SceneUtils [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
@@ -126,7 +126,7 @@ The port is not at parity with three.js yet. 180 features are ported and 22 are 
 - [x] [Sprite](https://github.com/SethKitchen/ThreeMojo/wiki/Points-and-sprites#sprites): a square that always faces the camera, built in camera space and drawn as two triangles [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
 - [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
 - [x] [SkinnedMesh, Bone and Skeleton](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning): bones that are scene nodes, and a skeleton saying how far each has moved since the bind [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
-- [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
+- [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several objects under a node, picked by the camera's distance before each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 - [x] [Per-instance colors](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instance-colors): a color per instance of an instanced or batched mesh that multiplies the material color [#112](https://github.com/SethKitchen/ThreeMojo/issues/112)
 - [x] [Raycasting lines, points, sprites and skinned meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting#lines-points-and-sprites): skinned meshes picked where the bones carry them, with three.js's line and point thresholds [#117](https://github.com/SethKitchen/ThreeMojo/issues/117)
 - [x] [Wide lines: Line2, LineSegments2 and LineMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Lines#wide-lines): lines of any width in pixels or meters, with round caps, dashes, vertex colors and picking [#116](https://github.com/SethKitchen/ThreeMojo/issues/116)

@@ -687,6 +687,10 @@ struct Raycaster(ImplicitlyCopyable):
         var world = scene.world_matrix(batch.node)
         var hits = List[Hit]()
         for instance in range(batch.count()):
+            # three.js's `BatchedMesh.raycast` skips a deleted or hidden
+            # instance.
+            if not batch.is_drawn(instance):
+                continue
             var mesh = Mesh(
                 batch.geometry_at(instance), batch.material, batch.node
             )
@@ -708,6 +712,10 @@ struct Raycaster(ImplicitlyCopyable):
         from the ray's origin to the node picks with no memory, and a
         hit's `instance` says which level that was.
 
+        three.js calls the level object's own `raycast`, so the meshes on
+        the level's node are tested and its descendants are not. A level
+        the scene hides is not picked here, as a hidden mesh is not.
+
         Args:
             scene: The scene the LOD is in, updated.
             assets: The geometries and materials its levels name.
@@ -728,18 +736,26 @@ struct Raycaster(ImplicitlyCopyable):
         var level = lod.level_for(
             Length((self.ray.origin - origin).length(), METER)
         )
+        var hits = List[Hit]()
         if level < 0:
-            return List[Hit]()
-        var shown = lod.levels[level]
-        return self._intersect_shape(
-            scene,
-            assets,
-            Mesh(shown.geometry, shown.material, lod.node),
-            world,
-            LOD_HIT,
-            index,
-            level,
-        )
+            return hits^
+        var shown = lod.levels[level].object
+        for at in range(len(scene.meshes)):
+            ref mesh = scene.meshes[at]
+            if mesh.node == shown:
+                hits.extend(
+                    self._intersect_shape(
+                        scene,
+                        assets,
+                        mesh,
+                        scene.world_matrix(shown),
+                        LOD_HIT,
+                        index,
+                        level,
+                    )
+                )
+        _sort_by_distance(hits)
+        return hits^
 
     def intersect_skinned_mesh(
         self, scene: Scene, assets: Assets, index: Int
@@ -1425,8 +1441,9 @@ struct Raycaster(ImplicitlyCopyable):
 
     def intersect_scene(self, scene: Scene, assets: Assets) raises -> List[Hit]:
         """Return every place this ray meets anything of the scene it can
-        pick, nearest first, three.js's `intersectObjects`: meshes,
-        skinned, instanced and batched meshes, LODs, lines, points and
+        pick, nearest first, three.js's `intersectObjects`: meshes, among
+        them an LOD's levels, skinned, instanced and batched meshes, lines,
+        points and
         sprites. Sprites are left out until a camera is set.
 
         Args:
@@ -1447,8 +1464,8 @@ struct Raycaster(ImplicitlyCopyable):
             hits.extend(self.intersect_instanced_mesh(scene, assets, index))
         for index in range(len(scene.batched_meshes)):
             hits.extend(self.intersect_batched_mesh(scene, assets, index))
-        for index in range(len(scene.lods)):
-            hits.extend(self.intersect_lod(scene, assets, index))
+        # An LOD's levels are nodes whose meshes are in `scene.meshes`:
+        # the shown level is picked there, once.
         for index in range(len(scene.skinned_meshes)):
             hits.extend(self.intersect_skinned_mesh(scene, assets, index))
         for index in range(len(scene.lines)):

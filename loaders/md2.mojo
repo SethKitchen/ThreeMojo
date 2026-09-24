@@ -17,9 +17,9 @@ coordinate the corner names, `v` turned upside down. Positions and
 normals turn from z up to y up, as three.js turns them.
 
 **The frames.** Each frame keeps its name and its positions and normals
-in the same order. When there are no more than `MAX_MORPH_TARGETS`, each
-frame is also a morph target of the geometry, whole and not relative, as
-three.js's `morphAttributes` are.
+in the same order. Each frame is also a morph target of the geometry,
+named by the frame, whole and not relative, as three.js's
+`morphAttributes` are.
 
 **The animations.** three.js's `CreateClipsFromMorphTargetSequences`
 groups frames by their name less its trailing digits: `run1` to `run6`
@@ -30,11 +30,8 @@ each frame that rises to one at its time and falls to zero at its
 neighbors', with a last key at the end when the first frame's key is at
 zero.
 
-**Where this port differs.** A mesh here has `MAX_MORPH_TARGETS` morph
-targets, and a model has more frames than that more often than not.
-Such a model keeps its frames but its geometry has no morph targets, and
-`md2_clip` refuses an animation that uses a frame past the limit. It
-also refuses an animation of one or two frames, whose three.js tracks
+**Where this port differs.** `md2_clip` refuses an animation of one or
+two frames, whose three.js tracks
 have two keys at one time. Where three.js logs and returns nothing or
 reads `undefined`, this refuses: a file that is not `IDP2` version 8, or
 whose size is not the header's end; a file that ends inside a part; a
@@ -46,7 +43,6 @@ from animation.animation_clip import AnimationClip
 from animation.keyframe_track import KeyframeTrack, MeshIndex, morph_target
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
@@ -793,13 +789,13 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
         String(NORMAL), BufferAttribute(frames[0].normals.copy(), 3)
     )
     geometry.set_attribute(String(UV), BufferAttribute(uv_values^, 2))
-    if num_frames <= MAX_MORPH_TARGETS:
-        # At least one frame: the loop always runs.
-        for frame in frames:  # pragma: no branch
-            geometry.add_morph_target(
-                BufferAttribute(frame.positions.copy(), 3),
-                BufferAttribute(frame.normals.copy(), 3),
-            )
+    # At least one frame: the loop always runs.
+    for frame in frames:  # pragma: no branch
+        geometry.add_morph_target(
+            BufferAttribute(frame.positions.copy(), 3),
+            BufferAttribute(frame.normals.copy(), 3),
+            name=frame.name,
+        )
     geometry.morph_relative = False
 
     var names = List[String]()
@@ -850,7 +846,7 @@ def md2_clip(
 
     Raises:
         Error: If there is no such animation, it has fewer than three
-            frames, a frame is past `MAX_MORPH_TARGETS`, or `fps` is not
+            frames, or `fps` is not
             above zero.
     """
     var missing = animation < 0 or animation >= len(model.animations)

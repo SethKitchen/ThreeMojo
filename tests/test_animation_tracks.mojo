@@ -178,10 +178,10 @@ def test_the_new_target_functions_take_their_ids() raises:
     assert_equal(skin.kind, SKINNED_MORPH_INFLUENCE)
     assert_equal(skin.index, 2)
     assert_equal(skin.slot, 3)
-    with assert_raises(contains="eight"):
+    with assert_raises(contains="cannot be negative"):
         _ = skinned_morph_target(SkinnedMeshIndex(0), -1)
-    with assert_raises(contains="eight"):
-        _ = skinned_morph_target(SkinnedMeshIndex(0), 8)
+    # No cap on the targets, as three.js on WebGL2 has none.
+    assert_equal(skinned_morph_target(SkinnedMeshIndex(0), 8).slot, 8)
     var eye = perspective_camera_target(PerspectiveCameraIndex(1), CAMERA_FOV)
     assert_equal(eye.slot, PERSPECTIVE_SLOT)
     with assert_raises(contains="drives a camera"):

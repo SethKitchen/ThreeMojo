@@ -19,11 +19,12 @@ A browser dispatches `hoveron`, `hoveroff`, `dragstart`, `drag` and
 `dragend`. Here `handle` returns them as `DragEvent` records, in the order
 three.js dispatches them.
 
-An object is a node of the scene. A hit on a mesh, an instanced mesh, a
-batched mesh or an LOD counts when its node is one of `objects`, or, with
+An object is a node of the scene. A hit on a mesh, an instanced mesh or a
+batched mesh counts when its node is one of `objects`, or, with
 `recursive` set, when one of its ancestors is: three.js's
-`intersectObjects(objects, recursive)`. The object moved is the node
-struck. With `transform_group` set it is the outermost of `objects` above
+`intersectObjects(objects, recursive)`. An LOD's level is a node under
+the LOD's node, so a hit on it counts as a hit on a mesh does. The
+object moved is the node struck. With `transform_group` set it is the outermost of `objects` above
 the node struck. three.js moves the outermost `Group` instead; there is no
 `Group` here.
 

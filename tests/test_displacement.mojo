@@ -13,12 +13,12 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
 )
 from core.deform import displaced_positions
+from core.morph import MorphInfluences
 from core.object3d import NodeId, Object3D
 from core.raycaster import Raycaster
 from core.scene import Scene
@@ -246,9 +246,9 @@ def test_a_displacement_the_material_cannot_carry_is_refused() raises:
 # --- the vertex stage -------------------------------------------------------
 
 
-def no_morphs() -> SIMD[DType.float32, MAX_MORPH_TARGETS]:
+def no_morphs() -> MorphInfluences:
     """Return the influences of a mesh that wears nothing."""
-    return SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+    return MorphInfluences()
 
 
 def one_triangle(
@@ -349,7 +349,7 @@ def test_a_morph_moves_the_normal_the_map_pushes_along() raises:
         BufferAttribute(places^, 3), BufferAttribute(turned^, 3)
     )
     var worn = no_morphs()
-    worn[0] = 1
+    worn.set(0, 1)
     var material = displacing(
         Material(Color(255, 255, 255)), TextureId(0), 0, 0.5
     )

@@ -46,11 +46,15 @@ of the geometry's morph targets this mesh wears. The geometry holds the
 targets and the mesh holds the numbers, which is what lets two meshes share
 one head and pull different faces.
 
-They are a fixed row of eight rather than a list, because eight is
-three.js's own ceiling and because a row of numbers leaves a `Mesh`
-implicitly copyable -- a scene adds one by value, and a list field would
-have made every `add_mesh` call consume its argument instead. The influence
-of a target the geometry does not have is simply never read.
+They are a `MorphInfluences`, a list with no cap, as three.js on WebGL2
+has none. A weight never set reads as zero, and the weight of a target the
+geometry does not have is never read.
+
+`morph_target_dictionary` is three.js's `morphTargetDictionary`: each
+target's name and its index. `update_morph_targets` fills both from a
+geometry, as three.js's `updateMorphTargets` does when a mesh is made. A
+mesh here names its geometry by id and cannot read it, so the call is
+made by whoever holds both; a loader makes it.
 
 ## Several materials
 
@@ -71,11 +75,11 @@ until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """
 
-from core.buffer_geometry import MAX_MORPH_TARGETS, MaterialIndex
+from core.buffer_geometry import BufferGeometry, MaterialIndex
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from materials.material import MaterialId
-from std.math import isfinite
 
 
 struct Mesh(ImplicitlyCopyable):
@@ -89,7 +93,10 @@ struct Mesh(ImplicitlyCopyable):
     var frustum_culled: Bool
     # How much of each of the geometry's morph targets this mesh wears:
     # three.js's `morphTargetInfluences`. See the module docstring.
-    var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
+    var morph_influences: MorphInfluences
+    # Each target's name and index: three.js's `morphTargetDictionary`.
+    # Empty until `update_morph_targets`.
+    var morph_target_dictionary: Dict[String, Int]
     # Whether this mesh is drawn into the shadow maps of the lights that
     # cast, and whether the lights' shadows fall on it: three.js's
     # `castShadow` and `receiveShadow`, both off by default as there.
@@ -150,7 +157,8 @@ struct Mesh(ImplicitlyCopyable):
         self.material = material
         self.node = node
         self.frustum_culled = frustum_culled
-        self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+        self.morph_influences = MorphInfluences()
+        self.morph_target_dictionary = Dict[String, Int]()
         self.cast_shadow = cast_shadow
         self.receive_shadow = receive_shadow
         self.materials = List[MaterialId]()
@@ -215,6 +223,7 @@ struct Mesh(ImplicitlyCopyable):
         self.node = copy.node
         self.frustum_culled = copy.frustum_culled
         self.morph_influences = copy.morph_influences
+        self.morph_target_dictionary = copy.morph_target_dictionary.copy()
         self.cast_shadow = copy.cast_shadow
         self.receive_shadow = copy.receive_shadow
         self.materials = copy.materials.copy()
@@ -263,14 +272,26 @@ struct Mesh(ImplicitlyCopyable):
                 they overshoot, which is how a smile becomes a grin.
 
         Raises:
-            Error: If there is no such target, or the weight is not a
+            Error: If the target is negative, or the weight is not a
                 number.
         """
-        if target < 0 or target >= MAX_MORPH_TARGETS:
-            raise Error("A mesh has eight morph target influences")
-        if not isfinite(weight):
-            raise Error("A morph influence must be a number")
-        self.morph_influences[target] = weight
+        self.morph_influences.set(target, weight)
+
+    def set_morph_influence(mut self, name: String, weight: Float32) raises:
+        """Set how much of one named morph target this mesh wears, three.js's
+        `morphTargetInfluences[morphTargetDictionary[name]]`.
+
+        Args:
+            name: The target's name, from `morph_target_dictionary`.
+            weight: How much of it.
+
+        Raises:
+            Error: If no target has that name, or the weight is not a
+                number.
+        """
+        self.morph_influences.set(
+            morph_target_index(self.morph_target_dictionary, name), weight
+        )
 
     def morph_influence(self, target: Int) raises -> Float32:
         """Return how much of one morph target this mesh wears.
@@ -279,14 +300,31 @@ struct Mesh(ImplicitlyCopyable):
             target: Which of the geometry's targets, from zero.
 
         Returns:
-            Its weight.
+            Its weight, zero for a target never set.
 
         Raises:
-            Error: If there is no such target.
+            Error: If the target is negative.
         """
-        if target < 0 or target >= MAX_MORPH_TARGETS:
-            raise Error("A mesh has eight morph target influences")
-        return self.morph_influences[target]
+        return self.morph_influences.get(target)
+
+    def update_morph_targets(mut self, geometry: BufferGeometry) raises:
+        """Size the weights and name the targets from the geometry the mesh
+        draws, three.js's `updateMorphTargets`.
+
+        Every weight is set to zero, one per target, and the dictionary
+        maps each target's name to its index. A geometry with no targets
+        leaves both as they are, as three.js does.
+
+        Args:
+            geometry: The geometry this mesh names.
+
+        Raises:
+            Error: Never for a geometry that was built through its own
+                methods.
+        """
+        fill_morph_targets(
+            self.morph_influences, self.morph_target_dictionary, geometry
+        )
 
     def is_morphed(self) -> Bool:
         """Return True if any morph target is worn at all.
@@ -294,7 +332,50 @@ struct Mesh(ImplicitlyCopyable):
         The renderer asks before it culls: a mesh wearing a target is not
         where its geometry's bound says it is.
         """
-        for target in range(MAX_MORPH_TARGETS):  # pragma: no branch
-            if self.morph_influences[target] != 0:
-                return True
-        return False
+        return self.morph_influences.is_worn()
+
+
+def morph_target_index(
+    dictionary: Dict[String, Int], name: String
+) raises -> Int:
+    """Return the index a morph target's name maps to.
+
+    Args:
+        dictionary: A mesh's `morph_target_dictionary`.
+        name: The target's name.
+
+    Returns:
+        Its index.
+
+    Raises:
+        Error: If no target has that name.
+    """
+    var found = dictionary.get(name)
+    if not found:
+        raise Error("No morph target has the name " + name)
+    return found.value()
+
+
+def fill_morph_targets(
+    mut influences: MorphInfluences,
+    mut dictionary: Dict[String, Int],
+    geometry: BufferGeometry,
+) raises:
+    """Fill a mesh's weights and dictionary from its geometry, three.js's
+    `updateMorphTargets`; see `Mesh.update_morph_targets`.
+
+    Args:
+        influences: The weights, replaced by one zero per target.
+        dictionary: The names, replaced by each target's name and index.
+        geometry: The geometry the mesh draws.
+
+    Raises:
+        Error: Never for a geometry built through its own methods.
+    """
+    var count = geometry.morph_count()
+    if count == 0:
+        return
+    influences = MorphInfluences(count=count)
+    dictionary = Dict[String, Int]()
+    for target in range(count):  # pragma: no branch
+        dictionary[geometry.morph_target_name(target)] = target

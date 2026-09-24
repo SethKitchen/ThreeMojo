@@ -111,13 +111,14 @@ first, and this port's glTF loader calls `normalize_skin_weights` the same
 way. Call it for a geometry built by hand whose weights do not sum to one.
 """
 
-from core.buffer_geometry import MAX_MORPH_TARGETS, BufferGeometry
+from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from objects.mesh import fill_morph_targets, morph_target_index
 from objects.skeleton import Skeleton
-from std.math import isfinite
 
 # Four numbers per vertex in each of the two skin attributes: three.js's
 # and glTF's. See the module docstring.
@@ -180,7 +181,9 @@ struct SkinnedMesh(Copyable, Movable):
     var bind_mode: BindMode
     # How much of each of the geometry's morph targets this mesh wears,
     # exactly as a `Mesh` carries them. See `objects.mesh`.
-    var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
+    var morph_influences: MorphInfluences
+    # Each target's name and index, as a `Mesh` carries them.
+    var morph_target_dictionary: Dict[String, Int]
 
     def __init__(
         out self,
@@ -244,7 +247,8 @@ struct SkinnedMesh(Copyable, Movable):
         self.bind_inverse = undo^
         self.frustum_culled = frustum_culled
         self.bind_mode = bind_mode
-        self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+        self.morph_influences = MorphInfluences()
+        self.morph_target_dictionary = Dict[String, Int]()
 
     def bone_count(self) -> Int:
         """Return how many bones carry this mesh."""
@@ -258,14 +262,25 @@ struct SkinnedMesh(Copyable, Movable):
             weight: How much of it; see `objects.mesh.Mesh`.
 
         Raises:
-            Error: If there is no such target, or the weight is not a
+            Error: If the target is negative, or the weight is not a
                 number.
         """
-        if target < 0 or target >= MAX_MORPH_TARGETS:
-            raise Error("A mesh has eight morph target influences")
-        if not isfinite(weight):
-            raise Error("A morph influence must be a number")
-        self.morph_influences[target] = weight
+        self.morph_influences.set(target, weight)
+
+    def set_morph_influence(mut self, name: String, weight: Float32) raises:
+        """Set how much of one named morph target this mesh wears.
+
+        Args:
+            name: The target's name, from `morph_target_dictionary`.
+            weight: How much of it.
+
+        Raises:
+            Error: If no target has that name, or the weight is not a
+                number.
+        """
+        self.morph_influences.set(
+            morph_target_index(self.morph_target_dictionary, name), weight
+        )
 
     def morph_influence(self, target: Int) raises -> Float32:
         """Return how much of one morph target this mesh wears.
@@ -274,14 +289,26 @@ struct SkinnedMesh(Copyable, Movable):
             target: Which of the geometry's targets, from zero.
 
         Returns:
-            Its weight.
+            Its weight, zero for a target never set.
 
         Raises:
-            Error: If there is no such target.
+            Error: If the target is negative.
         """
-        if target < 0 or target >= MAX_MORPH_TARGETS:
-            raise Error("A mesh has eight morph target influences")
-        return self.morph_influences[target]
+        return self.morph_influences.get(target)
+
+    def update_morph_targets(mut self, geometry: BufferGeometry) raises:
+        """Size the weights and name the targets from the geometry the mesh
+        draws, three.js's `updateMorphTargets`; see `Mesh`.
+
+        Args:
+            geometry: The geometry this mesh names.
+
+        Raises:
+            Error: Never for a geometry built through its own methods.
+        """
+        fill_morph_targets(
+            self.morph_influences, self.morph_target_dictionary, geometry
+        )
 
 
 def normalized_skin_weights(

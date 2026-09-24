@@ -28,6 +28,7 @@ from core.buffer_geometry import (
 from core.deform import morphed_positions
 from core.geometry_store import GeometryId
 from core.interleaved_buffer import InterleavedBuffer
+from core.morph import MorphInfluences
 from core.object3d import NodeId, Object3D
 from core.raycaster import Raycaster
 from core.scene import Scene
@@ -523,8 +524,8 @@ def test_the_morph_evaluator_reads_an_interleaved_target() raises:
     geometry.set_attribute(String(POSITION), BufferAttribute([0, 0, 0], 3))
     var target = InterleavedBuffer([9, 2, 4, 6], 4)
     geometry.add_morph_target(BufferAttribute(target, 3, 1))
-    var influences = SIMD[DType.float32, 8](0)
-    influences[0] = 0.5
+    var influences = MorphInfluences()
+    influences.set(0, 0.5)
     var worn = morphed_positions(geometry, influences)
     assert_equal(worn[0].x, 1)
     assert_equal(worn[0].y, 2)

@@ -454,9 +454,9 @@ def test_refused_skins_and_shapes() raises:
     )
 
 
-def test_too_many_blend_shapes_are_refused() raises:
-    # Seven channels more than the rig's two: nine, and a mesh wears
-    # eight.
+def test_nine_blend_shapes_are_read() raises:
+    # Seven channels more than the rig's two: nine, past the eight this
+    # port once held. three.js on WebGL2 has no cap, and neither has this.
     var objects = String()
     var links = String()
     for extra in range(7):
@@ -482,7 +482,11 @@ def test_too_many_blend_shapes_are_refused() raises:
         '\tC: "OO",5000000000002,4000000000003\n',
         '\tC: "OO",5000000000002,4000000000003\n' + links,
     )
-    refused(text, "a mesh wears at most 8")
+    var scene = Scene()
+    var assets = Assets()
+    _ = load(text, scene, assets)
+    ref skinned = scene.skinned_meshes[0]
+    assert_equal(assets.geometries.get(skinned.geometry).morph_count(), 9)
 
 
 def test_lenient_animation() raises:

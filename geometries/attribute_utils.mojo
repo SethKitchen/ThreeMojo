@@ -45,11 +45,11 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     GeometryGroup,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
 )
 from core.interleaved_buffer import InterleavedBuffer
+from core.morph import MorphInfluences
 from math.matrix4 import Matrix4
 
 # three.js's index needs four bytes an entry, not two, from this value up:
@@ -239,6 +239,11 @@ def deinterleave_geometry(mut geometry: BufferGeometry) raises:
         if geometry.morph_normals[target].is_interleaved():
             geometry.morph_normals[target] = deinterleave_attribute(
                 geometry.morph_normals[target]
+            )
+    for target in range(len(geometry.morph_colors)):
+        if geometry.morph_colors[target].is_interleaved():
+            geometry.morph_colors[target] = deinterleave_attribute(
+                geometry.morph_colors[target]
             )
 
 
@@ -454,7 +459,7 @@ def _morphed(
     base: BufferAttribute,
     targets: List[BufferAttribute],
     relative: Bool,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
     vertex: Int,
 ) raises -> SIMD[DType.float64, 4]:
     """Return one vertex of an attribute with the morph targets worn, in
@@ -501,7 +506,7 @@ def _carried(
 
 def _worn(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
     carriers: List[Matrix4],
     skinned: Bool,
 ) raises -> MorphedAttributes:
@@ -553,7 +558,7 @@ def _worn(
 
 def compute_morphed_attributes(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
 ) raises -> MorphedAttributes:
     """Return a geometry's positions and normals with its morph targets
     worn, three.js's `computeMorphedAttributes` for a `Mesh`.
@@ -584,7 +589,7 @@ def compute_morphed_attributes(
 
 def compute_morphed_attributes(
     geometry: BufferGeometry,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
     carriers: List[Matrix4],
 ) raises -> MorphedAttributes:
     """Return a skinned geometry's positions and normals with its morph

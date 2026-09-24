@@ -11,17 +11,24 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
+    COLOR,
     BufferGeometry,
-    MAX_MORPH_TARGETS,
+    GeometryGroup,
+    MaterialIndex,
     NORMAL,
     POSITION,
 )
-from core.deform import box_of, morph_offset, sphere_of
+from core.deform import box_of, morph_offset, morphed_colors, sphere_of
+from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from materials.material import Color, DOUBLE_SIDE, Material
+from materials.material import Color, DOUBLE_SIDE, Material, MaterialId
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from objects.mesh import Mesh
+from objects.mesh import Mesh, morph_target_index
+from objects.skeleton import bind_skeleton
+from objects.skinned_mesh import SkinnedMesh
 from render.rasterizer import RasterVertex
 from renderers.renderer import Renderer
 from std.testing import (
@@ -127,13 +134,12 @@ def test_a_morph_target_must_fit_the_geometry() raises:
         geometry.add_morph_target(BufferAttribute(short^, 3))
 
 
-def test_a_geometry_holds_eight_morph_targets_at_most() raises:
+def test_a_geometry_holds_more_than_eight_morph_targets() raises:
+    # three.js on WebGL2 has no cap, and neither has this.
     var geometry = flat_triangle()
-    for _ in range(MAX_MORPH_TARGETS):
+    for _ in range(20):
         geometry.add_morph_target(moved_target())
-    assert_equal(geometry.morph_count(), MAX_MORPH_TARGETS)
-    with assert_raises():
-        geometry.add_morph_target(moved_target())
+    assert_equal(geometry.morph_count(), 20)
 
 
 def test_every_morph_target_carries_normals_or_none_does() raises:
@@ -196,17 +202,20 @@ def test_a_mesh_wears_a_morph_target() raises:
     assert_almost_equal(mesh.morph_influence(2), Float32(0.75), atol=TOLERANCE)
 
 
-def test_a_mesh_has_eight_influences_and_no_more() raises:
+def test_a_mesh_has_as_many_influences_as_it_is_given() raises:
     var assets = Assets()
     var mesh = a_mesh(assets, flat_triangle())
-    with assert_raises():
+    with assert_raises(contains="negative"):
         mesh.set_morph_influence(-1, 1)
-    with assert_raises():
-        mesh.set_morph_influence(MAX_MORPH_TARGETS, 1)
-    with assert_raises():
+    with assert_raises(contains="negative"):
         _ = mesh.morph_influence(-1)
-    with assert_raises():
-        _ = mesh.morph_influence(MAX_MORPH_TARGETS)
+    # A weight never set reads as zero; setting one past the end grows
+    # the list with zeros.
+    assert_equal(mesh.morph_influence(40), 0)
+    mesh.set_morph_influence(40, 0.5)
+    assert_equal(len(mesh.morph_influences), 41)
+    assert_equal(mesh.morph_influence(39), 0)
+    assert_equal(mesh.morph_influence(40), 0.5)
 
 
 def test_a_morph_influence_must_be_a_number() raises:
@@ -392,6 +401,309 @@ def test_bounding_the_points_a_mesh_has_been_carried_to() raises:
     assert_true(nothing.min.x > nothing.max.x)
     with assert_raises():
         _ = sphere_of(List[Vector3]())
+
+
+# --- no cap, names and colors ------------------------------------------------
+
+
+def test_influences_read_zero_past_the_end() raises:
+    var worn = MorphInfluences()
+    assert_equal(len(worn), 0)
+    assert_false(worn.is_worn())
+    assert_equal(worn[5], 0)
+    assert_equal(worn[-1], 0)
+    assert_equal(worn.get(5), 0)
+    with assert_raises(contains="negative"):
+        _ = worn.get(-1)
+    with assert_raises(contains="must be a number"):
+        worn.set(0, Float32(0) / Float32(0))
+    worn.set(2, 0.25)
+    assert_true(worn.is_worn())
+    assert_equal(worn[2], 0.25)
+    var sized = MorphInfluences(count=3)
+    assert_equal(len(sized), 3)
+    assert_false(sized.is_worn())
+    with assert_raises(contains="negative number"):
+        _ = MorphInfluences(count=-1)
+    # A copy is its own list.
+    var copied = worn
+    copied.set(2, 1)
+    assert_equal(worn[2], 0.25)
+
+
+def test_a_mesh_wears_twenty_targets() raises:
+    # Each target carries the first vertex a tenth of a meter along x.
+    var assets = Assets()
+    var geometry = flat_triangle()
+    for _ in range(20):
+        var points: List[Float32] = [0.1, 0, 0, 1, 0, 0, 0, 1, 0]
+        geometry.morph_relative = False
+        geometry.add_morph_target(BufferAttribute(points^, 3))
+    var mesh = a_mesh(assets, geometry^)
+    for target in range(20):
+        mesh.set_morph_influence(target, 1)
+    var corners = prepared(assets, mesh)
+    assert_almost_equal(corners[0].world.x, Float32(2), atol=TOLERANCE)
+
+
+def test_targets_have_names_and_a_dictionary() raises:
+    var geometry = flat_triangle()
+    geometry.add_morph_target(moved_target(), name="smile")
+    geometry.add_morph_target(stretched_target())
+    assert_equal(geometry.morph_target_name(0), "smile")
+    assert_equal(geometry.morph_target_name(1), "1")
+    # The names are none or one per target: a first name gives the
+    # targets before it empty names.
+    var unnamed = flat_triangle()
+    unnamed.add_morph_target(moved_target())
+    assert_equal(len(unnamed.morph_names), 0)
+    assert_equal(unnamed.morph_target_name(0), "0")
+    unnamed.add_morph_target(moved_target(), name="late")
+    assert_equal(len(unnamed.morph_names), 2)
+    assert_equal(unnamed.morph_names[0], "")
+    assert_equal(unnamed.morph_target_name(1), "late")
+    with assert_raises(contains="No morph target"):
+        _ = geometry.morph_target_name(2)
+    with assert_raises(contains="No morph target"):
+        _ = geometry.morph_target_name(-1)
+    var assets = Assets()
+    var mesh = Mesh(
+        assets.geometries.add(geometry.clone()),
+        assets.materials.add(Material(Color(255, 255, 255))),
+        NodeId(0),
+    )
+    mesh.set_morph_influence(5, 1)
+    mesh.update_morph_targets(geometry)
+    assert_equal(len(mesh.morph_influences), 2)
+    assert_false(mesh.is_morphed())
+    assert_equal(mesh.morph_target_dictionary["smile"], 0)
+    assert_equal(mesh.morph_target_dictionary["1"], 1)
+    mesh.set_morph_influence("smile", 0.5)
+    assert_equal(mesh.morph_influence(0), 0.5)
+    with assert_raises(contains="No morph target has the name frown"):
+        mesh.set_morph_influence("frown", 0.5)
+    assert_equal(morph_target_index(mesh.morph_target_dictionary, "1"), 1)
+    # A geometry with no targets leaves the mesh as it is.
+    mesh.update_morph_targets(flat_triangle())
+    assert_equal(len(mesh.morph_influences), 2)
+    # The copy a scene takes carries the dictionary.
+    var copied = mesh
+    assert_equal(copied.morph_target_dictionary["smile"], 0)
+
+
+def test_a_skinned_mesh_has_a_dictionary_too() raises:
+    var geometry = flat_triangle()
+    geometry.add_morph_target(moved_target(), name="smile")
+    var placed: List[Matrix4] = [Matrix4()]
+    var nodes: List[NodeId] = [NodeId(0)]
+    var mesh = SkinnedMesh(
+        GeometryId(0), MaterialId(0), NodeId(0), bind_skeleton(nodes, placed)
+    )
+    mesh.update_morph_targets(geometry)
+    mesh.set_morph_influence("smile", 0.75)
+    assert_equal(mesh.morph_influence(0), 0.75)
+    with assert_raises(contains="No morph target"):
+        mesh.set_morph_influence("frown", 1)
+
+
+def rgb(red: Float32, green: Float32, blue: Float32) raises -> BufferAttribute:
+    """Return a color attribute of three vertices, all one color."""
+    var data: List[Float32] = [
+        red,
+        green,
+        blue,
+        red,
+        green,
+        blue,
+        red,
+        green,
+        blue,
+    ]
+    return BufferAttribute(data^, 3)
+
+
+def test_color_targets_are_all_or_none() raises:
+    var geometry = flat_triangle()
+    var none = List[BufferAttribute]()
+    none.append(rgb(1, 0, 0))
+    with assert_raises(contains="Only a geometry with morph targets"):
+        geometry.set_morph_colors(none^)
+    geometry.add_morph_target(moved_target())
+    with assert_raises(contains="a color, or none"):
+        geometry.set_morph_colors(List[BufferAttribute]())
+    var flat = List[BufferAttribute]()
+    flat.append(BufferAttribute([0, 0, 0, 0, 0, 0], 2))
+    with assert_raises(contains="three or four numbers"):
+        geometry.set_morph_colors(flat^)
+    var short = List[BufferAttribute]()
+    short.append(BufferAttribute([0, 0, 0, 0, 0, 0], 3))
+    with assert_raises(contains="cover every vertex"):
+        geometry.set_morph_colors(short^)
+    var red = List[BufferAttribute]()
+    red.append(rgb(1, 0, 0))
+    assert_false(geometry.has_morph_colors())
+    geometry.set_morph_colors(red^)
+    assert_true(geometry.has_morph_colors())
+    assert_equal(geometry.morph_color(0, 1)[0], 1)
+    # Three numbers a vertex read an alpha of one.
+    assert_equal(geometry.morph_color(0, 1)[3], 1)
+    with assert_raises(contains="No morph target has that color"):
+        _ = geometry.morph_color(1, 0)
+    with assert_raises(contains="No morph target has that color"):
+        _ = geometry.morph_color(-1, 0)
+    # A target added without a color after the colors is refused, with
+    # normals or without.
+    with assert_raises(contains="a color, or none"):
+        geometry.add_morph_target(moved_target())
+    var turned = flat_triangle()
+    var facing: List[Float32] = [0, 0, 1, 0, 0, 1, 0, 0, 1]
+    turned.add_morph_target(moved_target(), BufferAttribute(facing.copy(), 3))
+    var blue = List[BufferAttribute]()
+    blue.append(BufferAttribute([0, 0, 1, 0.5, 0, 0, 1, 0.5, 0, 0, 1, 0.5], 4))
+    turned.set_morph_colors(blue^)
+    assert_equal(turned.morph_color(0, 2)[3], 0.5)
+    with assert_raises(contains="a color, or none"):
+        turned.add_morph_target(moved_target(), BufferAttribute(facing^, 3))
+
+
+def test_color_targets_are_carried_by_copies() raises:
+    var geometry = flat_triangle()
+    geometry.add_morph_target(moved_target(), name="red")
+    var red = List[BufferAttribute]()
+    red.append(rgb(1, 0, 0))
+    geometry.set_morph_colors(red^)
+    geometry.set_index([0, 1, 2])
+    geometry.add_group(0, 3, MaterialIndex(0))
+    var copied = geometry.clone()
+    assert_true(copied.has_morph_colors())
+    assert_equal(copied.morph_target_name(0), "red")
+    var loose = geometry.to_non_indexed()
+    assert_true(loose.has_morph_colors())
+    assert_equal(loose.morph_target_name(0), "red")
+    var part = geometry.group_part(GeometryGroup(0, 3, MaterialIndex(0)))
+    assert_true(part.has_morph_colors())
+    assert_equal(part.morph_color(0, 0)[0], 1)
+
+
+def test_morphed_colors_match_three() raises:
+    # three.js scales the base by one less the weights for absolute
+    # targets and adds each target times its weight.
+    var geometry = flat_triangle()
+    geometry.add_morph_target(moved_target())
+    geometry.add_morph_target(moved_target())
+    var tints = List[BufferAttribute]()
+    tints.append(rgb(1, 0, 0))
+    tints.append(rgb(0, 0, 1))
+    geometry.set_morph_colors(tints^)
+    var base: List[SIMD[DType.float32, 4]] = [
+        SIMD[DType.float32, 4](0.5, 0.5, 0.5, 1),
+        SIMD[DType.float32, 4](0.5, 0.5, 0.5, 1),
+        SIMD[DType.float32, 4](0.5, 0.5, 0.5, 1),
+    ]
+    var worn = MorphInfluences()
+    worn.set(0, 0.5)
+    worn.set(1, 0.25)
+    var absolute = morphed_colors(geometry, base, worn)
+    # 0.5 * (1 - 0.75) + 1 * 0.5 + 0 * 0.25
+    assert_almost_equal(absolute[0][0], Float32(0.625), atol=TOLERANCE)
+    assert_almost_equal(absolute[0][1], Float32(0.125), atol=TOLERANCE)
+    assert_almost_equal(absolute[0][2], Float32(0.375), atol=TOLERANCE)
+    assert_almost_equal(absolute[0][3], Float32(1), atol=TOLERANCE)
+    geometry.morph_relative = True
+    var relative = morphed_colors(geometry, base, worn)
+    assert_almost_equal(relative[0][0], Float32(1), atol=TOLERANCE)
+    assert_almost_equal(relative[0][2], Float32(0.75), atol=TOLERANCE)
+    # No colors to morph, and no vertices: the base as it is.
+    var plain = morphed_colors(flat_triangle(), base, worn)
+    assert_equal(plain[1][0], 0.5)
+    assert_equal(
+        len(morphed_colors(geometry, List[SIMD[DType.float32, 4]](), worn)), 0
+    )
+
+
+def colored_mesh(
+    mut assets: Assets, channels: Int, var geometry: BufferGeometry
+) raises -> Mesh:
+    """Return a mesh with gray vertex colors of `channels` numbers, whose
+    one target turns them red."""
+    var gray = List[Float32]()
+    for _ in range(3):
+        for channel in range(channels):
+            gray.append(Float32(0.5) if channel < 3 else Float32(0.25))
+    geometry.set_attribute(String(COLOR), BufferAttribute(gray^, channels))
+    geometry.add_morph_target(moved_target())
+    var red = List[BufferAttribute]()
+    red.append(BufferAttribute([1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1], 4))
+    geometry.set_morph_colors(red^)
+    return Mesh(
+        assets.geometries.add(geometry^),
+        assets.materials.add(
+            Material(Color(255, 255, 255), side=DOUBLE_SIDE, vertex_colors=True)
+        ),
+        NodeId(0),
+    )
+
+
+def test_the_renderer_morphs_vertex_colors() raises:
+    var assets = Assets()
+    var mesh = colored_mesh(assets, 3, flat_triangle())
+    var plain = prepared(assets, mesh)
+    assert_almost_equal(plain[0].color.r, Float32(0.5), atol=TOLERANCE)
+    mesh.set_morph_influence(0, 0.5)
+    var half = prepared(assets, mesh)
+    assert_almost_equal(half[0].color.r, Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(half[0].color.g, Float32(0.25), atol=TOLERANCE)
+    # Three numbers a vertex: the morphed alpha is not read.
+    assert_almost_equal(half[0].color.a, Float32(1), atol=TOLERANCE)
+    # Four numbers a vertex: it is, from a quarter toward one.
+    var clear = colored_mesh(assets, 4, flat_triangle())
+    clear.set_morph_influence(0, 0.5)
+    var mixed = prepared(assets, clear)
+    assert_almost_equal(mixed[0].color.a, Float32(0.625), atol=TOLERANCE)
+
+
+def test_a_geometry_of_no_vertices_has_no_colors_to_morph() raises:
+    var assets = Assets()
+    var empty = BufferGeometry()
+    var none = List[Float32]()
+    empty.set_attribute(String(POSITION), BufferAttribute(none.copy(), 3))
+    empty.set_attribute(String(COLOR), BufferAttribute(none.copy(), 3))
+    var mesh = Mesh(
+        assets.geometries.add(empty^),
+        assets.materials.add(
+            Material(Color(255, 255, 255), vertex_colors=True)
+        ),
+        NodeId(0),
+    )
+    mesh.frustum_culled = False
+    assert_equal(len(prepared(assets, mesh)), 0)
+
+
+def test_a_color_per_instance_is_not_morphed() raises:
+    # three.js morphs the vertex color attribute only.
+    var assets = Assets()
+    var geometry = BufferGeometry(instanced=True)
+    var points: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0]
+    geometry.set_attribute(String(POSITION), BufferAttribute(points^, 3))
+    geometry.set_attribute(
+        String(COLOR),
+        BufferAttribute([1, 0, 0, 0, 1, 0], 3, mesh_per_attribute=1),
+    )
+    geometry.add_morph_target(moved_target())
+    var blue = List[BufferAttribute]()
+    blue.append(rgb(0, 0, 1))
+    geometry.set_morph_colors(blue^)
+    var mesh = Mesh(
+        assets.geometries.add(geometry^),
+        assets.materials.add(
+            Material(Color(255, 255, 255), side=DOUBLE_SIDE, vertex_colors=True)
+        ),
+        NodeId(0),
+    )
+    mesh.set_morph_influence(0, 1)
+    var corners = prepared(assets, mesh)
+    assert_almost_equal(corners[0].color.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(corners[0].color.b, Float32(0), atol=TOLERANCE)
 
 
 def main() raises:

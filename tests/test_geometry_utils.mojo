@@ -504,6 +504,51 @@ def test_parts_whose_morph_targets_disagree_are_refused() raises:
         _ = merge_geometries(relative)
 
 
+def colored_quad(channels: Int, fill: Float32) raises -> BufferGeometry:
+    """Return a quad with one named morph target that carries a color of
+    `channels` numbers."""
+    var geometry = quad()
+    geometry.add_morph_target(
+        BufferAttribute(List[Float32](length=12, fill=0), 3), name="glow"
+    )
+    var tints = List[BufferAttribute]()
+    tints.append(
+        BufferAttribute(List[Float32](length=4 * channels, fill=fill), channels)
+    )
+    geometry.set_morph_colors(tints^)
+    return geometry^
+
+
+def test_color_targets_are_merged_target_by_target() raises:
+    """Each color target is joined across the parts, and the names kept."""
+    var parts = List[BufferGeometry]()
+    parts.append(colored_quad(3, 0.25))
+    parts.append(colored_quad(3, 0.75))
+    var merged = merge_geometries(parts)
+    assert_true(merged.has_morph_colors())
+    assert_equal(merged.morph_colors[0].item_size, 3)
+    assert_equal(merged.morph_color(0, 0)[0], 0.25)
+    assert_equal(merged.morph_color(0, 7)[0], 0.75)
+    assert_equal(merged.morph_target_name(0), "glow")
+
+
+def test_parts_whose_color_targets_disagree_are_refused() raises:
+    """Colors on one part and not the other, or of another size."""
+    var plain = List[BufferGeometry]()
+    plain.append(colored_quad(3, 0))
+    plain.append(quad())
+    plain[1].add_morph_target(
+        BufferAttribute(List[Float32](length=12, fill=0), 3)
+    )
+    with assert_raises(contains="carry colors"):
+        _ = merge_geometries(plain)
+    var sized = List[BufferGeometry]()
+    sized.append(colored_quad(3, 0))
+    sized.append(colored_quad(4, 0))
+    with assert_raises(contains="color target must keep"):
+        _ = merge_geometries(sized)
+
+
 def test_parts_that_cannot_be_read_are_refused() raises:
     """A part with no positions or a bad index is refused."""
     var empty = List[BufferGeometry]()
@@ -582,9 +627,14 @@ def test_welding_carries_the_morph_targets_along() raises:
         BufferAttribute(moved^, 3),
         BufferAttribute(List[Float32](length=18, fill=1), 3),
     )
+    var tints = List[BufferAttribute]()
+    tints.append(BufferAttribute(List[Float32](length=18, fill=0.5), 3))
+    geometry.set_morph_colors(tints^)
     var welded = merge_vertices(geometry)
     assert_equal(welded.morph_count(), 1)
     assert_true(welded.has_morph_normals())
+    assert_true(welded.has_morph_colors())
+    assert_equal(welded.morph_colors[0].count(), 4)
     assert_equal(welded.vertex_count(), 4)
     # The fourth kept vertex is the sixth vertex of the source.
     assert_equal(welded.morph_position(0, 3).x, 5)

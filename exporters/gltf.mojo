@@ -151,7 +151,6 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
@@ -159,6 +158,7 @@ from core.buffer_geometry import (
     BufferGeometry,
 )
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.user_data import UserData, json_value_text
@@ -2453,7 +2453,7 @@ def _weights(
     be one set: glTF gives a mesh one `weights`. Zero for a node whose
     geometry has targets and whose things wear none, as three.js's
     `InstancedMesh`, `Line` and `Points` start at zero."""
-    var worn = List[SIMD[DType.float32, MAX_MORPH_TARGETS]]()
+    var worn = List[MorphInfluences]()
     for which in carried.meshes:
         worn.append(scene.meshes[which].morph_influences)
     for which in carried.skinned:

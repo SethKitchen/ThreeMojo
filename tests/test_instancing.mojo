@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `objects.instanced_mesh`, `objects.lod`, and the renderer's
-drawing of them.
+"""Tests for `objects.instanced_mesh` and the renderer's drawing of it.
+`tests/test_lod.mojo` tests levels of detail.
 
 The claim each render test makes is the same: a scene drawn with
-instances, a batch or an LOD comes out pixel for pixel as the same scene
+instances or a batch comes out pixel for pixel as the same scene
 drawn with plain meshes on plain nodes. The opaque draws make that order
 independent, since the depth test settles every pixel, so the comparison
 is exact.
@@ -29,7 +29,7 @@ from math.matrix4 import Matrix4, scaling, translation
 from math.vector3 import Vector3
 from std.math import nan
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
-from objects.lod import Lod
+
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
@@ -215,127 +215,6 @@ def test_a_batched_mesh_refuses_bad_ids_and_a_bad_index() raises:
         batch.set_matrix_at(1, Matrix4())
 
 
-def test_an_lod_keeps_its_levels_in_order_of_distance() raises:
-    var lod = Lod(NodeId(0))
-    assert_equal(lod.count(), 0)
-    assert_equal(lod.level_for(Length(3.0, METER)), -1)
-    lod.add_level(GeometryId(2), MaterialId(0), Length(10.0, METER))
-    lod.add_level(GeometryId(0), MaterialId(0))
-    lod.add_level(GeometryId(1), MaterialId(0), Length(5.0, METER))
-    # A level at a distance another has goes after it.
-    lod.add_level(GeometryId(3), MaterialId(0), Length(5.0, METER))
-    assert_equal(lod.count(), 4)
-    assert_equal(lod.level_at(0).geometry, GeometryId(0))
-    assert_equal(lod.level_at(1).geometry, GeometryId(1))
-    assert_equal(lod.level_at(2).geometry, GeometryId(3))
-    assert_equal(lod.level_at(3).geometry, GeometryId(2))
-    assert_almost_equal(lod.level_at(3).distance.value, Float32(10))
-    # The last level whose distance has been reached shows, and the first
-    # below the second's distance.
-    assert_equal(lod.level_for(Length(0.0, METER)), 0)
-    assert_equal(lod.level_for(Length(4.9, METER)), 0)
-    assert_equal(lod.level_for(Length(5.0, METER)), 2)
-    assert_equal(lod.level_for(Length(7.0, METER)), 2)
-    assert_equal(lod.level_for(Length(50.0, METER)), 3)
-
-
-def test_an_lod_refuses_bad_ids_a_negative_distance_and_a_bad_level() raises:
-    with assert_raises():
-        _ = Lod(NodeId(-1))
-    var lod = Lod(NodeId(0))
-    with assert_raises():
-        lod.add_level(GeometryId(-1), MaterialId(0))
-    with assert_raises():
-        lod.add_level(GeometryId(0), MaterialId(-1))
-    with assert_raises():
-        lod.add_level(GeometryId(0), MaterialId(0), Length(-1.0, METER))
-    with assert_raises():
-        lod.add_level(GeometryId(0), MaterialId(0), hysteresis=-0.1)
-    with assert_raises():
-        lod.add_level(GeometryId(0), MaterialId(0), hysteresis=1.1)
-    with assert_raises():
-        lod.add_level(
-            GeometryId(0), MaterialId(0), hysteresis=nan[DType.float32]()
-        )
-    with assert_raises():
-        _ = lod.level_at(0)
-    lod.add_level(GeometryId(0), MaterialId(0))
-    with assert_raises():
-        _ = lod.level_at(1)
-    with assert_raises():
-        _ = lod.level_at(-1)
-
-
-def test_an_lod_with_hysteresis_keeps_its_level_until_the_camera_comes_nearer() raises:
-    # three.js's `addLevel(object, distance, hysteresis)`: the far level
-    # takes over at 10 m, and once shown holds down to 10 m less a fifth.
-    var lod = Lod(NodeId(0))
-    lod.add_level(GeometryId(0), MaterialId(0))
-    lod.add_level(GeometryId(1), MaterialId(0), Length(10.0, METER), 0.2)
-    assert_equal(lod.shown, 0)
-    assert_equal(lod.update(Length(9.0, METER)), 0)
-    assert_equal(lod.update(Length(10.0, METER)), 1)
-    assert_equal(lod.shown, 1)
-    # Back to nine: without memory the first, with it still the second.
-    assert_equal(lod.level_for(Length(9.0, METER)), 0)
-    assert_equal(lod.update(Length(9.0, METER)), 1)
-    assert_equal(lod.update(Length(8.0, METER)), 1)
-    assert_equal(lod.update(Length(7.9, METER)), 0)
-    assert_equal(lod.shown, 0)
-    # The memory follows a level inserted before it, and an empty LOD
-    # remembers nothing.
-    _ = lod.update(Length(50.0, METER))
-    lod.add_level(GeometryId(2), MaterialId(0), Length(5.0, METER))
-    assert_equal(lod.shown, 2)
-    assert_equal(lod.level_at(2).geometry, GeometryId(1))
-    var empty = Lod(NodeId(0))
-    assert_equal(empty.update(Length(1.0, METER)), -1)
-    assert_equal(empty.shown, 0)
-    empty.add_level(GeometryId(0), MaterialId(0))
-    assert_equal(empty.shown, 0)
-
-
-def test_the_scene_updates_every_lod_and_the_renderer_reads_the_memory() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METER)))
-    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
-    var paint = assets.materials.add(Material(Color(220, 120, 40)))
-    var lod = Lod(NodeId(0))
-    lod.add_level(box, paint)
-    lod.add_level(ball, paint, Length(5.0, METER), 0.5)
-    var scene = a_scene()
-    scene.add_lod(lod^)
-    var near_box = a_scene()
-    near_box.add_mesh(Mesh(box, paint, NodeId(0)))
-    var far_ball = a_scene()
-    far_ball.add_mesh(Mesh(ball, paint, NodeId(0)))
-    # Never updated, four meters out shows the cube. Updated from eight
-    # meters, the sphere holds at four, and lets go under two and a half.
-    assert_same_image(
-        renderer.render(scene, assets, a_camera(4)),
-        renderer.render(near_box, assets, a_camera(4)),
-    )
-    scene.update_lods(Vector3(0, 0, 8))
-    assert_equal(scene.lods[0].shown, 1)
-    assert_same_image(
-        renderer.render(scene, assets, a_camera(4)),
-        renderer.render(far_ball, assets, a_camera(4)),
-    )
-    scene.update_lods(Vector3(0, 0, 2.4))
-    assert_equal(scene.lods[0].shown, 0)
-    assert_same_image(
-        renderer.render(scene, assets, a_camera(4)),
-        renderer.render(near_box, assets, a_camera(4)),
-    )
-    # A scene with no LODs has nothing to update, and a stale scene is
-    # refused, as anywhere its world positions are read.
-    near_box.update_lods(Vector3(0, 0, 8))
-    scene.node(NodeId(0)).set_position(0, 0, 1)
-    with assert_raises():
-        scene.update_lods(Vector3(0, 0, 8))
-
-
 def test_the_scene_takes_each_once_its_node_exists() raises:
     var scene = Scene()
     with assert_raises():
@@ -344,17 +223,13 @@ def test_the_scene_takes_each_once_its_node_exists() raises:
         )
     with assert_raises():
         scene.add_batched_mesh(BatchedMesh(MaterialId(0), NodeId(0)))
-    with assert_raises():
-        scene.add_lod(Lod(NodeId(0)))
     _ = scene.add(Object3D())
     scene.add_instanced_mesh(
         InstancedMesh(GeometryId(0), MaterialId(0), NodeId(0), 1)
     )
     scene.add_batched_mesh(BatchedMesh(MaterialId(0), NodeId(0)))
-    scene.add_lod(Lod(NodeId(0)))
     assert_equal(len(scene.instanced_meshes), 1)
     assert_equal(len(scene.batched_meshes), 1)
-    assert_equal(len(scene.lods), 1)
 
 
 # --- drawing -----------------------------------------------------------------
@@ -469,9 +344,6 @@ def test_a_group_on_another_layer_is_not_drawn() raises:
     var batch = BatchedMesh(paint, NodeId(0))
     _ = batch.add_instance(box)
     scene.add_batched_mesh(batch^)
-    var lod = Lod(NodeId(0))
-    lod.add_level(box, paint)
-    scene.add_lod(lod^)
     var image = renderer.render(scene, assets, a_camera())
     assert_equal(count_drawn(image, renderer.background), 0)
 
@@ -525,47 +397,6 @@ def test_a_translucent_group_is_drawn_after_the_opaque_ones() raises:
     assert_true(middle.r > 40, "the cube did not show through the pane")
 
 
-def test_an_lod_shows_the_level_its_distance_picks() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METER)))
-    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
-    var paint = assets.materials.add(Material(Color(220, 120, 40)))
-    var lod = Lod(NodeId(0))
-    lod.add_level(box, paint)
-    lod.add_level(ball, paint, Length(5.0, METER))
-    var scene = a_scene()
-    scene.add_lod(lod^)
-    var near_box = a_scene()
-    near_box.add_mesh(Mesh(box, paint, NodeId(0)))
-    var far_ball = a_scene()
-    far_ball.add_mesh(Mesh(ball, paint, NodeId(0)))
-    # Three meters out, the cube; eight meters out, the sphere.
-    assert_same_image(
-        renderer.render(scene, assets, a_camera(3)),
-        renderer.render(near_box, assets, a_camera(3)),
-    )
-    assert_same_image(
-        renderer.render(scene, assets, a_camera(8)),
-        renderer.render(far_ball, assets, a_camera(8)),
-    )
-    assert_true(
-        count_drawn(
-            renderer.render(scene, assets, a_camera(8)), renderer.background
-        )
-        > 0,
-        "the far level drew nothing",
-    )
-
-
-def test_an_lod_with_no_levels_draws_nothing() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var assets = Assets()
-    var scene = a_scene()
-    scene.add_lod(Lod(NodeId(0)))
-    assert_equal(len(renderer.prepare(scene, assets, a_camera())), 0)
-
-
 def test_a_group_naming_an_asset_that_is_not_there_is_refused() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
@@ -583,12 +414,6 @@ def test_a_group_naming_an_asset_that_is_not_there_is_refused() raises:
     missing_paint.add_batched_mesh(batch^)
     with assert_raises():
         _ = renderer.render(missing_paint, assets, a_camera())
-    var missing_level = a_scene()
-    var lod = Lod(NodeId(0))
-    lod.add_level(box, MaterialId(7))
-    missing_level.add_lod(lod^)
-    with assert_raises():
-        _ = renderer.render(missing_level, assets, a_camera())
 
 
 def tinted_sheet(r: Float32, g: Float32, b: Float32) raises -> BufferGeometry:
@@ -790,45 +615,6 @@ def test_lit_and_transformed_instances_draw_as_meshes_would() raises:
     var image = renderer.render(instances, assets, a_camera(4))
     assert_true(count_drawn(image, renderer.background) > 30, "little drawn")
     assert_same_image(image, renderer.render(meshes, assets, a_camera(4)))
-
-
-def test_an_lod_under_a_moved_parent_measures_from_the_camera() raises:
-    # The LOD's node rides a parent six meters down z, and the camera
-    # rides a node two meters up it: eight meters apart, the far level
-    # shows. With the parent a meter down, three meters: the near one.
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METER)))
-    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
-    var paint = assets.materials.add(Material(Color(220, 120, 40)))
-    for far_away in [True, False]:
-        var eye = Object3D()
-        eye.set_position(0, 0, 2)
-        var parent = Object3D()
-        var away: Float32 = -6 if far_away else -1
-        parent.set_position(0, 0, away)
-        var lod_scene = Scene()
-        var eye_node = lod_scene.add(Object3D(copy=eye))
-        var parent_node = lod_scene.add(Object3D(copy=parent))
-        var child_node = lod_scene.attach(Object3D(), parent_node)
-        lod_scene.update()
-        var lod = Lod(child_node)
-        lod.add_level(box, paint)
-        lod.add_level(ball, paint, Length(5.0, METER))
-        lod_scene.add_lod(lod^)
-        var mesh_scene = Scene()
-        _ = mesh_scene.add(eye^)
-        var mesh_parent = mesh_scene.add(parent^)
-        var mesh_child = mesh_scene.attach(Object3D(), mesh_parent)
-        mesh_scene.update()
-        mesh_scene.add_mesh(Mesh(ball if far_away else box, paint, mesh_child))
-        var camera = a_camera()
-        camera.attach(eye_node)
-        var shown = renderer.render(lod_scene, assets, camera)
-        assert_true(
-            count_drawn(shown, renderer.background) > 0, "nothing shown"
-        )
-        assert_same_image(shown, renderer.render(mesh_scene, assets, camera))
 
 
 def rgb(color: Color) -> Int:

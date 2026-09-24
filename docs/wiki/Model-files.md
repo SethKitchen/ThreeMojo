@@ -430,7 +430,8 @@ The loader reads a skin into a `Skeleton`, a morph target into the geometry, and
 | `JOINTS_0` | The `skinIndex` attribute. The components must be unsigned bytes or unsigned shorts. |
 | `WEIGHTS_0` | The `skinWeight` attribute. The loader divides each vertex's four weights by their sum, as three.js's `normalizeSkinWeights` does. Four zeros become one on the first bone. |
 | A skin | A `Skeleton` with one `Bone` per joint. The inverse bind matrices come from `inverseBindMatrices`, or are the identity. The mesh is bound at the identity, in `ATTACHED` mode. |
-| A primitive's `targets` | Morph targets of the geometry, with `morph_relative` set, because glTF holds offsets. `POSITION` and `NORMAL` are read. |
+| A primitive's `targets` | Morph targets of the geometry, with `morph_relative` set, because glTF holds offsets. `POSITION`, `NORMAL` and `COLOR_0` are read. A geometry can carry any number of targets. |
+| A mesh's `extras.targetNames` | The names of the targets. Each mesh gets a `morph_target_dictionary` from them. |
 | `weights` | The morph influences of each mesh. A node's `weights` replace its mesh's `weights`. |
 | `extras.targetNames` | The geometry's `morph_names`, one per target, as three.js reads them into `morphTargetDictionary`. `extras` of another form names nothing. |
 | An animation | An `AnimationClip`, named by the file or `animation_` and its index. |
@@ -460,7 +461,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 - A morph target without `POSITION` moves no position. three.js adds the base positions to it as offsets.
 - A channel on a node that the default scene does not reach is left out. An animation left with no track is left out.
 - A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
-- A morph target of colors is refused. three.js reads it.
+- A morph target without `COLOR_0` changes no color. three.js adds the base colors to it as offsets.
 - A rotation key must be of unit length. A track refuses one that is not.
 - A map other than the occlusion texture must read the first set of texture coordinates. three.js reads any set. Here, only the ao map and the light map are sampled at a second set.
 - A map that reads the third set of texture coordinates or a later set is refused. A geometry here has only `uv` and `uv1`.
@@ -582,7 +583,8 @@ The loader raises for:
 - A sparse accessor with indices that do not rise, that are not unsigned integers, or that name an element past the accessor.
 - A skin without joints. A joint that the file does not have, or that the scene does not reach. Inverse bind matrices that are not one `MAT4` per joint.
 - A skinned primitive without `JOINTS_0` and `WEIGHTS_0`.
-- More than eight morph targets. Primitives of one mesh with different numbers of targets. `weights` that are not one number per target.
+- Primitives of one mesh with different numbers of targets. `weights` that are not one number per target.
+- A morph target `COLOR_0` that is not a `VEC3` or a `VEC4`. An `extras.targetNames` that is not an array of strings.
 - A camera of an unknown type, or without the values it needs. A camera that `PerspectiveCamera` or `OrthographicCamera` refuses.
 - An animation channel with an unknown path, or a sampler with an unknown interpolation. A sampler output that does not hold one value per key, or three for `CUBICSPLINE`.
 - A track or a clip that `KeyframeTrack` or `AnimationClip` refuses.
@@ -898,7 +900,7 @@ A `Skin` deformer on a geometry makes each mesh of the geometry a `SkinnedMesh`.
 | `AnimationCurveNode` `R` | A `QUATERNION` track on the model. |
 | `AnimationCurveNode` `DeformPercent` | A morph influence track on each mesh of the model. The value is divided by 100. |
 
-A mesh here wears at most `MAX_MORPH_TARGETS` morph targets. The loader refuses a geometry with more blend shape channels, and the message gives the count. The influences start at zero, as in three.js, which does not read `DeformPercent`.
+A geometry can carry any number of blend shape channels, as in three.js. The influences start at zero, as in three.js, which does not read `DeformPercent`.
 
 A curve time is in FBX ticks, 46186158000 each second. A key comes at each time that any axis has a key. An axis with no key at that time keeps its last value, and the first value is the model's own.
 
@@ -946,7 +948,7 @@ The loader raises for:
 - A mesh model with no mesh geometry. Models connected in a loop, or nested deeper than `MAX_MODEL_DEPTH`. A transform that flattens an axis.
 - A camera, a light or a material that its builder refuses.
 - A skin that deforms no geometry. A cluster with no `TransformLink`, a `TransformLink` that is not 16 numbers, or a cluster with not one weight for each index. A cluster with no bone.
-- A blend shape that holds something other than a `BlendShapeChannel`, or a channel with no shape. A shape with not three numbers for each index, or an index outside the positions. More blend shape channels than `MAX_MORPH_TARGETS`.
+- A blend shape that holds something other than a `BlendShapeChannel`, or a channel with no shape. A shape with not three numbers for each index, or an index outside the positions.
 - An animation curve with no `KeyTime` or `KeyValueFloat`, or not one value for each time. A curve on a curve node that is not read. A curve node that drives nothing. A stack with no layer. A blend shape channel with no model. A rotation curve with no keys.
 
 ## Fonts
