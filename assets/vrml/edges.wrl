@@ -1,0 +1,66 @@
+#VRML V2.0 utf8
+# Empty and unusual nodes that three.js still builds.
+
+WorldInfo { info [ ] other 1 }
+WorldInfo { }
+Group { }
+Group { children [ ] }
+Background { backUrl "x" }
+Background { skyColor [ 0.2 0.3 0.4 ] groundColor [ ] }
+Shape { appearance NULL geometry NULL other 1 }
+Shape {
+  appearance Appearance {
+    texture NULL
+    textureTransform NULL
+    other 1
+    texture MovieTexture { }
+  }
+  geometry Box { size 0 -1 2 }
+}
+Shape {
+  appearance Appearance {
+    material Material { shininess 0 transparency 0 other 1 }
+    texture ImageTexture { }
+  }
+  geometry Box { }
+}
+Shape { appearance Appearance { material Material { transparency -0.5 } } }
+Shape {
+  appearance Appearance {
+    texture ImageTexture { url [ ] repeatS TRUE repeatT TRUE other 1 }
+  }
+  geometry Box { }
+}
+Shape { appearance Appearance { texture PixelTexture { } } geometry Box { } }
+Shape {
+  appearance Appearance {
+    texture PixelTexture { image 1 1 3 0xFF0000 repeatS TRUE repeatT TRUE other 1 }
+    textureTransform TextureTransform { }
+  }
+  geometry Box { }
+}
+Shape {
+  appearance Appearance {
+    texture PixelTexture { image 1 1 3 0x00FF00 }
+    textureTransform TextureTransform { other 1 }
+  }
+  geometry Box { }
+}
+Shape { geometry IndexedFaceSet { } }
+Shape { geometry IndexedFaceSet { coord NULL coordIndex [ ] } }
+Shape { geometry IndexedLineSet { coord NULL coordIndex [ ] other 1 } }
+Shape { geometry PointSet { coord NULL color Color { color [ ] } other 1 } }
+Shape { geometry ElevationGrid { xDimension 0 zDimension 2 other 1 } }
+Shape { geometry ElevationGrid { xDimension 2 zDimension 0 } }
+Shape { geometry ElevationGrid { xDimension 3 zDimension 1 height [ 1 2 3 ] } }
+Shape {
+  geometry ElevationGrid {
+    xDimension 1 zDimension 2 height [ 1 2 ]
+    color Color { color [ ] } colorPerVertex FALSE
+    normal Normal { vector [ ] } normalPerVertex FALSE
+  }
+}
+Shape { geometry ElevationGrid { xDimension 0 zDimension 0 color Color { color [ 1 0 0 ] } } }
+Shape { geometry Extrusion { crossSection [ 0 0 ] other 1 } }
+Shape { geometry Cylinder { radius 0 } }
+Shape { geometry Cone { bottomRadius 0 } }

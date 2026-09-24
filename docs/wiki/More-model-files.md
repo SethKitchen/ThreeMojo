@@ -17,6 +17,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [IES](#ies) | `loaders/ies.mojo` | `read_ies(path) -> IesLamp` | `IESLoader` |
 | [3DL](#3dl) | `loaders/lut_3dl.mojo` | `read_lut_3dl(path) -> Lut3dl` | `LUT3dlLoader` |
 | [LUT image](#lut-image) | `loaders/lut_image.mojo` | `read_lut_image(path) -> LutImage` | `LUTImageLoader` |
+| [VRML](#vrml) | `loaders/vrml.mojo` | `read_vrml(path, scene, assets) -> VrmlModel` | `VRMLLoader` |
 
 ## PCD
 
@@ -652,3 +653,63 @@ A table of size `n` is `n` squares of `n` by `n` texels. There is one square for
 ### Example
 
 `assets/lut/row.png` and `assets/lut/column.png` hold one table of size three, as a row and as a column. `tests/test_lut_3dl.mojo` checks that they give the same texture.
+
+## VRML
+
+`loaders/vrml.mojo`. `read_vrml(path, scene, assets)` reads a VRML 2.0 world (`.wrl`) into the scene and the assets. three.js: `VRMLLoader`.
+
+```mojo
+var world = read_vrml("assets/vrml/scene.wrl", scene, assets)
+print(world.count(VRML_MESH))
+```
+
+| Function | What it does |
+|---|---|
+| `read_vrml(path, scene, assets, parent) -> VrmlModel` | Read a file. An `ImageTexture` comes from the directory of the file. |
+| `parse_vrml(text, scene, assets, resource_path, parent) -> VrmlModel` | Read the text of one. |
+| `lex_vrml(text) -> List[VrmlToken]` | Cut the text into tokens, as three.js's chevrotain lexer does. |
+| `parse_vrml_tree(tokens) -> VrmlTree` | Read the tokens into a tree of nodes and fields. |
+| `vrml_scene(tree, scene, assets, resource_path, parent) -> VrmlModel` | Build a tree into the scene. |
+| `earcut(data) -> List[Int]` | Cut a polygon into triangles, three.js's earcut. It is in `geometries/earcut.mojo`. |
+
+| Field | What it holds |
+|---|---|
+| `root` | The node that three.js returns as its `Scene`. The nodes at the top of the file are under it. |
+| `objects` | Each node that the loader made: its kind, its geometry and its material. |
+| `geometries`, `materials`, `textures` | The records of each geometry, material and texture, with the values that three.js holds. |
+| `has_world_info`, `title`, `info` | The last `WorldInfo` at the top of the file. |
+| `tree` | The parsed file. |
+
+`VrmlTokenKind`, `VrmlValueKind` and `VrmlObjectKind` are types. A bare integer does not compile.
+
+### What is built
+
+- `Anchor`, `Group`, `Transform` and `Collision` become groups. A `Transform` gives the translation, the rotation and the scale.
+- `Background` becomes a group of a sky sphere and a ground sphere. The colors are blended between their angles.
+- `Shape` becomes a mesh, points or lines. Its `Appearance` gives a `PHONG` material, a map from an `ImageTexture` or a `PixelTexture`, and a `TextureTransform`.
+- `IndexedFaceSet`, `IndexedLineSet`, `PointSet`, `ElevationGrid`, `Extrusion`, `Box`, `Cone`, `Cylinder` and `Sphere` become geometries.
+
+The loader cuts each face into a fan of triangles. It gives colors and normals to each vertex or to each face, as the file says. When a face set has no normals, the loader finds them from the crease angle. An extrusion's caps are cut by earcut.
+
+The other nodes are read but not built, as in three.js. These are the lights, the sensors, the interpolators and `Text`. A `DEF` name names what the node builds. A `USE` of a group or a shape adds a copy of it. A `USE` of an appearance copies its material.
+
+### Same as three.js
+
+- The values of a field are grouped by kind, so `children [ USE A Shape { } ]` adds the shape first.
+- A shape with no appearance is black, in a `BASIC` material named `__DEFAULT`.
+- A `texture` field that holds a `USE` is not read.
+- A texture transform with no `scale` gives a repeat of zero.
+- A `PixelTexture` of one or three components has an alpha of one, not 255.
+
+### Differences from three.js
+
+- three.js builds a geometry with `NaN` in it from a missing number. This port refuses it.
+- A field of the wrong kind is refused. So is a `USE` of a name that no `DEF` gives, and a node that uses itself.
+- A texture transform with no `rotation` turns by zero.
+- A `Texture` here has one wrap. It repeats only when `repeatS` and `repeatT` are both true.
+- An `ImageTexture` is decoded at once, when its file is there.
+- A number too big for a double is refused.
+
+### Example
+
+`assets/vrml/` has six worlds. They hold groups and shapes, face sets, line sets and point sets, primitives and grids and extrusions, pixel textures, and empty nodes. Each `.json` file beside them holds what three.js 0.180 builds, in node. `tests/test_vrml.mojo` compares them. `assets/vrml/earcut.json` holds earcut's triangles for `tests/test_earcut.mojo`.

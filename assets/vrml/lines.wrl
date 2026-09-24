@@ -1,0 +1,31 @@
+#VRML V2.0 utf8
+# Line sets and point sets, with and without colors.
+
+DEF P Coordinate { point [ 0 0 0, 1 0 0, 1 1 0, 0 1 0, 0.5 0.5 1, 2 0 0.5 ] }
+DEF K Color { color [ 1 0 0, 0 1 0, 0 0 1, 1 1 0, 0 1 1, 1 0 1 ] }
+
+Shape {
+  appearance Appearance { material Material { emissiveColor 0.5 0.25 0 transparency 0.5 } }
+  geometry IndexedLineSet { coord USE P coordIndex [ 0 1 2 -1 3 4 ] }
+}
+Shape {
+  geometry IndexedLineSet { coord USE P coordIndex [ 0 1 2 3 4 5 -1 1 2 ] color USE K colorIndex [ ] }
+}
+Shape {
+  geometry IndexedLineSet { coord USE P coordIndex [ 0 1 2 3 -1 3 4 5 1 ] color USE K colorIndex [ 5 4 3 2 -1 2 1 0 3 ] }
+}
+Shape {
+  geometry IndexedLineSet { coord USE P coordIndex [ 0 1 2 -1 3 4 ] color USE K colorPerVertex FALSE colorIndex [ 4 2 ] }
+}
+Shape {
+  appearance Appearance { material NULL }
+  geometry IndexedLineSet { coord USE P coordIndex [ 0 1 2 -1 3 4 ] color USE K colorPerVertex FALSE colorIndex [ ] }
+}
+Shape {
+  appearance Appearance { material Material { emissiveColor 0 0.5 1 } }
+  geometry PointSet { coord USE P }
+}
+Shape {
+  geometry PointSet { coord USE P color USE K }
+}
+Shape { geometry PointSet { } }

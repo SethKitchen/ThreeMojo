@@ -1,0 +1,59 @@
+#VRML V2.0 utf8
+# The primitives, elevation grids and extrusions.
+
+Shape { geometry Box { } }
+Shape { geometry Box { size 1 2 3 } }
+Shape { geometry Cone { } }
+Shape { geometry Cone { bottomRadius 0.5 height 1 bottom FALSE radius 9 } }
+Shape { geometry Cylinder { } }
+Shape { geometry Cylinder { radius 0.25 height 3 bottomRadius 9 } }
+Shape { geometry Sphere { } }
+Shape { geometry Sphere { radius 2 height 9 } }
+
+Shape { geometry ElevationGrid {
+  xDimension 3 zDimension 2 xSpacing 0.5 zSpacing 2
+  height [ 0 1 0, 0.5 0.25 1 ]
+} }
+Shape { geometry ElevationGrid {
+  xDimension 3 zDimension 3
+  height [ 0 1 0, 0.5 0.25 1, 0 0 0.5 ]
+  color Color { color [ 1 0 0, 0 1 0, 0 0 1, 1 1 0, 0 1 1, 1 0 1, 0.5 0.5 0.5, 0.2 0.2 0.2, 1 1 1 ] }
+  normal Normal { vector [ 0 1 0, 0 1 0, 0 1 0, 0 1 0, 0 1 0, 0 1 0, 0 1 0, 0 1 0, 0 1 0 ] }
+  texCoord TextureCoordinate { point [ 0 0, 0.5 0, 1 0, 0 0.5, 0.5 0.5, 1 0.5, 0 1, 0.5 1, 1 1 ] }
+  ccw FALSE
+  creaseAngle 1
+  solid FALSE
+} }
+Shape { geometry ElevationGrid {
+  xDimension 3 zDimension 3
+  height [ 0 1 0, 0.5 0.25 1, 0 0 0.5 ]
+  color Color { color [ 1 0 0, 0 1 0, 0 0 1, 1 1 0 ] }
+  colorPerVertex FALSE
+  normal Normal { vector [ 0 1 0, 0 0.6 0.8, 1 0 0, 0 0 1 ] }
+  normalPerVertex FALSE
+  creaseAngle 1.5
+} }
+Shape { geometry ElevationGrid { xDimension 1 zDimension 4 height [ 1 2 3 4 ] } }
+
+Shape { geometry Extrusion { } }
+Shape { geometry Extrusion {
+  crossSection [ 0 0, 1 0, 1 1, 0.5 0.4, 0 1 ]
+  spine [ 0 0 0, 0 1 0, 0.5 2 0 ]
+  scale [ 1 1, 0.5 2, 1 0.25 ]
+  orientation [ 0 1 0 0.5, 1 0 0 0.2, 0 0 1 0 ]
+  beginCap FALSE
+  ccw FALSE
+  creaseAngle 0.7
+  solid FALSE
+} }
+Shape { geometry Extrusion {
+  crossSection [ 0 0, 1 0, 1 1, 0 1 ]
+  endCap FALSE
+  ccw FALSE
+} }
+Shape { geometry Extrusion {
+  crossSection [ 0 0, 1 0, 0 1 ]
+  spine [ 0 0 0 ]
+  beginCap FALSE
+  endCap FALSE
+} }
