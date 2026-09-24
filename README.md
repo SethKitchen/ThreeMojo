@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 177 features are ported and 25 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 178 features are ported and 24 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -114,11 +114,11 @@ The port is not at parity with three.js yet. 177 features are ported and 25 are 
 
 - [ ] MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [ ] Skeleton, morph, batch and LOD tools [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
-- [ ] Scene objects: Reflector, Refractor, Water, Sky, Lensflare, MarchingCubes [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 
 <details>
-<summary>Ported: 11</summary>
+<summary>Ported: 12</summary>
 
+- [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 - [x] [Multi-material meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#several-materials): geometry groups drawn with a material list by both rasterizers, the raycaster, loaders, exporters and SceneUtils [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
 - [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
