@@ -16,6 +16,7 @@ Mojo's parser reads gives NaN; JavaScript rounds it.
 """
 
 from std.math import inf, isfinite, isnan, nan
+from std.ffi import external_call
 from std.memory import bitcast
 
 
@@ -683,3 +684,35 @@ def srgb_to_linear(byte: UInt8) -> Float64:
         The linear channel that three.js holds.
     """
     return bitcast[DType.float64](materialize[_SRGB_TO_LINEAR]()[Int(byte)])
+
+
+def js_pow(base: Float64, exponent: Float64) -> Float64:
+    """Return JavaScript's `Math.pow(base, exponent)`, to within a unit in
+    the last place.
+
+    `std.math.pow` works through `exp` and `log`, and is off by some
+    hundreds of units in the last place. That is enough to move a result
+    that is rounded to a `Float32` next. The C library's `pow` is within
+    one unit of V8's.
+
+    Args:
+        base: The base.
+        exponent: The exponent.
+
+    Returns:
+        The power.
+    """
+    return external_call["pow", Float64](base, exponent)
+
+
+def js_log2(value: Float64) -> Float64:
+    """Return JavaScript's `Math.log2(value)`, to within a unit in the
+    last place, from the C library, as `js_pow` is.
+
+    Args:
+        value: The number.
+
+    Returns:
+        Its base-two logarithm.
+    """
+    return external_call["log2", Float64](value)

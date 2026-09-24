@@ -301,6 +301,25 @@ var cube = assets.cube_textures.add(read_hdr_cube_texture(paths, SEEN_FROM_OUTSI
 - three.js's default type is `HalfFloatType`, which rounds each value to a half. This keeps the floats, as three.js's `setDataType(FloatType)` does.
 - `tests/test_hdr_cube.mojo` compares the faces with the floats that three.js 0.180 reads, in `assets/hdr_cube/three.json`.
 
+### Read an UltraHDR file
+
+`loaders/ultrahdr.mojo` reads an UltraHDR (JPEG_R) file as an HDR image. three.js: `UltraHDRLoader`.
+
+```mojo
+var hdr = read_ultrahdr("photo.jpg")
+var sky = assets.textures.add(float_texture_from(hdr.image, mipmapped=True))
+```
+
+An UltraHDR file holds two JPEG files: the SDR image and a gain map. The SDR image's MPF segment says where the gain map is. The gain map's XMP holds the `hdrgm` attributes, which `hdr.metadata` keeps. The HDR image is the SDR image made brighter where the gain map says, by three.js's formula and its table of `SRGBToLinear`. Each value is clamped to 0 and 65,504.
+
+- `parse_ultrahdr(bytes)` reads the bytes of a file. `apply_gain_map(sdr, gain, metadata)` applies a gain map to decoded images.
+- `render.jpeg` decodes the two JPEG files. It agrees with libjpeg to one level. A browser decodes them in three.js.
+- A gain map of another size is scaled bilinearly by `scale_gain_map`. A browser's canvas scales it in three.js, with a filter of its own.
+- The alpha is one. three.js fills each alpha with 255.
+- An APP1 segment that is not XMP, such as EXIF data, is read past. three.js throws a `TypeError`.
+- A number in the metadata that is not finite, or an HDR capacity range of zero, is refused. three.js gives an image of `NaN`s.
+- `tests/test_ultrahdr.mojo` compares the images with what three.js 0.180 gives for the files in `assets/ultrahdr/`. The node script gives three.js the pixels that `render.jpeg` decodes, so the segments, the XMP and the formula are three.js's own.
+
 ### An equirectangular environment or background
 
 A panorama with an equirectangular `mapping` is read directly, at `equirect_uv` of each direction. `equirect_uv` is three.js's `equirectUv`.

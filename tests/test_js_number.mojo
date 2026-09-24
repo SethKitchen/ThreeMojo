@@ -16,7 +16,9 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from loaders.js_number import (
     js_float32_text,
+    js_log2,
     js_number_text,
+    js_pow,
     js_to_fixed,
     js_to_precision,
     srgb_to_linear,
@@ -100,6 +102,13 @@ def test_srgb_to_linear() raises:
     assert_equal(js_number_text(srgb_to_linear(0x12)), "0.0060488330203860696")
     # Below 0.04045 it is a straight line.
     assert_equal(srgb_to_linear(10), Float64(10) / 255 * 0.0773993808)
+
+
+def test_pow_and_log2() raises:
+    # V8's answers, where `std.math.pow` is off in the last digits.
+    assert_equal(js_pow(0.5, 2.4), 0.18946457081379978)
+    assert_equal(js_log2(8), 3)
+    assert_equal(js_log2(10), 3.321928094887362)
 
 
 def test_ranges() raises:
