@@ -724,6 +724,8 @@ def test_skin_wraps_physical_stations() raises:
     var dims = foot_muscle_dimensions(_person())
     var skin = SkinField(dims)
     var worst = Float32(-1)
+    _worst_station(skin, dims.foot.medial_malleolus, worst)
+    _worst_station(skin, dims.foot.lateral_malleolus, worst)
     var bones = named_foot_bones()
     var index = 0
     while index < len(bones):
