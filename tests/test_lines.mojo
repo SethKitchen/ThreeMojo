@@ -25,15 +25,25 @@ from render.linerule import (
     share_at,
     span_of,
 )
+from lights.lighting import Lighting
+from materials.nodes import NodeProgramStore
+from render.cube_texture_store import CubeTextureStore
 from render.rasterizer import (
+    DRAW_SEGMENTS,
+    Draw,
     RasterVertex,
+    SHADE_LIT,
+    _frame_band,
+    _raise_band_errors,
     check_line_state,
     rasterize_line,
     rasterize_lines_all,
 )
 from render.target import RenderTarget
-from render.texture_store import NO_TEXTURE
+from render.texture_store import NO_TEXTURE, TextureStore
 from render.tonemap import NO_TONE_MAPPING
+from render.transmission import TransmissionTarget
+from std.runtime._asyncrt import TaskGroup
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -485,6 +495,83 @@ def test_a_line_must_agree_with_itself() raises:
     # Two ends that disagree about blending.
     with assert_raises():
         check_line_state(end(0.5, 0.5), end(1.5, 0.5, blend=BLEND))
+
+
+def one_band(
+    segments: List[RasterVertex],
+    var segment_rows: List[Int],
+    draws: List[Draw],
+    mut target: RenderTarget,
+    band: Int,
+    bands: Int,
+    corners: List[RasterVertex] = List[RasterVertex](),
+    textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
+) raises -> List[String]:
+    """Run one band of a frame of segments on its own, as a task, with none
+    of `rasterize_frame`'s checks first, and return every band's error slot.
+    """
+    var errors = List[String](length=bands, fill=String(""))
+    var no_rows = List[Int]()
+    var group = TaskGroup()
+    group.create_task(
+        _frame_band(
+            corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            len(draws),
+            Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
+            SHADE_LIT,
+            Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+            errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            band,
+            band * target.height // bands,
+            (band + 1) * target.height // bands - 1,
+            FogView.none(),
+            Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
+        )
+    )
+    group.wait()
+    # The task reads these through pointers the compiler cannot see.
+    _ = len(no_rows)
+    _ = len(segment_rows)
+    return errors^
+
+
+def test_a_segment_a_band_refuses_reaches_the_caller() raises:
+    # `rasterize_frame` refuses a lit segment before any band starts, so no
+    # band ever sees one there. A band run by itself does, and it must
+    # carry the error back in its own slot, from where it is raised.
+    var first = end(0.5, 0.5)
+    first.kind = LAMBERT
+    var second = end(4.5, 0.5)
+    second.kind = LAMBERT
+    var segments: List[RasterVertex] = [first, second]
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var errors = one_band(
+        segments, [0, 0], [Draw(DRAW_SEGMENTS, 0, 1)], target, 0, 2
+    )
+    assert_equal(errors[0], "A line's material must be unlit")
+    assert_equal(errors[1], "")
+    with assert_raises(contains="must be unlit"):
+        _raise_band_errors(errors)
+    assert_equal(lit(target), 0)
+    # No band, and bands that all finished, raise nothing.
+    _raise_band_errors(List[String]())
+    _raise_band_errors(List[String](length=2, fill=String("")))
+    # The same segment is refused by the frame before any band starts.
+    with assert_raises(contains="must be unlit"):
+        rasterize_lines_all(segments, target, 2)
 
 
 def test_a_line_cannot_be_lit() raises:

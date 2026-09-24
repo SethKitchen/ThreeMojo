@@ -5323,6 +5323,31 @@ async def _frame_band(
         errors[unsafe_offset=band] = String(e)
 
 
+def _raise_band_errors(errors: List[String]) raises:
+    """Raise the first error a band carried back, if one did.
+
+    **`rasterize_frame` never gives a band an error to carry.** It refuses
+    every input a band's three rasterizers refuse before any band starts:
+    the mode, the fog, each triangle's state and maps, its transmission,
+    each segment's and point's state and maps, and the draws. The one other
+    error a band can meet is a pixel outside the target, and each
+    rasterizer clamps its rows and columns to the target first. So this
+    net catches only a check that a later change runs inside a band and
+    not before. A task cannot raise, and without the net such an error
+    would be dropped. The tests drive `_frame_band` itself with a segment
+    the band refuses, which is how both halves of this are reached.
+
+    Args:
+        errors: One slot per band, empty where the band finished.
+
+    Raises:
+        Error: The first band's error, if any band has one.
+    """
+    for band in range(len(errors)):
+        if errors[band] != "":
+            raise Error(errors[band])
+
+
 def rasterize_frame(
     corners: List[RasterVertex],
     segments: List[RasterVertex],
@@ -5527,9 +5552,7 @@ def rasterize_frame(
     _ = len(triangle_rows)
     _ = len(segment_rows)
     _ = len(point_rows)
-    for band in range(bands):  # pragma: no branch
-        if errors[band] != "":
-            raise Error(errors[band])
+    _raise_band_errors(errors)
 
 
 def rasterize_all(

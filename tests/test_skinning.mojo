@@ -297,6 +297,18 @@ def test_normalize_skin_weights_needs_four_weights_a_vertex() raises:
         normalize_skin_weights(bare)
 
 
+def test_normalize_skin_weights_leaves_an_empty_skin_empty() raises:
+    # three.js's loop over no vertices does nothing, and so does this.
+    var empty = BufferGeometry()
+    empty.set_attribute(
+        String(SKIN_WEIGHT), BufferAttribute(List[Float32](), 4)
+    )
+    normalize_skin_weights(empty)
+    ref weights = empty.attribute_view(String(SKIN_WEIGHT))
+    assert_equal(weights.count(), 0)
+    assert_equal(weights.item_size, 4)
+
+
 # --- SkinnedMesh ------------------------------------------------------------
 
 
