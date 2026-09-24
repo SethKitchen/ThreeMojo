@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 171 features are ported and 9 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 172 features are ported and 8 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -110,11 +110,11 @@ The port is not at parity with three.js yet. 171 features are ported and 9 are o
 
 - [ ] Skeleton, morph, batch and LOD tools [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [ ] Scene objects: Reflector, Refractor, Water, Sky, Lensflare, MarchingCubes [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
-- [ ] Multi-material meshes: geometry groups with a material array [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
 
 <details>
-<summary>Ported: 10</summary>
+<summary>Ported: 11</summary>
 
+- [x] [Multi-material meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#several-materials): geometry groups drawn with a material list by both rasterizers, the raycaster, loaders, exporters and SceneUtils [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
 - [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
 - [x] [Points](https://github.com/SethKitchen/ThreeMojo/wiki/Points-and-sprites#points): vertices drawn as squares of pixels, sized by distance, covered by one rule both backends read [#27](https://github.com/SethKitchen/ThreeMojo/issues/27)
