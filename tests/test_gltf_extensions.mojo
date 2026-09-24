@@ -335,7 +335,7 @@ def test_every_read_extension_can_be_required() raises:
             + '"KHR_texture_transform","KHR_lights_punctual",'
             + '"KHR_mesh_quantization","EXT_mesh_gpu_instancing",'
             + '"KHR_materials_transmission","KHR_materials_volume",'
-            + '"KHR_materials_dispersion"]'
+            + '"KHR_materials_dispersion","KHR_draco_mesh_compression"]'
         ),
         scene,
         assets,
@@ -344,6 +344,7 @@ def test_every_read_extension_can_be_required() raises:
     assert_true(is_supported_extension("KHR_lights_punctual"))
     assert_true(is_supported_extension("KHR_materials_sheen"))
     assert_true(is_supported_extension("KHR_materials_transmission"))
+    assert_true(is_supported_extension("KHR_draco_mesh_compression"))
     assert_false(is_supported_extension("KHR_materials_variants"))
 
 

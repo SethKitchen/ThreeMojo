@@ -712,9 +712,9 @@ def test_a_document_that_is_not_gltf_2_is_refused() raises:
         refused('{"asset":{"version":2}}').find("no asset version") >= 0
     )
     assert_true(
-        refused(
-            doc('"extensionsRequired":["KHR_draco_mesh_compression"]')
-        ).find("KHR_draco")
+        refused(doc('"extensionsRequired":["KHR_materials_variants"]')).find(
+            "KHR_materials_variants"
+        )
         >= 0
     )
     # An extension only used is read without it.

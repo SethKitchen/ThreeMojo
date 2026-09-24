@@ -445,6 +445,43 @@ SOFTWARE.
 
 ---
 
+## Draco
+
+<https://github.com/google/draco>
+
+`loaders/draco.mojo`, `loaders/draco_buffer.mojo`, `loaders/draco_mesh.mojo`,
+`loaders/draco_attributes.mojo` and `loaders/draco_kd_tree.mojo` port the
+decoder of Draco 1.5.6, the version whose WebAssembly build three.js keeps in
+`examples/jsm/libs/draco/`: the decoder buffer, the rANS and bit decoders, the
+Edgebreaker, sequential and KD-tree decoders, the corner tables and
+traversers, the prediction schemes and their transforms, and the quantization
+and octahedron transforms. The port is a translation to Mojo and changes the
+code: it reads bitstreams 2.2 and 2.3 only, and it refuses malformed data with
+an error where the original returns false or reads on. Draco is distributed
+under the Apache License 2.0, reproduced in full under Basis Universal above,
+with this notice at the head of each source file:
+
+```
+Copyright 2016 The Draco Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+The test files under `assets/draco/` were written by the Draco 1.5.7 encoder,
+built from its source, and some were then changed by hand.
+
+---
+
 ## Scope note
 
 The `coverage/` directory — the line, branch, condition, and MC-DC coverage

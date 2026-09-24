@@ -18,6 +18,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [3DL](#3dl) | `loaders/lut_3dl.mojo` | `read_lut_3dl(path) -> Lut3dl` | `LUT3dlLoader` |
 | [LUT image](#lut-image) | `loaders/lut_image.mojo` | `read_lut_image(path) -> LutImage` | `LUTImageLoader` |
 | [VRML](#vrml) | `loaders/vrml.mojo` | `read_vrml(path, scene, assets) -> VrmlModel` | `VRMLLoader` |
+| [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader` |
 
 ## PCD
 
@@ -711,3 +712,72 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 ### Example
 
 `assets/vrml/` has six worlds. They hold groups and shapes, face sets, line sets and point sets, primitives and grids and extrusions, pixel textures, and empty nodes. Each `.json` file beside them holds what three.js 0.180 builds, in node. `tests/test_vrml.mojo` compares them. `assets/vrml/earcut.json` holds earcut's triangles for `tests/test_earcut.mojo`.
+
+## Draco
+
+`loaders/draco.mojo`. `read_draco(path)` reads a Draco file (`.drc`) into a `BufferGeometry`. three.js: `DRACOLoader`, which runs Draco's own decoder, compiled to WebAssembly. The port is that decoder, from Draco 1.5.6, the version that three.js 0.180 ships. Four modules hold its parts: `draco_buffer.mojo`, `draco_mesh.mojo`, `draco_attributes.mojo` and `draco_kd_tree.mojo`.
+
+```mojo
+var geometry = read_draco("assets/draco/sphere.drc")
+print(geometry.attribute_view(String(POSITION)).count())
+```
+
+| Function | What it does |
+|---|---|
+| `read_draco(path) -> BufferGeometry` | Read a file. |
+| `parse_draco(bytes) -> BufferGeometry` | Read the bytes of one, as `DRACOLoader.parse` does. |
+| `decode_draco(bytes) -> DracoGeometry` | Decode the bytes as Draco's decoder does. |
+| `draco_buffer_geometry(geometry, names, attributes, srgb_colors) -> BufferGeometry` | Build a geometry from decoded data. |
+
+| `DracoGeometry` | What it holds |
+|---|---|
+| `geometry_type` | `DRACO_POINT_CLOUD` or `DRACO_TRIANGULAR_MESH`. |
+| `points` | The points. |
+| `faces` | Three points for each triangle. A point cloud has none. |
+| `attributes` | Each `DracoAttribute`: its type, its data type, its components, `normalized`, its unique id, its values and the value of each point. |
+| `named_attribute(type)`, `unique_attribute(id)` | The first attribute of a type, or the attribute with a unique id. |
+| `float32_values(index)`, `integer_values(index, type)` | An attribute's values for every point, as `Float32` or at an integer type. |
+
+`DracoGeometryType`, `DracoEncoding`, `DracoAttributeCoding`, `DracoElement`, `DracoDataType`, `DracoAttributeType`, `DracoPrediction`, `DracoTransform`, `DracoTraversal` and `DracoTraversalMethod` are types. A bare integer does not compile.
+
+### What is read
+
+- A mesh of bitstream 2.2, sequential or Edgebreaker. The Edgebreaker symbols can use the standard or the valence traversal.
+- A point cloud of bitstream 2.3, sequential or a KD-tree, at every compression level.
+- Attributes of the raw, integer, quantized and octahedral normal codings.
+- The difference, parallelogram, multi-parallelogram, constrained multi-parallelogram, texture coordinate and geometric normal predictions, with the wrap and both octahedron transforms.
+- Metadata. The decoder reads past it, as three.js does not use it.
+
+### What is built
+
+`parse_draco` builds the geometry that `DRACOLoader.parse` builds:
+
+- The first `POSITION`, `NORMAL`, `COLOR` and `TEX_COORD` attributes become `position`, `normal`, `color` and `uv`.
+- Each value is a `Float32`. An integer is cast. It is divided by the largest value of its type when the attribute is normalized.
+- The colors are sRGB in the file. They are made linear, as three.js makes them.
+- A mesh has an index of three points for each triangle.
+
+A glTF file can hold Draco data. See [Draco primitives](Model-files#draco-primitives).
+
+### Same as three.js
+
+- Each value is the same `Float32` that three.js's decoder gives. The floats of dequantization and of the normals are computed in `Float32`, in Draco's order.
+- A prediction that Draco 1.5.6 does not know is read as a difference.
+- A sequential mesh with more points than three for each triangle is refused.
+
+### Differences from three.js
+
+- Draco reads bitstreams back to 1.0. This port reads 2.2 and 2.3 only. Draco has written these since 2017.
+- A triangle of a sequential mesh that names a point that the mesh does not have is refused. three.js keeps an index past the end of the attributes.
+- A color of one or two components is refused. three.js reads past the end of each item.
+- The deprecated texture coordinate prediction and a geometric normal prediction with the wrap transform are refused. Draco decodes them.
+
+### Errors
+
+The decoder raises for a file that does not start with `DRACO`, and for another bitstream version. It raises for an encoding, attribute coding, transform or traversal that is not known. It raises everywhere Draco's decoder fails, with the reason as the message.
+
+### Example
+
+`assets/draco/` has 60 files. The Draco 1.5.7 encoder wrote most of them. They hold meshes at several speeds, with seams, holes, handles, the valence traversal and metadata. They hold point clouds of every type too. Some were changed by one byte to reach a path that the encoder does not write. Some were written by hand: empty geometry and bad counts.
+
+`three.json` and `three.bin` hold what three.js 0.180's decoder gives for each file, in node. `tests/test_draco.mojo` compares each value by its bits.

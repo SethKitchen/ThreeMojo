@@ -111,6 +111,14 @@ draws none of them then.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
 `KHR_mesh_quantization` needs nothing: every attribute is read at any
 component type already.
+`KHR_draco_mesh_compression` decodes a primitive's Draco data with
+`loaders.draco`, as three.js's `DRACOLoader` decodes it: each attribute
+the extension names is read from the Draco data at its accessor's
+component type, normalized as the accessor says, and the triangles come
+from the Draco data too. An attribute the extension does not name is read
+from its accessor. Draco would round a float attribute read at an
+integer type; a file that asks for that is not valid glTF, and it is
+refused.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
@@ -154,6 +162,12 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from lights.light import directional_light, point_light, spot_light
+from loaders.draco import (
+    DRACO_TRIANGULAR_MESH,
+    DracoGeometry,
+    decode_draco,
+)
+from loaders.draco_attributes import DracoDataType
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -352,6 +366,7 @@ comptime TEXTURE_TRANSFORM = "KHR_texture_transform"
 comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
 comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
 comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
+comptime DRACO_MESH_COMPRESSION = "KHR_draco_mesh_compression"
 
 # A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
 # and an outer one of a quarter of a half turn, the specification's.
@@ -714,7 +729,7 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the fifteen this loader reads.
+        Whether it is one of the sixteen this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
@@ -732,6 +747,7 @@ def is_supported_extension(name: String) -> Bool:
         or name == LIGHTS_PUNCTUAL
         or name == MESH_QUANTIZATION
         or name == GPU_INSTANCING
+        or name == DRACO_MESH_COMPRESSION
     )
 
 
@@ -832,6 +848,25 @@ def _uri_bytes(uri: String, directory: String) raises -> List[UInt8]:
     if uri.find(":") >= 0:
         raise Error("glTF: only a data URI or a relative path is read: " + uri)
     return Path(directory + uri).read_bytes()
+
+
+struct _DracoPrimitive(Movable):
+    """A primitive's decoded `KHR_draco_mesh_compression` data, and the
+    Draco unique id of each glTF attribute it holds."""
+
+    var geometry: DracoGeometry
+    var names: List[String]
+    var ids: List[Int]
+
+    def __init__(
+        out self,
+        var geometry: DracoGeometry,
+        var names: List[String],
+        var ids: List[Int],
+    ):
+        self.geometry = geometry^
+        self.names = names^
+        self.ids = ids^
 
 
 struct _Loader(Movable):
@@ -1856,6 +1891,67 @@ struct _Loader(Movable):
                 self.model.geometries.append(assets.geometries.add(geometry^))
             self.morph_counts.append(targets)
 
+    def draco_of(mut self, primitive: Int) raises -> Optional[_DracoPrimitive]:
+        """Decode a primitive's `KHR_draco_mesh_compression` data, as
+        three.js's `GLTFDracoMeshCompressionExtension` does, or return
+        None when it has none."""
+        var found = self.extension(primitive, DRACO_MESH_COMPRESSION)
+        if found == NO_NODE:
+            return None
+        var view = self.view_bytes(self.required_integer(found, "bufferView"))
+        var ids = self.document.get(found, "attributes")
+        if ids == NO_NODE or self.document.kind(ids) != OBJECT:
+            raise Error("glTF: KHR_draco_mesh_compression needs attributes")
+        var names = List[String]()
+        var uids = List[Int]()
+        for slot in range(self.document.length(ids)):
+            names.append(self.document.key(ids, slot))
+            uids.append(self.document.integer(self.document.at(ids, slot)))
+        var data = List[UInt8](capacity=view[2])
+        ref bytes = self.buffers[view[0]]
+        for at in range(view[1], view[1] + view[2]):
+            data.append(bytes[at])
+        return _DracoPrimitive(decode_draco(data), names^, uids^)
+
+    def attribute_floats(
+        mut self,
+        name: String,
+        accessor: Int,
+        draco: Optional[_DracoPrimitive],
+    ) raises -> Tuple[List[Float32], Int]:
+        """Return an attribute's numbers: from the Draco data when the
+        primitive's `KHR_draco_mesh_compression` names it, and from its
+        accessor otherwise."""
+        if draco is not None:
+            ref found = draco.value()
+            for slot in range(len(found.names)):
+                if found.names[slot] == name:
+                    return self.draco_floats(found, slot, accessor)
+        return self.accessor_floats(accessor)
+
+    def draco_floats(
+        self, draco: _DracoPrimitive, slot: Int, accessor_index: Int
+    ) raises -> Tuple[List[Float32], Int]:
+        """Return a Draco attribute's values at its accessor's component
+        type, as three.js's `DRACOLoader` decodes them, then normalized as
+        the accessor says. The attribute's own components make an
+        element, as they make three.js's item size."""
+        var accessor = self.entry("accessors", accessor_index)
+        var component = self.required_integer(accessor, "componentType")
+        var normalized = self.flag(accessor, "normalized")
+        ref geometry = draco.geometry
+        var index = geometry.unique_attribute(draco.ids[slot])
+        if index < 0:
+            raise Error("glTF: a Draco attribute id is not in the Draco data")
+        var width = geometry.attributes[index].components
+        if component == COMPONENT_FLOAT:
+            return (geometry.float32_values(index), width)
+        var values = geometry.integer_values(index, _draco_type_of(component))
+        var out = List[Float32](capacity=len(values))
+        for value in values:
+            out.append(_integer_component(value, component, normalized))
+        return (out^, width)
+
     def geometry_of(mut self, primitive: Int) raises -> BufferGeometry:
         """Build a primitive's geometry."""
         if self.integer(primitive, "mode", MODE_TRIANGLES) != MODE_TRIANGLES:
@@ -1867,7 +1963,8 @@ struct _Loader(Movable):
         var position = self.integer(attributes, "POSITION", -1)
         if position < 0:
             raise Error("glTF: a primitive needs a POSITION")
-        var positions = self.accessor_floats(position)
+        var draco = self.draco_of(primitive)
+        var positions = self.attribute_floats("POSITION", position, draco)
         if positions[1] != 3:
             raise Error("glTF: POSITION must be a VEC3")
         geometry.set_attribute(
@@ -1875,7 +1972,7 @@ struct _Loader(Movable):
         )
         var normal = self.integer(attributes, "NORMAL", -1)
         if normal >= 0:
-            var normals = self.accessor_floats(normal)
+            var normals = self.attribute_floats("NORMAL", normal, draco)
             if normals[1] != 3:
                 raise Error("glTF: NORMAL must be a VEC3")
             geometry.set_attribute(
@@ -1883,7 +1980,7 @@ struct _Loader(Movable):
             )
         var uv = self.integer(attributes, "TEXCOORD_0", -1)
         if uv >= 0:
-            var uvs = self.accessor_floats(uv)
+            var uvs = self.attribute_floats("TEXCOORD_0", uv, draco)
             if uvs[1] != 2:
                 raise Error("glTF: TEXCOORD_0 must be a VEC2")
             geometry.set_attribute(
@@ -1891,7 +1988,7 @@ struct _Loader(Movable):
             )
         var uv1 = self.integer(attributes, "TEXCOORD_1", -1)
         if uv1 >= 0:
-            var second = self.accessor_floats(uv1)
+            var second = self.attribute_floats("TEXCOORD_1", uv1, draco)
             if second[1] != 2:
                 raise Error("glTF: TEXCOORD_1 must be a VEC2")
             geometry.set_attribute(
@@ -1899,7 +1996,7 @@ struct _Loader(Movable):
             )
         var color = self.integer(attributes, "COLOR_0", -1)
         if color >= 0:
-            var colors = self.accessor_floats(color)
+            var colors = self.attribute_floats("COLOR_0", color, draco)
             if colors[1] != 3 and colors[1] != 4:
                 raise Error("glTF: COLOR_0 must be a VEC3 or a VEC4")
             geometry.set_attribute(
@@ -1915,7 +2012,7 @@ struct _Loader(Movable):
                 raise Error(
                     "glTF: JOINTS_0 must be unsigned bytes or unsigned shorts"
                 )
-            var bones = self.accessor_floats(joints)
+            var bones = self.attribute_floats("JOINTS_0", joints, draco)
             if bones[1] != 4:
                 raise Error("glTF: JOINTS_0 must be a VEC4")
             geometry.set_attribute(
@@ -1923,7 +2020,7 @@ struct _Loader(Movable):
             )
         var weights = self.integer(attributes, "WEIGHTS_0", -1)
         if weights >= 0:
-            var shares = self.accessor_floats(weights)
+            var shares = self.attribute_floats("WEIGHTS_0", weights, draco)
             if shares[1] != 4:
                 raise Error("glTF: WEIGHTS_0 must be a VEC4")
             geometry.set_attribute(
@@ -1932,7 +2029,12 @@ struct _Loader(Movable):
             )
         self.read_targets(primitive, geometry, len(positions[0]))
         var indices = self.integer(primitive, "indices", -1)
-        if indices >= 0:
+        # three.js keeps a Draco mesh's own triangles over the accessor's.
+        if draco is not None and (
+            draco.value().geometry.geometry_type == DRACO_TRIANGULAR_MESH
+        ):
+            geometry.set_index(draco.value().geometry.faces.copy())
+        elif indices >= 0:
             geometry.set_index(self.accessor_indices(indices))
         return geometry^
 
@@ -2700,34 +2802,58 @@ def _read_component(
     minus one through one when the accessor says so."""
     if component == COMPONENT_FLOAT:
         return bitcast[DType.float32](UInt32(_le32(bytes, at)))
+    var raw: Int
     if component == COMPONENT_UNSIGNED_BYTE:
-        var value = Float32(Int(bytes[at]))
-        if normalized:
-            return value / 255
-        return value
-    if component == COMPONENT_BYTE:
-        var raw = Int(bytes[at])
+        raw = Int(bytes[at])
+    elif component == COMPONENT_BYTE:
+        raw = Int(bytes[at])
         if raw >= 128:
             raw -= 256
-        var value = Float32(raw)
-        if normalized:
-            return max(value / 127, Float32(-1))
-        return value
-    if component == COMPONENT_UNSIGNED_SHORT:
-        var value = Float32(Int(bytes[at]) | (Int(bytes[at + 1]) << 8))
-        if normalized:
-            return value / 65535
-        return value
-    if component == COMPONENT_SHORT:
-        var raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+    elif component == COMPONENT_UNSIGNED_SHORT:
+        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+    elif component == COMPONENT_SHORT:
+        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
         if raw >= 32768:
             raw -= 65536
-        var value = Float32(raw)
-        if normalized:
-            return max(value / 32767, Float32(-1))
-        return value
-    # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits.
-    return Float32(_le32(bytes, at))
+    else:
+        # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits.
+        raw = _le32(bytes, at)
+    return _integer_component(raw, component, normalized)
+
+
+def _draco_type_of(component: Int) raises -> DracoDataType:
+    """Return the Draco type an integer accessor's component type asks
+    for, as three.js's `DRACOLoader` maps a typed array."""
+    if component == COMPONENT_BYTE:
+        return DracoDataType(1)
+    if component == COMPONENT_UNSIGNED_BYTE:
+        return DracoDataType(2)
+    if component == COMPONENT_SHORT:
+        return DracoDataType(3)
+    if component == COMPONENT_UNSIGNED_SHORT:
+        return DracoDataType(4)
+    if component == COMPONENT_UNSIGNED_INT:
+        return DracoDataType(6)
+    raise Error("glTF: a component type that is not known")
+
+
+def _integer_component(value: Int, component: Int, normalized: Bool) -> Float32:
+    """Return an integer component as a float, normalized to zero through
+    one or minus one through one when the accessor says so. An unsigned
+    int is never normalized: glTF allows none, and three.js reads one as
+    it is."""
+    var number = Float32(value)
+    if not normalized:
+        return number
+    if component == COMPONENT_UNSIGNED_BYTE:
+        return number / 255
+    if component == COMPONENT_BYTE:
+        return max(number / 127, Float32(-1))
+    if component == COMPONENT_UNSIGNED_SHORT:
+        return number / 65535
+    if component == COMPONENT_SHORT:
+        return max(number / 32767, Float32(-1))
+    return number
 
 
 def _wrap_of(mode: Int) raises -> Wrap:

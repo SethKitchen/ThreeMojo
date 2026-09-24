@@ -391,7 +391,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads fifteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads sixteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -410,6 +410,7 @@ The loader reads fifteen extensions. They are the ones three.js's `GLTFLoader` r
 | `KHR_lights_punctual` | A directional, point or spot `Light` on the node. See [Punctual lights](#punctual-lights). |
 | `KHR_mesh_quantization` | Nothing more. The loader reads every attribute at any component type, and a normalized one divides by its largest value. |
 | `EXT_mesh_gpu_instancing` | One `InstancedMesh` for each primitive of the node's mesh. See [Instancing](#instancing). |
+| `KHR_draco_mesh_compression` | The primitive's Draco data, decoded by `loaders/draco.mojo`. See [Draco primitives](#draco-primitives). |
 
 A file that lists another extension in `extensionsRequired` is refused, as three.js refuses it. A file that lists an extension only in `extensionsUsed` is read without that extension.
 
@@ -433,10 +434,22 @@ The color is linear in the file and sRGB in the `Light`. The intensity is one wh
 
 Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attribute that is not there is the identity's part. `_COLOR_0` colors the instances, as three.js reads it into `instanceColor`. The loader counts every other attribute but does not read it, because it is for a custom shader. A node with an empty `attributes` object draws plain meshes, as in three.js.
 
+#### Draco primitives
+
+The loader decodes the buffer view that the extension names, as three.js's `DRACOLoader` decodes it. See [Draco](More-model-files#draco).
+
+- Each attribute that the extension names comes from the Draco data. The extension gives its Draco unique id.
+- The accessor gives the component type and `normalized`. A float accessor reads the values as floats. An integer accessor reads them at its type, then the loader divides a normalized one by its largest value, as for any accessor.
+- The Draco attribute gives the number of components of each element.
+- The triangles of a Draco mesh replace the accessor's `indices`. A Draco point cloud keeps them.
+- An attribute that the extension does not name comes from its accessor.
+
+The loader refuses an id that is not in the Draco data, and a value that does not fit its accessor's type. It also refuses a Draco float attribute that an integer accessor reads. Draco rounds that float. That file is not valid glTF.
+
 #### Not ported
 
 - `KHR_materials_variants`.
-- `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
+- `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
 
 #### Differences from three.js
 
