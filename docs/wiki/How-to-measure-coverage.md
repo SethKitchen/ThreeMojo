@@ -47,7 +47,7 @@ The budget exists to catch a construct that sends the compiler superlinear. See 
 
 ## What is not measured
 
-`render/gpu.mojo` is excluded. Its probes would write to `stderr`, and a GPU kernel has none. The parity tests in `tests/test_gpu.mojo` cover it instead.
+`render/gpu.mojo` is excluded. Its probes would write to `stderr`, and a GPU kernel has none. The parity tests in `tests/test_gpu.mojo` cover it instead. The layout tests in `tests/test_gpu_layout.mojo` check its host side. They need MAX but no GPU, so CI runs them in a job of their own.
 
 The coverage tool does not measure itself.
 

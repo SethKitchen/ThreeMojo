@@ -8,7 +8,10 @@
 # GitHub's hosted runners have no accelerator, so `make check-gpu` is
 # deliberately absent: it would skip every hardware test and report success,
 # which is the exact thing the skip messages and the uncached `test-gpu` target
-# exist to prevent. The GPU half is checked on a machine that has one.
+# exist to prevent. The GPU half is checked on a machine that has one. The
+# exception is its host side, the suites that open no device: the gpu-host
+# job installs MAX and runs them, since on a runner with no GPU they still
+# test everything they were written to test.
 #
 # Everything runs through `make ci`, which forces every recipe regardless of
 # the build cache. A cache hit from a previous commit is precisely what CI must
@@ -101,6 +104,31 @@ jobs:
       - name: coverage
         run: make -B coverage COV_BUDGET=3600
 
+  # The GPU backend's host side: the suites that import render/gpu.mojo but
+  # open no device. They lay out the vertex lanes, the state tables, the
+  # texture table and the light buffer, and a lane added without its test
+  # fails here. They need MAX, so this job installs it; they need no GPU,
+  # so nothing in them skips.
+  gpu-host:
+    name: test-gpu-host (MAX, no GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain and MAX
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0" "max==26.6.0"
+          .venv/bin/mojo --version
+
+      - name: test-gpu-host
+        run: make -B test-gpu-host
+
   # The wiki is generated from docs/wiki/ so the two cannot drift. GitHub
   # creates the wiki repository when its first page is saved in the browser;
   # until then this job warns and does nothing, so a missing wiki does not
@@ -108,7 +136,7 @@ jobs:
   wiki:
     name: publish wiki
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [cpu, coverage]
+    needs: [cpu, coverage, gpu-host]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

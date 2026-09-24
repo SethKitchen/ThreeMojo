@@ -56,7 +56,15 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 # them in the default lists meant CPU-only development could not be checked
 # without MAX, and the claim could rot without anything noticing.
 GPU_LIB_SOURCES  := render/gpu.mojo
-GPU_TESTS        := tests/test_gpu.mojo
+# The suites that import render/gpu.mojo but open no device: they flatten
+# vertices, state tables, textures and lights on the host and read the
+# layout back. They need MAX installed and no GPU, so CI runs them with
+# `make test-gpu-host` on a runner that has none. They were once part of
+# tests/test_gpu.mojo, and went stale there for a week: that suite fails
+# every device test on a machine without a GPU, so seven failing layout
+# assertions among two hundred device failures were not seen.
+GPU_HOST_TESTS   := tests/test_gpu_layout.mojo
+GPU_TESTS        := tests/test_gpu.mojo $(GPU_HOST_TESTS)
 GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo tools/gpu_status.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
@@ -113,7 +121,9 @@ JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
 # render/gpu.mojo, which cannot be instrumented at all, so it contributes no
 # records while costing a Metal shader compile and a pixel-by-pixel image
 # comparison. It still runs in `make test`, where its job is to prove the GPU
-# and CPU rasterizers agree.
+# and CPU rasterizers agree. tests/test_gpu_layout.mojo is left out for the
+# same reason, and because it needs MAX, which the coverage run does not
+# install. It runs in `make test` and in CI as `make test-gpu-host`.
 COVERAGE_TESTS := $(CPU_TESTS)
 COV_BUDGET := $(words $(COVERAGE_TESTS))
 
@@ -138,6 +148,7 @@ HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; } \
 # `lint-gpu` is still cached; only running against the device is not.
 # test-gpu has no stamp on purpose -- see the target.
 TEST_CPU_STAMP := $(CACHE_DIR)/test-cpu-$(HASH)
+TEST_GPU_HOST_STAMP := $(CACHE_DIR)/test-gpu-host-$(HASH)
 LINT_CPU_STAMP := $(CACHE_DIR)/lint-cpu-$(HASH)
 LINT_GPU_STAMP := $(CACHE_DIR)/lint-gpu-$(HASH)
 FMT_STAMP  := $(CACHE_DIR)/fmt-$(HASH)
@@ -151,7 +162,8 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu docs-check wiki-publish \
+.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
+        docs-check wiki-publish \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
         clean clean-images
@@ -161,7 +173,8 @@ help:
 	@echo
 	@echo "  make check      everything                 <- before committing"
 	@echo "  make check-cpu  the standard-library-only half ($(words $(CPU_TESTS)) suites)"
-	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suite)"
+	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suites)"
+	@echo "  make test-gpu-host  the MAX backend's layout suites, no GPU needed"
 	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
 	@echo "  make lint       compile with warnings promoted to errors"
@@ -243,6 +256,18 @@ test-gpu:
 	         echo "Some GPU suites FAILED."; \
 	       fi; exit 1; }
 	@echo "All $(words $(GPU_TESTS)) GPU suites passed."
+
+# The GPU suites that open no device. Cached, unlike test-gpu: nothing they
+# do depends on the hardware, so a stamp from another machine is as good.
+test-gpu-host: $(TEST_GPU_HOST_STAMP)
+$(TEST_GPU_HOST_STAMP):
+	@printf '%s\n' $(GPU_HOST_TESTS) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
+	  || { echo "Some GPU host suites FAILED."; exit 1; }
+	@echo "All $(words $(GPU_HOST_TESTS)) GPU host suites passed."
+	@$(call stamp,test-gpu-host)
 
 gpu-status:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/gpu_status.mojo); \

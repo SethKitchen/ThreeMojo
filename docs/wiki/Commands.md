@@ -8,6 +8,7 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 | `make check` | Everything. Run it before you commit. |
 | `make check-cpu` | Format check, lint, the CPU suites, the compile-fail cases and the documentation check. |
 | `make check-gpu` | Lint and test the MAX backend. Needs a GPU. |
+| `make test-gpu-host` | Run the MAX backend's layout suites. Needs MAX but no GPU. CI runs it. |
 | `make ci` | `check`, ignoring the cache. |
 | `make test` | Every `tests/test_*.mojo` suite. |
 | `make lint` | Compile everything with warnings as errors. |

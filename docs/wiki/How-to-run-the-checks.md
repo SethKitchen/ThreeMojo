@@ -6,6 +6,7 @@
 make check          # CPU and GPU halves
 make check-cpu      # format, lint, tests, compile-fail cases, docs
 make check-gpu      # the MAX backend, on a machine with a GPU
+make test-gpu-host  # the MAX backend's layout suites, with no GPU
 ```
 
 The full list of targets is in [Commands](Commands).
