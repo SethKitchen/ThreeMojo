@@ -53,6 +53,25 @@ mkdir -p out
 | `normals.mojo` | `normals.png` | [Why a normal is not a color](Why-a-normal-is-not-a-color) |
 | `fragments.mojo` | `fragments.png` | [Why shading is per fragment](Why-shading-is-per-fragment) |
 | `edges.mojo` | `coverage.png` | [Why coverage uses fixed point](Why-coverage-uses-fixed-point) |
+| `shadows.mojo` | `shadows.png` | [Lights](Lights#shadows) |
+| `wide.mojo` | `wide.png` | [Lines](Lines#wide-lines) |
+| `bloom.mojo` | `postprocessing.png` | [Post-processing](Post-processing) |
+| `gizmo.mojo` | `controls.png` | [Windowing and controls](Windowing-and-controls) |
+| `json_scene.mojo` | `scenejson.png` | [Scene JSON](Scene-JSON) |
+| `reloaded.mojo` | `exporters.png` | [Exporters](Exporters) |
+| `gem.mojo` | `transmission.png` | [Materials](Materials#transmission) |
+| `distance.mojo` | `distance.png` | [Materials](Materials#meshdistancematerial) |
+| `unfogged.mojo` | `unfogged.png` | [Materials](Materials#fog-switch) |
+| `targets.mojo` | `targets.png` | [Render target and framebuffer](Render-target-and-framebuffer#float-render-targets) |
+| `layers.mojo` | `layers.png` | [Materials](Materials#sheen) |
+| `graph.mojo` | `nodes.png` | [Node materials](Node-materials) |
+| `basis.mojo` | `ktx2.png` | [Textures](Textures#ktx2-and-compressed-formats) |
+| `coats.mojo` | `coats.png` | [Materials](Materials#specular-and-clearcoat-maps) |
+| `skyjson.mojo` | `environment.png` | [Scene JSON](Scene-JSON#cube-textures) |
+| `daylight.mojo` | `sky.png` | [Scene objects](Scene-objects#sky) |
+| `faces.mojo` | `faces.png` | [Meshes and assets](Meshes-and-assets#several-materials) |
+| `utah.mojo` | `teapot.png` | [Geometry addons](Geometry-addons#teapot) |
+| `blobs.mojo` | `blobs.png` | [Scene objects](Scene-objects#marching-cubes) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

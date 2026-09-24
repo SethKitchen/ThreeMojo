@@ -23,6 +23,7 @@ coverage/build/
 bench/build/
 bench/scratch/
 bench/threejs/node_modules/
+bench/threejs/lib/
 
 # Agent skills vendored from github per skills-lock.json. The lockfile is
 # committed so the versions are reproducible; the fetched content is not,

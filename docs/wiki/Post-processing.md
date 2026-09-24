@@ -2,6 +2,10 @@
 
 `postprocessing/composer.mojo`. An `EffectComposer` runs passes over the light a frame leaves in a render target and resolves it once at the end. three.js: `EffectComposer` and the passes under `examples/jsm/postprocessing/`.
 
+![Bright spheres bloom over a dark knot as the camera turns](out/postprocessing.png)
+
+`examples/bloom.mojo` draws this picture.
+
 ```mojo
 var composer = EffectComposer()
 composer.add_pass(render_pass())

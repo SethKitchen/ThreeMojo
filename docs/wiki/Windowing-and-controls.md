@@ -2,6 +2,10 @@
 
 `window/terminal.mojo` and `controls/`. A `TerminalWindow` shows frames in the terminal and reads the keys and the mouse. The controls turn that input into a camera that moves. All of them use the standard library only.
 
+![A transform gizmo rides a cube while the camera orbits](out/controls.png)
+
+`examples/gizmo.mojo` draws the gizmo. `examples/viewer.mojo` opens the window.
+
 | Controls | Module | The camera |
 |---|---|---|
 | `OrbitControls` | `controls/orbit_controls.mojo` | Orbits a target, with poles. |

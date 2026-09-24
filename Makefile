@@ -505,7 +505,18 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
            $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png \
            $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
-           $(OUT_DIR)/mirror.png $(OUT_DIR)/physical.png
+           $(OUT_DIR)/mirror.png $(OUT_DIR)/physical.png \
+           $(OUT_DIR)/sprites.png $(OUT_DIR)/stereo.png \
+           $(OUT_DIR)/television.png $(OUT_DIR)/shadows.png \
+           $(OUT_DIR)/wide.png $(OUT_DIR)/postprocessing.png \
+           $(OUT_DIR)/controls.png $(OUT_DIR)/scenejson.png \
+           $(OUT_DIR)/exporters.png $(OUT_DIR)/transmission.png \
+           $(OUT_DIR)/distance.png $(OUT_DIR)/unfogged.png \
+           $(OUT_DIR)/targets.png $(OUT_DIR)/layers.png \
+           $(OUT_DIR)/nodes.png $(OUT_DIR)/ktx2.png \
+           $(OUT_DIR)/coats.png $(OUT_DIR)/environment.png \
+           $(OUT_DIR)/sky.png $(OUT_DIR)/faces.png \
+           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -710,6 +721,136 @@ $(OUT_DIR)/fragments.png: $(LIB_SOURCES) examples/fragments.mojo
 $(OUT_DIR)/coverage.png: $(LIB_SOURCES) examples/edges.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/edges.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/sprites.png: $(LIB_SOURCES) examples/sprites.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sprites.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/stereo.png: $(LIB_SOURCES) examples/stereo.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/stereo.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/television.png: $(LIB_SOURCES) examples/television.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/television.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A cube's shadow swings across a floor as a directional lamp orbits.
+$(OUT_DIR)/shadows.png: $(LIB_SOURCES) examples/shadows.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/shadows.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A ribbon eight pixels wide, drawn as triangles, turns with a box.
+$(OUT_DIR)/wide.png: $(LIB_SOURCES) examples/wide.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/wide.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Bloom and a vignette over a dark knot and two emissive spheres.
+$(OUT_DIR)/postprocessing.png: $(LIB_SOURCES) examples/bloom.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/bloom.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Translate handles on a cube, redrawn as the camera orbits.
+$(OUT_DIR)/controls.png: $(LIB_SOURCES) examples/gizmo.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gizmo.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A scene written as three.js JSON and read back before it is drawn.
+$(OUT_DIR)/scenejson.png: $(LIB_SOURCES) examples/json_scene.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/json_scene.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A knot written to glTF and read back before it is drawn.
+$(OUT_DIR)/exporters.png: $(LIB_SOURCES) examples/reloaded.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/reloaded.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A glass sphere refracts three colored boxes.
+$(OUT_DIR)/transmission.png: $(LIB_SOURCES) examples/gem.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gem.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Distance from a point, packed into the color of a sphere.
+$(OUT_DIR)/distance.png: $(LIB_SOURCES) examples/distance.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/distance.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Three cubes in fog. The middle material has fog turned off.
+$(OUT_DIR)/unfogged.png: $(LIB_SOURCES) examples/unfogged.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/unfogged.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A float color attachment above a normal attachment.
+$(OUT_DIR)/targets.png: $(LIB_SOURCES) examples/targets.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/targets.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Sheen, iridescence and anisotropy on three spheres.
+$(OUT_DIR)/layers.png: $(LIB_SOURCES) examples/layers.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/layers.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A node graph tints a sphere and pushes its vertices.
+$(OUT_DIR)/nodes.png: $(LIB_SOURCES) examples/graph.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/graph.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# UASTC and ETC1S images decoded from KTX2 files.
+$(OUT_DIR)/ktx2.png: $(LIB_SOURCES) examples/basis.mojo assets/ktx2/uastc_rgb_zstd_mips.ktx2 \
+	assets/ktx2/etc1s_rgb.ktx2 assets/ktx2/uastc_gradient.ktx2
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/basis.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Clearcoat bands and a specular color map on two spheres.
+$(OUT_DIR)/coats.png: $(LIB_SOURCES) examples/coats.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/coats.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A metal ball whose sky was written as scene JSON and read back.
+$(OUT_DIR)/environment.png: $(LIB_SOURCES) examples/skyjson.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/skyjson.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Preetham's daylight sky, with the sun crossing above a sphere.
+$(OUT_DIR)/sky.png: $(LIB_SOURCES) examples/daylight.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/daylight.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# One box, a different material on each face.
+$(OUT_DIR)/faces.png: $(LIB_SOURCES) examples/faces.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/faces.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# The Utah teapot, from the geometry addons.
+$(OUT_DIR)/teapot.png: $(LIB_SOURCES) examples/utah.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/utah.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Two metaballs joined by marching cubes.
+$(OUT_DIR)/blobs.png: $(LIB_SOURCES) examples/blobs.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/blobs.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

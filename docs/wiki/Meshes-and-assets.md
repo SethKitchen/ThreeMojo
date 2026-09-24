@@ -41,6 +41,10 @@ A mesh holds no transform. The node holds it. One geometry can be drawn at many 
 
 A mesh can wear a list of materials. Each group of its geometry then draws with the material that its `material_index` names. three.js: `Mesh.material` as an array, with `BufferGeometry.groups`.
 
+![A turning box, each face a different color](out/faces.png)
+
+`examples/faces.mojo` draws this picture.
+
 ```mojo
 var faces = List[MaterialId]()
 for face in range(6):

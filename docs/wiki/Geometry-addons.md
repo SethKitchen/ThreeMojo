@@ -23,6 +23,10 @@ The geometry addons of three.js's `examples/jsm/`: two more geometries, four mod
 
 `teapot(size, segments, bottom, lid, body, fit_lid, blinn)` is the Utah teapot. It has 32 bicubic Bezier patches. Each patch is a grid of `segments + 1` by `segments + 1` vertices.
 
+![The Utah teapot turns under a lamp](out/teapot.png)
+
+`examples/utah.mojo` draws this picture.
+
 | Argument | Meaning |
 |---|---|
 | `size` | Half the height. 50 meters by default, as three.js has 50 units. |

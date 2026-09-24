@@ -360,6 +360,10 @@ A GPU takes `dFdx` from the pixel beside it in a 2x2 quad. The two rasterizers h
 
 A sheen is a second lobe over a `PHYSICAL` surface, for cloth and velvet: three.js's `sheen`. It adds a soft rim of light where the surface turns away from the eye.
 
+![Sheen, a thin film and a stretched highlight turn under one lamp](out/layers.png)
+
+`examples/layers.mojo` draws this picture. The left sphere is the sheen, the middle is the film, and the right is the stretch.
+
 ```mojo
 var velvet = assets.materials.add(
     physical_material(Color(60, 10, 40), sheen=1.0, sheen_color=Color(255, 120, 200), sheen_roughness=0.4)
@@ -473,6 +477,10 @@ Only `SHADE_TEXTURE` reads the five layer maps, because the other two shading mo
 ## Specular and clearcoat maps
 
 Five maps vary a `PHYSICAL` surface's reflectance and its clear coat per texel, as three.js's `MeshPhysicalMaterial` varies them.
+
+![Glossy bands cross red paint, and a gray sphere's highlight changes color](out/coats.png)
+
+`examples/coats.mojo` draws this picture.
 
 ```mojo
 var lacquer = assets.materials.add(
@@ -721,6 +729,10 @@ A `BASIC` or `SHADOW` material refuses a displacement map, as three.js gives nei
 
 A transmissive `PHYSICAL` surface shows the opaque scene behind it through itself, bent by its index of refraction: three.js's `transmission`. Glass, water and gems are transmissive.
 
+![A glass sphere refracts three colored boxes as the camera turns](out/transmission.png)
+
+`examples/gem.mojo` draws this picture.
+
 ```mojo
 var glass = assets.materials.add(
     physical_material(
@@ -876,6 +888,10 @@ A packed alpha is data, and it is often zero. A depth of one half or more leaves
 
 `DISTANCE` writes how far each fragment is from `reference_position`, in world space. This is three.js's `MeshDistanceMaterial`. The distance is a fraction of the way from `near_distance` to `far_distance`, clamped to zero to one. `pack_depth_to_rgba` packs the fraction into four channels.
 
+![A sphere shows its distance from a point as packed color](out/distance.png)
+
+`examples/distance.mojo` draws this picture.
+
 ```mojo
 var measured = distance_material(
     Vector3(0, 2, 0), Length(0.5, METER), Length(20.0, METER)
@@ -909,6 +925,10 @@ The output pass leaves a data pixel as it is, so a render pass and an output pas
 ## Fog switch
 
 `fog` says whether the scene's fog veils a surface. This is three.js's `fog` property. It is on for every kind that shows light, as in three.js. Turn it off to keep one surface clear in a foggy scene:
+
+![Three cubes stand in fog, and the middle one keeps its color](out/unfogged.png)
+
+`examples/unfogged.mojo` draws this picture.
 
 ```mojo
 var sign = assets.materials.add(

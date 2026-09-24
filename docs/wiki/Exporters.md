@@ -2,7 +2,9 @@
 
 `exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image, and `exporters/ktx2.mojo` a texture. `exporters/usdz.mojo` writes a scene for AR Quick Look, and `exporters/draco.mojo` writes a geometry as a Draco file. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter`, `PLYExporter` and `DRACOExporter`.
 
-To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
+![A knot written to glTF and read back turns under a lamp](out/exporters.png)
+
+`examples/reloaded.mojo` draws the knot that `read_gltf` built. To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
 
 ```mojo
 scene.update()

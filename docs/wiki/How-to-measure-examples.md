@@ -37,7 +37,7 @@ Compile time is `mojo build` only. Run time is the fastest of three runs of the 
 
 ThreeMojo writes the image file. three.js draws the same width, height and frame count, and reads the pixels back. three.js does not encode an animated PNG.
 
-three.js renders only when the `gl` package loads. Without it the runner fills the same triangles flat on the CPU and writes no file. The `three.js frames only` column times that fill inside the process. The page says which backend ran and what each process costs before it draws. See [Benchmarks](Benchmarks#what-the-columns-measure).
+The runner always times a `cpu-flat` fill. It also times WebGL 2 when `webgl-node` can open a context. That context needs `libGLESv2` on the library path. On Ubuntu the package is `libgles2`. Without root, `make bench-examples` downloads the dispatcher into `bench/threejs/lib`. See [Benchmarks](Benchmarks#what-the-columns-measure).
 
 The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 

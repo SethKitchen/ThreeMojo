@@ -158,6 +158,10 @@ Cutting a segment leaves a segment or nothing at all. There is no polygon to fan
 
 A `LineSegments2` draws its segments wider than one pixel. `Line2` is the same object with a path for a geometry. Each segment becomes a quad of two triangles, with a round cap at each end. Both rasterizers fill them by the triangle rule.
 
+![A ribbon eight pixels wide turns around a box](out/wide.png)
+
+`examples/wide.mojo` draws this picture.
+
 three.js: `LineSegments2`, `Line2`, `LineSegmentsGeometry`, `LineGeometry`, `LineMaterial`, from `examples/jsm/lines`.
 
 ```mojo

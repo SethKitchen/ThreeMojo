@@ -2,6 +2,10 @@
 
 `exporters/object_json.mojo` writes a scene and its assets as three.js JSON. `loaders/object_loader.mojo` reads that JSON back into a scene and its assets. The format is version 4 of three.js's JSON Object format. three.js: `Object3D.toJSON` and `ObjectLoader`.
 
+![A cube written as JSON and read back turns under its lamp](out/scenejson.png)
+
+`examples/json_scene.mojo` writes the scene, reads it back, and draws that.
+
 ```mojo
 var cameras = ObjectCameras()
 cameras.perspective.append(camera)
@@ -188,6 +192,10 @@ three.js has no alpha mode, so the reader finds it from the use of the texture. 
 ## Cube textures
 
 A cube texture is a texture entry whose image has six URLs. This is how three.js's `Source.toJSON` writes a `CubeTexture`, and how its `ObjectLoader` finds one. The writer writes six PNG `data:` URLs, `CubeReflectionMapping` (301) and `flipY` false.
+
+![A metal ball reflects a sky that was written as JSON and read back](out/environment.png)
+
+`examples/skyjson.mojo` draws this picture.
 
 three.js keeps the six images of a cube in its own layout. The px image is the view along -x, and the nx image is the view along +x. Thus the writer swaps these two faces, and the reader reads the images `SEEN_FROM_OUTSIDE`. See [Textures](Textures). A `flipY` of true turns each image upside down.
 

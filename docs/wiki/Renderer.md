@@ -212,6 +212,8 @@ var image = target.resolve(renderer.workers, renderer.tone_curve(), renderer.ton
 
 `GpuRenderer.draw` takes the same `scissor`, and its device target keeps its pixels between draws the same way. See [GPU backend](GPU-backend#gpurenderer). `examples/split.mojo` draws a split screen.
 
+![One frame holds a perspective view and a plan view](out/split.png)
+
 ## Workers
 
 With more than one worker, the image is cut into horizontal bands. Each band is drawn on its own thread. The result is byte for byte the same as one thread. See [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands).

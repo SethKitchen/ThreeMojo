@@ -105,6 +105,10 @@ A blend whose effective alpha is zero changes nothing at all. Source-over hides 
 
 A `FLOAT_TARGET` keeps light above one, with no clamp, no tone mapping and no sRGB encode. three.js: `WebGLRenderTarget` with `type: FloatType`. Pass the type to the constructor, draw into the target, and read it with `attachment` or `attachment_texture`.
 
+![A float target's light sits above the view-space normals](out/targets.png)
+
+`examples/targets.mojo` draws this picture. The bottom band is the normal attachment.
+
 ```mojo
 var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET)
 renderer.render_into(target, scene, assets, camera)

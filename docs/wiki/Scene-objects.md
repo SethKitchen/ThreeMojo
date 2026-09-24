@@ -79,6 +79,10 @@ water.update(renderer, scene, assets, camera, Duration(1.0 / 60, SECOND))
 
 `Sky` is Preetham's daylight model on a unit box seen from inside. Scale the box's node until it holds the scene. Set the sun with the `sunPosition` uniform.
 
+![A daylight sky, with the sun crossing above a sphere](out/sky.png)
+
+`examples/daylight.mojo` draws this picture.
+
 ```mojo
 var sky = Sky(assets, node)
 assets.programs.get(sky.program).set_uniform("sunPosition", Vector3(0, 0.1, -1))
@@ -107,6 +111,10 @@ Each element is a square with a shader material, drawn with additive blending. A
 ## Marching cubes
 
 `MarchingCubes` holds a cube of cells, each with a number. `update` finds the surface where the numbers pass `isolation`, and makes triangles by Paul Bourke's tables. The gradient of the field gives the normals.
+
+![Two colored metaballs join into one surface](out/blobs.png)
+
+`examples/blobs.mojo` draws this picture.
 
 ```mojo
 var cubes = MarchingCubes(28, enable_uvs=False, enable_colors=True)

@@ -127,7 +127,7 @@ The kernel also adds the [geometric roughness](Materials#geometric-roughness) wi
 
 ## Post-processing on the GPU
 
-`GpuComposer` runs an [`EffectComposer`](Post-processing) with the frame on the device. The frame stays on the device between passes. It crosses the bus only for a pass that has no kernel.
+`GpuComposer` runs an [`EffectComposer`](Post-processing) with the frame on the device. The frame stays on the device between passes. It crosses the bus only for a pass that has no kernel. `examples/bloom.mojo` draws those passes on the CPU. The device runs the same pixels.
 
 ```mojo
 var device = GpuComposer(renderer.width, renderer.height)

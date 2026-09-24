@@ -57,12 +57,93 @@ def which_npm() -> Path | None:
     return None
 
 
+_GLES_DIR: Path | None = None
+_GLES_LOOKED = False
+
+
+def gles_dir() -> Path | None:
+    """Return a directory that holds `libGLESv2.so.2`, or none.
+
+    `webgl-node` loads that soname. Ubuntu keeps it in `libgles2`. A
+    checkout without root can still fetch the dispatcher with
+    `apt-get download`, which does not install it.
+    """
+    global _GLES_DIR, _GLES_LOOKED
+    if _GLES_LOOKED:
+        return _GLES_DIR
+    _GLES_LOOKED = True
+    names = ("libGLESv2.so.2", "libGLESv2.so.2.1.0")
+    candidates = [
+        THREEJS / "lib",
+        Path.home() / "gles-lib",
+        Path("/usr/lib/x86_64-linux-gnu"),
+        Path("/usr/lib64"),
+        Path("/usr/lib"),
+    ]
+    for folder in candidates:
+        for name in names:
+            if (folder / name).exists():
+                link = folder / "libGLESv2.so.2"
+                if not link.exists() and name != "libGLESv2.so.2":
+                    try:
+                        link.symlink_to(name)
+                    except OSError:
+                        continue
+                _GLES_DIR = folder
+                return folder
+    if sys.platform != "linux":
+        return None
+    if shutil.which("apt-get") is None or shutil.which("dpkg-deb") is None:
+        return None
+    dest = THREEJS / "lib"
+    dest.mkdir(parents=True, exist_ok=True)
+    fetched = subprocess.run(
+        ["apt-get", "download", "libgles2"],
+        cwd=dest,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if fetched.returncode != 0:
+        return None
+    debs = list(dest.glob("libgles2_*.deb"))
+    if not debs:
+        return None
+    extracted = subprocess.run(
+        ["dpkg-deb", "-x", str(debs[0]), str(dest / "extract")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if extracted.returncode != 0:
+        return None
+    found = list((dest / "extract").rglob("libGLESv2.so.*"))
+    if not found:
+        return None
+    library = found[0]
+    stored = dest / library.name
+    if not stored.exists():
+        stored.write_bytes(library.read_bytes())
+    link = dest / "libGLESv2.so.2"
+    if not link.exists():
+        link.symlink_to(stored.name)
+    _GLES_DIR = dest
+    return dest
+
+
 def node_env() -> dict[str, str]:
     node = which_node()
     env = {}
     if node:
         bindir = str(node.parent)
         env["PATH"] = bindir + os.pathsep + os.environ.get("PATH", "")
+    folder = gles_dir()
+    if folder is not None:
+        current = os.environ.get("LD_LIBRARY_PATH", "")
+        parts = [str(folder)]
+        if current:
+            parts.append(current)
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(parts)
     return env
 
 
@@ -351,7 +432,7 @@ def ensure_threejs() -> bool:
     return ready
 
 
-def bench_threejs(name: str) -> dict:
+def bench_threejs(name: str, backend_name: str) -> dict:
     if not ensure_threejs():
         return {
             "ok": False,
@@ -374,7 +455,7 @@ def bench_threejs(name: str) -> dict:
     result = None
     for _ in range(RUNS):
         run = measure(
-            [str(node), str(THREEJS / "run.mjs"), name],
+            [str(node), str(THREEJS / "run.mjs"), name, backend_name],
             cwd=ROOT,
             env=node_env(),
         )
@@ -471,61 +552,91 @@ def refused_reason(output: str) -> str:
     return "refused"
 
 
-def example_table(rows: list[dict], backend: str) -> str:
+def js_cells(result: dict | None) -> tuple[str, str, str, float | None, int | None]:
+    if not result or not result.get("ok"):
+        return "unavailable", "—", "—", None, None
+    return (
+        fmt_s(result["seconds"]),
+        fmt_s(result.get("frames_seconds")),
+        fmt_mib(result.get("rss_kib")),
+        good_seconds(result),
+        good_mib(result),
+    )
+
+
+def example_table(rows: list[dict], webgl_ok: bool) -> str:
     lines = [
-        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | three.js run (s) | three.js frames only (s) | ThreeMojo RSS (MiB) | three.js RSS (MiB) |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | cpu-flat frames (s) | webgl run (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         tm = row["threemojo"]
-        js = row["threejs"]
+        flat = row.get("threejs_flat") or row.get("threejs") or {}
+        web = row.get("threejs_webgl") or {}
         tm_run_ok = tm["compile"].get("ok") and tm["run"].get("ok")
         tm_run = fmt_s(tm["run"]["seconds"]) if tm_run_ok else (
             "compile failed" if not tm["compile"].get("ok") else "run failed"
         )
         tm_rss = fmt_mib(tm["run"].get("rss_kib")) if tm_run_ok else "—"
-        js_run = fmt_s(js["seconds"]) if js.get("ok") else "failed"
-        js_frames = fmt_s(js.get("frames_seconds")) if js.get("ok") else "—"
-        js_rss = fmt_mib(js.get("rss_kib")) if js.get("ok") else "—"
+        flat_run, flat_frames, flat_rss, flat_seconds, flat_mib = js_cells(flat)
+        web_run, web_frames, web_rss, web_seconds, web_mib = js_cells(web)
+        pair_seconds = web_seconds if webgl_ok and web.get("ok") else flat_seconds
+        pair_mib = web_mib if webgl_ok and web.get("ok") else flat_mib
+        pair_run = web_run if webgl_ok and web.get("ok") else flat_run
+        pair_rss = web_rss if webgl_ok and web.get("ok") else flat_rss
         run_l, run_r = painted_pair(
             tm_run,
-            js_run,
+            pair_run,
             good_seconds(tm["run"]) if tm_run_ok else None,
-            good_seconds(js),
+            pair_seconds,
         )
         rss_l, rss_r = painted_pair(
             tm_rss,
-            js_rss,
+            pair_rss,
             good_mib(tm["run"]) if tm_run_ok else None,
-            good_mib(js),
+            pair_mib,
         )
+        if webgl_ok and web.get("ok"):
+            shown_web_run, shown_web_rss = run_r, rss_r
+            shown_flat_run, shown_flat_rss = flat_run, flat_rss
+        else:
+            shown_flat_run, shown_flat_rss = run_r, rss_r
+            shown_web_run, shown_web_rss = web_run, web_rss
         lines.append(
-            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {jr} | {jf} | {m} | {jm} |".format(
+            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {ff} | {wr} | {wf} | {m} | {fm} | {wm} |".format(
                 name=row["name"],
                 w=row["width"],
                 h=row["height"],
                 frames=row["frames"],
                 c=fmt_s(tm["compile"]["seconds"]),
                 r=run_l,
-                jr=run_r,
-                jf=js_frames,
+                fr=shown_flat_run,
+                ff=flat_frames,
+                wr=shown_web_run,
+                wf=web_frames,
                 m=rss_l,
-                jm=rss_r,
+                fm=shown_flat_rss,
+                wm=shown_web_rss,
             )
         )
-    if backend:
-        lines.append("")
-        lines.append(f"three.js backend for this run: `{backend}`.")
-        if backend != "webgl":
-            lines.append(
-                "The `gl` package did not load, so three.js did not render. "
-                "The `cpu-flat` backend fills the same triangles with each "
-                "material's flat color and a depth test. It does no lighting, "
-                "no textures, no sRGB and no transparency, and it writes no "
-                "file. The `three.js frames only` column is that fill, timed "
-                "inside the process. The rest of the `three.js run` column is "
-                "Node starting and importing three.js."
-            )
+    lines.append("")
+    lines.append(
+        "The `cpu-flat` columns fill the same triangles with each material's flat color and a depth test."
+    )
+    lines.append(
+        "That fill does no lighting, no textures, no sRGB and no transparency, and it writes no file."
+    )
+    if webgl_ok:
+        lines.append(
+            "The `webgl` columns are three.js drawing with WebGL 2 through `webgl-node`."
+        )
+    else:
+        lines.append(
+            "The `webgl` columns are unavailable. The context did not load."
+        )
+    lines.append(
+        "Read a frames column against the ThreeMojo `run` column minus the Mojo baseline."
+    )
     return "\n".join(lines)
 
 
@@ -618,7 +729,7 @@ def slim_payload(payload: dict) -> dict:
     slim = {
         "generated_at": payload["generated_at"],
         "host": payload["host"],
-        "threejs_backend": payload.get("threejs_backend", ""),
+        "threejs_webgl": payload.get("threejs_webgl", False),
         "baselines": {
             key: slim_metric(value)
             for key, value in payload.get("baselines", {}).items()
@@ -644,7 +755,8 @@ def slim_payload(payload: dict) -> dict:
                     "compile": slim_metric(row["threemojo"]["compile"]),
                     "run": slim_metric(row["threemojo"]["run"]),
                 },
-                "threejs": slim_metric(row["threejs"]),
+                "threejs_flat": slim_metric(row.get("threejs_flat") or row.get("threejs") or {}),
+                "threejs_webgl": slim_metric(row.get("threejs_webgl") or {}),
                 "mojo10": (
                     {
                         "compile": slim_metric(row["mojo10"]["compile"]),
@@ -678,7 +790,12 @@ def write_wiki(payload: dict) -> None:
             f"- Mojo 1.1: `{host['mojo_1_1'] or 'missing'}`",
             f"- Mojo 1.0: `{host['mojo_1_0'] or 'not installed'}`",
             f"- Node: `{host['node'] or 'missing'}`",
-            f"- three.js backend: `{payload.get('threejs_backend') or 'missing'}`",
+            "- three.js backends: "
+            + (
+                "`cpu-flat` and `webgl`"
+                if payload.get("threejs_webgl")
+                else "`cpu-flat` (`webgl` did not load)"
+            ),
         ]
         + baseline_lines(payload)
     )
@@ -687,7 +804,7 @@ def write_wiki(payload: dict) -> None:
     text = replace_span(
         text,
         "EXAMPLES",
-        example_table(payload["examples"], payload.get("threejs_backend", "")),
+        example_table(payload["examples"], bool(payload.get("threejs_webgl"))),
     )
     text = replace_span(
         text,
@@ -742,7 +859,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def emit_tables(payload: dict, write_wiki_page: bool) -> None:
-    print(example_table(payload["examples"], payload.get("threejs_backend", "")))
+    print(example_table(payload["examples"], bool(payload.get("threejs_webgl"))))
     print()
     print(
         mojo10_table(
@@ -783,7 +900,7 @@ def main() -> int:
         "generated_at": time.strftime("%Y-%m-%d"),
         "host": host_info(mojo11, mojo10),
         "examples": [],
-        "threejs_backend": "",
+        "threejs_webgl": False,
         "baselines": {},
         "probe": {},
         "mojo10_refused": 0,
@@ -852,7 +969,7 @@ def main() -> int:
             flush=True,
         )
 
-        js = {
+        skipped = {
             "ok": False,
             "seconds": None,
             "rss_kib": None,
@@ -860,12 +977,19 @@ def main() -> int:
             "backend": "",
             "output": "skipped",
         }
+        flat = skipped
+        web = skipped
         if not args.skip_threejs:
-            js = bench_threejs(name)
-            if js.get("backend"):
-                payload["threejs_backend"] = js["backend"]
+            flat = bench_threejs(name, "cpu-flat")
+            web = bench_threejs(name, "webgl")
+            if web.get("ok"):
+                payload["threejs_webgl"] = True
             print(
-                f"  three.js {fmt_s(js['seconds'])}s  rss {fmt_mib(js['rss_kib'])} MiB  {js.get('backend') or 'failed'}",
+                "  cpu-flat {f}s  webgl {w}  {note}".format(
+                    f=fmt_s(flat["seconds"]),
+                    w=fmt_s(web["seconds"]) + "s" if web.get("ok") else "unavailable",
+                    note=web.get("backend") or "cpu-flat",
+                ),
                 flush=True,
             )
 
@@ -909,7 +1033,8 @@ def main() -> int:
                 "height": item["height"],
                 "frames": item["frames"],
                 "threemojo": {"compile": compile_result, "run": run_result},
-                "threejs": js,
+                "threejs_flat": flat,
+                "threejs_webgl": web,
                 "mojo10": mojo10_example,
             }
         )
@@ -928,13 +1053,13 @@ def main() -> int:
         if previous.get("baselines"):
             slim["baselines"] = previous["baselines"] | slim.get("baselines", {})
         slim["host"] = slim["host"] or previous.get("host", {})
-        slim["threejs_backend"] = slim.get("threejs_backend") or previous.get(
-            "threejs_backend", ""
+        slim["threejs_webgl"] = bool(
+            slim.get("threejs_webgl") or previous.get("threejs_webgl")
         )
         payload["examples"] = slim["examples"]
         payload["probe"] = slim["probe"]
         payload["host"] = slim["host"]
-        payload["threejs_backend"] = slim["threejs_backend"]
+        payload["threejs_webgl"] = slim["threejs_webgl"]
     RESULTS.write_text(json.dumps(slim, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {RESULTS.relative_to(ROOT)}", flush=True)
     print()

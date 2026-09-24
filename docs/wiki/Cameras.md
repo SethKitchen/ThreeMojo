@@ -134,6 +134,10 @@ Each rectangle is cleared to the background and drawn with the scissor on, so no
 
 `StereoCamera` makes a left and a right eye from one camera: three.js's `StereoCamera`. Each eye stands half `eye_separation` to its side of the camera and looks the same way. Each eye's frustum is skewed toward the other so the two views cross at `focus`. Draw the eyes through an `ArrayCamera` for a side-by-side image.
 
+![A stereo pair of a box and a ring, side by side](out/stereo.png)
+
+`examples/stereo.mojo` draws this picture.
+
 ```mojo
 from cameras.stereo_camera import StereoCamera
 

@@ -198,6 +198,10 @@ Every builder calls `validate`. `Lighting(scene)` calls it again on every light,
 
 `lights/shadow.mojo`. A directional, a point or a spot light can cast shadows: three.js's `castShadow` and `LightShadow`, with `DirectionalLightShadow`, `PointLightShadow` and `SpotLightShadow`. A spot light can also project a picture. See [Soft shadows](#soft-shadows), [Point light shadows](#point-light-shadows) and [Spot light maps](#spot-light-maps).
 
+![A cube's shadow swings across the floor as the lamp orbits](out/shadows.png)
+
+`examples/shadows.mojo` draws this picture.
+
 ```mojo
 var sun = directional_light(Color(255, 255, 255), lamp_node, 3.0)
 sun.cast_shadow = True

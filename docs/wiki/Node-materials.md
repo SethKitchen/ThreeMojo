@@ -2,6 +2,10 @@
 
 `materials/nodes.mojo` and `materials/glsl.mojo`. A node material replaces parts of a surface's shading with a small graph of nodes: three.js's node materials and its Three Shading Language (TSL). You build a `NodeGraph`, or you compile GLSL source to one. You compile the graph to a `NodeProgram`, add the program to `assets.programs`, and give its id to a `Material`.
 
+![A node graph shifts a sphere from orange to blue and back](out/nodes.png)
+
+`examples/graph.mojo` draws this picture.
+
 three.js: `NodeMaterial` and its outputs, from `colorNode` to `depthNode`. TSL's `uniform`, `If`, `Loop`, `Fn`, `Discard`, `varying`, `dFdx`, `dFdy` and its math. MaterialX's noise. `ShaderMaterial` and `RawShaderMaterial` in a subset of GLSL.
 
 ## Build one

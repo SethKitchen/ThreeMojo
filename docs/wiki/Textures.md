@@ -68,6 +68,8 @@ It is a picture of the depth, not the depth. A byte holds 256 steps, and a persp
 
 `examples/television.mojo` renders a box into a small target every frame and shows its picture and its depth on two screens.
 
+![A box plays on one screen and its depth on the other](out/television.png)
+
 ## From a compressed file
 
 `render/compressed_texture.mojo`. `compressed_texture` decodes a block-compressed payload into an ordinary texture: three.js's `CompressedTexture`. The GPU samples a compressed texture as it is. This project's rasterizers read bytes, so the blocks are decoded once, on the host, and sampled like any other image.
@@ -94,6 +96,10 @@ The 565 channels widen to eight bits by copying their top bits down, as the hard
 ## KTX2 and compressed formats
 
 `render/compressed_texture.mojo` decodes eighteen block formats. `render/dds.mojo`, `render/ktx.mojo` and `render/ktx2.mojo` read the three container files that three.js reads. Each container gives every level of every face, and a `texture` method decodes one of them. A KTX2 file can also hold Basis Universal data and Zstandard supercompression. This reader decodes UASTC, UASTC HDR 4x4, ETC1S and ETC1S video, and Zstandard.
+
+![Three panels show a UASTC image, an ETC1S image and a gradient](out/ktx2.png)
+
+`examples/basis.mojo` draws this picture.
 
 three.js: `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CompressedTexture` and the compressed format constants.
 
