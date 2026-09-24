@@ -12,6 +12,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [3DS](#3ds) | `loaders/tds.mojo` | `read_3ds(path, scene, assets) -> TdsModel` | `TDSLoader` |
 | [XYZ](#xyz) | `loaders/xyz.mojo` | `read_xyz(path) -> BufferGeometry` | `XYZLoader` |
 | [AMF](#amf) | `loaders/amf.mojo` | `read_amf(path, scene, assets) -> AmfModel` | `AMFLoader` |
+| [VOX](#vox) | `loaders/vox.mojo` | `read_vox(path) -> List[VoxModel]` | `VOXLoader` |
 
 ## PCD
 
@@ -439,3 +440,51 @@ three.js logs a root that is not `<amf>` and returns nothing. It throws a `TypeE
 ### Example
 
 `assets/amf/fixture.amf` has metadata, two materials, and three objects whose ids are not in order. It has object colors, normals, a volume with a material that is not there, and an empty volume. `assets/amf/fixture.zip` has the same model in an archive, in microns. `tests/test_amf.mojo` compares both with three.js 0.180.
+
+## VOX
+
+`loaders/vox.mojo`. `read_vox(path)` reads the models of a MagicaVoxel file. `vox_geometry` and `vox_data_3d_texture` turn a model into a mesh or a volume. three.js: `VOXLoader`, `VOXMesh` and `VOXData3DTexture`.
+
+```mojo
+var models = read_vox("assets/vox/fixture.vox")
+var node = add_vox_mesh(models[0], scene, assets)
+var volume = assets.data_3d_textures.add(vox_data_3d_texture(models[0]))
+```
+
+| Function | What it does |
+|---|---|
+| `read_vox(path) -> List[VoxModel]` | Read a file. |
+| `parse_vox(bytes) -> List[VoxModel]` | Read the bytes of one. |
+| `vox_geometry(model) -> BufferGeometry` | The faces of a model, three.js's `VOXMesh` geometry. |
+| `vox_material(model) -> Material` | Its `STANDARD` material, with vertex colors when the model has colors. |
+| `add_vox_mesh(model, scene, assets, parent) -> NodeId` | Add a node and a mesh of a model. |
+| `vox_data_3d_texture(model) -> Data3DTexture` | The model as a volume, three.js's `VOXData3DTexture`. |
+
+A `VoxModel` has its size in voxels, four bytes for each voxel (x, y, z and a color index), and its palette.
+
+### What is read
+
+`SIZE` starts a model, `XYZI` gives its voxels and `RGBA` gives a palette. The loader steps over the other chunks and reads their children.
+
+A model takes three.js's default palette. An `RGBA` chunk gives its palette to the last model before it, as three.js does.
+
+`vox_geometry` makes two triangles for each face of a voxel that has no voxel next to it. The model is centered, with y up. Each vertex has a color, decoded from sRGB, when a voxel is not black.
+
+`vox_data_3d_texture` has one red byte for each cell: 255 where a voxel is, and zero where there is none.
+
+### Differences from three.js
+
+- three.js filters the volume with nearest filtering when it shrinks, and linear filtering when it grows. A `Data3DTexture` has one filter, and it is `BILINEAR`.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A file that is not `VOX `, or not version 150. three.js logs these and returns nothing.
+- A file that ends inside a chunk, and voxels or a palette before any `SIZE`. three.js throws for these.
+- A `SIZE` whose content is shorter than its three sizes. three.js reads the file backward from there.
+- A voxel outside its model, and a color index past the palette.
+
+### Example
+
+`assets/vox/fixture.vox` has three models, a chunk that the loader skips, and a palette for the last model. One model is all black. `tests/test_vox.mojo` compares each geometry and volume with three.js 0.180.
