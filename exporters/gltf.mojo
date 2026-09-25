@@ -165,7 +165,10 @@ from core.user_data import UserData, json_value_text
 from exporters.common import check_geometry, push_f32, push_word
 from exporters.json_writer import JsonWriter
 from loaders.gltf import (
+    COMPONENT_BYTE,
     COMPONENT_FLOAT,
+    COMPONENT_SHORT,
+    COMPONENT_UNSIGNED_BYTE,
     COMPONENT_UNSIGNED_INT,
     COMPONENT_UNSIGNED_SHORT,
     EMISSIVE_STRENGTH,
@@ -186,6 +189,7 @@ from loaders.gltf import (
     MATERIALS_TRANSMISSION,
     MATERIALS_UNLIT,
     MATERIALS_VOLUME,
+    MESH_QUANTIZATION,
     MODE_LINES,
     MODE_LINE_LOOP,
     MODE_LINE_STRIP,
@@ -210,6 +214,15 @@ from materials.material import (
     MaterialId,
 )
 from math.matrix4 import Matrix4
+from math.utils import (
+    ComponentType,
+    INT16_COMPONENT,
+    INT32_COMPONENT,
+    INT8_COMPONENT,
+    UINT16_COMPONENT,
+    UINT32_COMPONENT,
+    UINT8_COMPONENT,
+)
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -878,6 +891,79 @@ struct _Exporter(Movable):
         self.accessors.append(writer.finish())
         return len(self.accessors) - 1
 
+    def attribute_accessor(
+        mut self,
+        attribute: BufferAttribute,
+        kind: String,
+        bounded: Bool,
+        semantic: String,
+    ) raises -> Int:
+        """Write a vertex attribute and return its accessor, as three.js's
+        `processAccessor` writes one: a `Float32` attribute as floats, and
+        an integer one in its own component type with its `normalized`
+        flag. A 32-bit integer attribute is written as floats, as three.js
+        converts one of a named attribute. A quantized type that
+        `KHR_mesh_quantization` allows for `semantic` requires that
+        extension, as three.js's `detectMeshQuantization` requires it."""
+        var type = attribute.component_type()
+        if (
+            not attribute.is_integer()
+            or type == UINT32_COMPONENT
+            or type == INT32_COMPONENT
+        ):
+            return self.float_accessor(
+                attribute.packed(), attribute.item_size, kind, bounded
+            )
+        var size = 1 if type == UINT8_COMPONENT or type == INT8_COMPONENT else 2
+        var width = attribute.item_size
+        # Each element starts on four bytes, as the specification has a
+        # vertex attribute's elements aligned.
+        var stride = (width * size + 3) // 4 * 4
+        var stored = attribute.stored_values()
+        var count = attribute.count()
+        var bytes = List[UInt8](capacity=count * stride)
+        # A geometry with no vertices is refused before this, so there is
+        # an element, and an item size is positive.
+        for element in range(count):  # pragma: no branch
+            for lane in range(width):  # pragma: no branch
+                push_word(bytes, stored[element * width + lane], size, True)
+            while len(bytes) % stride != 0:
+                bytes.append(0)
+        var view = self.view(bytes, ARRAY_BUFFER, stride)
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("bufferView")
+        writer.integer(view)
+        writer.key("componentType")
+        writer.integer(_gl_component(type))
+        if attribute.is_normalized():
+            writer.key("normalized")
+            writer.boolean(True)
+        writer.key("count")
+        writer.integer(count)
+        writer.key("type")
+        writer.string(kind)
+        if bounded:
+            var low = List[Int]()
+            var high = List[Int]()
+            for lane in range(width):  # pragma: no branch
+                low.append(stored[lane])
+                high.append(stored[lane])
+            for element in range(1, count):
+                for lane in range(width):  # pragma: no branch
+                    var value = stored[element * width + lane]
+                    low[lane] = min(low[lane], value)
+                    high[lane] = max(high[lane], value)
+            writer.key("min")
+            _write_integers(writer, low)
+            writer.key("max")
+            _write_integers(writer, high)
+        writer.end_object()
+        self.accessors.append(writer.finish())
+        if _is_quantized(semantic, type, attribute.is_normalized()):
+            self.require(MESH_QUANTIZATION)
+        return len(self.accessors) - 1
+
     def joint_accessor(mut self, joints: List[Float32]) raises -> Int:
         """Write a `JOINTS_0` of unsigned shorts, as three.js's
         `GLTFExporter` converts a `skinIndex` to them, and return its
@@ -948,26 +1034,26 @@ struct _Exporter(Movable):
                 raise Error("glTF: a geometry with no vertices is not written")
             self.geometry_keys.append(id.value)
             self.positions.append(
-                self.float_accessor(
-                    geometry.attribute_view(POSITION).packed(), 3, "VEC3", True
+                self.attribute_accessor(
+                    geometry.attribute_view(POSITION), "VEC3", True, "POSITION"
                 )
             )
             var normal = -1
             if geometry.has_attribute(NORMAL):
-                normal = self.float_accessor(
-                    geometry.attribute_view(NORMAL).packed(), 3, "VEC3", False
+                normal = self.attribute_accessor(
+                    geometry.attribute_view(NORMAL), "VEC3", False, "NORMAL"
                 )
             self.normals.append(normal)
             var uv = -1
             if geometry.has_attribute(UV):
-                uv = self.float_accessor(
-                    geometry.attribute_view(UV).packed(), 2, "VEC2", False
+                uv = self.attribute_accessor(
+                    geometry.attribute_view(UV), "VEC2", False, "TEXCOORD"
                 )
             self.uvs.append(uv)
             var uv1 = -1
             if geometry.has_attribute(UV1):
-                uv1 = self.float_accessor(
-                    geometry.attribute_view(UV1).packed(), 2, "VEC2", False
+                uv1 = self.attribute_accessor(
+                    geometry.attribute_view(UV1), "VEC2", False, "TEXCOORD"
                 )
             self.uv1s.append(uv1)
             self.colors.append(-1)
@@ -983,19 +1069,16 @@ struct _Exporter(Movable):
             self.joints[slot] = self.joint_accessor(
                 geometry.attribute_view(SKIN_INDEX).packed()
             )
-            self.skin_weights[slot] = self.float_accessor(
-                geometry.attribute_view(SKIN_WEIGHT).packed(),
-                4,
-                "VEC4",
-                False,
+            self.skin_weights[slot] = self.attribute_accessor(
+                geometry.attribute_view(SKIN_WEIGHT), "VEC4", False, "WEIGHTS"
             )
         if colored and self.colors[slot] < 0:
             ref color = geometry.attribute_view(COLOR)
-            self.colors[slot] = self.float_accessor(
-                color.packed(),
-                color.item_size,
+            self.colors[slot] = self.attribute_accessor(
+                color,
                 "VEC3" if color.item_size == 3 else "VEC4",
                 False,
+                "COLOR",
             )
         return slot
 
@@ -2689,6 +2772,44 @@ def _write_numbers(mut writer: JsonWriter, numbers: List[Float32]) raises:
     for value in numbers:  # pragma: no branch
         writer.number(value)
     writer.end_array()
+
+
+def _gl_component(type: ComponentType) -> Int:
+    """Return the glTF component type of an 8- or 16-bit typed array, as
+    three.js's `processAccessor` reads it off the array."""
+    if type == INT8_COMPONENT:
+        return COMPONENT_BYTE
+    if type == UINT8_COMPONENT:
+        return COMPONENT_UNSIGNED_BYTE
+    if type == INT16_COMPONENT:
+        return COMPONENT_SHORT
+    return COMPONENT_UNSIGNED_SHORT
+
+
+def _is_quantized(
+    semantic: String, type: ComponentType, normalized: Bool
+) -> Bool:
+    """Return True if `KHR_mesh_quantization` is what allows an 8- or
+    16-bit attribute, three.js's `KHR_mesh_quantization_ExtraAttrTypes`.
+
+    Args:
+        semantic: The attribute's name without its set number: `POSITION`,
+            `NORMAL`, `TEXCOORD`, `COLOR` or `WEIGHTS`.
+        type: Its component type.
+        normalized: Whether it is normalized.
+
+    Returns:
+        Whether the extension must be required.
+    """
+    var signed = type == INT8_COMPONENT or type == INT16_COMPONENT
+    if semantic == "POSITION":
+        return True
+    if semantic == "NORMAL":
+        return signed and normalized
+    if semantic == "TEXCOORD":
+        # Every type but the normalized unsigned ones, which glTF allows.
+        return signed or not normalized
+    return False
 
 
 def _write_integers(mut writer: JsonWriter, numbers: List[Int]) raises:

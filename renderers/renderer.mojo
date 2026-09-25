@@ -4943,8 +4943,9 @@ struct Renderer(Movable):
                 if indices[slot] >= vertex_count:
                     raise Error("An index entry points past the last vertex")
             # The run this draw fills: a group of a mesh that wears a
-            # material list, or the whole stream. See `triangle_run`.
-            var run = geometry.triangle_run(
+            # material list, or the whole stream, inside the geometry's
+            # draw range. See `drawn_run`.
+            var run = geometry.drawn_run(
                 draws[slot].group_start, draws[slot].group_count
             )
             var run_start = run[0]
@@ -5005,9 +5006,10 @@ struct Renderer(Movable):
                 # lines, as three.js submits it, and a line has no facing
                 # to reject. A front-sided wireframe box shows the far
                 # side of itself, which is what a wireframe is for.
-                var ends = triangle_edges(
-                    geometry, draws[slot].group_start, draws[slot].group_count
-                )
+                # The edges of the triangles drawn: the run above, which
+                # the draw range has cut, as three.js cuts its wireframe
+                # index by the same range.
+                var ends = triangle_edges(geometry, run_start, triangles * 3)
                 for edge in range(len(ends[0])):
                     var from_end = ends[0][edge]
                     var to_end = ends[1][edge]
@@ -5400,10 +5402,19 @@ struct Renderer(Movable):
                 for vertex in range(vertex_count):
                     along[vertex] *= material.dash_scale
 
-            for segment in range(segment_count(line.mode, vertex_count)):
-                var ends = segment_ends(line.mode, vertex_count, segment)
-                var first = ends[0]
-                var second = ends[1]
+            # The whole line must suit its mode, and then only the points
+            # the draw range lets through are joined, as `drawArrays` joins
+            # them: a loop closes on the first of them, and a list of
+            # sticks leaves out a last point that has no partner.
+            _ = segment_count(line.mode, vertex_count)
+            var ranged = geometry.drawn_vertices()
+            var joined = ranged[1]
+            if line.mode == SEGMENTS:
+                joined -= joined % 2
+            for segment in range(segment_count(line.mode, joined)):
+                var ends = segment_ends(line.mode, joined, segment)
+                var first = ranged[0] + ends[0]
+                var second = ranged[0] + ends[1]
                 # The normal is zero and the texture coordinates are zero
                 # because nothing reads either: the kind is unlit and there
                 # is no map. Carrying the material color, the world
@@ -5746,7 +5757,9 @@ struct Renderer(Movable):
             var colors = _vertex_colors(
                 geometry, material.vertex_colors, base, vertex_count
             )
-            for vertex in range(vertex_count):
+            # Only the points the draw range lets through.
+            var ranged = geometry.drawn_vertices()
+            for vertex in range(ranged[0], ranged[0] + ranged[1]):
                 var point = world.transform_point(
                     Vector3(
                         positions.component(vertex, 0),

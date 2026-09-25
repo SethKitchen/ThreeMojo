@@ -6,18 +6,27 @@ Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, to
 
 ![A torus knot turns under a lamp](out/geometry.png)
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. From the addons: `TextGeometry`, `ParametricGeometry`, `ParametricFunctions`, `ConvexGeometry`, `ConvexHull`, `DecalGeometry` and `RoundedBoxGeometry`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. From the addons: `TextGeometry`, `ParametricGeometry`, `ParametricFunctions`, `ConvexGeometry`, `ConvexHull`, `DecalGeometry` and `RoundedBoxGeometry`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, `applyMatrix4`, `applyQuaternion`, `rotateX`, `rotateY`, `rotateZ`, `translate`, `scale`, `lookAt`, `setFromPoints`, `deleteAttribute`, `normalizeNormals`, `setDrawRange`, `name`, `userData`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
 
 ## BufferAttribute
 
-A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vectors of three floats.
+A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vectors of three floats. `BufferAttribute(stored, 3, UINT8_COMPONENT, True)` holds normalized bytes. See [Integer attributes](#integer-attributes).
 
 | Member | Meaning |
 |---|---|
 | `count() -> Int` | The number of items. |
-| `component(index, offset) -> Float32` | One float of one item. |
+| `component(index, offset) -> Float32` | One number of one item, as a read gives it. |
 | `vector3(index) -> Vector3` | One item as a vector. Item size must be three. |
-| `set_component(index, offset, value)` | Replace one float of one item. |
+| `set_component(index, offset, value)` | Replace one number of one item. |
+| `apply_matrix3(matrix)` | Move 2D points, or multiply vectors of three, three.js's `applyMatrix3`. |
+| `apply_matrix4(matrix)` | Move points, with the divide by w. |
+| `apply_normal_matrix(matrix)` | Turn normals and make them unit length. |
+| `transform_direction(matrix)` | Turn directions and make them unit length. A fourth number stays. |
+| `set(values, offset)`, `set_stored(values, offset)` | Write numbers into the array as it stores them, three.js's `set`. |
+| `copy_at(index, source, source_index)` | Copy one item of another attribute as its array stores it. |
+| `component_type() -> ComponentType` | The typed array the numbers are stored in. |
+| `is_normalized() -> Bool`, `set_normalized(flag)` | three.js's `normalized`. |
+| `stored_values() -> List[Int]` | The integers an integer attribute stores. |
 | `gather(index) -> BufferAttribute` | One copy of an item for each entry of `index`. |
 | `packed() -> List[Float32]` | Every float, item after item, with no stride. |
 | `clone() -> BufferAttribute` | A copy with an array of its own. |
@@ -50,6 +59,15 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `vertex_at(slot) -> Int` | Which vertex one slot of that stream reads. |
 | `set_instance_count(count)` | Set how many instances to draw. |
 | `drawn_instances() -> Int` | How many instances a mesh draws. |
+| `delete_attribute(name)` | Remove an attribute. An unknown name is ignored. |
+| `apply_matrix4(matrix)`, `apply_quaternion(rotation)` | Transform the geometry. See [Transforms](#transforms). |
+| `rotate_x(angle)`, `rotate_y(angle)`, `rotate_z(angle)` | Turn the geometry about one axis. |
+| `translate(x, y, z)`, `scale(x, y, z)` | Move the geometry by lengths, or scale it by factors. |
+| `look_at(target)` | Turn the geometry so that its +z axis points at `target`. |
+| `set_from_points(points)` | Set `position` from a list of `Vector3` or `Vector2`. |
+| `normalize_normals()` | Make every normal unit length. |
+| `set_draw_range(start, count)` | Draw only part of the triangle stream. See [Draw range](#draw-range). |
+| `name`, `user_data` | three.js's `name` and `userData`. [Scene JSON](Scene-JSON) carries both. |
 
 Attribute names are the constants `POSITION`, `NORMAL`, `UV`, `UV1`, `COLOR` and `TANGENT`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
 
@@ -60,6 +78,86 @@ A geometry can carry `uv1`, a second set of coordinates, for a baked map. See [L
 Faces are joined by index, not by position. The two vertices on either side of a texture seam keep separate normals, so a recomputed seamed sphere shows its seam, as in three.js. A builder's own normals are better. Replace them only on purpose.
 
 The bounds are computed each time they are asked for. Nothing is cached. See [Math](Math#box3-sphere-and-plane) for `Box3` and `Sphere`.
+
+## Transforms
+
+```mojo
+geometry.rotate_x(Angle(90.0, DEGREE))
+geometry.translate(Length(0, METER), Length(1, METER), Length(0, METER))
+geometry.scale(2, 2, 2)
+```
+
+A transform changes the vertex data itself, once. Use a node's transform for a shape that moves each frame.
+
+`apply_matrix4` moves `position` as points. It turns `normal` by the normal matrix and makes each normal unit length. It turns `tangent` as a direction, and the handedness in `w` stays. The other transforms build a matrix and call `apply_matrix4`, as three.js does.
+
+three.js recomputes a bounding box or sphere that it has cached. Here the bounds are computed each time they are asked for, so they are always current.
+
+### Where this port differs
+
+- The morph targets also move. A target of finished positions moves with the positions, and a target of offsets turns without the translation. three.js leaves both as they are. This keeps a worn target where it was relative to the shape, as `center` does.
+- A matrix that flattens a dimension raises when there are normals to turn. three.js gives zero normals, which light every surface black.
+- `apply_matrix4` on an attribute of fewer than three numbers an item raises. three.js reads the next item's numbers.
+- `set_from_points` on a geometry that has positions writes as many items as fit, as three.js does. It does not warn about the rest.
+
+## Draw range
+
+```mojo
+geometry.set_draw_range(6, 12)     # index entries 6 to 17: triangles 2 to 5
+geometry.set_draw_range(0)         # every slot again: three.js's Infinity
+```
+
+The draw range is the part of the triangle stream that is drawn and picked. It counts index entries for an indexed geometry and vertices for one without an index, as a group does.
+
+`drawn_run(start, count)` intersects a group with the range, as three.js's `renderBufferDirect` does. Then it clamps the run to the stream and to whole triangles. The CPU and GPU rasterizers, the wireframe and the raycaster all read a run through it. So they draw and pick the same triangles.
+
+A line or a points object reads `drawn_vertices()`. A line joins only the points in the range. A loop closes on the first of them, and a list of sticks leaves out a last point without a partner. The whole line must still suit its mode.
+
+three.js: `drawRange`, `setDrawRange`.
+
+### Where this port differs
+
+- A negative start or count raises. three.js draws nothing for a range that ends before it starts.
+- A wide line and an instanced mesh ignore the draw range. three.js draws a wide line as instances, and a draw range does not cut instances.
+- The glTF and OBJ exporters write the whole geometry, as three.js's exporters do.
+
+## Integer attributes
+
+```mojo
+var colors = BufferAttribute(bytes, 3, UINT8_COMPONENT, True)   # Uint8Array, normalized
+colors.set_component(0, 0, 0.5)                                 # stores 128
+```
+
+An attribute can store its numbers in any of three.js's seven typed arrays: `Float32`, `Uint32`, `Uint16`, `Uint8`, `Int32`, `Int16` and `Int8`. A normalized integer stands for a number from 0 to 1, or from -1 to 1 for a signed type.
+
+A read divides by the type's largest value, three.js's `denormalize`. A write multiplies and rounds, three.js's `normalize`. Then the integer is cut and wrapped into the type, as a JavaScript typed array does. A `Uint8Array` stores 1.2 as 50. `typed_value` gives that integer.
+
+`set`, `set_stored` and `copy_at` write the numbers as the array stores them. They do not normalize, as in three.js.
+
+three.js: `normalized`, `MathUtils.normalize`, `MathUtils.denormalize`, `Int8BufferAttribute` and its kin, `applyMatrix3`, `applyMatrix4`, `applyNormalMatrix`, `transformDirection`, `set`, `copyAt`.
+
+### Why the float view stays
+
+`data` stays a `List[Float32]` for every attribute. It holds what a read returns. An integer attribute also keeps the integers it stores, and every write goes through them first.
+
+The reason is speed. About 150 call sites in 30 modules read an attribute through `component`, `vector3` or `packed`. They include the rasterizers, the raycaster, the morph and skin code, the utilities and the exporters. With integer storage, each of these reads needs a branch on the type and a divide. The float view keeps every one of them as fast as before. An integer attribute pays for its integers only on a write.
+
+The cost is memory. An integer attribute holds its numbers twice.
+
+### Who reads the integers
+
+- The [glTF loader](glTF) reads each vertex attribute in its accessor's component type, with its `normalized` flag. A quantized attribute of `KHR_mesh_quantization` keeps its integers.
+- The glTF exporter writes an integer attribute in its own component type, with `normalized`. It requires `KHR_mesh_quantization` for the types that extension names, as three.js does. A 32-bit integer attribute is written as floats, as three.js converts one.
+- [Scene JSON](Scene-JSON) writes and reads the typed array's name, its integers and `normalized`.
+
+### Where this port differs
+
+- An interleaved attribute is always `Float32`.
+- A `Uint32` or `Int32` attribute reads through a `Float32`, so a value past 2^24 is rounded. three.js reads it as a `Float64`.
+- A write takes a `Float32`. A number at a rounding half can round the other way from three.js's `Float64`.
+- The glTF loader reads `WEIGHTS_0` as floats, because it normalizes the weights. glTF morph targets are read as floats.
+- The glTF exporter writes `JOINTS_0` as unsigned shorts whatever its type.
+- `GeometryCompressionUtils` is not ported. Its encodings need a shader that decodes them, and this renderer has none.
 
 ## GeometryStore
 
@@ -738,6 +836,13 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A rounded box needs positive extents, one segment and a radius that is not negative.
 - An index entry beyond the last vertex raises.
 - A group needs a start and a count that are not negative, and a material index of zero or more.
+- A draw range needs a start and a count that are not negative.
+- A transform that flattens a dimension raises when there are normals to turn.
+- `apply_matrix4`, `apply_normal_matrix` and `transform_direction` need three numbers an item.
+- `set`, `set_stored` and `copy_at` raise on an interleaved attribute, and when the numbers do not fit.
+- `copy_at` needs a source item at least as long as the target item.
+- An integer attribute needs one of the seven component types.
+- `normalize_normals` needs `normal`.
 - A merge needs one geometry at least. The parts must all be indexed or none, and carry the same attributes, item sizes and morph targets.
 - A weld tolerance must be finite and not negative. A crease angle must be finite and not negative.
 - `compute_tangents` needs `position`, `normal` and `uv`.
