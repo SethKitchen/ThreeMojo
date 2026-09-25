@@ -48,6 +48,11 @@ instanced mesh has no colors until the first `set_color_at`, which starts
 every instance at white, as three.js does; a batch member is white until
 set.
 
+An instanced mesh can also give each instance its own morph weights,
+three.js's `setMorphAt`. The renderer morphs each instance by them, where
+three.js reads them from its `morphTexture`. An instance past the end of
+`morphs` wears none.
+
 ## Managing a batch
 
 A batch follows three.js's `BatchedMesh` API. `delete_instance` frees an
@@ -76,10 +81,12 @@ the scene's draws; see `renderers.renderer`.
 
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from render.framebuffer import Color
+from std.math import isfinite
 
 comptime WHITE = Color(255, 255, 255)
 
@@ -122,6 +129,10 @@ struct InstancedMesh(Copyable, Movable):
     # empty until the first `set_color_at`. `color_at` reads an instance
     # past its end as white, and so does the renderer.
     var colors: List[Color]
+    # How much of each morph target each instance wears, three.js's
+    # `morphTexture`, or none at all: empty until the first
+    # `set_morph_at`. An instance with none wears no target.
+    var morphs: List[MorphInfluences]
     # Whether the instances are drawn into the lights' shadow maps, and
     # whether their shadows fall on them: three.js's `castShadow` and
     # `receiveShadow`, both off by default as there.
@@ -172,6 +183,7 @@ struct InstancedMesh(Copyable, Movable):
         self.frustum_culled = frustum_culled
         self.matrices = List[Matrix4](length=count, fill=Matrix4())
         self.colors = List[Color]()
+        self.morphs = List[MorphInfluences]()
         self.cast_shadow = cast_shadow
         self.receive_shadow = receive_shadow
 
@@ -245,6 +257,50 @@ struct InstancedMesh(Copyable, Movable):
         while len(self.colors) < len(self.matrices):
             self.colors.append(WHITE)
         self.colors[index] = color
+
+    def morph_at(self, index: Int) raises -> MorphInfluences:
+        """Return how much of each morph target one instance wears,
+        three.js's `getMorphAt`.
+
+        Args:
+            index: Which instance, from zero.
+
+        Returns:
+            A copy of its weights. None held, every target at zero, when
+            no instance has weights yet or it was appended after they were
+            made.
+
+        Raises:
+            Error: If there is no such instance.
+        """
+        self._check(index)
+        if index >= len(self.morphs):
+            return MorphInfluences()
+        return MorphInfluences(copy=self.morphs[index])
+
+    def set_morph_at(mut self, index: Int, influences: MorphInfluences) raises:
+        """Set how much of each morph target one instance wears, three.js's
+        `setMorphAt`, which copies a mesh's `morphTargetInfluences`.
+
+        The first call gives every instance weights, none held for the
+        rest. The renderer morphs each instance by its own weights, as a
+        mesh is morphed by its own.
+
+        Args:
+            index: Which instance, from zero.
+            influences: Its weights, copied.
+
+        Raises:
+            Error: If there is no such instance, or a weight is not a
+                number.
+        """
+        self._check(index)
+        for target in range(len(influences)):
+            if not isfinite(influences[target]):
+                raise Error("A morph weight must be a number")
+        while len(self.morphs) < len(self.matrices):
+            self.morphs.append(MorphInfluences())
+        self.morphs[index] = MorphInfluences(copy=influences)
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""

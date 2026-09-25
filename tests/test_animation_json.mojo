@@ -183,12 +183,14 @@ def test_a_property_is_a_kind_and_back() raises:
         property_kind(parse_track_name(".morphTargetInfluences[1]")),
         MORPH_INFLUENCE,
     )
-    with assert_raises(contains="not its map"):
-        _ = property_kind(parse_track_name("a.map.offset"))
+    with assert_raises(contains="not its mesh"):
+        _ = property_kind(parse_track_name("a.mesh[0].offset"))
     with assert_raises(contains="property named"):
         _ = property_kind(parse_track_name("a.bones[hip].intensity"))
     with assert_raises(contains="one part of"):
-        _ = property_kind(parse_track_name("a.position[x]"))
+        _ = property_kind(parse_track_name("a.color[r]"))
+    with assert_raises(contains="by x, y or z"):
+        _ = property_kind(parse_track_name("a.position[0]"))
     assert_equal(
         property_path(morph_target(MeshIndex(0), 3)),
         ".morphTargetInfluences[3]",
@@ -787,6 +789,11 @@ def test_a_skinned_mesh_binds_its_bones_and_its_own_properties() raises:
         track("o.visible", "bool", "[true,false]"),
         track(".bones[nobody].position", "vector", "[0,0,0,1,1,1]"),
         track("Other.position", "vector", "[0,0,0,1,1,1]"),
+        # Paths three.js cannot bind: no target of that name, no mesh,
+        # and no material.
+        track(".morphTargetInfluences[smile]", "number", "[0,1]"),
+        track("Other.morphTargetInfluences[smile]", "number", "[0,1]"),
+        track("Other.map.offset", "vector", "[0,0,1,1]"),
     ]
     var scene = Scene()
     var assets = Assets()

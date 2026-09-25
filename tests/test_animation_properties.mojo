@@ -166,7 +166,7 @@ def play_additive(
 def test_every_kind_says_what_it_drives() raises:
     assert_true(VISIBLE.is_valid())
     assert_true(LIGHT_INTENSITY.is_valid())
-    assert_false(TrackKind(40).is_valid())
+    assert_false(TrackKind(47).is_valid())
     assert_false(TrackKind(-1).is_valid())
     assert_true(VISIBLE.is_node())
     assert_false(MORPH_INFLUENCE.is_node())
@@ -183,7 +183,7 @@ def test_every_kind_says_what_it_drives() raises:
     assert_equal(LIGHT_COLOR.component_count(), 3)
     assert_equal(MATERIAL_OPACITY.component_count(), 1)
     assert_equal(VISIBLE.component_count(), 1)
-    assert_equal(TrackKind(40).component_count(), 0)
+    assert_equal(TrackKind(47).component_count(), 0)
 
 
 def test_mesh_and_light_indices_are_checked() raises:

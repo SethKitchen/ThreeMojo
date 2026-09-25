@@ -95,6 +95,8 @@ scene.add_instanced_mesh(forest^)
 | `color_at(index) -> Color`, `set_color_at(index, color)` | One instance's color. three.js: `getColorAt`, `setColorAt`. |
 | `matrices` | Every transform, in order. |
 | `colors` | Every color, in order, or none. three.js: `instanceColor`. |
+| `morph_at(index) -> MorphInfluences`, `set_morph_at(index, influences)` | One instance's morph weights. three.js: `getMorphAt`, `setMorphAt`. |
+| `morphs` | Every instance's morph weights, in order, or none. three.js: `morphTexture`. |
 
 Moving the node moves every instance. The renderer orders every instance on its own: opaque nearest first, translucent furthest first. three.js keeps an instanced mesh's instances together. That draws a translucent instance over one it is behind when the two were added the other way round. It culls each instance on its own, so an instance out of view costs nothing. three.js culls the whole group by one bound.
 
@@ -105,6 +107,8 @@ An instance index is a plain number, as three.js's `instanceId` is. An index tha
 ### Instance colors
 
 An instance's color multiplies the material's color, as a vertex color does. The two rasterizers see the same result, because the color is on each prepared corner. A geometry's own vertex colors multiply it again. The alpha is not changed.
+
+An instance's morph weights work as a mesh's do: the renderer morphs each instance by its own weights. An instanced mesh has no weights until the first `set_morph_at`. That call gives every other instance no weights, so it wears no target. A weight that is not a number raises.
 
 An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. An instance appended to `matrices` after the colors has no color. `color_at` reads it as white, and the next `set_color_at` gives it white. The renderer also draws an instance past the end of `colors` in white, as three.js does. It ignores a color past the last instance.
 

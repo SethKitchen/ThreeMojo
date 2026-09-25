@@ -297,6 +297,10 @@ from animation.keyframe_track import (
     MATERIAL_EMISSIVE_INTENSITY,
     MATERIAL_ENV_MAP_INTENSITY,
     MATERIAL_IOR,
+    MATERIAL_MAP_CENTER,
+    MATERIAL_MAP_OFFSET,
+    MATERIAL_MAP_REPEAT,
+    MATERIAL_MAP_ROTATION,
     MATERIAL_METALNESS,
     MATERIAL_OPACITY,
     MATERIAL_REFLECTIVITY,
@@ -309,8 +313,11 @@ from animation.keyframe_track import (
     NODE_NAME,
     ORTHOGRAPHIC_SLOT,
     POSITION,
+    POSITION_ELEMENT,
     QUATERNION,
+    ROTATION_ELEMENT,
     SCALE,
+    SCALE_ELEMENT,
     TrackKind,
     TrackTarget,
     VISIBLE,
@@ -323,9 +330,12 @@ from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from materials.material import MAX_IOR, MIN_IOR
+from math.euler import Euler
 from math.quaternion import Quaternion
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
+from render.texture_store import NO_TEXTURE, TextureId
 from std.math import floor, inf, isfinite
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
@@ -808,6 +818,12 @@ def read_target(
         return _read_camera(cameras, target)
     if kind.is_node():
         ref held = scene.get(NodeId(target.index))
+        if kind == POSITION_ELEMENT:
+            return [_axis(held.position, target.slot), 0, 0, 0]
+        if kind == SCALE_ELEMENT:
+            return [_axis(held.scale, target.slot), 0, 0, 0]
+        if kind == ROTATION_ELEMENT:
+            return [_euler_axis(held.quaternion, target.slot), 0, 0, 0]
         if kind == QUATERNION:
             return [
                 held.quaternion.x,
@@ -847,6 +863,15 @@ def read_target(
             number = light.penumbra
         return [number, 0, 0, 0]
     ref material = assets.materials.materials[target.index]
+    if kind.is_map():
+        ref laid = assets.textures.textures[_map_of(assets, target).value]
+        if kind == MATERIAL_MAP_OFFSET:
+            return [laid.offset.x, laid.offset.y, 0, 0]
+        if kind == MATERIAL_MAP_REPEAT:
+            return [laid.repeat.x, laid.repeat.y, 0, 0]
+        if kind == MATERIAL_MAP_CENTER:
+            return [laid.center.x, laid.center.y, 0, 0]
+        return [laid.rotation.to(RADIAN), 0, 0, 0]
     if kind == MATERIAL_TRANSPARENT:
         return [Float32(1) if material.transparent else Float32(0), 0, 0, 0]
     if kind == MATERIAL_WIREFRAME:
@@ -883,6 +908,68 @@ def read_target(
     else:
         number = material.ior
     return [number, 0, 0, 0]
+
+
+def _axis(vector: Vector3, axis: Int) -> Float32:
+    """Return one number of a vector: 0 for x, 1 for y, 2 for z."""
+    if axis == 0:
+        return vector.x
+    if axis == 1:
+        return vector.y
+    return vector.z
+
+
+def _with_axis(vector: Vector3, axis: Int, value: Float32) -> Vector3:
+    """Return a vector with one number replaced."""
+    var out = vector
+    if axis == 0:
+        out.x = value
+    elif axis == 1:
+        out.y = value
+    else:
+        out.z = value
+    return out
+
+
+def _euler_axis(turn: Quaternion, axis: Int) raises -> Float32:
+    """Return one angle of a turn read as x, y and z angles, in radians,
+    three.js's `rotation[axis]`."""
+    var angles = Euler.from_quaternion(turn)
+    if axis == 0:
+        return angles.x.to(RADIAN)
+    if axis == 1:
+        return angles.y.to(RADIAN)
+    return angles.z.to(RADIAN)
+
+
+def _with_euler_axis(
+    turn: Quaternion, axis: Int, radians: Float32
+) raises -> Quaternion:
+    """Return a turn with one of its x, y and z angles replaced, as setting
+    three.js's `rotation[axis]` turns its quaternion."""
+    var angles = Euler.from_quaternion(turn)
+    if axis == 0:
+        angles.x = Angle(radians, RADIAN)
+    elif axis == 1:
+        angles.y = Angle(radians, RADIAN)
+    else:
+        angles.z = Angle(radians, RADIAN)
+    return angles.to_quaternion()
+
+
+def _map_of(assets: Assets, target: TrackTarget) raises -> TextureId:
+    """Return the texture a map track's material wears as its map.
+
+    Raises:
+        Error: If the material has no map, or names a texture the assets
+            do not have. three.js cannot bind `.map` there either.
+    """
+    var map = assets.materials.materials[target.index].map
+    if map == NO_TEXTURE:
+        raise Error("A map track needs a material with a map")
+    if map.value < 0 or map.value >= assets.textures.count():
+        raise Error("A map track's material names a texture that is not there")
+    return map
 
 
 def _read_camera(cameras: CameraList, target: TrackTarget) -> List[Float32]:
@@ -1061,7 +1148,17 @@ def write_target(
         return
     if kind.is_node():
         ref placed = scene.node(NodeId(target.index))
-        if kind == POSITION:
+        if kind == POSITION_ELEMENT:
+            placed.position = _with_axis(
+                placed.position, target.slot, values[at]
+            )
+        elif kind == SCALE_ELEMENT:
+            placed.scale = _with_axis(placed.scale, target.slot, values[at])
+        elif kind == ROTATION_ELEMENT:
+            placed.quaternion = _with_euler_axis(
+                placed.quaternion, target.slot, values[at]
+            )
+        elif kind == POSITION:
             placed.position = Vector3(
                 values[at], values[at + 1], values[at + 2]
             )
@@ -1102,6 +1199,18 @@ def write_target(
             light.validate()
         return
     ref material = assets.materials.materials[target.index]
+    if kind.is_map():
+        var map = _map_of(assets, target)
+        ref laid = assets.textures.textures[map.value]
+        if kind == MATERIAL_MAP_OFFSET:
+            laid.offset = Vector2(values[at], values[at + 1])
+        elif kind == MATERIAL_MAP_REPEAT:
+            laid.repeat = Vector2(values[at], values[at + 1])
+        elif kind == MATERIAL_MAP_CENTER:
+            laid.center = Vector2(values[at], values[at + 1])
+        else:
+            laid.rotation = Angle(values[at], RADIAN)
+        return
     if kind == MATERIAL_TRANSPARENT:
         material.transparent = values[at] >= 0.5
         return
@@ -1213,6 +1322,8 @@ def check_target(
             "A track must name a node, a mesh, a light, a material or a"
             " camera that is there"
         )
+    if kind.is_map():
+        _ = _map_of(assets, target)
 
 
 def resolve_targets(
@@ -1252,7 +1363,7 @@ def resolve_targets(
             raise Error("A group member must be a node in the scene")
         var reached = List[TrackTarget]()
         if kind.is_node():
-            reached.append(TrackTarget(kind, node, 0))
+            reached.append(TrackTarget(kind, node, target.slot))
         elif kind.is_light():
             for light in range(len(scene.lights)):
                 if scene.lights[light].node.value == node:
@@ -2542,6 +2653,69 @@ struct AnimationMixer(Movable):
                 track that drives a camera.
         """
         self._update(scene, assets, True, cameras, True, delta)
+
+    def _zero_time(mut self):
+        """Set the mixer's clock and every action's time to zero, the first
+        half of three.js's `setTime`."""
+        self.elapsed = 0
+        for index in range(len(self.actions)):
+            self.actions[index].phase = 0
+
+    def set_time(mut self, mut scene: Scene, time: Duration) raises:
+        """Play every action from its start to `time`, three.js's `setTime`.
+
+        The mixer's clock and each action's time go to zero, and one update
+        then moves them on by `time`. Fades, warps and start times are
+        read on the new clock.
+
+        Args:
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            time: Where to put the actions.
+
+        Raises:
+            Error: As `update` does.
+        """
+        self._zero_time()
+        self.update(scene, time)
+
+    def set_time(
+        mut self, mut scene: Scene, mut assets: Assets, time: Duration
+    ) raises:
+        """Play every action from its start to `time`, three.js's `setTime`,
+        with the assets the tracks can name.
+
+        Args:
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            assets: The assets whose materials the tracks name.
+            time: Where to put the actions.
+
+        Raises:
+            Error: As `update` does.
+        """
+        self._zero_time()
+        self.update(scene, assets, time)
+
+    def set_time(
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        mut cameras: CameraList,
+        time: Duration,
+    ) raises:
+        """Play every action from its start to `time`, three.js's `setTime`,
+        with the assets and the cameras the tracks can name.
+
+        Args:
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            assets: The assets whose materials the tracks name.
+            cameras: The cameras the tracks name.
+            time: Where to put the actions.
+
+        Raises:
+            Error: As `update` does.
+        """
+        self._zero_time()
+        self.update(scene, assets, cameras, time)
 
     def _update(
         mut self,

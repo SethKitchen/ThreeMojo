@@ -125,7 +125,8 @@ def bezier() raises -> KeyframeTrack:
 
 def test_the_new_kinds_say_what_they_drive() raises:
     assert_true(TrackKind(39).is_valid())
-    assert_false(TrackKind(40).is_valid())
+    assert_true(TrackKind(46).is_valid())
+    assert_false(TrackKind(47).is_valid())
     assert_true(NODE_NAME.is_node())
     assert_true(NODE_NAME.is_string())
     assert_true(NODE_NAME.is_discrete())

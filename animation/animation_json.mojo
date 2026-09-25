@@ -42,7 +42,7 @@ for glTF's cubic spline, and writes the tangents as values that read back
 as keys. A track in three.js's older `keys` form is refused; three.js
 writes `times` and `values`. A track whose `type` is not the type of its
 property is refused, where three.js builds a track of the wrong type and
-binds it anyway. A clip's `userData` is written as `{}` and not read.
+binds it anyway.
 """
 
 from animation.animation_clip import (
@@ -74,6 +74,10 @@ from animation.keyframe_track import (
     MATERIAL_EMISSIVE_INTENSITY,
     MATERIAL_ENV_MAP_INTENSITY,
     MATERIAL_IOR,
+    MATERIAL_MAP_CENTER,
+    MATERIAL_MAP_OFFSET,
+    MATERIAL_MAP_REPEAT,
+    MATERIAL_MAP_ROTATION,
     MATERIAL_METALNESS,
     MATERIAL_OPACITY,
     MATERIAL_REFLECTIVITY,
@@ -86,8 +90,11 @@ from animation.keyframe_track import (
     MORPH_INFLUENCE,
     NODE_NAME,
     POSITION,
+    POSITION_ELEMENT,
     QUATERNION,
+    ROTATION_ELEMENT,
     SCALE,
+    SCALE_ELEMENT,
     SMOOTH,
     STEP,
     TrackKind,
@@ -95,7 +102,16 @@ from animation.keyframe_track import (
     VISIBLE,
 )
 from exporters.json_writer import JsonWriter
-from loaders.json import ARRAY, BOOLEAN, JsonDocument, NO_NODE, NUMBER, OBJECT
+from core.user_data import user_data_of
+from loaders.json import (
+    ARRAY,
+    BOOLEAN,
+    JsonDocument,
+    NO_NODE,
+    NUMBER,
+    OBJECT,
+    parse_json,
+)
 from units.si import Duration, SECOND
 
 # three.js's interpolation constants, as a track's JSON writes them.
@@ -348,7 +364,12 @@ def property_kind(path: TrackPath) raises -> TrackKind:
     A node's `morphTargetInfluences` is `MORPH_INFLUENCE`, which the
     caller makes `SKINNED_MORPH_INFLUENCE` for a skinned mesh. A `color`
     with no object is a light's; a mesh's color is `material.color`. A
-    bone's property is a node's, since a bone is a node here.
+    bone's property is a node's, since a bone is a node here. One number
+    of a `position`, a `scale` or a `rotation`, `[x]`, `[y]` or `[z]`, is
+    an element kind; `element_axis` says which. A `map`'s `offset`,
+    `repeat`, `rotation` and `center` are the map kinds of the node's
+    material. `materials` names a material's properties too, though the
+    loader binds it to nothing, as three.js does.
 
     Args:
         path: The parsed name.
@@ -357,23 +378,43 @@ def property_kind(path: TrackPath) raises -> TrackKind:
         The kind.
 
     Raises:
-        Error: If the object is not a material or a bone, or the property
-            is not one a track here drives, or a property other than
-            `morphTargetInfluences` has an index: three.js can drive one
-            number of a vector, and this port cannot.
+        Error: If the object is not a material, a map or a bone, the
+            property is not one a track here drives, or a property has
+            an index it cannot take: only `morphTargetInfluences`, and
+            `position`, `scale` and `rotation` by an axis, take one.
     """
     var names = _node_properties()
     var kinds = _node_kinds()
-    if path.object_name == "material":
+    if path.object_name == "material" or path.object_name == "materials":
         names = _material_properties()
         kinds = _material_kinds()
+    elif path.object_name == "map":
+        names = ["offset", "repeat", "rotation", "center"]
+        kinds = [
+            MATERIAL_MAP_OFFSET,
+            MATERIAL_MAP_REPEAT,
+            MATERIAL_MAP_ROTATION,
+            MATERIAL_MAP_CENTER,
+        ]
     elif path.object_name == "bones":
         names = ["position", "scale", "quaternion", "visible", "name"]
     elif path.object_name != "":
         raise Error(
-            "A track can drive a node, its material or a bone, not its "
+            "A track can drive a node, its material, its map or a bone,"
+            " not its "
             + path.object_name
         )
+    if path.object_name != "map" and path.property_index != "":
+        # One number of a vector, three.js's `ArrayElement` binding.
+        if path.property_name == "position":
+            _ = element_axis(path)
+            return POSITION_ELEMENT
+        if path.property_name == "scale":
+            _ = element_axis(path)
+            return SCALE_ELEMENT
+        if path.property_name == "rotation":
+            _ = element_axis(path)
+            return ROTATION_ELEMENT
     for index in range(len(names)):  # pragma: no branch
         if names[index] != path.property_name:
             continue
@@ -388,6 +429,34 @@ def property_kind(path: TrackPath) raises -> TrackKind:
     raise Error("A track cannot drive a property named " + path.property_name)
 
 
+def element_axis(path: TrackPath) raises -> Int:
+    """Return the axis an element path names, three.js's `[x]`, `[y]` and
+    `[z]` on a vector.
+
+    Args:
+        path: The parsed name.
+
+    Returns:
+        0 for x, 1 for y and 2 for z.
+
+    Raises:
+        Error: If the index is not `x`, `y` or `z`. three.js reads a
+            number there as a key of the vector, which it does not have.
+    """
+    if path.property_index == "x":
+        return 0
+    if path.property_index == "y":
+        return 1
+    if path.property_index == "z":
+        return 2
+    raise Error(
+        "A track can drive one number of "
+        + path.property_name
+        + " by x, y or z, not by "
+        + path.property_index
+    )
+
+
 def property_path(target: TrackTarget) -> String:
     """Return the part of a track name after the node, for a target: the
     other way from `property_kind`.
@@ -396,12 +465,25 @@ def property_path(target: TrackTarget) -> String:
         target: What the track drives.
 
     Returns:
-        `.position`, `.material.opacity`, `.morphTargetInfluences[2]` and
-        the like, or an empty string for a kind that is not valid.
+        `.position`, `.material.opacity`, `.morphTargetInfluences[2]`,
+        `.position[x]`, `.map.offset` and the like, or an empty string for a kind that is not valid.
     """
     var kind = target.kind
     if kind.is_morph():
         return ".morphTargetInfluences[" + String(target.slot) + "]"
+    if kind.is_element():
+        var axes: List[String] = ["x", "y", "z"]
+        var names: List[String] = ["position", "scale", "rotation"]
+        return (
+            "."
+            + names[kind.value - POSITION_ELEMENT.value]
+            + "["
+            + axes[target.slot]
+            + "]"
+        )
+    if kind.is_map():
+        var names: List[String] = ["offset", "repeat", "rotation", "center"]
+        return ".map." + names[kind.value - MATERIAL_MAP_OFFSET.value]
     var kinds = _material_kinds()
     for index in range(len(kinds)):  # pragma: no branch
         if kinds[index] == kind:
@@ -548,8 +630,9 @@ def write_clip(
         ADDITIVE_ANIMATION_BLEND_MODE if clip.blend_mode
         == ADDITIVE_BLEND_MODE else NORMAL_ANIMATION_BLEND_MODE
     )
+    # three.js writes the user data as the text of a JSON object.
     writer.key("userData")
-    writer.string("{}")
+    writer.string(clip.user_data.to_json())
     writer.end_object()
 
 
@@ -824,4 +907,12 @@ def read_clip(
             # three.js's `parse` hands the duration to the constructor as
             # it is, and a negative one means work it out.
             length = Duration(Float32(seconds), SECOND)
-    return AnimationClip(name, tracks^, blend, length)
+    var made = AnimationClip(name, tracks^, blend, length)
+    if document.has(clip, "userData"):
+        # three.js's `JSON.parse( json.userData || '{}' )`: the text of an
+        # object, and an empty text is none.
+        var text = document.string(document.get(clip, "userData"))
+        if text != "":
+            var data = parse_json(text)
+            made.user_data = user_data_of(data, data.root())
+    return made^
