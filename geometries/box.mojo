@@ -5,22 +5,21 @@
 
 """A box, from three.js `src/geometries/BoxGeometry.js`.
 
-The box is built from twenty-four vertices rather than eight, four per face.
-Sharing the eight corners would be smaller, but a corner shared between three
-faces can only carry one normal, so the faces could never be shaded
-separately. That is no longer hypothetical: each of a face's four vertices
-carries that face's outward normal, which is what keeps a cube's edges
-crisp when the renderer interpolates normals across a triangle.
+The box is six planes, each three.js's `buildPlane`: a grid of
+`segments + 1` by `segments + 1` vertices, the planes in three.js's order
++x, -x, +y, -y, +z, -z. So a face's vertices, its triangles and its
+texture coordinates are three.js's, in three.js's order, and an export or
+a hit's triangle names what it names in three.js.
 
-Faces are emitted in a fixed order, two triangles each, so triangle index
-divided by two identifies the face. `examples/cubes.mojo` uses exactly that to
-shade the sides differently.
+A corner is not shared between faces. Each face's vertices carry that
+face's outward normal, which keeps a box's edges crisp when the renderer
+interpolates normals across a triangle.
 
-Each face is also a group, three.js's `addGroup` in `buildPlane`, so a
-mesh that wears a list of six materials gives each face its own. The
-material index of a face is three.js's, not its place in this order:
-+x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. So a list of
-materials written for a three.js box dresses this box the same way.
+Each face is a group, three.js's `addGroup` in `buildPlane`, with its
+material index: +x is 0, -x is 1, +y is 2, -y is 3, +z is 4 and -z is 5. A
+mesh that wears a list of six materials gives each face its own, as in
+three.js. With one segment a side, a face is two triangles, so the face of
+triangle `t` is `t // 2`.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -31,175 +30,161 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from math.vector3 import Vector3
 from units.si import Length
 
 
-def _push(mut data: List[Float32], x: Float32, y: Float32, z: Float32):
-    """Append one vertex position to a flat attribute array."""
-    data.append(x)
-    data.append(y)
-    data.append(z)
+struct _Planes:
+    """The arrays the six planes are written into, and where the next one
+    starts: three.js's `vertices`, `normals`, `uvs`, `indices`,
+    `numberOfVertices` and `groupStart`."""
+
+    var positions: List[Float32]
+    var normals: List[Float32]
+    var uvs: List[Float32]
+    var index: List[Int]
+    var vertices: Int
+    var group_start: Int
+    # Each face's group: its start, count and material index.
+    var groups: List[Int]
+
+    def __init__(out self):
+        """Start with nothing written."""
+        self.positions = List[Float32]()
+        self.normals = List[Float32]()
+        self.uvs = List[Float32]()
+        self.index = List[Int]()
+        self.vertices = 0
+        self.group_start = 0
+        self.groups = List[Int]()
 
 
-def _face(
-    mut data: List[Float32],
-    mut normals: List[Float32],
-    mut uvs: List[Float32],
-    a: Vector3,
-    b: Vector3,
-    c: Vector3,
-    d: Vector3,
-    nx: Float32,
-    ny: Float32,
-    nz: Float32,
+def _plane(
+    mut planes: _Planes,
+    u: Int,
+    v: Int,
+    w: Int,
+    udir: Float32,
+    vdir: Float32,
+    width: Float32,
+    height: Float32,
+    depth: Float32,
+    grid_x: Int,
+    grid_y: Int,
+    material: Int,
 ):
-    """Append one face's four corners, with its normal and texture coordinates.
+    """Write one face, three.js's `buildPlane`.
 
-    The corners arrive counter-clockwise from the face's bottom-left seen from
-    outside, so the texture covers each face once from (0,0) at that corner to
-    (1,1) diagonally opposite. Every face gets the whole image, which is what
-    three.js's BoxGeometry does too.
+    Args:
+        planes: The arrays, and where this face starts.
+        u: The axis across the face: 0 for x, 1 for y and 2 for z.
+        v: The axis up the face.
+        w: The axis the face faces along.
+        udir: The direction `u` runs in, one or minus one.
+        vdir: The direction `v` runs in.
+        width: The face's extent along `u`.
+        height: Its extent along `v`.
+        depth: How far it lies along `w`, signed: its half is the face's
+            place, and its sign the normal's.
+        grid_x: Segments across.
+        grid_y: Segments up.
+        material: The group's material index.
     """
-    var u = [Float32(0), Float32(1), Float32(1), Float32(0)]
-    var v = [Float32(0), Float32(0), Float32(1), Float32(1)]
-    var corners = [a, b, c, d]
-    for corner in range(4):  # pragma: no branch
-        _push(data, corners[corner].x, corners[corner].y, corners[corner].z)
-        _push(normals, nx, ny, nz)
-        uvs.append(u[corner])
-        uvs.append(v[corner])
+    var segment_width = width / Float32(grid_x)
+    var segment_height = height / Float32(grid_y)
+    var width_half = width / 2
+    var height_half = height / 2
+    var depth_half = depth / 2
+    var grid_x1 = grid_x + 1
+    var grid_y1 = grid_y + 1
+    # A box has at least one segment a side: every loop here runs.
+    for iy in range(grid_y1):  # pragma: no branch
+        var y = Float32(iy) * segment_height - height_half
+        for ix in range(grid_x1):  # pragma: no branch
+            var x = Float32(ix) * segment_width - width_half
+            var vector = SIMD[DType.float32, 4](0)
+            vector[u] = x * udir
+            vector[v] = y * vdir
+            vector[w] = depth_half
+            planes.positions.extend([vector[0], vector[1], vector[2]])
+            var normal = SIMD[DType.float32, 4](0)
+            normal[w] = 1 if depth > 0 else -1
+            planes.normals.extend([normal[0], normal[1], normal[2]])
+            planes.uvs.append(Float32(ix) / Float32(grid_x))
+            planes.uvs.append(1 - Float32(iy) / Float32(grid_y))
+    var start = planes.vertices
+    for iy in range(grid_y):  # pragma: no branch
+        for ix in range(grid_x):  # pragma: no branch
+            var a = start + ix + grid_x1 * iy
+            var b = start + ix + grid_x1 * (iy + 1)
+            var c = start + (ix + 1) + grid_x1 * (iy + 1)
+            var d = start + (ix + 1) + grid_x1 * iy
+            planes.index.extend([a, b, d, b, c, d])
+    var count = grid_x * grid_y * 6
+    planes.groups.extend([planes.group_start, count, material])
+    planes.group_start += count
+    planes.vertices += grid_x1 * grid_y1
 
 
-def _quad(mut index: List[Int], start: Int):
-    """Append the two triangles of a face whose four vertices begin at `start`.
-
-    Wound counter-clockwise seen from outside, which is what lets a reversed
-    winding on screen identify a face pointing away.
-    """
-    index.append(start)
-    index.append(start + 1)
-    index.append(start + 2)
-    index.append(start)
-    index.append(start + 2)
-    index.append(start + 3)
-
-
-def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
-    """Return a box centered on the origin, in meters.
+def box(
+    width: Length,
+    height: Length,
+    depth: Length,
+    width_segments: Int = 1,
+    height_segments: Int = 1,
+    depth_segments: Int = 1,
+) raises -> BufferGeometry:
+    """Return a box centered on the origin, three.js's `BoxGeometry`.
 
     Args:
         width: Extent along x.
         height: Extent along y.
         depth: Extent along z.
+        width_segments: Segments along x. One by default, as in three.js.
+        height_segments: Segments along y.
+        depth_segments: Segments along z.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes, an
-        index buffer, and a group per face, its faces ordered front, back,
-        left, right, top, bottom.
+        index, and a group per face, its faces in three.js's order: +x,
+        -x, +y, -y, +z, -z.
 
     Raises:
-        Error: If any extent is not positive.
+        Error: If any extent is not positive, or any segment count is
+            below one. three.js floors a count and takes what it gets.
     """
     if width.value <= 0 or height.value <= 0 or depth.value <= 0:
         raise Error("A box needs positive extents")
-
-    var x = width.value / 2
-    var y = height.value / 2
-    var z = depth.value / 2
-
-    var data = List[Float32]()
-    var normals = List[Float32]()
-    var uvs = List[Float32]()
-
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(-x, -y, z),
-        Vector3(x, -y, z),
-        Vector3(x, y, z),
-        Vector3(-x, y, z),
-        0,
-        0,
-        1,
-    )  # front
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(x, -y, -z),
-        Vector3(-x, -y, -z),
-        Vector3(-x, y, -z),
-        Vector3(x, y, -z),
-        0,
-        0,
-        -1,
-    )  # back
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(-x, -y, -z),
-        Vector3(-x, -y, z),
-        Vector3(-x, y, z),
-        Vector3(-x, y, -z),
-        -1,
-        0,
-        0,
-    )  # left
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(x, -y, z),
-        Vector3(x, -y, -z),
-        Vector3(x, y, -z),
-        Vector3(x, y, z),
-        1,
-        0,
-        0,
-    )  # right
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(-x, y, z),
-        Vector3(x, y, z),
-        Vector3(x, y, -z),
-        Vector3(-x, y, -z),
-        0,
-        1,
-        0,
-    )  # top
-    _face(
-        data,
-        normals,
-        uvs,
-        Vector3(-x, -y, -z),
-        Vector3(x, -y, -z),
-        Vector3(x, -y, z),
-        Vector3(-x, -y, z),
-        0,
-        -1,
-        0,
-    )  # bottom
-
-    var index = List[Int]()
-    # A box always has six faces, so this cannot run zero times.
-    for face in range(6):  # pragma: no branch
-        _quad(index, face * 4)
-
+    if width_segments < 1 or height_segments < 1 or depth_segments < 1:
+        raise Error("A box needs at least one segment a side")
+    var x = width.value
+    var y = height.value
+    var z = depth.value
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    # three.js's material index of each face, in the order the faces are
-    # built here: front, back, left, right, top, bottom.
-    var dressed: List[Int] = [4, 5, 1, 0, 2, 3]
+    var planes = _Planes()
+    # three.js's six calls, axis by axis: x is 0, y 1 and z 2.
+    _plane(planes, 2, 1, 0, -1, -1, z, y, x, depth_segments, height_segments, 0)
+    _plane(planes, 2, 1, 0, 1, -1, z, y, -x, depth_segments, height_segments, 1)
+    _plane(planes, 0, 2, 1, 1, 1, x, z, y, width_segments, depth_segments, 2)
+    _plane(planes, 0, 2, 1, 1, -1, x, z, -y, width_segments, depth_segments, 3)
+    _plane(planes, 0, 1, 2, 1, -1, x, y, z, width_segments, height_segments, 4)
+    _plane(
+        planes, 0, 1, 2, -1, -1, x, y, -z, width_segments, height_segments, 5
+    )
+    var groups = planes.groups.copy()
+    geometry.set_attribute(
+        String(POSITION), BufferAttribute(planes.positions.copy(), 3)
+    )
+    geometry.set_attribute(
+        String(NORMAL), BufferAttribute(planes.normals.copy(), 3)
+    )
+    geometry.set_attribute(String(UV), BufferAttribute(planes.uvs.copy(), 2))
+    geometry.set_index(planes.index.copy())
     for face in range(6):  # pragma: no branch
-        geometry.add_group(face * 6, 6, MaterialIndex(dressed[face]))
+        geometry.add_group(
+            groups[face * 3],
+            groups[face * 3 + 1],
+            MaterialIndex(groups[face * 3 + 2]),
+        )
     return geometry^
 
 

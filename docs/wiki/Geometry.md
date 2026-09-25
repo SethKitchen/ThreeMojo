@@ -168,17 +168,29 @@ The cost is memory. An integer attribute holds its numbers twice.
 ```mojo
 var solid = cube(Length(1.0, METER))
 var brick = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER))
+var grid = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER), 4, 2, 1)
 ```
 
-A box has twenty-four vertices, four per face. Each face carries its own normal and texture coordinates. The whole image covers each face once.
+The box is three.js's `BoxGeometry`, built by its `buildPlane`. The three counts after the sizes are `width_segments`, `height_segments` and `depth_segments`, one each by default. Each face is a grid of segments, with its own normal and texture coordinates, and the whole image covers each face once.
+
+The faces come in three.js's order: +x, -x, +y, -y, +z, -z. Each face is a group, with material indices 0 to 5 in that order. The vertices, the triangles and the texture coordinates are three.js's, in three.js's order. So a hit's `triangle` is three.js's `faceIndex`, and an exported box matches three.js's.
+
+With one segment a side, a face is two triangles, and the face of triangle `t` is `t // 2`. A count below one is refused. three.js rounds a count down and takes what it gets.
 
 ## Sphere
 
 ```mojo
 var ball = sphere(Length(1.0, METER), 24, 16)   # segments around, rings down
+var band = sphere(
+    Length(1.0, METER), 24, 16,
+    Angle(0.0, RADIAN), Angle(pi, RADIAN),     # phi: half the way around
+    Angle(0.5, RADIAN), Angle(1.0, RADIAN),    # theta: a band below the pole
+)
 ```
 
-A latitude and longitude sphere. Each normal points away from the center, so shading is smooth. `u` runs once around the equator. `v` runs from one at the north pole to zero at the south pole. It needs at least three segments and two rings.
+A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points away from the center, so shading is smooth. `u` runs once around the part drawn. `v` runs from one at the top of the part to zero at its bottom. It needs at least three segments and two rings.
+
+`phi_start` and `phi_length` say where the surface starts around the y axis and how far it runs, a whole turn by default. `theta_start` and `theta_length` say where it starts down from the north pole and how far it runs, pole to pole by default. As in three.js, a part that reaches a pole ends in a point there. A part that stops short of a pole has a full ring of triangles at its edge. An angle that is not finite is refused.
 
 ## Plane
 
@@ -322,7 +334,10 @@ With a `Curve3`, the tube is three.js's `TubeGeometry`. It samples `tubular_segm
 ```mojo
 var flat = shape_geometry(plate)                    # twelve runs a curve
 var flat = shape_geometry(plate, 32)                # a finer sample
+var flat = shape_geometry([plate, badge])           # one group per shape
 ```
+
+A list of shapes is three.js's `ShapeGeometry` given an array. The shapes follow one another in one geometry, and each is a group whose material index is its place in the list.
 
 A [shape](Curves) filled in: a flat surface in the plane where z is zero, facing the positive z axis. The outline and its holes are sampled into points, and the points are cut into triangles. The texture coordinate of a vertex is the vertex, which is three.js's default generator.
 
@@ -375,7 +390,28 @@ A corner moves along its miter, the line that keeps both of its edges parallel t
 
 An extrusion has no index buffer, and its normals come from its triangles, so every vertex belongs to one face. A bevel of three segments is three flat bands. three.js does the same, and for the same reason: two walls that meet at a corner do not agree about the texture coordinate there.
 
-A wall is measured along x or along y, whichever it runs further in, and up the negative of z. That is three.js's own generator.
+A wall is measured along x or along y, whichever it runs further in, and up the negative of z. That is three.js's own generator, `WorldUVGenerator`.
+
+### A UV generator of your own
+
+```mojo
+def halved(vertices: List[Float32], a: Int, b: Int, c: Int) -> List[Vector2]:
+    ...                                          # three coordinates for a cap triangle
+
+var solid = extrude(plate, Length(2, METER), uv_generator=UVGenerator(halved, walls))
+```
+
+`uv_generator` is three.js's `UVGenerator` option, on every form of `extrude`. A `UVGenerator` holds two functions. `top` gives a cap triangle's three coordinates, and `side_wall` gives a wall quad's four. Each gets the vertices written so far, three floats each, and the indices of its corners among them, as three.js's `generateTopUV` and `generateSideWallUV` get them.
+
+The four wall coordinates go to the quad's six vertices in the order a, b, d, b, c, d, as three.js's `f4` puts them. A generator that gives another count is refused. `UVGenerator()` is `WorldUVGenerator`.
+
+### Several shapes
+
+`extrude([plate, badge], depth)` is three.js's `ExtrudeGeometry` given an array. The shapes follow one another in one geometry, and each adds its own two groups: its caps wear material 0 and its walls material 1.
+
+### Where this port differs
+
+A shape is cut into triangles by this port's own ear clipping. three.js turns an outline clockwise and cuts it with earcut. So the same surface can come in another vertex order, and a cap can take the other diagonal. The tests compare a shape and an extrusion with three.js as a surface. Each group has the same triangles by count and by area, and the same vertices, each with its normal and texture coordinate. See issue #215.
 
 ### Along a path
 

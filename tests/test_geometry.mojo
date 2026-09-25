@@ -398,14 +398,20 @@ def test_a_box_can_be_specified_in_feet() raises:
 
 
 def test_each_face_is_two_consecutive_triangles() raises:
-    # examples/cubes.mojo shades by triangle // 2, which relies on this.
+    # examples/cubes.mojo shades by triangle // 2, which relies on this:
+    # both triangles of a face carry the face's normal, three.js's
+    # `(a, b, d)` and `(b, c, d)`.
     var geometry = cube(Length(1.0, METER))
+    ref normals = geometry.attribute_view(String(NORMAL))
     for face in range(6):
-        var first = geometry.corner(face * 2, 0)
-        var second = geometry.corner(face * 2 + 1, 0)
-        assert_equal(first.x, second.x)
-        assert_equal(first.y, second.y)
-        assert_equal(first.z, second.z)
+        var facing = normals.vector3(face * 4)
+        for triangle in [face * 2, face * 2 + 1]:
+            for corner in range(3):
+                var at = geometry.corner_index(triangle, corner)
+                var here = normals.vector3(at)
+                assert_equal(here.x, facing.x)
+                assert_equal(here.y, facing.y)
+                assert_equal(here.z, facing.z)
 
 
 def test_a_box_with_no_extent_is_rejected() raises:
@@ -424,12 +430,13 @@ def test_a_box_carries_a_normal_per_vertex() raises:
 
 
 def test_a_face_four_vertices_share_one_normal() raises:
-    # What keeps a cube's edges crisp when normals are interpolated.
+    # What keeps a cube's edges crisp when normals are interpolated. The
+    # first face is +x, as in three.js.
     var geometry = cube(Length(1.0, METER))
     ref normals = geometry.attribute_view(String(NORMAL))
     for corner in range(4):
         var direction = normals.vector3(corner)
-        assert_almost_equal(direction.z, Float32(1), atol=TOLERANCE)
+        assert_almost_equal(direction.x, Float32(1), atol=TOLERANCE)
 
 
 def test_box_normals_point_outwards_and_are_unit_length() raises:
@@ -568,18 +575,16 @@ def test_a_box_gives_every_face_the_whole_image() raises:
     assert_true(geometry.has_attribute(String(UV)))
     ref uvs = geometry.attribute_view(String(UV))
     assert_equal(uvs.count(), 24)
-    # Each face's four corners run (0,0) (1,0) (1,1) (0,1) counter-clockwise
-    # from its bottom-left seen from outside.
+    # Each face's four corners are three.js's grid, row by row from the
+    # top: (0,1) (1,1) (0,0) (1,0).
+    var expected: List[Float32] = [0, 1, 1, 1, 0, 0, 1, 0]
     for face in range(6):
         var base = face * 4
-        assert_equal(uvs.component(base, 0), Float32(0))
-        assert_equal(uvs.component(base, 1), Float32(0))
-        assert_equal(uvs.component(base + 1, 0), Float32(1))
-        assert_equal(uvs.component(base + 1, 1), Float32(0))
-        assert_equal(uvs.component(base + 2, 0), Float32(1))
-        assert_equal(uvs.component(base + 2, 1), Float32(1))
-        assert_equal(uvs.component(base + 3, 0), Float32(0))
-        assert_equal(uvs.component(base + 3, 1), Float32(1))
+        for corner in range(4):
+            assert_equal(uvs.component(base + corner, 0), expected[corner * 2])
+            assert_equal(
+                uvs.component(base + corner, 1), expected[corner * 2 + 1]
+            )
 
 
 def test_every_box_texture_coordinate_is_in_range() raises:

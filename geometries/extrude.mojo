@@ -108,7 +108,13 @@ is split along is part of the surface. Both forms split it as three.js's
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, MaterialIndex, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+)
 from geometries.shape import Contours, triangulate
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.path import Shape
@@ -129,6 +135,89 @@ comptime FOLDED = Float32(1e-6)
 # shrinks a longer one to it, so a sharp corner is rounded off rather
 # than drawn out to a spike.
 comptime MITER_LIMIT = Float32(1.4142135)
+
+# three.js's `UVGenerator.generateTopUV`: the texture coordinates of a cap
+# triangle, from the vertices written so far, three floats each, and the
+# indices of its three vertices among them.
+comptime TopUV = def(List[Float32], Int, Int, Int) thin -> List[Vector2]
+# three.js's `generateSideWallUV`: those of a wall quad's four corners.
+comptime SideWallUV = def(List[Float32], Int, Int, Int, Int) thin -> List[
+    Vector2
+]
+
+
+def world_top_uv(
+    vertices: List[Float32], a: Int, b: Int, c: Int
+) -> List[Vector2]:
+    """Return a cap triangle's texture coordinates, three.js's
+    `WorldUVGenerator.generateTopUV`: each vertex's x and y.
+
+    Args:
+        vertices: The vertices written so far, three floats each.
+        a: The first vertex's index among them.
+        b: The second's.
+        c: The third's.
+
+    Returns:
+        The three coordinates, in the vertices' order.
+    """
+    return [
+        Vector2(vertices[a * 3], vertices[a * 3 + 1]),
+        Vector2(vertices[b * 3], vertices[b * 3 + 1]),
+        Vector2(vertices[c * 3], vertices[c * 3 + 1]),
+    ]
+
+
+def world_side_wall_uv(
+    vertices: List[Float32], a: Int, b: Int, c: Int, d: Int
+) -> List[Vector2]:
+    """Return a wall quad's texture coordinates, three.js's
+    `WorldUVGenerator.generateSideWallUV`: x, or y where the quad's first
+    edge covers more of y, and one minus z.
+
+    Args:
+        vertices: The vertices written so far, three floats each.
+        a: The first corner's index among them.
+        b: The second's.
+        c: The third's.
+        d: The fourth's.
+
+    Returns:
+        The four coordinates, in the corners' order.
+    """
+    var along_x = abs(vertices[a * 3 + 1] - vertices[b * 3 + 1]) < abs(
+        vertices[a * 3] - vertices[b * 3]
+    )
+    var lane = 0 if along_x else 1
+    var out = List[Vector2](capacity=4)
+    for corner in [a, b, c, d]:  # pragma: no branch
+        out.append(
+            Vector2(vertices[corner * 3 + lane], 1 - vertices[corner * 3 + 2])
+        )
+    return out^
+
+
+struct UVGenerator(Copyable, Movable):
+    """How an extrusion's texture coordinates are made: three.js's
+    `UVGenerator` option, `WorldUVGenerator` by default."""
+
+    var top: TopUV
+    var side_wall: SideWallUV
+
+    def __init__(out self):
+        """Return three.js's `WorldUVGenerator`."""
+        self.top = world_top_uv
+        self.side_wall = world_side_wall_uv
+
+    def __init__(out self, top: TopUV, side_wall: SideWallUV):
+        """Return a generator of one's own, three.js's `UVGenerator` option.
+
+        Args:
+            top: The coordinates of a cap triangle.
+            side_wall: The coordinates of a wall quad.
+        """
+        self.top = top
+        self.side_wall = side_wall
 
 
 def _miters(points: List[Vector2], start: Int, count: Int) -> List[Vector2]:
@@ -249,15 +338,23 @@ def _copy_vertex(
 
 
 def _faces(
-    cut: Contours, placed: List[Float32], layers: Int
+    cut: Contours,
+    placed: List[Float32],
+    layers: Int,
+    uv_generator: UVGenerator,
 ) raises -> BufferGeometry:
     """Return the two caps and the walls between `layers` layers of placed
     vertices, as three.js's `buildLidFaces` and `buildSideWalls` write
     them.
 
-    The texture coordinates are three.js's `WorldUVGenerator`, read from
-    the placed vertices: a cap takes its x and y, and a wall takes x or y,
-    whichever its first edge covers more of, and one minus z.
+    The texture coordinates come from `uv_generator`, asked as three.js
+    asks it: of each cap triangle once its three vertices are written,
+    and of each wall quad once its six are, the quad's corners being the
+    first, fourth, fifth and sixth.
+
+    Raises:
+        Error: If the generator gives a cap other than three coordinates
+            or a wall other than four.
     """
     var wide = len(cut.points)
     var top = (layers - 1) * wide
@@ -272,14 +369,12 @@ def _faces(
         var third = cut.index[triangle * 3 + 2]
         var back: List[Int] = [third, second, first]
         for corner in range(3):  # pragma: no branch
-            var flat = _copy_vertex(placed, back[corner], data)
-            uvs.append(flat.x)
-            uvs.append(flat.y)
+            _ = _copy_vertex(placed, back[corner], data)
+        _cap_uvs(uv_generator, data, uvs)
         var front: List[Int] = [first, second, third]
         for corner in range(3):  # pragma: no branch
-            var flat = _copy_vertex(placed, top + front[corner], data)
-            uvs.append(flat.x)
-            uvs.append(flat.y)
+            _ = _copy_vertex(placed, top + front[corner], data)
+        _cap_uvs(uv_generator, data, uvs)
 
     var lids = len(data) // 3
 
@@ -299,11 +394,6 @@ def _faces(
                     high + next,
                     high + here,
                 ]
-                # Which way the wall runs: three.js measures it along the
-                # axis the first edge covers more of.
-                var along_x = abs(
-                    placed[quad[0] * 3 + 1] - placed[quad[1] * 3 + 1]
-                ) < abs(placed[quad[0] * 3] - placed[quad[1] * 3])
                 # three.js's `f4` splits the quad across its second and
                 # fourth corners. A wall swept along a twisting path is
                 # not flat, so the diagonal is part of the surface.
@@ -316,13 +406,19 @@ def _faces(
                     quad[3],
                 ]
                 for corner in range(6):  # pragma: no branch
-                    var vertex = corners[corner]
-                    _ = _copy_vertex(placed, vertex, data)
-                    if along_x:
-                        uvs.append(placed[vertex * 3])
-                    else:
-                        uvs.append(placed[vertex * 3 + 1])
-                    uvs.append(1 - placed[vertex * 3 + 2])
+                    _ = _copy_vertex(placed, corners[corner], data)
+                # three.js's `f4`: the generator is asked of the quad's
+                # corners as written, and its four answers go to the six
+                # vertices in the quad's order a, b, d, b, c, d.
+                var n = len(data) // 3
+                var wall = uv_generator.side_wall(
+                    data, n - 6, n - 3, n - 2, n - 1
+                )
+                if len(wall) != 4:
+                    raise Error("A side wall UV generator must give four")
+                for pick in [0, 1, 3, 1, 2, 3]:  # pragma: no branch
+                    uvs.append(wall[pick].x)
+                    uvs.append(wall[pick].y)
 
     var walls = len(data) // 3 - lids
     var geometry = BufferGeometry()
@@ -337,7 +433,10 @@ def _faces(
 
 
 def _sweep(
-    cut: Contours, spine: List[Vector3], frames: FrenetFrames
+    cut: Contours,
+    spine: List[Vector3],
+    frames: FrenetFrames,
+    uv_generator: UVGenerator,
 ) raises -> BufferGeometry:
     """Return `cut` swept through one layer per point of `spine`, each
     point of the shape placed `x` along that step's normal and `y` along
@@ -356,7 +455,7 @@ def _sweep(
             placed.append(moved.x)
             placed.append(moved.y)
             placed.append(moved.z)
-    return _faces(cut, placed, len(spine))
+    return _faces(cut, placed, len(spine), uv_generator)
 
 
 def _check_sweep(steps: Int) raises:
@@ -366,7 +465,11 @@ def _check_sweep(steps: Int) raises:
 
 
 def extrude(
-    shape: Shape, path: Curve3, steps: Int = 1, curve_segments: Int = 12
+    shape: Shape,
+    path: Curve3,
+    steps: Int = 1,
+    curve_segments: Int = 12,
+    uv_generator: UVGenerator = UVGenerator(),
 ) raises -> BufferGeometry:
     """Return `shape` swept along `path`, three.js's `ExtrudeGeometry`
     with an `extrudePath`.
@@ -383,6 +486,8 @@ def extrude(
         steps: How many equal runs the curve is cut into; at least one.
         curve_segments: How many straight runs each curve of the shape is
             sampled into; at least one.
+        uv_generator: How the texture coordinates are made, three.js's
+            `UVGenerator`. `WorldUVGenerator` by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and no
@@ -399,12 +504,19 @@ def extrude(
     _check_sweep(steps)
     var cut = triangulate(shape, curve_segments)
     return _sweep(
-        cut, path.spaced_points(steps), path.frenet_frames(steps, False)
+        cut,
+        path.spaced_points(steps),
+        path.frenet_frames(steps, False),
+        uv_generator,
     )
 
 
 def extrude(
-    shape: Shape, path: CurvePath3, steps: Int = 1, curve_segments: Int = 12
+    shape: Shape,
+    path: CurvePath3,
+    steps: Int = 1,
+    curve_segments: Int = 12,
+    uv_generator: UVGenerator = UVGenerator(),
 ) raises -> BufferGeometry:
     """Return `shape` swept along a path of curves, three.js's
     `ExtrudeGeometry` with a `CurvePath` for its `extrudePath`.
@@ -418,6 +530,8 @@ def extrude(
         steps: How many equal runs the path is cut into; at least one.
         curve_segments: How many straight runs each curve of the shape is
             sampled into; at least one.
+        uv_generator: How the texture coordinates are made, three.js's
+            `UVGenerator`. `WorldUVGenerator` by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and no
@@ -432,7 +546,10 @@ def extrude(
     _check_sweep(steps)
     var cut = triangulate(shape, curve_segments)
     return _sweep(
-        cut, path.spaced_points(steps), path.frenet_frames(steps, False)
+        cut,
+        path.spaced_points(steps),
+        path.frenet_frames(steps, False),
+        uv_generator,
     )
 
 
@@ -480,6 +597,49 @@ def check_extrusion(
         raise Error("A bevel cannot reach a negative distance in")
 
 
+def _cap_uvs(
+    uv_generator: UVGenerator, data: List[Float32], mut uvs: List[Float32]
+) raises:
+    """Append the texture coordinates of the cap triangle just written,
+    three.js's `generateTopUV` of its three vertices."""
+    var n = len(data) // 3
+    var cap = uv_generator.top(data, n - 3, n - 2, n - 1)
+    if len(cap) != 3:
+        raise Error("A top UV generator must give three")
+    for point in cap:  # pragma: no branch
+        uvs.append(point.x)
+        uvs.append(point.y)
+
+
+def _joined(parts: List[BufferGeometry]) raises -> BufferGeometry:
+    """Return extrusions end to end, each part's groups moved past the
+    parts before it, as three.js's `ExtrudeGeometry` adds shape after shape
+    to one geometry."""
+    var data = List[Float32]()
+    var normals = List[Float32]()
+    var uvs = List[Float32]()
+    var starts = List[Int]()
+    var counts = List[Int]()
+    var materials = List[Int]()
+    for at in range(len(parts)):  # pragma: no branch
+        ref part = parts[at]
+        var offset = len(data) // 3
+        data.extend(part.attribute_view(String(POSITION)).packed())
+        normals.extend(part.attribute_view(String(NORMAL)).packed())
+        uvs.extend(part.attribute_view(String(UV)).packed())
+        for group in part.groups:  # pragma: no branch
+            starts.append(group.start + offset)
+            counts.append(group.count)
+            materials.append(group.material_index.value)
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    for at in range(len(starts)):  # pragma: no branch
+        geometry.add_group(starts[at], counts[at], MaterialIndex(materials[at]))
+    return geometry^
+
+
 def extrude(
     shape: Shape,
     depth: Length,
@@ -490,6 +650,7 @@ def extrude(
     bevel_size: Length = Length(0.1, METER),
     bevel_offset: Length = Length(0, METER),
     bevel_segments: Int = 3,
+    uv_generator: UVGenerator = UVGenerator(),
 ) raises -> BufferGeometry:
     """Return `shape` extruded along the z axis, from zero to `depth`.
 
@@ -509,6 +670,8 @@ def extrude(
             than rounding an edge.
         bevel_segments: How many bands each bevel is cut into; at least one
             when there is a bevel.
+        uv_generator: How the texture coordinates are made, three.js's
+            `UVGenerator`. `WorldUVGenerator` by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and no
@@ -562,4 +725,68 @@ def extrude(
         insets,
     )
     var placed = _place(cut, miters, heights, insets)
-    return _faces(cut, placed, len(heights))
+    return _faces(cut, placed, len(heights), uv_generator)
+
+
+def extrude(
+    shapes: List[Shape],
+    depth: Length,
+    steps: Int = 1,
+    curve_segments: Int = 12,
+    bevel_enabled: Bool = False,
+    bevel_thickness: Length = Length(0.2, METER),
+    bevel_size: Length = Length(0.1, METER),
+    bevel_offset: Length = Length(0, METER),
+    bevel_segments: Int = 3,
+    uv_generator: UVGenerator = UVGenerator(),
+) raises -> BufferGeometry:
+    """Return several shapes extruded along the z axis, three.js's
+    `ExtrudeGeometry` given an array of shapes.
+
+    Each shape is extruded as the one-shape form extrudes it, and the
+    shapes follow one another in one geometry. Each adds its own two
+    groups, its caps wearing material 0 and its walls material 1, as
+    three.js's `addShape` adds them shape by shape.
+
+    Args:
+        shapes: The outlines, each with its holes; at least one.
+        depth: How thick the solid is; positive.
+        steps: How many layers the extrusion is cut into; at least one.
+        curve_segments: How many straight runs each curve is sampled into;
+            at least one.
+        bevel_enabled: True to round the two edges off.
+        bevel_thickness: How far past each end face the bevel reaches.
+        bevel_size: How far out from the outline the body stands.
+        bevel_offset: How far out every layer is moved before the bevel is
+            measured.
+        bevel_segments: How many bands each bevel is cut into.
+        uv_generator: How the texture coordinates are made, three.js's
+            `UVGenerator`.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes and no
+        index buffer, and two groups per shape.
+
+    Raises:
+        Error: If there is no shape, or for anything the one-shape form
+            raises for.
+    """
+    if len(shapes) == 0:
+        raise Error("An extrusion needs at least one shape")
+    var parts = List[BufferGeometry]()
+    for shape in shapes:  # pragma: no branch
+        parts.append(
+            extrude(
+                shape,
+                depth,
+                steps,
+                curve_segments,
+                bevel_enabled,
+                bevel_thickness,
+                bevel_size,
+                bevel_offset,
+                bevel_segments,
+                uv_generator,
+            )
+        )
+    return _joined(parts)
