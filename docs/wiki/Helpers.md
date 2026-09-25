@@ -6,7 +6,7 @@ Four helpers draw more than lines. The light probe helper and the texture helper
 
 ![A camera circles a cube outlined in yellow, over a grid, beside the axes and a second camera's frustum](out/helpers.png)
 
-three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`. From `examples/jsm`: `OctreeHelper`, `LightProbeHelper`, `TextureHelper`, `ViewHelper`, `ShadowMapViewer` and `CSMHelper`.
+three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`. From `examples/jsm`: `OctreeHelper`, `LightProbeHelper`, `TextureHelper`, `ViewHelper`, `ShadowMapViewer`, `CSMHelper` and `UVsDebug`.
 
 ## A helper is a geometry
 
@@ -366,6 +366,12 @@ var faces = helper.planes(csm, scene, camera)
 | `display_shadow_bounds` | `True` | Show the shadow boxes. |
 
 three.js's helper is a group that copies the camera's position, rotation and scale. Here the parts are in world space, which is the same for a camera outside a group. three.js reads each shadow box from its shadow camera, which moves at a render, so its boxes are one frame late. Here each box is where its light is now. There is no `updateVisibility`: each call reads the three members.
+
+## UVsDebug
+
+`uvs_debug(geometry, size)` in `helpers/uvs_debug.mojo` draws a geometry's texture coordinates as an image. It is three.js's `UVsDebug`. Each triangle's outline is dark gray on white, where its coordinates put it.
+
+three.js also writes each triangle's number and each corner's letter on the image. This port has no canvas text. So `labels` holds each label: its text, its place, its size and its color. `outlines` holds each triangle's corners in pixels. A canvas antialiases its lines. Here a line is the pixels that a one-pixel pen crosses.
 
 ## Members
 

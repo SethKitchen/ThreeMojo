@@ -107,6 +107,10 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     # The tile of a larger image this camera draws, three.js's `view`:
     # none until `set_view_offset`. See `cameras.camera.ViewOffset`.
     var view: Optional[ViewOffset]
+    # A projection set outright, as three.js's `frameCorners` sets
+    # `projectionMatrix`, or none to build it from the fields. See
+    # `cameras.camera_utils.frame_corners`.
+    var projection_override: Optional[Matrix4]
 
     def __init__(
         out self,
@@ -157,6 +161,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.film_gauge = DEFAULT_FILM_GAUGE
         self.film_offset = NO_SHIFT
         self.view = None
+        self.projection_override = None
 
     def validate(self) raises:
         """Refuse a zoom, a film, a focus or a tile that is not one.
@@ -363,7 +368,8 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         enabled view offset then cuts its tile out of that, and the film
         offset moves both side edges, as in three.js. Last the side edges
         are moved by `view_shift`, which keeps the frustum's width and
-        skews it: the symmetric frustum is the shift of zero.
+        skews it: the symmetric frustum is the shift of zero. A
+        `projection_override` is returned in place of all of it.
 
         Returns:
             The projection matrix.
@@ -373,6 +379,8 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
                 out degenerate.
         """
         self.validate()
+        if Bool(self.projection_override):
+            return self.projection_override.value()
         var near = self.near.value
         var top = near * tan(self.fov.value / 2) / self.zoom
         var height = 2 * top

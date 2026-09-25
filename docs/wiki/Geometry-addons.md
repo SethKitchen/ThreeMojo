@@ -1,6 +1,6 @@
 # Geometry addons
 
-The geometry addons of three.js's `examples/jsm/`: two more geometries, four modifiers, the rest of `BufferGeometryUtils`, MikkTSpace tangents, `SceneUtils`, NURBS and the named curves. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated under node.
+The geometry addons of three.js's `examples/jsm/`: two more geometries, four modifiers, the rest of `BufferGeometryUtils`, MikkTSpace tangents, `SceneUtils`, NURBS and the named curves. It also covers the geometry tools of `misc/` and `GeometryUtils`. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated under node.
 
 | Module | three.js |
 |---|---|
@@ -16,6 +16,10 @@ The geometry addons of three.js's `examples/jsm/`: two more geometries, four mod
 | `math/nurbs.mojo` | `NURBSUtils`, `NURBSCurve`, `NURBSSurface`, `NURBSVolume` |
 | `math/curve_extras.mojo` | `CurveExtras` |
 | `math/space_curve.mojo` | the base `Curve`: arc lengths, spaced points, Frenet frames |
+| `geometries/curves.mojo` | `GeometryUtils`: `hilbert2D`, `hilbert3D`, `gosper` |
+| `geometries/roller_coaster.mojo` | `RollerCoasterGeometry`, `RollerCoasterLiftersGeometry`, `RollerCoasterShadowGeometry`, `SkyGeometry`, `TreesGeometry` |
+| `geometries/tube_painter.mojo` | `TubePainter` |
+| `geometries/convex_object_breaker.mojo` | `ConvexObjectBreaker` |
 
 `mergeGeometries`, `mergeVertices` and `toCreasedNormals` are in `geometries/utils.mojo`. See [Geometry](Geometry#merge-weld-and-tangents).
 
@@ -155,6 +159,39 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 | `frames_of`, `frames3_of` | `computeFrenetFrames` |
 | `chord_tangent` | the base `getTangent`: a chord a ten-thousandth either side |
 
+## Space-filling curves
+
+`hilbert2d(center, size, iterations, order)` and `hilbert3d(...)` return the corners of a Hilbert curve across a square in the xz plane or through a cube. The points come in the order that the curve visits them. `order` is three.js's `v0` to `v7`. `gosper(size)` returns the points of a Gosper curve in the xy plane, three numbers for each point. Draw each as a line strip.
+
+## Roller coaster
+
+`geometries/roller_coaster.mojo` builds three.js's roller coaster example. Each function takes a `SpaceCurve` and a number of divisions, and samples the curve at even steps of its length.
+
+| Function | What it builds |
+|---|---|
+| `roller_coaster_geometry(curve, divisions)` | Three rails and a sleeper at every second step, with `normal` and `color` |
+| `roller_coaster_lifters_geometry(curve, divisions)` | A post from each step down to the ground. A step above ten meters has a crossbar and two posts. |
+| `roller_coaster_shadow_geometry(curve, divisions)` | A flat band on the ground under the track |
+| `sky_geometry(random)` | A hundred flat clouds |
+| `trees_geometry(scene, assets, random)` | Crossed triangles that stand on the meshes of a scene |
+
+The arithmetic is in doubles, as in three.js. The sky and the trees take their random numbers from a `SeededRandom`. three.js's geometry first takes four numbers for its uuid. A geometry here has no uuid, so it does not take them.
+
+## Tube painter
+
+A `TubePainter` is a pen that draws tubes. `move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
+
+three.js fills a buffer of a million vertices. Here the lists grow. Draw the geometry with a `STANDARD` material that reads the vertex colors, and turn frustum culling off, as three.js does.
+
+## Convex object breaker
+
+A `ConvexObjectBreaker` cuts convex objects and breaks them. A `BreakableObject` holds a convex geometry, a place and a turn, a mass and two velocities, as three.js's mesh and its `userData` do.
+
+- `cut_by_plane(object, plane)` cuts an object in two. Each side's corners, and the points where edges cross the plane, become the convex hull of a new piece at their mean. Each piece has half the mass. A side of four points or fewer gives none.
+- `subdivide_by_impact(object, point, normal, max_radial_iterations, max_random_iterations, random)` cuts an object again and again about a point of impact, and returns the debris.
+
+The breaker keeps three.js's quirks. A piece's size is its largest coordinate about its mean. A piece is placed by the object's position, not turned. The test for faces in one plane reads the normals as three.js reads them.
+
 ## Where this port differs
 
 - `compute_morphed_attributes` wears the normal targets on the normals. three.js wears the position targets on them.
@@ -166,6 +203,7 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 - `Flow` measures a curve over 200 runs every time. three.js uses 512 runs for the second update of one curve object.
 - `generate_tangents` gives the C's default frame on a surface where every triangle is degenerate. The WebAssembly build fails there.
 - `merge_groups`, `edge_split` and the modifiers refuse the input that makes three.js read past the end of an array.
+- A cut in `ConvexObjectBreaker` works in doubles, as three.js's does. A corner within `small_delta` of a cut is on the knife's edge: the last bit of a double decides its side. So a piece of a piece can differ from three.js's by a corner, and its place by some centimeters.
 
 ## What is not ported
 

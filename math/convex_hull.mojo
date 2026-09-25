@@ -136,6 +136,27 @@ struct ConvexHull(Movable):
                 finite, or the points all lie on one point, one line or one
                 plane.
         """
+        var doubles = List[SIMD[DType.float64, 4]]()
+        for point in points:  # pragma: no branch
+            doubles.append(
+                SIMD[DType.float64, 4](
+                    Float64(point.x), Float64(point.y), Float64(point.z), 0
+                )
+            )
+        self = Self(doubles)
+
+    def __init__(out self, points: List[SIMD[DType.float64, 4]]) raises:
+        """Compute the hull of points given in doubles, as three.js's are:
+        the first three numbers of each, in meters.
+
+        Args:
+            points: The points.
+
+        Raises:
+            Error: If there are fewer than four points, any number is not
+                finite, or the points all lie on one point, one line or one
+                plane.
+        """
         if len(points) < 4:
             raise Error("A convex hull needs at least four points")
         self.tolerance = -1
@@ -162,12 +183,10 @@ struct ConvexHull(Movable):
         # Four points at least, checked above.
         for point in points:  # pragma: no branch
             if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
+                isfinite(point[0]) and isfinite(point[1]) and isfinite(point[2])
             ):
                 raise Error("A convex hull needs finite points")
-            self._points.append(
-                _Point(Float64(point.x), Float64(point.y), Float64(point.z))
-            )
+            self._points.append(_Point(point[0], point[1], point[2]))
             self._vertex_prev.append(-1)
             self._vertex_next.append(-1)
             self._vertex_face.append(-1)

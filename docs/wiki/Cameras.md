@@ -196,6 +196,12 @@ The constructor refuses a size that is not positive. It refuses a near plane tha
 
 `examples/mirror.mojo` renders a cube camera's view every frame and reflects it in a chrome ball.
 
+## Frame a rectangle
+
+`frame_corners(camera, bottom_left, bottom_right, top_left)` in `cameras/camera_utils.mojo` fits a perspective camera to a rectangle in the world, as a window in a wall is seen. It is three.js's `CameraUtils.frameCorners`. The camera stays where it is and turns to face the rectangle. Its projection becomes an off-axis frustum whose edges pass through the rectangle's edges.
+
+The projection goes in `projection_override`, and `projection_matrix()` returns it in place of the one it builds. Set `projection_override` to `None` to build the projection from the fields again. With `estimate_view_frustum=True`, the field of view is also set to three.js's estimate.
+
 ## Attach a camera to a node
 
 ```mojo
