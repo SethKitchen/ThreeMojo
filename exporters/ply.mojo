@@ -30,12 +30,13 @@ The format is `loaders.ply`'s own `PlyFormat`: `PLY_ASCII`, the default,
 `PLY_BINARY_LITTLE_ENDIAN` or `PLY_BINARY_BIG_ENDIAN`, the three that
 three.js's `binary` and `littleEndian` options choose between.
 
-**Colors are rounded.** A color is encoded from linear light to sRGB and
-scaled to a byte, as three.js encodes it, clamped to zero through one
-first. three.js then rounds down, and this rounds to the nearest byte:
-`read_ply` decodes a byte into a linear value that encodes a hair below
-the byte, so rounding down lost one level every time a file was read and
-written again. Alpha is not written, as three.js writes none.
+**Colors are rounded down.** A color is encoded from linear light to sRGB
+and scaled to a byte, then rounded down, as three.js's `PLYExporter`
+writes `Math.floor(color * 255)`. It is clamped to zero through one
+first, where three.js writes a byte out of range. So white is 254 when
+its encoding lands a hair below one, as in three.js's files. A byte
+`read_ply` decodes can come back one lower, as it does in three.js.
+Alpha is not written, as three.js writes none.
 """
 
 from core.assets import Assets
@@ -65,11 +66,10 @@ def color_byte(value: Float32) -> Int:
         value: The channel, in linear light.
 
     Returns:
-        The byte, from zero to 255: clamped, encoded and rounded.
+        The byte, from zero to 255: clamped, encoded and rounded down, as
+        three.js's `Math.floor(color * 255)`.
     """
-    return Int(
-        linear_to_srgb(min(max(value, Float32(0)), Float32(1))) * 255 + 0.5
-    )
+    return Int(linear_to_srgb(min(max(value, Float32(0)), Float32(1))) * 255)
 
 
 def _format_name(format: PlyFormat) -> String:

@@ -77,6 +77,7 @@ from std.math import inf
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -313,6 +314,60 @@ def test_ply_matches_three_js() raises:
         ),
         three.text("ply_cloud_ascii"),
     )
+
+
+def tinted_scene(mut scene: Scene, mut assets: Assets) raises:
+    """Add a triangle with vertex colors in linear light, in an unlit
+    material: `tinted` in `three_exporters.mjs`."""
+    var shape = BufferGeometry()
+    shape.set_attribute(
+        String(POSITION), BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)
+    )
+    shape.set_attribute(
+        String(COLOR),
+        BufferAttribute([1, 1, 1, 0.5, 0.25, 0, 0.2, 0.6, 0.9], 3),
+    )
+    var unlit = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
+    )
+    var node = scene.add(Object3D())
+    scene.add_mesh(Mesh(assets.geometries.add(shape^), unlit, node))
+    scene.update()
+
+
+def test_ply_colors_round_down_as_three_js_does() raises:
+    # three.js writes `Math.floor( color * 255 )` after the sRGB encode, so
+    # its white is 254.
+    var scene = Scene()
+    var assets = Assets()
+    tinted_scene(scene, assets)
+    var three = Reference()
+    assert_equal(
+        as_text(export_ply(scene, assets)), three.text("ply_colors_ascii")
+    )
+
+
+def test_gltf_writes_an_unlit_material_as_three_js_does() raises:
+    # three.js's unlit extension writes a metalness of zero and a
+    # roughness of 0.9.
+    var scene = Scene()
+    var assets = Assets()
+    tinted_scene(scene, assets)
+    var files = export_gltf(scene, assets)
+    var document = parse_json(String(unsafe_from_utf8=files.document))
+    var material = document.at(document.get(document.root(), "materials"), 0)
+    var ours = document.get(material, "pbrMetallicRoughness")
+    var three = Reference()
+    var written = three.node("gltf_unlit_material")
+    var theirs = three.document.get(written, "pbrMetallicRoughness")
+    for key in ["metallicFactor", "roughnessFactor"]:
+        assert_almost_equal(
+            document.number(document.get(ours, key)),
+            three.document.number(three.document.get(theirs, key)),
+            atol=1e-6,
+        )
+    var extensions = document.get(material, "extensions")
+    assert_true(document.has(extensions, "KHR_materials_unlit"))
 
 
 def test_usdz_matches_three_js() raises:
@@ -625,6 +680,81 @@ def test_gltf_max_texture_size_clamps_each_side() raises:
     with assert_raises(contains="maxTextureSize"):
         _ = export_gltf(scene, assets, options=options)
     write_gltf("out/extras.gltf", scene, assets, options=GltfExportOptions())
+
+
+def test_a_geometrys_user_data_rides_its_primitive_as_in_three_js() raises:
+    # three.js writes a geometry's `userData` as its primitive's `extras`,
+    # and reads them back into the geometry's `userData`.
+    var assets = Assets()
+    var scene = Scene()
+    var shape = BufferGeometry()
+    shape.set_attribute(
+        String(POSITION), BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)
+    )
+    shape.user_data.set_string("kind", "leaf")
+    shape.user_data.set_number("count", 3)
+    var paint = assets.materials.add(standard_material(Color(255, 255, 255)))
+    var node = scene.add(Object3D())
+    scene.add_mesh(Mesh(assets.geometries.add(shape^), paint, node))
+    scene.update()
+    var files = export_gltf(scene, assets)
+    var text = String(unsafe_from_utf8=files.document)
+    var document = parse_json(text)
+    var mesh = document.at(document.get(document.root(), "meshes"), 0)
+    var primitive = document.at(document.get(mesh, "primitives"), 0)
+    var ours = document.get(primitive, "extras")
+    var three = Reference()
+    var reference = three.node("gltf_primitive_extras")
+    ref doc = three.document
+    var written = doc.get(reference, "written")
+    assert_equal(
+        document.string(document.get(ours, "kind")),
+        doc.string(doc.get(written, "kind")),
+    )
+    assert_equal(
+        document.number(document.get(ours, "count")),
+        doc.number(doc.get(written, "count")),
+    )
+    # Read back, the extras are the geometry's user data again.
+    var again = Scene()
+    var read = Assets()
+    _ = load_gltf(text, files.binary.copy(), "", again, read)
+    ref back = read.geometries.get(again.meshes[0].geometry).user_data
+    var expected = doc.get(reference, "read")
+    assert_equal(back.string("kind"), doc.string(doc.get(expected, "kind")))
+    assert_equal(back.number("count"), doc.number(doc.get(expected, "count")))
+    # With custom extensions on, a `gltfExtensions` key rides as the
+    # primitive's `extensions`, as three.js's `serializeUserData` writes it.
+    var tagged = BufferGeometry()
+    tagged.set_attribute(
+        String(POSITION), BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)
+    )
+    tagged.user_data.set_json("gltfExtensions", '{"EXT_leaf":{"a":1}}')
+    var holder = Scene()
+    var store = Assets()
+    var at = holder.add(Object3D())
+    holder.add_mesh(
+        Mesh(
+            store.geometries.add(tagged^),
+            store.materials.add(standard_material(Color(255, 255, 255))),
+            at,
+        )
+    )
+    holder.update()
+    var options = GltfExportOptions()
+    options.include_custom_extensions = True
+    var custom = parse_json(
+        String(
+            unsafe_from_utf8=export_gltf(
+                holder, store, options=options
+            ).document
+        )
+    )
+    var mesh_entry = custom.at(custom.get(custom.root(), "meshes"), 0)
+    var tagged_part = custom.at(custom.get(mesh_entry, "primitives"), 0)
+    var named = custom.get(tagged_part, "extensions")
+    assert_true(custom.has(named, "EXT_leaf"))
+    assert_false(custom.has(tagged_part, "extras"))
 
 
 def test_gltf_extras_read_as_three_js_reads_them() raises:

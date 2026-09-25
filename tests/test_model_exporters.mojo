@@ -442,13 +442,17 @@ def test_a_ply_writes_only_the_properties_some_mesh_has() raises:
     assert_equal(empty.vertex_count(), 0)
 
 
-def test_a_color_is_rounded_to_the_byte_it_came_from() raises:
+def test_a_color_is_rounded_down_as_three_js_does() raises:
+    # three.js's `Math.floor( color * 255 )`, clamped here first. White
+    # encodes a hair below one, so it is 254, as in three.js's files.
     assert_equal(color_byte(-1), 0)
-    assert_equal(color_byte(2), 255)
-    assert_equal(color_byte(1), 255)
-    # Every byte, decoded as `read_ply` decodes it, encodes back to itself.
+    assert_equal(color_byte(2), color_byte(1))
+    assert_equal(color_byte(1), 254)
+    # A byte decoded as `read_ply` decodes it writes back as itself or one
+    # below, as it does in three.js.
     for byte in range(256):
-        assert_equal(color_byte(srgb_to_linear(Float32(byte) / 255)), byte)
+        var again = color_byte(srgb_to_linear(Float32(byte) / 255))
+        assert_true(again == byte or again == byte - 1)
 
 
 def test_a_mesh_of_no_vertices_writes_nothing_for_it() raises:

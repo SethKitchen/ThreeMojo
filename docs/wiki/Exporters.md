@@ -74,7 +74,7 @@ The nodes keep the scene order. Node `k` of the file is the `k`th node that the 
 | `scene_user_data` | `scene.userData` | Empty |
 | `set_material_user_data(id, data)` | `material.userData` | Empty |
 
-The user data of a node, of the scene and of each material is written as `extras`, as three.js's `serializeUserData` writes it. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) writes.
+The user data of a node, of a geometry, of the scene and of each material is written as `extras`, as three.js's `serializeUserData` writes it. A geometry's user data goes on each primitive that draws it. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) writes.
 
 With `include_custom_extensions`, a `gltfExtensions` key in user data is written as the object's `extensions`. Each name also goes into `extensionsUsed`. The rest of the user data stays in `extras`. The value of `gltfExtensions` must be an object. A custom extension comes before the extensions that the writer adds. A custom extension with the name of a writer's extension takes the writer's value, as a three.js plugin overwrites it.
 
@@ -112,7 +112,7 @@ Every material is written as a metallic-roughness material.
 | Property | glTF |
 |---|---|
 | `color`, `opacity` | `baseColorFactor`, in linear light. Left out for opaque white. |
-| `metalness`, `roughness` | `metallicFactor`, `roughnessFactor`. A kind that is not `STANDARD` or `PHYSICAL` writes zero and one, as three.js does. |
+| `metalness`, `roughness` | `metallicFactor`, `roughnessFactor`. A kind that is not `STANDARD` or `PHYSICAL` writes zero and one, as three.js does. An unlit `BASIC` material writes a roughness of 0.9, as three.js's unlit extension does. |
 | `map` | `baseColorTexture`. |
 | `roughness_map`, `metalness_map` | `metallicRoughnessTexture`. See [Textures](#textures). |
 | `normal_map`, `normal_scale.x` | `normalTexture` and its `scale`. |
@@ -399,6 +399,7 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 | `include_anchoring_properties` | `includeAnchoringProperties` | `True` |
 | `only_visible` | `onlyVisible` | `True` |
 | `quick_look_compatible` | `quickLookCompatible` | `False` |
+| `max_texture_size` | `maxTextureSize` | `1024` |
 
 Each material is a `UsdPreviewSurface`. It has the color or the map, the emissive color or map, the normal map, the ao map, the roughness, the metalness and the opacity. A `PHYSICAL` material also has the clear coat and the index of refraction. Each map has a `UsdTransform2d` of the texture's repeat, offset and rotation.
 
@@ -415,7 +416,7 @@ The text is the text that three.js writes for a scene whose numbers are short de
 
 ### Differences from three.js
 
-- Each texture is written as its own pixels, as a PNG from `render.png`, at its own size. three.js draws it on a canvas and scales it to `maxTextureSize`.
+- A texture larger than `max_texture_size` is scaled down to it, keeping its shape, as three.js's `imageToCanvas` scales it. The writer resamples it bilinear at the center of each pixel. three.js lets the canvas resample it, so the pixels can differ.
 - A texture file is named for the texture's id. three.js names it for the id of its source.
 - Each file's data starts at a multiple of 64 bytes. three.js pads each file by a count that is right only for the first file.
 - A geometry that is not whole triangles is refused. three.js throws a `RangeError`.
@@ -491,7 +492,6 @@ JSON numbers are written as the shortest text that reads back to the same `Float
 
 ## Differences from three.js
 
-- A PLY color is rounded to the nearest byte. three.js rounds down, and then a file loses one level each time it is read and written again.
 - A PLY color is clamped to zero through one before it is encoded.
 - An OBJ point color above the linear part of the sRGB curve goes through the C library's `pow`. V8's `Math.pow` can give a different last digit.
 - `KHR_materials_emissive_strength` is written for every kind of material. three.js writes it only for a standard or physical material.
@@ -515,7 +515,7 @@ JSON numbers are written as the shortest text that reads back to the same `Float
 - Tracks of the visibility, a material, a light or a camera.
 - A morph target of colors. glTF allows only positions, normals and tangents.
 - Batched meshes and sprites.
-- Batched meshes, sprites and wide lines in OBJ, STL and PLY. three.js writes a batched mesh and a `LineSegments2` because each is a mesh there. The meshes on an LOD's levels are written, every level, as three.js writes them.
+- Batched meshes, sprites and wide lines in OBJ, STL and PLY. three.js writes a batched mesh and a `LineSegments2` because each is a mesh there, but it writes their buffers and not their shapes. A batched mesh gives its shared buffer once at the node, with the unused vertices as zeros and no instance moved. A wide line gives the quad that each segment is drawn from. A three.js sprite is not a mesh, and is not written. The meshes on an LOD's levels are written, every level, as three.js writes them.
 - The instances of an instanced mesh in OBJ, STL, PLY and USDZ, as in three.js.
 - Alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
 - The groups of a geometry of a mesh with one material, as in three.js.

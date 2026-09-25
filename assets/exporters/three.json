@@ -315,6 +315,16 @@
    ]
   }
  },
+ "gltf_primitive_extras": {
+  "written": {
+   "kind": "leaf",
+   "count": 3
+  },
+  "read": {
+   "kind": "leaf",
+   "count": 3
+  }
+ },
  "ply_mapped": {
   "text": "ply\nformat ascii 1.0\nelement vertex 2\nproperty float x\nproperty float y\nproperty float z\nproperty uchar cr\nproperty uchar cg\nproperty uchar cb\nproperty float q1\nproperty float q2\nend_header\n0 0 0 255 0 0 1 2\n1 2 3 0 255 0 3 4\n",
   "position": [
@@ -340,5 +350,15 @@
    4
   ],
   "quality_size": 2
+ },
+ "ply_colors_ascii": "ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nelement face 1\nproperty list uchar int vertex_index\nend_header\n0 0 0 254 254 254\n1 0 0 187 136 0\n0 1 0 123 203 243\n3 0 1 2\n\n",
+ "gltf_unlit_material": {
+  "pbrMetallicRoughness": {
+   "metallicFactor": 0,
+   "roughnessFactor": 0.9
+  },
+  "extensions": {
+   "KHR_materials_unlit": {}
+  }
  }
 }
