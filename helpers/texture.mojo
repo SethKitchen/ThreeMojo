@@ -432,7 +432,11 @@ def _face_geometry(whole: BufferGeometry, face: Int) raises -> BufferGeometry:
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index([0, 1, 2, 0, 2, 3])
+    # The face's two triangles, as the box winds them.
+    var index = List[Int]()
+    for corner in range(6):  # pragma: no branch
+        index.append(whole.index[face * 6 + corner] - face * 4)
+    geometry.set_index(index^)
     return geometry^
 
 
@@ -469,10 +473,12 @@ def texture_helper(
     for face in range(6):  # pragma: no branch
         var geometry = _face_geometry(whole, face)
         ref at = geometry.attribute_view(String(POSITION))
-        # The corners at uv (0, 0), (1, 0) and (0, 1); see `geometries.box`.
-        var origin = at.vector3(0)
-        var across = at.vector3(1) - origin
-        var up = at.vector3(3) - origin
+        # The corners at uv (0, 0), (1, 0) and (0, 1): three.js's grid runs
+        # row by row from the top, (0, 1) (1, 1) (0, 0) (1, 0); see
+        # `geometries.box`.
+        var origin = at.vector3(2)
+        var across = at.vector3(3) - origin
+        var up = at.vector3(0) - origin
         var data = List[Float32]()
         ref cube = assets.cube_textures.get(texture)
         var size = cube.size

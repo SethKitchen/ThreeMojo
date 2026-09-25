@@ -498,11 +498,11 @@ def test_a_mesh_with_a_list_and_no_groups_splits_into_nothing() raises:
 def test_a_box_has_three_js_s_six_groups() raises:
     var box = cube(Length(1.0, METER))
     assert_equal(len(box.groups), 6)
-    var dressed: List[Int] = [4, 5, 1, 0, 2, 3]
+    # In three.js's order, +x -x +y -y +z -z, each its own material.
     for face in range(6):
         assert_equal(box.groups[face].start, face * 6)
         assert_equal(box.groups[face].count, 6)
-        assert_equal(box.groups[face].material_index.value, dressed[face])
+        assert_equal(box.groups[face].material_index.value, face)
 
 
 def test_a_cylinder_has_a_side_and_two_caps() raises:

@@ -57,7 +57,13 @@ reason to trust the answer.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+)
 from math.path import Shape
 from math.vector2 import Vector2
 
@@ -617,4 +623,55 @@ def shape_geometry(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(cut.index.copy())
+    return geometry^
+
+
+def shape_geometry(
+    shapes: List[Shape], curve_segments: Int = 12
+) raises -> BufferGeometry:
+    """Return several shapes as one flat surface in the z equals zero
+    plane, three.js's `ShapeGeometry` given an array of shapes.
+
+    Each shape is filled as the one-shape form fills it, the shapes one
+    after another, and each is a group whose material index is its place
+    in the list, as three.js's `addGroup( groupStart, groupCount, i )`.
+
+    Args:
+        shapes: The outlines, each with its holes; at least one.
+        curve_segments: How many straight runs each curve is sampled into;
+            at least one.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes, an index,
+        and one group per shape.
+
+    Raises:
+        Error: If there is no shape, or a shape cannot be filled in; see
+            `triangulate`.
+    """
+    if len(shapes) == 0:
+        raise Error("A shape geometry needs at least one shape")
+    var data = List[Float32]()
+    var normals = List[Float32]()
+    var uvs = List[Float32]()
+    var index = List[Int]()
+    var counts = List[Int]()
+    for shape in shapes:  # pragma: no branch
+        var part = shape_geometry(shape, curve_segments)
+        var offset = len(data) // 3
+        data.extend(part.attribute_view(String(POSITION)).packed())
+        normals.extend(part.attribute_view(String(NORMAL)).packed())
+        uvs.extend(part.attribute_view(String(UV)).packed())
+        for corner in part.index:  # pragma: no branch
+            index.append(corner + offset)
+        counts.append(len(part.index))
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    geometry.set_index(index^)
+    var start = 0
+    for at in range(len(counts)):  # pragma: no branch
+        geometry.add_group(start, counts[at], MaterialIndex(at))
+        start += counts[at]
     return geometry^

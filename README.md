@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 184 features are ported and 18 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 185 features are ported and 18 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -82,11 +82,12 @@ The port is not at parity with three.js yet. 184 features are ported and 18 are 
 ### Geometry
 
 - [ ] RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
-- [ ] Box segments, partial spheres, shape arrays and UVGenerator [#184](https://github.com/SethKitchen/ThreeMojo/issues/184)
+- [ ] ShapeGeometry and ExtrudeGeometry in three.js's vertex order, cut by earcut [#215](https://github.com/SethKitchen/ThreeMojo/issues/215)
 
 <details>
-<summary>Ported: 20</summary>
+<summary>Ported: 21</summary>
 
+- [x] [Box segments, partial spheres, shape arrays and UVGenerator](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box): segmented boxes, sphere parts, shape lists and custom UV generators [#184](https://github.com/SethKitchen/ThreeMojo/issues/184)
 - [x] [BufferGeometry transforms, draw range and normalized integer attributes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#transforms): transforms, a draw range every pass honors, and seven typed arrays [#186](https://github.com/SethKitchen/ThreeMojo/issues/186)
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
 - [x] [Geometry addons](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry-addons): teapot, box lines, modifiers, BufferGeometryUtils, MikkTSpace tangents, SceneUtils, NURBS and named curves. [#180](https://github.com/SethKitchen/ThreeMojo/issues/180)
