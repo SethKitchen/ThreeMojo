@@ -18,7 +18,12 @@ from core.scene import Scene
 from exporters.object_json import object_to_json
 from math.matrix4 import Matrix4
 from objects.gyroscope import gyroscope
-from std.testing import TestSuite, assert_almost_equal, assert_equal, assert_true
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_true,
+)
 from units.si import Angle, RADIAN
 
 
@@ -53,7 +58,9 @@ def _world() raises -> Scene:
     var top = scene.add(root^)
     var spinner = gyroscope()
     spinner.set_position(0.5, -1, 2)
-    spinner.set_euler(Angle(0.0, RADIAN), Angle(0.4, RADIAN), Angle(0.0, RADIAN))
+    spinner.set_euler(
+        Angle(0.0, RADIAN), Angle(0.4, RADIAN), Angle(0.0, RADIAN)
+    )
     var middle = scene.attach(spinner^, top)
     var child = Object3D()
     child.set_position(0, 1, 0)
@@ -117,7 +124,9 @@ def test_a_gyroscope_at_the_top_is_a_plain_node() raises:
     var scene = Scene()
     var spinner = gyroscope()
     spinner.set_position(1, 2, 3)
-    spinner.set_euler(Angle(0.4, RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN))
+    spinner.set_euler(
+        Angle(0.4, RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN)
+    )
     var local = spinner.local_matrix()
     var id = scene.add(spinner^)
     scene.update()
