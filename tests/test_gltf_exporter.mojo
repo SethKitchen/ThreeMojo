@@ -478,6 +478,23 @@ def test_the_document_says_what_the_specification_asks() raises:
     assert_equal(document.string(document.get(asset, "version")), "2.0")
     var used = document.get(root, "extensionsUsed")
     assert_equal(document.string(document.at(used, 0)), "KHR_materials_unlit")
+    # three.js's `GLTFMaterialsUnlitExtension` writes an unlit material's
+    # metalness as zero and its roughness as 0.9.
+    var materials = document.get(root, "materials")
+    var unlit = 0
+    for index in range(document.length(materials)):
+        var entry = document.at(materials, index)
+        if not document.has(entry, "extensions"):
+            continue
+        var named = document.get(entry, "extensions")
+        if not document.has(named, "KHR_materials_unlit"):
+            continue
+        var pbr = document.get(entry, "pbrMetallicRoughness")
+        var rough = document.number(document.get(pbr, "roughnessFactor"))
+        assert_almost_equal(rough, 0.9, atol=1e-6)
+        assert_equal(document.number(document.get(pbr, "metallicFactor")), 0)
+        unlit += 1
+    assert_true(unlit > 0, "no unlit material was written")
     # POSITION carries its bounds; the others do not.
     var accessors = document.get(root, "accessors")
     var first = document.at(accessors, 0)

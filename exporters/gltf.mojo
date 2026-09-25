@@ -32,8 +32,9 @@ once.
 is written with its color, opacity, metalness, roughness, emissive color,
 alpha mode, side and maps. Every other kind is written as the nearest
 metallic-roughness material, as three.js writes it: its color and opacity
-with a metalness of zero and a roughness of one, and a `BASIC` material
-also says `KHR_materials_unlit`. An ao map is the `occlusionTexture`, its
+with a metalness of zero and a roughness of one. A `BASIC` material
+also says `KHR_materials_unlit`, with a roughness of 0.9, as three.js's
+unlit extension writes it. An ao map is the `occlusionTexture`, its
 intensity the `strength`, and its texture's channel the `texCoord`. An
 emissive intensity that is not one is `KHR_materials_emissive_strength`.
 A transparent material is `BLEND`, an alpha-tested one is `MASK` at its
@@ -104,8 +105,9 @@ into one `weights` channel, as three.js's `mergeMorphTargetTracks`
 merges them; see `_Merged`. Any other track is left out, as three.js
 leaves it out.
 
-**User data and options.** A node's `user_data`, and the scene's and
-each material's user data from `GltfExportOptions`, are written as
+**User data and options.** A node's `user_data`, a geometry's on each
+primitive that draws it, and the scene's and each material's user data
+from `GltfExportOptions`, are written as
 `extras`, as three.js's `serializeUserData` writes them. A `Scene` and a
 `Material` here hold no user data, so the options carry theirs. With
 `include_custom_extensions` on, a `gltfExtensions` object in user data
@@ -162,7 +164,12 @@ from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.user_data import UserData, json_value_text
-from exporters.common import check_geometry, push_f32, push_word
+from exporters.common import (
+    check_geometry,
+    push_f32,
+    push_word,
+    resized_image,
+)
 from exporters.json_writer import JsonWriter
 from loaders.gltf import (
     COMPONENT_BYTE,
@@ -664,35 +671,6 @@ def _with_custom(parts: _UserParts, plugins: String) raises -> String:
             out += ","
         out += quote_json(names[at]) + ":" + values[at]
     return out + "}"
-
-
-def _resized(
-    pixels: List[UInt8], width: Int, height: Int, wide: Int, high: Int
-) -> List[UInt8]:
-    """Return an RGBA image resampled to `wide` by `high`, bilinear at each
-    pixel's center, as a canvas's `drawImage` with smoothing draws it."""
-    var out = List[UInt8](capacity=wide * high * 4)
-    for y in range(high):  # pragma: no branch
-        var fy = (Float64(y) + 0.5) * Float64(height) / Float64(high) - 0.5
-        fy = min(max(fy, 0.0), Float64(height - 1))
-        var y0 = Int(fy)
-        var y1 = min(y0 + 1, height - 1)
-        var ty = fy - Float64(y0)
-        for x in range(wide):  # pragma: no branch
-            var fx = (Float64(x) + 0.5) * Float64(width) / Float64(wide) - 0.5
-            fx = min(max(fx, 0.0), Float64(width - 1))
-            var x0 = Int(fx)
-            var x1 = min(x0 + 1, width - 1)
-            var tx = fx - Float64(x0)
-            for channel in range(4):  # pragma: no branch
-                var a = Float64(pixels[(y0 * width + x0) * 4 + channel])
-                var b = Float64(pixels[(y0 * width + x1) * 4 + channel])
-                var c = Float64(pixels[(y1 * width + x0) * 4 + channel])
-                var d = Float64(pixels[(y1 * width + x1) * 4 + channel])
-                var top = a + (b - a) * tx
-                var bottom = c + (d - c) * tx
-                out.append(UInt8(Int(top + (bottom - top) * ty + 0.5)))
-    return out^
 
 
 struct _Exporter(Movable):
@@ -1212,7 +1190,7 @@ struct _Exporter(Movable):
             if width > most or height > most:
                 var wide = min(width, most)
                 var high = min(height, most)
-                pixels = _resized(pixels, width, height, wide, high)
+                pixels = resized_image(pixels, width, height, wide, high)
                 width = wide
                 height = high
         var image = self.image(pixels^, width, height)
@@ -1298,8 +1276,11 @@ struct _Exporter(Movable):
         var physical = material.is_physical()
         writer.key("metallicFactor")
         writer.number(material.metalness if physical else 0)
+        # three.js's `GLTFMaterialsUnlitExtension` sets an unlit material's
+        # roughness to 0.9; every other kind it has no roughness for is 1.
+        var roughness = Float32(0.9) if material.kind == BASIC else 1
         writer.key("roughnessFactor")
-        writer.number(material.roughness if physical else 1)
+        writer.number(material.roughness if physical else roughness)
         if material.map != NO_TEXTURE:
             self.texture_info(
                 writer, "baseColorTexture", material.map, material.map, assets
@@ -1832,6 +1813,16 @@ struct _Exporter(Movable):
                     writer.integer(self.targets[slot][target * 2 + 1])
                 writer.end_object()
             writer.end_array()
+        # The geometry's user data, three.js's `serializeUserData( geometry,
+        # primitive )`.
+        var parts = self.user_parts(shape.user_data)
+        if parts.extras != "":
+            writer.key("extras")
+            writer.raw(parts.extras)
+        var custom = _with_custom(parts, "")
+        if custom != "":
+            writer.key("extensions")
+            writer.raw(custom)
         writer.end_object()
 
     def instancing(mut self, scene: Scene, carried: _Carried) raises -> String:

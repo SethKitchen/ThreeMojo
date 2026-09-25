@@ -519,3 +519,43 @@ def world_meshes(
             )
             found.append(world^)
     return found^
+
+
+def resized_image(
+    pixels: List[UInt8], width: Int, height: Int, wide: Int, high: Int
+) -> List[UInt8]:
+    """Return an RGBA image resampled to `wide` by `high`, bilinear at each
+    pixel's center, as a canvas's `drawImage` with smoothing draws it.
+
+    Args:
+        pixels: The image, four bytes a pixel, rows in order.
+        width: Its width in pixels.
+        height: Its height in pixels.
+        wide: The width to draw it at.
+        high: The height to draw it at.
+
+    Returns:
+        The drawn image, four bytes a pixel.
+    """
+    var out = List[UInt8](capacity=wide * high * 4)
+    for y in range(high):  # pragma: no branch
+        var fy = (Float64(y) + 0.5) * Float64(height) / Float64(high) - 0.5
+        fy = min(max(fy, 0.0), Float64(height - 1))
+        var y0 = Int(fy)
+        var y1 = min(y0 + 1, height - 1)
+        var ty = fy - Float64(y0)
+        for x in range(wide):  # pragma: no branch
+            var fx = (Float64(x) + 0.5) * Float64(width) / Float64(wide) - 0.5
+            fx = min(max(fx, 0.0), Float64(width - 1))
+            var x0 = Int(fx)
+            var x1 = min(x0 + 1, width - 1)
+            var tx = fx - Float64(x0)
+            for channel in range(4):  # pragma: no branch
+                var a = Float64(pixels[(y0 * width + x0) * 4 + channel])
+                var b = Float64(pixels[(y0 * width + x1) * 4 + channel])
+                var c = Float64(pixels[(y1 * width + x0) * 4 + channel])
+                var d = Float64(pixels[(y1 * width + x1) * 4 + channel])
+                var top = a + (b - a) * tx
+                var bottom = c + (d - c) * tx
+                out.append(UInt8(Int(top + (bottom - top) * ty + 0.5)))
+    return out^

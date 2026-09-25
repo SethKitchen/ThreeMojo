@@ -37,8 +37,9 @@ Call `update` after `Scene.update` and before the render. `update` returns False
 | `camera` | `camera` | The `VirtualCamera` of the last update. |
 | `texture_matrix` | `textureMatrix` | The bias, the virtual projection and view, and the surface's world matrix. |
 | `clip_bias` | `clipBias` | How far past the surface the clipping plane lies, as a `Length`. |
+| `multisample` | `multisample` | How many samples each pixel of the target takes: 4 by default, 0 for none. The count must be 0, 1 or a square, as a [render target](Render-target-and-framebuffer#multisampled-render-targets) takes. |
 
-The constructor takes the three.js options: `color`, `texture_width`, `texture_height`, `clip_bias`, and a `vertex_shader` and a `fragment_shader` for three.js's `shader` option. The target is a half float target, as in three.js. The `Refractor` material is transparent, as in three.js.
+The constructor takes the three.js options: `color`, `texture_width`, `texture_height`, `clip_bias`, `multisample`, and a `vertex_shader` and a `fragment_shader` for three.js's `shader` option. The target is a half float target, as in three.js. The `Refractor` material is transparent, as in three.js.
 
 ### How the view is cut
 
@@ -170,6 +171,5 @@ scene.update()
 
 ## What is not ported
 
-- The `multisample` option of the reflectors and refractors. Their targets take one sample a pixel. A [render target](Render-target-and-framebuffer#multisampled-render-targets) can take more.
 - `ReflectorForSSRPass`, and the node versions for WebGPU: `SkyMesh`, `WaterMesh`, `Water2Mesh` and `LensflareMesh`.
 - The textures that `Water2` loads by default. Pass the two normal maps.

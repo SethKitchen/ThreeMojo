@@ -32,8 +32,9 @@ then applied in that order:
   checked and changes nothing, as three.js ignores it.
 - `map_Kd`: the color map, read as sRGB. `map_Ke`: the emissive map, read
   as sRGB. `map_d`: the alpha map, read as data, and it makes the surface
-  transparent. `map_bump` or `bump`: the bump map, and `norm`: the normal
-  map, each read as data. The first of each kind is kept, as three.js
+  transparent. `map_bump` or `bump`: the bump map, `norm`: the normal
+  map, `map_Ks`: the specular map, and `disp`: the displacement map, each
+  read as data. The first of each kind is kept, as three.js
   keeps it. A material with both keeps the normal map and drops the bump
   map, as three.js ignores it.
 
@@ -41,8 +42,9 @@ A texture line is options, then a file name relative to the library's
 own directory. `-s u v w` sets the texture's `repeat` and `-o u v w` its
 `offset`; `w` is ignored, and a missing `v` is one for `-s` and zero for
 `-o`. `-bm scale` sets the material's bump scale, from whichever texture
-line carries it, as three.js sets it. `-mm base gain` is read and ignored,
-since it scales a displacement map, which is not ported. `-clamp on`
+line carries it, as three.js sets it. `-mm base gain` sets the material's
+displacement bias to `base` and its scale to `gain`, in meters, the same
+way. They move nothing without a `disp` map, as in three.js. `-clamp on`
 clamps the texture where three.js takes its `wrap` option anyway; `-clamp
 off` takes the `wrap` option, a repeat by default.
 Any other option is refused, where three.js would take it for part of the
@@ -55,9 +57,7 @@ specular of `0x111111`, a shininess of thirty, no emissive, opaque, on the
 front side, textures repeating.
 
 **Not ported.** `Ka` and `map_Ka`, which three.js reads and ignores, are
-skipped, as is every keyword three.js ignores. `map_Ks`, three.js's
-`specularMap`, is skipped, since `Material` has no specular map. `disp` is
-skipped, since no material displaces its vertices. Each map keeps its
+skipped, as is every keyword three.js ignores. Each map keeps its
 own `-s` and `-o`, as in three.js.
 
 **Options.** `MtlOptions` holds three.js's `setMaterialOptions`. `side`
@@ -96,6 +96,7 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import isfinite
 from std.pathlib import Path
+from units.si import METER, Length
 
 # What three.js's `MeshPhongMaterial` starts from.
 comptime _WHITE = Color(255, 255, 255)
@@ -332,6 +333,12 @@ struct _Surface(Copyable, Movable):
     var normal_map: TextureId
     var bump_map: TextureId
     var bump_scale: Float32
+    var specular_map: TextureId
+    var displacement_map: TextureId
+    # In meters, as three.js's `displacementBias` and
+    # `displacementScale` are in the geometry's units.
+    var displacement_bias: Float32
+    var displacement_scale: Float32
     var side: Side
 
     def __init__(out self):
@@ -348,6 +355,10 @@ struct _Surface(Copyable, Movable):
         self.normal_map = NO_TEXTURE
         self.bump_map = NO_TEXTURE
         self.bump_scale = 1
+        self.specular_map = NO_TEXTURE
+        self.displacement_map = NO_TEXTURE
+        self.displacement_bias = 0
+        self.displacement_scale = 1
         self.side = FRONT_SIDE
 
 
@@ -365,7 +376,7 @@ def _phong(surface: _Surface) raises -> Material:
             keys were read leave no way to do. A bump map beside a normal
             map is dropped rather than refused.
     """
-    return Material(
+    var built = Material(
         surface.color,
         kind=PHONG,
         map=surface.map,
@@ -380,10 +391,20 @@ def _phong(surface: _Surface) raises -> Material:
         bump_map=NO_TEXTURE if surface.normal_map
         != NO_TEXTURE else surface.bump_map,
         bump_scale=surface.bump_scale,
+        specular_map=surface.specular_map,
         opacity=surface.opacity,
         transparent=surface.transparent,
         side=surface.side,
     )
+    # A bias and a scale move nothing without a map, as in three.js, and
+    # `Material` refuses them alone, so they go with the map.
+    if surface.displacement_map != NO_TEXTURE:
+        built.set_displacement(
+            surface.displacement_map,
+            Length(surface.displacement_scale, METER),
+            Length(surface.displacement_bias, METER),
+        )
+    return built^
 
 
 struct _Textures(Movable):
@@ -410,6 +431,9 @@ struct _TextureLine(Copyable, Movable):
     var clamp: Bool
     var has_bump_scale: Bool
     var bump_scale: Float32
+    var has_displacement: Bool
+    var displacement_bias: Float32
+    var displacement_scale: Float32
 
 
 def _where(line: Int) -> String:
@@ -612,6 +636,9 @@ def _texture_line(value: String, line: Int) raises -> _TextureLine:
     var clamp = False
     var has_bump_scale = False
     var bump_scale = Float32(1)
+    var has_displacement = False
+    var displacement_bias = Float32(0)
+    var displacement_scale = Float32(1)
     var at = 0
     while at < len(tokens):
         var token = tokens[at]
@@ -631,7 +658,13 @@ def _texture_line(value: String, line: Int) raises -> _TextureLine:
             has_bump_scale = True
             at += 1
         elif token == "-mm":
-            at += len(_option_numbers(tokens, at, 2, 2, line))
+            # three.js's order: the base, which is the bias, then the gain,
+            # which is the scale.
+            var values = _option_numbers(tokens, at, 2, 2, line)
+            displacement_bias = values[0]
+            displacement_scale = values[1]
+            has_displacement = True
+            at += 2
         elif token == "-clamp":
             var setting = tokens[at] if at < len(tokens) else String()
             if setting != "on" and setting != "off":
@@ -651,7 +684,15 @@ def _texture_line(value: String, line: Int) raises -> _TextureLine:
     if file == "":
         raise Error(_where(line) + "a texture line names no file")
     return _TextureLine(
-        file^, repeat, offset, clamp, has_bump_scale, bump_scale
+        file^,
+        repeat,
+        offset,
+        clamp,
+        has_bump_scale,
+        bump_scale,
+        has_displacement,
+        displacement_bias,
+        displacement_scale,
     )
 
 
@@ -661,6 +702,8 @@ def _texture(
     role: Int,
     directory: String,
     mut bump_scale: Float32,
+    mut displacement_bias: Float32,
+    mut displacement_scale: Float32,
     mut assets: Assets,
     mut textures: _Textures,
     wrap: Wrap,
@@ -675,6 +718,9 @@ def _texture(
         role: `_COLOR_ROLE`, `_GLOW_ROLE` or `_DATA_ROLE`.
         directory: Where the file names are relative to.
         bump_scale: The material's bump scale, set by a `-bm` option.
+        displacement_bias: The material's displacement bias, set by a
+            `-mm` option.
+        displacement_scale: Its displacement scale, set by the same.
         assets: Where the texture is added.
         textures: What this library has read, to read an image once.
         wrap: The wrap of a texture that does not clamp.
@@ -691,6 +737,9 @@ def _texture(
     var said = _texture_line(entry.value, entry.line)
     if said.has_bump_scale:
         bump_scale = said.bump_scale
+    if said.has_displacement:
+        displacement_bias = said.displacement_bias
+        displacement_scale = said.displacement_scale
     var path = directory + said.file
     var key = (
         path
@@ -823,6 +872,8 @@ def _build(
                 _COLOR_ROLE,
                 directory,
                 surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
                 assets,
                 textures,
                 options.wrap,
@@ -834,6 +885,8 @@ def _build(
                 _GLOW_ROLE,
                 directory,
                 surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
                 assets,
                 textures,
                 options.wrap,
@@ -845,6 +898,8 @@ def _build(
                 _DATA_ROLE,
                 directory,
                 surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
                 assets,
                 textures,
                 options.wrap,
@@ -857,6 +912,8 @@ def _build(
                 _DATA_ROLE,
                 directory,
                 surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
                 assets,
                 textures,
                 options.wrap,
@@ -868,6 +925,34 @@ def _build(
                 _DATA_ROLE,
                 directory,
                 surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
+                assets,
+                textures,
+                options.wrap,
+            )
+        elif key == "map_ks":
+            surface.specular_map = _texture(
+                surface.specular_map,
+                entry,
+                _DATA_ROLE,
+                directory,
+                surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
+                assets,
+                textures,
+                options.wrap,
+            )
+        elif key == "disp":
+            surface.displacement_map = _texture(
+                surface.displacement_map,
+                entry,
+                _DATA_ROLE,
+                directory,
+                surface.bump_scale,
+                surface.displacement_bias,
+                surface.displacement_scale,
                 assets,
                 textures,
                 options.wrap,

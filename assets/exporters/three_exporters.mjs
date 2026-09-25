@@ -16,6 +16,10 @@
 //   GLTFLoader gives each object.
 // - `ply_mapped`: a PLY text, and the attributes PLYLoader reads from it
 //   with both property name mappings.
+// - `ply_colors_ascii`, `gltf_unlit_material`: a triangle with vertex colors
+//   as PLY, and the material GLTFExporter writes for its `MeshBasicMaterial`.
+// - `gltf_primitive_extras`: a geometry's `userData` as GLTFExporter writes
+//   it on its primitive, and as GLTFLoader reads it back.
 
 import * as THREE from 'three';
 import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
@@ -205,6 +209,22 @@ out.gltf_extras = {
 	material: one.material.userData,
 };
 
+// --- primitive extras ------------------------------------------------------
+//
+// GLTFExporter writes a geometry's `userData` as its primitive's `extras`,
+// and GLTFLoader reads them back into the geometry's `userData`.
+
+const leaf = geometry( TRIANGLE );
+leaf.userData = { kind: 'leaf', count: 3 };
+const leafScene = new THREE.Scene();
+leafScene.add( new THREE.Mesh( leaf, new THREE.MeshStandardMaterial() ) );
+const leafDocument = await gltf.parseAsync( leafScene );
+const leafRead = await new GLTFLoader().parseAsync( JSON.stringify( leafDocument ), '' );
+out.gltf_primitive_extras = {
+	written: leafDocument.meshes[ 0 ].primitives[ 0 ].extras,
+	read: leafRead.scene.children[ 0 ].geometry.userData,
+};
+
 // --- PLY property name mappings ---------------------------------------------
 
 const plyText = [
@@ -235,5 +255,18 @@ out.ply_mapped = {
 	quality: Array.from( read.getAttribute( 'quality' ).array ),
 	quality_size: read.getAttribute( 'quality' ).itemSize,
 };
+
+// --- vertex colors and an unlit material ------------------------------------
+//
+// PLYExporter writes `Math.floor( color * 255 )` after the sRGB encode, and
+// GLTFExporter writes an unlit material's roughness as 0.9.
+
+const tinted = new THREE.Scene();
+tinted.add( new THREE.Mesh(
+	geometry( TRIANGLE, { color: [ [ 1, 1, 1, 0.5, 0.25, 0, 0.2, 0.6, 0.9 ], 3 ] } ),
+	new THREE.MeshBasicMaterial( { vertexColors: true } ),
+) );
+out.ply_colors_ascii = ply.parse( tinted );
+out.gltf_unlit_material = ( await gltf.parseAsync( tinted ) ).materials[ 0 ];
 
 console.log( JSON.stringify( out, null, 1 ) );

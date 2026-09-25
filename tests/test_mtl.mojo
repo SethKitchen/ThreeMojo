@@ -259,6 +259,36 @@ def test_clamp_and_the_displacement_option() raises:
     assert_true(assets.textures.get(repeated.map).wrap_s == REPEAT)
 
 
+def test_the_specular_and_displacement_maps_are_read_as_data() raises:
+    # three.js's `map_Ks` is the `specularMap` and `disp` the
+    # `displacementMap`, each data. `-mm base gain` sets the displacement
+    # bias and scale, from whichever texture line carries it.
+    var assets = Assets()
+    var built = one(
+        (
+            "newmtl a\nmap_Ks brick.png\nmap_Kd -mm 0.25 3 brick.png\n"
+            "disp gltf/checker.png\n"
+        ),
+        assets,
+    )
+    ref shine = assets.textures.get(built.specular_map)
+    assert_true(shine.color_space == LINEAR)
+    ref height = assets.textures.get(built.displacement_map)
+    assert_true(height.color_space == LINEAR)
+    assert_almost_equal(
+        built.displacement_bias.to(METER), Float32(0.25), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        built.displacement_scale.to(METER), Float32(3), atol=TOLERANCE
+    )
+    # Without a map the numbers move nothing, and are not kept.
+    var loose = one("newmtl c\nmap_Kd -mm 0.5 2 brick.png\n", assets)
+    assert_false(loose.has_displacement_map())
+    assert_almost_equal(
+        loose.displacement_scale.to(METER), Float32(1), atol=TOLERANCE
+    )
+
+
 def test_a_file_name_can_hold_spaces() raises:
     refuses("newmtl a\nmap_Kd no such.png\n", "assets/no such.png")
 

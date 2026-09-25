@@ -217,7 +217,7 @@ help:
 	@echo "  make test-gpu-host  the MAX backend's layout suites, no GPU needed"
 	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
-	@echo "  make lint       compile with warnings promoted to errors"
+	@echo "  make lint       compile with warnings promoted to errors, but the suites"
 	@echo "  make fmt        reformat sources in place"
 	@echo "  make fmt-check  verify formatting, changing nothing"
 	@echo "  make coverage   line / branch / condition / MC-DC coverage"
@@ -258,11 +258,19 @@ ci:
 # --- cached tasks -----------------------------------------------------------
 test: test-cpu test-gpu
 
+# Each suite is built once, with warnings as errors, and the program is
+# run. The build is the suite's lint, so `lint-cpu` leaves the suites to
+# this: building a suite to check it and again to run it compiled the
+# whole library twice for every suite, and was most of CI's hour.
+BIN_DIR := $(CACHE_DIR)/bin
 test-cpu: $(TEST_CPU_STAMP)
 $(TEST_CPU_STAMP):
+	@mkdir -p $(BIN_DIR)
 	@printf '%s\n' $(CPU_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	      sh -c 'bin=$(BIN_DIR)/$$(basename "$$1" .mojo); \
+	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
+	                    2>&1 && "$$bin" 2>&1); rc=$$?; rm -f "$$bin"; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some CPU suites FAILED."; exit 1; }
 	@echo "All $(words $(CPU_TESTS)) CPU suites passed."
@@ -316,9 +324,10 @@ gpu-status:
 
 lint: lint-cpu lint-gpu
 
+# The suites are linted where `test-cpu` builds them.
 lint-cpu: $(LINT_CPU_STAMP)
 $(LINT_CPU_STAMP):
-	@printf '%s\n' $(CPU_ENTRY_POINTS) \
+	@printf '%s\n' $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
 	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \

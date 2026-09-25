@@ -97,7 +97,9 @@ instanced, where three.js drops the skin.
 after its `name`, which three.js also keeps as `userData.name`. A node
 whose mesh has one primitive, and that has no camera and no light and is
 not a joint, takes the mesh's `extras` first, since three.js's node is
-that mesh. A `Mesh`, a `Material` and a `Scene` here hold no user data,
+that mesh. A primitive's `extras` become its geometry's `user_data`, as
+three.js's `geometry.userData`. A `Mesh`, a `Material` and a `Scene` here
+hold no user data,
 so `GltfModel.mesh_extras`, `material_extras` and `scene_extras` hold
 theirs. `extras` that are not an object are skipped, as three.js skips
 them.
@@ -2031,6 +2033,9 @@ struct _Loader(Movable):
                         " of triangles are not read"
                     )
                 var geometry = self.geometry_of(primitive, mode)
+                # three.js's `assignExtrasToUserData( geometry,
+                # primitiveDef )`.
+                geometry.user_data = self.extras(primitive)
                 if len(names) > 0:
                     if len(names) != geometry.morph_count():
                         raise Error(

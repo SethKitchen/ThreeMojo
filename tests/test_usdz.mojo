@@ -312,6 +312,24 @@ def test_archive() raises:
         at = data + len(entries[i].data)
 
 
+def test_a_texture_is_scaled_to_the_max_texture_size() raises:
+    # three.js's `maxTextureSize`: the longer side comes down to it, and the
+    # other keeps the shape, cut down to whole pixels.
+    var world = _World()
+    var whole = usdz_files(world.scene, world.assets, world.cameras)
+    var full = decode_png(whole.data[len(whole.data) - 1])
+    var options = UsdzOptions()
+    options.max_texture_size = 1
+    var files = usdz_files(world.scene, world.assets, world.cameras, options)
+    var image = decode_png(files.data[len(files.data) - 1])
+    assert_equal(max(image.width, image.height), 1)
+    assert_true(image.width <= full.width and image.height <= full.height)
+    # Not below one.
+    options.max_texture_size = 0
+    with assert_raises(contains="max texture size"):
+        _ = usdz_files(world.scene, world.assets, world.cameras, options)
+
+
 def test_a_node_of_several_things() raises:
     var scene = Scene()
     var assets = Assets()

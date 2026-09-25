@@ -58,7 +58,12 @@ from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.target import HALF_FLOAT_TARGET, RenderTarget, TargetType
+from render.target import (
+    HALF_FLOAT_TARGET,
+    RenderTarget,
+    TargetType,
+    check_samples,
+)
 from render.texture import Texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
@@ -67,6 +72,9 @@ from units.si import Length, METER
 
 # three.js's `textureWidth` and `textureHeight` default, in pixels.
 comptime DEFAULT_TEXTURE_SIZE = 512
+# The samples each pixel of the target takes, three.js's `multisample`
+# option of `Reflector` and `Refractor`: four by default, zero for none.
+comptime DEFAULT_MULTISAMPLE = 4
 # three.js's `clipBias` default: the plane lies on the surface.
 comptime NO_CLIP_BIAS = Length(0.0, METER)
 # three.js's `color` default for both objects, `0x7F7F7F`.
@@ -419,6 +427,7 @@ def render_view(
     width: Int,
     height: Int,
     type: TargetType,
+    samples: Int = 0,
 ) raises -> Texture:
     """Render the scene through a virtual camera, with a node hidden and a
     plane cut, and return the target as a texture.
@@ -435,6 +444,8 @@ def render_view(
         width: The target's width in pixels.
         height: The target's height in pixels.
         type: What the target stores.
+        samples: How many samples each pixel of the target takes, three.js's
+            `samples`. Zero, the default, takes one.
 
     Returns:
         The target's color as a float texture, clamped, bilinear, without
@@ -445,7 +456,9 @@ def render_view(
     """
     var view = view_renderer(renderer, width, height)
     view.clipping_planes.append(cut)
-    var target = RenderTarget(width, height, renderer.background, type)
+    var target = RenderTarget(
+        width, height, renderer.background, type, samples=samples
+    )
     var was = scene.get(hidden).visible
     _show(scene, hidden, False)
     try:
@@ -536,6 +549,8 @@ struct Reflector(Movable):
     var texture: TextureId
     var texture_width: Int
     var texture_height: Int
+    # The samples each pixel of the target takes, three.js's `multisample`.
+    var multisample: Int
     # How far past the mirror the clipping plane lies.
     var clip_bias: Length
     # Render the target at the next update even when the camera is behind
@@ -556,6 +571,7 @@ struct Reflector(Movable):
         texture_width: Int = DEFAULT_TEXTURE_SIZE,
         texture_height: Int = DEFAULT_TEXTURE_SIZE,
         clip_bias: Length = NO_CLIP_BIAS,
+        multisample: Int = DEFAULT_MULTISAMPLE,
         vertex_shader: String = REFLECTOR_VERTEX,
         fragment_shader: String = REFLECTOR_FRAGMENT,
     ) raises:
@@ -573,6 +589,8 @@ struct Reflector(Movable):
             texture_width: The render target's width in pixels.
             texture_height: The render target's height in pixels.
             clip_bias: How far past the mirror the clipping plane lies.
+            multisample: How many samples each pixel of the target takes,
+                three.js's `multisample`: four by default, zero for none.
             vertex_shader: The GLSL vertex shader, three.js's `shader`.
             fragment_shader: The GLSL fragment shader. The shaders read the
                 uniforms `color`, `tDiffuse` and `textureMatrix`.
@@ -583,6 +601,7 @@ struct Reflector(Movable):
         """
         check_texture_size(texture_width, texture_height)
         check_clip_bias(clip_bias)
+        check_samples(multisample)
         self.texture = assets.textures.add(
             blank_texture(texture_width, texture_height, HALF_FLOAT_TARGET)
         )
@@ -596,6 +615,7 @@ struct Reflector(Movable):
         self.texture_width = texture_width
         self.texture_height = texture_height
         self.clip_bias = clip_bias
+        self.multisample = multisample
         self.force_update = False
         self.camera = default_virtual_camera()
         self.texture_matrix = Matrix4()
@@ -652,6 +672,7 @@ struct Reflector(Movable):
             self.texture_width,
             self.texture_height,
             HALF_FLOAT_TARGET,
+            self.multisample,
         )
         replace_texture(assets, self.texture, seen^)
         self.force_update = False
@@ -722,6 +743,8 @@ struct Refractor(Movable):
     var texture: TextureId
     var texture_width: Int
     var texture_height: Int
+    # The samples each pixel of the target takes, three.js's `multisample`.
+    var multisample: Int
     # How far past the surface the clipping plane lies.
     var clip_bias: Length
     # The camera the last update rendered through.
@@ -738,6 +761,7 @@ struct Refractor(Movable):
         texture_width: Int = DEFAULT_TEXTURE_SIZE,
         texture_height: Int = DEFAULT_TEXTURE_SIZE,
         clip_bias: Length = NO_CLIP_BIAS,
+        multisample: Int = DEFAULT_MULTISAMPLE,
         vertex_shader: String = REFRACTOR_VERTEX,
         fragment_shader: String = REFRACTOR_FRAGMENT,
     ) raises:
@@ -753,6 +777,8 @@ struct Refractor(Movable):
             texture_width: The render target's width in pixels.
             texture_height: The render target's height in pixels.
             clip_bias: How far past the surface the clipping plane lies.
+            multisample: How many samples each pixel of the target takes,
+                three.js's `multisample`: four by default, zero for none.
             vertex_shader: The GLSL vertex shader, three.js's `shader`.
             fragment_shader: The GLSL fragment shader. The shaders read the
                 uniforms `color`, `tDiffuse` and `textureMatrix`.
@@ -763,6 +789,7 @@ struct Refractor(Movable):
         """
         check_texture_size(texture_width, texture_height)
         check_clip_bias(clip_bias)
+        check_samples(multisample)
         self.texture = assets.textures.add(
             blank_texture(texture_width, texture_height, HALF_FLOAT_TARGET)
         )
@@ -778,6 +805,7 @@ struct Refractor(Movable):
         self.texture_width = texture_width
         self.texture_height = texture_height
         self.clip_bias = clip_bias
+        self.multisample = multisample
         self.camera = default_virtual_camera()
         self.texture_matrix = Matrix4()
 
@@ -830,6 +858,7 @@ struct Refractor(Movable):
             self.texture_width,
             self.texture_height,
             HALF_FLOAT_TARGET,
+            self.multisample,
         )
         replace_texture(assets, self.texture, seen^)
         return True

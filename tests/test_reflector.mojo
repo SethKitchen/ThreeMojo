@@ -294,6 +294,33 @@ def test_a_mirror_shows_the_mirrored_scene() raises:
     assert_true(floor.r < 16)
 
 
+def test_the_target_takes_three_js_samples() raises:
+    # three.js's `multisample`: four by default, zero for one sample. Four
+    # samples blend the box's edges, so the two targets differ.
+    var assets = Assets()
+    var scene = Scene()
+    var mirror = mirror_scene(assets, scene)
+    assert_equal(mirror.multisample, 4)
+    var renderer = Renderer(SIZE, SIZE)
+    assert_true(mirror.update(renderer, scene, assets, high_camera()))
+    var smooth = assets.textures.get(mirror.texture).data.copy()
+    mirror.multisample = 0
+    assert_true(mirror.update(renderer, scene, assets, high_camera()))
+    ref sharp = assets.textures.get(mirror.texture).data
+    var differ = 0
+    for index in range(len(sharp)):
+        if sharp[index] != smooth[index]:
+            differ += 1
+    assert_true(differ > 0, "four samples changed nothing")
+    # A count the target cannot take is refused, as a render target
+    # refuses it.
+    var node = floor_node(scene)
+    with assert_raises():
+        _ = Reflector(assets, square(assets, 1), node, multisample=3)
+    with assert_raises():
+        _ = Refractor(assets, square(assets, 1), node, multisample=-1)
+
+
 def test_a_mirror_seen_from_behind_renders_nothing() raises:
     var assets = Assets()
     var scene = Scene()

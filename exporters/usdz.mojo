@@ -54,9 +54,14 @@ for any scene whose numbers are short decimals. A matrix is this port's
 `Float32` matrix. A turn that a `Float32` cannot hold exactly, such as
 thirty degrees, is written a few units apart in the last digits.
 
-**Where this port differs.** three.js draws each texture on a canvas
-and scales it to `maxTextureSize`. This port writes the texture's own
-pixels as a PNG from `render.png`, at its own size. A texture file is
+**Textures.** A texture is written as a PNG from `render.png`. One whose
+longer side is past `max_texture_size`, 1024 by default, is scaled down
+to it, keeping its shape, as three.js's `imageToCanvas` scales it: each
+side times the size over the longer side, cut down to whole pixels. The
+resampling is bilinear at each pixel's center, where three.js leaves it
+to the canvas, so the pixels can differ.
+
+**Where this port differs.** A texture file is
 named for the texture's id, as three.js names it for its source's id.
 Each file of the archive starts at a multiple of 64 bytes, as USDZ
 asks. three.js pads each file by a count that is right only for the
@@ -91,6 +96,7 @@ from materials.material import (
 )
 from math.matrix4 import Matrix4
 from render.framebuffer import Color, Framebuffer
+from exporters.common import resized_image
 from render.png import encode as encode_png
 from render.srgb import SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
@@ -119,6 +125,10 @@ struct UsdzOptions(Copyable, Movable):
     var only_visible: Bool
     # Write texture transforms the way AR Quick Look reads them.
     var quick_look_compatible: Bool
+    # The longest side a texture is written at, three.js's
+    # `maxTextureSize`. A larger one is scaled down to it, keeping its
+    # shape.
+    var max_texture_size: Int
 
     def __init__(out self):
         """Take three.js's defaults."""
@@ -127,6 +137,7 @@ struct UsdzOptions(Copyable, Movable):
         self.include_anchoring_properties = True
         self.only_visible = True
         self.quick_look_compatible = False
+        self.max_texture_size = 1024
 
 
 @fieldwise_init
@@ -1076,9 +1087,12 @@ def usdz_files(
     Raises:
         Error: If a mesh names a node, a geometry, a material or a
             texture that is not there, a geometry has no position or is
-            not whole triangles, or a texture is blank, holds floats, or
-            has a wrap or a channel that is not valid.
+            not whole triangles, a texture is blank, holds floats, or
+            has a wrap or a channel that is not valid, or
+            `max_texture_size` is below one.
     """
+    if options.max_texture_size < 1:
+        raise Error("USDZ: a max texture size must be one or more")
     var count = scene.count()
     var meshes = List[List[_Drawn]](length=count, fill=List[_Drawn]())
     for mesh in scene.meshes:
@@ -1128,9 +1142,22 @@ def usdz_files(
     for id in exporter.textures:
         ref texture = assets.textures.get(TextureId(id))
         var pixels = gltf_pixels(texture)
+        var wide = texture.width
+        var high = texture.height
+        # three.js's `imageToCanvas`: both sides times the longest side's
+        # share of `maxTextureSize`, never above one, and a canvas's size
+        # is a whole number of pixels, cut down.
+        var most = options.max_texture_size
+        if max(wide, high) > most:
+            var scale = Float64(most) / Float64(max(wide, high))
+            wide = max(Int(Float64(texture.width) * scale), 1)
+            high = max(Int(Float64(texture.height) * scale), 1)
+            pixels = resized_image(
+                pixels, texture.width, texture.height, wide, high
+            )
         files.add(
             "textures/Texture_" + String(id) + "_true.png",
-            encode_png(Framebuffer(texture.width, texture.height, pixels^)),
+            encode_png(Framebuffer(wide, high, pixels^)),
         )
     return files^
 

@@ -147,6 +147,8 @@ A keyword can be in any case. Each key keeps the last value that a material give
 | `map_d file` | The alpha map, as data. It also sets `transparent`. |
 | `map_bump file`, `bump file` | The bump map, as data. The first of the two is kept. |
 | `norm file` | The normal map, as data. |
+| `map_Ks file` | The specular map, as data. |
+| `disp file` | The displacement map, as data. |
 | `#` | A comment, to the end of the line. |
 
 The defaults are those of three.js's `MeshPhongMaterial`: a white color, a specular of `0x111111`, a shininess of 30, no emissive color, and opaque. Lines before the first `newmtl` are skipped. A key with no value is skipped. `Ka`, `map_Ka` and unknown keys are skipped, as three.js skips them.
@@ -162,15 +164,14 @@ A texture line has options, then a file name. The file name can contain spaces.
 | `-s u v w` | The texture's `repeat`. `w` is ignored. When `v` is missing, it is one. |
 | `-o u v w` | The texture's `offset`. `w` is ignored. When `v` is missing, it is zero. |
 | `-bm n` | The material's `bump_scale`, on any texture line, as three.js reads it. |
-| `-mm base gain` | Read and ignored. It scales a displacement map, and this loader skips `disp`. |
+| `-mm base gain` | The material's displacement bias and scale, in meters, on any texture line, as three.js reads them. They move nothing without a `disp` map. |
 | `-clamp on`, `-clamp off` | `CLAMP`, or the `wrap` of the options. three.js always uses the `wrap` of the options. |
 
-A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and TGA images, and tells them apart by their first bytes. A color map is `SRGB`, and its alpha is coverage. An emissive map is `SRGB`, and its alpha is `IGNORED`. An alpha map, a bump map and a normal map are `LINEAR`, and their alpha is `IGNORED`. One image read the same way twice gives one texture.
+A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and TGA images, and tells them apart by their first bytes. A color map is `SRGB`, and its alpha is coverage. An emissive map is `SRGB`, and its alpha is `IGNORED`. An alpha map, a bump map, a normal map, a specular map and a displacement map are `LINEAR`, and their alpha is `IGNORED`. One image read the same way twice gives one texture.
 
 ### Differences from three.js
 
-- `map_Ks`, the specular map, is skipped. `Material.specular_map` can hold one, but this loader does not read it.
-- `disp`, the displacement map, is skipped. `Material.displacement_map` can hold one, but this loader does not read it.
+- A displacement bias and scale without a `disp` map are dropped. three.js keeps them, and they move nothing there either.
 - `-clamp on` clamps a texture. three.js ignores `-clamp` and uses the `wrap` option.
 - An unknown texture option is refused. three.js reads it as part of the file name, and then cannot load the file.
 - A color above one is refused. `Color` holds eight bits for each channel.
@@ -370,6 +371,7 @@ The loader reads `extras` into user data, as three.js's `assignExtrasToUserData`
 
 - A node's `extras` go into its `user_data`. A named node also gets `name` in its `user_data`, as three.js sets `userData.name`.
 - In three.js, the node of a mesh with one primitive is the mesh itself. Thus such a node takes the mesh's `extras` first, then `name`, then its own `extras`. A node with a camera or a light does not, and a joint does not. three.js makes a group or a bone of it.
+- A primitive's `extras` go into its geometry's `user_data`, as three.js reads them into `geometry.userData`.
 - A `Mesh`, a `Material` and a `Scene` here hold no user data. `mesh_extras`, `material_extras` and `scene_extras` hold their `extras`.
 - `extras` that are not an object are skipped, as three.js skips them.
 

@@ -10,8 +10,8 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 | `make check-gpu` | Lint and test the MAX backend. Needs a GPU. |
 | `make test-gpu-host` | Run the MAX backend's layout suites. Needs MAX but no GPU. CI runs it. |
 | `make ci` | `check`, ignoring the cache. |
-| `make test` | Every `tests/test_*.mojo` suite. |
-| `make lint` | Compile everything with warnings as errors. |
+| `make test` | Build every `tests/test_*.mojo` suite once, with warnings as errors, and run it. |
+| `make lint` | Compile the examples, the benchmarks, the tools and the library documentation with warnings as errors. `make test` builds each suite with warnings as errors, and that build is the suite's lint. |
 | `make fmt` | Reformat every source in place. |
 | `make fmt-check` | Verify the formatting. Changes nothing. |
 | `make coverage` | Line, branch, condition and MC/DC coverage. Fails on any gap. |
