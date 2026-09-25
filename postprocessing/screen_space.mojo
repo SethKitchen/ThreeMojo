@@ -51,6 +51,8 @@ from render.raster_state import (
     log_depth_factor,
 )
 from render.target import RenderTarget
+from render.texture import Texture
+from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, exp, exp2, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
 
@@ -1138,9 +1140,21 @@ struct SsrSettings(ImplicitlyCopyable):
     var blur: Bool
     # `output`.
     var output: ScreenSpaceOutput
+    # `selects`, as a set of layers: when `selective` is on, only the
+    # objects on them reflect, as three.js's metalness mask has it. Off by
+    # default, when every surface reflects, as three.js's `selects` of
+    # `null` has it.
+    var selective: Bool
+    var selects: Layers
+    # `bouncing`: whether the reflections are read from the frame the pass
+    # made last time, so they gather bounces frame by frame.
+    var bouncing: Bool
 
     def __init__(out self):
         """Start with three.js's defaults."""
+        self.selective = False
+        self.selects = Layers(UInt32(0))
+        self.bouncing = False
         self.opacity = 0.5
         self.max_distance = Length(180.0, METER)
         self.thickness = Length(0.018, METER)
@@ -1393,7 +1407,11 @@ def _show_reflections(mut frame: RenderTarget, reflections: List[FloatColor]):
 
 
 def ssr_light(
-    mut frame: RenderTarget, view: DepthView, settings: SsrSettings
+    mut frame: RenderTarget,
+    view: DepthView,
+    settings: SsrSettings,
+    selected: List[Bool] = List[Bool](),
+    bounced: List[FloatColor] = List[FloatColor](),
 ) raises:
     """Lay what each surface reflects over the frame: three.js's `SSRPass`
     after its beauty render.
@@ -1406,6 +1424,11 @@ def ssr_light(
         frame: The frame, changed in place.
         view: Its depth.
         settings: The pass's settings.
+        selected: With `settings.selective`, whether each pixel shows a
+            selected object; a pixel that does not reflects nothing.
+        bounced: With `settings.bouncing`, what the pass made last time,
+            which the reflections are read from; empty, the first time,
+            for transparent black, as three.js's fresh target holds.
 
     Raises:
         Error: Everything `check_ssr` raises, or if the frame and the depth
@@ -1424,7 +1447,21 @@ def ssr_light(
     if output == NORMAL_OUTPUT:
         show_normals(frame, normals)
         return
-    var reflections = ssr_reflections(view, frame.colors, normals, settings)
+    var source = frame.colors.copy()
+    if settings.bouncing:
+        source = bounced.copy()
+        if len(source) != len(frame.colors):
+            source = List[FloatColor](
+                length=len(frame.colors), fill=FloatColor(0, 0, 0, 0)
+            )
+    var reflections = ssr_reflections(view, source, normals, settings)
+    if settings.selective:
+        # three.js's `SELECTIVE`: a pixel of no metalness returns early,
+        # and its reflection is the target's clear, transparent black.
+        for slot in range(len(reflections)):  # pragma: no branch
+            var chosen = slot < len(selected) and selected[slot]
+            if not chosen:
+                reflections[slot] = FloatColor(0, 0, 0, 0)
     if output == EFFECT_OUTPUT:
         _show_reflections(frame, reflections)
         return
@@ -1468,6 +1505,11 @@ struct OutlineSettings(ImplicitlyCopyable):
     # `pulsePeriod`: how long the outline takes to pulse, or zero for no
     # pulse.
     var pulse_period: Duration
+    # `usePatternTexture` and `patternTexture`: whether the selected
+    # objects are filled with a pattern, and the texture it is read from,
+    # in the assets the composer is given, six times across the frame.
+    var use_pattern_texture: Bool
+    var pattern_texture: TextureId
 
     def __init__(out self):
         """Start with three.js's defaults and nothing selected."""
@@ -1478,6 +1520,8 @@ struct OutlineSettings(ImplicitlyCopyable):
         self.edge_glow = 0.0
         self.edge_thickness = 1.0
         self.pulse_period = Duration(0.0, SECOND)
+        self.use_pattern_texture = False
+        self.pattern_texture = NO_TEXTURE
 
 
 def check_outline(settings: OutlineSettings) raises:
@@ -1508,6 +1552,8 @@ def check_outline(settings: OutlineSettings) raises:
         # The list is built above with ten entries.
         if not (isfinite(value) and value >= 0):
             raise Error("An outline setting must be finite and not negative")
+    if settings.use_pattern_texture and settings.pattern_texture == NO_TEXTURE:
+        raise Error("An outline with a pattern must name its texture")
     if not settings.edge_thickness > 0:
         raise Error("An outline's thickness must be positive")
 
@@ -1635,6 +1681,7 @@ def outline_light(
     settings: OutlineSettings,
     time: Duration,
     mode: DepthMode = STANDARD_DEPTH,
+    pattern: Texture = Texture(),
 ) raises:
     """Draw a glowing edge around the selected objects: three.js's
     `OutlinePass`.
@@ -1652,6 +1699,10 @@ def outline_light(
         settings: The pass's settings.
         time: How long the pass has run, which drives the pulse.
         mode: How both depths are stored; see `outline_mask`.
+        pattern: The texture `settings.pattern_texture` names, read when
+            `use_pattern_texture` is on. With it, the selected objects are
+            filled with one less the pattern's red, half as bright where
+            they are hidden, as three.js's overlay adds it.
 
     Raises:
         Error: Everything `check_outline` and `outline_mask` raise, or if
@@ -1762,6 +1813,19 @@ def outline_light(
             var g = (e1.g + e2.g * glow) * k
             var b = (e1.b + e2.b * glow) * k
             var a = (e1.a + e2.a * glow) * k
+            if settings.use_pattern_texture:
+                # `visibilityFactor * (1 - maskColor.r) * (1 - patternColor.r)`,
+                # the pattern read at six times the coordinate.
+                var seen = Float32(1) if 1 - mask[slot].g > 0 else Float32(0.5)
+                var fill = (
+                    seen
+                    * (1 - mask[slot].r)
+                    * (1 - pattern.sample(6 * u, 6 * v).r)
+                )
+                r += fill
+                g += fill
+                b += fill
+                a += fill
             var under = frame.colors[slot]
             frame.colors[slot] = FloatColor(
                 under.r + r * a, under.g + g * a, under.b + b * a, under.a

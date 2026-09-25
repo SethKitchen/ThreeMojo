@@ -17,6 +17,13 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.composer import (
+    CLASSIC_BLOOM,
+    DOF_MIPMAP,
+    dof_mipmap_pass,
+    bloom_kernel,
+    classic_bloom_light,
+    classic_bloom_pass,
+    convolution_pixel,
     AFTERIMAGE,
     AFTERIMAGE_FLOOR,
     BLOOM,
@@ -57,6 +64,11 @@ from postprocessing.composer import (
     sepia_pass,
     vignette_light,
     vignette_pass,
+)
+from postprocessing.effects import (
+    DofMipMapSettings,
+    frame_mips,
+    mip_sample,
 )
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import glsl_rand
@@ -168,7 +180,7 @@ def test_the_first_eleven_kinds_are_valid_and_a_twenty_seventh_is_not() raises:
     assert_true(LUMINOSITY.is_valid())
     assert_true(AFTERIMAGE.is_valid())
     assert_true(OUTPUT.is_valid())
-    assert_false(PassKind(35).is_valid())
+    assert_false(PassKind(60).is_valid())
 
 
 def test_each_builder_sets_its_kind_and_three_js_defaults() raises:
@@ -230,7 +242,7 @@ def test_each_builder_sets_its_kind_and_three_js_defaults() raises:
 
 def test_a_pass_no_kind_could_run_is_refused() raises:
     with assert_raises():
-        check_pass(Pass(PassKind(35)))
+        check_pass(Pass(PassKind(60)))
     with assert_raises():
         _ = copy_pass(-1)
     with assert_raises():
@@ -313,9 +325,9 @@ def test_passes_are_added_inserted_and_removed_in_order() raises:
     with assert_raises():
         composer.insert_pass(copy_pass(), -1)
     with assert_raises():
-        composer.add_pass(Pass(PassKind(35)))
+        composer.add_pass(Pass(PassKind(60)))
     with assert_raises():
-        composer.insert_pass(Pass(PassKind(35)), 0)
+        composer.insert_pass(Pass(PassKind(60)), 0)
     assert_equal(composer.pass_count(), 3)
 
 
@@ -770,7 +782,7 @@ def test_a_disabled_pass_is_skipped_and_a_changed_one_is_checked() raises:
     with assert_raises():
         _ = composer.render(renderer, scene, assets, camera)
     composer.passes[1].strength = 0.5
-    composer.passes[1].kind = PassKind(35)
+    composer.passes[1].kind = PassKind(60)
     with assert_raises():
         _ = composer.render(renderer, scene, assets, camera)
     with assert_raises():
@@ -901,6 +913,113 @@ def test_a_step_run_alone_fits_the_memories_and_checks_its_index() raises:
         composer.run_step(1, frame, renderer, scene, assets, a_camera(), 0.0)
     with assert_raises(contains="one of its passes"):
         composer.run_step(-1, frame, renderer, scene, assets, a_camera(), 0.0)
+
+
+def test_the_classic_bloom_kernel_is_three_js_s() raises:
+    # `buildKernel( 4 )`: 25 taps, summing to one, as three.js 0.180 has.
+    var wide = bloom_kernel(4, 25)
+    var want: List[Float32] = [
+        0.0011098816,
+        0.0022773292,
+        0.0043896669,
+        0.0079486599,
+        0.013521126,
+        0.021606698,
+        0.032435495,
+        0.045741379,
+        0.060597482,
+        0.075414785,
+        0.088168817,
+        0.096834501,
+        0.099908358,
+    ]
+    var total = Float32(0)
+    for at in range(25):
+        total += wide[at]
+    assert_almost_equal(total, Float32(1), atol=1e-5)
+    for at in range(13):
+        assert_almost_equal(wide[at], want[at], atol=1e-7)
+        assert_almost_equal(wide[24 - at], want[at], atol=1e-7)
+    # `buildKernel( 1 )` has seven taps; the other uniforms are zero.
+    var narrow = bloom_kernel(1, 9)
+    assert_almost_equal(narrow[3], Float32(0.39905028), atol=1e-7)
+    assert_equal(narrow[7], Float32(0))
+    assert_equal(narrow[8], Float32(0))
+    # A kernel shorter than the Gaussian reads its first taps.
+    assert_equal(len(bloom_kernel(4, 3)), 3)
+    # A wide Gaussian is cut at three.js's 25 taps.
+    var cut = bloom_kernel(10, 30)
+    assert_true(cut[24] > 0)
+    assert_equal(cut[25], Float32(0))
+
+
+def test_the_classic_bloom_adds_its_blur_times_its_strength_twice() raises:
+    # An even frame blurs to itself, and the additive blend adds it times
+    # the blur's alpha, which is the strength too.
+    var frame = RenderTarget(12, 8, Color(0, 0, 0, 255))
+    for index in range(len(frame.colors)):
+        frame.colors[index] = FloatColor(0.2, 0.4, 0.6, 1)
+    classic_bloom_light(frame, 0.5, 25, 4)
+    var got = frame.colors[5 * 12 + 6]
+    assert_almost_equal(got.r, Float32(0.2 * 1.25), atol=1e-5)
+    assert_almost_equal(got.b, Float32(0.6 * 1.25), atol=1e-5)
+    assert_almost_equal(got.a, Float32(1), atol=1e-5)
+    # One lit pixel spreads to its neighbors.
+    var dark = RenderTarget(64, 64, Color(0, 0, 0, 255))
+    dark.colors[32 * 64 + 32] = FloatColor(1, 1, 1, 1)
+    var view = LightView(dark.colors, 64, 64)
+    var near = convolution_pixel(view, 33, 32, bloom_kernel(4, 25), 1.0 / 64, 0)
+    assert_true(near.r > 0)
+    classic_bloom_light(dark, 1, 25, 4)
+    assert_true(dark.colors[32 * 64 + 33].r > 0)
+
+
+def test_the_classic_bloom_pass_is_checked() raises:
+    var step = classic_bloom_pass(2, 9, 1)
+    assert_true(step.kind == CLASSIC_BLOOM)
+    assert_equal(step.kernel_size, 9)
+    with assert_raises(contains="at least one tap"):
+        _ = classic_bloom_pass(kernel_size=0)
+    with assert_raises(contains="sigma"):
+        _ = classic_bloom_pass(sigma=0)
+
+
+def test_a_frame_mip_chain_halves_to_one_pixel() raises:
+    var colors = List[FloatColor](length=6 * 4, fill=FloatColor(0, 0, 0, 1))
+    colors[0] = FloatColor(1, 1, 1, 1)
+    var levels = frame_mips(colors, 6, 4)
+    # 6 by 4, 3 by 2, 1 by 1.
+    assert_equal(len(levels), 3)
+    assert_equal(len(levels[1]), 6)
+    assert_equal(len(levels[2]), 1)
+    # A tall frame keeps halving its height once its width is one.
+    var dark = List[FloatColor](length=8, fill=FloatColor(0, 0, 0, 1))
+    var tall = frame_mips(dark, 2, 4)
+    # 2 by 4, 1 by 2, 1 by 1.
+    assert_equal(len(tall), 3)
+    assert_equal(len(tall[1]), 2)
+    # The top left two by two holds one lit pixel of four.
+    assert_almost_equal(levels[1][0].r, Float32(0.25), atol=1e-6)
+    # Level zero is the frame; a level between two mixes them.
+    var sharp = mip_sample(levels, 6, 4, 1.0 / 12, 7.0 / 8, 0)
+    assert_almost_equal(sharp.r, Float32(1), atol=1e-6)
+    var halfway = mip_sample(levels, 6, 4, 1.0 / 12, 7.0 / 8, 0.5)
+    assert_true(halfway.r < 1 and halfway.r > 0.25)
+    # A level past the last is the last.
+    var far = mip_sample(levels, 6, 4, 0.5, 0.5, 9)
+    assert_almost_equal(far.r, levels[2][0].r, atol=1e-6)
+
+
+def test_the_mip_map_depth_of_field_pass_is_checked() raises:
+    var step = dof_mipmap_pass(0.5, 2)
+    assert_true(step.kind == DOF_MIPMAP)
+    assert_almost_equal(step.dof.focus, Float32(0.5))
+    with assert_raises(contains="must not be negative"):
+        _ = dof_mipmap_pass(max_blur=-1)
+    with assert_raises(contains="finite"):
+        _ = dof_mipmap_pass(focus=Float32.MAX * 2)
+    var defaults = DofMipMapSettings()
+    assert_almost_equal(defaults.max_blur, Float32(1))
 
 
 def main() raises:

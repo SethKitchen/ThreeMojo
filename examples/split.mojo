@@ -80,7 +80,10 @@ def frame_at(
     renderer.set_scissor(RIGHT)
     renderer.render_into(target, scene, assets, plan)
     return target.resolve(
-        renderer.workers, renderer.tone_curve(), renderer.tone_mapping_exposure
+        renderer.workers,
+        renderer.tone_curve(),
+        renderer.tone_mapping_exposure,
+        output=renderer.output_encoding(),
     )
 
 

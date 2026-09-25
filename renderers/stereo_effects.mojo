@@ -220,6 +220,7 @@ struct AnaglyphEffect(Movable):
             renderer.workers,
             renderer.tone_curve(),
             renderer.tone_mapping_exposure,
+            output=renderer.output_encoding(),
         )
 
 
@@ -278,6 +279,7 @@ struct ParallaxBarrierEffect(Movable):
             renderer.workers,
             renderer.tone_curve(),
             renderer.tone_mapping_exposure,
+            output=renderer.output_encoding(),
         )
 
 

@@ -15,13 +15,19 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from lights.light import directional_light
-from materials.material import Material
+from materials.material import BASIC, Material
 from math.sine import sin_float32
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.composer import (
+    ssaa_render_pass,
+    taa_render_pass,
+    BOKEH2,
+    bokeh2_pass,
+    classic_bloom_pass,
+    dof_mipmap_pass,
     BOKEH,
     CLEAR,
     CLEAR_MASK,
@@ -44,6 +50,11 @@ from postprocessing.composer import (
     texture_pass,
 )
 from postprocessing.effects import (
+    Bokeh2Settings,
+    bokeh2_light,
+    bokeh2_penta,
+    bokeh2_pixel,
+    check_bokeh2,
     BOKEH_TAPS,
     GLITCH_BAND,
     HALFTONE_ADD,
@@ -196,7 +207,7 @@ def test_the_seven_new_kinds_and_their_builders() raises:
     assert_true(CLEAR_MASK.is_valid())
     assert_true(CLEAR.is_valid())
     assert_true(TEXTURE.is_valid())
-    assert_false(PassKind(35).is_valid())
+    assert_false(PassKind(60).is_valid())
     var bokeh = bokeh_pass()
     assert_equal(bokeh.kind, BOKEH)
     assert_equal(bokeh.bokeh.focus.value, Float32(1))
@@ -782,6 +793,34 @@ def test_a_small_scattered_halftone_varies_and_a_disabled_one_is_still() raises:
     assert_true(still_frame(still, columns(8, 8)))
 
 
+def test_a_halftone_can_be_laid_over_another_size() raises:
+    # `setSize` of the frame's own size is the default; another size lays
+    # a grid of a different pitch over the frame.
+    var settings = HalftoneSettings()
+    settings.radius = 2
+    var plain = columns(8, 8)
+    halftone_light(plain, settings)
+    var same = HalftoneSettings()
+    same.radius = 2
+    same.set_size(8, 8)
+    var sized = columns(8, 8)
+    halftone_light(sized, same)
+    assert_true(still_frame(plain, sized))
+    var wide = HalftoneSettings()
+    wide.radius = 2
+    wide.set_size(24, 24)
+    var stretched = columns(8, 8)
+    halftone_light(stretched, wide)
+    assert_false(still_frame(plain, stretched))
+    var bad = HalftoneSettings()
+    bad.set_size(-1, 8)
+    with assert_raises(contains="must not be negative"):
+        check_halftone(bad)
+    bad.set_size(8, -1)
+    with assert_raises(contains="must not be negative"):
+        check_halftone(bad)
+
+
 # --- mask, clear and texture -------------------------------------------------
 
 
@@ -799,6 +838,33 @@ def test_the_mask_writes_one_where_covered_or_the_inverse() raises:
     assert_true(inside_mask(1))
     assert_false(inside_mask(0))
     assert_false(inside_mask(2))
+    # A mask that does not clear adds to the one before it: the pixel it
+    # does not cover keeps its stencil.
+    frame.stencil[1] = 1
+    mask_stencil(frame, depth, False, False)
+    assert_equal(frame.stencil_at(0, 0), 1)
+    assert_equal(frame.stencil_at(1, 0), 1)
+
+
+def test_the_clear_flags_are_three_js_s() raises:
+    # A render and a mask pass clear; a texture pass does not.
+    assert_true(render_pass().clear)
+    assert_true(mask_pass(Layers(UInt32(2))).clear)
+    assert_false(texture_pass(TextureId(0)).clear)
+    # A texture pass that clears first leaves the background alone under
+    # a texture of no opacity.
+    var assets = Assets()
+    var scene = two_sheets(assets)
+    var renderer = a_renderer()
+    var camera = a_flat_camera()
+    var red = assets.textures.add(data_texture(1, 1, [1.0, 0.0, 0.0, 1.0]))
+    var composer = EffectComposer()
+    composer.add_pass(render_pass())
+    var cleared = texture_pass(red, 0)
+    cleared.clear = True
+    composer.add_pass(cleared^)
+    var image = composer.render(renderer, scene, assets, camera)
+    assert_equal(image.get_pixel(4, HEIGHT // 2).r, UInt8(0))
 
 
 def test_a_pass_inside_a_mask_changes_only_the_masked_pixels() raises:
@@ -947,6 +1013,183 @@ def test_masks_let_two_textures_fill_two_sheets() raises:
     var unmasked = composer.render(renderer, scene, assets, camera)
     assert_equal(unmasked.get_pixel(4, y).r, UInt8(255))
     assert_equal(unmasked.get_pixel(WIDTH // 2, y).r, UInt8(255))
+
+
+def test_the_classic_bloom_and_the_mip_map_blur_run_in_the_composer() raises:
+    var assets = Assets()
+    var scene = two_sheets(assets)
+    var renderer = a_renderer()
+    var camera = a_flat_camera()
+    var plain = EffectComposer()
+    plain.add_pass(render_pass())
+    var base = plain.render(renderer, scene, assets, camera)
+    var steps = List[Pass]()
+    steps.append(classic_bloom_pass(1, 9, 1))
+    # A focus nowhere near the sheets reads a blurred mip.
+    steps.append(dof_mipmap_pass(0.0, 4))
+    var lens = Bokeh2Settings()
+    lens.manual_dof = True
+    lens.shader_focus = False
+    steps.append(bokeh2_pass(lens))
+    for at in range(len(steps)):
+        var composer = EffectComposer()
+        composer.add_pass(render_pass())
+        composer.add_pass(steps[at].copy())
+        var image = composer.render(renderer, scene, assets, camera)
+        var changed = 0
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                if image.get_pixel(x, y).r != base.get_pixel(x, y).r:
+                    changed += 1
+        assert_true(changed > 0, "A pass changed nothing")
+
+
+def _bokeh2_depths(near: Float32, far: Float32) -> List[Float32]:
+    """Return a depth of `near` meters on the left half and `far` on the
+    right, as NDC depth."""
+    var depth = List[Float32]()
+    for _ in range(HEIGHT):
+        for x in range(WIDTH):
+            depth.append(ndc_of(near if x < WIDTH // 2 else far))
+    return depth^
+
+
+def test_bokeh2_keeps_its_focus_sharp_and_blurs_the_rest() raises:
+    var frame = columns(WIDTH, HEIGHT)
+    var depth = a_view(WIDTH, HEIGHT, _bokeh2_depths(1, 8))
+    var view = LightView(frame.colors, WIDTH, HEIGHT)
+    var settings = Bokeh2Settings()
+    settings.znear = 0.1
+    settings.zfar = 10
+    settings.manual_dof = True
+    settings.shader_focus = False
+    settings.focal_depth = 1
+    # At the focal plane nothing blurs: the pixel is the frame's.
+    var sharp = bokeh2_pixel(view, depth, 3, 5, settings)
+    assert_almost_equal(sharp.r, frame.colors[5 * WIDTH + 3].r, atol=1e-5)
+    assert_equal(sharp.a, Float32(1))
+    # Seven meters off it, the rings of taps average the columns.
+    var soft = bokeh2_pixel(view, depth, 12, 5, settings)
+    assert_true(abs(soft.r - frame.colors[5 * WIDTH + 12].r) > 1e-4)
+    # Focused on the far half by the depth at a point, the near half
+    # blurs instead; with a pentagon, a blurred depth, the focus shown
+    # and the vignette, every branch of the shader runs.
+    var auto = settings
+    auto.manual_dof = False
+    auto.shader_focus = True
+    auto.focus_u = 0.9
+    auto.focus_v = 0.5
+    auto.pentagon = True
+    auto.depth_blur = True
+    auto.show_focus = True
+    auto.vignetting = True
+    auto.texture_width = Float32(WIDTH)
+    auto.texture_height = Float32(HEIGHT)
+    var near = bokeh2_pixel(view, depth, 3, 5, auto)
+    assert_equal(near.a, Float32(1))
+    assert_true(near.r >= 0)
+    var out = columns(WIDTH, HEIGHT)
+    bokeh2_light(out, depth, settings)
+    assert_almost_equal(
+        out.colors[5 * WIDTH + 3].r, frame.colors[5 * WIDTH + 3].r, atol=1e-5
+    )
+    _ = frame^
+
+
+def test_bokeh2_pentagon_weighs_the_middle_fully() raises:
+    assert_almost_equal(bokeh2_penta(0, 0, 3), Float32(1), atol=1e-6)
+    assert_almost_equal(bokeh2_penta(-10, 0, 3), Float32(0), atol=1e-6)
+
+
+def test_bokeh2_settings_are_checked() raises:
+    var defaults = Bokeh2Settings()
+    assert_equal(defaults.rings, 3)
+    assert_equal(defaults.samples, 4)
+    assert_almost_equal(defaults.focal_length, Float32(24))
+    check_bokeh2(defaults)
+    var bad = Bokeh2Settings()
+    bad.fstop = Float32.MAX * 2
+    with assert_raises(contains="finite"):
+        check_bokeh2(bad)
+    var small = Bokeh2Settings()
+    small.texture_width = -1
+    with assert_raises(contains="negative"):
+        check_bokeh2(small)
+    small.texture_width = 8
+    small.texture_height = -1
+    with assert_raises(contains="negative"):
+        check_bokeh2(small)
+    var planes = Bokeh2Settings()
+    planes.zfar = 0.05
+    with assert_raises(contains="near plane"):
+        check_bokeh2(planes)
+    var empty = Bokeh2Settings()
+    empty.rings = 0
+    with assert_raises(contains="a ring"):
+        check_bokeh2(empty)
+    var sampleless = Bokeh2Settings()
+    sampleless.samples = 0
+    with assert_raises(contains="a ring"):
+        check_bokeh2(sampleless)
+    assert_true(bokeh2_pass().kind == BOKEH2)
+    with assert_raises(contains="a ring"):
+        _ = bokeh2_pass(empty)
+
+
+def test_a_render_pass_takes_three_js_options() raises:
+    var assets = Assets()
+    var scene = two_sheets(assets)
+    var renderer = a_renderer()
+    var camera = a_flat_camera()
+    var y = HEIGHT // 2
+    # Every sheet drawn with the override, in the place of its own white.
+    var red = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var tinted = EffectComposer()
+    tinted.add_pass(render_pass(override_material=red))
+    var reds = tinted.render(renderer, scene, assets, camera)
+    assert_equal(reds.get_pixel(4, y).g, UInt8(0))
+    assert_true(reds.get_pixel(4, y).r > 200)
+    # The renderer's own override takes the place of the scene's.
+    assert_true(Bool(renderer.drawn_override(scene)) == False)
+    # A clear color and a clear alpha in the place of the renderer's.
+    var cleared = EffectComposer()
+    cleared.add_pass(
+        render_pass(clear_color=Color(0, 0, 255, 255), clear_alpha=Float32(0.5))
+    )
+    var blue = cleared.render(renderer, scene, assets, camera)
+    assert_true(blue.get_pixel(WIDTH // 2, 0).b > 200)
+    assert_true(blue.get_pixel(WIDTH // 2, 0).a < 255)
+    # A render pass that does not clear draws over the frame it is given:
+    # the clear pass's green stays where no sheet is.
+    var over = EffectComposer()
+    over.add_pass(clear_pass(Color(0, 255, 0, 255)))
+    var kept = render_pass()
+    kept.clear = False
+    kept.clear_depth = True
+    over.add_pass(kept^)
+    var green = over.render(renderer, scene, assets, camera)
+    assert_true(green.get_pixel(WIDTH // 2, 0).g > 200)
+    assert_true(green.get_pixel(4, y).r > 100)
+    # A clear alpha outside zero to one is refused.
+    with assert_raises(contains="clear alpha"):
+        check_pass(render_pass(clear_alpha=Float32(2)))
+    # The SSAA and TAA passes clear each sample to their own color.
+    for kind in range(2):
+        var samples = EffectComposer()
+        if kind == 0:
+            samples.add_pass(
+                ssaa_render_pass(1, clear_color=Color(0, 0, 255, 255))
+            )
+        else:
+            samples.add_pass(
+                taa_render_pass(
+                    1, clear_color=Color(0, 0, 255, 255), clear_alpha=Float32(1)
+                )
+            )
+        var image = samples.render(renderer, scene, assets, camera)
+        assert_true(image.get_pixel(WIDTH // 2, 0).b > 200)
+    with assert_raises(contains="clear alpha"):
+        _ = ssaa_render_pass(clear_alpha=Float32(-1))
 
 
 def test_the_effects_run_in_the_composer() raises:

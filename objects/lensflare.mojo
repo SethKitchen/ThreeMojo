@@ -372,6 +372,7 @@ struct Lensflare(Movable):
                             renderer.tone_curve(),
                             renderer.tone_mapping_exposure,
                             curve,
+                            renderer.output_encoding(),
                         )
                 red += Float32(shown.r) / 255
                 green += Float32(shown.g) / 255

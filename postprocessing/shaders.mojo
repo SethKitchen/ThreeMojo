@@ -3,15 +3,18 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Shader effects: fifteen of three.js's `examples/jsm/shaders/`, each run
+"""Shader effects: eighteen of three.js's `examples/jsm/shaders/`, each run
 over the screen as a `ShaderPass` runs it, and its `GodRaysShader` chain.
 
-**The fifteen.** `RGBShiftShader`, `BrightnessContrastShader`,
+**The eighteen.** `RGBShiftShader`, `BrightnessContrastShader`,
 `HueSaturationShader`, `ColorCorrectionShader`, `ColorifyShader`,
 `BleachBypassShader`, `TechnicolorShader`, `SobelOperatorShader`,
 `FreiChenShader`, `KaleidoShader`, `MirrorShader`,
-`HorizontalTiltShiftShader`, `VerticalTiltShiftShader`, `ExposureShader`
-and `GammaCorrectionShader`. `ShaderEffect` names one, and
+`HorizontalTiltShiftShader`, `VerticalTiltShiftShader`, `ExposureShader`,
+`GammaCorrectionShader`, `TriangleBlurShader`, `NormalMapShader` and
+`FocusShader`. A shader that reads another texture than the frame, as
+`TriangleBlurShader`'s `texture` or `NormalMapShader`'s `heightMap`,
+reads the frame here, as a `ShaderPass` with that `textureID` reads it. `ShaderEffect` names one, and
 `EffectSettings` holds the uniforms each reads, with three.js's defaults.
 `effect_pixel` is one pixel of any of them, line for line with its
 fragment shader.
@@ -39,7 +42,7 @@ from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
-from postprocessing.screen_space import DepthView
+from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import Color, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pow, sin, sqrt
@@ -58,12 +61,12 @@ struct ShaderEffect(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the fifteen effects there are.
+        """Return True if this is one of the eighteen effects there are.
 
         Returns:
-            Whether the value is zero through fourteen.
+            Whether the value is zero through seventeen.
         """
-        return self.value >= 0 and self.value <= 14
+        return self.value >= 0 and self.value <= 17
 
 
 # `RGBShiftShader`: red and blue shifted apart.
@@ -96,6 +99,12 @@ comptime VERTICAL_TILT_SHIFT = ShaderEffect(12)
 comptime EXPOSURE = ShaderEffect(13)
 # `GammaCorrectionShader`: the sRGB transfer function.
 comptime GAMMA_CORRECTION = ShaderEffect(14)
+# `TriangleBlurShader`: twenty-one taps along `delta`, weighted by a tent.
+comptime TRIANGLE_BLUR = ShaderEffect(15)
+# `NormalMapShader`: a height map's slope as a normal.
+comptime NORMAL_MAP = ShaderEffect(16)
+# `FocusShader`: sharp at the center, a smear of the darkest blue away.
+comptime FOCUS = ShaderEffect(17)
 
 
 @fieldwise_init
@@ -140,12 +149,21 @@ comptime HUE_PI = Float32(3.14159265)
 # `sRGBTransferOETF`'s exponent, as three.js spells it.
 comptime OETF_EXPONENT = Float32(0.41666)
 # How many floats `effect_floats` packs an `EffectSettings` into.
-comptime EFFECT_FLOATS = 26
+comptime EFFECT_FLOATS = 35
+# `TriangleBlurShader`'s `ITERATIONS`: taps to each side of the pixel.
+comptime TRIANGLE_ITERATIONS = Float32(10)
+# `FocusShader`'s seven taps, as the shader spells them.
+comptime FOCUS_TAPS_X = SIMD[DType.float32, 8](
+    0.111964, 0.846724, 0.943883, 0.330279, -0.532032, -0.993712, -0.707107, 0
+)
+comptime FOCUS_TAPS_Y = SIMD[DType.float32, 8](
+    0.993712, 0.532032, -0.330279, -0.943883, -0.846724, -0.111964, 0.707107, 0
+)
 
 
 struct EffectSettings(ImplicitlyCopyable):
     """What a shader effect pass reads: the effect and the uniforms of all
-    fifteen shaders, named as three.js names them, with its defaults.
+    eighteen shaders, named as three.js names them, with its defaults.
 
     An effect reads its own uniforms and leaves the others alone.
     """
@@ -183,6 +201,20 @@ struct EffectSettings(ImplicitlyCopyable):
     var focus: Float32
     # `ExposureShader`'s `exposure`: one.
     var exposure: Float32
+    # `TriangleBlurShader`'s `delta`, in texture widths and heights:
+    # (1, 1).
+    var delta_u: Float32
+    var delta_v: Float32
+    # `NormalMapShader`'s `height`, 0.05, and `resolution`, 512 by 512.
+    var height: Float32
+    var resolution_x: Float32
+    var resolution_y: Float32
+    # `FocusShader`'s `sampleDistance`, 0.94, `waveFactor`, 0.00125, and
+    # `screenWidth` and `screenHeight`, 1024 each.
+    var sample_distance: Float32
+    var wave_factor: Float32
+    var screen_width: Float32
+    var screen_height: Float32
 
     def __init__(out self, effect: ShaderEffect = RGB_SHIFT):
         """Start with three.js's defaults for every uniform.
@@ -207,6 +239,15 @@ struct EffectSettings(ImplicitlyCopyable):
         self.spread = Float32(1.0 / 512.0)
         self.focus = 0.35
         self.exposure = 1
+        self.delta_u = 1
+        self.delta_v = 1
+        self.height = 0.05
+        self.resolution_x = 512
+        self.resolution_y = 512
+        self.sample_distance = 0.94
+        self.wave_factor = 0.00125
+        self.screen_width = 1024
+        self.screen_height = 1024
 
 
 def _finite(v: Vector3) -> Bool:
@@ -227,7 +268,7 @@ def check_effect(settings: EffectSettings) raises:
             its weight changes sign; or the sides are not positive.
     """
     if not settings.effect.is_valid():
-        raise Error("A shader effect must be one of the fifteen named")
+        raise Error("A shader effect must be one of the eighteen named")
     if not settings.side.is_valid():
         raise Error("A mirror side must be one of the four named")
     var scalars = (
@@ -242,6 +283,11 @@ def check_effect(settings: EffectSettings) raises:
         and isfinite(settings.spread)
         and isfinite(settings.focus)
         and isfinite(settings.exposure)
+        and isfinite(settings.delta_u)
+        and isfinite(settings.delta_v)
+        and isfinite(settings.height)
+        and isfinite(settings.sample_distance)
+        and isfinite(settings.wave_factor)
     )
     var vectors = (
         _finite(settings.pow_rgb)
@@ -256,6 +302,15 @@ def check_effect(settings: EffectSettings) raises:
         raise Error("A saturation must not be above one")
     if settings.sides <= 0:
         raise Error("A kaleidoscope needs a positive number of sides")
+    var sizes = (
+        settings.resolution_x > 0
+        and settings.resolution_y > 0
+        and settings.screen_width > 0
+        and settings.screen_height > 0
+    )
+    # A NaN is not above zero, so this refuses it as well.
+    if not sizes:
+        raise Error("A resolution and a screen size must be positive")
 
 
 def effect_floats(settings: EffectSettings) -> List[Float32]:
@@ -297,6 +352,15 @@ def effect_floats(settings: EffectSettings) -> List[Float32]:
         settings.focus,
         settings.exposure,
         Float32(c.a),
+        settings.delta_u,
+        settings.delta_v,
+        settings.height,
+        settings.resolution_x,
+        settings.resolution_y,
+        settings.sample_distance,
+        settings.wave_factor,
+        settings.screen_width,
+        settings.screen_height,
     ]
 
 
@@ -345,6 +409,15 @@ def effect_from_floats(
     settings.spread = floats[unsafe_offset=22]
     settings.focus = floats[unsafe_offset=23]
     settings.exposure = floats[unsafe_offset=24]
+    settings.delta_u = floats[unsafe_offset=26]
+    settings.delta_v = floats[unsafe_offset=27]
+    settings.height = floats[unsafe_offset=28]
+    settings.resolution_x = floats[unsafe_offset=29]
+    settings.resolution_y = floats[unsafe_offset=30]
+    settings.sample_distance = floats[unsafe_offset=31]
+    settings.wave_factor = floats[unsafe_offset=32]
+    settings.screen_width = floats[unsafe_offset=33]
+    settings.screen_height = floats[unsafe_offset=34]
     return settings
 
 
@@ -967,16 +1040,155 @@ def reads_neighbors(effect: ShaderEffect) -> Bool:
 
     Returns:
         Whether it does: the shift, the two edge filters, the kaleidoscope,
-        the mirror and the two tilt shifts.
+        the mirror, the two tilt shifts, the triangle blur, the normal map
+        and the focus.
     """
     return (
-        effect == RGB_SHIFT
+        effect == TRIANGLE_BLUR
+        or effect == NORMAL_MAP
+        or effect == FOCUS
+        or effect == RGB_SHIFT
         or effect == SOBEL
         or effect == FREI_CHEN
         or effect == KALEIDO
         or effect == MIRROR
         or effect == HORIZONTAL_TILT_SHIFT
         or effect == VERTICAL_TILT_SHIFT
+    )
+
+
+def triangle_blur_pixel(
+    source: LightView,
+    u: Float32,
+    v: Float32,
+    delta_u: Float32,
+    delta_v: Float32,
+) -> FloatColor:
+    """Return one pixel of `TriangleBlurShader`: twenty-one taps along
+    `delta`, weighted by a tent, their places moved by three.js's `rand`
+    of the pixel so the taps do not show.
+
+    Args:
+        source: The frame, premultiplied.
+        u: The pixel's texture coordinate across.
+        v: Up.
+        delta_u: How far the taps reach, across, in texture widths.
+        delta_v: Up, in texture heights.
+
+    Returns:
+        The weighted mean of the taps.
+    """
+    var sum = FloatColor(0, 0, 0, 0)
+    var total = Float32(0)
+    var offset = glsl_rand(u, v)
+    var t = -TRIANGLE_ITERATIONS
+    while t <= TRIANGLE_ITERATIONS:
+        var percent = (t + offset - 0.5) / TRIANGLE_ITERATIONS
+        var weight = 1 - abs(percent)
+        var tap = source.sample(u + delta_u * percent, v + delta_v * percent)
+        sum = FloatColor(
+            sum.r + tap.r * weight,
+            sum.g + tap.g * weight,
+            sum.b + tap.b * weight,
+            sum.a + tap.a * weight,
+        )
+        total += weight
+        t += 1
+    return FloatColor(
+        sum.r / total, sum.g / total, sum.b / total, sum.a / total
+    )
+
+
+def normal_map_pixel(
+    source: LightView,
+    u: Float32,
+    v: Float32,
+    height: Float32,
+    resolution_x: Float32,
+    resolution_y: Float32,
+) -> FloatColor:
+    """Return one pixel of `NormalMapShader`: the slope of the frame's red,
+    read as a height, as a normal packed into a color.
+
+    Args:
+        source: The frame, read as the height map.
+        u: The pixel's texture coordinate across.
+        v: Up.
+        height: How tall a unit of red stands, three.js's `height`.
+        resolution_x: The height map's width, three.js's `resolution`.
+        resolution_y: Its height.
+
+    Returns:
+        The normal, halved and moved up by a half, opaque. A slope and a
+        height of zero have no direction, and give a half in each
+        channel.
+    """
+    var here = source.sample(u, v).r
+    var across = source.sample(u + 1 / resolution_x, v).r
+    var up = source.sample(u, v + 1 / resolution_y).r
+    var n = Vector3(here - across, here - up, height)
+    if n.length() > 0:
+        n.normalize()
+    return FloatColor(0.5 * n.x + 0.5, 0.5 * n.y + 0.5, 0.5 * n.z + 0.5, 1)
+
+
+def focus_pixel(
+    source: LightView, u: Float32, v: Float32, settings: EffectSettings
+) -> FloatColor:
+    """Return one pixel of `FocusShader`: sharp at the center, and away
+    from it the darkest blue of seven taps, pulled toward their mean.
+
+    Args:
+        source: The frame.
+        u: The pixel's texture coordinate across.
+        v: Up.
+        settings: The shader's `sampleDistance`, `waveFactor`,
+            `screenWidth` and `screenHeight`.
+
+    Returns:
+        The light the shader writes, opaque.
+    """
+    var org = source.sample(u, v)
+    var color = org
+    var add = org
+    var vin_x = (u - 0.5) * 1.4
+    var vin_y = (v - 0.5) * 1.4
+    var sample_dist = (vin_x * vin_x + vin_y * vin_y) * 2
+    var f = (
+        (settings.wave_factor * 100 + sample_dist)
+        * settings.sample_distance
+        * 4
+    )
+    var size_u = 1 / settings.screen_width * f
+    var size_v = 1 / settings.screen_height * f
+    for at in range(7):  # pragma: no branch
+        var tap = source.sample(
+            u + FOCUS_TAPS_X[at] * size_u, v + FOCUS_TAPS_Y[at] * size_v
+        )
+        add = FloatColor(
+            add.r + tap.r, add.g + tap.g, add.b + tap.b, add.a + tap.a
+        )
+        if tap.b < color.b:
+            color = tap
+    var mean = FloatColor(add.r / 8, add.g / 8, add.b / 8, add.a / 8)
+    color = FloatColor(
+        color.r * 2 - mean.r,
+        color.g * 2 - mean.g,
+        color.b * 2 - mean.b,
+        color.a * 2 - mean.a,
+    )
+    var keep = 1 - sample_dist * 0.5
+    color = FloatColor(
+        color.r + (mean.r - color.r) * keep,
+        color.g + (mean.g - color.g) * keep,
+        color.b + (mean.b - color.b) * keep,
+        color.a + (mean.a - color.a) * keep,
+    )
+    return FloatColor(
+        color.r * color.r * 0.95 + color.r,
+        color.g * color.g * 0.95 + color.g,
+        color.b * color.b * 0.95 + color.b,
+        1,
     )
 
 
@@ -1015,6 +1227,21 @@ def effect_pixel(
         return tilt_shift_pixel(
             source, u, v, settings.spread, settings.focus, False
         )
+    if effect == TRIANGLE_BLUR:
+        return triangle_blur_pixel(
+            source, u, v, settings.delta_u, settings.delta_v
+        )
+    if effect == NORMAL_MAP:
+        return normal_map_pixel(
+            source,
+            u,
+            v,
+            settings.height,
+            settings.resolution_x,
+            settings.resolution_y,
+        )
+    if effect == FOCUS:
+        return focus_pixel(source, u, v, settings)
     var straight = source.at(x, y).unpremultiplied()
     return effect_color(straight, settings).premultiplied()
 

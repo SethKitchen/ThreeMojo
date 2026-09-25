@@ -29,6 +29,12 @@ The tests that open no device, and only lay data out on the host, are in
 `tests/test_gpu_layout.mojo`. CI runs that suite on a runner with no GPU.
 """
 
+from render.color_spaces import (
+    ColorSpaceId,
+    DISPLAY_P3_COLOR_SPACE,
+    LINEAR_REC2020_COLOR_SPACE,
+    LINEAR_SRGB_COLOR_SPACE,
+)
 from materials.material import (
     ADDITIVE,
     Blending,
@@ -10076,6 +10082,10 @@ def test_the_gpu_composer_matches_the_host_on_each_halftone() raises:
     var off = halftone_pass()
     off.halftone.disable = True
     assert_equal(compare_post(one_pass(off)), 1)
+    # `HalftonePass.setSize`: a grid laid over another size.
+    var sized = halftone_pass(3.0)
+    sized.halftone.set_size(96, 64)
+    assert_equal(compare_post(one_pass(sized), 2), 1)
 
 
 def test_the_gpu_composer_matches_the_host_on_a_clear_and_a_texture() raises:
@@ -10086,6 +10096,10 @@ def test_the_gpu_composer_matches_the_host_on_a_clear_and_a_texture() raises:
     # `compare_post` puts its checkerboard in place of the first texture.
     steps.append(texture_pass(TextureId(0), 0.5))
     assert_equal(compare_post(steps), 1)
+    # A texture pass that clears first, as three.js's `clear` has it.
+    var cleared = texture_pass(TextureId(0), 0.5)
+    cleared.clear = True
+    assert_equal(compare_post(one_pass(cleared)), 1)
 
 
 def test_the_gpu_composer_matches_the_host_on_a_lut() raises:
@@ -10101,7 +10115,7 @@ def test_the_gpu_composer_matches_the_host_on_a_lut() raises:
 def test_the_gpu_composer_matches_the_host_on_each_shader_effect() raises:
     if skipped_for_lack_of_a_gpu("post shader effects"):
         return
-    for value in range(15):
+    for value in range(18):
         var step = effect_pass(ShaderEffect(value))
         if step.effect.effect == MIRROR_SHADER:
             step.effect.side = MIRROR_TOP
@@ -11940,8 +11954,28 @@ def _flags_on_both(
         points=frame.points,
         programs=frame.programs,
         custom_tone_mapping=renderer.custom_tone_mapping,
+        output_color_space=renderer.output_color_space,
     )
     return (cpu^, device.read_back())
+
+
+def test_both_backends_write_every_output_color_space_alike() raises:
+    if skipped_for_lack_of_a_gpu("both backends write each output space"):
+        return
+    var assets = Assets()
+    var scene = _flagged_scene(assets, True)
+    var spaces: List[ColorSpaceId] = [
+        LINEAR_SRGB_COLOR_SPACE,
+        DISPLAY_P3_COLOR_SPACE,
+        LINEAR_REC2020_COLOR_SPACE,
+    ]
+    for space in spaces:
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        renderer.set_output_color_space(space)
+        var both = _flags_on_both(renderer, scene, assets)
+        # The matrix and the curve are `OutputEncoding`'s on both sides.
+        assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
 
 
 def test_both_backends_agree_on_the_material_flags() raises:

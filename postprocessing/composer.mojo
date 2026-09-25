@@ -19,7 +19,7 @@ glitch, halftone, mask, clear, lay a texture over the frame and grade it
 through a color lookup table; see `postprocessing.effects`. Eight more
 draw a pixelated scene, occlusion by GTAO, a transition between two
 views and a cube texture, save the frame, run a node program or one of
-fifteen screen shaders, and lay god rays over the frame; see
+eighteen screen shaders, and lay god rays over the frame; see
 `postprocessing.render_passes`, `postprocessing.gtao`,
 `postprocessing.shader_pass` and `postprocessing.shaders`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
@@ -64,6 +64,12 @@ from postprocessing.antialiasing import (
 )
 from postprocessing.effects import (
     BokehSettings,
+    Bokeh2Settings,
+    DofMipMapSettings,
+    bokeh2_light,
+    check_bokeh2,
+    check_dof_mipmap,
+    dof_mipmap_light,
     FrameCopy,
     GlitchSettings,
     HalftoneSettings,
@@ -108,7 +114,10 @@ from postprocessing.shaders import (
     COLORIFY,
     EXPOSURE,
     FREI_CHEN,
+    FOCUS,
     GAMMA_CORRECTION,
+    NORMAL_MAP,
+    TRIANGLE_BLUR,
     HORIZONTAL_TILT_SHIFT,
     HUE_SATURATION,
     KALEIDO,
@@ -144,6 +153,7 @@ from postprocessing.screen_space import (
     ssao_light,
     ssr_light,
 )
+from materials.material import MaterialId
 from materials.nodes import NodeProgramId
 from render.antialias import SUPERSAMPLE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
@@ -160,7 +170,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
 from renderers.renderer import Renderer
-from std.math import cos, exp, floor, isfinite, sin
+from std.math import ceil, cos, exp, floor, isfinite, sin
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
 
@@ -170,14 +180,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(35)`,
+    stops a bare integer at compile time; it does not stop `PassKind(60)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the thirty-five kinds there are."""
+        """Return True if this is one of the kinds named below."""
         return (
             self == RENDER
             or self == COPY
@@ -214,6 +224,9 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == SHADER
             or self == SHADER_EFFECT
             or self == GOD_RAYS
+            or self == CLASSIC_BLOOM
+            or self == DOF_MIPMAP
+            or self == BOKEH2
         )
 
 
@@ -285,11 +298,25 @@ comptime CUBE_TEXTURE = PassKind(30)
 comptime SAVE = PassKind(31)
 # Run a node program over the screen: `ShaderPass`.
 comptime SHADER = PassKind(32)
-# Run one of fifteen of three.js's screen shaders: `ShaderPass` with
+# Run one of eighteen of three.js's screen shaders: `ShaderPass` with
 # `RGBShiftShader`, `SobelOperatorShader` and the rest.
 comptime SHADER_EFFECT = PassKind(33)
 # Lay god rays from a sun over the frame: the `GodRaysShader` chain.
 comptime GOD_RAYS = PassKind(34)
+# Blur the frame with a Gaussian and add it back: three.js's classic
+# `BloomPass`, with its `ConvolutionShader`.
+comptime CLASSIC_BLOOM = PassKind(35)
+# Blur each pixel by its depth's distance from a focus: a `ShaderPass` of
+# three.js's `DOFMipMapShader`, reading the frame's mip chain.
+comptime DOF_MIPMAP = PassKind(36)
+# Blur by depth with a lens's rings of taps: a `ShaderPass` of three.js's
+# `BokehShader2`.
+comptime BOKEH2 = PassKind(37)
+# `BloomPass.blurX` and `blurY`: how far apart the convolution's taps are,
+# in texture widths or heights, whatever the frame's size.
+comptime CONVOLUTION_STEP = Float32(0.001953125)
+# `BloomPass`'s `buildKernel` stops growing a kernel at this many taps.
+comptime MAX_BLOOM_KERNEL = 25
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -327,7 +354,7 @@ struct Pass(Copyable, Movable):
     `glitch_pass`, `halftone_pass`, `mask_pass`, `clear_mask_pass`,
     `clear_pass`, `texture_pass`, `lut_pass`, `render_pixelated_pass`,
     `gtao_pass`, `render_transition_pass`, `cube_texture_pass`,
-    `save_pass`, `shader_pass`, `effect_pass` or one of its fifteen
+    `save_pass`, `shader_pass`, `effect_pass` or one of its eighteen
     shorthands, or `god_rays_pass`, and change a
     setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
@@ -404,6 +431,28 @@ struct Pass(Copyable, Movable):
     # The cube texture pass's cube, in the assets `render` is given; its
     # opacity is `strength`.
     var cube: CubeTextureId
+    # The classic bloom's `kernelSize`, how many taps its convolution
+    # reads, and `sigma`, the Gaussian's spread, in taps. Its strength is
+    # `strength`.
+    var kernel_size: Int
+    var sigma: Float32
+    # What a mip map depth of field pass reads; see
+    # `postprocessing.effects.dof_mipmap_light`.
+    var dof: DofMipMapSettings
+    # What a `BokehShader2` pass reads; see
+    # `postprocessing.effects.bokeh2_light`.
+    var bokeh2: Bokeh2Settings
+    # A render pass's `overrideMaterial`, `clearColor` and `clearAlpha`,
+    # each none by default, and three.js's `clear` and `clearDepth`:
+    # whether a pass clears the frame before it draws, true for a render
+    # and a mask pass and false for the rest, as three.js's classes set
+    # it, and whether a render pass clears the depth first, false. The color is in sRGB, and only its red, green
+    # and blue are read, as three.js's `setClearColor` keeps the alpha.
+    var override_material: Optional[MaterialId]
+    var render_clear_color: Optional[Color]
+    var render_clear_alpha: Optional[Float32]
+    var clear: Bool
+    var clear_depth: Bool
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -446,6 +495,15 @@ struct Pass(Copyable, Movable):
         self.first = Layers()
         self.second = Layers()
         self.cube = NO_CUBE_TEXTURE
+        self.kernel_size = 25
+        self.sigma = 4
+        self.dof = DofMipMapSettings()
+        self.bokeh2 = Bokeh2Settings()
+        self.override_material = None
+        self.render_clear_color = None
+        self.render_clear_alpha = None
+        self.clear = kind == RENDER or kind == MASK
+        self.clear_depth = False
 
 
 def check_pass(step: Pass) raises:
@@ -455,7 +513,7 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the thirty-five; a strength, radius,
+        Error: If the kind is none of the named ones; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
             bloom's radius or an afterimage's damp is above one; the sample
@@ -470,7 +528,7 @@ def check_pass(step: Pass) raises:
             raise, and `check_shader` for a shader pass.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the thirty-five named kinds")
+        raise Error("A pass kind must be one of the named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -522,16 +580,51 @@ def check_pass(step: Pass) raises:
         raise Error("A transition that reads a texture must name one")
     if step.kind == SHADER:
         check_shader(step.shader)
+    check_dof_mipmap(step.dof)
+    check_bokeh2(step.bokeh2)
+    var alpha = Bool(step.render_clear_alpha)
+    if alpha:
+        var value = step.render_clear_alpha.value()
+        # A NaN is refused by the same test.
+        if not (value >= 0 and value <= 1):
+            raise Error("A render pass's clear alpha runs from zero to one")
+    if step.kind == CLASSIC_BLOOM:
+        if step.kernel_size < 1:
+            raise Error("A bloom's kernel needs at least one tap")
+        # A NaN is not above zero, so this refuses it as well.
+        if not (step.sigma > 0 and isfinite(step.sigma)):
+            raise Error("A bloom's sigma must be positive and finite")
 
 
-def render_pass() -> Pass:
+def render_pass(
+    override_material: Optional[MaterialId] = None,
+    clear_color: Optional[Color] = None,
+    clear_alpha: Optional[Float32] = None,
+) -> Pass:
     """Return a pass that draws the scene, clearing the frame first:
     three.js's `RenderPass`.
+
+    Set `clear` false on the pass to draw over the frame it is given, and
+    `clear_depth` true to clear the depth first, as three.js's properties
+    of those names do. `EffectComposer.render` refuses a clear alpha
+    outside zero to one.
+
+    Args:
+        override_material: A material to draw every object with in the
+            place of its own, three.js's `overrideMaterial`, or none.
+        clear_color: The color to clear to in the place of the renderer's
+            background, `clearColor`, or none. Its alpha is not read.
+        clear_alpha: The alpha to clear to, `clearAlpha`, zero to one, or
+            none.
 
     Returns:
         The pass.
     """
-    return Pass(RENDER)
+    var step = Pass(RENDER)
+    step.override_material = override_material
+    step.render_clear_color = clear_color
+    step.render_clear_alpha = clear_alpha
+    return step^
 
 
 def copy_pass(opacity: Float32 = 1.0) raises -> Pass:
@@ -763,7 +856,10 @@ def smaa_pass() -> Pass:
 
 
 def ssaa_render_pass(
-    sample_level: Int = 4, unbiased: Bool = True
+    sample_level: Int = 4,
+    unbiased: Bool = True,
+    clear_color: Optional[Color] = None,
+    clear_alpha: Optional[Float32] = None,
 ) raises -> Pass:
     """Return a pass that draws the scene once per jittered sample and
     averages the samples: three.js's `SSAARenderPass`.
@@ -772,22 +868,33 @@ def ssaa_render_pass(
         sample_level: Zero through five, for 1, 2, 4, 8, 16 or 32 samples.
         unbiased: Whether to vary each sample's weight a little about the
             mean, as three.js does, so rounding cancels.
+        clear_color: The color each sample clears to, three.js's
+            `clearColor`, or none for the renderer's background. Its
+            alpha is not read.
+        clear_alpha: The alpha each sample clears to, `clearAlpha`, zero
+            to one, or none for the background's.
 
     Returns:
         The pass.
 
     Raises:
-        Error: If the sample level is outside zero through five.
+        Error: If the sample level is outside zero through five, or the
+            clear alpha outside zero to one.
     """
     var step = Pass(SSAA_RENDER)
     step.sample_level = sample_level
     step.unbiased = unbiased
+    step.render_clear_color = clear_color
+    step.render_clear_alpha = clear_alpha
     check_pass(step)
     return step^
 
 
 def taa_render_pass(
-    sample_level: Int = 0, accumulate: Bool = False
+    sample_level: Int = 0,
+    accumulate: Bool = False,
+    clear_color: Optional[Color] = None,
+    clear_alpha: Optional[Float32] = None,
 ) raises -> Pass:
     """Return a pass that draws jittered samples and, once asked to,
     accumulates 32 of them over many frames: three.js's `TAARenderPass`.
@@ -802,16 +909,23 @@ def taa_render_pass(
     Args:
         sample_level: Zero through five: how many samples a frame draws.
         accumulate: Whether to accumulate over frames.
+        clear_color: The color each sample clears to, three.js's
+            `clearColor`, or none for the renderer's background.
+        clear_alpha: The alpha each sample clears to, `clearAlpha`, zero
+            to one, or none for the background's.
 
     Returns:
         The pass.
 
     Raises:
-        Error: If the sample level is outside zero through five.
+        Error: If the sample level is outside zero through five, or the
+            clear alpha outside zero to one.
     """
     var step = Pass(TAA_RENDER)
     step.sample_level = sample_level
     step.accumulate = accumulate
+    step.render_clear_color = clear_color
+    step.render_clear_alpha = clear_alpha
     check_pass(step)
     return step^
 
@@ -1285,7 +1399,7 @@ def shader_pass(
 
 
 def effect_pass(effect: ShaderEffect) raises -> Pass:
-    """Return a pass that runs one of fifteen of three.js's screen shaders
+    """Return a pass that runs one of eighteen of three.js's screen shaders
     with its default uniforms: a `ShaderPass` of that shader.
 
     Change the uniforms in the fields of `effect` afterward.
@@ -1569,6 +1683,160 @@ def gamma_correction_pass() raises -> Pass:
     return effect_pass(GAMMA_CORRECTION)
 
 
+def triangle_blur_pass(
+    delta_u: Float32 = 1.0, delta_v: Float32 = 1.0
+) raises -> Pass:
+    """Return a pass of three.js's `TriangleBlurShader`, reading the frame
+    as its `texture`.
+
+    Args:
+        delta_u: How far the taps reach across, in texture widths.
+        delta_v: How far they reach up, in texture heights.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(TRIANGLE_BLUR)
+    step.effect.delta_u = delta_u
+    step.effect.delta_v = delta_v
+    check_pass(step)
+    return step^
+
+
+def normal_map_pass(
+    height: Float32 = 0.05,
+    resolution_x: Float32 = 512,
+    resolution_y: Float32 = 512,
+) raises -> Pass:
+    """Return a pass of three.js's `NormalMapShader`, reading the frame's
+    red as its `heightMap`.
+
+    Args:
+        height: How tall a unit of red stands.
+        resolution_x: The height map's width, as three.js's `resolution`
+            gives it; positive.
+        resolution_y: Its height; positive.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(NORMAL_MAP)
+    step.effect.height = height
+    step.effect.resolution_x = resolution_x
+    step.effect.resolution_y = resolution_y
+    check_pass(step)
+    return step^
+
+
+def focus_pass(
+    sample_distance: Float32 = 0.94,
+    wave_factor: Float32 = 0.00125,
+    screen_width: Float32 = 1024,
+    screen_height: Float32 = 1024,
+) raises -> Pass:
+    """Return a pass of three.js's `FocusShader`.
+
+    Args:
+        sample_distance: How far the taps reach, three.js's
+            `sampleDistance`.
+        wave_factor: How far they reach at the center, `waveFactor`.
+        screen_width: The width the taps are measured against,
+            `screenWidth`; positive.
+        screen_height: The height, `screenHeight`; positive.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(FOCUS)
+    step.effect.sample_distance = sample_distance
+    step.effect.wave_factor = wave_factor
+    step.effect.screen_width = screen_width
+    step.effect.screen_height = screen_height
+    check_pass(step)
+    return step^
+
+
+def classic_bloom_pass(
+    strength: Float32 = 1.0, kernel_size: Int = 25, sigma: Float32 = 4.0
+) raises -> Pass:
+    """Return a pass of three.js's classic `BloomPass`: the frame blurred
+    across and then up by a Gaussian, and added back over itself.
+
+    `bloom_pass` is three.js's `UnrealBloomPass`.
+
+    Args:
+        strength: How much of the blur is added.
+        kernel_size: How many taps each blur reads; at least one.
+        sigma: How far the Gaussian spreads, in taps; positive.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_pass` raises.
+    """
+    var step = Pass(CLASSIC_BLOOM)
+    step.strength = strength
+    step.kernel_size = kernel_size
+    step.sigma = sigma
+    check_pass(step)
+    return step^
+
+
+def dof_mipmap_pass(
+    focus: Float32 = 1.0, max_blur: Float32 = 1.0
+) raises -> Pass:
+    """Return a pass of three.js's `DOFMipMapShader`. Put it after a
+    `render_pass`: it draws the scene's depth itself, and blurs the frame
+    it is given.
+
+    Args:
+        focus: The window depth that stays sharp, zero at the near plane
+            and one at the far.
+        max_blur: How many mip levels a unit of depth from the focus
+            blurs by, halved; not negative.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_dof_mipmap` raises.
+    """
+    var step = Pass(DOF_MIPMAP)
+    step.dof = DofMipMapSettings(focus, max_blur)
+    check_pass(step)
+    return step^
+
+
+def bokeh2_pass(settings: Bokeh2Settings = Bokeh2Settings()) raises -> Pass:
+    """Return a pass of three.js's `BokehShader2`. Put it after a
+    `render_pass`: it draws the scene's depth itself, and blurs the frame
+    it is given.
+
+    Args:
+        settings: The shader's uniforms and its ring and sample counts.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_bokeh2` raises.
+    """
+    var step = Pass(BOKEH2)
+    step.bokeh2 = settings
+    check_pass(step)
+    return step^
+
+
 def god_rays_pass(
     sun: Vector3, intensity: Float32 = 0.69, fake_sun: Bool = False
 ) raises -> Pass:
@@ -1830,7 +2098,12 @@ struct EffectComposer(Movable):
             )
             if mask_active:
                 keep_outside_mask(frame, saved)
-        return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
+        return frame.resolve(
+            renderer.workers,
+            NO_TONE_MAPPING,
+            1.0,
+            output=renderer.output_encoding(),
+        )
 
     def run_step[
         C: Camera
@@ -1904,7 +2177,7 @@ struct EffectComposer(Movable):
             # Nothing to draw: `render` turns the mask off.
             pass
         elif step.kind == RENDER:
-            _draw(frame, renderer, scene, assets, camera)
+            _render_step(frame, renderer, scene, assets, camera, step)
         elif step.kind == COPY:
             copy_light(frame, step.strength)
         elif step.kind == BLUR:
@@ -1935,7 +2208,7 @@ struct EffectComposer(Movable):
             smaa_light(frame)
         elif step.kind == SSAA_RENDER:
             frame = supersample(
-                renderer,
+                _cleared_renderer(renderer, step),
                 scene,
                 assets,
                 camera,
@@ -1970,7 +2243,20 @@ struct EffectComposer(Movable):
         elif step.kind == SSR:
             _draw(frame, renderer, scene, assets, camera)
             _premultiply_data(frame)
-            ssr_light(frame, _depth_view(frame, camera), step.ssr)
+            var selected = List[Bool]()
+            if step.ssr.selective:
+                selected = _covered(
+                    renderer, scene, assets, camera, step.ssr.selects
+                )
+            ssr_light(
+                frame,
+                _depth_view(frame, camera),
+                step.ssr,
+                selected,
+                self.memories[index],
+            )
+            if step.ssr.bouncing:
+                self.memories[index] = frame.colors.copy()
         elif step.kind == OUTLINE:
             self.passes[index].time += delta_time
             _outline(
@@ -1986,10 +2272,22 @@ struct EffectComposer(Movable):
                 frame,
                 self.passes[index],
                 self.accumulations[index],
-                renderer,
+                _cleared_renderer(renderer, step),
                 scene,
                 assets,
                 camera,
+            )
+        elif step.kind == BOKEH2:
+            bokeh2_light(
+                frame, depth_view(renderer, scene, assets, camera), step.bokeh2
+            )
+        elif step.kind == DOF_MIPMAP:
+            dof_mipmap_light(
+                frame, depth_view(renderer, scene, assets, camera), step.dof
+            )
+        elif step.kind == CLASSIC_BLOOM:
+            classic_bloom_light(
+                frame, step.strength, step.kernel_size, step.sigma
             )
         elif step.kind == BOKEH:
             bokeh_light(
@@ -2009,6 +2307,10 @@ struct EffectComposer(Movable):
         elif step.kind == CLEAR:
             clear_light(frame, step.clear_color)
         elif step.kind == TEXTURE:
+            # three.js's `TexturePass` with `clear` on clears to the
+            # renderer's color first.
+            if step.clear:
+                clear_light(frame, renderer.background)
             texture_light(
                 frame, assets.textures.get(step.texture), step.strength
             )
@@ -2146,6 +2448,68 @@ def depth_view[
     return _depth_view(drawn, camera)
 
 
+def _render_step[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+    step: Pass,
+) raises:
+    """Draw the scene as three.js's `RenderPass` draws it: with its
+    override material in the place of every object's, its clear color and
+    alpha in the place of the renderer's, the depth cleared first when it
+    asks, and the frame cleared first unless it asks not to be."""
+    var plain = not (
+        Bool(step.override_material)
+        or Bool(step.render_clear_color)
+        or Bool(step.render_clear_alpha)
+        or step.clear_depth
+        or not step.clear
+    )
+    if plain:
+        _draw(frame, renderer, scene, assets, camera)
+        return
+    var drawn = _cleared_renderer(renderer, step)
+    drawn.override_material = step.override_material
+    if step.clear_depth:
+        drawn.clear(frame, False, True, False)
+    # A frame that is not cleared keeps what it holds, so it is drawn at
+    # its own size: supersampling draws into a fresh target.
+    drawn.antialias = renderer.antialias and step.clear
+    drawn.auto_clear = step.clear
+    _draw(frame, drawn, scene, assets, camera)
+
+
+def _cleared_renderer(renderer: Renderer, step: Pass) raises -> Renderer:
+    """Return a copy of the renderer that clears to a pass's clear color
+    and alpha where the pass sets them: what three.js's render, SSAA and
+    TAA passes do with `setClearColor` and `setClearAlpha`.
+
+    Args:
+        renderer: The renderer.
+        step: The pass, whose `render_clear_color` and
+            `render_clear_alpha` are read.
+
+    Returns:
+        The copy, antialiased as the renderer is.
+    """
+    var drawn = renderer.scaled(1)
+    drawn.antialias = renderer.antialias
+    var tinted = Bool(step.render_clear_color)
+    if tinted:
+        var color = step.render_clear_color.value()
+        drawn.background = Color(color.r, color.g, color.b, drawn.background.a)
+    var faded = Bool(step.render_clear_alpha)
+    if faded:
+        drawn.background.a = UInt8(
+            Int(step.render_clear_alpha.value() * 255 + 0.5)
+        )
+    return drawn^
+
+
 def _draw[
     C: Camera
 ](
@@ -2261,6 +2625,18 @@ def _outline[
         renderer.width, renderer.height, renderer.background
     )
     _draw(picked, renderer, scene, assets, chosen)
+    var patterned = step.outline.use_pattern_texture
+    if patterned:
+        outline_light(
+            frame,
+            everything.depth,
+            picked.depth,
+            step.outline,
+            Duration(step.time, SECOND),
+            everything.depth_mode,
+            assets.textures.get(step.outline.pattern_texture),
+        )
+        return
     outline_light(
         frame,
         everything.depth,
@@ -2269,6 +2645,32 @@ def _outline[
         Duration(step.time, SECOND),
         everything.depth_mode,
     )
+
+
+def _covered[
+    C: Camera
+](
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+    selection: Layers,
+) raises -> List[Bool]:
+    """Return whether each pixel shows an object on the selected layers,
+    drawn alone through the same camera: the mask three.js's passes draw
+    their selected objects into."""
+    var chosen = JitteredCamera(
+        camera, scene, 0, 0, renderer.width, renderer.height
+    )
+    chosen.layers = selection
+    var picked = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(picked, renderer, scene, assets, chosen)
+    var covered = List[Bool](capacity=len(picked.depth))
+    for depth in picked.depth:  # pragma: no branch
+        covered.append(isfinite(depth))
+    return covered^
 
 
 def _mask[
@@ -2293,7 +2695,7 @@ def _mask[
         renderer.width, renderer.height, renderer.background
     )
     _draw(picked, renderer, scene, assets, chosen)
-    mask_stencil(frame, picked.depth, step.mask.inverse)
+    mask_stencil(frame, picked.depth, step.mask.inverse, step.clear)
 
 
 def sized_renderer(
@@ -2451,7 +2853,10 @@ def render_transition[
     )
     transition_light(frame, first, second, texels, settings)
     return frame.resolve(
-        renderer.workers, renderer.tone_curve(), renderer.tone_mapping_exposure
+        renderer.workers,
+        renderer.tone_curve(),
+        renderer.tone_mapping_exposure,
+        output=renderer.output_encoding(),
     )
 
 
@@ -3015,6 +3420,133 @@ def glow_pixel(color: FloatColor, glow: FloatColor) -> FloatColor:
         color.b + glow.b * glow.a,
         color.a,
     )
+
+
+def bloom_kernel(sigma: Float32, size: Int) -> List[Float32]:
+    """Return `BloomPass`'s `buildKernel`: a Gaussian of `sigma` taps,
+    at most 25 wide and summing to one, laid in `size` uniforms, the ones
+    past the kernel zero as a shader's unset uniforms are.
+
+    Args:
+        sigma: How far the Gaussian spreads, in taps.
+        size: How many taps the convolution reads, `kernelSize`.
+
+    Returns:
+        `size` weights.
+    """
+    var built = 2 * Int(ceil(sigma * 3)) + 1
+    if built > MAX_BLOOM_KERNEL:
+        built = MAX_BLOOM_KERNEL
+    var half = Float32(built - 1) * 0.5
+    var values = List[Float32]()
+    var total = Float32(0)
+    for i in range(built):  # pragma: no branch
+        var x = Float32(i) - half
+        var value = exp(-(x * x) / (2 * sigma * sigma))
+        values.append(value)
+        total += value
+    var out = List[Float32](length=size, fill=0)
+    for i in range(min(built, size)):  # pragma: no branch
+        out[i] = values[i] / total
+    return out^
+
+
+def convolution_pixel(
+    source: LightView,
+    x: Int,
+    y: Int,
+    kernel: List[Float32],
+    step_u: Float32,
+    step_v: Float32,
+) -> FloatColor:
+    """Return one pixel of three.js's `ConvolutionShader`: `len(kernel)`
+    taps a step apart, centered on the pixel, each weighted.
+
+    Args:
+        source: The frame, premultiplied.
+        x: The column.
+        y: The row, down from the top.
+        kernel: The weights, `bloom_kernel`.
+        step_u: How far apart the taps are across, in texture widths.
+        step_v: How far apart they are up, in texture heights.
+
+    Returns:
+        The weighted sum.
+    """
+    var size = Float32(len(kernel))
+    var u = u_of(x, source.width) - (size - 1) / 2 * step_u
+    var v = v_of(y, source.height) - (size - 1) / 2 * step_v
+    var sum = FloatColor(0, 0, 0, 0)
+    for i in range(len(kernel)):  # pragma: no branch
+        var tap = source.sample(u, v)
+        var weight = kernel[i]
+        sum = FloatColor(
+            sum.r + tap.r * weight,
+            sum.g + tap.g * weight,
+            sum.b + tap.b * weight,
+            sum.a + tap.a * weight,
+        )
+        u += step_u
+        v += step_v
+    return sum
+
+
+def _convolve(
+    colors: List[FloatColor],
+    width: Int,
+    height: Int,
+    kernel: List[Float32],
+    step_u: Float32,
+    step_v: Float32,
+) -> List[FloatColor]:
+    """Return `ConvolutionShader` run over every pixel of a frame."""
+    var view = LightView(colors, width, height)
+    var out = List[FloatColor](capacity=width * height)
+    # Spelled with `while`; see `_blur_along`.
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            out.append(convolution_pixel(view, x, y, kernel, step_u, step_v))
+            x += 1
+        y += 1
+    return out^
+
+
+def classic_bloom_light(
+    mut frame: RenderTarget, strength: Float32, kernel_size: Int, sigma: Float32
+):
+    """Blur the frame across and then up with `ConvolutionShader`, and add
+    `strength` of it back: three.js's classic `BloomPass`.
+
+    The taps are 1/512 of the texture apart whatever its size, as
+    three.js's `blurX` and `blurY` are. The blur is added with three.js's
+    `CombineShader` and its additive blend, as `glow_pixel` adds it.
+
+    Args:
+        frame: The frame, changed in place.
+        strength: How much of the blur is added.
+        kernel_size: How many taps each blur reads.
+        sigma: How far the Gaussian spreads, in taps.
+    """
+    var kernel = bloom_kernel(sigma, kernel_size)
+    var across = _convolve(
+        frame.colors, frame.width, frame.height, kernel, CONVOLUTION_STEP, 0
+    )
+    var blurred = _convolve(
+        across, frame.width, frame.height, kernel, 0, CONVOLUTION_STEP
+    )
+    for index in range(len(frame.colors)):  # pragma: no branch
+        var glow = blurred[index]
+        frame.colors[index] = glow_pixel(
+            frame.colors[index],
+            FloatColor(
+                glow.r * strength,
+                glow.g * strength,
+                glow.b * strength,
+                glow.a * strength,
+            ),
+        )
 
 
 def bloom_light(

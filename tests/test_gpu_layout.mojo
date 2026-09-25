@@ -137,6 +137,7 @@ from render.gpu import (
     flatten_transmission,
     FLOATS_PER_VERTEX,
     FOG_FLOATS,
+    FOG_OUTPUT,
     LANE_ANISOTROPY_X,
     LANE_ANISOTROPY_Y,
     LANE_AO_INTENSITY,
@@ -601,8 +602,12 @@ def test_flattening_fog_lays_out_six_floats() raises:
         linear_fog(Color(128, 0, 255), Length(2.0, METER), Length(9.0, METER))
     )
     var flat = flatten_fog(view)
-    assert_equal(len(flat), 7)
+    assert_equal(len(flat), 18)
     assert_equal(len(flat), FOG_FLOATS)
+    # Then the output encoding: sRGB by default, the matrix skipped.
+    assert_equal(flat[FOG_OUTPUT], Float32(1))
+    assert_equal(flat[FOG_OUTPUT + 9], Float32(1))
+    assert_equal(flat[FOG_OUTPUT + 10], Float32(1))
     # No custom tone mapping curve: its start is -1.
     assert_equal(flat[6], Float32(-1))
     assert_equal(flatten_fog(view, 12)[6], Float32(12))
@@ -1288,7 +1293,7 @@ def test_the_gpu_composer_runs_the_per_pixel_passes_on_the_device() raises:
     assert_false(runs_on_device(RENDER_PIXELATED))
     assert_false(runs_on_device(GTAO))
     assert_false(runs_on_device(RENDER_TRANSITION))
-    assert_false(runs_on_device(PassKind(35)))
+    assert_false(runs_on_device(PassKind(60)))
 
 
 def test_the_depth_packing_the_range_and_the_fog_switch_cross() raises:

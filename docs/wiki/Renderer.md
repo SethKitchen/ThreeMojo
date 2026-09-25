@@ -108,6 +108,21 @@ The viewport and the scissor are given in output pixels and scaled with the fram
 
 `set_tone_mapping` refuses a curve that is none of the seven, and an exposure that is negative or not finite.
 
+## Output color space
+
+```mojo
+renderer.set_output_color_space(LINEAR_SRGB_COLOR_SPACE)
+renderer.set_output_color_space(DISPLAY_P3_COLOR_SPACE)
+```
+
+`set_output_color_space` is three.js's `outputColorSpace`. sRGB is the default, as in three.js. `resolve` writes each pixel's light in that space, after the tone mapping curve. Both backends use the same `OutputEncoding`, from `render/color_spaces.mojo`.
+
+The light is multiplied by three.js's matrix, then goes through the space's transfer function. A linear space has no transfer function, so its bytes are the light itself. The matrix is `ColorManagement._getMatrix`, rounded to four places, as `WebGLProgram` writes it into the shader. The shader multiplies the color by the matrix from the left, `value.rgb * mat3(...)`, and this does the same.
+
+A space with sRGB's primaries has the identity matrix, and the matrix is skipped. A pixel that a normal or depth material wrote is data. three.js writes it without `linearToOutputTexel`, and so does this, in every space.
+
+`set_output_color_space` refuses `NO_COLOR_SPACE`, which three.js cannot write out, and a value that names no space. A caller that resolves its own target, such as a stereo effect or a composer, passes `renderer.output_encoding()` to `resolve`.
+
 ## What prepare does
 
 First, read the scene as draws. A mesh is one draw. An instanced or batched mesh is one draw per instance, kept together as one group. An LOD is one draw, the level its distance from the camera picks. See [Meshes and assets](Meshes-and-assets#instancedmesh).

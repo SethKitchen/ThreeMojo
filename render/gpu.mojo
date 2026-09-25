@@ -39,6 +39,14 @@ Whether this is *faster* than the CPU is a separate question, and the answer
 is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 """
 
+from render.color_spaces import (
+    ColorSpaceId,
+    OUTPUT_FLOATS,
+    OutputEncoding,
+    SRGB_COLOR_SPACE,
+    output_encoding,
+    output_from,
+)
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
@@ -674,7 +682,10 @@ comptime FOG_B = 5
 # or -1 for none: the kernel has no argument left for it. See
 # `render.tonemap.custom_tone_map`.
 comptime FOG_TONE_PROGRAM = 6
-comptime FOG_FLOATS = FOG_TONE_PROGRAM + 1
+# Where the output color space's encoding starts, `OUTPUT_FLOATS` floats:
+# three.js's `outputColorSpace`. See `render.color_spaces.OutputEncoding`.
+comptime FOG_OUTPUT = 7
+comptime FOG_FLOATS = FOG_OUTPUT + OUTPUT_FLOATS
 
 # How the light buffer begins: where the camera is, the one direction
 # toward it when its rays are parallel, then the ambient term, then the
@@ -1586,13 +1597,18 @@ def _shadow_mask(
     return mask
 
 
-def flatten_fog(fog: FogView, curve_start: Int = -1) -> List[Float32]:
+def flatten_fog(
+    fog: FogView,
+    curve_start: Int = -1,
+    output: OutputEncoding = OutputEncoding(),
+) -> List[Float32]:
     """Return a fog view as the flat float buffer the kernel reads.
 
     Args:
         fog: The scene's fog, as the rasterizers take it.
         curve_start: Where the custom tone mapping curve's program starts
             in the fog buffer, or -1, the default, for none.
+        output: How the kernel writes light out; sRGB by default.
 
     Returns:
         `FOG_FLOATS` floats, in the order the kernel unpacks them. The
@@ -1606,6 +1622,7 @@ def flatten_fog(fog: FogView, curve_start: Int = -1) -> List[Float32]:
     flat.append(fog.color.g)
     flat.append(fog.color.b)
     flat.append(Float32(curve_start))
+    flat.extend(output.flatten())
     return flat^
 
 
@@ -6475,14 +6492,18 @@ def rasterize_kernel(
         curve = NO_TONE_MAPPING.value
     else:
         lit = lit.unpremultiplied()
-    var word = pack(
-        tone_map_with(
-            lit,
-            ToneMapping(curve),
-            exposure,
-            _DeviceCurve(fog, Int(fog[unsafe_offset=FOG_TONE_PROGRAM])),
-        ).encode()
+    var mapped = tone_map_with(
+        lit,
+        ToneMapping(curve),
+        exposure,
+        _DeviceCurve(fog, Int(fog[unsafe_offset=FOG_TONE_PROGRAM])),
     )
+    # A data pixel skips the output space, as `RenderTarget.resolve` has
+    # it: it is stored so that sRGB's curve gives back its bytes.
+    var shown = mapped.encode()
+    if not data:
+        shown = output_from(fog, FOG_OUTPUT).encode(mapped)
+    var word = pack(shown)
     if solid:
         nearest_depth = nearest
 
@@ -6827,7 +6848,11 @@ struct GpuRenderer(Movable):
             )
 
     def _upload_fog(
-        mut self, fog: FogView, programs: NodeProgramStore, curve_start: Int
+        mut self,
+        fog: FogView,
+        programs: NodeProgramStore,
+        curve_start: Int,
+        output: OutputEncoding = OutputEncoding(),
     ) raises:
         """Put `fog` on the device, and the node programs after it.
 
@@ -6837,11 +6862,12 @@ struct GpuRenderer(Movable):
                 says.
             curve_start: Where the custom tone mapping curve's program
                 starts, or -1 for none.
+            output: How the kernel writes light out.
 
         Raises:
             Error: If the device buffer cannot be made or written.
         """
-        var flat = flatten_fog(fog, curve_start)
+        var flat = flatten_fog(fog, curve_start, output)
         flat.extend(flatten_programs(programs))
         if len(flat) > self.fog_room:
             # A draw still in flight may be reading the old buffer; see
@@ -6877,6 +6903,7 @@ struct GpuRenderer(Movable):
         transmission: TransmissionTarget = TransmissionTarget(),
         programs: NodeProgramStore = NodeProgramStore(),
         custom_tone_mapping: NodeProgramId = NO_NODES,
+        output_color_space: ColorSpaceId = SRGB_COLOR_SPACE,
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -6944,6 +6971,9 @@ struct GpuRenderer(Movable):
                 `Renderer.custom_tone_mapping`, or `NO_NODES`, the
                 default, for three.js's default curve, which leaves the
                 light as it is. See `render.tonemap.custom_tone_map`.
+            output_color_space: The space the image is written in,
+                `Renderer.output_color_space`; sRGB by default. See
+                `render.color_spaces.output_encoding`.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -6983,6 +7013,7 @@ struct GpuRenderer(Movable):
         # the refusals `RenderTarget.resolve` and `rasterize_all` make are
         # made here, before the launch, by the same functions.
         check_tone_mapping(tone_mapping, exposure)
+        var output = output_encoding(output_color_space)
         fog.validate()
         # Where the custom curve's program starts in the fog buffer, or -1
         # for none; the kernel reads it from the fog's header.
@@ -7019,6 +7050,7 @@ struct GpuRenderer(Movable):
                     depth_mode=depth_mode,
                     programs=programs,
                     custom_tone_mapping=custom_tone_mapping,
+                    output_color_space=output_color_space,
                 )
         var triangles = len(corners) // 3
 
@@ -7448,7 +7480,7 @@ struct GpuRenderer(Movable):
             )
 
         self._upload_lights(lighting)
-        self._upload_fog(fog, programs, curve_start)
+        self._upload_fog(fog, programs, curve_start, output)
         # The transmission target, flattened, and room for it made after
         # the backdrop before the backdrop is written: a new buffer holds
         # nothing, so it is cleared below as a painted one would be.
@@ -8406,6 +8438,8 @@ def halftone_kernel(
     blending: Float32,
     blending_mode: Int32,
     grayscale: Int32,
+    size_x: Float32,
+    size_y: Float32,
 ):
     """Redraw each channel as a grid of dots: `halftone_pixel`."""
     var x = Int(global_idx.x)
@@ -8424,6 +8458,8 @@ def halftone_kernel(
     settings.blending = blending
     settings.blending_mode = HalftoneBlending(Int(blending_mode))
     settings.grayscale = grayscale != 0
+    settings.width = size_x
+    settings.height = size_y
     var view = LightView(floats=source, width=w, height=h)
     var slot = y * w + x
     _store(light, slot, halftone_pixel(view, x, y, settings))
@@ -8571,7 +8607,7 @@ def effect_kernel(
     width: Int32,
     height: Int32,
 ):
-    """Run one of the fifteen screen shaders: `effect_pixel`, its settings
+    """Run one of the eighteen screen shaders: `effect_pixel`, its settings
     read back from `params` by `effect_from_floats`."""
     var x = Int(global_idx.x)
     var y = Int(global_idx.y)
@@ -9498,6 +9534,8 @@ struct GpuComposer(Movable):
                 settings.blending,
                 Int32(settings.blending_mode.value),
                 Int32(1 if settings.grayscale else 0),
+                settings.width,
+                settings.height,
                 grid_dim=grid,
                 block_dim=(TILE, TILE),
             )
@@ -9521,6 +9559,25 @@ struct GpuComposer(Movable):
                 block_dim=(TILE, TILE),
             )
         elif kind == TEXTURE:
+            if composer.passes[index].clear:
+                var cleared = FloatColor(
+                    srgb=renderer.background
+                ).premultiplied()
+                self.context.enqueue_function[clear_kernel](
+                    self.light.unsafe_ptr(),
+                    self.data.unsafe_ptr(),
+                    self.depth.unsafe_ptr(),
+                    self.stencil.unsafe_ptr(),
+                    Int32(self.width),
+                    Int32(self.height),
+                    cleared.r,
+                    cleared.g,
+                    cleared.b,
+                    cleared.a,
+                    cleared_depth(frame.depth_mode),
+                    grid_dim=grid,
+                    block_dim=(TILE, TILE),
+                )
             self._put_colors(
                 texture_overlay(
                     assets.textures.get(composer.passes[index].texture),
