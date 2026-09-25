@@ -26,12 +26,20 @@ sphere's does: one carries zero and the other one.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    TORUS_GEOMETRY,
+    TORUS_KNOT_GEOMETRY,
+    UV,
+)
+from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
-from units.si import Angle, Length
+from units.si import Angle, Length, METER, RADIAN
 
 # How far along the knot's parameter the second point is taken, to give the
 # frame a tangent. three.js's step, so the frames and therefore the vertices
@@ -128,6 +136,13 @@ def torus(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(grid_index(radial_segments, tubular_segments, True))
+    geometry.kind = TORUS_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
+    geometry.parameters.set_number("arc", Float64(arc.to(RADIAN)))
     return geometry^
 
 
@@ -224,4 +239,12 @@ def torus_knot(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(grid_index(tubular_segments, radial_segments, False))
+    geometry.kind = TORUS_KNOT_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("p", Float64(p))
+    geometry.parameters.set_number("q", Float64(q))
     return geometry^

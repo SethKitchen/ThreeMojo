@@ -51,16 +51,15 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 190 features are ported and 13 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 191 features are ported and 12 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
-- [ ] Scene JSON for every geometry type, shapes and curves, and single geometry and material documents [#185](https://github.com/SethKitchen/ThreeMojo/issues/185)
-
 <details>
-<summary>Ported: 15</summary>
+<summary>Ported: 16</summary>
 
+- [x] [Scene JSON for every geometry type](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON#geometry): all nineteen parametric types, the shapes library, curve JSON, and lone geometry and material documents [#185](https://github.com/SethKitchen/ThreeMojo/issues/185)
 - [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
 - [x] [Edit the scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#edit-the-graph): reparent, attach, remove, clone and traverse nodes; world-space queries; Group and userData in scene JSON. [#165](https://github.com/SethKitchen/ThreeMojo/issues/165)
 - [x] [Quaternion and Euler rotations](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations): six Euler orders, `rotate_x`, `rotate_y`, `rotate_z`, `look_at`, `slerp` [#2](https://github.com/SethKitchen/ThreeMojo/issues/2)

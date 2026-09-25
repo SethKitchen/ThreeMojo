@@ -18,7 +18,10 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import (
+    BUFFER_GEOMETRY,
+    BufferGeometry,
+)
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
@@ -160,6 +163,9 @@ def _morphed() raises -> BufferGeometry:
     for at in range(len(positions)):
         moved.append(positions[at] * (Float32(1.5) if at % 3 == 0 else 1))
     geometry.add_morph_target(BufferAttribute(moved^, 3))
+    # Changed after it was built, so written by its arrays: as a box, the
+    # target would be lost, as three.js loses it.
+    geometry.kind = BUFFER_GEOMETRY
     return geometry^
 
 

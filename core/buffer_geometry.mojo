@@ -80,6 +80,7 @@ run through it. A line or a points object draws the vertices that
 from core.buffer_attribute import BufferAttribute
 from core.interleaved_buffer import InterleavedBuffer
 from core.user_data import UserData
+from math.path import Shape
 from math.bounds import Box3, Sphere
 from math.matrix3 import Matrix3
 from math.matrix4 import (
@@ -260,6 +261,99 @@ struct GeometryGroup(ImplicitlyCopyable):
     var material_index: MaterialIndex
 
 
+@fieldwise_init
+struct GeometryType(Equatable, ImplicitlyCopyable, Writable):
+    """Which three.js class a geometry was built as, its `type`, as a type
+    rather than a string.
+
+    A builder such as `geometries.box.box` sets it, with the numbers it
+    was given in `BufferGeometry.parameters`, so that JSON can say
+    `BoxGeometry` and its width rather than every vertex. Anything else is
+    `BUFFER_GEOMETRY`, and is written with its arrays.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the types there are."""
+        return self.value >= 0 and self.value < len(geometry_type_names())
+
+    def name(self) -> String:
+        """Return three.js's class name, or an empty string for a type
+        that is not valid."""
+        if not self.is_valid():
+            return String()
+        return geometry_type_names()[self.value]
+
+
+def geometry_type_names() -> List[String]:
+    """Return three.js's class names, in the order of the types' values."""
+    return [
+        "BufferGeometry",
+        "BoxGeometry",
+        "CapsuleGeometry",
+        "CircleGeometry",
+        "ConeGeometry",
+        "CylinderGeometry",
+        "DodecahedronGeometry",
+        "ExtrudeGeometry",
+        "IcosahedronGeometry",
+        "LatheGeometry",
+        "OctahedronGeometry",
+        "PlaneGeometry",
+        "PolyhedronGeometry",
+        "RingGeometry",
+        "ShapeGeometry",
+        "SphereGeometry",
+        "TetrahedronGeometry",
+        "TorusGeometry",
+        "TorusKnotGeometry",
+        "TubeGeometry",
+    ]
+
+
+def geometry_type_of(name: String) raises -> GeometryType:
+    """Return the type three.js's class name names.
+
+    Args:
+        name: A class name, such as `BoxGeometry`.
+
+    Returns:
+        The type.
+
+    Raises:
+        Error: If the name is not one of the types there are.
+    """
+    var names = geometry_type_names()
+    for at in range(len(names)):  # pragma: no branch
+        if names[at] == name:
+            return GeometryType(at)
+    raise Error("A geometry type that is not read: " + name)
+
+
+# Built from its arrays, three.js's plain `BufferGeometry`.
+comptime BUFFER_GEOMETRY = GeometryType(0)
+comptime BOX_GEOMETRY = GeometryType(1)
+comptime CAPSULE_GEOMETRY = GeometryType(2)
+comptime CIRCLE_GEOMETRY = GeometryType(3)
+comptime CONE_GEOMETRY = GeometryType(4)
+comptime CYLINDER_GEOMETRY = GeometryType(5)
+comptime DODECAHEDRON_GEOMETRY = GeometryType(6)
+comptime EXTRUDE_GEOMETRY = GeometryType(7)
+comptime ICOSAHEDRON_GEOMETRY = GeometryType(8)
+comptime LATHE_GEOMETRY = GeometryType(9)
+comptime OCTAHEDRON_GEOMETRY = GeometryType(10)
+comptime PLANE_GEOMETRY = GeometryType(11)
+comptime POLYHEDRON_GEOMETRY = GeometryType(12)
+comptime RING_GEOMETRY = GeometryType(13)
+comptime SHAPE_GEOMETRY = GeometryType(14)
+comptime SPHERE_GEOMETRY = GeometryType(15)
+comptime TETRAHEDRON_GEOMETRY = GeometryType(16)
+comptime TORUS_GEOMETRY = GeometryType(17)
+comptime TORUS_KNOT_GEOMETRY = GeometryType(18)
+comptime TUBE_GEOMETRY = GeometryType(19)
+
+
 struct BufferGeometry(Movable):
     """Named vertex attributes, with optional indexed triangles."""
 
@@ -300,6 +394,14 @@ struct BufferGeometry(Movable):
     # The part of the triangle stream that is drawn, three.js's
     # `drawRange`. See the module docstring and `set_draw_range`.
     var draw_range: DrawRange
+    # The three.js class a builder made this as, its `type`, and the
+    # numbers it was given, three.js's `parameters`: each a JSON value,
+    # under three.js's key, in three.js's order. A shape or an extrusion
+    # also keeps its shapes, which JSON names by `uuid`. Like three.js's,
+    # they are kept as they were given when the arrays are changed later.
+    var kind: GeometryType
+    var parameters: UserData
+    var shapes: List[Shape]
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
@@ -333,12 +435,16 @@ struct BufferGeometry(Movable):
         self.name = String()
         self.user_data = UserData()
         self.draw_range = WHOLE_STREAM
+        self.kind = BUFFER_GEOMETRY
+        self.parameters = UserData()
+        self.shapes = List[Shape]()
 
     def clone(self) -> BufferGeometry:
         """Return a copy of this geometry, three.js's `clone`.
 
         Copies every attribute, the index, the morph targets, the groups,
-        the instancing, the name, the user data and the draw range. A
+        the instancing, the name, the user data, the draw range, and the type
+        and parameters a builder gave it. A
         geometry is not `Copyable`, so that a copy is
         always asked for by name and never made by an assignment.
 
@@ -367,6 +473,9 @@ struct BufferGeometry(Movable):
         copied.name = self.name
         copied.user_data = self.user_data.copy()
         copied.draw_range = self.draw_range
+        copied.kind = self.kind
+        copied.parameters = self.parameters.copy()
+        copied.shapes = self.shapes.copy()
         return copied^
 
     def set_draw_range(

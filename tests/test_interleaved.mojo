@@ -19,11 +19,12 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
+    BUFFER_GEOMETRY,
+    BufferGeometry,
     COLOR,
     NORMAL,
     POSITION,
     UV,
-    BufferGeometry,
 )
 from core.deform import morphed_positions
 from core.geometry_store import GeometryId
@@ -751,6 +752,9 @@ def test_a_ray_meets_an_interleaved_geometry_where_it_meets_the_plain() raises:
 def test_the_exporters_write_an_interleaved_geometry_as_the_plain() raises:
     var box = cube(Length(1.0, METER))
     var tinted = box.clone()
+    # Tinted after it was built, so written by its arrays, as the
+    # interleaved copy is.
+    tinted.kind = BUFFER_GEOMETRY
     var colors = List[Float32]()
     for vertex in range(box.vertex_count()):
         colors.append(Float32(vertex % 3) * 0.5)

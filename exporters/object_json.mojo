@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """A scene and its assets written in three.js's JSON Object format,
-version 4.6: what `scene.toJSON()` writes, and the other half of
+version 4.7: what `scene.toJSON()` writes, and the other half of
 `loaders.object_loader`.
 
 **The document.** A `metadata` object, the `geometries`, `materials`,
@@ -118,7 +118,7 @@ from core.background import (
     TEXTURE_BACKGROUND,
 )
 from core.buffer_attribute import BufferAttribute, array_type_name
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import BUFFER_GEOMETRY, BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
 from core.layers import Layers
@@ -127,6 +127,10 @@ from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from exporters.json_writer import JsonWriter
+from core.user_data import json_value_text
+from loaders.json import parse_json
+from loaders.curve_json import write_shape
+from math.path import Shape
 from lights.light import (
     DIRECTIONAL,
     HEMISPHERE,
@@ -218,6 +222,7 @@ comptime _TEXTURE_UUID = 6
 comptime _IMAGE_UUID = 7
 comptime _SKELETON_UUID = 8
 comptime _CLIP_UUID = 9
+comptime _SHAPE_UUID = 10
 # The largest vertex count whose index three.js writes as a `Uint16Array`.
 comptime _MAX_SHORT_INDEX = 65535
 comptime _HEX = "0123456789abcdef"
@@ -462,12 +467,26 @@ struct _Header(Copyable, Movable):
             writer.boolean(False)
 
 
+def _named(mut writer: JsonWriter, geometry: BufferGeometry) raises:
+    """Write a geometry's name when it is not empty and its user data when
+    it holds a key, as three.js's `toJSON` writes them."""
+    if geometry.name != "":
+        writer.key("name")
+        writer.string(geometry.name)
+    if geometry.user_data.count() > 0:
+        writer.key("userData")
+        writer.raw(geometry.user_data.to_json())
+
+
 struct _Library(Movable):
     """The libraries as JSON texts, and which store id each entry is."""
 
     var geometries: List[String]
     # The store id of each geometry entry, or -1 for a batch's joined one.
     var geometry_keys: List[Int]
+    # three.js's `shapes` library, and the uuid of each entry.
+    var shapes: List[String]
+    var shape_keys: List[String]
     var materials: List[String]
     # Each material entry's store id and three.js class, as one text.
     var material_keys: List[String]
@@ -486,6 +505,8 @@ struct _Library(Movable):
         self.environment = NO_CUBE_TEXTURE
         self.geometries = List[String]()
         self.geometry_keys = List[Int]()
+        self.shapes = List[String]()
+        self.shape_keys = List[String]()
         self.materials = List[String]()
         self.material_keys = List[String]()
         self.textures = List[String]()
@@ -506,6 +527,19 @@ struct _Library(Movable):
             at = self.add_geometry(assets.geometries.get(id), id.value)
         return object_uuid(_GEOMETRY_UUID, at)
 
+    def shape(mut self, shape: Shape) raises -> String:
+        """Write a shape once, by its uuid, and return the uuid. A shape
+        with no uuid is given one."""
+        var uuid = shape.uuid
+        if uuid == "":
+            uuid = object_uuid(_SHAPE_UUID, len(self.shapes))
+        if _find_text(self.shape_keys, uuid) < 0:
+            var writer = JsonWriter()
+            write_shape(writer, shape, uuid, metadata=False)
+            self.shapes.append(writer.finish())
+            self.shape_keys.append(uuid)
+        return uuid
+
     def add_geometry(
         mut self, geometry: BufferGeometry, key: Int
     ) raises -> Int:
@@ -516,6 +550,27 @@ struct _Library(Movable):
         writer.key("uuid")
         writer.string(object_uuid(_GEOMETRY_UUID, at))
         writer.key("type")
+        if geometry.kind != BUFFER_GEOMETRY:
+            # three.js's `toJSON` of a geometry with `parameters`: its
+            # type, name and user data, then the parameters, and no
+            # arrays. A shape is named by its uuid, and written to the
+            # `shapes` library.
+            writer.string(geometry.kind.name())
+            _named(writer, geometry)
+            if len(geometry.shapes) > 0:
+                writer.key("shapes")
+                writer.begin_array()
+                for shape in geometry.shapes:  # pragma: no branch
+                    writer.string(self.shape(shape))
+                writer.end_array()
+            for slot in range(geometry.parameters.count()):  # pragma: no branch
+                var name = geometry.parameters.key(slot)
+                writer.key(name)
+                writer.raw(geometry.parameters.json(name))
+            writer.end_object()
+            self.geometries.append(writer.finish())
+            self.geometry_keys.append(key)
+            return at
         if geometry.instanced:
             # three.js's `InstancedBufferGeometry.toJSON`: `null` is
             # what `JSON.stringify` makes of its default `Infinity`.
@@ -529,14 +584,7 @@ struct _Library(Movable):
             writer.boolean(True)
         else:
             writer.string("BufferGeometry")
-        # three.js's `toJSON` writes a name that is not empty and user
-        # data that holds a key.
-        if geometry.name != "":
-            writer.key("name")
-            writer.string(geometry.name)
-        if geometry.user_data.count() > 0:
-            writer.key("userData")
-            writer.raw(geometry.user_data.to_json())
+        _named(writer, geometry)
         writer.key("data")
         writer.begin_object()
         writer.key("attributes")
@@ -2496,6 +2544,7 @@ def object_to_json(
     _library(writer, "materials", out.library.materials)
     _library(writer, "textures", out.library.textures)
     _library(writer, "images", out.library.images)
+    _library(writer, "shapes", out.library.shapes)
     _library(writer, "skeletons", out.library.skeletons)
     _library(writer, "animations", clips)
     writer.key("object")
@@ -2525,3 +2574,82 @@ def write_object_json(
             raises.
     """
     Path(path).write_text(object_to_json(scene, assets, cameras, animations))
+
+
+def _standalone(
+    kind: String,
+    entry: String,
+    textures: List[String],
+    images: List[String],
+) raises -> String:
+    """Return a library entry as a document of its own, as three.js's
+    `toJSON` writes one called on its own: its `metadata` first, then the
+    entry, then the textures and images it uses."""
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("metadata")
+    writer.begin_object()
+    writer.key("version")
+    writer.number(FORMAT_VERSION)
+    writer.key("type")
+    writer.string(kind)
+    writer.key("generator")
+    writer.string(kind + ".toJSON")
+    writer.end_object()
+    var doc = parse_json(entry)
+    var root = doc.root()
+    for at in range(doc.length(root)):  # pragma: no branch
+        var key = doc.key(root, at)
+        writer.key(key)
+        writer.raw(json_value_text(doc, doc.get(root, key)))
+    _library(writer, "textures", textures)
+    _library(writer, "images", images)
+    writer.end_object()
+    return writer.finish()
+
+
+def geometry_to_json(geometry: BufferGeometry) raises -> String:
+    """Return one geometry as three.js's `geometry.toJSON()` writes it.
+
+    A geometry a builder made is written as its type and parameters, and a
+    shape or an extrusion names its shapes by uuid without carrying them,
+    as three.js's does.
+
+    Args:
+        geometry: The geometry.
+
+    Returns:
+        The document.
+
+    Raises:
+        Error: If an attribute cannot be written; see `object_to_json`.
+    """
+    var library = _Library()
+    var at = library.add_geometry(geometry, 0)
+    return _standalone(
+        "BufferGeometry",
+        library.geometries[at],
+        List[String](),
+        List[String](),
+    )
+
+
+def material_to_json(id: MaterialId, assets: Assets) raises -> String:
+    """Return one material as three.js's `material.toJSON()` writes it,
+    with the textures and images it uses.
+
+    Args:
+        id: The material.
+        assets: Where it and its textures are.
+
+    Returns:
+        The document.
+
+    Raises:
+        Error: If the material has no three.js form; see `object_to_json`.
+    """
+    var library = _Library()
+    _ = library.material(id, assets, _SURFACE_USE)
+    return _standalone(
+        "Material", library.materials[0], library.textures, library.images
+    )

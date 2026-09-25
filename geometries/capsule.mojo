@@ -5,56 +5,31 @@
 
 """A capsule, from three.js `src/geometries/CapsuleGeometry.js`.
 
-A cylinder with a hemisphere on each end, standing on the y axis. A profile
--- a quarter circle up from the bottom pole, a straight run up the side, a
-quarter circle in to the top pole -- revolved around the axis, the way a
-lathe turns it: one column of vertices per step around and one vertex per
-profile point up each column. three.js once built it on its lathe and now
-builds the same surface directly. This takes its normals from the profile
-exactly, along the radius of whichever cap a point is on and straight out
-on the side, rather than from the profile's neighboring points, so the
-caps and the side meet without a crease.
+A cylinder with a hemisphere on each end, standing on the y axis. Its
+profile runs from the bottom pole up a quarter circle, up the straight
+side, and in along a quarter circle to the top pole. The vertices are
+rows of that profile, bottom to top, one vertex per step around and one
+more for the seam, as three.js's builder lays them out.
 
-Texture coordinates run around for `u` and up the profile for `v`, by
-distance along it, so the caps and the side keep their share of the image
-whatever the segment counts are. The sweep starts at +z, as the cylinder's
-does; three.js's current builder starts at -x and gives its pole vertices a
-half-step `u`. The shape is the same, and a texture lands a quarter turn
-on.
-
-Each pole is one point that every column repeats, for the reason the
-sphere's are: the columns need a vertex to close on. The half of each cell
-against a pole that has no area is left out, as the cylinder leaves out
-the cells against its apex. A capsule of no length has one rim, not two:
-its top cap continues from the bottom cap's rim, so nothing collapses.
+The arithmetic is three.js's, in doubles. The sweep starts at -x, and a
+pole's vertices take a half-step `u`, as three.js's do. A normal points
+along the radius of whichever cap a point is on, and straight out on the
+side. `v` is the distance along the profile, over its whole length. A
+capsule of no length keeps its two rims and the side between them, which
+has no height.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from std.math import cos, pi, sin
-from units.si import Length
-
-
-def _append_profile_point(
-    mut across: List[Float32],
-    mut up: List[Float32],
-    mut lean_across: List[Float32],
-    mut lean_up: List[Float32],
-    mut along: List[Float32],
-    x: Float32,
-    y: Float32,
-    normal_x: Float32,
-    normal_y: Float32,
-    distance: Float32,
-):
-    """Append one point of the profile, the normal it carries, both in the
-    plane the profile is drawn in with `x` out from the axis and `y` along
-    it, and how far along the profile it lies from the bottom pole."""
-    along.append(distance)
-    across.append(x)
-    up.append(y)
-    lean_across.append(normal_x)
-    lean_up.append(normal_y)
+from core.buffer_geometry import (
+    BufferGeometry,
+    CAPSULE_GEOMETRY,
+    NORMAL,
+    POSITION,
+    UV,
+)
+from core.user_data import UserData
+from std.math import cos, pi, sin, sqrt
+from units.si import Length, METER
 
 
 def capsule(
@@ -64,12 +39,13 @@ def capsule(
     radial_segments: Int = 8,
     height_segments: Int = 1,
 ) raises -> BufferGeometry:
-    """Return a capsule standing on the y axis, centered on the origin.
+    """Return a capsule standing on the y axis, centered on the origin,
+    three.js's `CapsuleGeometry`.
 
     Args:
         radius: The radius of the side and of both caps.
-        length: How long the straight side is, between the caps. Zero
-            makes a sphere.
+        length: How long the straight side is, between the caps, three.js's
+            `height`. Zero makes a sphere.
         cap_segments: How many rows of cells each cap has, from its rim to
             its pole; at least one.
         radial_segments: How many cells around; at least three.
@@ -78,10 +54,8 @@ def capsule(
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and an
         index buffer, wound counter-clockwise seen from outside. Vertices
-        run in columns, one per step around, each from the bottom pole to
-        the top. `u` runs around and `v` up the profile by distance along
-        it, zero at the bottom pole and one at the top, so the caps and the
-        side keep their share of the image whatever the segment counts.
+        run in rows from the bottom pole to the top, `radial_segments + 1`
+        to a row.
 
     Raises:
         Error: If the radius is not positive, the length is negative, or
@@ -98,115 +72,94 @@ def capsule(
     if height_segments < 1:
         raise Error("A capsule needs at least one segment up its side")
 
-    var r = radius.value
-    var straight = length.value
-    var half = straight / 2
-    var quarter = Float32(pi) / 2
-    # The profile's length from pole to pole: two quarter circles and the
-    # side. `v` is a point's distance along it over this.
-    var total = Float32(pi) * r + straight
-    # The profile, bottom pole to top pole: a quarter circle around the
-    # bottom cap's center, the side, and a quarter circle around the top's.
-    # Each point carries the direction the surface faces there and how far
-    # along the profile it lies. The segment counts were checked above, so
-    # every cap loop runs.
-    var across = List[Float32]()
-    var up = List[Float32]()
-    var lean_across = List[Float32]()
-    var lean_up = List[Float32]()
-    var along = List[Float32]()
-    for step in range(cap_segments + 1):  # pragma: no branch
-        var turn = Float32(step) / Float32(cap_segments) * quarter
-        var angle = turn - quarter
-        _append_profile_point(
-            across,
-            up,
-            lean_across,
-            lean_up,
-            along,
-            r * cos(angle),
-            -half + r * sin(angle),
-            cos(angle),
-            sin(angle),
-            r * turn,
-        )
-    if straight > 0:
-        for step in range(1, height_segments):
-            var rise = Float32(step) / Float32(height_segments) * straight
-            _append_profile_point(
-                across,
-                up,
-                lean_across,
-                lean_up,
-                along,
-                r,
-                -half + rise,
-                1,
-                0,
-                quarter * r + rise,
-            )
-    # A capsule of no length has one rim, not two: the top cap continues
-    # from the bottom cap's rim rather than repeating it, so there is no
-    # side of collapsed cells between them.
-    var first = 0
-    if straight == 0:
-        first = 1
-    for step in range(first, cap_segments + 1):  # pragma: no branch
-        var turn = Float32(step) / Float32(cap_segments) * quarter
-        _append_profile_point(
-            across,
-            up,
-            lean_across,
-            lean_up,
-            along,
-            r * cos(turn),
-            half + r * sin(turn),
-            cos(turn),
-            sin(turn),
-            quarter * r + straight + r * turn,
-        )
+    var r = Float64(radius.to(METER))
+    var height = Float64(length.to(METER))
+    var half = height / 2
+    var cap_arc = (pi / 2) * r
+    var total = 2 * cap_arc + height
+    var rows = cap_segments * 2 + height_segments
+    var per_row = radial_segments + 1
 
-    var points = len(across)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
-    for column in range(radial_segments + 1):  # pragma: no branch
-        var u = Float32(column) / Float32(radial_segments)
-        var phi = u * 2 * Float32(pi)
-        var sin_phi = sin(phi)
-        var cos_phi = cos(phi)
-        for row in range(points):  # pragma: no branch
-            data.append(across[row] * sin_phi)
-            data.append(up[row])
-            data.append(across[row] * cos_phi)
-            normals.append(lean_across[row] * sin_phi)
-            normals.append(lean_up[row])
-            normals.append(lean_across[row] * cos_phi)
-            uvs.append(u)
-            uvs.append(along[row] / total)
-
     var index = List[Int]()
-    for column in range(radial_segments):  # pragma: no branch
-        for row in range(points - 1):  # pragma: no branch
-            var a = row + column * points
-            var b = row + (column + 1) * points
-            var c = row + 1 + (column + 1) * points
-            var d = row + 1 + column * points
-            # Two triangles per cell, counter-clockwise from outside, in
-            # the lathe's order. The two corners on a pole coincide, so the
-            # half of the cell they alone would span is left out.
-            if row != 0:
-                index.append(a)
-                index.append(b)
-                index.append(d)
-            if row != points - 2:
-                index.append(c)
-                index.append(d)
-                index.append(b)
+    for iy in range(rows + 1):  # pragma: no branch
+        var arc: Float64
+        var profile_y: Float64
+        var profile_radius: Float64
+        var normal_y: Float64
+        if iy <= cap_segments:
+            var progress = Float64(iy) / Float64(cap_segments)
+            var angle = (progress * pi) / 2
+            profile_y = -half - r * cos(angle)
+            profile_radius = r * sin(angle)
+            normal_y = -r * cos(angle)
+            arc = progress * cap_arc
+        elif iy <= cap_segments + height_segments:
+            var progress = Float64(iy - cap_segments) / Float64(height_segments)
+            profile_y = -half + progress * height
+            profile_radius = r
+            normal_y = 0
+            arc = cap_arc + progress * height
+        else:
+            var progress = Float64(
+                iy - cap_segments - height_segments
+            ) / Float64(cap_segments)
+            var angle = (progress * pi) / 2
+            profile_y = half + r * sin(angle)
+            profile_radius = r * cos(angle)
+            normal_y = r * sin(angle)
+            arc = cap_arc + height + progress * cap_arc
+        var v = max(Float64(0), min(Float64(1), arc / total))
+        # The poles' vertices sit half a step round, as three.js's do.
+        var u_offset = Float64(0)
+        if iy == 0:
+            u_offset = 0.5 / Float64(radial_segments)
+        elif iy == rows:
+            u_offset = -0.5 / Float64(radial_segments)
+        for ix in range(radial_segments + 1):  # pragma: no branch
+            var u = Float64(ix) / Float64(radial_segments)
+            var theta = u * pi * 2
+            var sin_theta = sin(theta)
+            var cos_theta = cos(theta)
+            var x = -profile_radius * cos_theta
+            var z = profile_radius * sin_theta
+            data.append(Float32(x))
+            data.append(Float32(profile_y))
+            data.append(Float32(z))
+            # three.js's `normalize`: divided by its length. A normal is
+            # never of no length: a pole's points straight along y.
+            var scale = 1 / sqrt(x * x + normal_y * normal_y + z * z)
+            normals.append(Float32(x * scale))
+            normals.append(Float32(normal_y * scale))
+            normals.append(Float32(z * scale))
+            uvs.append(Float32(u + u_offset))
+            uvs.append(Float32(v))
+        if iy > 0:
+            var previous = (iy - 1) * per_row
+            for ix in range(radial_segments):  # pragma: no branch
+                var i1 = previous + ix
+                var i2 = previous + ix + 1
+                var i3 = iy * per_row + ix
+                var i4 = iy * per_row + ix + 1
+                index.append(i1)
+                index.append(i2)
+                index.append(i3)
+                index.append(i2)
+                index.append(i4)
+                index.append(i3)
 
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    geometry.kind = CAPSULE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("height", Float64(length.to(METER)))
+    geometry.parameters.set_number("capSegments", Float64(cap_segments))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
     return geometry^

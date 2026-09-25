@@ -443,6 +443,9 @@ struct Shape(Copyable, Movable):
 
     var outline: Path
     var holes: List[Path]
+    # three.js's `uuid`, which a geometry names the shape by in JSON.
+    # Empty until a JSON document gives one or a writer makes one.
+    var uuid: String
 
     def __init__(out self, var outline: Path) raises:
         """Create a shape from its outline.
@@ -458,11 +461,13 @@ struct Shape(Copyable, Movable):
             raise Error("A shape needs a closed outline")
         self.outline = outline^
         self.holes = List[Path]()
+        self.uuid = String()
 
     def __init__(out self, *, copy: Self):
         """Copy another shape."""
         self.outline = Path(copy=copy.outline)
         self.holes = copy.holes.copy()
+        self.uuid = copy.uuid
 
     def add_hole(mut self, var hole: Path) raises:
         """Cut `hole` out of the shape.

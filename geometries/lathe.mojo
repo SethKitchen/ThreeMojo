@@ -16,7 +16,9 @@ own segments: each segment faces away from itself, turned a quarter turn
 and as long as the segment is, and a corner faces the sum of the two
 segments it joins, made unit length. The longer segment pulls the corner
 its way, which is three.js's weighting exactly. The first point faces the
-way its segment does, and the last the way its own does.
+way its segment does, made unit length. The last faces the way its own
+segment does, and three.js leaves that one as long as the segment, so
+this does too.
 
 A profile that comes back along a segment to exactly the point before it
 leaves that corner facing nowhere: the two normals cancel, and there is no
@@ -24,9 +26,9 @@ direction to make unit length. It is refused, rather than given a normal
 that is not one.
 
 A point on the axis, with `x` of zero, is one point that every column
-repeats, a pole. The half of each cell against it that has no area is left
-out, as the cylinder leaves out the cells against its apex; three.js emits
-those triangles and lets the rasterizer discard them.
+repeats, a pole. The half of each cell against it has no area. three.js
+emits it and lets the rasterizer discard it, and so does this, so the
+index is three.js's.
 
 The profile's numbers are bare meters, as a `Vector3` position is: the
 lathe is where a shape drawn by hand meets the scene, and the drawing is
@@ -34,7 +36,14 @@ made of plain points.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    LATHE_GEOMETRY,
+    NORMAL,
+    POSITION,
+    UV,
+)
+from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.vector2 import Vector2
 from std.math import cos, sin, sqrt
@@ -56,8 +65,8 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
     point faces the way its segment does; every point after it faces the
     sum of the segment before it and the segment after it, so a corner
     shades smoothly and a longer segment weighs more; the last point, with
-    no segment after it, faces the way the last segment does. The ends are
-    made unit length as well, which three.js leaves undone for the last.
+    no segment after it, faces the way the last segment does, left as long
+    as that segment, as three.js leaves it.
     Consecutive points were checked to differ, so no segment is zero, but
     two that cancel are caught here.
 
@@ -69,7 +78,7 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
     var previous = Vector2(0, 0)
     for index in range(len(points)):  # pragma: no branch
         if index == len(points) - 1:
-            normals.append(_unit(previous.x, previous.y))
+            normals.append(previous)
             continue
         var dx = points[index + 1].x - points[index].x
         var dy = points[index + 1].y - points[index].y
@@ -83,6 +92,18 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
             normals.append(_unit(summed.x, summed.y))
         previous = ahead
     return normals^
+
+
+def _points_json(points: List[Vector2]) raises -> String:
+    """Return the profile as three.js's JSON writes its `points`: an
+    object of `x` and `y` for each."""
+    var out = String("[")
+    for at in range(len(points)):  # pragma: no branch
+        if at > 0:
+            out += ","
+        out += '{"x":' + json_number_text(Float64(points[at].x))
+        out += ',"y":' + json_number_text(Float64(points[at].y)) + "}"
+    return out + "]"
 
 
 def lathe(
@@ -156,20 +177,24 @@ def lathe(
             var b = row + (column + 1) * count
             var c = row + 1 + (column + 1) * count
             var d = row + 1 + column * count
-            # Two triangles per cell in three.js's order, less the half
-            # whose two corners sit on the axis.
-            if points[row].x != 0:
-                index.append(a)
-                index.append(b)
-                index.append(d)
-            if points[row + 1].x != 0:
-                index.append(c)
-                index.append(d)
-                index.append(b)
+            # Two triangles per cell in three.js's order, the one against
+            # a pole included.
+            index.append(a)
+            index.append(b)
+            index.append(d)
+            index.append(c)
+            index.append(d)
+            index.append(b)
 
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    geometry.kind = LATHE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_json("points", _points_json(points))
+    geometry.parameters.set_number("segments", Float64(segments))
+    geometry.parameters.set_number("phiStart", Float64(phi_start.to(RADIAN)))
+    geometry.parameters.set_number("phiLength", Float64(phi_length.to(RADIAN)))
     return geometry^

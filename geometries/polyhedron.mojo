@@ -28,10 +28,21 @@ reads it as the same place.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    DODECAHEDRON_GEOMETRY,
+    ICOSAHEDRON_GEOMETRY,
+    NORMAL,
+    OCTAHEDRON_GEOMETRY,
+    POLYHEDRON_GEOMETRY,
+    POSITION,
+    TETRAHEDRON_GEOMETRY,
+    UV,
+)
+from core.user_data import UserData, json_number_text
 from math.vector3 import Vector3
 from std.math import atan2, pi, sqrt
-from units.si import Length
+from units.si import Length, METER
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the
 # dodecahedron are built on.
@@ -123,6 +134,26 @@ def _correct_seam(mut uvs: List[Float32], triangle: Int):
         for corner in range(3):  # pragma: no branch
             if uvs[first + corner * 2] < 0.2:
                 uvs[first + corner * 2] += 1
+
+
+def _numbers_json(values: List[Float32]) raises -> String:
+    """Return numbers as a JSON array."""
+    var out = String("[")
+    for at in range(len(values)):  # pragma: no branch
+        if at > 0:
+            out += ","
+        out += json_number_text(Float64(values[at]))
+    return out + "]"
+
+
+def _integers_json(values: List[Int]) -> String:
+    """Return whole numbers as a JSON array."""
+    var out = String("[")
+    for at in range(len(values)):  # pragma: no branch
+        if at > 0:
+            out += ","
+        out += String(values[at])
+    return out + "]"
 
 
 def polyhedron(
@@ -221,6 +252,12 @@ def polyhedron(
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     if detail == 0:
         geometry.compute_vertex_normals()
+    geometry.kind = POLYHEDRON_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_json("vertices", _numbers_json(vertices))
+    geometry.parameters.set_json("indices", _integers_json(indices))
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
 
@@ -246,7 +283,12 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     """
     var vertices: List[Float32] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
-    return polyhedron(vertices, indices, radius, detail)
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    geometry.kind = TETRAHEDRON_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
 
 
 def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -308,7 +350,12 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         4,
         2,
     ]
-    return polyhedron(vertices, indices, radius, detail)
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    geometry.kind = OCTAHEDRON_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
 
 
 def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -427,7 +474,12 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         8,
         1,
     ]
-    return polyhedron(vertices, indices, radius, detail)
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    geometry.kind = ICOSAHEDRON_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
 
 
 def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -618,4 +670,9 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         5,
         9,
     ]
-    return polyhedron(vertices, indices, radius, detail)
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    geometry.kind = DODECAHEDRON_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
