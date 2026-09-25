@@ -7,17 +7,20 @@
 mapbox's earcut 3.0.1, as `ShapeUtils.triangulateShape` calls it.
 
 `earcut` gives the same triangles, in the same order, as three.js's
-`Earcut.triangulate( data )` for a polygon with no holes. The points are
+`Earcut.triangulate( data, holeIndices )`. The points are
 put in a ring in clockwise order, and the ring is cut one ear at a time.
 When no ear is left, the ring is filtered of repeated and collinear
 points, then small self-intersections are cured, then the ring is split
 in two along a diagonal, as earcut does. A polygon of more than 80
 points is searched through a z-order curve, as earcut searches it.
 
-`triangulate_shape` is three.js's `ShapeUtils.triangulateShape` with no
-holes: it drops a last point that repeats the first.
+Each hole is joined to the outline by a bridge from its leftmost point,
+the holes from left to right, as earcut joins them.
 
-**Where this port differs.** Holes are not ported. earcut reads a
+`triangulate_shape` is three.js's `ShapeUtils.triangulateShape`: it drops
+a last point that repeats the first, of the outline and of each hole.
+
+**Where this port differs.** earcut reads a
 missing coordinate of a list of odd length as `undefined`; this refuses
 such a list. Each product that feeds a sum is rounded on its own, as
 JavaScript rounds it, so a nearly flat corner is judged as three.js
@@ -39,6 +42,8 @@ struct _EarNode(ImplicitlyCopyable):
     var z: Int
     var prev_z: Int
     var next_z: Int
+    # A hole of one point, which filtering leaves, earcut's `steiner`.
+    var steiner: Bool
 
     def __init__(out self, i: Int, x: Float64, y: Float64):
         """Make an unlinked point."""
@@ -50,6 +55,7 @@ struct _EarNode(ImplicitlyCopyable):
         self.z = 0
         self.prev_z = -1
         self.next_z = -1
+        self.steiner = False
 
 
 @no_inline
@@ -72,12 +78,12 @@ def _equals(nodes: List[_EarNode], p: Int, q: Int) -> Bool:
     return nodes[p].x == nodes[q].x and nodes[p].y == nodes[q].y
 
 
-def _signed_area(data: List[Float64]) -> Float64:
-    """Return earcut's `signedArea` of the whole list."""
+def _signed_area(data: List[Float64], start: Int, end: Int) -> Float64:
+    """Return earcut's `signedArea` of the points from `start` to `end`."""
     var total = Float64(0)
-    var j = len(data) - 2
-    # The caller refuses an empty list: the loop always runs.
-    for i in range(0, len(data), 2):  # pragma: no branch
+    var j = end - 2
+    # A ring holds a point at least: the loop always runs.
+    for i in range(start, end, 2):  # pragma: no branch
         total += _product(data[j] - data[i], data[i + 1] + data[j + 1])
         j = i
     return total
@@ -114,15 +120,22 @@ def _remove_node(mut nodes: List[_EarNode], p: Int):
         nodes[next_z].prev_z = prev_z
 
 
-def _linked_list(mut nodes: List[_EarNode], data: List[Float64]) -> Int:
-    """Make the clockwise ring, earcut's `linkedList`."""
+def _linked_list(
+    mut nodes: List[_EarNode],
+    data: List[Float64],
+    start: Int,
+    end: Int,
+    clockwise: Bool,
+) -> Int:
+    """Make a ring of the points from `start` to `end`, clockwise or
+    not, earcut's `linkedList`."""
     var last = -1
-    if _signed_area(data) > 0:
-        # The caller refuses an empty list: the loops always run.
-        for i in range(0, len(data), 2):  # pragma: no branch
+    if clockwise == (_signed_area(data, start, end) > 0):
+        # A ring holds a point at least: the loops always run.
+        for i in range(start, end, 2):  # pragma: no branch
             last = _insert_node(nodes, i // 2, data[i], data[i + 1], last)
     else:
-        for i in range(len(data) - 2, -1, -2):  # pragma: no branch
+        for i in range(end - 2, start - 1, -2):  # pragma: no branch
             last = _insert_node(nodes, i // 2, data[i], data[i + 1], last)
     if _equals(nodes, last, nodes[last].next):
         _remove_node(nodes, last)
@@ -134,7 +147,9 @@ def _drops(nodes: List[_EarNode], p: Int) -> Bool:
     """Return True for a point that repeats the next or lies on a line."""
     var prev = nodes[p].prev
     var next = nodes[p].next
-    return _equals(nodes, p, next) or _area(nodes, prev, p, next) == 0
+    return not nodes[p].steiner and (
+        _equals(nodes, p, next) or _area(nodes, prev, p, next) == 0
+    )
 
 
 def _filter_points(mut nodes: List[_EarNode], start: Int, end_at: Int) -> Int:
@@ -538,6 +553,167 @@ def _split_earcut(
         looping = a != start
 
 
+def _get_leftmost(nodes: List[_EarNode], start: Int) -> Int:
+    """Return the ring's leftmost point, the lowest of those, earcut's
+    `getLeftmost`."""
+    var p = start
+    var leftmost = start
+    var looping = True
+    while looping:
+        ref q = nodes[p]
+        ref best = nodes[leftmost]
+        if q.x < best.x or (q.x == best.x and q.y < best.y):
+            leftmost = p
+        p = nodes[p].next
+        looping = p != start
+    return leftmost
+
+
+def _compare_xy_slope(nodes: List[_EarNode], a: Int, b: Int) -> Float64:
+    """Return earcut's `compareXYSlope`: below zero when hole `a` comes
+    first."""
+    var result = nodes[a].x - nodes[b].x
+    if result == 0:
+        result = nodes[a].y - nodes[b].y
+        if result == 0:
+            ref an = nodes[nodes[a].next]
+            ref bn = nodes[nodes[b].next]
+            var a_slope = (an.y - nodes[a].y) / (an.x - nodes[a].x)
+            var b_slope = (bn.y - nodes[b].y) / (bn.x - nodes[b].x)
+            result = a_slope - b_slope
+    return result
+
+
+def _sector_contains_sector(nodes: List[_EarNode], m: Int, p: Int) -> Bool:
+    """Return whether the sector at `m` holds the sector at `p`, earcut's
+    `sectorContainsSector`."""
+    return (
+        _area(nodes, nodes[m].prev, m, nodes[p].prev) < 0
+        and _area(nodes, nodes[p].next, m, nodes[m].next) < 0
+    )
+
+
+def _find_hole_bridge(nodes: List[_EarNode], hole: Int, outer: Int) -> Int:
+    """Return the outline's point a hole's leftmost point joins, David
+    Eberly's search as earcut's `findHoleBridge` makes it, or -1."""
+    var p = outer
+    var hx = nodes[hole].x
+    var hy = nodes[hole].y
+    var qx = -Float64.MAX
+    var infinite = True
+    var m = -1
+    if _equals(nodes, hole, p):
+        return p
+    var looping = True
+    while looping:
+        var n = nodes[p].next
+        if _equals(nodes, hole, n):
+            return n
+        if hy <= nodes[p].y and hy >= nodes[n].y and nodes[n].y != nodes[p].y:
+            var x = nodes[p].x + _product(
+                hy - nodes[p].y, nodes[n].x - nodes[p].x
+            ) / (nodes[n].y - nodes[p].y)
+            if x <= hx and (infinite or x > qx):
+                qx = x
+                infinite = False
+                m = p if nodes[p].x < nodes[n].x else n
+                if x == hx:
+                    return m
+        p = n
+        looping = p != outer
+    if m < 0:
+        return -1
+    var stop = m
+    var mx = nodes[m].x
+    var my = nodes[m].y
+    var tan_min = Float64.MAX
+    var unbounded = True
+    p = m
+    looping = True
+    while looping:
+        ref q = nodes[p]
+        if (
+            hx >= q.x
+            and q.x >= mx
+            and hx != q.x
+            and _point_in_triangle(
+                hx if hy < my else qx,
+                hy,
+                mx,
+                my,
+                qx if hy < my else hx,
+                hy,
+                q.x,
+                q.y,
+            )
+        ):
+            var tan = abs(hy - q.y) / (hx - q.x)
+            if _locally_inside(nodes, p, hole) and (
+                unbounded
+                or tan < tan_min
+                or (
+                    tan == tan_min
+                    and (
+                        q.x > nodes[m].x
+                        or (
+                            q.x == nodes[m].x
+                            and _sector_contains_sector(nodes, m, p)
+                        )
+                    )
+                )
+            ):
+                m = p
+                tan_min = tan
+                unbounded = False
+        p = nodes[p].next
+        looping = p != stop
+    return m
+
+
+def _eliminate_hole(mut nodes: List[_EarNode], hole: Int, outer: Int) -> Int:
+    """Join a hole to the outline by a bridge, earcut's `eliminateHole`."""
+    var bridge = _find_hole_bridge(nodes, hole, outer)
+    if bridge < 0:
+        return outer
+    var bridge_reverse = _split_polygon(nodes, bridge, hole)
+    _ = _filter_points(nodes, bridge_reverse, nodes[bridge_reverse].next)
+    return _filter_points(nodes, bridge, nodes[bridge].next)
+
+
+def _eliminate_holes(
+    mut nodes: List[_EarNode],
+    data: List[Float64],
+    hole_indices: List[Int],
+    outer: Int,
+) -> Int:
+    """Join every hole to the outline, from left to right, earcut's
+    `eliminateHoles`."""
+    var queue = List[Int]()
+    # Called with a hole at least, so this loop runs.
+    for at in range(len(hole_indices)):  # pragma: no branch
+        var start = hole_indices[at] * 2
+        var end = hole_indices[at + 1] * 2 if at < len(
+            hole_indices
+        ) - 1 else len(data)
+        var list = _linked_list(nodes, data, start, end, False)
+        if list == nodes[list].next:
+            nodes[list].steiner = True
+        queue.append(_get_leftmost(nodes, list))
+    # A stable insertion sort, as JavaScript's sort is stable: a hole goes
+    # before another only when the comparison says it comes first.
+    for at in range(1, len(queue)):
+        var hole = queue[at]
+        var j = at
+        while j > 0 and _compare_xy_slope(nodes, hole, queue[j - 1]) < 0:
+            queue[j] = queue[j - 1]
+            j -= 1
+        queue[j] = hole
+    var joined = outer
+    for at in range(len(queue)):  # pragma: no branch
+        joined = _eliminate_hole(nodes, queue[at], joined)
+    return joined
+
+
 def _takes_first(
     nodes: List[_EarNode], p: Int, p_size: Int, q: Int, q_size: Int
 ) -> Bool:
@@ -664,29 +840,43 @@ def _earcut_linked(
             break
 
 
-def earcut(data: List[Float64]) raises -> List[Int]:
-    """Cut a polygon into triangles, three.js's `Earcut.triangulate( data )`
-    with no holes.
+def earcut(
+    data: List[Float64], hole_indices: List[Int] = List[Int]()
+) raises -> List[Int]:
+    """Cut a polygon into triangles, three.js's
+    `Earcut.triangulate( data, holeIndices )`.
 
     Args:
-        data: The points, x then y for each, in either winding order.
+        data: The points, x then y for each, in either winding order:
+            the outline, then each hole.
+        hole_indices: Where each hole starts, as a point's number.
 
     Returns:
         Three point indices for each triangle, in earcut's order. It is
         empty for fewer than three points.
 
     Raises:
-        Error: If the list has an odd length.
+        Error: If the list has an odd length, or a hole starts outside
+            it, before the one before it, or where the outline would
+            have no point.
     """
     if len(data) % 2 != 0:
         raise Error("earcut: a point list of odd length")
+    var points = len(data) // 2
+    for at in range(len(hole_indices)):
+        var low = 1 if at == 0 else hole_indices[at - 1] + 1
+        if hole_indices[at] < low or hole_indices[at] >= points:
+            raise Error("earcut: a hole must start after the last, in the list")
     var triangles = List[Int]()
     if len(data) == 0:
         return triangles^
+    var outer_len = hole_indices[0] * 2 if len(hole_indices) > 0 else len(data)
     var nodes = List[_EarNode]()
-    var outer = _linked_list(nodes, data)
+    var outer = _linked_list(nodes, data, 0, outer_len, True)
     if nodes[outer].next == nodes[outer].prev:
         return triangles^
+    if len(hole_indices) > 0:
+        outer = _eliminate_holes(nodes, data, hole_indices, outer)
     var min_x = Float64(0)
     var min_y = Float64(0)
     var inv_size = Float64(0)
@@ -695,8 +885,9 @@ def earcut(data: List[Float64]) raises -> List[Int]:
         min_y = Float64.MAX
         var max_x = -Float64.MAX
         var max_y = -Float64.MAX
-        # earcut starts at the second point, and so does this.
-        for i in range(2, len(data), 2):  # pragma: no branch
+        # earcut starts at the outline's second point, and so does this.
+        # The outline holds three points at least here: the loop runs.
+        for i in range(2, outer_len, 2):  # pragma: no branch
             min_x = min(min_x, data[i])
             min_y = min(min_y, data[i + 1])
             max_x = max(max_x, data[i])
@@ -707,23 +898,19 @@ def earcut(data: List[Float64]) raises -> List[Int]:
     return triangles^
 
 
-def triangulate_shape(contour: List[Float64]) raises -> List[Int]:
-    """Cut an outline into triangles, three.js's
-    `ShapeUtils.triangulateShape( contour, [] )`.
+def drop_closing_point(mut points: List[Float64]) raises:
+    """Drop a last point equal to the first, when there are more than two
+    points, three.js's `removeDupEndPts`.
 
     Args:
-        contour: The points, x then y for each. A last point equal to the
-            first is dropped, when there are more than two points.
-
-    Returns:
-        Three point indices for each triangle.
+        points: The points, x then y for each. Changed in place, as
+            three.js changes its array.
 
     Raises:
         Error: If the list has an odd length.
     """
-    if len(contour) % 2 != 0:
+    if len(points) % 2 != 0:
         raise Error("earcut: a point list of odd length")
-    var points = contour.copy()
     var n = len(points)
     var repeats = (
         n > 4 and points[n - 2] == points[0] and points[n - 1] == (points[1])
@@ -731,4 +918,32 @@ def triangulate_shape(contour: List[Float64]) raises -> List[Int]:
     if repeats:
         _ = points.pop()
         _ = points.pop()
-    return earcut(points)
+
+
+def triangulate_shape(
+    contour: List[Float64], holes: List[List[Float64]] = List[List[Float64]]()
+) raises -> List[Int]:
+    """Cut an outline with holes into triangles, three.js's
+    `ShapeUtils.triangulateShape( contour, holes )`.
+
+    Args:
+        contour: The outline's points, x then y for each. A last point
+            equal to the first is dropped, when there are more than two.
+        holes: Each hole's points, likewise.
+
+    Returns:
+        Three point indices for each triangle: the outline's points
+        first, then each hole's.
+
+    Raises:
+        Error: If a list has an odd length.
+    """
+    var points = contour.copy()
+    drop_closing_point(points)
+    var hole_indices = List[Int]()
+    for at in range(len(holes)):
+        var hole = holes[at].copy()
+        drop_closing_point(hole)
+        hole_indices.append(len(points) // 2)
+        points.extend(hole^)
+    return earcut(points, hole_indices)

@@ -8,11 +8,11 @@ fills in.
 """
 
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from geometries.extrude import extrude
+from geometries.extrude import bevel_vector, extrude
 from geometries.shape import (
     Contours,
     extent,
-    on_diagonal,
+    is_clockwise,
     shape_geometry,
     triangulate,
     turn,
@@ -204,20 +204,14 @@ def test_a_notch_on_the_first_diagonal_is_not_clipped_across() raises:
         assert_true(covered_by(cut, Vector2(0.5, 0.5)) > 0)
 
 
-def test_on_diagonal_sees_a_point_along_a_run() raises:
-    var first = Vector2(0, 2)
-    var second = Vector2(2, 0)
-    var flat = Float32(1e-5)
-    # On the run, between its ends.
-    assert_true(on_diagonal(Vector2(1, 1), first, second, flat))
-    # Off the run.
-    assert_false(on_diagonal(Vector2(0, 0), first, second, flat))
-    # On the line the run lies along, but past either end.
-    assert_false(on_diagonal(Vector2(-1, 3), first, second, flat))
-    assert_false(on_diagonal(Vector2(3, -1), first, second, flat))
-    # At either end, which a seam names twice on purpose.
-    assert_false(on_diagonal(first, first, second, flat))
-    assert_false(on_diagonal(second, first, second, flat))
+def test_is_clockwise_reads_the_signed_area() raises:
+    # three.js's `ShapeUtils.isClockWise`: the area is below zero.
+    var counter: List[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1)]
+    assert_false(is_clockwise(counter))
+    counter.reverse()
+    assert_true(is_clockwise(counter))
+    # No area is not clockwise.
+    assert_false(is_clockwise([Vector2(0, 0), Vector2(1, 0), Vector2(2, 0)]))
 
 
 def test_extent_is_the_box_around_a_contour() raises:
@@ -338,23 +332,26 @@ def test_a_contour_with_no_area_is_refused() raises:
         )
 
 
-def test_an_outline_that_crosses_itself_is_refused() raises:
-    with assert_raises():
-        _ = triangulate(
-            Shape(
-                polygon(
-                    [
-                        Vector2(2, 1),
-                        Vector2(4, 4),
-                        Vector2(3, 2),
-                        Vector2(2, 5),
-                        Vector2(0, 2),
-                        Vector2(0, 5),
-                    ]
-                )
-            ),
-            1,
-        )
+def test_an_outline_that_crosses_itself_is_filled_as_three_js_fills_it() raises:
+    # earcut fills a crossing outline rather than refuse it, as three.js
+    # does: every corner is kept, and some triangles are cut.
+    var cut = triangulate(
+        Shape(
+            polygon(
+                [
+                    Vector2(2, 1),
+                    Vector2(4, 4),
+                    Vector2(3, 2),
+                    Vector2(2, 5),
+                    Vector2(0, 2),
+                    Vector2(0, 5),
+                ]
+            )
+        ),
+        1,
+    )
+    assert_equal(len(cut.points), 6)
+    assert_true(cut.triangle_count() > 0)
 
 
 def test_a_hole_outside_the_outline_is_refused() raises:
@@ -413,6 +410,33 @@ def test_shape_geometry_refuses_what_triangulate_refuses() raises:
 # --- the extrusion ----------------------------------------------------------
 
 
+def moved(before: Vector2, point: Vector2, after: Vector2) -> Vector2:
+    """Return `bevel_vector` of a point as a `Vector2`."""
+    var out = bevel_vector(point, before, after)
+    return Vector2(Float32(out[0]), Float32(out[1]))
+
+
+def assert_near(got: Vector2, x: Float32, y: Float32) raises:
+    """Assert a vector's two numbers."""
+    assert_almost_equal(got.x, x, atol=TOLERANCE)
+    assert_almost_equal(got.y, y, atol=TOLERANCE)
+
+
+def test_a_point_in_a_line_moves_as_get_bevel_vec_moves_it() raises:
+    # Running on: one unit square to the run, to its left.
+    assert_near(moved(Vector2(0, 0), Vector2(1, 0), Vector2(2, 0)), 0, 1)
+    assert_near(moved(Vector2(2, 0), Vector2(1, 0), Vector2(0, 0)), 0, -1)
+    assert_near(moved(Vector2(0, 0), Vector2(0, 1), Vector2(0, 2)), -1, 0)
+    # Folding straight back: along the run, by the square root of two.
+    var root = Float32(1.4142135)
+    assert_near(moved(Vector2(0, 0), Vector2(1, 0), Vector2(0, 0)), root, 0)
+    assert_near(moved(Vector2(1, 0), Vector2(0, 0), Vector2(1, 0)), -root, 0)
+    assert_near(moved(Vector2(0, 0), Vector2(0, 1), Vector2(0, 0)), 0, root)
+    # A next point on top of this one has no direction, which three.js
+    # reads as folding back.
+    assert_near(moved(Vector2(0, 0), Vector2(0, 1), Vector2(0, 1)), 0, root)
+
+
 def closed_volume(geometry: BufferGeometry) raises -> Float32:
     """Return the volume a closed surface encloses.
 
@@ -465,10 +489,11 @@ def test_a_hole_becomes_a_shaft_through_the_solid() raises:
 def test_the_caps_face_away_from_each_other() raises:
     var solid = extrude(square(4), Length(2, METER))
     ref normals = solid.attribute_view(String(NORMAL))
-    # The first three vertices are the back cap and the next three the
-    # front one, as the caps are written first.
+    # The back cap's two triangles come first and the front cap's two
+    # next, as three.js's `buildLidFaces` writes them.
     assert_almost_equal(normals.component(0, 2), Float32(-1), atol=TOLERANCE)
-    assert_almost_equal(normals.component(3, 2), Float32(1), atol=TOLERANCE)
+    assert_almost_equal(normals.component(3, 2), Float32(-1), atol=TOLERANCE)
+    assert_almost_equal(normals.component(6, 2), Float32(1), atol=TOLERANCE)
 
 
 def test_a_cap_is_textured_by_where_its_points_are() raises:

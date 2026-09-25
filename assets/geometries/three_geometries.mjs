@@ -60,6 +60,75 @@ const shapes = [ square( 0, 0, 1 ), triangle( 3, 0 ) ];
 out.shapes_flat = dump( new THREE.ShapeGeometry( shapes, 4 ) );
 out.shapes_extruded = dump( new THREE.ExtrudeGeometry( shapes, { depth: 0.5, bevelEnabled: false, steps: 2 } ) );
 
+// A square with two holes: one drawn counter-clockwise, and one drawn
+// clockwise with a curve in it. ShapeGeometry turns the outline clockwise
+// and both holes counter-clockwise.
+function holed() {
+	const shape = square( 0, 0, 4 );
+	const a = new THREE.Path();
+	a.moveTo( 0.5, 0.5 );
+	a.lineTo( 1.5, 0.5 );
+	a.lineTo( 1.5, 1.5 );
+	a.lineTo( 0.5, 1.5 );
+	a.lineTo( 0.5, 0.5 );
+	const b = new THREE.Path();
+	b.moveTo( 2.5, 2.5 );
+	b.lineTo( 2.5, 3.5 );
+	b.quadraticCurveTo( 3.6, 3.4, 3.4, 2.5 );
+	b.lineTo( 2.5, 2.5 );
+	shape.holes.push( a, b );
+	return shape;
+}
+
+// An outline drawn clockwise, with a hole drawn clockwise too. The
+// extrusion keeps both as they are, since its outline needs no turning.
+function clockwise() {
+	const shape = new THREE.Shape();
+	shape.moveTo( 0, 0 );
+	shape.lineTo( 0, 3 );
+	shape.lineTo( 1, 4 );
+	shape.lineTo( 3, 3 );
+	shape.lineTo( 3, 0 );
+	shape.lineTo( 0, 0 );
+	const hole = new THREE.Path();
+	hole.moveTo( 1, 1 );
+	hole.lineTo( 1, 2 );
+	hole.lineTo( 2, 2 );
+	hole.lineTo( 2, 1 );
+	hole.lineTo( 1, 1 );
+	shape.holes.push( hole );
+	return shape;
+}
+
+out.shape_holes = dump( new THREE.ShapeGeometry( holed(), 3 ) );
+out.shape_clockwise = dump( new THREE.ShapeGeometry( clockwise(), 3 ) );
+out.extruded_holes = dump( new THREE.ExtrudeGeometry( holed(), {
+	depth: 1, steps: 2, curveSegments: 3, bevelEnabled: true,
+	bevelThickness: 0.3, bevelSize: 0.2, bevelOffset: 0.05, bevelSegments: 2,
+} ) );
+// Points midway along each edge, and a spike out and straight back: the
+// bevel moves each as three.js's collinear branch does.
+function midpoints() {
+	const shape = new THREE.Shape();
+	shape.moveTo( 0, 0 );
+	shape.lineTo( 2, 0 );
+	shape.lineTo( 4, 0 );
+	shape.lineTo( 4, 2 );
+	shape.lineTo( 6, 2 );
+	shape.lineTo( 4, 2 );
+	shape.lineTo( 4, 4 );
+	shape.lineTo( 2, 4 );
+	shape.lineTo( 0, 4 );
+	shape.lineTo( 0, 2 );
+	shape.lineTo( 0, 0 );
+	return shape;
+}
+
+out.extruded_midpoints = dump( new THREE.ExtrudeGeometry( midpoints(), {
+	depth: 1, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.1, bevelSegments: 1,
+} ) );
+out.extruded_clockwise = dump( new THREE.ExtrudeGeometry( clockwise(), { depth: 0.5, bevelEnabled: false } ) );
+
 // A UV generator of its own: the top faces take x and y halved, the side
 // walls take the first corner's x and z for all four.
 const halving = {
