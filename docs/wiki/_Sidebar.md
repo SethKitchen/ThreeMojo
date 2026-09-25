@@ -24,6 +24,7 @@
 - [Points and sprites](Points-and-sprites)
 - [Helpers](Helpers)
 - [Scene objects](Scene-objects)
+- [Animated objects](Animated-objects)
 - [Raycasting](Raycasting)
 - [Curves and paths](Curves)
 - [Animation](Animation)

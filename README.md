@@ -113,11 +113,11 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 
 ### Objects
 
-- [ ] MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 
 <details>
-<summary>Ported: 13</summary>
+<summary>Ported: 14</summary>
 
+- [x] [MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope](https://github.com/SethKitchen/ThreeMojo/wiki/Animated-objects): morph flip-books blended by weight, Quake II characters that walk and fight, and a node that keeps its turn [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [x] [Skeleton, morph, batch and LOD tools](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#skeleton-tools): clone and retarget, CCD IK, uncapped morphs, batch deletion and sorting, any node as a level [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 - [x] [Multi-material meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#several-materials): geometry groups drawn with a material list by both rasterizers, the raycaster, loaders, exporters and SceneUtils [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
@@ -301,11 +301,10 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 
 ### Windowing and controls
 
-- [x] [SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#selectionbox) [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
-
 <details>
-<summary>Ported: 7</summary>
+<summary>Ported: 8</summary>
 
+- [x] [SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#selectionbox): frustum selection by a drag, saved orbit state, move limits and cascade helpers [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
 - [x] [Windowing and interactive controls](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls): a `TerminalWindow` that shows frames and reads the mouse, and `OrbitControls` that orbit a camera [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 - [x] [TerminalWindow: the terminal's size, and resize](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#terminalwindow): the terminal asked its size, the answer a resize event [#109](https://github.com/SethKitchen/ThreeMojo/issues/109)
 - [x] [OrbitControls: orthographic zoom, zoom to cursor, and any camera up](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#orthographic-cameras): orthographic zoom, zoom toward the pointer, and any up [#105](https://github.com/SethKitchen/ThreeMojo/issues/105)

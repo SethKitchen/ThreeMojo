@@ -34,6 +34,7 @@ Look something up.
 - [Geometry addons](Geometry-addons)
 - [Meshes and assets](Meshes-and-assets)
 - [Scene objects](Scene-objects)
+- [Animated objects](Animated-objects)
 - [Lines](Lines)
 - [Points and sprites](Points-and-sprites)
 - [Helpers](Helpers)
