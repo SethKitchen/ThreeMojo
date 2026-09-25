@@ -25,11 +25,12 @@ from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Duration, Length, METER, SECOND
+from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
 comptime TOLERANCE = Float64(1e-4)
 comptime SIZE = 100
@@ -215,6 +216,23 @@ def test_a_resize_changes_nothing() raises:
     var controls = OrbitControls()
     controls.handle(InputEvent(RESIZE, x=80, y=48), camera, SIZE)
     assert_false(controls.update(camera, _frame()))
+
+
+def test_an_orthographic_state_is_put_back() raises:
+    var camera = _ortho()
+    var controls = OrbitControls()
+    with assert_raises(contains="save_state"):
+        controls.reset(camera)
+    controls.save_state(camera)
+    controls.rotate_left(Angle(1.0, RADIAN))
+    controls.target = Vector3(1, 0, 0)
+    camera.zoom = 2
+    _ = controls.update(camera, _frame())
+    controls.reset(camera)
+    assert_almost_equal(camera.position.z, 5, atol=1e-5)
+    assert_almost_equal(camera.position.x, 0, atol=1e-5)
+    assert_equal(camera.zoom, 1)
+    assert_almost_equal(controls.target.length(), 0, atol=1e-5)
 
 
 def main() raises:

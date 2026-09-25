@@ -397,6 +397,24 @@ struct TransformControls(Copyable, Movable):
     var show_z: Bool
     # What picks the handles and finds the pointer on the drag plane.
     var raycaster: Raycaster
+    # The box a moved node's position is kept in, three.js's `minX` to
+    # `maxZ`: the node's own position, in its parent's frame. No limit by
+    # default.
+    var min_x: Length
+    var max_x: Length
+    var min_y: Length
+    var max_y: Length
+    var min_z: Length
+    var max_z: Length
+    # The handles' colors, three.js's `setColors`: the x, y and z handles,
+    # and the handle under the pointer and the eye's ring.
+    var x_color: Color
+    var y_color: Color
+    var z_color: Color
+    var active_color: Color
+    # The axis the last turn was about, in the world, three.js's
+    # `rotationAxis`, for the helper line of a free turn.
+    var _rotation_axis: Vector3
 
     # The node's own transform when the drag started.
     var _position_start: Vector3
@@ -429,6 +447,18 @@ struct TransformControls(Copyable, Movable):
         self.show_y = True
         self.show_z = True
         self.raycaster = Raycaster(Vector3(0, 0, 0), Vector3(0, 0, -1))
+        var unbounded = Length(inf[DType.float32](), METER)
+        self.min_x = -unbounded
+        self.max_x = unbounded
+        self.min_y = -unbounded
+        self.max_y = unbounded
+        self.min_z = -unbounded
+        self.max_z = unbounded
+        self.x_color = RED
+        self.y_color = GREEN
+        self.z_color = BLUE
+        self.active_color = ACTIVE_COLOR
+        self._rotation_axis = Vector3(0, 0, 0)
         self._position_start = Vector3(0, 0, 0)
         self._quaternion_start = Quaternion.identity()
         self._scale_start = Vector3(1, 1, 1)
@@ -667,6 +697,92 @@ struct TransformControls(Copyable, Movable):
             )
         return segments.geometry()
 
+    def set_colors(mut self, x: Color, y: Color, z: Color, active: Color):
+        """Recolor the handles, three.js's `setColors`.
+
+        Args:
+            x: The x handles' color, red by default.
+            y: The y handles', green by default.
+            z: The z handles', blue by default.
+            active: The handle under the pointer, and the eye's ring,
+                yellow by default.
+        """
+        self.x_color = x
+        self.y_color = y
+        self.z_color = z
+        self.active_color = active
+
+    def helper[
+        C: Camera
+    ](self, camera: C, scene: Scene) raises -> BufferGeometry:
+        """Return the helper lines as segments in world space, three.js's
+        helper objects in `TransformControlsGizmo`.
+
+        For a move or a scale: a long line along each axis of the picked
+        handle, through where a drag began, or through the node while none
+        is on; and while a move is dragged, the line from where it began to
+        where the node is. Around a turn: a long line along the
+        handle's axis whenever one is picked, unless it points at the eye,
+        or along the turn's axis while a free turn is dragged. White, as
+        three.js's helper material is. The lines run as three.js's do,
+        from minus a thousand to a million less a thousand times the
+        handle's size.
+
+        Args:
+            camera: The camera the gizmo is seen through.
+            scene: The scene, updated.
+
+        Returns:
+            Two points a segment, with a `color` attribute in linear light.
+            None with no node attached.
+
+        Raises:
+            Error: If a setting is refused by `check`, the node is not in
+                the scene, the scene is stale, or the camera cannot be
+                read.
+        """
+        self.check()
+        var segments = Segments()
+        if not Bool(self.node) or self.axis == NO_HANDLE:
+            return segments.geometry()
+        var frame = TransformFrame(camera, scene, self.node.value())
+        var white = FloatColor(1, 1, 1)
+        var reach = frame.factor * self.size / 4
+        var turn = self._turn(frame)
+        if self.mode == ROTATE_MODE:
+            var along = Vector3(0, 0, 0)
+            var shown = False
+            if self.axis == HANDLE_XYZE:
+                along = self._rotation_axis
+                shown = self.dragging
+            elif self.axis != HANDLE_E:
+                along = turn.rotate(_unit(self.axis))
+                shown = abs(along.dot(frame.eye)) <= AXIS_FACING
+            if shown:
+                _long_line(segments, frame.world.position, along, reach, white)
+            return segments.geometry()
+        # The axis lines run through where a drag began, or through the
+        # node while none is on. A move's drag also shows the line it
+        # has made, three.js's `DELTA`.
+        var start = (
+            self._world_position_start if self.dragging else frame.world.position
+        )
+        if self.dragging and self.mode == TRANSLATE_MODE:
+            segments.add(start, frame.world.position, white)
+        var name = self.axis.name()
+        var letters: List[String] = ["X", "Y", "Z"]
+        var units: List[Vector3] = [
+            Vector3(1, 0, 0),
+            Vector3(0, 1, 0),
+            Vector3(0, 0, 1),
+        ]
+        for at in range(3):  # pragma: no branch
+            if name.find(letters[at]) >= 0:
+                _long_line(
+                    segments, start, turn.rotate(units[at]), reach, white
+                )
+        return segments.geometry()
+
     def _event(self, kind: TransformEventKind) -> TransformEvent:
         """Return an event of `kind` with the controls' state.
 
@@ -836,17 +952,24 @@ struct TransformControls(Copyable, Movable):
             _divided(turn.rotate(offset), frame.parent.scale)
             + self._position_start
         )
-        if not Bool(self.translation_snap):
-            return
-        var step = self.translation_snap.value().to(METER)
-        if local:
-            var along = self._quaternion_start.conjugate().rotate(node.position)
-            along = _snapped(along, step, self.axis)
-            node.position = self._quaternion_start.rotate(along)
-        else:
-            var world = node.position + frame.parent.position
-            world = _snapped(world, step, self.axis)
-            node.position = world - frame.parent.position
+        if Bool(self.translation_snap):
+            var step = self.translation_snap.value().to(METER)
+            if local:
+                var along = self._quaternion_start.conjugate().rotate(
+                    node.position
+                )
+                along = _snapped(along, step, self.axis)
+                node.position = self._quaternion_start.rotate(along)
+            else:
+                var world = node.position + frame.parent.position
+                world = _snapped(world, step, self.axis)
+                node.position = world - frame.parent.position
+        # three.js's `minX` to `maxZ`, after the snap.
+        node.position = Vector3(
+            _within(node.position.x, self.min_x, self.max_x),
+            _within(node.position.y, self.min_y, self.max_y),
+            _within(node.position.z, self.min_z, self.max_z),
+        )
 
     def _scale(self, frame: TransformFrame, mut node: Object3D) raises:
         """Scale the node by the pointer's distance from its origin.
@@ -890,7 +1013,7 @@ struct TransformControls(Copyable, Movable):
             _scale_step(scale.z, step) if self.axis.has("Z") else scale.z,
         )
 
-    def _rotate(self, frame: TransformFrame, mut node: Object3D) raises:
+    def _rotate(mut self, frame: TransformFrame, mut node: Object3D) raises:
         """Turn the node by the pointer's movement on the plane.
 
         Args:
@@ -937,6 +1060,8 @@ struct TransformControls(Copyable, Movable):
             end.normalize()
             end.cross(start)
             angle = angle if end.dot(eye) < 0 else -angle
+        # three.js's `rotationAxis`, before it is taken into the parent.
+        self._rotation_axis = axis
         if Bool(self.rotation_snap):
             var step = self.rotation_snap.value().to(RADIAN)
             angle = _js_round(angle / step) * step
@@ -1089,8 +1214,19 @@ struct TransformControls(Copyable, Movable):
                 or (name.byte_length() == 1 and self.axis.has(name))
             )
         )
-        return FloatColor(srgb=ACTIVE_COLOR) if active else FloatColor(
-            srgb=_handle_color(handle)
+        var own = _handle_color(handle)
+        # three.js's `setColors` recolors the red, green and blue
+        # materials, and the yellow of the eye's ring with the active one.
+        if _same(own, RED):
+            own = self.x_color
+        elif _same(own, GREEN):
+            own = self.y_color
+        elif _same(own, BLUE):
+            own = self.z_color
+        elif _same(own, YELLOW):
+            own = self.active_color
+        return FloatColor(srgb=self.active_color) if active else FloatColor(
+            srgb=own
         )
 
 
@@ -1102,6 +1238,37 @@ comptime YELLOW = Color(0xFF, 0xFF, 0x00)
 comptime GRAY = Color(0x78, 0x78, 0x78)
 # The color of the handle under the pointer. three.js: `materialLib.active`.
 comptime ACTIVE_COLOR = YELLOW
+
+
+# How nearly a rotation handle's axis may point at the eye and still show
+# its helper line, three.js's 0.9.
+comptime AXIS_FACING = Float32(0.9)
+
+
+def _same(a: Color, b: Color) -> Bool:
+    """Return whether two colors are one: every channel equal."""
+    return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
+
+
+def _within(value: Float32, low: Length, high: Length) -> Float32:
+    """Return a coordinate kept between two limits, three.js's
+    `Math.max( min, Math.min( max, value ) )`."""
+    return max(low.to(METER), min(high.to(METER), value))
+
+
+def _long_line(
+    mut segments: Segments,
+    at: Vector3,
+    along: Vector3,
+    reach: Float32,
+    color: FloatColor,
+):
+    """Add three.js's helper line through a point: its `lineGeometry` moved
+    a thousand back and stretched a millionfold along `along`, then scaled
+    by the handle's size."""
+    segments.add(
+        at + along * (-1000 * reach), at + along * (999000 * reach), color
+    )
 
 
 def _handle_color(handle: TransformAxis) -> Color:

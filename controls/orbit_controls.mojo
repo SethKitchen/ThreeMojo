@@ -43,6 +43,7 @@ from controls.input import (
     ARROW_UP,
     KEY_DOWN,
     InputEvent,
+    Key,
     MIDDLE,
     POINTER_DOWN,
     POINTER_MOVE,
@@ -131,6 +132,20 @@ struct OrbitControls(Copyable, Movable):
     var pan_speed: Float32
     # How many pixels an arrow key pans by.
     var key_pan_speed: Float32
+    # How fast Shift or Ctrl and an arrow turns the camera, three.js's
+    # `keyRotateSpeed`: apart from `rotate_speed`, one by default.
+    var key_rotate_speed: Float32
+    # The keys that pan or turn, three.js's `keys`: the arrows by default.
+    var key_left: Key
+    var key_up: Key
+    var key_right: Key
+    var key_bottom: Key
+    # The center of a sphere the target is kept in, three.js's `cursor`,
+    # between `min_target_radius` and `max_target_radius` from it. Zero
+    # and infinity by default: no limit.
+    var cursor: Vector3
+    var min_target_radius: Length
+    var max_target_radius: Length
     # True to turn about the target by itself while no button is held.
     var auto_rotate: Bool
     # Turns per minute.
@@ -167,6 +182,14 @@ struct OrbitControls(Copyable, Movable):
     var _cursor_x: Float32
     var _cursor_y: Float32
     var _dolly_direction: Vector3
+    # The angles the last update left the camera at, three.js's
+    # `_spherical`: down from the up axis, and about it.
+    var _phi: Float32
+    var _theta: Float32
+    # What `save_state` saved, three.js's `target0`, `position0` and
+    # `zoom0`. None before the first save.
+    var _saved: Optional[List[Vector3]]
+    var _saved_zoom: Float32
 
     def __init__(out self, target: Vector3 = Vector3(0, 0, 0)):
         """Create controls about `target`, with three.js's defaults.
@@ -191,6 +214,14 @@ struct OrbitControls(Copyable, Movable):
         self.enable_pan = True
         self.pan_speed = 1.0
         self.key_pan_speed = 7.0
+        self.key_rotate_speed = 1.0
+        self.key_left = ARROW_LEFT
+        self.key_up = ARROW_UP
+        self.key_right = ARROW_RIGHT
+        self.key_bottom = ARROW_DOWN
+        self.cursor = Vector3(0, 0, 0)
+        self.min_target_radius = Length(0.0, METER)
+        self.max_target_radius = Length(inf[DType.float32](), METER)
         self.auto_rotate = False
         self.auto_rotate_speed = 2.0
         self.primary_action = ROTATE
@@ -211,6 +242,10 @@ struct OrbitControls(Copyable, Movable):
         self._cursor_x = 0
         self._cursor_y = 0
         self._dolly_direction = Vector3(0, 0, 0)
+        self._phi = 0
+        self._theta = 0
+        self._saved = None
+        self._saved_zoom = 1
 
     # --- the three changes -------------------------------------------------
 
@@ -564,25 +599,113 @@ struct OrbitControls(Copyable, Movable):
         """
         var x = Float32(0)
         var y = Float32(0)
-        if event.key == ARROW_UP:
+        if event.key == self.key_up:
             y = 1
-        elif event.key == ARROW_DOWN:
+        elif event.key == self.key_bottom:
             y = -1
-        elif event.key == ARROW_LEFT:
+        elif event.key == self.key_left:
             x = 1
-        elif event.key == ARROW_RIGHT:
+        elif event.key == self.key_right:
             x = -1
         else:
             return
         if event.shift or event.ctrl:
             if self.enable_rotate:
-                var step = TAU * self.rotate_speed / Float32(view.height)
+                # three.js's `keyRotateSpeed`, not the pointer's speed.
+                var step = TAU * self.key_rotate_speed / Float32(view.height)
                 self.rotate_left(Angle(x * step, RADIAN))
                 self.rotate_up(Angle(y * step, RADIAN))
         elif self.enable_pan:
             self._pan_by(x * self.key_pan_speed, y * self.key_pan_speed, view)
 
     # --- the frame ---------------------------------------------------------
+
+    def get_polar_angle(self) -> Angle:
+        """Return how far down from the camera's up the last update left
+        it, three.js's `getPolarAngle`.
+
+        Returns:
+            Zero straight above the target, half a turn straight below.
+        """
+        return Angle(self._phi, RADIAN)
+
+    def get_azimuthal_angle(self) -> Angle:
+        """Return how far about the up axis the last update left the
+        camera, three.js's `getAzimuthalAngle`.
+
+        Returns:
+            The angle from the +z side, toward +x.
+        """
+        return Angle(self._theta, RADIAN)
+
+    def get_distance(self, position: Vector3) -> Length:
+        """Return how far a camera is from the target, three.js's
+        `getDistance`. The camera is not held here, so it is asked.
+
+        Args:
+            position: The camera's position.
+
+        Returns:
+            The distance.
+        """
+        return Length((position - self.target).length(), METER)
+
+    def save_state(mut self, camera: PerspectiveCamera):
+        """Remember the target, the camera's position and its zoom, three.js's
+        `saveState`, for `reset`.
+
+        Args:
+            camera: The camera the controls place.
+        """
+        var saved: List[Vector3] = [self.target, camera.position]
+        self._saved = saved^
+        self._saved_zoom = camera.zoom
+
+    def save_state(mut self, camera: OrthographicCamera):
+        """Remember the target, the camera's position and its zoom.
+
+        Args:
+            camera: The camera the controls place.
+        """
+        var saved: List[Vector3] = [self.target, camera.position]
+        self._saved = saved^
+        self._saved_zoom = camera.zoom
+
+    def reset(mut self, mut camera: PerspectiveCamera) raises:
+        """Put the target and the camera back as `save_state` left them,
+        three.js's `reset`, and let go of any button.
+
+        Args:
+            camera: The camera the controls place.
+
+        Raises:
+            Error: If no state was saved. three.js saves one as it is made,
+                with the camera it is given; these controls are given none.
+        """
+        if not self._saved:
+            raise Error("OrbitControls: reset needs a state from save_state")
+        var saved = self._saved.value().copy()
+        self.target = saved[0]
+        camera.zoom = self._saved_zoom
+        camera.place(saved[1], self.target)
+        self._action = NO_ACTION
+
+    def reset(mut self, mut camera: OrthographicCamera) raises:
+        """Put the target and the camera back as `save_state` left them.
+
+        Args:
+            camera: The camera the controls place.
+
+        Raises:
+            Error: If no state was saved.
+        """
+        if not self._saved:
+            raise Error("OrbitControls: reset needs a state from save_state")
+        var saved = self._saved.value().copy()
+        self.target = saved[0]
+        camera.zoom = self._saved_zoom
+        camera.place(saved[1], self.target)
+        self._action = NO_ACTION
 
     def update(
         mut self, mut camera: PerspectiveCamera, delta: Duration
@@ -790,9 +913,23 @@ struct OrbitControls(Copyable, Movable):
             self.max_distance.to(METER),
         )
         var target = self.target + self._pan * share
+        # three.js keeps the target within its radii of the cursor:
+        # `target.sub( cursor ).clampLength( min, max ).add( cursor )`.
+        var from_cursor = target - self.cursor
+        var span = from_cursor.length()
+        var kept = _clamp(
+            span,
+            self.min_target_radius.to(METER),
+            self.max_target_radius.to(METER),
+        )
+        target = self.cursor + from_cursor * (
+            kept / (span if span != 0 else Float32(1))
+        )
 
         var placed = Spherical(radius, Angle(phi, RADIAN), Angle(theta, RADIAN))
         placed.make_safe()
+        self._phi = placed.phi.to(RADIAN)
+        self._theta = placed.theta.to(RADIAN)
         var moved_to = target + back.rotate(placed.to_vector3())
 
         var keep = 1 - share

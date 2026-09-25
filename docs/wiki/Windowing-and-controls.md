@@ -16,7 +16,7 @@
 | `FirstPersonControls` | `controls/first_person_controls.mojo` | Walks, and turns toward the pointer. |
 | `PointerLockControls` | `controls/pointer_lock_controls.mojo` | Turns by the pointer's movement, and walks. |
 
-Two more controls move objects, not the camera. [DragControls](#dragcontrols) drags an object across the view. [TransformControls](#transformcontrols) moves, turns and scales one object with a gizmo.
+Two more controls move objects, not the camera. [DragControls](#dragcontrols) drags an object across the view. [TransformControls](#transformcontrols) moves, turns and scales one object with a gizmo. [SelectionBox](#selectionbox) selects the objects inside a dragged rectangle.
 
 three.js: a `WebGLRenderer` canvas, and the controls of the same names in `examples/jsm/controls/`.
 
@@ -157,7 +157,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | Right drag | Pan. The point under the pointer stays under it. |
 | Wheel | Dolly by 0.95 a notch. |
 | Arrow | Pan by `key_pan_speed` pixels. |
-| Shift or Ctrl with an arrow | Rotate. |
+| Shift or Ctrl with an arrow | Rotate, at `key_rotate_speed`. |
 | Shift or Ctrl with a left or right drag | The drag's rotate and pan swap. |
 
 | Member | Default | Meaning |
@@ -172,12 +172,19 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | `enable_zoom`, `zoom_speed` | `True`, 1 | |
 | `enable_pan`, `pan_speed` | `True`, 1 | |
 | `key_pan_speed` | 7 | Pixels an arrow pans by. |
+| `key_rotate_speed` | 1 | How fast Shift or Ctrl with an arrow rotates. `rotate_speed` does not change it. |
+| `key_left`, `key_up`, `key_right`, `key_bottom` | the arrows | The keys that pan and rotate. three.js: `keys`. |
+| `cursor`, `min_target_radius`, `max_target_radius` | the origin, 0, infinity | A pan keeps the target within these distances of `cursor`, as a `Length`. |
 | `auto_rotate`, `auto_rotate_speed` | `False`, 2 | Turns a minute while no button is held. |
 | `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | What each button does. three.js: `mouseButtons`. |
 | `min_zoom`, `max_zoom` | 0, infinity | How far an orthographic camera can zoom. |
 | `zoom_to_cursor` | `False` | Dolly or zoom toward the point under the pointer. |
 
 `rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera moved. The `delta` is a `Duration`, for the automatic rotation.
+
+### State
+
+`get_polar_angle()` and `get_azimuthal_angle()` return the angles that the last `update` gave the camera, as an `Angle`. `get_distance(position)` returns the distance from a camera position to the target. `save_state(camera)` keeps the target, the camera position and the zoom. `reset(camera)` puts them back and stops the current drag.
 
 ### The arithmetic
 
@@ -205,7 +212,9 @@ The offset is turned into a frame whose y is the camera's `up` before it is read
 
 ### Differences from three.js
 
-- Touch input and a limit on the target's radius are not ported.
+- Touch input is not ported.
+- The controls get no camera when you make them, so they save no state then. three.js saves one. `reset` raises until you call `save_state`.
+- `get_distance` takes the camera position, because the controls do not keep the camera.
 
 ## MapControls
 
@@ -413,6 +422,8 @@ Each record also holds the `mode`, the `axis` and `dragging` after the event. St
 | `size` | 1 | A factor on the gizmo's size. |
 | `show_x`, `show_y`, `show_z` | `True` | False hides the handles along that axis. |
 | `enabled` | `True` | False ignores all input. |
+| `min_x` to `max_z` | minus and plus infinity | A translation keeps the node's position between these, as a `Length`. |
+| `x_color`, `y_color`, `z_color`, `active_color` | red, green, blue, yellow | The colors of the handles. `set_colors(x, y, z, active)` sets all four. |
 
 `check()` refuses an invalid mode, space or axis, and an axis that the mode has no handle for. It also refuses a size or a snap that is not positive. `handle` and `gizmo` call it first. `reset(scene)` puts the node back where the drag started.
 
@@ -430,15 +441,15 @@ The arithmetic of each mode, snapping included, is three.js's. `SCALE_MODE` alwa
 
 `gizmo(camera, scene)` returns the handles of the current mode as line segments in world space. Each point has a color: red for x, green for y and blue for z. The handle under the pointer is yellow. Draw the geometry with a `Line` in `SEGMENTS` mode, on a node at the origin, with `helper_material`. Call `gizmo` again after the node or the camera moves.
 
+`helper(camera, scene)` returns the white helper lines of three.js, in world space. During a translation or a scale, each axis of the handle has a long line through the start point. A translation also has a line from the start point to the node. In `ROTATE_MODE`, the axis of the picked ring has a long line, unless it points at the eye. During an `XYZE` turn, the line follows the axis of the turn.
+
 ### Differences from three.js
 
 three.js draws solid arrows and boxes with materials that ignore depth. Here each shape is drawn by its edges, and the depth test applies. The rings of `ROTATE_MODE` are drawn as half circles that face the eye, as in three.js.
 
 These parts are not ported:
 
-- The helper lines that three.js shows during a drag.
-- The limits `minX` to `maxZ` on a translation.
-- `setColors`, and touch input.
+- Touch input.
 - The `change` event, which three.js sends to ask for a render.
 
 A scale whose start point has no length along an axis keeps that axis's scale. three.js divides by zero there. The `E` picker is a flat ring, the shape of three.js's torus with two segments around its tube. The pickers are tested from both sides, which gives the same hits for closed shapes. The plane and the handles are found again at each event. In three.js a render between two events finds them.
@@ -512,9 +523,35 @@ The controls read time from `update`. An event happens at the time of the last `
 
 Touch input is not ported. So there is no turn about the view axis, which only touch starts in three.js. The `start` and `end` events are not ported either.
 
+## SelectionBox
+
+`controls/selection_box.mojo`. A `SelectionBox` finds the objects inside a rectangle on the view. This is three.js's `SelectionBox` from `examples/jsm/interactive`.
+
+```mojo
+var box = SelectionBox()
+# For each pointer event of the window:
+var picked = box.handle(event, camera, scene, assets, width, height)
+if picked:
+    print(len(picked.value().meshes))
+```
+
+A left press starts a rectangle. Each move and the release return a `Selection` of what is inside it. Other events return none. `select(camera, scene, assets, start, end)` selects through two corners in normalized device coordinates.
+
+An object is inside when the center of its geometry's bounding sphere is inside the frustum of the rectangle. This is the test of three.js. An instanced mesh is tested one instance at a time, at the position of each instance.
+
+A `Selection` has one list for each kind of object: `meshes`, `skinned_meshes`, `lines` and `points`. Each list holds indices into the scene's list of that kind, in the order of the scene's nodes. `instanced_meshes` holds each instanced mesh, and `instances` holds the selected instances of each one.
+
+### Differences from three.js
+
+- three.js returns one list of objects. A scene here keeps one list for each kind, so a selection does too.
+- A batched mesh is not selected. three.js tests the center of its shared geometry, which this port does not keep.
+- `deep` is none by default, and then there is no far plane. three.js's default of `Number.MAX_VALUE` has the same effect.
+- three.js turns the far plane's normal but keeps its constant. This port does the same, so a `deep` gives the same selection.
+- A rectangle with no width or height gets a small width. three.js adds `Number.EPSILON`, which a `Float32` loses. This port adds one `Float32` step.
+
 ## How the ports were checked
 
-The tests hold each control to three.js r180's own numbers, `DragControls`, `TransformControls` and `ArcballControls` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
+The tests hold each control to three.js r180's own numbers, `DragControls`, `TransformControls`, `ArcballControls` and `SelectionBox` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
 
 ## Limits
 
