@@ -551,7 +551,6 @@ def test_a_complex_character_crouches_jumps_and_attacks() raises:
         )
 
 
-
 def _named_mesh(names: List[String]) raises -> Tuple[Scene, Assets]:
     """Return a scene of one triangle with a morph target of each name."""
     var scene = Scene()
@@ -655,9 +654,7 @@ def test_a_character_plays_and_keeps_its_actions() raises:
     character.set_weapon(scene, -1)
     assert_false(scene.get(character.weapons[0].node).visible)
     character.set_skin(scene, assets, -1)
-    assert_equal(
-        assets.materials.get(character.body.textured).map, NO_TEXTURE
-    )
+    assert_equal(assets.materials.get(character.body.textured).map, NO_TEXTURE)
     # A body with no clip names none.
     var plain = MD2Character(
         scene,
@@ -728,6 +725,7 @@ def test_a_complex_character_without_a_weapon() raises:
     )
     armed.set_weapon(scene, 0)
     assert_equal(armed.weapon_blends[0].animations[0].active, False)
+
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
