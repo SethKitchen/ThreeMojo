@@ -481,7 +481,7 @@ def test_a_complex_character_crouches_jumps_and_attacks() raises:
         names,
         _skins(assets, 2),
         _skins(assets, 1),
-        animations=picks,
+        animations=picks^,
     )
     var cases: List[Tuple[Bool, Bool, Bool, Bool, String]] = [
         (False, False, False, False, "idle"),
