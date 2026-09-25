@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 189 features are ported and 14 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 190 features are ported and 13 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -81,11 +81,10 @@ The port is not at parity with three.js yet. 189 features are ported and 14 are 
 
 ### Geometry
 
-- [ ] RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
-
 <details>
-<summary>Ported: 22</summary>
+<summary>Ported: 23</summary>
 
+- [x] [RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry-addons#roller-coaster): track geometry, tube strokes, convex breaking, space-filling curves and UV images [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
 - [x] [Shapes and extrusions in three.js's order](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#how-it-is-cut-up): earcut with holes, and three.js's vertex and triangle order for ShapeGeometry and ExtrudeGeometry [#215](https://github.com/SethKitchen/ThreeMojo/issues/215)
 - [x] [Box segments, partial spheres, shape arrays and UVGenerator](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box): segmented boxes, sphere parts, shape lists and custom UV generators [#184](https://github.com/SethKitchen/ThreeMojo/issues/184)
 - [x] [BufferGeometry transforms, draw range and normalized integer attributes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#transforms): transforms, a draw range every pass honors, and seven typed arrays [#186](https://github.com/SethKitchen/ThreeMojo/issues/186)
