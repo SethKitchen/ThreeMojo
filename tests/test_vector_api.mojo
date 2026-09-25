@@ -153,6 +153,22 @@ def test_negate_and_scaled_add() raises:
     assert_vector(Vector3(2, 4, 6) / 2, 1, 2, 3)
 
 
+def test_scalar_add_and_subtract_match_three_js() raises:
+    # three.js 0.180: (1, 2, 3).addScalar(0.5) and .subScalar(0.5).
+    var v = Vector3(1, 2, 3)
+    v.add_scalar(0.5)
+    assert_vector(v, 1.5, 2.5, 3.5)
+    v = Vector3(1, 2, 3)
+    v.sub_scalar(0.5)
+    assert_vector(v, 0.5, 1.5, 2.5)
+    var w = Vector2(1, 2)
+    w.add_scalar(0.5)
+    assert_vector2(w, 1.5, 2.5)
+    w = Vector2(1, 2)
+    w.sub_scalar(0.5)
+    assert_vector2(w, 0.5, 1.5)
+
+
 def test_set_length() raises:
     var v = Vector3(3, 0, 4)
     v.set_length(10)

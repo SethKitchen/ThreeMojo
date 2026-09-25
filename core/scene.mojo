@@ -822,8 +822,8 @@ struct Scene(Movable):
         `Object3D.look_at` works in the node's parent frame, which is only
         the world for a root node. This does what three.js's `lookAt` does:
         builds the facing in world space -- where the node is, what it should
-        face, and which way is up, all in world terms -- and then undoes the
-        parent's rotation to get the node's own. It is why a camera parented
+        face, and the node's `up`, all in world terms, as three.js reads
+        `up` -- and then undoes the parent's rotation to get the node's own. It is why a camera parented
         to a moving pivot can still be told to watch the origin.
 
         The first version of this took the *target* into the parent's frame
@@ -843,7 +843,7 @@ struct Scene(Movable):
         Args:
             index: Which node to turn.
             target: The point to face, in world space.
-            camera: True to face it the way a camera does; see
+            camera: True to face it the way a camera or a light does; see
                 `Object3D.look_at`.
 
         Raises:
@@ -852,14 +852,15 @@ struct Scene(Movable):
                 current; the parent's world transform is not a rotation and
                 a positive uniform scale -- a nonuniform scale, a shear, a
                 mirror or a flattened axis leaves no frame the facing
-                survives the trip into. A target at the node or straight
+                survives the trip into; the node's `up` is zero or not
+                finite. A target at the node or straight
                 along up is not refused: `facing` settles both, as three.js
                 does.
         """
         if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")
         var eye = self.world_position(index)
-        var desired = facing(eye, target, Vector3(0, 1, 0), camera)
+        var desired = facing(eye, target, self._nodes[index.value].up, camera)
         var parent = self._nodes[index.value].parent
         if parent != NO_PARENT:
             var frame = self.world_matrix(parent)
@@ -1011,8 +1012,8 @@ struct Scene(Movable):
         `getObjectsByProperty('name', name)`.
 
         three.js looks up any property by its name as a string. A Mojo
-        struct has no such lookup, so this is the one property there is a
-        call for. Filter `traverse` for any other.
+        struct has no such lookup, so the name has this call of its own;
+        `objects_by_property` takes a function that reads any other.
 
         Args:
             name: The name.
@@ -1028,6 +1029,71 @@ struct Scene(Movable):
         var found = List[NodeId]()
         for node in self.traverse(root):
             if self._nodes[node.value].name == name:
+                found.append(node)
+        return found^
+
+    def object_by_property[
+        T: Equatable & ImplicitlyCopyable & Deinitable,
+        //,
+        property: def(Object3D) thin -> T,
+    ](self, value: T, root: NodeId = NO_PARENT) raises -> Optional[NodeId]:
+        """Return the first node whose property has a value, three.js's
+        `getObjectByProperty`.
+
+        three.js names the property by a string. A Mojo struct has no
+        lookup by name, so the property is a function that reads it:
+        `object_by_property[render_order_of](3)` with a
+        `def render_order_of(node: Object3D) -> Int`.
+
+        Parameters:
+            T: The type of the property.
+            property: Reads the property from a node.
+
+        Args:
+            value: The value to look for, compared with `==`.
+            root: Where to look: this node and everything under it, or
+                `NO_PARENT` for the whole scene.
+
+        Returns:
+            The first such node in `traverse` order, or None.
+
+        Raises:
+            Error: For anything `traverse` raises for.
+        """
+        for node in self.traverse(root):
+            if property(self._nodes[node.value]) == value:
+                return node
+        return None
+
+    def objects_by_property[
+        T: Equatable & ImplicitlyCopyable & Deinitable,
+        //,
+        property: def(Object3D) thin -> T,
+    ](self, value: T, root: NodeId = NO_PARENT) raises -> List[NodeId]:
+        """Return every node whose property has a value, three.js's
+        `getObjectsByProperty`.
+
+        The property is a function that reads it; see
+        `object_by_property`.
+
+        Parameters:
+            T: The type of the property.
+            property: Reads the property from a node.
+
+        Args:
+            value: The value to look for, compared with `==`.
+            root: Where to look: this node and everything under it, or
+                `NO_PARENT` for the whole scene.
+
+        Returns:
+            The nodes, in `traverse` order.
+
+        Raises:
+            Error: For anything `traverse` raises for.
+        """
+        var found = List[NodeId]()
+        for node in self.traverse(root):
+            if property(self._nodes[node.value]) == value:
                 found.append(node)
         return found^
 

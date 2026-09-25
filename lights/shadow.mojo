@@ -79,7 +79,7 @@ from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
 from std.math import floor, isfinite, max, min, sqrt
-from units.si import Length, METER
+from units.si import Angle, Length, METER
 
 
 @fieldwise_init
@@ -237,6 +237,10 @@ struct LightShadow(ImplicitlyCopyable):
     # more, three.js's `shadow.needsUpdate`. See `Renderer.shadow_maps`.
     var auto_update: Bool
     var needs_update: Bool
+    # How much of a spot light's cone its shadow camera sees, three.js's
+    # `SpotLightShadow.focus`: one for the whole cone, a half for its
+    # middle half. Read only for a spot light. See `spot_field_of_view`.
+    var focus: Float32
 
     def __init__(out self):
         """Start at three.js's defaults."""
@@ -254,6 +258,7 @@ struct LightShadow(ImplicitlyCopyable):
         self.intensity = FULL_SHADOW
         self.auto_update = True
         self.needs_update = False
+        self.focus = 1
 
     def set_extent(mut self, extent: Length):
         """Make a directional light's camera see `extent` to each side of
@@ -266,6 +271,23 @@ struct LightShadow(ImplicitlyCopyable):
         self.right = extent
         self.top = extent
         self.bottom = -extent
+
+    def spot_field_of_view(self, cone: Angle) -> Angle:
+        """Return how wide a spot light's shadow camera sees, three.js's
+        `SpotLightShadow.updateMatrices`: twice the cone's angle, times
+        `focus`.
+
+        A focus below one narrows the camera to the middle of the cone, so
+        the map's texels cover less and the shadow is sharper there. What
+        the camera does not see is not shadowed, as in three.js.
+
+        Args:
+            cone: The spot light's `angle`, from its axis to its edge.
+
+        Returns:
+            The camera's vertical field of view.
+        """
+        return cone.scaled(2 * self.focus)
 
     def is_frozen(self) -> Bool:
         """Return True if the map is kept as it was rather than drawn
@@ -284,8 +306,9 @@ struct LightShadow(ImplicitlyCopyable):
                 the bias or the normal bias is not finite; the radius is
                 negative or not finite; the blur samples are below one or
                 above `MAX_BLUR_SAMPLES`; the near plane is negative, the
-                far plane not beyond it, or either not finite; or the
-                extent is not a positive finite length.
+                far plane not beyond it, or either not finite; the extent
+                is not a positive finite length; or the focus is not a
+                positive finite number.
         """
         if self.map_size < 1 or self.map_size > MAX_MAP_SIZE:
             raise Error("A shadow map must be one to 8192 texels a side")
@@ -323,6 +346,8 @@ struct LightShadow(ImplicitlyCopyable):
             or self.intensity > 1
         ):
             raise Error("A shadow's intensity must be between zero and one")
+        if not isfinite(self.focus) or self.focus <= 0:
+            raise Error("A spot shadow's focus must be a positive number")
 
 
 struct ShadowMap(Movable):

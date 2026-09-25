@@ -11,7 +11,7 @@ The expected numbers come from three.js 0.180, run in node on the same
 inputs.
 """
 
-from math.euler import Euler, XYZ
+from math.euler import XYZ, XZY, YXZ, ZYX, Euler, EulerOrder
 from math.matrix3 import Matrix3
 from math.matrix4 import (
     Matrix4,
@@ -530,6 +530,76 @@ def test_normalize() raises:
     assert_equal(normalize(0.25, FLOAT32_COMPONENT), 0.25)
     with assert_raises():
         _ = normalize(1, ComponentType(7))
+
+
+def test_reorder_keeps_the_rotation_and_matches_three_js() raises:
+    var euler = Euler(
+        Angle(0.1, RADIAN), Angle(0.2, RADIAN), Angle(0.3, RADIAN), XYZ
+    )
+    var before = euler.to_quaternion()
+    euler.reorder(ZYX)
+    assert_true(euler.order == ZYX)
+    assert_almost_equal(
+        euler.x.to(RADIAN), Float32(0.15641951308019914), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        euler.y.to(RADIAN), Float32(0.16002722043161824), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        euler.z.to(RADIAN), Float32(0.322609690576475), atol=TOLERANCE
+    )
+    var after = euler.to_quaternion()
+    assert_quaternion(
+        after,
+        Float64(before.x),
+        Float64(before.y),
+        Float64(before.z),
+        Float64(before.w),
+    )
+    var other = Euler(
+        Angle(0.5, RADIAN), Angle(-1.0, RADIAN), Angle(2.0, RADIAN), YXZ
+    )
+    other.reorder(XZY)
+    assert_almost_equal(
+        other.x.to(RADIAN), Float32(-1.9670278632567404), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        other.y.to(RADIAN), Float32(-2.2462866410970936), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        other.z.to(RADIAN), Float32(0.3293335053559902), atol=TOLERANCE
+    )
+    with assert_raises():
+        other.reorder(EulerOrder(0, 0, 1))
+    assert_true(other.order == XZY)
+
+
+def test_set_from_matrix3_matches_three_js() raises:
+    var small = Matrix3()
+    small.set(1, 2, 3, 4, 5, 6, 7, 8, 9)
+    var big = translation(5, 6, 7)
+    big.elements[3] = 2
+    big.set_from_matrix3(small)
+    var expected: List[Float32] = [
+        1,
+        4,
+        7,
+        0,
+        2,
+        5,
+        8,
+        0,
+        3,
+        6,
+        9,
+        0,
+        0,
+        0,
+        0,
+        1,
+    ]
+    for index in range(16):
+        assert_equal(big.elements[index], expected[index])
 
 
 def main() raises:

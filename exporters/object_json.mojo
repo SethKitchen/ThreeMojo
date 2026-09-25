@@ -381,6 +381,8 @@ struct _Header(Copyable, Movable):
     var layers: Layers
     var matrix: Matrix4
     var auto: Bool
+    # The node's `up`, which three.js writes for every object.
+    var up: List[Float32]
 
     def __init__(out self, uuid: String, node: Object3D) raises:
         """Start from a node: its type, name, visibility, user data,
@@ -401,6 +403,7 @@ struct _Header(Copyable, Movable):
         self.layers = node.layers
         self.auto = node.matrix_auto_update
         self.matrix = node.local_matrix() if self.auto else node.matrix
+        self.up = [node.up.x, node.up.y, node.up.z]
 
     def __init__(out self, uuid: String, layers: Layers):
         """Start a part: unnamed, visible, at the identity."""
@@ -416,6 +419,7 @@ struct _Header(Copyable, Movable):
         self.layers = layers
         self.matrix = Matrix4()
         self.auto = True
+        self.up = [0, 1, 0]
 
     def write(self, mut writer: JsonWriter) raises:
         """Write the fields, as `Object3D.toJSON` writes them."""
@@ -449,7 +453,7 @@ struct _Header(Copyable, Movable):
         writer.key("matrix")
         _matrix(writer, self.matrix)
         writer.key("up")
-        _numbers(writer, [0, 1, 0])
+        _numbers(writer, self.up)
         if not self.auto:
             writer.key("matrixAutoUpdate")
             writer.boolean(False)

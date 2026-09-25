@@ -4,7 +4,7 @@
 
 ![A cube turns along a slerp between two poses](out/rotations.png)
 
-three.js: `Quaternion`, `Euler`, `Euler.setFromRotationMatrix`, `Euler.setFromQuaternion`, `Object3D.rotation`, `Object3D.rotateX/Y/Z`, `rotateOnAxis`, `rotateOnWorldAxis`, `lookAt`.
+three.js: `Quaternion`, `Euler`, `Euler.setFromRotationMatrix`, `Euler.setFromQuaternion`, `Euler.reorder`, `Object3D.up`, `Object3D.rotation`, `Object3D.rotateX/Y/Z`, `rotateOnAxis`, `rotateOnWorldAxis`, `lookAt`.
 
 ## Quaternion
 
@@ -44,6 +44,7 @@ A rotation as `(x, y, z, w)`. The identity is `(0, 0, 0, 1)`. `a * b` applies `b
 | `Euler.from_quaternion(q, order=XYZ)` | The same, from a unit quaternion. |
 | `to_quaternion() -> Quaternion` | The rotation as a quaternion. |
 | `to_matrix() -> Matrix4` | The rotation as a matrix. |
+| `reorder(order)` | Keep the rotation and change the order. three.js's `reorder`: the angles become a quaternion, and the new angles are read from it in `order`. Refuses a bad order. |
 | `EulerOrder.is_valid() -> Bool` | Whether the order names three different axes. |
 | `EulerOrder.is_cyclic() -> Bool` | Whether the axes run x, y, z round: `XYZ`, `YZX` or `ZXY`. |
 
@@ -66,7 +67,7 @@ All four conversions refuse an `EulerOrder` that does not name three different a
 | `rotate_x(angle)`, `rotate_y(angle)`, `rotate_z(angle)` | Turn about the node's own axis. three.js's `rotateX`, `rotateY`, `rotateZ`. |
 | `rotate_on_axis(axis, angle)` | Turn about a unit axis in the node's own frame. |
 | `rotate_on_world_axis(axis, angle)` | Turn about a unit axis in the parent's frame. |
-| `look_at(target, camera=False)` | Face a point given in the parent's frame. Up is the parent's +y. |
+| `look_at(target, camera=False)` | Face a point given in the parent's frame. The node's y axis stays as near its `up` as it can. |
 
 `rotation()` is not three.js's live `rotation` object. Changing the result changes nothing. three.js's `rotation.y += angle` is three steps here:
 
@@ -80,13 +81,25 @@ node.set_rotation(angles)
 
 ## Scene.look_at
 
-`scene.look_at(id, target, camera=False)` faces a world-space point. It builds the facing in world space with world up, then undoes the parent's rotation. The parent's world transform must be a rotation and a positive uniform scale. The scale is normalized away. A nonuniform scale, a shear, a mirror or a flattened axis is refused.
+`scene.look_at(id, target, camera=False)` faces a world-space point. It builds the facing in world space with the node's `up`, then undoes the parent's rotation. The parent's world transform must be a rotation and a positive uniform scale. The scale is normalized away. A nonuniform scale, a shear, a mirror or a flattened axis is refused.
 
 three.js normalizes the parent's axes and carries on. Under a parent scaled `(2, 1, 1)`, that aims a child told to face `(1, 1, 0)` at `(2, 1, 0)` instead, eighteen degrees off. ThreeMojo refuses the parent. The table in [Cameras](Cameras#attach-a-camera-to-a-node) lists what `look_at` and an attached camera accept.
 
-An object faces the target with its +z axis. A camera faces it with its -z axis. Pass `camera=True` for a node that a camera rides.
+An object faces the target with its +z axis. A camera and a light face it with their -z axis, as three.js decides by `isCamera` and `isLight`. Pass `camera=True` for a node that a camera or a light rides.
 
-Both `look_at` methods accept every target, as three.js does. A target at the node's own position gives the identity rotation. A target straight along the up direction moves the line of sight off up by 0.0001 first.
+## Up
+
+Each node has an `up` direction, three.js's `Object3D.up`. It is `DEFAULT_UP`, `(0, 1, 0)`, unless you set it. Both `look_at` methods keep the node's y axis as near `up` as they can. `up` is a direction in world space, as three.js reads it. An `up` of zero, or one that is not finite, is refused.
+
+```mojo
+var node = Object3D()
+node.up = Vector3(0, 0, 1)          # z is up in this scene
+node.look_at(Vector3(4, 6, 3))
+```
+
+three.js lets a program change `Object3D.DEFAULT_UP` for every object made after the change. A Mojo module has no mutable global, so `DEFAULT_UP` is fixed. Set `up` on each node instead.
+
+Both `look_at` methods accept every target, as three.js does. A target at the node's own position gives the identity rotation. A target straight along `up` moves the line of sight off `up` by 0.0001 first.
 
 ## Example
 

@@ -33,7 +33,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from renderers.renderer import Renderer
-from std.math import inf, pi
+from std.math import inf, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -223,6 +223,55 @@ def test_a_sun_draws_its_map_between_its_four_edges() raises:
     scene.lights[0].shadow.right = Length(-5.0, METER)
     with assert_raises():
         _ = renderer.shadow_maps(scene, assets)
+
+
+def _y_scale(frame: SIMD[DType.float32, 16]) -> Float32:
+    """Return the length of a frame's second row's rotation part."""
+    return sqrt(frame[1] * frame[1] + frame[5] * frame[5] + frame[9] * frame[9])
+
+
+def test_a_spot_shadow_focus_narrows_its_camera() raises:
+    # three.js 0.180: a spot light of angle pi / 6 with a focus of a half
+    # gives its shadow camera a field of view of 30 degrees.
+    var lamp = spot_light(WHITE, NodeId(0), angle=Angle(30.0, DEGREE))
+    assert_equal(lamp.shadow.focus, 1)
+    assert_almost_equal(
+        lamp.shadow.spot_field_of_view(lamp.angle).to(DEGREE),
+        Float32(60),
+        atol=1e-4,
+    )
+    lamp.shadow.focus = 0.5
+    assert_almost_equal(
+        lamp.shadow.spot_field_of_view(lamp.angle).to(DEGREE),
+        Float32(29.999999999999996),
+        atol=1e-4,
+    )
+    lamp.shadow.validate()
+    # The map's camera narrows with it: its y scale is 1 / tan(fov / 2),
+    # the length of the frame's y row with the translation left out.
+    var assets = Assets()
+    var scene = Scene()
+    var bulb = Object3D()
+    bulb.set_position(0, 5, 0)
+    var spot = spot_light(WHITE, scene.add(bulb^), 5, angle=Angle(30.0, DEGREE))
+    spot.cast_shadow = True
+    spot.shadow.map_size = 4
+    scene.add_light(spot)
+    scene.update()
+    var renderer = Renderer(4, 4)
+    var wide = renderer.shadow_maps(scene, assets)
+    scene.lights[0].shadow.focus = 0.5
+    var narrow = renderer.shadow_maps(scene, assets)
+    assert_almost_equal(
+        _y_scale(wide[0].frame), Float32(1 / 0.5773502691896257), atol=1e-4
+    )
+    assert_almost_equal(
+        _y_scale(narrow[0].frame), Float32(1 / 0.2679491924311227), atol=1e-4
+    )
+    for bad in [Float32(0), Float32(-1), inf[DType.float32]()]:
+        scene.lights[0].shadow.focus = bad
+        with assert_raises(contains="focus"):
+            _ = renderer.shadow_maps(scene, assets)
 
 
 def test_a_frozen_shadow_keeps_the_map_it_was_given() raises:

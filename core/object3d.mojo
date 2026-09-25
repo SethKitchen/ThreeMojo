@@ -51,6 +51,7 @@ from math.euler import XYZ, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from std.math import isfinite
 from units.si import METER, Angle, Length
 
 
@@ -70,6 +71,12 @@ struct NodeId(Equatable, ImplicitlyCopyable, Writable):
 
     var value: Int
 
+
+# Which way is up for a node that is not told otherwise, three.js's
+# `Object3D.DEFAULT_UP`. three.js lets a program change it for every object
+# made after; a Mojo module has no mutable global, so here it is fixed, and
+# a node's own `up` is what changes.
+comptime DEFAULT_UP = Vector3(0, 1, 0)
 
 # A node with no parent. Roots carry this instead of an index. Where a
 # `Scene` method takes a node to start from, this names the scene itself.
@@ -139,11 +146,16 @@ def facing(
         The rotation.
 
     Raises:
-        Error: Never. A target at the eye leaves the rotation the identity,
-            and a line of sight along `up` is nudged off it by a
-            ten-thousandth, exactly as three.js's `Matrix4.lookAt` settles
-            both; see `math.projection.look_at`.
+        Error: If `up` is zero or not finite: it names no direction, and
+            three.js builds a basis that is not a rotation from it. A
+            target at the eye leaves the rotation the identity, and a line
+            of sight along `up` is nudged off it by a ten-thousandth,
+            exactly as three.js's `Matrix4.lookAt` settles both; see
+            `math.projection.look_at`.
     """
+    var reach = up.length()
+    if not isfinite(reach) or reach == 0:
+        raise Error("An up direction must be finite and not zero")
     var z = target - eye
     if camera:
         z = -z
@@ -224,10 +236,16 @@ struct Object3D(ImplicitlyCopyable):
     # What the caller keeps on the node, three.js's `userData`. Written to
     # and read from scene JSON. See `core.user_data`.
     var user_data: UserData
+    # Which way is up when the node turns to face something, three.js's
+    # `Object3D.up`: `look_at` and `Scene.look_at` keep the node's y axis
+    # as near it as they can. A direction in world space, as three.js reads
+    # it, and `DEFAULT_UP` unless set. Written to and read from scene JSON.
+    var up: Vector3
 
     def __init__(out self):
         """Create an untransformed node with no parent, on layer zero,
-        visible, unnamed, at render order zero, with no user data."""
+        visible, unnamed, at render order zero, with no user data, and with
+        `DEFAULT_UP` for up."""
         self.position = Vector3(0, 0, 0)
         self.scale = Vector3(1, 1, 1)
         self.quaternion = Quaternion.identity()
@@ -240,6 +258,7 @@ struct Object3D(ImplicitlyCopyable):
         self.matrix = Matrix4()
         self.object_type = OBJECT3D_TYPE
         self.user_data = UserData()
+        self.up = DEFAULT_UP
 
     def __init__(out self, *, copy: Self):
         """Copy another node, every field included."""
@@ -255,6 +274,7 @@ struct Object3D(ImplicitlyCopyable):
         self.matrix = Matrix4(copy=copy.matrix)
         self.object_type = copy.object_type
         self.user_data = UserData(copy=copy.user_data)
+        self.up = copy.up
 
     def set_position(mut self, x: Float32, y: Float32, z: Float32):
         """Move this node, relative to its parent."""
@@ -455,28 +475,27 @@ struct Object3D(ImplicitlyCopyable):
         three.js's `Object3D.lookAt` with one difference worth knowing: it
         works in world space, walking the parents to get there, and this one
         works entirely in the frame the node's position is in -- the target,
-        and the up direction, which is that frame's +y. For a root node the
-        two are the same; for a child, `Scene.look_at` does the walk, up
-        direction included.
+        and the node's `up`. For a root node the two are the same; for a
+        child, `Scene.look_at` does the walk.
 
         Which way "facing" is depends on what the node is, exactly as there.
-        An object points its +z axis at the target. A camera points its -z
-        axis at the target, because a camera looks down -z; three.js decides
-        by `isCamera`, and here you say so.
+        An object points its +z axis at the target. A camera and a light
+        point their -z axis at it, because a camera looks down -z; three.js
+        decides by `isCamera` and `isLight`, and here you say so. All three
+        keep their y axis as near `up` as they can.
 
         Args:
             target: The point to face, in the parent's frame.
-            camera: True to face the target the way a camera does.
+            camera: True to face the target the way a camera or a light
+                does.
 
         Raises:
-            Error: Never. A target at the node's own position gives the
-                identity, and a target straight along the parent's y is
-                nudged off it by a ten-thousandth, as three.js does; see
-                `facing`.
+            Error: If `up` is zero or not finite; the node is left as it
+                was. A target at the node's own position gives the
+                identity, and a target straight along `up` is nudged off
+                it by a ten-thousandth, as three.js does; see `facing`.
         """
-        self.quaternion = facing(
-            self.position, target, Vector3(0, 1, 0), camera
-        )
+        self.quaternion = facing(self.position, target, self.up, camera)
 
     def local_matrix(self) raises -> Matrix4:
         """Return this node's transform relative to its parent.

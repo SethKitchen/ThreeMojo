@@ -669,6 +669,33 @@ def test_objects_are_found_by_name_and_id() raises:
     assert_false(Bool(empty.object_by_id(NodeId(0))))
 
 
+def _render_order_of(node: Object3D) -> Int:
+    """Read a node's render order, for the property lookups."""
+    return node.render_order
+
+
+def _name_of(node: Object3D) -> String:
+    """Read a node's name, for the property lookups."""
+    return node.name
+
+
+def test_objects_are_found_by_any_property() raises:
+    var scene = Scene()
+    var nodes = walked(scene)
+    scene.node(nodes[2]).render_order = 3
+    scene.node(nodes[3]).render_order = 3
+    var first = scene.object_by_property[_render_order_of](3)
+    assert_equal(first.value().value, 2)
+    assert_ids(scene.objects_by_property[_render_order_of](3), [2, 3])
+    assert_ids(scene.objects_by_property[_render_order_of](3, nodes[1]), [2])
+    assert_false(Bool(scene.object_by_property[_render_order_of](9)))
+    # The name as a property is `objects_by_name` again.
+    assert_ids(scene.objects_by_property[_name_of]("twin"), [1, 4])
+    var empty = Scene()
+    assert_false(Bool(empty.object_by_property[_render_order_of](0)))
+    assert_equal(len(empty.objects_by_property[_render_order_of](0)), 0)
+
+
 # --- clone and copy ----------------------------------------------------------
 
 

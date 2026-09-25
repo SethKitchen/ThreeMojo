@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `flipY`, `mapping`, `colorSpace`, `anisotropy`, `type`, `channel`, `RGBELoader`, `EXRLoader`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`. Their settings are `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `flipY`, `mapping`, `colorSpace`, `anisotropy`, `type` and `channel`. The tools are `RGBELoader`, `EXRLoader`, `TextureUtils` and `DataUtils`.
 
 ## Make a texture
 
@@ -740,6 +740,23 @@ Each map is sampled at its own coordinate, as in three.js. The texture's channel
 
 `placement()` returns a `UvPlacement`: the channel and the top two rows of the matrix. `place(uv, uv1)` gives the coordinate where the map is sampled.
 
+### Fit a texture to a surface
+
+`render/texture_utils.mojo` sets `repeat` and `offset` so that the image keeps its aspect ratio on a surface of another. three.js's `TextureUtils.contain`, `cover` and `fill`, which are CSS's `object-fit`.
+
+| Function | Meaning |
+|---|---|
+| `contain(texture, aspect)` | Show the whole image, centered. The wrap mode decides what shows beside it. |
+| `cover(texture, aspect)` | Fill the surface, centered. The image is cropped. |
+| `fill(texture)` | Stretch the image over the surface: a repeat of one and no offset. |
+
+`aspect` is the surface's width over its height. The blank texture has an aspect of one, as three.js's texture with no image does. An aspect that is not a positive finite number is refused. three.js takes it and gives a fit that is not a number.
+
+```mojo
+var poster = assets.textures.get(id)          # a 400 by 200 image
+cover(poster, 1.5)                            # repeat (0.75, 1), offset (0.125, 0)
+```
+
 ### How the rasterizers place a map
 
 The corners carry the geometry's two raw pairs, `uv` and `uv1`. A geometry with no `uv1` carries its `uv` twice. Each fragment interpolates both pairs, and each map moves its own pair by its own matrix. The matrix is linear, so this is the same as moving each corner and then interpolating, to the rounding. three.js moves each corner in the vertex shader, one varying for each map.
@@ -780,6 +797,18 @@ var id = assets.textures.add(board^)
 | `channel` | Which coordinates the texture reads: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
 | `texel_type`, `pixels`, `data` | `UNSIGNED_BYTE_TYPE` with bytes in `pixels`, or `FLOAT_TYPE` with floats in `data`. See [HDR images](#hdr-images). |
 | `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
+
+## Byte length
+
+`byte_length(width, height, format, type)` is three.js's `TextureUtils.getByteLength`: how many bytes an image takes in GPU memory. `TextureFormat` and `TextureDataType` are three.js's format and type constants, with three.js's numbers as their values. `TextureFormat.RGBA` is `RGBAFormat`, 1023. `TextureDataType.HALF_FLOAT` is `HalfFloatType`, 1016.
+
+The result is a `Float64`, because three.js's result is not always a whole number. A red image of `UNSIGNED_SHORT_4444` texels is half a byte for each texel. The function refuses a negative size, a format or type that is none of the named values, and `UNSIGNED_INT_248`, which three.js's `getByteLength` does not know.
+
+## Half floats
+
+`render/data_utils.mojo` is three.js's `DataUtils`. `to_half_float(x) -> UInt16` and `from_half_float(bits) -> Float32` give three.js's bits, bit for bit. The tests build three.js's conversion tables and compare every half, and every float exponent.
+
+`to_half_float` clamps to 65504, rounds to a `Float32`, and then cuts the extra fraction bits. It does not round them. So 1.0007 gives `0x3C00`, which is one, although `0x3C01` is nearer. An infinity gives the largest half. A NaN gives `0xFE00`, which is what three.js gives in Node on x86-64. `from_half_float` is exact, because a `Float32` holds every half.
 
 ## TextureStore
 

@@ -35,8 +35,10 @@ sRGB on the way in and `hex()` encodes it on the way out, as `setHex` and
 numbers in the linear working space, as `setHSL` and `getHSL` do, and in
 sRGB only when asked with `space=SRGB`. A half-lightness gray is therefore
 linear 0.5, which encodes to 188, and not the sRGB gray 128 that `0x808080`
-decodes from. `lerp`, `lerp_hsl`, `offset_hsl`, `multiply` and `add` are the
-same arithmetic on the same numbers, in the working space. What three.js's
+decodes from. `set_rgb` and `rgb` default to the working space too, as
+`setRGB` and `getRGB` do. `lerp`, `lerp_colors`, `lerp_hsl`, `offset_hsl`,
+`multiply`, `add`, `add_scalar`, `sub` and `set_scalar` are the same
+arithmetic on the same numbers, in the working space. What three.js's
 `Color` lacks is an alpha, which this keeps and the HSL operations leave
 alone. CSS strings and names are read and written by `render.css_color`,
 through `FloatColor(style=...)`, `style()` and `hex_string()`.
@@ -458,6 +460,108 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         self.r += other.r
         self.g += other.g
         self.b += other.b
+
+    def sub(mut self, other: Self):
+        """Subtract `other`'s red, green and blue from this color's,
+        three.js's `sub`. As there, a channel stops at zero. Alpha is kept.
+
+        Args:
+            other: The color to subtract.
+        """
+        self.r = max(Float32(0), self.r - other.r)
+        self.g = max(Float32(0), self.g - other.g)
+        self.b = max(Float32(0), self.b - other.b)
+
+    def add_scalar(mut self, value: Float32):
+        """Add one number to red, green and blue, three.js's `addScalar`.
+        Alpha is kept.
+
+        Args:
+            value: The number to add.
+        """
+        self.r += value
+        self.g += value
+        self.b += value
+
+    def set_scalar(mut self, value: Float32):
+        """Set red, green and blue to one number, three.js's `setScalar`.
+        Alpha is kept.
+
+        Args:
+            value: The number, in the linear working space.
+        """
+        self.r = value
+        self.g = value
+        self.b = value
+
+    def lerp_colors(mut self, start: Self, end: Self, alpha: Float32):
+        """Set this color a fraction of the way from `start` to `end`,
+        three.js's `lerpColors`. Every channel, alpha too, as `lerp` does.
+
+        Args:
+            start: The color at an `alpha` of zero.
+            end: The color at an `alpha` of one.
+            alpha: How far along.
+        """
+        self.r = start.r + (end.r - start.r) * alpha
+        self.g = start.g + (end.g - start.g) * alpha
+        self.b = start.b + (end.b - start.b) * alpha
+        self.a = start.a + (end.a - start.a) * alpha
+
+    def set_rgb(
+        mut self, r: Float32, g: Float32, b: Float32, space: ColorSpace = LINEAR
+    ) raises:
+        """Set red, green and blue as given in a color space, three.js's
+        `setRGB`. Alpha is kept.
+
+        The default is the linear working space, as in three.js: the three
+        are taken as they are. `SRGB` decodes them.
+
+        Args:
+            r: Red, in `space`.
+            g: Green, in `space`.
+            b: Blue, in `space`.
+            space: `LINEAR` or `SRGB`.
+
+        Raises:
+            Error: If `space` is neither `LINEAR` nor `SRGB`. The color is
+                left as it was.
+        """
+        if space == SRGB:
+            self.r = srgb_to_linear(r)
+            self.g = srgb_to_linear(g)
+            self.b = srgb_to_linear(b)
+        elif space == LINEAR:
+            self.r = r
+            self.g = g
+            self.b = b
+        else:
+            raise Error("An RGB color is given in LINEAR or SRGB")
+
+    def rgb(self, space: ColorSpace = LINEAR) raises -> Self:
+        """Return this color's red, green and blue in a color space,
+        three.js's `getRGB`.
+
+        Args:
+            space: `LINEAR`, the default as in three.js, for the channels as
+                they are, or `SRGB` to encode them.
+
+        Returns:
+            The channels in `space`, with this color's alpha.
+
+        Raises:
+            Error: If `space` is neither `LINEAR` nor `SRGB`.
+        """
+        if space == SRGB:
+            return FloatColor(
+                linear_to_srgb(self.r),
+                linear_to_srgb(self.g),
+                linear_to_srgb(self.b),
+                self.a,
+            )
+        if space != LINEAR:
+            raise Error("An RGB color is asked for in LINEAR or SRGB")
+        return self
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every channel is exactly equal, three.js's

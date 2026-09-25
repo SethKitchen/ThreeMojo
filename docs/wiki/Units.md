@@ -89,3 +89,28 @@ var step = clock.delta()                     # a Duration
 var moved = Velocity(2.0) * step             # a Length: two meters per second, for one step
 node.position.x += moved.value
 ```
+
+## Timer
+
+`core/timer.mojo`. A `Timer` gives an animation loop one delta per frame, scaled by a time scale. three.js's `Timer`, which three.js recommends over `Clock`. Call `update` once a frame. Every question after it in the same frame gets the same answer.
+
+| Member | Meaning |
+|---|---|
+| `Timer()` | A timer that starts now, with a time scale of one. |
+| `update()` | Take this frame's delta. three.js's `update`. |
+| `delta() -> Duration` | The time between the last two updates, times the time scale. Zero before the first update. |
+| `elapsed() -> Duration` | The sum of every delta. |
+| `set_timescale(s)` | Multiply each later delta by `s`. Two is double speed, zero pauses, and a negative scale runs the elapsed time back. A scale that is not finite is refused. |
+| `reset()` | Measure the next delta from now. The elapsed time is kept. |
+| `set_hidden(hidden)` | Tell the timer that the window is hidden or shown. |
+| `Timer(start=ns)`, `update_at(ns)`, `reset_at(ns)`, `set_hidden_at(hidden, ns)` | The same at a given counter reading. `update_at` is three.js's `update(timestamp)`. |
+
+A hidden window gives a delta of zero. Showing it again resets the timer, so the first frame back does not jump. three.js does this when `connect` gives it the page's document. There is no document here, so `set_hidden` takes the place of the `visibilitychange` event.
+
+```mojo
+var timer = Timer()
+timer.set_timescale(0.5)                     # slow motion
+# In the loop:
+timer.update()
+var step = timer.delta()                     # the same Duration until the next update
+```

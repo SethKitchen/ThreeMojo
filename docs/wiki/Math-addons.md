@@ -1,6 +1,6 @@
 # Math addons
 
-The math addons of three.js's `examples/jsm/math/`: noise, an oriented box, a capsule, an octree for collisions, a surface sampler, color maps and color spaces. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated.
+These are the math addons of three.js's `examples/jsm/math/`. They are noise, an oriented box, a capsule, a collision octree, a surface sampler, color maps, color spaces and HSV colors. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated.
 
 | Module | three.js |
 |---|---|
@@ -11,6 +11,7 @@ The math addons of three.js's `examples/jsm/math/`: noise, an oriented box, a ca
 | `geometries/surface_sampler.mojo` | `MeshSurfaceSampler` |
 | `render/lut.mojo` | `Lut` |
 | `render/color_spaces.mojo` | `ColorManagement`, `ColorSpaces` |
+| `render/color_converter.mojo` | `ColorConverter` |
 
 The shapes hold bare `Float32` meters, as `Box3` and `Ray` do. See [Math](Math).
 
@@ -133,3 +134,21 @@ three.js decodes the first and the last sample from sRGB, and it does not decode
 `conversion_matrix(source, target)` is the target's matrix from XYZ times the source's matrix to XYZ. three.js's internal `_getMatrix` multiplies the two in the other order.
 
 `srgb_to_linear_three` and `linear_to_srgb_three` are three.js's transfer functions, with the constants of three.js. `render/srgb.mojo` holds the transfer functions that the renderer uses, written from the definition.
+
+## HSV colors
+
+`set_hsv(color, h, s, v)` sets a `FloatColor` from hue, saturation and value, and `get_hsv(color)` gives them back as an `HSV`. three.js's `ColorConverter.setHSV` and `getHSV`. Both go through HSL in the linear working space, as three.js's do.
+
+| Member | Meaning |
+|---|---|
+| `set_hsv(color, h, s, v)` | Set red, green and blue. The hue wraps. The saturation and the value clamp to zero to one. Alpha is kept. |
+| `get_hsv(color) -> HSV` | The hue, saturation and value of the linear channels. |
+| `HSV(hue, saturation, value)` | The three numbers, each nominally zero to one. |
+
+```mojo
+var color = FloatColor(0, 0, 0)
+set_hsv(color, 0.3, 0.6, 0.8)                # linear (0.416, 0.8, 0.32)
+var back = get_hsv(color)                     # HSV(0.3, 0.6, 0.8)
+```
+
+Black and white have no saturation, and three.js divides zero by zero for both. There, `setHSV` gives a color that is not a number, and `getHSV` of black gives a saturation that is not a number. Here both give a saturation of zero. All other inputs give three.js's numbers.

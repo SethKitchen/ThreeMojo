@@ -31,6 +31,7 @@ passed where radians are meant.
 """
 
 from math.euler import Euler
+from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import cos, isfinite, sin, sqrt
@@ -764,6 +765,16 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             other: The matrix to copy from.
         """
         self.set_position(Vector3.from_matrix_position(other))
+
+    def set_from_matrix3(mut self, matrix: Matrix3):
+        """Set this matrix to a 3x3 in its upper left, three.js's
+        `setFromMatrix3`: no translation, and a bottom row of (0, 0, 0, 1).
+        The same as `Matrix3.as_matrix4`.
+
+        Args:
+            matrix: The 3x3.
+        """
+        self = matrix.as_matrix4()
 
     def extract_basis(
         self, mut x_axis: Vector3, mut y_axis: Vector3, mut z_axis: Vector3

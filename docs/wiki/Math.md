@@ -44,6 +44,7 @@ A method that changes the vector changes `self` in place, as in three.js.
 | `distance_to(p)`, `distance_to_squared(p)`, `manhattan_distance_to(p)` | The distance to another point. |
 | `angle_to(v) -> Angle` | The angle between two vectors. A zero vector gives a right angle, as in three.js. |
 | `add(other)`, `sub(other)`, `add_scaled_vector(v, s)`, `negate()` | Change `self` in place. |
+| `add_scalar(s)`, `sub_scalar(s)` | Add a number to each component, or subtract it. `Vector2` has them too. |
 | `cross(other)` | `self = self × other`. |
 | `normalize()`, `set_length(l)` | Scale to unit length, or to `l`. A zero vector stays zero. |
 | `lerp(v, alpha)`, `lerp_vectors(a, b, alpha)` | A point on the line between two vectors. |
@@ -65,15 +66,29 @@ A method that changes the vector changes `self` in place, as in three.js.
 
 `Vector4(x, y, z, w)` holds four `Float32` components. `w` is the homogeneous coordinate: one for a position, zero for a direction. `Vector4(of=v, w=1)` builds one from a `Vector3`.
 
+It has the `Vector3` members that make sense in four dimensions, with the same arithmetic over four components.
+
 | Member | Meaning |
 |---|---|
 | `xyz() -> Vector3` | The first three components. |
-| `dot(other)`, `length()` | Over all four components. |
-| `add(other)`, `sub(other)`, `normalize()` | Change `self` in place. |
+| `dot(other)`, `length()`, `length_sq()`, `manhattan_length()` | Over all four components. |
+| `add(other)`, `sub(other)`, `add_scaled_vector(v, s)`, `negate()` | Change `self` in place. |
+| `normalize()`, `set_length(l)` | Scale to unit length, or to `l`. A zero vector stays zero. |
+| `lerp(v, alpha)`, `lerp_vectors(a, b, alpha)` | A point on the line between two vectors. |
+| `multiply(v)`, `divide(v)` | Component by component. |
+| `min(v)`, `max(v)`, `clamp(low, high)`, `clamp_scalar(low, high)`, `clamp_length(low, high)` | Hold the components, or the length, in a range. |
+| `floor()`, `ceil()`, `round()`, `round_to_zero()` | Round each component. `round` rounds a half up. |
+| `get_component(i)`, `set_component(i, value)` | One component by index. An index other than 0 to 3 raises. |
 | `apply_matrix4(m)` | `self = m * self`, with nothing divided. A projection leaves the clip-space `w` in `w`. |
-| `a + b`, `a - b`, `a * f`, `-a` | Return a new vector. |
+| `set_from_matrix_position(m)` | The last column of `m`: the translation, and the last element of the bottom row in `w`. |
+| `set_axis_angle_from_quaternion(q)` | The axis of a unit quaternion in `x`, `y` and `z`, and its angle in radians in `w`. A turn too small to have an axis gets +x. |
+| `set_axis_angle_from_rotation_matrix(m)` | The same, from a rotation matrix, with three.js's thresholds. No turn gives `(1, 0, 0, 0)`. A half turn takes its axis from the largest diagonal element. |
+| `axis_angle() -> Angle` | `w` as an `Angle`, after one of the two setters above. |
+| `a + b`, `a - b`, `a * f`, `a / f`, `-a`, `a == b` | Return a new vector, or compare exactly. |
 
 `Matrix4.transform_point` divides by `w` and discards it. `apply_matrix4` keeps the whole product.
+
+The two axis-angle setters are three.js's `setAxisAngleFromQuaternion` and `setAxisAngleFromRotationMatrix`. Their thresholds and their fallback axes are three.js's, and the tests compare them with three.js 0.180. A half turn whose largest diagonal element is below a hundredth gets one of three.js's three fixed axes, such as `(0, 0.707106781, 0.707106781)`.
 
 ## Matrix3
 
@@ -136,6 +151,7 @@ Column-major storage, as three.js and OpenGL. Element `(row, col)` is at `col * 
 | `a == b`, `a * b`, `multiply_scalar(f)` | Compare exactly, multiply, or multiply every element by a number. |
 | `scale(v)` | Scale the three axis columns: a scale applied first. |
 | `set_position(v)`, `copy_position(m)` | Set the translation column. |
+| `set_from_matrix3(m)` | A `Matrix3` in the upper-left corner, with no translation. The same as `Matrix3.as_matrix4`. |
 | `extract_basis(x, y, z)` | Write the three axis columns into three vectors. |
 | `look_at(eye, target, up)` | Set the rotation so that +z points from `target` to `eye`. The translation is kept. `math.projection.look_at` builds a view matrix instead. |
 | `decompose(position, quaternion, scale)` | Split into a translation, a rotation and a scale. A mirror gives a negative x scale. An axis of zero length raises; three.js writes `NaN`. |

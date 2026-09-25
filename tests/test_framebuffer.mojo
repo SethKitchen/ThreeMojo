@@ -455,6 +455,43 @@ def test_multiply_add_and_equality() raises:
     assert_false(FloatColor(1, 0.5, 0, 1) == FloatColor(1, 0.5, 1, 1))
 
 
+def test_sub_scalars_and_lerp_colors_match_three_js() raises:
+    # three.js 0.180's `Color`, run in Node on the same numbers.
+    var color = FloatColor(0.25, 0.5, 0.75, 0.5)
+    color.sub(FloatColor(0.5, 0.25, 0.1, 0.1))
+    assert_linear(color, 0, 0.25, 0.65, 0.5)
+    color = FloatColor(0.25, 0.5, 0.75, 0.5)
+    color.add_scalar(0.125)
+    assert_linear(color, 0.375, 0.625, 0.875, 0.5)
+    color.set_scalar(0.3)
+    assert_linear(color, 0.3, 0.3, 0.3, 0.5)
+    color.lerp_colors(FloatColor(0, 0.5, 1, 0), FloatColor(1, 0.25, 0, 1), 0.25)
+    assert_linear(color, 0.25, 0.4375, 0.75, 0.25)
+
+
+def test_rgb_is_set_and_read_in_a_color_space() raises:
+    var color = FloatColor(0, 0, 0, 0.5)
+    color.set_rgb(0.5, 0.25, 0.75, SRGB)
+    assert_linear(
+        color, 0.2140411404715882, 0.050876088164650994, 0.5225215539594343, 0.5
+    )
+    color.set_rgb(0.5, 0.25, 0.75)
+    assert_linear(color, 0.5, 0.25, 0.75, 0.5)
+    assert_linear(color.rgb(), 0.5, 0.25, 0.75, 0.5)
+    assert_linear(
+        color.rgb(SRGB),
+        0.7353606352856507,
+        0.5371042026626895,
+        0.8808268158925643,
+        0.5,
+    )
+    with assert_raises():
+        color.set_rgb(1, 1, 1, UNKNOWN_SPACE)
+    assert_linear(color, 0.5, 0.25, 0.75, 0.5)
+    with assert_raises():
+        _ = color.rgb(UNKNOWN_SPACE)
+
+
 def test_adopting_pixels_and_depth_keeps_both() raises:
     # What a GPU readback needs. The three-argument version fills depth with
     # infinity, which would report an empty scene over a rendered one.

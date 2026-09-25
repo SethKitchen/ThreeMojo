@@ -3662,14 +3662,15 @@ def _spot_camera(
     light: Light, at: Vector3, aimed: Vector3
 ) raises -> PerspectiveCamera:
     """Return a spot light's shadow camera, three.js's `SpotLightShadow`:
-    twice the cone's angle wide, square, from the shadow's near plane to
-    `Light.shadow_far`, at `at` looking at `aimed`.
+    twice the cone's angle times the shadow's `focus` wide, square, from
+    the shadow's near plane to `Light.shadow_far`, at `at` looking at
+    `aimed`.
 
     Raises:
         Error: If `PerspectiveCamera` refuses the planes or the angle.
     """
     var camera = PerspectiveCamera(
-        Angle(light.angle.value * 2, RADIAN),
+        light.shadow.spot_field_of_view(light.angle),
         1.0,
         light.shadow.near,
         light.shadow_far(),
