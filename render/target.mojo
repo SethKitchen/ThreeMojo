@@ -983,9 +983,9 @@ struct RenderTarget(Movable, SampleSource):
     ) raises:
         """Mix `color` into pixel (x, y) by a blending mode.
 
-        The normal attachment is left alone: a translucent surface claims
-        no depth, so the normal stays the one of the surface the depth
-        belongs to. The result is light, whatever was there before. Only light blends:
+        The normal attachment is left alone, so it stays the one of the
+        opaque surface behind. The kernel keeps it the same way. The
+        result is light, whatever was there before. Only light blends:
         a fragment that shows data is refused a blend policy, so the mix is
         light over something, and a mixture with light in it is light. See
         the module docstring.

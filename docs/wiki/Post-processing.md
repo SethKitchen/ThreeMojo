@@ -376,9 +376,9 @@ Put the LUT pass after the output pass, as three.js's example does. Then the tab
 ### How the more passes differ from three.js
 
 - **The mask selection.** three.js's `MaskPass` takes a scene and a camera. This port takes a set of layers, as the outline pass does, and the composer's camera.
-- **The mask coverage.** A pixel is in the mask where a selected object writes its depth. A surface that blends, or that writes no depth, does not add to the mask.
+- **The mask coverage.** A pixel is in the mask where a selected object writes its depth. A surface that writes no depth does not add to the mask.
 - **Every pass obeys the mask.** In three.js, a clear ignores the stencil test. So a clear pass, and a render pass that clears, clear the whole frame inside a mask. This port keeps the pixels outside the mask for every pass.
-- **The bokeh depth.** three.js draws the depth again with a `MeshDepthMaterial`. This port draws the scene as a render pass does, so a surface that blends is not in the depth.
+- **The bokeh depth.** three.js draws the depth again with a `MeshDepthMaterial`. This port draws the scene as a render pass does, so a surface with `depth_write` off is not in the depth.
 - **The bokeh aspect.** three.js reads the camera's aspect. This port reads the frame's width over its height.
 - **The randomness.** three.js uses `Math.random`. This port uses `SeededRandom`, so the same seed gives the same frames.
 - **The texel.** The bokeh, glitch and halftone read the light as stored, premultiplied. For an opaque pixel that is the straight color.

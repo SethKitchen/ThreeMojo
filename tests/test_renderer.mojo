@@ -3239,7 +3239,8 @@ def test_varying_vertex_colors_survive_the_near_plane() raises:
 
 def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
     # A fourth float halves the alpha. Over a blended material the sheet
-    # shows half the background through, and writes no depth. An opaque
+    # shows half the background through, and writes its depth, as
+    # three.js's transparent material with `depthWrite` does. An opaque
     # material does not blend with what is behind: its fragment replaces
     # the pixel, alpha and all, and claims the depth. So the opaque sheet
     # is full red with an alpha of a half, not an opaque red.
@@ -3264,10 +3265,10 @@ def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
     assert_true(left.r > 180 and left.r < 196, "the alpha did not blend")
     assert_equal(left.g, UInt8(0))
     # Over an opaque background the result is opaque, and a blended
-    # fragment leaves the depth as it found it.
+    # fragment claims the depth.
     assert_equal(left.a, UInt8(255))
-    assert_equal(
-        blended.depth_at(WIDTH // 8, HEIGHT // 2), inf[DType.float32]()
+    assert_true(
+        blended.depth_at(WIDTH // 8, HEIGHT // 2) < 1, "no depth was claimed"
     )
     var solid = assets.materials.add(
         Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)

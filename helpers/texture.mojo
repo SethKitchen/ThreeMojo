@@ -16,13 +16,13 @@ not the texel's: it is one for a 2D texture and a cube, and
 other. Both sides are drawn, as three.js's `DoubleSide` says.
 
 **What blends.** three.js's material is `transparent`, and it writes its
-depth as it blends. A surface that blends here writes no depth; see
-`render.raster_state`. So a part with an alpha of one is drawn opaque,
-which keeps the nearer face of a cube in front, as three.js's depth write
-does. A stack's slices blend, in order from the most negative z. Seen from
-+z, each slice blends over the ones behind it, as in three.js. Seen from
--z, three.js draws the nearest slice and its depth hides the rest. Here
-each slice still blends over the one drawn before it.
+depth as it blends. A surface that blends here writes its depth too; see
+`render.raster_state`. A part with an alpha of one is drawn opaque, which
+keeps the nearer face of a cube in front. A stack's slices blend, in
+order from the most negative z, as every part stands on one node. Seen
+from +z, each slice blends over the ones behind it, as in three.js. Seen
+from -z, the nearest slice is drawn first and its depth hides the rest,
+as in three.js.
 
 **How it is drawn.** three.js writes a `ShaderMaterial` that reads a
 `sampler2D`, a `sampler3D`, a `sampler2DArray` or a `samplerCube` at a

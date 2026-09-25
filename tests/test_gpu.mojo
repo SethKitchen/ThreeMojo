@@ -291,9 +291,11 @@ from materials.material import (
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION, UV, UV1
-from math.matrix4 import Matrix4
-from objects.skeleton import bind_skeleton
+from math.matrix4 import Matrix4, rotation_x
+from objects.skeleton import Bone, Skeleton, bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
+from objects.instanced_mesh import BatchedMesh
+from objects.lod import Lod
 from materials.material import (
     BASIC,
     DEPTH,
@@ -1936,11 +1938,11 @@ def test_both_backends_resolve_an_untouched_transparent_clear_alike() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
-def test_both_backends_let_blended_lines_cross() raises:
-    # A blended segment tests the depth without claiming it. The host once
-    # claimed it, so of two blended segments crossing, the second was
-    # dropped at the crossing on the host and kept on the device.
-    if skipped_for_lack_of_a_gpu("both backends let blended lines cross"):
+def test_both_backends_claim_a_blended_lines_depth() raises:
+    # A blended segment claims its depth, as three.js's transparent line
+    # with `depthWrite` does. Of two blended segments crossing, the one
+    # behind and drawn second is dropped at the crossing on both sides.
+    if skipped_for_lack_of_a_gpu("both backends claim a blended line's depth"):
         return
     var lines = a_line(2.0, 8.5, 14.0, 8.5, 0.2, Color(255, 0, 0, 128), BLEND)
     for here in a_line(8.5, 2.0, 8.5, 14.0, 0.6, Color(0, 0, 255, 128), BLEND):
@@ -1961,10 +1963,15 @@ def test_both_backends_let_blended_lines_cross() raises:
         1.0,
         lines,
     )
-    # Both colors reach the crossing, and neither side claimed its depth.
-    assert_true(cpu.get_pixel(8, 8).b > 60, "the second segment was dropped")
-    assert_equal(cpu.depth_at(8, 8), inf[DType.float32]())
-    assert_equal(gpu.depth_at(8, 8), inf[DType.float32]())
+    # Only the first color reaches the crossing, and both sides claimed
+    # its depth there. The red, blended at half, halves the background's
+    # blue; the blue segment behind adds none.
+    assert_true(
+        cpu.get_pixel(8, 8).b <= BACKGROUND.b,
+        "the segment behind reached the crossing",
+    )
+    assert_almost_equal(cpu.depth_at(8, 8), Float32(0.2), atol=Float64(1e-5))
+    assert_almost_equal(gpu.depth_at(8, 8), Float32(0.2), atol=Float64(1e-5))
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
@@ -2085,7 +2092,12 @@ def test_both_backends_draw_a_frame_in_its_one_order() raises:
     assert_equal(
         count_mismatches(two_passes, device.read_back(), tolerance=1), 0
     )
-    assert_true(two_passes.get_pixel(24, 18).r < 100, "the pane stayed on top")
+    # The pane claims its depth, as three.js's `depthWrite` does, so the
+    # line behind it, drawn after every triangle, is hidden there.
+    assert_true(
+        two_passes.get_pixel(24, 18).b < 100,
+        "the line showed through a pane that claims its depth",
+    )
     # And a draw the frame cannot hold is refused before the launch.
     with assert_raises():
         device.draw(
@@ -3725,17 +3737,40 @@ def test_both_backends_agree_on_every_blending_mode() raises:
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
-def test_both_backends_agree_that_a_blend_claims_no_depth() raises:
-    # A translucent surface is hidden by what is in front without hiding what
-    # is behind, so the depth that comes back is the nearest *solid* one.
-    if skipped_for_lack_of_a_gpu("a blend claims no depth"):
+def test_both_backends_agree_that_a_blend_claims_its_depth() raises:
+    # A translucent surface with the depth write on claims its depth, as
+    # three.js's transparent material with `depthWrite` does.
+    if skipped_for_lack_of_a_gpu("a blend claims its depth"):
         return
     var corners = translucent_pair()
     var gpu = render_triangles(corners, 16, 16, BACKGROUND)
     var cpu = cpu_render_triangles(corners, 16, 16)
-    # The opaque pane is at 0.8; the translucent one at 0.3 claims nothing.
-    assert_almost_equal(cpu.depth_at(2, 2), Float32(0.8), atol=Float64(1e-5))
-    assert_almost_equal(gpu.depth_at(2, 2), Float32(0.8), atol=Float64(1e-5))
+    # The opaque pane is at 0.8; the translucent one at 0.3 claims it.
+    assert_almost_equal(cpu.depth_at(2, 2), Float32(0.3), atol=Float64(1e-5))
+    assert_almost_equal(gpu.depth_at(2, 2), Float32(0.3), atol=Float64(1e-5))
+
+
+def test_both_backends_claim_the_depth_of_a_blend_that_covers_nothing() raises:
+    # A source-over fragment with an alpha of zero adds no color, but it
+    # claims its depth on both sides, as three.js writes it: a later
+    # surface behind it is hidden. A clear translucent pane, then an
+    # opaque pane behind it.
+    if skipped_for_lack_of_a_gpu("a clear blend claims its depth"):
+        return
+    var corners = List[RasterVertex]()
+    var clear = Color(255, 0, 0, 0)
+    corners.append(corner(0, 0, 0.3, 1, clear, BLEND))
+    corners.append(corner(40, 0, 0.3, 1, clear, BLEND))
+    corners.append(corner(0, 40, 0.3, 1, clear, BLEND))
+    corners.append(corner(0, 0, 0.8, 1, Color(0, 255, 0)))
+    corners.append(corner(40, 0, 0.8, 1, Color(0, 255, 0)))
+    corners.append(corner(0, 40, 0.8, 1, Color(0, 255, 0)))
+    var gpu = render_triangles(corners, 16, 16, BACKGROUND)
+    var cpu = cpu_render_triangles(corners, 16, 16)
+    assert_equal(cpu.get_pixel(2, 2).g, BACKGROUND.g)
+    assert_almost_equal(cpu.depth_at(2, 2), Float32(0.3), atol=Float64(1e-5))
+    assert_almost_equal(gpu.depth_at(2, 2), Float32(0.3), atol=Float64(1e-5))
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_blend_a_translucent_surface_over_nothing() raises:
@@ -4887,9 +4922,9 @@ def sheet_over(z: Float32, alpha: Float32) -> List[RasterVertex]:
 
 
 def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
-    # Source-over at alpha zero hides nothing and adds nothing, so it must
-    # add no color and no depth. The kernel recorded both before it looked
-    # at the alpha.
+    # Source-over at alpha zero adds no color. It claims its depth, as
+    # three.js writes it; `test_both_backends_claim_the_depth_of_a_blend_
+    # that_covers_nothing` holds both backends to that.
     #
     # The surfaces underneath are `BASIC` rather than `NORMALS`: a blended
     # fragment may not share a tone-mapped frame with a data material at
@@ -4929,11 +4964,6 @@ def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
         1.0,
     )
     assert_equal(count_mismatches(plain, gpu, tolerance=1), 0)
-    for y in range(18):
-        for x in range(24):
-            assert_almost_equal(
-                gpu.depth_at(x, y), plain.depth_at(x, y), atol=Float64(1e-5)
-            )
     # A sheet that does cover something changes both, so the rule is about
     # the alpha and not about the sheet.
     var faint = data_pair(BASIC)
@@ -4963,7 +4993,10 @@ def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
     assert_equal(count_mismatches(clear, device), 0)
     assert_equal(device.get_pixel(12, 12).r, BACKGROUND.r)
     assert_equal(device.get_pixel(12, 12).a, UInt8(255))
-    assert_equal(device.depth_at(12, 12), inf[DType.float32]())
+    # Its depth is claimed on both sides, as three.js writes it.
+    assert_almost_equal(
+        device.depth_at(12, 12), clear.depth_at(12, 12), atol=Float64(1e-5)
+    )
 
 
 # --- a highlight under a parallel projection, on both backends --------------
@@ -8080,6 +8113,133 @@ def test_both_backends_agree_on_a_shadowed_scene() raises:
         scene.lights[1].cast_shadow = False
         var unshadowed = renderer.render(scene, assets, camera)
         assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
+
+
+def every_kind_of_caster(mut assets: Assets) raises -> Scene:
+    """Return a floor drawn as an instanced mesh that receives, under a
+    skinned block, a batched ball, an LOD's ball and a translucent block
+    that all cast, with a sun and a bulb that cast."""
+    var scene = Scene()
+    var root = scene.add(Object3D())
+    var lift = Object3D()
+    lift.set_position(0, 1.0, 0)
+    var lift_node = scene.add(lift^)
+    var aside = Object3D()
+    aside.set_position(1.4, 0.6, -1)
+    var aside_node = scene.add(aside^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    var red = assets.materials.add(
+        phong_material(Color(200, 60, 60), specular=Color(80, 80, 80))
+    )
+    var glass = assets.materials.add(
+        Material(Color(90, 200, 250), opacity=0.5, transparent=True)
+    )
+    var ground = InstancedMesh(floor, paint, root, 1, receive_shadow=True)
+    ground.set_matrix_at(0, rotation_x(Angle(-90.0, DEGREE)))
+    scene.add_instanced_mesh(ground^)
+    # A block the first bone carries a meter up.
+    var block = cube(Length(1.0, METER))
+    var count = block.attribute_view(String(POSITION)).count()
+    var first = List[Float32]()
+    var second = List[Float32]()
+    for _ in range(count):
+        first.extend([Float32(0), 0, 0, 0])
+        second.extend([Float32(1), 0, 0, 0])
+    block.set_attribute(String(SKIN_INDEX), BufferAttribute(first^, 4))
+    block.set_attribute(String(SKIN_WEIGHT), BufferAttribute(second^, 4))
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            assets.geometries.add(block^),
+            red,
+            root,
+            Skeleton([Bone(lift_node, Matrix4())]),
+            cast_shadow=True,
+            receive_shadow=True,
+        )
+    )
+    var batch = BatchedMesh(red, root, cast_shadow=True, receive_shadow=True)
+    _ = batch.add_instance(ball, translation(-1.5, 0.6, 1))
+    scene.add_batched_mesh(batch^)
+    # An LOD's level is a node, casting and receiving by its mesh.
+    var level = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(ball, red, level, cast_shadow=True, receive_shadow=True)
+    )
+    var lod = Lod(aside_node)
+    lod.add_level(level)
+    scene.add_lod(lod^)
+    var pane = Object3D()
+    pane.set_position(-0.5, 2.2, 1.2)
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(cube(Length(0.6, METER))),
+            glass,
+            scene.add(pane^),
+            cast_shadow=True,
+        )
+    )
+    var lamp = Object3D()
+    lamp.set_position(-3, 4, 0)
+    var sun = directional_light(Color(255, 250, 240), scene.add(lamp^), 2.5)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 48
+    sun.shadow.bias = -0.002
+    scene.add_light(sun)
+    var bulb_at = Object3D()
+    bulb_at.set_position(2, 3, 1)
+    var bulb = point_light(Color(255, 240, 220), scene.add(bulb_at^), 30.0)
+    bulb.cast_shadow = True
+    bulb.shadow.map_size = 16
+    bulb.shadow.bias = -0.005
+    scene.add_light(bulb)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
+    scene.update()
+    return scene^
+
+
+def test_both_backends_agree_on_the_shadows_of_every_kind() raises:
+    # A skinned block, a batched ball, an LOD's ball and a translucent
+    # block cast onto an instanced floor that receives, from a sun and a
+    # bulb: the host draws the maps, and the kernel reads them for each
+    # kind as the host does.
+    if skipped_for_lack_of_a_gpu("both backends agree on every kind's shadow"):
+        return
+    var assets = Assets()
+    var scene = every_kind_of_caster(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the shadows are there: with the lights not casting, the
+    # picture changes.
+    scene.lights[0].cast_shadow = False
+    scene.lights[1].cast_shadow = False
+    var unshadowed = renderer.render(scene, assets, camera)
+    assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
 
 
 def test_both_backends_add_the_bias_before_the_far_plane() raises:

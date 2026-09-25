@@ -4,13 +4,13 @@ Blending is not commutative, so `Renderer.prepare` decides the draw order. Opaqu
 
 ## Two rules every renderer has
 
-A translucent surface tests depth without writing it. It is hidden by what is in front and hides nothing behind, so two panes one behind the other both show. three.js's `depthWrite` is on by default for a transparent material too, so there a pane drawn first can hide one drawn after it. `Material.depth_write` is three.js's flag, but only an opaque surface obeys it. A blending surface writes no depth, whatever `depth_write` says. See [Materials](Materials#depth-color-and-stencil).
+A translucent surface tests depth and writes it, as in three.js. `depth_write` is on by default for a transparent material too. The furthest pane draws first, so a pane behind is already there when a nearer pane mixes over it. A pane drawn first can hide a pane drawn after it, as in three.js. Set `depth_write=False` on a material to let every surface behind it show through.
 
 Opaque surfaces draw first because they write the depth that stops a pane behind a wall from showing through. Among themselves they draw nearest first. The image does not depend on that order, but the cost does: a fragment that fails the depth test is skipped before it is shaded.
 
 ## One answer to one question
 
-Whether a surface composites decides two things together: how its color combines, and whether it writes depth. It has to be one answer. It was three: the mesh sorter asked the material, and each rasterizer asked a vertex color. A material with an opaque `opacity` but a translucent base color sorted as opaque and rasterized as blended. It wrote no depth, and whatever came after painted over it.
+Whether a surface composites decides two things together: how its color combines, and where it sorts. It has to be one answer. It was three: the mesh sorter asked the material, and each rasterizer asked a vertex color. A material with an opaque `opacity` but a translucent base color sorted as opaque and rasterized as blended. It mixed with the pixel before the surfaces behind it were drawn.
 
 `Material.blending` is now that one answer. It is inferred from the opacity and the color where it can be. It is stated where it cannot be, because a texture's own alpha is invisible from the material. It travels to both rasterizers as per-triangle state.
 
@@ -20,10 +20,10 @@ The sort is per mesh, by the depth of its node's origin, as three.js sorts. A tr
 
 ## The GPU blends in one pass
 
-The kernel accumulates every fragment of a pixel in one pass. That is correct only because every opaque triangle arrives before any translucent one. The nearest solid depth is then final when the first blended fragment shows up.
+The kernel accumulates every fragment of a pixel in one pass, in draw order. A fragment that writes depth updates the depth that the next fragments test against, opaque or translucent. The host target writes depth at the same step, so the two backends agree.
 
 ## See it
 
 ![Three translucent panes turn through each other over a cube](out/glass.png)
 
-`examples/glass.mojo` renders three translucent panes turning through each other over a solid cube. Submitting them in any order gives the same image, and a test asserts it.
+`examples/glass.mojo` renders three translucent panes turning through each other over a solid cube. The sort decides the order, so submitting them in any order gives the same image, and a test asserts it.

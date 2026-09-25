@@ -140,6 +140,7 @@ from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
 from objects.line import SEGMENTS, line_distances, segment_count, segment_ends
 from objects.line_segments2 import cap_steps, dash_spans
+from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skinned_mesh import (
     ATTACHED,
@@ -246,7 +247,6 @@ from render.rasterizer import (
     check_light_map,
     check_output_kinds,
     edge,
-    rasterize_all,
     rasterize_frame,
 )
 from renderers.clip import (
@@ -1349,6 +1349,7 @@ def _gather_batch(
         slack,
         bounds,
         known,
+        receive_shadow=batch.receive_shadow,
         colors=colors,
         one_depth=batch.custom_sorted,
     )
@@ -1419,10 +1420,11 @@ def _draws(
         skins: The frame's posed skeletons; one is appended per skinned
             mesh, and the draws name them by index.
         casters_only: Whether this is a light's view for a shadow map,
-            which holds the meshes that cast and nothing else: not a
-            mesh that does not cast, and not a skinned, instanced or
-            batched mesh, a sprite or a wide line, none of which
-            casts yet.
+            which holds the meshes that cast and nothing else: a mesh, a
+            skinned, instanced or batched mesh, a line or points whose
+            `cast_shadow` is set. An LOD's level is a node, and casts by
+            what it carries. A sprite and a wide line cast nothing, as
+            three.js's `Sprite` casts nothing.
         receivers_cast: Whether a light's view also holds the meshes that
             receive a shadow, as three.js draws them into a
             `VSM_SHADOW_MAP`.
@@ -1452,8 +1454,9 @@ def _draws(
     var one: List[Matrix4] = [Matrix4()]
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
-        var casts = mesh.cast_shadow or (receivers_cast and mesh.receive_shadow)
-        if casters_only and not casts:
+        if casters_only and not _casts(
+            mesh.cast_shadow, mesh.receive_shadow, receivers_cast
+        ):
             continue
         # Left out before its geometry is read, as `_gather` would leave
         # it out.
@@ -1520,10 +1523,15 @@ def _draws(
         if casters_only and swapped:
             for slot in range(before, len(draws)):
                 draws[slot].material = custom.value()
+    # A light's view holds every other kind that casts, as three.js's
+    # `renderObject` draws any mesh, line or points object whose
+    # `castShadow` is set: a skinned mesh posed, each instance placed.
     for index in range(len(scene.skinned_meshes)):
-        if casters_only:
-            continue
         ref skinned = scene.skinned_meshes[index]
+        if casters_only and not _casts(
+            skinned.cast_shadow, skinned.receive_shadow, receivers_cast
+        ):
+            continue
         skins.append(skin_pose(scene, index))
         var skin_geometry: List[GeometryId] = [skinned.geometry]
         _gather(
@@ -1545,11 +1553,14 @@ def _draws(
             known,
             skinned.morph_influences,
             len(skins) - 1,
+            receive_shadow=skinned.receive_shadow,
         )
     for index in range(len(scene.instanced_meshes)):
-        if casters_only:
-            continue
         ref group = scene.instanced_meshes[index]
+        if casters_only and not _casts(
+            group.cast_shadow, group.receive_shadow, receivers_cast
+        ):
+            continue
         _gather(
             draws,
             depths,
@@ -1567,10 +1578,14 @@ def _draws(
             slack,
             bounds,
             known,
+            receive_shadow=group.receive_shadow,
             colors=group.colors,
         )
     for index in range(len(scene.batched_meshes)):
-        if casters_only:
+        ref batch = scene.batched_meshes[index]
+        if casters_only and not _casts(
+            batch.cast_shadow, batch.receive_shadow, receivers_cast
+        ):
             continue
         _gather_batch(
             draws,
@@ -1578,7 +1593,7 @@ def _draws(
             clear,
             scene,
             assets,
-            scene.batched_meshes[index],
+            batch,
             view,
             visible,
             frustum,
@@ -1717,6 +1732,25 @@ def _draws(
                 ordered[position].material,
             )
     return ordered^
+
+
+def _casts(cast_shadow: Bool, receive_shadow: Bool, receivers: Bool) -> Bool:
+    """Return True if a light's view draws an object: it casts, or it
+    receives and the view draws the receivers too.
+
+    three.js's `castShadow || ( receiveShadow && type === VSMShadowMap )`
+    in `WebGLShadowMap.renderObject`.
+
+    Args:
+        cast_shadow: The object's `cast_shadow`.
+        receive_shadow: The object's `receive_shadow`.
+        receivers: Whether the view draws the receivers, under
+            `VSM_SHADOW_MAP`.
+
+    Returns:
+        Whether the object is drawn into the map.
+    """
+    return cast_shadow or (receivers and receive_shadow)
 
 
 def _sort_by(
@@ -5230,6 +5264,9 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         mut spans: List[_Span],
+        casters_only: Bool = False,
+        receivers_cast: Bool = False,
+        distance_casters: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn the lines and the wireframes in a scene into segments, in
         draw order, recording each one's run.
@@ -5248,6 +5285,15 @@ struct Renderer(Movable):
             spans: Where each line's and each wireframe's run is recorded,
                 with its depth and whether it blends, in the order the
                 returned list holds them. Appended to.
+            casters_only: Whether this is a light's view for a shadow map,
+                which holds the lines and the wireframes that cast. A line
+                there is drawn in its own material under the default
+                state, and solid, as three.js draws it with its depth
+                material, which has no dashes.
+            receivers_cast: Whether that view also holds the lines and
+                the wireframes that receive; see `_draws`.
+            distance_casters: Whether that view is a point light's; see
+                `_draws`.
 
         Returns:
             Raster vertices, two per segment, in draw order.
@@ -5283,6 +5329,10 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.lines)):
             ref line = scene.lines[index]
+            if casters_only and not _casts(
+                line.cast_shadow, line.receive_shadow, receivers_cast
+            ):
+                continue
             if not scene.shows(line.node, camera.visible_layers()):
                 continue
             var world = scene.world_matrix(line.node)
@@ -5304,14 +5354,18 @@ struct Renderer(Movable):
             if not own.visible:
                 continue
             var blends = own.is_transparent()
-            var drawn = _drawn_material(scene, own, line.material)
+            # A light's view keeps the line's own material, as it keeps a
+            # mesh's; the scene's override is the frame's alone.
+            var drawn = line.material if casters_only else _drawn_material(
+                scene, own, line.material
+            )
             var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A line")
-            # A line is never a caster, so its state is always its own.
             # A dashed line is three.js's `dashed` shader, which does not
-            # dither; a plain one is its `basic` shader, which does.
+            # dither; a plain one is its `basic` shader, which does. A
+            # light's view takes the default state; see `_draw_state`.
             var state = _draw_state(
-                material, False, not material.is_dashed(), False, True
+                material, casters_only, not material.is_dashed(), False, True
             )
             var shown = _shown_of(material)
             var cut = List[Plane]()
@@ -5322,7 +5376,7 @@ struct Renderer(Movable):
                 sides,
                 global_planes,
                 self.local_clipping_enabled,
-                False,
+                casters_only,
                 cut,
                 any_of,
             )
@@ -5396,7 +5450,7 @@ struct Renderer(Movable):
             var dash = Float32(0)
             var gap = Float32(0)
             var along = List[Float32](length=vertex_count, fill=0)
-            if material.is_dashed():
+            if material.is_dashed() and not casters_only:
                 dash = material.dash_size.to(METER)
                 gap = material.gap_size.to(METER)
                 along = line_distances(line.mode, positions)
@@ -5495,7 +5549,14 @@ struct Renderer(Movable):
                 # rather than a second pass over its geometry.
                 var wire_spans = List[_Span]()
                 var wired = self._prepared(
-                    scene, assets, camera, True, wire_spans
+                    scene,
+                    assets,
+                    camera,
+                    True,
+                    wire_spans,
+                    casters_only,
+                    receivers_cast,
+                    distance_casters=distance_casters,
                 )
                 var offset = len(corners) // 2
                 corners.extend(Span(wired))
@@ -5621,6 +5682,8 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         mut spans: List[_Span],
+        casters_only: Bool = False,
+        receivers_cast: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn the points in a scene into raster vertices, in draw order,
         recording each object's run.
@@ -5636,6 +5699,13 @@ struct Renderer(Movable):
             spans: Where each object's run is recorded, with its depth and
                 whether it blends, in the order the returned list holds
                 them. Appended to.
+            casters_only: Whether this is a light's view for a shadow map,
+                which holds the points that cast. A point there is drawn
+                in its own material under the default state, one texel
+                wide: three.js draws it with its depth material, whose
+                shader sets no `gl_PointSize`, and WebGL draws one pixel.
+            receivers_cast: Whether that view also holds the points that
+                receive; see `_draws`.
 
         Returns:
             Raster vertices, one per point, in draw order.
@@ -5673,6 +5743,10 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.points)):
             ref points = scene.points[index]
+            if casters_only and not _casts(
+                points.cast_shadow, points.receive_shadow, receivers_cast
+            ):
+                continue
             if not scene.shows(points.node, camera.visible_layers()):
                 continue
             var world = scene.world_matrix(points.node)
@@ -5691,12 +5765,14 @@ struct Renderer(Movable):
             if not own.visible:
                 continue
             var blends = own.is_transparent()
-            var drawn = _drawn_material(scene, own, points.material)
+            var drawn = points.material if casters_only else _drawn_material(
+                scene, own, points.material
+            )
             var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A point")
-            # A point is never a caster, so its state is always its own.
             # three.js's `points` shader premultiplies and does not dither.
-            var state = _draw_state(material, False, False, False, True)
+            # A light's view takes the default state; see `_draw_state`.
+            var state = _draw_state(material, casters_only, False, False, True)
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
@@ -5706,7 +5782,7 @@ struct Renderer(Movable):
                 sides,
                 global_planes,
                 self.local_clipping_enabled,
-                False,
+                casters_only,
                 cut,
                 any_of,
             )
@@ -5799,12 +5875,14 @@ struct Renderer(Movable):
                         0,
                         NO_TEXTURE,
                         NO_TEXTURE,
-                        point_size=attenuated_size(
-                            material.point_size.pixels,
-                            seen.z,
-                            scale,
-                            perspective and material.size_attenuation,
-                            self.render_scale,
+                        point_size=Float32(1) if casters_only else (
+                            attenuated_size(
+                                material.point_size.pixels,
+                                seen.z,
+                                scale,
+                                perspective and material.size_attenuation,
+                                self.render_scale,
+                            )
                         ),
                         state=state,
                         shown=shown,
@@ -5880,8 +5958,8 @@ struct Renderer(Movable):
         translucent surface behind it and before the one in front of it.
         Drawing every line after every triangle, as the two lists were
         once drawn, put an opaque line behind a translucent pane on top of
-        it: the pane had blended without claiming the depth, and the line
-        passed the test.
+        it, or, once the pane claimed its depth, left the line out of the
+        mix.
 
         Args:
             scene: The transform hierarchy, and the meshes, lines, points
@@ -6684,11 +6762,15 @@ struct Renderer(Movable):
         directions with `cube_up` up, three.js's `PointLightShadow`, and
         keeps the distance from the bulb in each texel; see
         `lights.shadow.cube_stored`. A point or spot light with a distance
-        puts its far plane there; see `Light.shadow_far`. Only the meshes that cast are drawn, under lit shading with no
-        lights, so a cut-out map cuts nothing out of a shadow and a
-        translucent surface, which claims no depth, casts none; see
-        `_draws`. What is kept is the target's depth, and the transform
-        that put it there.
+        puts its far plane there; see `Light.shadow_far`. Only what casts
+        is drawn, under lit shading with no lights: every mesh, skinned,
+        instanced or batched mesh, LOD level, line and points object
+        whose `cast_shadow` is set, as three.js's `renderObject` draws
+        any mesh, line or points object. So a cut-out map cuts nothing
+        out of a shadow. A translucent surface writes its depth, as
+        three.js's depth material does, and casts a whole shadow; see
+        `_casters`. What is kept is the target's depth, and the
+        transform that put it there.
 
         Each map carries the renderer's `shadow_map_type`, three.js's
         `shadowMap.type`. Under `VSM_SHADOW_MAP` a directional or spot
@@ -6753,7 +6835,7 @@ struct Renderer(Movable):
                 continue
             var at = scene.world_position(light.node)
             var aimed = _light_aim(scene, light)
-            var corners: List[RasterVertex]
+            var target: RenderTarget
             var frame: Matrix4
             if light.kind == DIRECTIONAL:
                 var camera = OrthographicCamera(
@@ -6765,29 +6847,28 @@ struct Renderer(Movable):
                     shadow.far,
                 )
                 camera.place(at, aimed)
-                corners = self._casters(
-                    scene, assets, camera, shadow.map_size, variance, index
+                target = self._casters(
+                    scene,
+                    assets,
+                    camera,
+                    shadow.map_size,
+                    variance,
+                    index,
                 )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             else:
                 var camera = _spot_camera(light, at, aimed)
-                corners = self._casters(
-                    scene, assets, camera, shadow.map_size, variance, index
+                target = self._casters(
+                    scene,
+                    assets,
+                    camera,
+                    shadow.map_size,
+                    variance,
+                    index,
                 )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
-            var target = RenderTarget(
-                shadow.map_size, shadow.map_size, Color(0, 0, 0)
-            )
-            rasterize_all(
-                corners,
-                target,
-                SHADE_LIT,
-                TextureStore(),
-                Lighting.uniform(),
-                self.workers,
-            )
             var held = SIMD[DType.float32, 16](0)
             for element in range(16):  # pragma: no branch
                 held[element] = frame.elements[element]
@@ -6815,7 +6896,11 @@ struct Renderer(Movable):
         return maps^
 
     def _cube_shadow(
-        self, scene: Scene, assets: Assets, light: Light, index: Int
+        self,
+        scene: Scene,
+        assets: Assets,
+        light: Light,
+        index: Int,
     ) raises -> ShadowMap:
         """Draw a point light's six faces and return them as its cube."""
         ref shadow = light.shadow
@@ -6830,7 +6915,7 @@ struct Renderer(Movable):
             )
             camera.up = cube_up(face)
             camera.place(at, at + cube_direction(face))
-            var corners = self._casters(
+            var target = self._casters(
                 scene,
                 assets,
                 camera,
@@ -6838,15 +6923,6 @@ struct Renderer(Movable):
                 self.shadow_map_type == VSM_SHADOW_MAP,
                 index,
                 True,
-            )
-            var target = RenderTarget(size, size, Color(0, 0, 0))
-            rasterize_all(
-                corners,
-                target,
-                SHADE_LIT,
-                TextureStore(),
-                Lighting.uniform(),
-                self.workers,
             )
             for row in range(size):  # pragma: no branch
                 for column in range(size):  # pragma: no branch
@@ -6956,13 +7032,34 @@ struct Renderer(Movable):
         receivers_cast: Bool,
         light: Int,
         distance: Bool = False,
-    ) raises -> List[RasterVertex]:
-        """Return the triangles of the meshes that cast a shadow, and the
-        ones that receive when `receivers_cast`, as a light's camera sees
-        them, on a square of `size` pixels a side, and remember each
-        caster's run for the `on_before_shadow` hook of light `light`. A
-        point light's view, `distance`, draws a mesh's custom distance
-        material."""
+    ) raises -> RenderTarget:
+        """Draw what casts a shadow, and what receives when
+        `receivers_cast`, as a light's camera sees it, onto a square of
+        `size` pixels a side, and remember each caster's run for the
+        `on_before_shadow` hook of light `light`.
+
+        Every kind three.js's shadow map draws is drawn: the triangles of
+        every mesh, skinned, instanced or batched mesh and LOD level, the
+        segments of every line and wireframe, and every point, under lit
+        shading with no lights. A point light's view, `distance`, draws a
+        mesh's custom distance material.
+
+        Args:
+            scene: The transform hierarchy, updated.
+            assets: The geometry and materials the casters name.
+            camera: The light's camera.
+            size: How many texels a side the map is.
+            receivers_cast: Whether the receivers are drawn too.
+            light: The light's index, for the hook.
+            distance: Whether this is a point light's view.
+
+        Returns:
+            The target, whose depth is the map.
+
+        Raises:
+            Error: Anything `prepare`, `prepare_lines`, `prepare_points`
+                or `rasterize_frame` raises for the casters.
+        """
         var spans = List[_Span]()
         var square = Renderer(size, size, workers=self.workers)
         # A material's planes cut its shadow under `clip_shadows`, which
@@ -6978,11 +7075,43 @@ struct Renderer(Movable):
             receivers_cast,
             distance_casters=distance,
         )
+        var segments = square._prepared_lines(
+            scene,
+            assets,
+            camera,
+            spans,
+            True,
+            receivers_cast,
+            distance,
+        )
+        var points = square._prepared_points(
+            scene, assets, camera, spans, True, receivers_cast
+        )
         ref state = self._state[]
         for index in range(len(spans)):
             state.shadow_items.append(spans[index].item())
             state.shadow_lights.append(light)
-        return corners^
+        # Every fragment writes its depth under the default state, so the
+        # nearest wins whatever the order: the three kinds go one after
+        # the other.
+        var draws: List[Draw] = [
+            Draw(DRAW_TRIANGLES, 0, len(corners) // 3),
+            Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
+            Draw(DRAW_POINTS, 0, len(points)),
+        ]
+        var target = RenderTarget(size, size, Color(0, 0, 0))
+        rasterize_frame(
+            corners,
+            segments,
+            draws,
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            Lighting.uniform(),
+            self.workers,
+            points=points,
+        )
+        return target^
 
     def clear_color(self, scene: Scene) raises -> Color:
         """Return what a frame of `scene` is cleared to: the scene's color

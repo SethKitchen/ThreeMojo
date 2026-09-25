@@ -72,6 +72,8 @@ The type of the object tells what the node carries:
 
 A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number in `background` becomes a color background. A string in `background` names a texture or a cube texture. A string in `environment` names the cube texture of the scene's `environment`. See [Cube textures](#cube-textures).
 
+Every `Mesh`, `InstancedMesh`, `BatchedMesh`, `SkinnedMesh`, `Line`, `LineLoop`, `LineSegments` and `Points` carries `castShadow` and `receiveShadow`, as three.js's `Object3D.toJSON` writes them. See [Shadows](Lights#what-casts-and-what-receives).
+
 A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for each morph target of the geometry. The reader reads every number, because a mesh here has no cap. The reader fills a mesh's `morph_target_dictionary` from its geometry, as three.js's `Mesh` constructor does.
 
 A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `intensity`, `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera gives `left`, `right`, `top` and `bottom`.

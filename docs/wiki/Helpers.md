@@ -277,7 +277,7 @@ three.js reads the texture in a shader, at a `uvw` attribute. The rasterizers he
 The helper differs from three.js in two places:
 
 - For a box whose three sides are not equal, a face is a resampling of the cube. It can differ from three.js by a filter step between texels.
-- A surface that blends here writes no depth. So a plane or a cube with an alpha of one is drawn opaque, and the nearer face hides the far one, as in three.js. The slices of a stack blend in order from the most negative z. Seen from +z, that is what three.js draws. Seen from -z, three.js shows only the nearest slice, and here each slice blends over the slice before it.
+- A plane or a cube with an alpha of one is drawn opaque, and the nearer face hides the far one, as in three.js. The slices of a stack blend in order from the most negative z, and each slice writes its depth, as in three.js. Seen from +z, each slice blends over the slices behind it. Seen from -z, the nearest slice draws first and hides the rest.
 
 A blank texture, a size that is not positive, and an id that is not in its store are refused.
 

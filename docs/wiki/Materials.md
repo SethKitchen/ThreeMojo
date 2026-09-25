@@ -1051,7 +1051,7 @@ To keep only the edges that show the shape, build a geometry with [`edges_geomet
 
 ## Opacity and blending
 
-`transparent=True` makes the material blend, as in three.js. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first. Its alpha is `opacity` times the color's alpha, the texture's alpha and the alpha map.
+`transparent=True` makes the material blend, as in three.js. A blended surface tests depth and writes it while `depth_write` is on, as in three.js. The renderer draws it after every opaque mesh, furthest first. Its alpha is `opacity` times the color's alpha, the texture's alpha and the alpha map.
 
 A material that is not `transparent` is drawn opaque whatever its opacity or its maps say. Every fragment is written with an alpha of one, as three.js's `opaque_fragment` writes it. The opacity and the maps still feed the alpha test. A `DEPTH` material keeps its opacity as its alpha, as three.js's does.
 
@@ -1116,7 +1116,7 @@ Draw the mask first, with a lower render order. The second material then draws o
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `depth_test` | `Bool` | `True` | Compare the depth. Off, every fragment passes and writes no depth. |
-| `depth_write` | `Bool` | `True` | A fragment that passes writes its depth. |
+| `depth_write` | `Bool` | `True` | A fragment that passes writes its depth, blending or not. |
 | `depth_func` | `DepthFunc` | `LESS_EQUAL_DEPTH` | How the depth is compared. |
 | `color_write` | `Bool` | `True` | A fragment that passes writes its color. Off, it still writes depth and stencil. |
 | `polygon_offset` | `Bool` | `False` | Push the filled triangles back. |
@@ -1142,8 +1142,6 @@ The order is OpenGL's. The stencil test runs first, and a fragment that fails it
 An alpha test runs before the stencil and the depth are written. A fragment that the alpha test discards changes no stencil value, as a GPU's `discard` changes none.
 
 ### Where this port differs
-
-A blending surface never writes depth, whatever `depth_write` says. The renderer sorts blending surfaces and draws them last; see [Why transparency is sorted](Why-transparency-is-sorted). An opaque surface writes depth when `depth_test` and `depth_write` are both on.
 
 The reference and the masks must be from 0 to 255, because the stencil buffer is eight bits deep. WebGL masks a larger value, and this port refuses it.
 
