@@ -834,7 +834,8 @@ def test_a_group_is_an_object3d_of_the_group_type() raises:
     assert_equal(made.object_type, GROUP_TYPE)
     assert_equal(Object3D().object_type, OBJECT3D_TYPE)
     assert_true(GROUP_TYPE.is_valid())
-    assert_false(ObjectType(2).is_valid())
+    assert_true(ObjectType(2).is_valid())
+    assert_false(ObjectType(3).is_valid())
     assert_equal(Object3D(copy=made).object_type, GROUP_TYPE)
 
 
@@ -842,15 +843,15 @@ def test_a_node_of_no_type_is_refused_at_every_boundary() raises:
     var scene = Scene()
     var bad = Object3D()
     bad.object_type = ObjectType(5)
-    with assert_raises(contains="Object3D or a Group"):
+    with assert_raises(contains="a Group or a Gyroscope"):
         _ = scene.add(bad)
     var node = scene.add(Object3D())
-    with assert_raises(contains="Object3D or a Group"):
+    with assert_raises(contains="a Group or a Gyroscope"):
         scene.set(node, bad)
     scene.node(node).object_type = ObjectType(-1)
-    with assert_raises(contains="Object3D or a Group"):
+    with assert_raises(contains="a Group or a Gyroscope"):
         scene.update()
-    with assert_raises(contains="Object3D or a Group"):
+    with assert_raises(contains="a Group or a Gyroscope"):
         _ = object_to_json(scene, Assets())
 
 

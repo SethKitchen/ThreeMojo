@@ -36,6 +36,8 @@ A `Unit` is a factor to the canonical unit and a symbol.
 | Mass | `KILOGRAM`, `GRAM`, `POUND` |
 | Duration | `SECOND`, `MILLISECOND`, `MINUTE`, `HOUR` |
 | Angle | `RADIAN`, `DEGREE`, `TURN` |
+| Velocity | `METER_PER_SECOND` |
+| Acceleration | `METER_PER_SECOND_SQUARED` |
 
 ## Use them
 

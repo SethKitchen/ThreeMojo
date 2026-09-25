@@ -72,10 +72,17 @@ first, because a mutable reference to a node is also a way past it.
 from core.background import Background, no_background
 from core.fog import Fog, no_fog
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D, facing, scale_of
+from core.object3d import (
+    GYROSCOPE_TYPE,
+    NO_PARENT,
+    NodeId,
+    Object3D,
+    facing,
+    scale_of,
+)
 from lights.light import Light
 from materials.material import MaterialId
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
 from math.euler import XYZ, Euler
 from math.vector3 import Vector3
@@ -580,7 +587,7 @@ struct Scene(Movable):
 
         Raises:
             Error: If the parent index names no node, or the node's
-                `object_type` is neither of the two there are.
+                `object_type` is none of the three there are.
         """
         self._check_parent(node.parent)
         _check_type(node)
@@ -604,7 +611,7 @@ struct Scene(Movable):
 
         Raises:
             Error: If `parent` names no node, or the node's `object_type`
-                is neither of the two there are.
+                is none of the three there are.
         """
         node.parent = parent
         return self.add(node^)
@@ -798,7 +805,7 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range, the replacement's parent
                 names no node or is the node itself or under it, or its
-                `object_type` is neither of the two there are.
+                `object_type` is none of the three there are.
         """
         self._check(index)
         self._check_parent(node.parent)
@@ -894,7 +901,7 @@ struct Scene(Movable):
 
         Raises:
             Error: If a node's parent link names no node or loops back to
-                it, a node's `object_type` is neither of the two there
+                it, a node's `object_type` is none of the three there
                 are, or a node's local matrix cannot be built.
         """
         self._check_nodes()
@@ -908,6 +915,10 @@ struct Scene(Movable):
             var shown = node.visible and not self._removed[index]
             if parent == NO_PARENT:
                 self._world[index] = Matrix4(copy=node.matrix)
+            elif node.object_type == GYROSCOPE_TYPE:
+                self._world[index] = _gyroscope_world(
+                    self._world[parent.value], node.matrix
+                )
             else:
                 var combined = Matrix4(copy=self._world[parent.value])
                 combined.multiply(node.matrix)
@@ -1291,7 +1302,7 @@ struct Scene(Movable):
 
         Raises:
             Error: If the arrays have drifted apart, a node's `object_type`
-                is neither of the two there are, or a parent link names no
+                is none of the three there are, or a parent link names no
                 node or loops back to its node.
         """
         self._check_nodes()
@@ -1434,6 +1445,8 @@ struct Scene(Movable):
         """Return a node's world transform from the parents as they are
         now, or the identity for `NO_PARENT`: three.js's
         `updateWorldMatrix(true, false)`.
+        A gyroscope is a plain node here, as three.js's `Gyroscope` does not
+        change `updateWorldMatrix`.
 
         Raises:
             Error: If a parent link names no node or loops.
@@ -1753,6 +1766,34 @@ def _copy_of(copies: List[Int], node: NodeId) -> Int:
 
 
 def _check_type(node: Object3D) raises:
-    """Refuse a node whose `object_type` is neither of the two there are."""
+    """Refuse a node whose `object_type` is none of the three there are."""
     if not node.object_type.is_valid():
-        raise Error("A node must be an Object3D or a Group")
+        raise Error("A node must be an Object3D, a Group or a Gyroscope")
+
+
+def _gyroscope_world(parent: Matrix4, local: Matrix4) raises -> Matrix4:
+    """Return a gyroscope's world transform, three.js's
+    `Gyroscope.updateMatrixWorld`: the position and the scale the parents
+    carry it to, and its own turn, not theirs.
+
+    Args:
+        parent: The parent's world transform.
+        local: The gyroscope's transform relative to the parent.
+
+    Returns:
+        The world transform.
+
+    Raises:
+        Error: Never for a transform that decomposes.
+    """
+    var world = Matrix4(copy=parent)
+    world.multiply(local)
+    var at = Vector3(0, 0, 0)
+    var turn = Quaternion.identity()
+    var size = Vector3(1, 1, 1)
+    world.decompose(at, turn, size)
+    var own_at = Vector3(0, 0, 0)
+    var own_turn = Quaternion.identity()
+    var own_size = Vector3(1, 1, 1)
+    local.decompose(own_at, own_turn, own_size)
+    return compose(at, own_turn, size)

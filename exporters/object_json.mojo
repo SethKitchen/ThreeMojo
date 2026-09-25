@@ -388,7 +388,10 @@ struct _Header(Copyable, Movable):
         """Start from a node: its type, name, visibility, user data,
         layers and matrix. Refuse a node of neither type."""
         if not node.object_type.is_valid():
-            raise Error("Object JSON: a node must be an Object3D or a Group")
+            raise Error(
+                "Object JSON: a node must be an Object3D, a Group or a"
+                " Gyroscope"
+            )
         self.uuid = uuid
         self.type = "Group" if node.object_type == GROUP_TYPE else "Object3D"
         self.name = node.name
