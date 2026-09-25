@@ -688,6 +688,9 @@ def test_a_complex_character_without_a_weapon() raises:
     assert_equal(scene.get(character.root).parent, holder)
     character.set_visible(scene, False)
     character.set_wireframe(scene, True)
+    # The body alone casts and takes shadows.
+    character.enable_shadows(scene, True)
+    assert_true(scene.meshes[character.body.mesh].cast_shadow)
     character.set_weapon(scene, -1)
     # No controls: it neither moves nor picks.
     character.update(scene, Duration(0.1, SECOND))
