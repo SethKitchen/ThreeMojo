@@ -23,6 +23,8 @@ struct and a kind: a clip has to hold a list of one type.
     QUATERNION         four numbers, which way it is turned
     VISIBLE            one number, zero or one, whether it is drawn
     NODE_NAME          a string, the node's name
+    POSITION_ELEMENT   one number of the position, and SCALE_ELEMENT and
+                       ROTATION_ELEMENT beside it, three.js's `.position[x]`
     MORPH_INFLUENCE    one number, how much of a morph target a mesh wears,
                        and SKINNED_MORPH_INFLUENCE for a skinned mesh
     MATERIAL_COLOR     three linear channels, and the emissive and
@@ -34,6 +36,9 @@ struct and a kind: a clip has to hold a list of one type.
                        LIGHT_PENUMBRA beside it
     CAMERA_FOV         one number in degrees, and CAMERA_ZOOM, CAMERA_NEAR
                        and CAMERA_FAR beside it
+    MATERIAL_MAP_OFFSET  two numbers of a material's map, and
+                       MATERIAL_MAP_REPEAT and MATERIAL_MAP_CENTER beside
+                       it; MATERIAL_MAP_ROTATION is one, in radians
 
 A flag and a string are discrete, as three.js's `BooleanKeyframeTrack` and
 `StringKeyframeTrack` are: `STEP` is their only interpolation. A string
@@ -195,7 +200,7 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
             self.value >= POSITION.value and self.value <= QUATERNION.value
         ) or (
             self.value >= VISIBLE.value
-            and self.value <= SKINNED_MORPH_INFLUENCE.value
+            and self.value <= MATERIAL_MAP_CENTER.value
         )
 
     def is_node(self) -> Bool:
@@ -207,6 +212,24 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
             or self == QUATERNION
             or self == VISIBLE
             or self == NODE_NAME
+            or self.is_element()
+        )
+
+    def is_element(self) -> Bool:
+        """Return True if this kind drives one number of a node's position,
+        scale or rotation, three.js's `.position[x]`: its slot says which."""
+        return (
+            self == POSITION_ELEMENT
+            or self == SCALE_ELEMENT
+            or self == ROTATION_ELEMENT
+        )
+
+    def is_map(self) -> Bool:
+        """Return True if this kind drives how a material's map is laid,
+        three.js's `.map.offset` and the like."""
+        return (
+            self.value >= MATERIAL_MAP_OFFSET.value
+            and self.value <= MATERIAL_MAP_CENTER.value
         )
 
     def is_morph(self) -> Bool:
@@ -224,7 +247,11 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
         return (
             self.value >= MATERIAL_COLOR.value
             and self.value <= MATERIAL_IOR.value
-        ) or (self == MATERIAL_TRANSPARENT or self == MATERIAL_WIREFRAME)
+        ) or (
+            self == MATERIAL_TRANSPARENT
+            or self == MATERIAL_WIREFRAME
+            or self.is_map()
+        )
 
     def is_light(self) -> Bool:
         """Return True if this kind drives a light's color, intensity,
@@ -263,6 +290,15 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
         `StringKeyframeTrack`."""
         return self == NODE_NAME
 
+    def is_map_vector(self) -> Bool:
+        """Return True if this kind's value is two numbers of a map: its
+        offset, its repeat or its center."""
+        return (
+            self == MATERIAL_MAP_OFFSET
+            or self == MATERIAL_MAP_REPEAT
+            or self == MATERIAL_MAP_CENTER
+        )
+
     def is_discrete(self) -> Bool:
         """Return True if this kind's values cannot be mixed, only chosen:
         a flag or a string. Such a track is `STEP`, and nothing else."""
@@ -276,7 +312,7 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
             `vector`, `quaternion`, `bool`, `string`, `color` or `number`,
             and an empty string for a kind that is not valid.
         """
-        if self == POSITION or self == SCALE:
+        if self == POSITION or self == SCALE or self.is_map_vector():
             return "vector"
         if self == QUATERNION:
             return "quaternion"
@@ -295,7 +331,8 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
 
         Returns:
             Four for `QUATERNION`, three for `POSITION`, `SCALE` and the
-            colors, and one for every other kind. A string key is one
+            colors, two for a map's offset, repeat and center, and one
+            for every other kind. A string key is one
             number, its place in the track's `strings`. Zero for a kind
             that is not valid, which `KeyframeTrack.__init__` has already
             refused.
@@ -308,6 +345,8 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
             return 3
         if self.is_color():
             return 3
+        if self.is_map_vector():
+            return 2
         if self.is_valid():
             return 1
         return 0
@@ -371,6 +410,22 @@ comptime MATERIAL_WIREFRAME = TrackKind(38)
 # How much of one morph target a skinned mesh wears, three.js's
 # `.morphTargetInfluences[i]` on a `SkinnedMesh`.
 comptime SKINNED_MORPH_INFLUENCE = TrackKind(39)
+# One number of a node's position, scale or rotation, three.js's
+# `.position[x]`, `.scale[y]` and `.rotation[z]` `NumberKeyframeTrack`s. The
+# target's slot is the axis: 0 for x, 1 for y and 2 for z. A rotation is
+# an angle in radians, of the node's turn read as x, y and z angles in
+# that order, as three.js's `rotation` is.
+comptime POSITION_ELEMENT = TrackKind(40)
+comptime SCALE_ELEMENT = TrackKind(41)
+comptime ROTATION_ELEMENT = TrackKind(42)
+# How a material's map is laid, three.js's `.map.offset`, `.map.repeat`,
+# `.map.rotation` and `.map.center`. Two numbers a key, and one for the
+# rotation, in radians. The track names the material; the numbers go to
+# the texture its `map` names.
+comptime MATERIAL_MAP_OFFSET = TrackKind(43)
+comptime MATERIAL_MAP_REPEAT = TrackKind(44)
+comptime MATERIAL_MAP_ROTATION = TrackKind(45)
+comptime MATERIAL_MAP_CENTER = TrackKind(46)
 
 
 @fieldwise_init
@@ -475,9 +530,9 @@ struct TrackTarget(Equatable, ImplicitlyCopyable, Writable):
     # The node, mesh, skinned mesh, material, light or camera, as its
     # index. The kind says which.
     var index: Int
-    # Which morph target, for a morph kind; which list of cameras,
-    # `PERSPECTIVE_SLOT` or `ORTHOGRAPHIC_SLOT`, for a camera kind; zero
-    # for every other kind.
+    # Which morph target, for a morph kind; which axis, for an element
+    # kind; which list of cameras, `PERSPECTIVE_SLOT` or
+    # `ORTHOGRAPHIC_SLOT`, for a camera kind; zero for every other kind.
     var slot: Int
 
     def is_valid(self) -> Bool:
@@ -491,6 +546,8 @@ struct TrackTarget(Equatable, ImplicitlyCopyable, Writable):
             return False
         if self.kind.is_morph():
             return self.slot >= 0
+        if self.kind.is_element():
+            return self.slot >= 0 and self.slot <= 2
         if self.kind == CAMERA_FOV:
             # An orthographic camera has no field of view.
             return self.slot == PERSPECTIVE_SLOT
@@ -506,17 +563,44 @@ def node_target(node: NodeId, kind: TrackKind) raises -> TrackTarget:
 
     Args:
         node: Which node.
-        kind: `POSITION`, `SCALE`, `QUATERNION` or `VISIBLE`.
+        kind: `POSITION`, `SCALE`, `QUATERNION`, `VISIBLE` or `NODE_NAME`.
 
     Returns:
         The target.
 
     Raises:
-        Error: If the kind does not drive a node.
+        Error: If the kind does not drive a whole property of a node.
     """
-    if not kind.is_node():
-        raise Error("A node target needs a kind that drives a node")
+    if not kind.is_node() or kind.is_element():
+        raise Error(
+            "A node target needs a kind that drives a whole property of a node"
+        )
     return TrackTarget(kind, node.value, 0)
+
+
+def node_element_target(
+    node: NodeId, kind: TrackKind, axis: Int
+) raises -> TrackTarget:
+    """Return the target for one number of a node's position, scale or
+    rotation, three.js's `.position[x]`.
+
+    Args:
+        node: Which node.
+        kind: `POSITION_ELEMENT`, `SCALE_ELEMENT` or `ROTATION_ELEMENT`.
+        axis: 0 for x, 1 for y and 2 for z.
+
+    Returns:
+        The target.
+
+    Raises:
+        Error: If the kind is not an element kind, or the axis is not 0, 1
+            or 2.
+    """
+    if not kind.is_element():
+        raise Error("An element target needs an element kind")
+    if axis < 0 or axis > 2:
+        raise Error("An element target's axis must be 0, 1 or 2")
+    return TrackTarget(kind, node.value, axis)
 
 
 def morph_target(mesh: MeshIndex, target: Int) raises -> TrackTarget:

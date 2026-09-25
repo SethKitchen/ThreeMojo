@@ -1108,6 +1108,7 @@ def _gather(
     morph_influences: MorphInfluences = MorphInfluences(),
     skin: Int = -1,
     receive_shadow: Bool = False,
+    morphs: List[MorphInfluences] = List[MorphInfluences](),
     colors: List[Color] = List[Color](),
     instances: List[Int] = List[Int](),
     group_start: Int = 0,
@@ -1164,6 +1165,9 @@ def _gather(
             Only a skinned mesh has one.
         receive_shadow: Whether the lights' shadows fall on the object,
             a mesh's `receive_shadow`. Off for everything else.
+        morphs: The morph weights of each draw, in place of
+            `morph_influences`, as an instanced mesh's `morphs` holds
+            them. A draw past its end wears `morph_influences`.
         colors: An sRGB color per draw, which multiplies the material's
             color. A draw past the end of the list is white, as three.js
             reads an instance with no `instanceColor`, and a color past
@@ -1227,12 +1231,15 @@ def _gather(
         var instance = -1
         if len(instances) > 0:
             instance = instances[index]
+        var worn = morph_influences
+        if index < len(morphs):
+            worn = morphs[index]
         draws.append(
             _Draw(
                 geometries[index],
                 material,
                 world^,
-                morph_influences,
+                worn,
                 skin,
                 depth,
                 blends,
@@ -1580,6 +1587,7 @@ def _draws(
             known,
             receive_shadow=group.receive_shadow,
             colors=group.colors,
+            morphs=group.morphs,
         )
     for index in range(len(scene.batched_meshes)):
         ref batch = scene.batched_meshes[index]

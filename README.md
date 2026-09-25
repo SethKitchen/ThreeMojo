@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 186 features are ported and 17 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 187 features are ported and 16 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -318,11 +318,10 @@ The port is not at parity with three.js yet. 186 features are ported and 17 are 
 
 ### Animation
 
-- [ ] Clip creator, mixer setTime, element paths, morph tracks by name and instanced morphs [#195](https://github.com/SethKitchen/ThreeMojo/issues/195)
-
 <details>
-<summary>Ported: 7</summary>
+<summary>Ported: 8</summary>
 
+- [x] [Clip creator, mixer setTime, element paths, morph tracks by name and instanced morphs](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#paths-in-json): ready-made clips, vector elements, map layouts and per-instance morphs [#195](https://github.com/SethKitchen/ThreeMojo/issues/195)
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
 - [x] [The rest of the animation API](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): Bezier and string tracks, repetitions, mixer time scale and cache, camera and light tracks, and clip JSON. [#169](https://github.com/SethKitchen/ThreeMojo/issues/169)
 - [x] [Animation fades, cross-fades, warps and events](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#fades-warps-and-start-times): fades, cross-fades, warps, halt, start times, and loop and finished events drained from the mixer [#147](https://github.com/SethKitchen/ThreeMojo/issues/147)

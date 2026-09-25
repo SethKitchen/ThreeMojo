@@ -185,7 +185,10 @@ def subclip(
                 track.interpolation,
             )
         )
-    return AnimationClip(name, tracks^, source.blend_mode)
+    var clip = AnimationClip(name, tracks^, source.blend_mode)
+    # three.js's `subclip` starts from a clone, which keeps the user data.
+    clip.user_data = source.user_data.copy()
+    return clip^
 
 
 def make_clip_additive(

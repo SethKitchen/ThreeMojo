@@ -16,8 +16,9 @@ is exact.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, BufferGeometry
+from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -260,6 +261,66 @@ def test_an_instanced_mesh_draws_as_its_meshes_would() raises:
         count_drawn(instanced, renderer.background) > 30, "nothing drawn"
     )
     assert_same_image(instanced, separate)
+
+
+def test_each_instance_wears_its_own_morph() raises:
+    # three.js's `setMorphAt`: each instance is morphed by its own weights,
+    # as a mesh with those weights is.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shape = cube(Length(1.0, METER))
+    var stretched = shape.clone_attribute(String(POSITION))
+    for at in range(0, len(stretched.data), 3):
+        stretched.data[at] *= 1.8
+    shape.add_morph_target(stretched^, name="wide")
+    var box = assets.geometries.add(shape^)
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    var offsets: List[Vector3] = [Vector3(-1.5, 0, 0), Vector3(1.5, 0, 0)]
+    var weights: List[Float32] = [0.25, 1]
+    var group = InstancedMesh(box, paint, NodeId(0), 2)
+    assert_equal(len(group.morph_at(1)), 0)
+    for index in range(2):
+        group.set_matrix_at(
+            index,
+            translation(offsets[index].x, offsets[index].y, offsets[index].z),
+        )
+        var worn = MorphInfluences(count=1)
+        worn.set(0, weights[index])
+        group.set_morph_at(index, worn)
+    assert_equal(group.morph_at(1)[0], 1)
+    var scene = a_scene()
+    scene.add_instanced_mesh(group^)
+    var instanced = renderer.render(scene, assets, a_camera())
+    var plain = with_meshes(assets, [box, box], paint, offsets)
+    for index in range(2):
+        plain.meshes[index].set_morph_influence(0, weights[index])
+    assert_same_image(instanced, renderer.render(plain, assets, a_camera()))
+
+
+def test_an_instances_morph_is_checked() raises:
+    var group = InstancedMesh(GeometryId(0), MaterialId(0), NodeId(0), 2)
+    var worn = MorphInfluences(count=2)
+    worn.set(1, 0.5)
+    group.set_morph_at(0, worn)
+    # Every instance gets weights at the first set; the rest wear none.
+    assert_equal(len(group.morphs), 2)
+    assert_equal(len(group.morph_at(1)), 0)
+    assert_equal(group.morph_at(0)[1], 0.5)
+    # No weights at all is an instance that wears no target.
+    group.set_morph_at(1, MorphInfluences())
+    assert_equal(len(group.morph_at(1)), 0)
+    # An instance added after the weights were made wears none.
+    group.matrices.append(Matrix4())
+    assert_equal(len(group.morph_at(2)), 0)
+    with assert_raises(contains="No instance"):
+        _ = group.morph_at(3)
+    with assert_raises(contains="No instance"):
+        group.set_morph_at(-1, worn)
+    var odd = MorphInfluences(count=1)
+    # The weights are open, so one can be set past the check of `set`.
+    odd.weights[0] = nan[DType.float32]()
+    with assert_raises(contains="must be a number"):
+        group.set_morph_at(0, odd)
 
 
 def test_moving_the_node_moves_every_instance() raises:

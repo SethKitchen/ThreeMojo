@@ -171,6 +171,7 @@ from core.user_data import user_data_of
 from cameras.camera import ViewOffset
 from animation.animation_clip import AnimationClip
 from animation.animation_json import (
+    element_axis,
     parse_track_name,
     property_kind,
     read_clip,
@@ -188,6 +189,7 @@ from animation.keyframe_track import (
     TrackTarget,
     light_target,
     material_target,
+    node_element_target,
     node_target,
     orthographic_camera_target,
     perspective_camera_target,
@@ -410,6 +412,16 @@ def light_type_names() -> List[String]:
         "RectAreaLight",
         "LightProbe",
     ]
+
+
+def _is_count(text: String) -> Bool:
+    """Return True if a text holds decimal digits and nothing else: an
+    index, not a name. Every caller has a text of one character or more."""
+    var bytes = text.as_bytes()
+    for at in range(len(bytes)):  # pragma: no branch
+        if bytes[at] < 48 or bytes[at] > 57:
+            return False
+    return True
 
 
 def _position_of(names: List[String], name: String) -> Int:
@@ -2741,7 +2753,13 @@ struct _Loader(Movable):
 
         A `morphTargetInfluences` with no index is every morph target, as
         a glTF clip's weights track is: the target's slot is -1, and
-        `read_clip` makes a track per target.
+        `read_clip` makes a track per target. An index that is not a
+        number is a target's name, looked up in the mesh's
+        `morph_target_dictionary` as three.js looks it up.
+
+        `material[i]` names the i-th material of a mesh with several, and
+        `map` the map of the object's one material. `materials[i]` binds
+        nothing, as in three.js.
         """
         var path = parse_track_name(name)
         var kind = property_kind(path)
@@ -2760,15 +2778,59 @@ struct _Loader(Movable):
                 if scene.get(bone.node).name == path.object_index:
                     return node_target(bone.node, kind)
             return None
+        if path.object_name == "materials":
+            # three.js reads `materials` as the old `material.materials`
+            # of a `MultiMaterial`, which no material has now, and binds
+            # nothing.
+            return None
         if path.object_name == "material":
             var item = self.items[at]
             if self.document.get(item, "material") == NO_NODE:
                 return None
+            if path.object_index != "":
+                # three.js's `material[ index ]`: a mesh's list of
+                # materials, which a mesh with one material has not.
+                var listed = self.material_list(item)
+                if not _is_count(path.object_index):
+                    return None
+                var slot = atol(path.object_index)
+                if slot >= len(listed):
+                    return None
+                return material_target(listed[slot], kind)
             return material_target(self.material_named(item), kind)
+        if path.object_name == "map":
+            # three.js's `map` object: the node's material's map.
+            var item = self.items[at]
+            if self.document.get(item, "material") == NO_NODE:
+                return None
+            return material_target(self.material_named(item), kind)
+        if kind.is_element():
+            return node_element_target(
+                self.model.nodes[at], kind, element_axis(path)
+            )
         if kind.is_morph():
             var slot = -1
-            if path.property_index != "":
-                slot = atol(path.property_index)
+            var index = path.property_index
+            if (
+                index != ""
+                and not _is_count(index)
+                and not index.startswith("-")
+            ):
+                # A target's name, three.js's `morphTargetDictionary`.
+                var named: Optional[Int] = None
+                if self.meshes[at] >= 0:
+                    named = scene.meshes[
+                        self.meshes[at]
+                    ].morph_target_dictionary.get(path.property_index)
+                elif self.skins[at] >= 0:
+                    named = scene.skinned_meshes[
+                        self.first_skin + self.skins[at]
+                    ].morph_target_dictionary.get(path.property_index)
+                if not named:
+                    return None
+                slot = named.value()
+            elif index != "":
+                slot = atol(index)
                 if slot < 0:
                     raise Error(
                         "Object JSON: a morph target index cannot be negative"

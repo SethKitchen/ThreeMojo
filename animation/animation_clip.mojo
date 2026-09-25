@@ -44,6 +44,7 @@ neither of the two.
 """
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
+from core.user_data import UserData
 from std.math import isfinite
 from units.si import Duration, SECOND
 
@@ -80,6 +81,9 @@ struct AnimationClip(Copyable, Movable):
     # longest track's length unless the clip was given another;
     # `reset_duration` sets it back.
     var length: Float32
+    # Whatever the caller keeps with the clip, three.js's `userData`. A
+    # copy of the clip copies it, and JSON keeps it.
+    var user_data: UserData
 
     def __init__(
         out self,
@@ -121,6 +125,7 @@ struct AnimationClip(Copyable, Movable):
         self.tracks = tracks^
         self.blend_mode = blend_mode
         self.length = runs
+        self.user_data = UserData()
 
     def __init__(out self, *, copy: Self):
         """Copy another clip, its tracks included, three.js's `clone`."""
@@ -128,6 +133,7 @@ struct AnimationClip(Copyable, Movable):
         self.tracks = copy.tracks.copy()
         self.blend_mode = copy.blend_mode
         self.length = copy.length
+        self.user_data = copy.user_data.copy()
 
     def track_count(self) -> Int:
         """Return how many tracks the clip plays."""

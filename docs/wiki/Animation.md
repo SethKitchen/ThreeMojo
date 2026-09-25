@@ -33,6 +33,7 @@ var slide = KeyframeTrack(
 | `NODE_NAME` | A string | The node's name. |
 | `MORPH_INFLUENCE` | 1 | How much of one morph target a mesh wears. |
 | `SKINNED_MORPH_INFLUENCE` | 1 | How much of one morph target a skinned mesh wears. |
+| `POSITION_ELEMENT`, `SCALE_ELEMENT`, `ROTATION_ELEMENT` | 1 | One number of the node's position, scale or rotation. three.js: `.position[x]`. |
 | `MATERIAL_COLOR`, `MATERIAL_EMISSIVE`, `MATERIAL_SPECULAR` | 3 | A material's colors, as linear channels. |
 | `MATERIAL_OPACITY` and the other `MATERIAL_` numbers | 1 | One number field of a material. |
 | `MATERIAL_TRANSPARENT`, `MATERIAL_WIREFRAME` | 1, zero or one | A flag of a material. |
@@ -41,6 +42,8 @@ var slide = KeyframeTrack(
 | `LIGHT_DISTANCE`, `LIGHT_ANGLE`, `LIGHT_PENUMBRA` | 1 | A light's range in meters, cone in radians, and soft rim. |
 | `CAMERA_FOV` | 1 | A perspective camera's field of view, in degrees. |
 | `CAMERA_ZOOM`, `CAMERA_NEAR`, `CAMERA_FAR` | 1 | A camera's zoom, and its planes in meters. |
+| `MATERIAL_MAP_OFFSET`, `MATERIAL_MAP_REPEAT`, `MATERIAL_MAP_CENTER` | 2 | How a material's map is laid. three.js: `.map.offset`. |
+| `MATERIAL_MAP_ROTATION` | 1 | How far a material's map is turned, in radians. |
 
 The material numbers are `OPACITY`, `EMISSIVE_INTENSITY`, `ROUGHNESS`, `METALNESS`, `SHININESS`, `ALPHA_TEST`, `REFLECTIVITY`, `ENV_MAP_INTENSITY`, `CLEARCOAT`, `CLEARCOAT_ROUGHNESS`, `SPECULAR_INTENSITY` and `IOR`, each with the `MATERIAL_` prefix. The units are three.js's: a field of view in degrees and a spot light's angle in radians.
 
@@ -96,9 +99,10 @@ var dim = KeyframeTrack(
 | Function | Id it takes | Kinds |
 |---|---|---|
 | `node_target(node, kind)` | `NodeId` | `POSITION`, `SCALE`, `QUATERNION`, `VISIBLE`, `NODE_NAME` |
+| `node_element_target(node, kind, axis)` | `NodeId` | The `_ELEMENT` kinds, axis 0 for x, 1 for y and 2 for z |
 | `morph_target(mesh, target)` | `MeshIndex`, into `scene.meshes` | `MORPH_INFLUENCE`, target 0 to 7 |
 | `skinned_morph_target(mesh, target)` | `SkinnedMeshIndex`, into `scene.skinned_meshes` | `SKINNED_MORPH_INFLUENCE`, target 0 to 7 |
-| `material_target(material, kind)` | `MaterialId`, into `assets.materials` | The `MATERIAL_` kinds |
+| `material_target(material, kind)` | `MaterialId`, into `assets.materials` | The `MATERIAL_` kinds, and the map kinds |
 | `light_target(light, kind)` | `LightIndex`, into `scene.lights` | The `LIGHT_` kinds |
 | `perspective_camera_target(camera, kind)` | `PerspectiveCameraIndex`, into `cameras.perspective` | The `CAMERA_` kinds |
 | `orthographic_camera_target(camera, kind)` | `OrthographicCameraIndex`, into `cameras.orthographic` | `CAMERA_ZOOM`, `CAMERA_NEAR`, `CAMERA_FAR` |
@@ -106,6 +110,12 @@ var dim = KeyframeTrack(
 `KeyframeTrack(node, kind, times, values)` is the short form of a node track.
 
 A string that matches nothing is three.js's most common animation bug. A typed target removes it. A typed *index* does not prove that the thing is there, because the scene and the assets are chosen at `update`. The mixer checks there, and raises on an index that names nothing.
+
+### One number of a vector, and a map
+
+An element kind drives one number of a node's vector, as three.js's `.position[x]` does. It mixes with the other two numbers, which keep their values. `ROTATION_ELEMENT` reads the node's turn as x, y and z angles in that order, changes one, and turns the node again. three.js keeps these angles in its `rotation`. Here they come from the node's quaternion each time.
+
+A map kind names the material, and drives the texture that its `map` names, as three.js's `.map.offset` does. A material with no map raises at `update`.
 
 ### Colors are linear
 
@@ -604,15 +614,14 @@ A clip of no length is refused where clips are built. That is what lets an actio
 ## Not ported
 
 - `AnimationMixer.clipAction`: make the action and give it to `add`.
-- `AnimationMixer.setTime`.
 - `AnimationObjectGroup.uncache` and its statistics. An action keeps no binding per member to release.
 - `AnimationUtils.convertArray`, `flattenJSON` and `isTypedArray`. A track holds `List[Float32]` and nothing else, so there is no array type to convert.
-- `AnimationClip.parseAnimation`, which three.js deprecates, and a clip's `userData`.
-- Tracks on other properties. A track drives only the properties in the table of kinds. A path to one number of a vector, such as `.position[x]`, and the `materials` and `map` objects of a path, are refused.
-- A morph target named by its name in a path. A path does not look up the geometry's `morph_names`, so a path names a morph target by its index.
+- `AnimationClip.parseAnimation`, which three.js deprecates.
+- Tracks on other properties. A track drives only the properties in the table of kinds. One number of a vector other than a position, a scale or a rotation is refused, and so is a whole `.rotation`.
 
 ## Where this port differs from three.js
 
+- A `ROTATION_ELEMENT` track reads its angles from the node's quaternion. three.js keeps them in its `rotation`, so past a right angle in y the two can give different angles for one turn.
 - A `SMOOTH` rotation track is an error. three.js prints a warning and uses `LINEAR`.
 - A `SMOOTH` track reads the action's endings on every frame. three.js keeps the weights of a pair of keys until the time moves to a different pair. On a track with two keys it keeps the endings of the first frame, so a `REPEAT` clip never wraps.
 - `make_clip_additive` with a `CUBIC_SPLINE` reference read between two keys takes off the value of the curve. three.js reads the wrong numbers from its result there, and every key of the target becomes not a number.
@@ -630,6 +639,44 @@ A clip of no length is refused where clips are built. That is what lets an actio
 - An uncached action keeps its index. After an uncache, the mixer drops every binding that nothing drove in the last update. three.js drops the bindings of the actions that it forgets.
 - A morph target sequence of one or two targets makes keys at one time in three.js. Here only the later key is kept. It reads the same.
 - A clip in JSON with a track whose `type` is not the type of its property is an error. three.js builds a track of that type and binds it anyway.
+
+## Set the time
+
+`set_time(scene, time)` is three.js's `setTime`. The mixer's clock and every action's time go to zero, and one `update` then moves them on by `time`. It takes the assets and the cameras as `update` does.
+
+## User data
+
+A clip's `user_data` is three.js's `userData`. A copy of the clip and a subclip keep it. JSON writes it as the text of an object, as three.js does, and reads it back.
+
+## Paths in JSON
+
+The object loader binds these paths as three.js's `PropertyBinding` binds them:
+
+| Path | What it drives |
+|---|---|
+| `.position[x]`, `.scale[y]`, `.rotation[z]` | One number, an element kind. |
+| `.material[1].opacity` | The second material of a mesh with several. |
+| `.map.offset` | The layout of the map of the object's material. |
+| `.morphTargetInfluences[smile]` | The morph target named `smile`, from the mesh's `morph_target_dictionary`. |
+
+A path that three.js cannot bind is left out. That is a material index past the end, or on a mesh of one material. It is also a morph target name the mesh does not have. `.materials[0].opacity` is also left out. three.js reads `materials` as the old `material.materials`, which no material has now.
+
+In code, `morph_target_index(mesh.morph_target_dictionary, name)` gives the index that `morph_target` takes.
+
+## Ready-made clips
+
+`animation/animation_clip_creator.mojo` is three.js's `AnimationClipCreator`. Each function returns a clip of one track, with no name.
+
+| Function | three.js | The track |
+|---|---|---|
+| `create_rotation_animation(node, period, axis)` | `CreateRotationAnimation` | One angle, from 0 to 360 radians |
+| `create_scale_axis_animation(node, period, axis)` | `CreateScaleAxisAnimation` | One number of the scale, from 0 to 1 |
+| `create_shake_animation(node, duration, shake_scale, random)` | `CreateShakeAnimation` | The position, ten random keys a second |
+| `create_pulsation_animation(node, duration, pulse_scale, random)` | `CreatePulsationAnimation` | The scale, ten random keys a second |
+| `create_visibility_animation(node, duration)` | `CreateVisibilityAnimation` | Shown, hidden at half way, shown |
+| `create_material_color_animation(material, duration, colors)` | `CreateMaterialColorAnimation` | The colors, at even steps |
+
+The rotation ends at 360 radians, as in three.js, which writes 360 and reads radians. three.js takes its random numbers from `Math.random`. Here they come from a `SeededRandom`, so a clip can be made again.
 
 ## See also
 
