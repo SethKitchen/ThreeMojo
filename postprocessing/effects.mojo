@@ -33,6 +33,7 @@ well; see `render.gpu.GpuComposer`.
 
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
+from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from postprocessing.screen_space import DepthView
@@ -50,7 +51,7 @@ from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
-from std.math import cos, floor, isfinite, pi, sin, sqrt
+from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 # --- bokeh ------------------------------------------------------------------
@@ -498,6 +499,9 @@ def sine_hash(u: Float32, v: Float32) -> Float32:
     for themselves: the fractional part of a large sine of the
     coordinate's dot with a fixed vector, with no reduction modulo pi.
 
+    The sine is `math.sine.sin_float32`, and the dot and the scale each
+    round once, so the host and a kernel give the same noise.
+
     Args:
         u: The first coordinate.
         v: The second.
@@ -505,8 +509,8 @@ def sine_hash(u: Float32, v: Float32) -> Float32:
     Returns:
         A number from zero up to one.
     """
-    var s = sin(u * 12.9898 + v * 78.233) * 43758.5453
-    return s - floor(s)
+    var dot = fma(u, Float32(12.9898), v * Float32(78.233))
+    return fraction(noise_scale(sin_float32(dot)))
 
 
 def nearest_texel(

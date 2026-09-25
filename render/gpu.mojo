@@ -7248,6 +7248,37 @@ struct GpuRenderer(Movable):
                 self._check_data_map(
                     layered.anisotropy_map, "An anisotropy map"
                 )
+                # The specular and coat maps: a number read from the
+                # alpha, a color whose alpha means nothing, and three maps
+                # of data, as `check_triangle_maps` refuses them.
+                var intensity = layered.specular_intensity_map
+                if intensity != NO_TEXTURE:
+                    if not self.is_linear[intensity.value]:
+                        raise Error(
+                            "A specular intensity map holds data, not"
+                            " color; build the texture with"
+                            " color_space=LINEAR"
+                        )
+                    if self.ignores_alpha[intensity.value]:
+                        raise Error(
+                            "A specular intensity map is read from its"
+                            " alpha; build the texture with"
+                            " alpha=COVERAGE"
+                        )
+                var shine = layered.specular_color_map
+                if shine != NO_TEXTURE and not self.ignores_alpha[shine.value]:
+                    raise Error(
+                        "A specular color map must ignore its alpha; build"
+                        " the texture with alpha=IGNORED"
+                    )
+                self._check_data_map(layered.clearcoat_map, "A clearcoat map")
+                self._check_data_map(
+                    layered.clearcoat_roughness_map,
+                    "A clearcoat roughness map",
+                )
+                self._check_data_map(
+                    layered.clearcoat_normal_map, "A clearcoat normal map"
+                )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`
         # asks it before it draws. The uv view is data throughout and is

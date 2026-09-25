@@ -16,6 +16,7 @@ from core.scene import Scene
 from geometries.plane import plane
 from lights.light import directional_light
 from materials.material import Material
+from math.sine import sin_float32
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -92,7 +93,7 @@ from render.target import RenderTarget
 from render.texture import data_texture
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer
-from std.math import cos, floor, inf, nan, pi, sin, sqrt
+from std.math import cos, floor, fma, inf, nan, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -444,8 +445,11 @@ def test_the_glitch_draws_wild_then_small_then_bypasses() raises:
 
 
 def test_the_sine_hash_is_the_shaders_own() raises:
+    # The shader's formula, with the sine the kernel computes too: the
+    # fraction of the sine of the dot, times 43758.5453.
     assert_equal(sine_hash(0, 0), Float32(0))
-    var s = sin(Float32(1) * 12.9898 + Float32(2) * 78.233) * 43758.5453
+    var dot = fma(Float32(1), Float32(12.9898), Float32(2) * 78.233)
+    var s = fma(sin_float32(dot), Float32(43758.5453), Float32(0))
     assert_equal(sine_hash(1, 2), s - floor(s))
 
 
