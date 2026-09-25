@@ -84,7 +84,7 @@ struct MorphAnimMesh(Movable):
             self.mixer.action(self.actions[self.active]).stop()
             self.active = -1
         var found = find_by_name(self.clips, label)
-        if not found:
+        if not Bool(found):
             raise Error(
                 "MorphAnimMesh: animations[" + label + "] is not a clip"
             )

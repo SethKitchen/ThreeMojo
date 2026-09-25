@@ -213,7 +213,7 @@ struct MorphBlendMesh(Movable):
         var index = 0
         for entry in dictionary.items():
             var word = _animation_word(entry.key)
-            if word:
+            if Bool(word):
                 var found = -1
                 for at in range(len(words)):
                     if words[at] == word.value():

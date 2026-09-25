@@ -314,7 +314,7 @@ struct MD2Character(Movable):
             self.mixer.action(self.body_action).stop()
             self.body_action = -1
         var found = find_by_name(self.body_clips, clip_name)
-        if found:
+        if Bool(found):
             var clip = self.body_clips[found.value()].copy()
             self.body_action = self._action(clip)
             self.mixer.action(self.body_action).play()
@@ -336,7 +336,7 @@ struct MD2Character(Movable):
         var found = find_by_name(
             self.weapon_clips[self.weapon], self.active_clip_name
         )
-        if not found:
+        if not Bool(found):
             return
         var clip = self.weapon_clips[self.weapon][found.value()].copy()
         self.weapon_action = self._action(clip)
@@ -713,9 +713,9 @@ struct MD2CharacterComplex(Movable):
             Error: If the time is not a number, or the root is not in the
                 scene.
         """
-        if self.controls:
+        if Bool(self.controls):
             self.update_movement_model(scene, delta)
-        if self.animations:
+        if Bool(self.animations):
             self.update_behaviors()
             self.update_animations(scene, delta)
 
@@ -752,7 +752,7 @@ struct MD2CharacterComplex(Movable):
     def update_behaviors(mut self):
         """Pick the animation for what the controls ask, three.js's
         `updateBehaviors`."""
-        if not self.controls or not self.animations:
+        if not Bool(self.controls) or not Bool(self.animations):
             return
         var controls = self.controls.value().copy()
         var names = self.animations.value().copy()
@@ -820,7 +820,7 @@ struct MD2CharacterComplex(Movable):
         Raises:
             Error: If the root is not in the scene.
         """
-        if not self.controls:
+        if not Bool(self.controls):
             return
         var controls = self.controls.value().copy()
         var dt = delta.to(SECOND)
