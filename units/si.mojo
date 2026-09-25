@@ -43,6 +43,7 @@ comptime DurationUnit = Unit[0, 0, 1, 0]
 comptime AngleUnit = Unit[0, 0, 0, 1]
 comptime InverseLengthUnit = Unit[-1, 0, 0, 0]
 comptime VelocityUnit = Unit[1, 0, -1, 0]
+comptime AccelerationUnit = Unit[1, 0, -2, 0]
 comptime AngularVelocityUnit = Unit[0, 0, -1, 1]
 comptime AngularAccelerationUnit = Unit[0, 0, -2, 1]
 comptime FrequencyUnit = Unit[0, 0, -1, 0]
@@ -85,6 +86,7 @@ comptime TURN = AngleUnit(6.283185307179586, "turn")
 
 # --- speed ------------------------------------------------------------------
 comptime METER_PER_SECOND = VelocityUnit(1.0, "m/s")
+comptime METER_PER_SECOND_SQUARED = AccelerationUnit(1.0, "m/s^2")
 comptime RADIAN_PER_SECOND = AngularVelocityUnit(1.0, "rad/s")
 comptime DEGREE_PER_SECOND = AngularVelocityUnit(0.017453292519943295, "deg/s")
 comptime PER_SECOND = FrequencyUnit(1.0, "1/s")
