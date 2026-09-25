@@ -30,7 +30,7 @@ that is not in the scene.
 
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
-from std.math import floor, isfinite
+from std.math import floor, isfinite, nan
 
 # The name three.js gives the animation every blend mesh starts with.
 comptime DEFAULT_ANIMATION = "__default"
@@ -48,7 +48,7 @@ def js_remainder(a: Float64, b: Float64) -> Float64:
         JavaScript.
     """
     if b == 0:
-        return Float64.NaN
+        return nan[DType.float64]()
     var r = a % b
     if r != 0 and (r < 0) != (a < 0):
         r -= b

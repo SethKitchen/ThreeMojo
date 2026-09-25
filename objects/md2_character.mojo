@@ -63,6 +63,7 @@ comptime WIREFRAME_COLOR = Color(0xFF, 0xAA, 0x00)
 comptime MD2_CLIP_FPS = Float64(10)
 
 
+@fieldwise_init
 struct Md2Part(Copyable, Movable):
     """One model of a character: its mesh, its node and its two
     materials, three.js's `materialTexture` and `materialWireframe`."""
@@ -206,7 +207,7 @@ struct MD2Character(Movable):
             self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.copy())
+        var shape = assets.geometries.add(body.geometry.clone())
         self.body = _make_part(
             scene,
             assets,
@@ -221,7 +222,7 @@ struct MD2Character(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_clips = List[List[AnimationClip]]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.copy())
+            var held = assets.geometries.add(weapons[at].geometry.clone())
             var part = _make_part(
                 scene,
                 assets,
@@ -316,7 +317,8 @@ struct MD2Character(Movable):
             self.body_action = -1
         var found = find_by_name(self.body_clips, clip_name)
         if found:
-            self.body_action = self._action(self.body_clips[found.value()])
+            var clip = self.body_clips[found.value()].copy()
+            self.body_action = self._action(clip)
             self.mixer.action(self.body_action).play()
         self.active_clip_name = clip_name
         self.sync_weapon_animation()
@@ -338,9 +340,8 @@ struct MD2Character(Movable):
         )
         if not found:
             return
-        self.weapon_action = self._action(
-            self.weapon_clips[self.weapon][found.value()]
-        )
+        var clip = self.weapon_clips[self.weapon][found.value()].copy()
+        self.weapon_action = self._action(clip)
         if self.body_action >= 0:
             self.mixer.sync_with(self.weapon_action, self.body_action)
         self.mixer.action(self.weapon_action).play()
@@ -549,7 +550,7 @@ struct MD2CharacterComplex(Movable):
         self.angular_speed = AngularVelocity(2.5, RADIAN_PER_SECOND)
         self.controls = None
         self.current_skin = -1
-        self.animations = animations
+        self.animations = animations.copy()
         self.speed = Velocity(0.0, METER_PER_SECOND)
         self.body_orientation = Angle(0.0, RADIAN)
         self.walk_speed = walk_speed
@@ -565,7 +566,7 @@ struct MD2CharacterComplex(Movable):
             self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.copy())
+        var shape = assets.geometries.add(body.geometry.clone())
         self.body = _make_part(
             scene,
             assets,
@@ -580,7 +581,7 @@ struct MD2CharacterComplex(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_blends = List[MorphBlendMesh]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.copy())
+            var held = assets.geometries.add(weapons[at].geometry.clone())
             var part = _make_part(
                 scene,
                 assets,
