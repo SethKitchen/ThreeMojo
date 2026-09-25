@@ -2167,6 +2167,114 @@ def test_both_backends_draw_each_group_in_its_own_material() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_honor_a_draw_range() raises:
+    # three.js's `drawRange` on a box that wears six materials, a line
+    # loop and a cloud of points. `prepare_frame` cuts each group by the
+    # range, and the loop closes on the first point the range lets
+    # through. Both backends draw the one cut list to the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends honor a draw range"):
+        return
+    var renderer = Renderer(40, 40)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var shape = cube(Length(1.2, METER))
+    # The second face from its second triangle on, then the third and the
+    # fourth: three groups cut, and three left out whole.
+    shape.set_draw_range(9, 15)
+    var box = assets.geometries.add(shape^)
+    var dressed = List[MaterialId]()
+    for face in range(6):
+        dressed.append(
+            assets.materials.add(
+                Material(
+                    Color(UInt8(40 + 40 * face), 120, UInt8(250 - 40 * face)),
+                    side=DOUBLE_SIDE,
+                )
+            )
+        )
+    var outline = BufferGeometry()
+    outline.set_attribute(
+        String(POSITION),
+        BufferAttribute(
+            [
+                Float32(-0.9),
+                -0.7,
+                0.9,
+                0.9,
+                -0.7,
+                0.9,
+                0.8,
+                0.75,
+                0.9,
+                -0.85,
+                0.6,
+                0.9,
+                -0.95,
+                0.0,
+                0.9,
+            ],
+            3,
+        ),
+    )
+    outline.set_draw_range(1, 3)
+    var ring = assets.geometries.add(outline^)
+    var ink = assets.materials.add(Material(Color(255, 210, 0), kind=BASIC))
+    var cloud = BufferGeometry()
+    var numbers = List[Float32]()
+    for index in range(20):
+        numbers.append(Float32(index) / 10 - 1)
+        numbers.append(-0.8)
+        numbers.append(0.8)
+    cloud.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
+    cloud.set_draw_range(5, 8)
+    var dots = assets.geometries.add(cloud^)
+    var green = assets.materials.add(
+        points_material(Color(120, 255, 160), size=PointSize(2.0))
+    )
+    var scene = Scene()
+    var turned = Object3D()
+    turned.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var node = scene.add(turned^)
+    var root = scene.add(Object3D())
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(Mesh(box, dressed, node))
+    scene.add_line(Line(ring, ink, root, mode=LOOP))
+    scene.add_points(Points(dots, green, root))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 1.0, Length(0.5, METER), Length(12.0, METER)
+    )
+    camera.place(Vector3(0, 0.4, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    # Three points of the loop make three segments, and the cloud draws
+    # only the eight points in its range.
+    assert_equal(len(frame.segments), 6)
+    assert_true(len(frame.points) <= 8, "a point outside the range drew")
+    var device = GpuRenderer(40, 40)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        frame.segments,
+        frame.draws,
+        None,
+        frame.points,
+    )
+    var gpu = device.read_back()
+    assert_true(
+        count_background(cpu, BACKGROUND) < 40 * 40, "the box drew nothing"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:
     # Every light kind, a mipmapped floor, a lit box, an unlit sphere and a
     # translucent pane, through a linear fog and the ACES curve: the whole

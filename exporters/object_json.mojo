@@ -117,7 +117,7 @@ from core.background import (
     CUBE_BACKGROUND,
     TEXTURE_BACKGROUND,
 )
-from core.buffer_attribute import BufferAttribute
+from core.buffer_attribute import BufferAttribute, array_type_name
 from core.buffer_geometry import BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
@@ -274,7 +274,9 @@ def _attribute(
     `InterleavedBufferAttribute.toJSON` writes one when it is given no
     buffers to share. A per-instance attribute is marked as three.js's
     `InstancedBufferAttribute.toJSON` marks it. A name is written when
-    there is one, as three.js writes a morph target's.
+    there is one, as three.js writes a morph target's. An integer
+    attribute is written as its typed array holds it, with its
+    `normalized` flag.
     """
     writer.begin_object()
     if name != "":
@@ -283,11 +285,17 @@ def _attribute(
     writer.key("itemSize")
     writer.integer(attribute.item_size)
     writer.key("type")
-    writer.string("Float32Array")
+    writer.string(array_type_name(attribute.component_type()))
     writer.key("array")
-    _numbers(writer, attribute.packed())
+    if attribute.is_integer():
+        writer.begin_array()
+        for value in attribute.stored_values():
+            writer.integer(value)
+        writer.end_array()
+    else:
+        _numbers(writer, attribute.packed())
     writer.key("normalized")
-    writer.boolean(False)
+    writer.boolean(attribute.is_normalized())
     if attribute.is_instanced():
         writer.key("meshPerAttribute")
         writer.integer(attribute.mesh_per_attribute())
@@ -514,6 +522,14 @@ struct _Library(Movable):
             writer.boolean(True)
         else:
             writer.string("BufferGeometry")
+        # three.js's `toJSON` writes a name that is not empty and user
+        # data that holds a key.
+        if geometry.name != "":
+            writer.key("name")
+            writer.string(geometry.name)
+        if geometry.user_data.count() > 0:
+            writer.key("userData")
+            writer.raw(geometry.user_data.to_json())
         writer.key("data")
         writer.begin_object()
         writer.key("attributes")

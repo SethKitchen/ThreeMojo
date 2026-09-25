@@ -66,13 +66,36 @@ held its weights in a list; three.js on WebGL2 passes the targets in a
 texture and has no cap. Each target has a name, three.js's
 `morphAttributes.position[i].name`, which a mesh's
 `morph_target_dictionary` is built from.
+
+## Draw range
+
+`draw_range` is three.js's `drawRange`: the part of the triangle stream
+that is drawn and picked. It is counted as a group is, in index entries
+or in vertices. `drawn_run` intersects it with a group, as three.js's
+`renderBufferDirect` does, and the renderer and the raycaster read every
+run through it. A line or a points object draws the vertices that
+`drawn_vertices` names.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.interleaved_buffer import InterleavedBuffer
+from core.user_data import UserData
 from math.bounds import Box3, Sphere
+from math.matrix3 import Matrix3
+from math.matrix4 import (
+    Matrix4,
+    rotation_from_quaternion,
+    rotation_x,
+    rotation_y,
+    rotation_z,
+    scaling,
+    translation,
+)
+from math.quaternion import Quaternion
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import isfinite
+from units.si import Angle, Length, METER
 
 
 # The attributes this port knows about, named as three.js names them.
@@ -175,6 +198,55 @@ struct MaterialIndex(Equatable, ImplicitlyCopyable, Writable):
 
 
 @fieldwise_init
+struct DrawRange(Equatable, ImplicitlyCopyable, Writable):
+    """The part of a geometry's triangle stream that is drawn, three.js's
+    `drawRange`, as a type rather than two bare ints.
+
+    `start` and `count` are counted as a group's are: in index entries for
+    an indexed geometry, and in vertices for one without an index. A
+    `count` of none is three.js's `Infinity`: every slot from `start` on.
+    `set_draw_range` stops a negative one with `is_valid`.
+    """
+
+    var start: Int
+    var count: Optional[Int]
+
+    def is_valid(self) -> Bool:
+        """Return True if neither the start nor the count is negative."""
+        return self.start >= 0 and (
+            not Bool(self.count) or self.count.value() >= 0
+        )
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if both ranges start and end at the same slot.
+
+        Args:
+            other: The other range.
+
+        Returns:
+            Whether the two are the same range.
+        """
+        return self.start == other.start and self.count == other.count
+
+    def write_to(self, mut writer: Some[Writer]):
+        """Write the range as `DrawRange(start, count)`.
+
+        Args:
+            writer: Where to write it.
+        """
+        writer.write("DrawRange(", self.start, ", ")
+        if Bool(self.count):
+            writer.write(self.count.value())
+        else:
+            writer.write("Infinity")
+        writer.write(")")
+
+
+# Every slot from the first on: three.js's default `drawRange`.
+comptime WHOLE_STREAM = DrawRange(0, None)
+
+
+@fieldwise_init
 struct GeometryGroup(ImplicitlyCopyable):
     """A run of triangles that wears one material, three.js's geometry
     group.
@@ -221,6 +293,13 @@ struct BufferGeometry(Movable):
     # as many as the per-instance attributes hold: three.js's default of
     # `Infinity`. Read only when `instanced` is set.
     var instance_count: Optional[Int]
+    # three.js's `name` and `userData`. Carried in scene JSON, as
+    # three.js's `toJSON` and `BufferGeometryLoader` carry them.
+    var name: String
+    var user_data: UserData
+    # The part of the triangle stream that is drawn, three.js's
+    # `drawRange`. See the module docstring and `set_draw_range`.
+    var draw_range: DrawRange
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
@@ -251,12 +330,16 @@ struct BufferGeometry(Movable):
         self.groups = List[GeometryGroup]()
         self.instanced = instanced
         self.instance_count = None
+        self.name = String()
+        self.user_data = UserData()
+        self.draw_range = WHOLE_STREAM
 
     def clone(self) -> BufferGeometry:
         """Return a copy of this geometry, three.js's `clone`.
 
-        Copies every attribute, the index, the morph targets, the groups
-        and the instancing. A geometry is not `Copyable`, so that a copy is
+        Copies every attribute, the index, the morph targets, the groups,
+        the instancing, the name, the user data and the draw range. A
+        geometry is not `Copyable`, so that a copy is
         always asked for by name and never made by an assignment.
 
         Each interleaved buffer is copied once, and the copied attributes
@@ -281,7 +364,90 @@ struct BufferGeometry(Movable):
         copied.morph_names = self.morph_names.copy()
         copied.groups = self.groups.copy()
         copied.instance_count = self.instance_count
+        copied.name = self.name
+        copied.user_data = self.user_data.copy()
+        copied.draw_range = self.draw_range
         return copied^
+
+    def set_draw_range(
+        mut self, start: Int, count: Optional[Int] = None
+    ) raises:
+        """Set the part of the triangle stream that is drawn, three.js's
+        `setDrawRange`.
+
+        Args:
+            start: The first slot: an index entry, or a vertex for a
+                geometry without an index.
+            count: How many slots, or none for every slot from `start` on,
+                three.js's `Infinity`.
+
+        Raises:
+            Error: If `start` or `count` is negative. three.js draws
+                nothing for a range that ends before it starts; this
+                refuses one.
+        """
+        var range = DrawRange(start, count)
+        if not range.is_valid():
+            raise Error("A draw range cannot start or run a negative distance")
+        self.draw_range = range
+
+    def drawn_run(self, start: Int, count: Int) raises -> Tuple[Int, Int]:
+        """Return the whole triangles of a run that the draw range lets
+        through: three.js's `drawStart` and `drawEnd` in
+        `renderBufferDirect`, and the loop bounds of `Mesh.raycast`.
+
+        The run is intersected with `draw_range`, then clamped to the
+        stream as `triangle_run` clamps it.
+
+        Args:
+            start: The first slot, a group's `start`.
+            count: How many slots, a group's `count`, or minus one for
+                every slot from `start` on.
+
+        Returns:
+            The first slot, and how many triangles follow it.
+
+        Raises:
+            Error: If `start` is negative, the draw range is not valid, or
+                the geometry has no index and no positions.
+        """
+        if start < 0:
+            raise Error("A run cannot start before the stream")
+        if not self.draw_range.is_valid():
+            raise Error("A draw range cannot start or run a negative distance")
+        var total = self.stream_length()
+        var first = max(start, self.draw_range.start)
+        var end = total
+        if count >= 0:
+            end = min(end, start + count)
+        if Bool(self.draw_range.count):
+            end = min(
+                end, self.draw_range.start + self.draw_range.count.value()
+            )
+        return self.triangle_run(first, max(0, end - first))
+
+    def drawn_vertices(self) raises -> Tuple[Int, Int]:
+        """Return the vertices the draw range lets through, for a line or
+        a points object: three.js's `drawStart` and `drawCount` with no
+        group.
+
+        Returns:
+            The first vertex, and how many follow it.
+
+        Raises:
+            Error: If the draw range is not valid, or the geometry has no
+                positions.
+        """
+        if not self.draw_range.is_valid():
+            raise Error("A draw range cannot start or run a negative distance")
+        var total = self.vertex_count()
+        var first = min(self.draw_range.start, total)
+        var end = total
+        if Bool(self.draw_range.count):
+            end = min(
+                end, self.draw_range.start + self.draw_range.count.value()
+            )
+        return (first, max(0, end - first))
 
     def set_instance_count(mut self, count: Int) raises:
         """Set how many instances to draw, three.js's `instanceCount`.
@@ -639,6 +805,19 @@ struct BufferGeometry(Movable):
         else:
             self.values[slot] = attribute^
 
+    def delete_attribute(mut self, name: String):
+        """Remove the attribute of that name, three.js's
+        `deleteAttribute`. A name the geometry does not hold is ignored,
+        as in three.js.
+
+        Args:
+            name: Which attribute to remove.
+        """
+        var slot = self._slot(name)
+        if slot >= 0:
+            _ = self.names.pop(slot)
+            _ = self.values.pop(slot)
+
     def has_attribute(self, name: String) -> Bool:
         """Return True if an attribute of that name is present."""
         return self._slot(name) >= 0
@@ -958,6 +1137,208 @@ struct BufferGeometry(Movable):
         if not self.morph_relative:
             for target in range(len(self.morph_positions)):
                 _shift(self.morph_positions[target], offset)
+
+    def apply_matrix4(mut self, matrix: Matrix4) raises:
+        """Transform the geometry by a matrix, three.js's `applyMatrix4`.
+
+        Positions are moved as points. Normals are turned by the normal
+        matrix and made unit length. Tangents are turned as directions
+        and made unit length, and keep their handedness. The bounds follow
+        by themselves, because `bounding_box` and `bounding_sphere` are
+        computed when they are asked for.
+
+        Morph targets move too, which three.js leaves as they are: a
+        target of finished positions is moved as the positions are, a
+        target of offsets is turned without the translation, and a morph
+        normal is turned as a normal is. So a worn target lands where it
+        did relative to the shape, as `center` keeps it.
+
+        Args:
+            matrix: The transform.
+
+        Raises:
+            Error: If the matrix collapses a dimension and there are
+                normals to turn, or an attribute holds fewer than three
+                numbers an item.
+        """
+        var slot = self._slot(String(POSITION))
+        if slot >= 0:
+            self.values[slot].apply_matrix4(matrix)
+        var linear = matrix
+        linear.elements[12] = 0
+        linear.elements[13] = 0
+        linear.elements[14] = 0
+        for target in range(len(self.morph_positions)):
+            if self.morph_relative:
+                self.morph_positions[target].apply_matrix4(linear)
+            else:
+                self.morph_positions[target].apply_matrix4(matrix)
+        var normal_slot = self._slot(String(NORMAL))
+        if normal_slot >= 0 or len(self.morph_normals) > 0:
+            var turn = Matrix3.normal_matrix(matrix)
+            if normal_slot >= 0:
+                self.values[normal_slot].apply_normal_matrix(turn)
+            for target in range(len(self.morph_normals)):
+                self.morph_normals[target].apply_normal_matrix(turn)
+        var tangent_slot = self._slot(String(TANGENT))
+        if tangent_slot >= 0:
+            self.values[tangent_slot].transform_direction(matrix)
+
+    def apply_quaternion(mut self, rotation: Quaternion) raises:
+        """Rotate the geometry, three.js's `applyQuaternion`.
+
+        Args:
+            rotation: The rotation.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(rotation_from_quaternion(rotation))
+
+    def rotate_x(mut self, angle: Angle) raises:
+        """Rotate the geometry about the x axis, three.js's `rotateX`.
+
+        Args:
+            angle: How far.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(rotation_x(angle))
+
+    def rotate_y(mut self, angle: Angle) raises:
+        """Rotate the geometry about the y axis, three.js's `rotateY`.
+
+        Args:
+            angle: How far.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(rotation_y(angle))
+
+    def rotate_z(mut self, angle: Angle) raises:
+        """Rotate the geometry about the z axis, three.js's `rotateZ`.
+
+        Args:
+            angle: How far.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(rotation_z(angle))
+
+    def translate(mut self, x: Length, y: Length, z: Length) raises:
+        """Move the geometry, three.js's `translate`.
+
+        Args:
+            x: How far along x.
+            y: How far along y.
+            z: How far along z.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(translation(x.to(METER), y.to(METER), z.to(METER)))
+
+    def scale(mut self, x: Float32, y: Float32, z: Float32) raises:
+        """Scale the geometry along each axis, three.js's `scale`.
+
+        Args:
+            x: The factor along x.
+            y: The factor along y.
+            z: The factor along z.
+
+        Raises:
+            Error: If a factor is zero and there are normals to turn, or
+                an attribute holds fewer than three numbers an item.
+        """
+        self.apply_matrix4(scaling(x, y, z))
+
+    def look_at(mut self, target: Vector3) raises:
+        """Turn the geometry so that its +z axis points at a point,
+        three.js's `lookAt`.
+
+        three.js builds the turn with an `Object3D` at the origin, whose
+        up is +y. This builds the same matrix directly.
+
+        Args:
+            target: The point, in the geometry's own space.
+
+        Raises:
+            Error: If an attribute holds fewer than three numbers an item.
+        """
+        var turn = Matrix4()
+        turn.look_at(target, Vector3(0, 0, 0), Vector3(0, 1, 0))
+        self.apply_matrix4(turn)
+
+    def set_from_points(mut self, points: List[Vector3]) raises:
+        """Set the positions from a list of points, three.js's
+        `setFromPoints`.
+
+        A geometry with no positions gets a new attribute of them. One
+        that has positions keeps its attribute, and as many of its items
+        as there are points are written, as in three.js. Points past the
+        attribute's end are left out; three.js warns about them.
+
+        Args:
+            points: The points.
+
+        Raises:
+            Error: If the positions hold fewer than three numbers an item.
+        """
+        var slot = self._slot(String(POSITION))
+        if slot < 0:
+            var numbers = List[Float32](capacity=len(points) * 3)
+            for point in points:
+                numbers.append(point.x)
+                numbers.append(point.y)
+                numbers.append(point.z)
+            self.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
+            return
+        ref positions = self.values[slot]
+        if positions.item_size < 3:
+            raise Error("Positions hold three numbers a vertex")
+        for index in range(min(len(points), positions.count())):
+            positions.set_component(index, 0, points[index].x)
+            positions.set_component(index, 1, points[index].y)
+            positions.set_component(index, 2, points[index].z)
+
+    def set_from_points(mut self, points: List[Vector2]) raises:
+        """Set the positions from a list of 2D points, with z zero,
+        three.js's `setFromPoints` given `Vector2`s.
+
+        Args:
+            points: The points.
+
+        Raises:
+            Error: If the positions hold fewer than three numbers an item.
+        """
+        var lifted = List[Vector3](capacity=len(points))
+        for point in points:
+            lifted.append(Vector3(point.x, point.y, 0))
+        self.set_from_points(lifted)
+
+    def normalize_normals(mut self) raises:
+        """Make every normal unit length, three.js's `normalizeNormals`.
+        A zero normal stays zero.
+
+        Raises:
+            Error: If the geometry has no normals, or they hold fewer than
+                three numbers a vertex.
+        """
+        var slot = self._slot(String(NORMAL))
+        if slot < 0:
+            raise Error("This geometry has no attribute named normal")
+        ref normals = self.values[slot]
+        if normals.item_size < 3:
+            raise Error("Normals hold three numbers a vertex")
+        for index in range(normals.count()):
+            var unit = normals.vector3(index)
+            unit.normalize()
+            normals.set_component(index, 0, unit.x)
+            normals.set_component(index, 1, unit.y)
+            normals.set_component(index, 2, unit.z)
 
     def stream_length(self) raises -> Int:
         """Return how many slots the triangle stream holds: the index

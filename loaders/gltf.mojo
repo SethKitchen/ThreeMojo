@@ -173,6 +173,14 @@ from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
+from math.utils import (
+    ComponentType,
+    INT16_COMPONENT,
+    INT8_COMPONENT,
+    UINT16_COMPONENT,
+    UINT32_COMPONENT,
+    UINT8_COMPONENT,
+)
 from core.buffer_geometry import (
     COLOR,
     NORMAL,
@@ -1208,18 +1216,18 @@ struct _Loader(Movable):
         return (buffer, offset, length, stride)
 
     def accessor_floats(
-        mut self, index: Int
+        mut self, index: Int, raw: Bool = False
     ) raises -> Tuple[List[Float32], Int]:
         """Return an accessor's numbers as floats, normalized when it says
-        so, and how many make one element, with its sparse values put in
-        place."""
+        so and `raw` is not set, and how many make one element, with its
+        sparse values put in place."""
         var accessor = self.entry("accessors", index)
         var component = self.required_integer(accessor, "componentType")
         var count = self.required_integer(accessor, "count")
         var kind = self.text(accessor, "type")
         var width = _components_of(kind)
         var size = _component_size(component)
-        var normalized = self.flag(accessor, "normalized")
+        var normalized = self.flag(accessor, "normalized") and not raw
         var out = List[Float32]()
         var view_index = self.integer(accessor, "bufferView", -1)
         if count < 0:
@@ -2068,27 +2076,61 @@ struct _Loader(Movable):
         name: String,
         accessor: Int,
         draco: Optional[_DracoPrimitive],
+        raw: Bool = False,
     ) raises -> Tuple[List[Float32], Int]:
         """Return an attribute's numbers: from the Draco data when the
         primitive's `KHR_draco_mesh_compression` names it, and from its
-        accessor otherwise."""
+        accessor otherwise. With `raw` set, an integer is not
+        normalized."""
         if Bool(draco):
             ref found = draco.value()
             for slot in range(len(found.names)):
                 if found.names[slot] == name:
-                    return self.draco_floats(found, slot, accessor)
-        return self.accessor_floats(accessor)
+                    return self.draco_floats(found, slot, accessor, raw)
+        return self.accessor_floats(accessor, raw)
+
+    def vertex_attribute(
+        mut self,
+        name: String,
+        accessor: Int,
+        draco: Optional[_DracoPrimitive],
+    ) raises -> BufferAttribute:
+        """Return an attribute as three.js's `GLTFLoader` builds it: in
+        the typed array of its accessor's component type, normalized as
+        the accessor says. A quantized attribute of `KHR_mesh_quantization`
+        keeps its integers, so an exporter writes them back."""
+        var component = self.component_of(accessor)
+        if component == COMPONENT_FLOAT:
+            var floats = self.attribute_floats(name, accessor, draco)
+            return BufferAttribute(floats[0].copy(), floats[1])
+        var raw = self.attribute_floats(name, accessor, draco, True)
+        var stored = List[Int](capacity=len(raw[0]))
+        for value in raw[0]:
+            stored.append(Int(value))
+        # glTF forbids a normalized unsigned int, and one is read as it
+        # is, as `_integer_component` reads it.
+        var normalized = (
+            self.flag(self.entry("accessors", accessor), "normalized")
+            and component != COMPONENT_UNSIGNED_INT
+        )
+        return BufferAttribute(
+            stored, raw[1], _component_type_of(component), normalized
+        )
 
     def draco_floats(
-        self, draco: _DracoPrimitive, slot: Int, accessor_index: Int
+        self,
+        draco: _DracoPrimitive,
+        slot: Int,
+        accessor_index: Int,
+        raw: Bool = False,
     ) raises -> Tuple[List[Float32], Int]:
         """Return a Draco attribute's values at its accessor's component
         type, as three.js's `DRACOLoader` decodes them, then normalized as
-        the accessor says. The attribute's own components make an
-        element, as they make three.js's item size."""
+        the accessor says unless `raw` is set. The attribute's own
+        components make an element, as they make three.js's item size."""
         var accessor = self.entry("accessors", accessor_index)
         var component = self.required_integer(accessor, "componentType")
-        var normalized = self.flag(accessor, "normalized")
+        var normalized = self.flag(accessor, "normalized") and not raw
         ref geometry = draco.geometry
         var index = geometry.unique_attribute(draco.ids[slot])
         if index < 0:
@@ -2131,44 +2173,35 @@ struct _Loader(Movable):
         if position < 0:
             raise Error("glTF: a primitive needs a POSITION")
         var draco = self.draco_of(primitive)
-        var positions = self.attribute_floats("POSITION", position, draco)
-        if positions[1] != 3:
+        var positions = self.vertex_attribute("POSITION", position, draco)
+        if positions.item_size != 3:
             raise Error("glTF: POSITION must be a VEC3")
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(positions[0].copy(), 3)
-        )
+        var floats = positions.count() * 3
+        geometry.set_attribute(String(POSITION), positions^)
         var normal = self.integer(attributes, "NORMAL", -1)
         if normal >= 0:
-            var normals = self.attribute_floats("NORMAL", normal, draco)
-            if normals[1] != 3:
+            var normals = self.vertex_attribute("NORMAL", normal, draco)
+            if normals.item_size != 3:
                 raise Error("glTF: NORMAL must be a VEC3")
-            geometry.set_attribute(
-                String(NORMAL), BufferAttribute(normals[0].copy(), 3)
-            )
+            geometry.set_attribute(String(NORMAL), normals^)
         var uv = self.integer(attributes, "TEXCOORD_0", -1)
         if uv >= 0:
-            var uvs = self.attribute_floats("TEXCOORD_0", uv, draco)
-            if uvs[1] != 2:
+            var uvs = self.vertex_attribute("TEXCOORD_0", uv, draco)
+            if uvs.item_size != 2:
                 raise Error("glTF: TEXCOORD_0 must be a VEC2")
-            geometry.set_attribute(
-                String(UV), BufferAttribute(uvs[0].copy(), 2)
-            )
+            geometry.set_attribute(String(UV), uvs^)
         var uv1 = self.integer(attributes, "TEXCOORD_1", -1)
         if uv1 >= 0:
-            var second = self.attribute_floats("TEXCOORD_1", uv1, draco)
-            if second[1] != 2:
+            var second = self.vertex_attribute("TEXCOORD_1", uv1, draco)
+            if second.item_size != 2:
                 raise Error("glTF: TEXCOORD_1 must be a VEC2")
-            geometry.set_attribute(
-                String(UV1), BufferAttribute(second[0].copy(), 2)
-            )
+            geometry.set_attribute(String(UV1), second^)
         var color = self.integer(attributes, "COLOR_0", -1)
         if color >= 0:
-            var colors = self.attribute_floats("COLOR_0", color, draco)
-            if colors[1] != 3 and colors[1] != 4:
+            var colors = self.vertex_attribute("COLOR_0", color, draco)
+            if colors.item_size != 3 and colors.item_size != 4:
                 raise Error("glTF: COLOR_0 must be a VEC3 or a VEC4")
-            geometry.set_attribute(
-                String(COLOR), BufferAttribute(colors[0].copy(), colors[1])
-            )
+            geometry.set_attribute(String(COLOR), colors^)
         var joints = self.integer(attributes, "JOINTS_0", -1)
         if joints >= 0:
             var component = self.component_of(joints)
@@ -2179,12 +2212,10 @@ struct _Loader(Movable):
                 raise Error(
                     "glTF: JOINTS_0 must be unsigned bytes or unsigned shorts"
                 )
-            var bones = self.attribute_floats("JOINTS_0", joints, draco)
-            if bones[1] != 4:
+            var bones = self.vertex_attribute("JOINTS_0", joints, draco)
+            if bones.item_size != 4:
                 raise Error("glTF: JOINTS_0 must be a VEC4")
-            geometry.set_attribute(
-                String(SKIN_INDEX), BufferAttribute(bones[0].copy(), 4)
-            )
+            geometry.set_attribute(String(SKIN_INDEX), bones^)
         var weights = self.integer(attributes, "WEIGHTS_0", -1)
         if weights >= 0:
             var shares = self.attribute_floats("WEIGHTS_0", weights, draco)
@@ -2194,7 +2225,7 @@ struct _Loader(Movable):
                 String(SKIN_WEIGHT),
                 BufferAttribute(_normalize_skin_weights(shares[0]), 4),
             )
-        self.read_targets(primitive, geometry, len(positions[0]))
+        self.read_targets(primitive, geometry, floats)
         var indices = self.integer(primitive, "indices", -1)
         # three.js keeps a Draco mesh's own triangles over the accessor's.
         if Bool(draco) and (
@@ -3129,6 +3160,22 @@ def _read_component(
         # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits.
         raw = _le32(bytes, at)
     return _integer_component(raw, component, normalized)
+
+
+def _component_type_of(component: Int) -> ComponentType:
+    """Return the typed array an integer accessor's component type is
+    read into, as three.js's `WEBGL_COMPONENT_TYPES` maps it."""
+    if component == COMPONENT_BYTE:
+        return INT8_COMPONENT
+    if component == COMPONENT_UNSIGNED_BYTE:
+        return UINT8_COMPONENT
+    if component == COMPONENT_SHORT:
+        return INT16_COMPONENT
+    if component == COMPONENT_UNSIGNED_SHORT:
+        return UINT16_COMPONENT
+    # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits: the
+    # accessor has been read by the time this is asked.
+    return UINT32_COMPONENT
 
 
 def _draco_type_of(component: Int) raises -> DracoDataType:

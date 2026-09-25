@@ -1771,7 +1771,7 @@ def test_geometry_refusals() raises:
     )
     _refuses(
         data
-        + '{"attributes":{"position":{"type":"Uint8Array","array":[1]}}}}'
+        + '{"attributes":{"position":{"type":"Float64Array","array":[1]}}}}'
         + tail
     )
     _refuses(

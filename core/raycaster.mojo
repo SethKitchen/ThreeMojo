@@ -836,11 +836,23 @@ struct Raycaster(ImplicitlyCopyable):
         var vertices = geometry.vertex_count()
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(line.geometry, line.material, line.node)
-        for segment in range(segment_count(line.mode, vertices)):
-            var ends = segment_ends(line.mode, vertices, segment)
+        # The whole line must suit its mode; then only the points the
+        # draw range lets through are tested, as three.js's `Line.raycast`
+        # bounds its loop by it.
+        _ = segment_count(line.mode, vertices)
+        var drawn = geometry.drawn_vertices()
+        var shown = drawn[1]
+        if line.mode == SEGMENTS:
+            shown -= shown % 2
+        for step in range(segment_count(line.mode, shown)):
+            var ends = segment_ends(line.mode, shown, step)
+            var start = drawn[0] + ends[0]
+            # The segment's number in the whole line: the one its first
+            # point begins.
+            var segment = start // 2 if line.mode == SEGMENTS else start
             var met = self.ray.distance_sq_to_segment(
-                world.transform_point(positions.vector3(ends[0])),
-                world.transform_point(positions.vector3(ends[1])),
+                world.transform_point(positions.vector3(start)),
+                world.transform_point(positions.vector3(drawn[0] + ends[1])),
             )
             if met.distance_sq > reach * reach:
                 continue
@@ -901,9 +913,10 @@ struct Raycaster(ImplicitlyCopyable):
             return hits^
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(cloud.geometry, cloud.material, cloud.node)
-        # Not empty: an empty geometry's bound is empty, and the test above
-        # returned for it.
-        for vertex in range(positions.count()):  # pragma: no branch
+        # Only the points the draw range lets through, as three.js's
+        # `Points.raycast` bounds its loop by it.
+        var drawn = geometry.drawn_vertices()
+        for vertex in range(drawn[0], drawn[0] + drawn[1]):
             var place = world.transform_point(positions.vector3(vertex))
             # Strictly inside, as three.js's test is.
             if not (self.ray.distance_sq_to_point(place) < reach * reach):
@@ -1245,7 +1258,7 @@ struct Raycaster(ImplicitlyCopyable):
         var mirrored = world.determinant() < 0
         var near = self.near.value
         var far = self.far.value
-        var span = geometry.triangle_run(run.start, run.count)
+        var span = geometry.drawn_run(run.start, run.count)
         for step in range(span[1]):
             var slot = span[0] + step * 3
             var a = _worn_vertex(geometry, worn, slot)

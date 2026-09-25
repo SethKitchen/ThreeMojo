@@ -53,8 +53,9 @@ names, and places each active, visible instance of its `instanceInfo`
 from the `Float32Array` images of its `matricesTexture` and
 `colorsTexture`. Its joined geometry stays in the assets too.
 
-A `BufferGeometry` is read with its `Float32Array` attributes, its index,
-its groups and its morph targets. An interleaved attribute reads the
+A `BufferGeometry` is read with its name, its user data, its attributes
+in any of the seven typed arrays, its index, its groups and its morph
+targets. An interleaved attribute reads the
 geometry's `interleavedBuffers` and `arrayBuffers`, and the attributes that
 name one buffer share it. An `InstancedBufferGeometry` is read with its
 `instanceCount` and its per-instance attributes' `meshPerAttribute`, which
@@ -102,8 +103,8 @@ both ways is built twice.
 
 **What is refused.** A document that is not JSON, a `metadata.type` that
 is not `Object`, a version that is not 4, an object, geometry or material
-type this port has no counterpart for, an attribute that is not a
-`Float32Array`, an object other than a mesh with more than one
+type this port has no counterpart for, an attribute in a typed array
+that is not one of the seven, an instanced attribute of integers, an object other than a mesh with more than one
 material, a mesh with an empty material list, a
 uuid named twice or named and not there, a `CustomBlending` material, a
 depth function, stencil function or stencil operation that is none of
@@ -149,7 +150,7 @@ reserved ranges and bounds.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
+from core.buffer_attribute import BufferAttribute, component_of_array
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
@@ -262,6 +263,7 @@ from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.bounds import Plane
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
+from math.utils import FLOAT32_COMPONENT
 from math.spherical_harmonics3 import (
     SH_COUNT,
     SphericalHarmonics3,
@@ -1094,8 +1096,8 @@ struct _Loader(Movable):
         data: Int,
         mut shared: Dict[String, InterleavedBuffer],
     ) raises -> BufferAttribute:
-        """Return one attribute: a `Float32Array`, per vertex or per
-        instance, or a view of an interleaved buffer.
+        """Return one attribute: a typed array per vertex, a `Float32Array`
+        per instance, or a view of an interleaved buffer.
 
         Args:
             node: The attribute's entry.
@@ -1119,18 +1121,31 @@ struct _Loader(Movable):
                 size,
                 self.integer(node, "offset", 0),
             )
-        if self.text(node, "type", "") != "Float32Array":
-            raise Error("Object JSON: only a Float32Array attribute is read")
+        var component = component_of_array(self.text(node, "type", ""))
         var list = self.array(node, "array")
         if list == NO_NODE:
             raise Error("Object JSON: an attribute has no array")
+        var normalized = self.flag(node, "normalized", False)
+        if component != FLOAT32_COMPONENT:
+            # A typed array of integers, as three.js's `getTypedArray`
+            # builds it. Only a per-vertex one is read.
+            if self.flag(node, "isInstancedBufferAttribute", False):
+                raise Error(
+                    "Object JSON: an instanced attribute is read as floats"
+                )
+            var stored = List[Int]()
+            for at in range(self.document.length(list)):
+                stored.append(self.document.integer(self.document.at(list, at)))
+            return BufferAttribute(stored, size, component, normalized)
         if self.flag(node, "isInstancedBufferAttribute", False):
             return BufferAttribute(
                 self.numbers_of(list),
                 size,
                 mesh_per_attribute=self.integer(node, "meshPerAttribute", 1),
             )
-        return BufferAttribute(self.numbers_of(list), size)
+        var floats = BufferAttribute(self.numbers_of(list), size)
+        floats.set_normalized(normalized)
+        return floats^
 
     def interleaved(
         self,
@@ -1245,6 +1260,11 @@ struct _Loader(Movable):
         var geometry = BufferGeometry(
             instanced=self.flag(item, "isInstancedBufferGeometry", False)
         )
+        # As three.js's `BufferGeometryLoader` reads them.
+        geometry.name = self.text(item, "name", "")
+        var user_data = self.document.get(item, "userData")
+        if user_data != NO_NODE:
+            geometry.user_data = user_data_of(self.document, user_data)
         var count = self.document.get(item, "instanceCount")
         if geometry.instanced and count != NO_NODE:
             if self.document.kind(count) != NULL:

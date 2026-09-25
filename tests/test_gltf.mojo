@@ -22,7 +22,13 @@ from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import directional_light
 from loaders.gltf import (
+    COMPONENT_BYTE,
+    COMPONENT_SHORT,
+    COMPONENT_UNSIGNED_BYTE,
+    COMPONENT_UNSIGNED_INT,
+    COMPONENT_UNSIGNED_SHORT,
     GltfModel,
+    _integer_component,
     decode_base64,
     decode_image,
     load_gltf,
@@ -498,6 +504,19 @@ def test_an_image_is_told_by_its_first_bytes() raises:
 
 
 # --- accessors --------------------------------------------------------------
+
+
+def test_an_integer_component_is_normalized_by_its_type() raises:
+    # three.js's `GLTFLoader` divides by the type's largest value and holds
+    # a signed value at minus one. glTF allows no normalized unsigned int,
+    # and one is read as it is.
+    assert_equal(_integer_component(255, COMPONENT_UNSIGNED_BYTE, True), 1)
+    assert_equal(_integer_component(127, COMPONENT_BYTE, True), 1)
+    assert_equal(_integer_component(-128, COMPONENT_BYTE, True), -1)
+    assert_equal(_integer_component(65535, COMPONENT_UNSIGNED_SHORT, True), 1)
+    assert_equal(_integer_component(-32768, COMPONENT_SHORT, True), -1)
+    assert_equal(_integer_component(7, COMPONENT_UNSIGNED_INT, True), 7)
+    assert_equal(_integer_component(-5, COMPONENT_BYTE, False), -5)
 
 
 def test_every_component_type_is_read_and_normalized_when_asked() raises:
