@@ -86,21 +86,29 @@ comptime NO_PARENT = NodeId(-1)
 @fieldwise_init
 struct ObjectType(Equatable, ImplicitlyCopyable, Writable):
     """What a node is when it carries nothing, three.js's `type` of an
-    `Object3D` or a `Group`.
+    `Object3D` or a `Group`, or three.js's `Gyroscope`.
 
-    Both act the same. The type is kept so a scene written to JSON reads
-    back as it was.
+    An `Object3D` and a `Group` act the same. The type is kept so a scene
+    written to JSON reads back as it was. A gyroscope keeps its own turn
+    in the world, whatever its parents' turns: see `Scene.update`.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the two types there are."""
-        return self == OBJECT3D_TYPE or self == GROUP_TYPE
+        """Return True if this is one of the three types there are."""
+        return (
+            self == OBJECT3D_TYPE
+            or self == GROUP_TYPE
+            or self == GYROSCOPE_TYPE
+        )
 
 
 comptime OBJECT3D_TYPE = ObjectType(0)
 comptime GROUP_TYPE = ObjectType(1)
+# three.js's `Gyroscope`: the node takes its parents' position and scale,
+# and not their turn.
+comptime GYROSCOPE_TYPE = ObjectType(2)
 
 
 def scale_of(matrix: Matrix4) -> Vector3:
@@ -231,7 +239,8 @@ struct Object3D(ImplicitlyCopyable):
     # The transform relative to the parent, as the last update built it
     # or as the caller set it. three.js's `Object3D.matrix`.
     var matrix: Matrix4
-    # `OBJECT3D_TYPE`, or `GROUP_TYPE` for a node built by `group()`.
+    # `OBJECT3D_TYPE`, `GROUP_TYPE` for a node built by `group()`, or
+    # `GYROSCOPE_TYPE` for one built by `gyroscope()`.
     var object_type: ObjectType
     # What the caller keeps on the node, three.js's `userData`. Written to
     # and read from scene JSON. See `core.user_data`.
