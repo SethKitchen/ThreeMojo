@@ -170,7 +170,8 @@ struct MorphBlendMesh(Movable):
     def _find(self, name: String) -> Int:
         """Return the place of the last animation of a name, or -1."""
         var found = -1
-        for at in range(len(self.animations)):
+        # `__default` at least, so this loop always runs.
+        for at in range(len(self.animations)):  # pragma: no branch
             if self.animations[at].name == name:
                 found = at
         return found
@@ -383,7 +384,8 @@ struct MorphBlendMesh(Movable):
             )
         _check(self.mesh, scene)
         ref mesh = scene.meshes[self.mesh.value]
-        for at in range(len(self.animations)):
+        # `__default` at least, so this loop always runs.
+        for at in range(len(self.animations)):  # pragma: no branch
             ref animation = self.animations[at]
             if not animation.active:
                 continue

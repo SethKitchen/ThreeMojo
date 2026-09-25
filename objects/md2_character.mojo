@@ -78,10 +78,10 @@ def _lowest(model: Md2Model) raises -> Float32:
     """Return the lowest y of a model's first frame, three.js's
     `Box3.setFromBufferAttribute( position ).min.y`."""
     ref data = model.geometry.attribute_view(String(POSITION)).data
-    var low = Float32(0)
-    for at in range(1, len(data), 3):
-        if at == 1 or data[at] < low:
-            low = data[at]
+    var low = data[1]
+    # A model holds a triangle at least, so this loop always runs.
+    for at in range(4, len(data), 3):  # pragma: no branch
+        low = min(low, data[at])
     return low
 
 
@@ -603,7 +603,8 @@ struct MD2CharacterComplex(Movable):
             enable: True to cast and take them.
         """
         var parts = self._parts()
-        for at in range(len(parts)):
+        # The body at least, so this loop always runs.
+        for at in range(len(parts)):  # pragma: no branch
             scene.meshes[parts[at]].cast_shadow = enable
             scene.meshes[parts[at]].receive_shadow = enable
 
@@ -792,7 +793,7 @@ struct MD2CharacterComplex(Movable):
     def _direction(mut self, forward: Bool):
         """Play the active and the old animation forward or back."""
         var names: List[String] = [self.active_animation, self.old_animation]
-        for at in range(2):
+        for at in range(2):  # pragma: no branch
             if forward:
                 self.body_blend.set_animation_direction_forward(names[at])
             else:

@@ -15,10 +15,12 @@ it. Each test here takes the same steps.
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import MeshIndex
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from loaders.json import JsonDocument, parse_json
-from loaders.md2 import Md2Model, md2_clip, read_md2
+from loaders.md2 import Md2Animation, Md2Model, md2_clip, read_md2
 from materials.material import Material
 from objects.md2_character import (
     MD2Character,
@@ -548,6 +550,184 @@ def test_a_complex_character_crouches_jumps_and_attacks() raises:
             List[TextureId](),
         )
 
+
+
+def _named_mesh(names: List[String]) raises -> Tuple[Scene, Assets]:
+    """Return a scene of one triangle with a morph target of each name."""
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(POSITION),
+        BufferAttribute([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0], 3),
+    )
+    for at in range(len(names)):
+        geometry.add_morph_target(
+            BufferAttribute([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0], 3),
+            name=names[at],
+        )
+    var shape = assets.geometries.add(geometry^)
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    var mesh = Mesh(shape, paint, scene.add(Object3D()))
+    mesh.update_morph_targets(assets.geometries.get(shape))
+    scene.add_mesh(mesh)
+    scene.update()
+    return (scene^, assets^)
+
+
+def test_a_blend_mesh_reads_three_js_words() raises:
+    # three.js's `/([a-z]+)_?(\d+)/i`: a word, an optional underscore and a
+    # number. `walk_x3` has no number after `walk_`, so its word is `x`.
+    var names: List[String] = ["run_1", "run_2", "walk_x3", "pose"]
+    var made = _named_mesh(names)
+    ref scene = made[0]
+    var blend = MorphBlendMesh(MeshIndex(0), scene)
+    blend.auto_create_animations(scene, 6)
+    assert_equal(blend.first_animation, "run")
+    assert_equal(len(blend.animations), 3)
+    assert_equal(blend.animations[1].name, "run")
+    assert_equal(blend.animations[1].end, 1)
+    assert_equal(blend.animations[2].name, "x")
+    assert_equal(blend.animations[2].start, 2)
+    # A mesh with no targets finds no words.
+    var bare = _named_mesh(List[String]())
+    var none = MorphBlendMesh(MeshIndex(0), bare[0])
+    none.auto_create_animations(bare[0], 6)
+    assert_equal(len(none.animations), 1)
+    assert_equal(none.first_animation, "")
+
+
+def test_a_blend_mesh_turns_back_at_the_start_and_holds_one_frame() raises:
+    var names: List[String] = ["run_1", "run_2", "run_3"]
+    var made = _named_mesh(names)
+    ref scene = made[0]
+    var blend = MorphBlendMesh(MeshIndex(0), scene)
+    blend.auto_create_animations(scene, 6)
+    # Played back and forth from its start, backward: it turns at zero.
+    blend.animations[1].mirrored_loop = True
+    _ = blend.play_animation("run")
+    blend.set_animation_direction_backward("run")
+    blend.update(scene, 0.05)
+    assert_equal(blend.animations[1].time, 0)
+    assert_equal(blend.animations[1].direction, 1)
+    assert_false(blend.animations[1].direction_backwards)
+    # On its first frame still, the frame takes the whole weight.
+    blend.stop_animation("run")
+    _ = blend.play_animation(DEFAULT_ANIMATION)
+    blend.update(scene, 0.01)
+    assert_equal(scene.meshes[0].morph_influence(0), 1)
+
+
+def _bare_model() raises -> Md2Model:
+    """Return `fixture.md2`'s geometry and frames with no animation."""
+    var model = _fixture()
+    return Md2Model(
+        model.geometry.clone(), model.frames.copy(), List[Md2Animation]()
+    )
+
+
+def test_a_character_plays_and_keeps_its_actions() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var weapons = List[Md2Model]()
+    weapons.append(read_md2("assets/md2/many.md2"))
+    var names: List[String] = ["many.md2"]
+    var character = MD2Character(
+        scene,
+        assets,
+        _fixture(),
+        weapons,
+        names,
+        _skins(assets, 1),
+        _skins(assets, 1),
+    )
+    # A clip played again takes its action again, as three.js's cache
+    # keeps one.
+    character.set_animation("stand")
+    var first = character.body_action
+    character.set_animation("stand")
+    assert_equal(character.body_action, first)
+    # A clip only the weapon has plays on the weapon alone.
+    character.set_weapon(scene, 0)
+    character.set_animation("a")
+    assert_equal(character.body_action, -1)
+    assert_true(character.weapon_action >= 0)
+    character.set_weapon(scene, -1)
+    assert_false(scene.get(character.weapons[0].node).visible)
+    character.set_skin(scene, assets, -1)
+    assert_equal(
+        assets.materials.get(character.body.textured).map, NO_TEXTURE
+    )
+    # A body with no clip names none.
+    var plain = MD2Character(
+        scene,
+        assets,
+        _bare_model(),
+        List[Md2Model](),
+        List[String](),
+        List[TextureId](),
+        List[TextureId](),
+    )
+    assert_equal(plain.active_animation_clip_name, "")
+    plain.set_weapon(scene, 0)
+    assert_equal(plain.weapon, -1)
+
+
+def test_a_complex_character_without_a_weapon() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var holder = scene.add(Object3D())
+    var character = MD2CharacterComplex(
+        scene,
+        assets,
+        _fixture(),
+        List[Md2Model](),
+        List[String](),
+        List[TextureId](),
+        List[TextureId](),
+        animations=_names(),
+        parent=holder,
+    )
+    assert_equal(scene.get(character.root).parent, holder)
+    character.set_visible(scene, False)
+    character.set_wireframe(scene, True)
+    character.set_weapon(scene, -1)
+    # No controls: it neither moves nor picks.
+    character.update(scene, Duration(0.1, SECOND))
+    assert_equal(character.active_animation, "")
+    # Forward, then let go at its top speed, then standing: the blend runs
+    # out and the idle stays.
+    var ahead = Md2Controls()
+    ahead.move_forward = True
+    character.controls = ahead^
+    character.update(scene, Duration(0.1, SECOND))
+    character.controls = Md2Controls()
+    character.speed = character.walk_speed
+    character.update_movement_model(scene, Duration(0.1, SECOND))
+    character.speed = Velocity(0.0, METER_PER_SECOND)
+    for _ in range(20):
+        character.update(scene, Duration(0.05, SECOND))
+    assert_equal(character.active_animation, "stand")
+    assert_equal(character.blend_counter, 0)
+    # With no animations named, the picking does nothing.
+    character.animations = None
+    character.update_behaviors()
+    assert_equal(character.active_animation, "stand")
+    # A weapon shown before any animation plays nothing.
+    var weapons = List[Md2Model]()
+    weapons.append(_fixture())
+    var labels: List[String] = ["w"]
+    var armed = MD2CharacterComplex(
+        scene,
+        assets,
+        _fixture(),
+        weapons,
+        labels,
+        List[TextureId](),
+        List[TextureId](),
+    )
+    armed.set_weapon(scene, 0)
+    assert_equal(armed.weapon_blends[0].animations[0].active, False)
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
