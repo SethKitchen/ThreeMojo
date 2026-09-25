@@ -158,6 +158,7 @@ from render.packing import (
     RGB_DEPTH_PACKING,
     RG_DEPTH_PACKING,
     DepthPacking,
+    unpack_rgba_to_depth,
 )
 from render.gpu import (
     FLOATS_PER_VERTEX,
@@ -10108,6 +10109,18 @@ def test_both_backends_agree_on_every_depth_packing() raises:
         assert_equal(count_mismatches(cpu, gpu), 0)
 
 
+def unpacked(pixel: Color) -> Float32:
+    """Return the number a pixel packed by `pack_depth_to_rgba` holds."""
+    return unpack_rgba_to_depth(
+        SIMD[DType.float32, 4](
+            Float32(pixel.r) / 255,
+            Float32(pixel.g) / 255,
+            Float32(pixel.b) / 255,
+            Float32(pixel.a) / 255,
+        )
+    )
+
+
 def test_both_backends_agree_on_a_distance_material() raises:
     # The distance comes from the same interpolated world position on both
     # sides, measured and packed by the same function, and no fog reaches
@@ -10139,14 +10152,26 @@ def test_both_backends_agree_on_a_distance_material() raises:
         Lighting.uniform(),
         fog,
     )
-    assert_equal(count_mismatches(cpu, gpu), 0)
-    # Light blended over the packed pixels mixes with them as light on
-    # both sides: a data pixel is premultiplied before it mixes.
+    # Four bytes hold 32 bits, and a float has 24. The last byte is the
+    # last places of the interpolation, which the two backends round
+    # differently. So the two unpack to one distance, to a float's
+    # precision, rather than agreeing byte for byte.
+    for y in range(30):
+        for x in range(36):
+            assert_almost_equal(
+                unpacked(cpu.get_pixel(x, y)),
+                unpacked(gpu.get_pixel(x, y)),
+                atol=Float64(1e-6),
+            )
+    # Light blended over packed pixels mixes with them as light on both
+    # sides: a data pixel is premultiplied before it mixes. Over a packed
+    # depth, whose four bytes agree exactly, since a distance's last
+    # byte, its alpha, is rounding.
     var over = overlapping_pair()
     for index in range(len(over)):
         over[index].blend = BLEND
         over[index].color = FloatColor(1, 1, 1, 0.5)
-    var both = packed_pair(DISTANCE, BASIC_DEPTH_PACKING)
+    var both = packed_pair(DEPTH, RGBA_DEPTH_PACKING)
     for index in range(len(over)):
         both.append(over[index])
     var mixed = RenderTarget(36, 30, BACKGROUND)

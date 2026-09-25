@@ -36,6 +36,7 @@ The passes run on the host, as every pass in `postprocessing` does.
 
 from core.layers import Layers
 from math.matrix4 import Matrix4
+from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from postprocessing.sampling import sample, u_of, v_of
@@ -50,7 +51,7 @@ from render.raster_state import (
     log_depth_factor,
 )
 from render.target import RenderTarget
-from std.math import cos, exp, exp2, floor, isfinite, pi, sin, sqrt
+from std.math import cos, exp, exp2, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
 
 
@@ -840,6 +841,9 @@ def glsl_rand(u: Float32, v: Float32) -> Float32:
     part of a large sine of the coordinate's dot with a fixed vector,
     taken modulo pi first.
 
+    The sine is `math.sine.sin_float32`, and each multiply that feeds an
+    add rounds once, so the host and a kernel give the same noise.
+
     Args:
         u: The first coordinate.
         v: The second.
@@ -847,10 +851,9 @@ def glsl_rand(u: Float32, v: Float32) -> Float32:
     Returns:
         A number from zero up to one.
     """
-    var dt = u * 12.9898 + v * 78.233
-    var sn = dt - Float32(pi) * floor(dt / Float32(pi))
-    var s = sin(sn) * 43758.5453
-    return s - floor(s)
+    var dt = fma(u, Float32(12.9898), v * Float32(78.233))
+    var sn = fma(-Float32(pi), floor(dt / Float32(pi)), dt)
+    return fraction(noise_scale(sin_float32(sn)))
 
 
 def sao_sample_occlusion(
