@@ -272,6 +272,28 @@ var pipe = tube(track, Length(0.1, METER), 64, 8, closed=True)
 | `spaced_points(divisions) -> List[Vector3]` | Points at equal distances along the path. |
 | `frenet_frames(segments, closed)` | Frames at equal distances along the path. |
 
+## Curves in JSON
+
+`loaders/curve_json.mojo` writes and reads curves, paths and shapes as three.js's `toJSON` and `fromJSON` do.
+
+```mojo
+var text = shape_to_json(plate)          # a shape needs a uuid
+var again = shape_from_json(text)
+var spine = curve3_from_json(curve3_to_json(curve))
+```
+
+| Function | Meaning |
+|---|---|
+| `curve_to_json(curve)`, `curve_from_json(text)` | A curve in the plane: `LineCurve`, `QuadraticBezierCurve`, `CubicBezierCurve`, `SplineCurve` or `EllipseCurve`. An `ArcCurve` reads as its ellipse. |
+| `curve3_to_json(curve)`, `curve3_from_json(text)` | A curve in space: `LineCurve3`, `QuadraticBezierCurve3`, `CubicBezierCurve3` or `CatmullRomCurve3`. |
+| `write_path`, `read_path` | A `Path`, with its `currentPoint`. |
+| `write_shape`, `read_shape` | A `Shape`, with its `uuid` and its holes. |
+| `write_curve_path3`, `read_curve_path3` | A `CurvePath3`, as a `CurvePath`. |
+
+A curve writes `arcLengthDivisions` as 200, three.js's default. The reader ignores another value, because this port always measures with 200 divisions. A shape here must be closed. The reader closes an open outline or hole with a straight run back to its start.
+
+`Shape.uuid` is three.js's `uuid`. A scene's `shapes` library names each shape by it. See [Scene JSON](Scene-JSON#shapes-and-curves).
+
 ## What is refused
 
 | Mistake | Answer |

@@ -42,8 +42,10 @@ from core.buffer_geometry import (
     MaterialIndex,
     NORMAL,
     POSITION,
+    SHAPE_GEOMETRY,
     UV,
 )
+from core.user_data import UserData
 from geometries.earcut import triangulate_shape
 from math.path import Shape
 from math.vector2 import Vector2
@@ -455,6 +457,10 @@ def shape_geometry(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(cut.index.copy())
+    geometry.kind = SHAPE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    geometry.shapes = [shape.copy()]
     return geometry^
 
 
@@ -506,4 +512,8 @@ def shape_geometry(
     for at in range(len(counts)):  # pragma: no branch
         geometry.add_group(start, counts[at], MaterialIndex(at))
         start += counts[at]
+    geometry.kind = SHAPE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    geometry.shapes = shapes.copy()
     return geometry^

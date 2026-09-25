@@ -59,9 +59,10 @@ targets. An interleaved attribute reads the
 geometry's `interleavedBuffers` and `arrayBuffers`, and the attributes that
 name one buffer share it. An `InstancedBufferGeometry` is read with its
 `instanceCount` and its per-instance attributes' `meshPerAttribute`, which
-three.js's loader leaves at their defaults. A `BoxGeometry`, a `PlaneGeometry` and a
-`SphereGeometry` are built from their parameters by `geometries`, when
-the parameters are ones those builders take. A material is built with
+three.js's loader leaves at their defaults. A geometry of any of the
+nineteen types three.js writes as parameters is built again by
+`loaders.geometry_json`, its shapes read first from the `shapes`
+library. A material is built with
 the `MaterialKind` its type names, three.js's defaults filling what the
 entry leaves out: a `MeshPhongMaterial` without a `specular` has
 `0x111111`, as in three.js. That covers the baked light, the
@@ -167,6 +168,7 @@ from core.geometry_store import GeometryId
 from core.layers import Layers
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from exporters.json_writer import JsonWriter
 from core.user_data import user_data_of
 from cameras.camera import ViewOffset
 from animation.animation_clip import AnimationClip
@@ -197,9 +199,10 @@ from animation.keyframe_track import (
 from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
-from geometries.box import box
-from geometries.plane import plane
-from geometries.sphere import sphere
+from loaders.curve_json import read_shape
+from loaders.geometry_json import geometry_from_parameters
+from math.path import Shape
+from core.user_data import json_value_text
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
@@ -335,7 +338,7 @@ from units.si import PER_METER, RADIAN
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
-comptime FORMAT_VERSION = Float32(4.6)
+comptime FORMAT_VERSION = Float32(4.7)
 comptime FORMAT_MAJOR = 4
 
 # three.js's texture constants, by their numbers in `constants.js`.
@@ -785,6 +788,7 @@ def read_object_json(
         raise Error("Object JSON: the document must be an object")
     loader.check_metadata()
     loader.read_textures()
+    loader.read_shapes()
     loader.read_geometries(assets)
     loader.read_materials(assets)
     var top = loader.document.get(root, "object")
@@ -892,6 +896,8 @@ struct _Loader(Movable):
     var textures: Dict[String, Int]
     # The geometry and material each uuid was built into.
     var geometries: Dict[String, Int]
+    # three.js's `shapes` library, by uuid.
+    var shapes: Dict[String, Shape]
     var materials: Dict[String, Int]
     # Each texture entry built with its alpha as coverage and as nothing,
     # or `NO_TEXTURE` until a use asks for it.
@@ -929,6 +935,7 @@ struct _Loader(Movable):
         self.images = Dict[String, Int]()
         self.textures = Dict[String, Int]()
         self.geometries = Dict[String, Int]()
+        self.shapes = Dict[String, Shape]()
         self.materials = Dict[String, Int]()
         self.covered = List[TextureId]()
         self.ignored = List[TextureId]()
@@ -1082,6 +1089,14 @@ struct _Loader(Movable):
             self.covered.append(NO_TEXTURE)
             self.ignored.append(NO_TEXTURE)
 
+    def read_shapes(mut self) raises:
+        """Read the `shapes` library, three.js's `parseShapes`."""
+        var positions = self.index_library("shapes")
+        var list = self.library("shapes")
+        for at in range(len(positions)):
+            var shape = read_shape(self.document, self.document.at(list, at))
+            self.shapes[shape.uuid] = shape^
+
     def read_geometries(mut self, mut assets: Assets) raises:
         """Build every geometry of the library."""
         var positions = self.index_library("geometries")
@@ -1232,40 +1247,18 @@ struct _Loader(Movable):
     def geometry(self, item: Int) raises -> BufferGeometry:
         """Build one geometry entry."""
         var kind = self.text(item, "type", "")
-        if kind == "BoxGeometry":
-            var segments = (
-                self.integer(item, "widthSegments", 1)
-                * self.integer(item, "heightSegments", 1)
-                * self.integer(item, "depthSegments", 1)
-            )
-            if segments != 1:
-                raise Error(
-                    "Object JSON: a box is read with one segment a side"
-                )
-            return box(
-                Length(self.number(item, "width", 1), METER),
-                Length(self.number(item, "height", 1), METER),
-                Length(self.number(item, "depth", 1), METER),
-            )
-        if kind == "PlaneGeometry":
-            return plane(
-                Length(self.number(item, "width", 1), METER),
-                Length(self.number(item, "height", 1), METER),
-                self.integer(item, "widthSegments", 1),
-                self.integer(item, "heightSegments", 1),
-            )
-        if kind == "SphereGeometry":
-            if not self.is_whole_sphere(item):
-                raise Error("Object JSON: a sphere is read whole, not a part")
-            return sphere(
-                Length(self.number(item, "radius", 1), METER),
-                self.integer(item, "widthSegments", 32),
-                self.integer(item, "heightSegments", 16),
-            )
         if kind != "BufferGeometry" and kind != "InstancedBufferGeometry":
-            raise Error(
-                "Object JSON: a geometry type that is not read: " + kind
+            # A geometry three.js built from parameters: its type's
+            # `fromJSON`, then the name and user data `parseGeometries`
+            # sets on every geometry.
+            var built = geometry_from_parameters(
+                self.document, item, self.shapes
             )
+            built.name = self.text(item, "name", "")
+            var named = self.document.get(item, "userData")
+            if named != NO_NODE:
+                built.user_data = user_data_of(self.document, named)
+            return built^
         var data = self.entry(item, "data")
         if data == NO_NODE:
             raise Error("Object JSON: a BufferGeometry has no data")
@@ -1319,19 +1312,6 @@ struct _Loader(Movable):
                 )
         self.morph_targets(data, geometry, shared)
         return geometry^
-
-    def is_whole_sphere(self, item: Int) raises -> Bool:
-        """Return True if a sphere's four angles are three.js's defaults."""
-        var phi_start = self.number(item, "phiStart", 0)
-        var phi_length = self.number(item, "phiLength", Float32(2 * pi))
-        var theta_start = self.number(item, "thetaStart", 0)
-        var theta_length = self.number(item, "thetaLength", Float32(pi))
-        return (
-            phi_start == 0
-            and phi_length == Float32(2 * pi)
-            and theta_start == 0
-            and theta_length == Float32(pi)
-        )
 
     def morph_targets(
         self,
@@ -2956,3 +2936,109 @@ def _matrix_of(elements: List[Float32]) -> Matrix4:
     for index in range(16):  # pragma: no branch
         matrix.elements[index] = elements[index]
     return matrix^
+
+
+def _wrapped(
+    doc: JsonDocument, node: Int, library: String, skip: List[String]
+) raises -> String:
+    """Return an Object document whose `library` holds `node` alone, less
+    the keys in `skip`, and whose other libraries are `node`'s own under
+    the same names, such as a material's `textures`."""
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("metadata")
+    writer.begin_object()
+    writer.key("version")
+    writer.number(FORMAT_VERSION)
+    writer.key("type")
+    writer.string("Object")
+    writer.end_object()
+    writer.key(library)
+    writer.begin_array()
+    writer.begin_object()
+    for at in range(doc.length(node)):  # pragma: no branch
+        var key = doc.key(node, at)
+        if key == "metadata" or _position_of(skip, key) >= 0:
+            continue
+        writer.key(key)
+        writer.raw(json_value_text(doc, doc.get(node, key)))
+    writer.end_object()
+    writer.end_array()
+    for key in skip:
+        var found = doc.get(node, key)
+        if found != NO_NODE:
+            writer.key(key)
+            writer.raw(json_value_text(doc, found))
+    writer.key("object")
+    writer.begin_object()
+    writer.key("uuid")
+    writer.string("standalone")
+    writer.key("type")
+    writer.string("Scene")
+    writer.end_object()
+    writer.end_object()
+    return writer.finish()
+
+
+def read_geometry_json(text: String, mut assets: Assets) raises -> GeometryId:
+    """Read one geometry document, three.js's `BufferGeometryLoader`, or a
+    geometry three.js wrote from its parameters.
+
+    Args:
+        text: The document, as three.js's `geometry.toJSON()` writes it.
+        assets: Where the geometry goes.
+
+    Returns:
+        The geometry's id.
+
+    Raises:
+        Error: If the text is not a JSON object, or the geometry is
+            refused as a scene's geometry would be. A shape or an
+            extrusion names shapes that a lone geometry does not carry,
+            so it is refused.
+    """
+    var doc = parse_json(text)
+    if doc.kind(doc.root()) != OBJECT:
+        raise Error("Geometry JSON: the document must be an object")
+    var count = assets.geometries.count()
+    var scene = Scene()
+    _ = read_object_json(
+        _wrapped(doc, doc.root(), "geometries", List[String]()),
+        scene,
+        assets,
+    )
+    return GeometryId(count)
+
+
+def read_material_json(
+    text: String, mut assets: Assets, directory: String = ""
+) raises -> MaterialId:
+    """Read one material document, three.js's `MaterialLoader`, with the
+    textures and images three.js's `material.toJSON()` writes into it.
+
+    Args:
+        text: The document.
+        assets: Where the material and its textures go.
+        directory: Where an image named by a relative URL is read from,
+            ending in `/`, or empty for the working directory.
+
+    Returns:
+        The material's id.
+
+    Raises:
+        Error: If the text is not a JSON object, or the material or a
+            texture is refused as a scene's would be.
+    """
+    var doc = parse_json(text)
+    if doc.kind(doc.root()) != OBJECT:
+        raise Error("Material JSON: the document must be an object")
+    var count = assets.materials.count()
+    var scene = Scene()
+    var libraries: List[String] = ["textures", "images"]
+    _ = read_object_json(
+        _wrapped(doc, doc.root(), "materials", libraries),
+        scene,
+        assets,
+        directory,
+    )
+    return MaterialId(count)

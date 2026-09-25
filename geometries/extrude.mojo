@@ -97,12 +97,16 @@ is split along is part of the surface. Both forms split it as three.js's
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
+    EXTRUDE_GEOMETRY,
     MaterialIndex,
     NORMAL,
     POSITION,
     UV,
 )
+from core.user_data import UserData
+from exporters.json_writer import JsonWriter
 from geometries.earcut import triangulate_shape
+from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.path import Shape
@@ -546,6 +550,67 @@ def _sweep(
     return _faces(cut, placed, len(spine), uv_generator)
 
 
+def _options(
+    curve_segments: Int,
+    steps: Int,
+    depth: Length,
+    bevel_enabled: Bool,
+    bevel_thickness: Length,
+    bevel_size: Length,
+    bevel_offset: Length,
+    bevel_segments: Int,
+) raises -> JsonWriter:
+    """Return three.js's `options` for an extrusion along z, every one of
+    them, in an object that `_extruded` closes."""
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("curveSegments")
+    writer.integer(curve_segments)
+    writer.key("steps")
+    writer.integer(steps)
+    writer.key("depth")
+    writer.number(depth.to(METER))
+    writer.key("bevelEnabled")
+    writer.boolean(bevel_enabled)
+    writer.key("bevelThickness")
+    writer.number(bevel_thickness.to(METER))
+    writer.key("bevelSize")
+    writer.number(bevel_size.to(METER))
+    writer.key("bevelOffset")
+    writer.number(bevel_offset.to(METER))
+    writer.key("bevelSegments")
+    writer.integer(bevel_segments)
+    return writer^
+
+
+def _swept_options(curve_segments: Int, steps: Int) raises -> JsonWriter:
+    """Return three.js's `options` for a sweep, up to its `extrudePath`,
+    for the caller to write the path into."""
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("curveSegments")
+    writer.integer(curve_segments)
+    writer.key("steps")
+    writer.integer(steps)
+    writer.key("extrudePath")
+    return writer^
+
+
+def _extruded(
+    var geometry: BufferGeometry,
+    var shapes: List[Shape],
+    var options: JsonWriter,
+) raises -> BufferGeometry:
+    """Return `geometry` as three.js's `ExtrudeGeometry` of `shapes`, with
+    its `options`, which this closes."""
+    options.end_object()
+    geometry.kind = EXTRUDE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_json("options", options.finish())
+    geometry.shapes = shapes^
+    return geometry^
+
+
 def _check_sweep(steps: Int) raises:
     """Refuse a sweep of fewer than one step."""
     if steps < 1:
@@ -591,12 +656,15 @@ def extrude(
     """
     _check_sweep(steps)
     var cut = _extrusion_contours(shape, curve_segments)
-    return _sweep(
+    var geometry = _sweep(
         cut,
         path.spaced_points(steps),
         path.frenet_frames(steps, False),
         uv_generator,
     )
+    var options = _swept_options(curve_segments, steps)
+    write_curve3(options, path)
+    return _extruded(geometry^, [shape.copy()], options^)
 
 
 def extrude(
@@ -633,12 +701,84 @@ def extrude(
     """
     _check_sweep(steps)
     var cut = _extrusion_contours(shape, curve_segments)
-    return _sweep(
+    var geometry = _sweep(
         cut,
         path.spaced_points(steps),
         path.frenet_frames(steps, False),
         uv_generator,
     )
+    var options = _swept_options(curve_segments, steps)
+    write_curve_path3(options, path)
+    return _extruded(geometry^, [shape.copy()], options^)
+
+
+def extrude(
+    shapes: List[Shape],
+    path: Curve3,
+    steps: Int = 1,
+    curve_segments: Int = 12,
+    uv_generator: UVGenerator = UVGenerator(),
+) raises -> BufferGeometry:
+    """Return several shapes swept along `path` in one geometry, three.js's
+    `ExtrudeGeometry` given an array of shapes and an `extrudePath`.
+
+    Args:
+        shapes: The cross-sections, each with its holes; at least one.
+        path: The curve every shape is swept along.
+        steps: How many equal runs the curve is cut into; at least one.
+        curve_segments: How many straight runs each curve of a shape is
+            sampled into; at least one.
+        uv_generator: How the texture coordinates are made.
+
+    Returns:
+        The sweeps one after another, two groups per shape.
+
+    Raises:
+        Error: If there is no shape, or for anything the one-shape form
+            raises for.
+    """
+    if len(shapes) == 0:
+        raise Error("An extrusion needs at least one shape")
+    var parts = List[BufferGeometry]()
+    for shape in shapes:  # pragma: no branch
+        parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
+    var options = _swept_options(curve_segments, steps)
+    write_curve3(options, path)
+    return _extruded(_joined(parts), shapes.copy(), options^)
+
+
+def extrude(
+    shapes: List[Shape],
+    path: CurvePath3,
+    steps: Int = 1,
+    curve_segments: Int = 12,
+    uv_generator: UVGenerator = UVGenerator(),
+) raises -> BufferGeometry:
+    """Return several shapes swept along a path of curves in one geometry.
+
+    Args:
+        shapes: The cross-sections, each with its holes; at least one.
+        path: The curves every shape is swept along, end to end.
+        steps: How many equal runs the path is cut into; at least one.
+        curve_segments: How many straight runs each curve of a shape is
+            sampled into; at least one.
+        uv_generator: How the texture coordinates are made.
+
+    Returns:
+        The sweeps one after another, two groups per shape.
+
+    Raises:
+        Error: If there is no shape, or for anything the one-shape form
+            raises for.
+    """
+    if len(shapes) == 0:
+        raise Error("An extrusion needs at least one shape")
+    var parts = List[BufferGeometry]()
+    for shape in shapes:  # pragma: no branch
+        parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
+    var options = _swept_options(curve_segments, steps)
+    write_curve_path3(options, path)
+    return _extruded(_joined(parts), shapes.copy(), options^)
 
 
 def check_extrusion(
@@ -828,7 +968,20 @@ def extrude(
         insets,
     )
     var placed = _place(cut, moves, heights, insets)
-    return _faces(cut, placed, len(heights), uv_generator)
+    return _extruded(
+        _faces(cut, placed, len(heights), uv_generator),
+        [shape.copy()],
+        _options(
+            curve_segments,
+            steps,
+            depth,
+            bevel_enabled,
+            bevel_thickness,
+            bevel_size,
+            bevel_offset,
+            bevel_segments,
+        ),
+    )
 
 
 def extrude(
@@ -892,4 +1045,17 @@ def extrude(
                 uv_generator,
             )
         )
-    return _joined(parts)
+    return _extruded(
+        _joined(parts),
+        shapes.copy(),
+        _options(
+            curve_segments,
+            steps,
+            depth,
+            bevel_enabled,
+            bevel_thickness,
+            bevel_size,
+            bevel_offset,
+            bevel_segments,
+        ),
+    )

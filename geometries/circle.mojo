@@ -34,9 +34,17 @@ draws nothing for such a triangle, so the disk looks as `circle` draws it.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    CIRCLE_GEOMETRY,
+    NORMAL,
+    POSITION,
+    RING_GEOMETRY,
+    UV,
+)
+from core.user_data import UserData
 from std.math import cos, sin
-from units.si import Angle, Length, RADIAN, TURN
+from units.si import Angle, Length, METER, RADIAN, TURN
 
 # A whole circle: the default sweep, and the most a sweep can be, because
 # more than a turn lays the rim over itself.
@@ -145,6 +153,16 @@ def circle(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    geometry.kind = CIRCLE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("segments", Float64(segments))
+    geometry.parameters.set_number(
+        "thetaStart", Float64(theta_start.to(RADIAN))
+    )
+    geometry.parameters.set_number(
+        "thetaLength", Float64(theta_length.to(RADIAN))
+    )
     return geometry^
 
 
@@ -235,4 +253,20 @@ def ring(
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
+    geometry.kind = RING_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number(
+        "innerRadius", Float64(inner_radius.to(METER))
+    )
+    geometry.parameters.set_number(
+        "outerRadius", Float64(outer_radius.to(METER))
+    )
+    geometry.parameters.set_number("thetaSegments", Float64(theta_segments))
+    geometry.parameters.set_number("phiSegments", Float64(phi_segments))
+    geometry.parameters.set_number(
+        "thetaStart", Float64(theta_start.to(RADIAN))
+    )
+    geometry.parameters.set_number(
+        "thetaLength", Float64(theta_length.to(RADIAN))
+    )
     return geometry^

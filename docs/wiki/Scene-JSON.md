@@ -23,6 +23,10 @@ var camera_again = model.cameras.perspective[0]
 | `write_object_json(path, scene, assets, cameras)` | Write that text to a file. |
 | `read_object_json(text, scene, assets, directory) -> ObjectModel` | Read a JSON text into a scene and its assets. |
 | `load_object_json(path, scene, assets) -> ObjectModel` | Read a JSON file. An image with a relative URL is read beside the file. |
+| `geometry_to_json(geometry) -> String` | One geometry, as three.js's `geometry.toJSON()` writes it. |
+| `read_geometry_json(text, assets) -> GeometryId` | Read one geometry document into the assets. |
+| `material_to_json(id, assets) -> String` | One material with its textures and images, as three.js's `material.toJSON()` writes it. |
+| `read_material_json(text, assets, directory) -> MaterialId` | Read one material document and its textures into the assets. |
 
 The reader adds to the scene and the assets that you give it. The nodes that it adds come after the nodes that the scene has already.
 
@@ -32,8 +36,8 @@ A document has four parts. The writer writes them, and the reader reads them, as
 
 | Key | Meaning |
 |---|---|
-| `metadata` | `version` 4.6, `type` `Object`. The reader refuses another type or a major version that is not 4. |
-| `geometries`, `materials`, `textures`, `images`, `skeletons` | The libraries. Each entry has a `uuid`. Each thing is written one time, also when two meshes use it. |
+| `metadata` | `version` 4.7, `type` `Object`. The reader refuses another type or a major version that is not 4. |
+| `geometries`, `materials`, `textures`, `images`, `shapes`, `skeletons` | The libraries. Each entry has a `uuid`. Each thing is written one time, also when two meshes use it. |
 | `object` | The root object. The writer writes a `Scene`. Its children are the root nodes of the scene. |
 
 A mesh that wears a list of materials writes `material` as a list of uuids, as three.js's `toJSON` does. The reader reads the list back. See [Several materials](Meshes-and-assets#several-materials).
@@ -112,17 +116,44 @@ The reader splits the joined geometry back into its parts. It adds each part to 
 
 ## Geometry
 
-The writer writes each geometry as a `BufferGeometry`. Each attribute is a `Float32Array`. The index is a `Uint16Array` up to 65535 vertices, and a `Uint32Array` above that, as three.js chooses. The groups and the morph targets are written too: positions with their names, normals and colors.
+A geometry that a builder made keeps its three.js type and parameters. The writer writes it as three.js does: its type and its parameters, and no arrays. The reader builds it again with the same builder. Every other geometry is a `BufferGeometry`, written with its arrays.
+
+| Type | Built with |
+|---|---|
+| `BoxGeometry` | `box` |
+| `CapsuleGeometry` | `capsule` |
+| `CircleGeometry`, `RingGeometry` | `circle`, `ring` |
+| `ConeGeometry`, `CylinderGeometry` | `cone`, `cylinder` |
+| `DodecahedronGeometry`, `IcosahedronGeometry`, `OctahedronGeometry`, `TetrahedronGeometry`, `PolyhedronGeometry` | `dodecahedron`, `icosahedron`, `octahedron`, `tetrahedron`, `polyhedron` |
+| `ExtrudeGeometry` | `extrude`, along z or along a path |
+| `LatheGeometry` | `lathe` |
+| `PlaneGeometry` | `plane` |
+| `ShapeGeometry` | `shape_geometry` |
+| `SphereGeometry` | `sphere` |
+| `TorusGeometry`, `TorusKnotGeometry` | `torus`, `torus_knot` |
+| `TubeGeometry` | `tube` of a `Curve3` |
+
+The reader uses three.js's constructor default for a parameter that is not there. An `ExtrudeGeometry` without `bevelEnabled` gets a bevel, as in three.js. The builder refuses a parameter that it cannot use, and names it.
+
+`geometry.kind` is the type, and `geometry.parameters` holds the parameters. Like three.js's, both stay when you change the arrays later. The writer then writes the parameters, and the changes are lost. Set `geometry.kind = BUFFER_GEOMETRY` to write the arrays instead.
+
+### Shapes and curves
+
+A `ShapeGeometry` or an `ExtrudeGeometry` names its shapes by `uuid`. The writer writes each shape one time in the `shapes` library, without its own `metadata`, as three.js does. A shape without a `uuid` gets one from the writer. An extrusion's `extrudePath` is the JSON of its curve. See [Curves](Curves#curves-in-json).
+
+### Arrays
+
+The writer writes each attribute as a `Float32Array`. The index is a `Uint16Array` up to 65535 vertices, and a `Uint32Array` above that, as three.js chooses. The groups and the morph targets are written too: positions with their names, normals and colors.
 
 An instanced geometry is an `InstancedBufferGeometry` with its `instanceCount`, and each per-instance attribute has its `meshPerAttribute`. An interleaved attribute is written as its own floats, as three.js writes one attribute alone. See [Geometry](Geometry#interleaved-buffers).
 
-The reader reads a `BufferGeometry` with `Float32Array` attributes, an index, groups and morph targets. An interleaved attribute reads the `interleavedBuffers` and `arrayBuffers` of the geometry, and attributes that name one buffer share it. An `InstancedBufferGeometry` keeps its `instanceCount` and the `meshPerAttribute` of each attribute. three.js's loader leaves both at their defaults. It also builds three parametric types from their parameters:
+The reader reads a `BufferGeometry` with `Float32Array` attributes, an index, groups and morph targets. An interleaved attribute reads the `interleavedBuffers` and `arrayBuffers` of the geometry, and attributes that name one buffer share it. An `InstancedBufferGeometry` keeps its `instanceCount` and the `meshPerAttribute` of each attribute. three.js's loader leaves both at their defaults.
 
-| Type | Built with | Condition |
-|---|---|---|
-| `BoxGeometry` | `box` | One segment on each side. |
-| `PlaneGeometry` | `plane` | None. |
-| `SphereGeometry` | `sphere` | The whole sphere: `phiStart`, `phiLength`, `thetaStart` and `thetaLength` at their defaults. |
+### One geometry or one material
+
+`geometry_to_json` writes one geometry with a `metadata` of type `BufferGeometry`. A shape or an extrusion names its shapes but does not carry them, as in three.js. So `read_geometry_json` refuses it.
+
+`material_to_json` writes one material with a `metadata` of type `Material`. It writes the textures and images that the material uses after the material, as three.js does. `read_material_json` reads the material and those textures.
 
 ## Materials
 
@@ -234,6 +265,8 @@ The scene's `backgroundBlurriness`, `backgroundIntensity`, `backgroundRotation`,
 - The writer refuses a standard or physical material that reflects nothing in a scene with an environment. three.js would reflect the environment on it.
 - A face of a cube texture is always clamped. The reader does not read the `wrap` of a cube texture.
 - The joined geometry of a batched mesh stays in the assets after the reader splits it.
+- A material has no `name` here. The reader does not keep it.
+- The writer writes every option of an extrusion. three.js writes only the options that were given.
 
 ## Not ported
 
@@ -254,7 +287,6 @@ The writer does not write these things, and the reader refuses them:
 The writer does not write these things, and the reader ignores them:
 
 - An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
-- `shapes`.
 - An `up` other than the default. The writer writes `up` as `[0, 1, 0]` on each object, and the reader ignores it.
 - The material keys that have no field here.
 - A batched mesh's sorting, reserved ranges and bounds.

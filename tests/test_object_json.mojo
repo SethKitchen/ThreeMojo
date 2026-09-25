@@ -22,6 +22,7 @@ from core.background import (
 )
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
+    BUFFER_GEOMETRY,
     COLOR,
     NORMAL,
     POSITION,
@@ -274,6 +275,9 @@ def _scene(mut assets: Assets) raises -> Tuple[Scene, ObjectCameras]:
     var data_map = assets.textures.add(_texture(MIRROR, False, True))
     var geometry = assets.geometries.add(_triangle())
     var indexed = box(Length(1, METER), Length(2, METER), Length(3, METER))
+    # Changed after it was built, so written by its arrays: a box keeps
+    # its type, and would be written as its width, as three.js writes it.
+    indexed.kind = BUFFER_GEOMETRY
     indexed.clear_groups()
     indexed.add_group(0, 6, MaterialIndex(1))
     indexed.add_morph_target(
@@ -1771,26 +1775,7 @@ def test_scene_fog_and_background_refusals() raises:
 def test_geometry_refusals() raises:
     """A geometry this port cannot build is refused."""
     var tail = '],"object":{"uuid":"o","type":"Group"}'
-    _refuses(
-        '"geometries":[{"uuid":"g","type":"BoxGeometry","widthSegments":2}'
-        + tail
-    )
-    _refuses(
-        '"geometries":[{"uuid":"g","type":"SphereGeometry","phiStart":1}' + tail
-    )
-    _refuses(
-        '"geometries":[{"uuid":"g","type":"SphereGeometry","phiLength":1}'
-        + tail
-    )
-    _refuses(
-        '"geometries":[{"uuid":"g","type":"SphereGeometry","thetaStart":1}'
-        + tail
-    )
-    _refuses(
-        '"geometries":[{"uuid":"g","type":"SphereGeometry","thetaLength":1}'
-        + tail
-    )
-    _refuses('"geometries":[{"uuid":"g","type":"TorusGeometry"}' + tail)
+    _refuses('"geometries":[{"uuid":"g","type":"TextGeometry"}' + tail)
     _refuses('"geometries":[{"uuid":"g","type":"BufferGeometry"}' + tail)
     var data = '"geometries":[{"uuid":"g","type":"BufferGeometry","data":'
     _refuses(data + '{"attributes":{"position":3}}}' + tail)

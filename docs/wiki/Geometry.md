@@ -294,13 +294,13 @@ Texture coordinates are longitude and latitude, with the seam repaired per face 
 var pill = capsule(Length(0.5, METER), Length(2.0, METER), 4, 16)   # radius, length, cap rows, around
 ```
 
-A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps. A length of zero is a sphere with one rim, not two. Vertices run in columns, one per step around, from the bottom pole to the top.
+A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps, three.js's `height`. The builder is three.js's `CapsuleGeometry`, number for number.
 
-`u` runs around. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
+Vertices run in rows from the bottom pole to the top, one vertex per step around and one more for the seam. The sweep starts at -x. A capsule of no length keeps both rims and a side of no height between them.
 
-The normals come from the profile exactly. On a cap they run along its radius, and on the side straight out. The caps and the side meet without a crease. The half of each cell against a pole that has no area is left out.
+`u` runs around, and a pole's vertices sit half a step round, as in three.js. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
 
-The sweep starts at +z, as the cylinder's does. three.js's current builder starts at -x and gives its pole vertices a half-step `u`. The shape is the same. A texture lands a quarter turn on.
+The normals come from the profile exactly. On a cap they run along its radius, and on the side straight out. The half of each cell against a pole has no area. three.js keeps it, and so does this.
 
 ## Lathe
 
@@ -311,9 +311,11 @@ var half = lathe(points, 24, Angle(0.0, DEGREE), Angle(180.0, DEGREE))
 
 A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point.
 
-The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first and last points face the way their own segment does.
+The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first point faces the way its segment does.
 
-A point on the axis is a pole. The half of each cell against it that has no area is left out. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
+The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that.
+
+A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 
 ## Tube
 

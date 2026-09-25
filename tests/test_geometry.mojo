@@ -127,6 +127,31 @@ def assert_faces_wind_with_their_normals(geometry: BufferGeometry) raises:
         assert_true(first.dot(stated) > 0, "a face winds against its normals")
 
 
+def assert_faces_with_area_wind_with_their_normals(
+    geometry: BufferGeometry,
+) raises -> Int:
+    """Assert every triangle with area winds the way its normals point, as
+    `assert_faces_wind_with_their_normals` does, and return how many have
+    no area: three.js keeps the half of a cell against a pole."""
+    ref normals = geometry.attribute_view(String(NORMAL))
+    var flat = 0
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var first = geometry.corner(triangle, 1)
+        first.sub(a)
+        var second = geometry.corner(triangle, 2)
+        second.sub(a)
+        first.cross(second)
+        if first.length() <= Float32(1e-6):
+            flat += 1
+            continue
+        var stated = normals.vector3(geometry.corner_index(triangle, 0))
+        stated.add(normals.vector3(geometry.corner_index(triangle, 1)))
+        stated.add(normals.vector3(geometry.corner_index(triangle, 2)))
+        assert_true(first.dot(stated) > 0, "a face winds against its normals")
+    return flat
+
+
 def assert_no_degenerate_triangle(geometry: BufferGeometry) raises:
     """Assert every triangle has some area."""
     for triangle in range(geometry.triangle_count()):
@@ -1966,16 +1991,16 @@ def a_pill() raises -> BufferGeometry:
     return capsule(Length(1.0, METER), Length(2.0, METER), 4, 8)
 
 
-def test_a_capsule_is_a_lathe_of_its_profile() raises:
+def test_a_capsule_is_rows_of_its_profile() raises:
+    # three.js's layout: ten rows, five per cap, of nine vertices each;
+    # two triangles per cell, the ones against a pole included.
     var pill = a_pill()
-    # Ten profile points, five per cap, in each of nine columns; two
-    # triangles per cell less the half against each pole.
-    assert_equal(pill.vertex_count(), 9 * 10)
-    assert_equal(pill.triangle_count(), 2 * 8 * 9 - 2 * 8)
-    # More rows up the side add profile points between the caps.
+    assert_equal(pill.vertex_count(), 10 * 9)
+    assert_equal(pill.triangle_count(), 2 * 8 * 9)
+    # More rows up the side add rows between the caps.
     var tall = capsule(Length(1.0, METER), Length(2.0, METER), 4, 8, 3)
-    assert_equal(tall.vertex_count(), 9 * 12)
-    assert_equal(tall.triangle_count(), 2 * 8 * 11 - 2 * 8)
+    assert_equal(tall.vertex_count(), 12 * 9)
+    assert_equal(tall.triangle_count(), 2 * 8 * 11)
 
 
 def test_every_capsule_vertex_lies_on_the_surface() raises:
@@ -1999,21 +2024,24 @@ def test_a_capsule_runs_from_pole_to_pole() raises:
     var pill = a_pill()
     ref positions = pill.attribute_view(String(POSITION))
     assert_xyz(positions.vector3(0), 0, -2, 0)
-    assert_xyz(positions.vector3(9), 0, 2, 0)
-    # The bottom cap's rim sits at the side's radius, on +z in the first
-    # column, and the last column sits on the first.
-    assert_xyz(positions.vector3(4), 0, -1, 1)
-    assert_xyz(positions.vector3(8 * 10 + 4), 0, -1, 1)
+    assert_xyz(positions.vector3(9 * 9), 0, 2, 0)
+    # The bottom rim is the fifth row. It starts at -x, as three.js's
+    # does, and its last vertex sits on its first.
+    assert_xyz(positions.vector3(4 * 9), -1, -1, 0)
+    assert_xyz(positions.vector3(4 * 9 + 8), -1, -1, 0)
 
 
 def test_a_capsule_maps_u_around_and_v_up() raises:
     var pill = a_pill()
     ref uvs = pill.attribute_view(String(UV))
-    assert_equal(uvs.component(0, 0), Float32(0))
+    # A pole's vertices sit half a step round, as three.js's do.
+    assert_almost_equal(uvs.component(0, 0), Float32(0.0625), atol=TOLERANCE)
     assert_equal(uvs.component(0, 1), Float32(0))
-    assert_almost_equal(uvs.component(9, 1), Float32(1), atol=TOLERANCE)
-    assert_equal(uvs.component(8 * 10, 0), Float32(1))
-    assert_texture_coordinates_in_range(pill)
+    assert_almost_equal(
+        uvs.component(9 * 9, 0), Float32(-0.0625), atol=TOLERANCE
+    )
+    assert_almost_equal(uvs.component(9 * 9, 1), Float32(1), atol=TOLERANCE)
+    assert_equal(uvs.component(4 * 9 + 8, 0), Float32(1))
 
 
 def test_capsule_v_is_distance_along_the_profile() raises:
@@ -2030,28 +2058,29 @@ def test_capsule_v_is_distance_along_the_profile() raises:
             )
             ref uvs = pill.attribute_view(String(UV))
             assert_almost_equal(
-                uvs.component(caps, 1), bottom_rim, atol=Float64(1e-5)
+                uvs.component(caps * 9, 1), bottom_rim, atol=Float64(1e-5)
             )
             assert_almost_equal(
-                uvs.component(caps + rows, 1), top_rim, atol=Float64(1e-5)
+                uvs.component((caps + rows) * 9, 1),
+                top_rim,
+                atol=Float64(1e-5),
             )
 
 
 def test_every_capsule_face_winds_outward() raises:
-    assert_faces_wind_with_their_normals(a_pill())
-    assert_no_degenerate_triangle(a_pill())
+    # Every face with area winds outward, and the only faces without are
+    # the half cells against the two poles.
+    assert_equal(assert_faces_with_area_wind_with_their_normals(a_pill()), 16)
     var tall = capsule(Length(0.5, METER), Length(3.0, METER), 2, 6, 3)
-    assert_faces_wind_with_their_normals(tall)
-    assert_no_degenerate_triangle(tall)
+    assert_equal(assert_faces_with_area_wind_with_their_normals(tall), 12)
 
 
 def test_a_capsule_of_no_length_is_a_sphere() raises:
-    # One rim rather than two coincident ones, so there is no collapsed
-    # side between the caps, however many rows the side was asked for.
+    # three.js keeps both rims and the side between them, which has no
+    # height, however many rows the side was asked for.
     for rows in [1, 3]:
         var ball = capsule(Length(1.5, METER), Length(0.0, METER), 4, 8, rows)
-        assert_equal(ball.vertex_count(), 9 * 9)
-        assert_equal(ball.triangle_count(), 2 * 8 * 8 - 2 * 8)
+        assert_equal(ball.vertex_count(), 9 * (8 + rows + 1))
         ref positions = ball.attribute_view(String(POSITION))
         for vertex in range(ball.vertex_count()):
             assert_almost_equal(
@@ -2059,8 +2088,7 @@ def test_a_capsule_of_no_length_is_a_sphere() raises:
                 Float32(1.5),
                 atol=Float64(1e-5),
             )
-        assert_no_degenerate_triangle(ball)
-        assert_faces_wind_with_their_normals(ball)
+        _ = assert_faces_with_area_wind_with_their_normals(ball)
 
 
 def test_a_capsules_area_approaches_the_closed_form() raises:
@@ -2122,10 +2150,13 @@ def test_a_lathe_turns_a_profile_into_columns() raises:
             sqrt(p.x * p.x + p.z * p.z), Float32(1), atol=Float64(1e-5)
         )
         var n = normals.vector3(vertex)
-        assert_unit(n)
+        # The last point's normal is as long as its segment, two meters,
+        # as three.js leaves it.
+        var long = Float32(1) if vertex % 2 == 0 else Float32(2)
+        assert_almost_equal(n.length(), long, atol=Float64(1e-5))
         assert_equal(n.y, Float32(0))
         assert_almost_equal(
-            n.dot(Vector3(p.x, 0, p.z)), Float32(1), atol=Float64(1e-5)
+            n.dot(Vector3(p.x, 0, p.z)), long, atol=Float64(1e-5)
         )
     # The sweep starts at +z, as the cylinder's does.
     assert_xyz(positions.vector3(0), 0, -1, 1)
@@ -2164,14 +2195,13 @@ def test_a_lathe_profile_that_turns_straight_back_is_refused() raises:
     assert_xyz(ridge.vector3(1), 0, -1, 0)
 
 
-def test_a_lathe_leaves_out_the_cells_against_the_axis() raises:
-    # A diamond: a point on the axis at each end, so each end's half cells
-    # go, and what is left is two cones' worth of facets.
+def test_a_lathe_keeps_the_cells_against_the_axis() raises:
+    # A diamond: a point on the axis at each end. Each end's half cells
+    # have no area, and three.js keeps them, as this does.
     var gem = lathe(profile([0, -1, 1, 0, 0, 1]), 6)
     assert_equal(gem.vertex_count(), 7 * 3)
-    assert_equal(gem.triangle_count(), 2 * 6 * 2 - 2 * 6)
-    assert_no_degenerate_triangle(gem)
-    assert_faces_wind_with_their_normals(gem)
+    assert_equal(gem.triangle_count(), 2 * 6 * 2)
+    assert_equal(assert_faces_with_area_wind_with_their_normals(gem), 2 * 6)
     var chord = 2 * sin(Float32(pi) / 6)
     var slant = sqrt(cos(Float32(pi) / 6) * cos(Float32(pi) / 6) + 1)
     assert_almost_equal(

@@ -37,12 +37,21 @@ transport made. three.js checks neither; here both raise.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    TUBE_GEOMETRY,
+    UV,
+)
+from core.user_data import UserData
+from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
+from loaders.curve_json import write_curve3
 from math.curve3 import Curve3, FrenetFrames, transport_frames
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
-from units.si import Length
+from units.si import Length, METER
 
 
 def _tangents(path: List[Vector3], closed: Bool) raises -> List[Vector3]:
@@ -196,7 +205,17 @@ def tube(
     for ring in range(tubular_segments + 1):  # pragma: no branch
         # At least one segment, so this runs.
         us.append(Float32(ring) / Float32(tubular_segments))
-    return _sweep(centers, frames, us, radius.value, radial_segments)
+    var geometry = _sweep(centers, frames, us, radius.value, radial_segments)
+    var path = JsonWriter()
+    write_curve3(path, curve)
+    geometry.kind = TUBE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_json("path", path.finish())
+    geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_boolean("closed", closed)
+    return geometry^
 
 
 def _sweep(

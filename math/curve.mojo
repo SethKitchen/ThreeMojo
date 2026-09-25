@@ -311,6 +311,10 @@ struct Curve(Copyable, Movable):
     # How far an ellipse's own axes are turned from the plane's, in
     # radians, anticlockwise.
     var rotation: Float32
+    # The angle an ellipse ends at and which way it runs, as it was given:
+    # three.js's `aEndAngle` and `aClockwise`, which its JSON carries.
+    var end: Float32
+    var clockwise: Bool
 
     def __init__(out self, kind: CurveKind, var points: List[Vector2]) raises:
         """Create a curve of `kind` through or around `points`.
@@ -348,6 +352,8 @@ struct Curve(Copyable, Movable):
         self.start = 0
         self.sweep = 0
         self.rotation = 0
+        self.end = 0
+        self.clockwise = False
 
     def __init__(
         out self,
@@ -385,6 +391,8 @@ struct Curve(Copyable, Movable):
         self.start = start.to(RADIAN)
         self.sweep = ellipse_sweep(start, end, clockwise)
         self.rotation = rotation.to(RADIAN)
+        self.end = end.to(RADIAN)
+        self.clockwise = clockwise
 
     def __init__(out self, *, copy: Self):
         """Copy another curve."""
@@ -394,6 +402,8 @@ struct Curve(Copyable, Movable):
         self.start = copy.start
         self.sweep = copy.sweep
         self.rotation = copy.rotation
+        self.end = copy.end
+        self.clockwise = copy.clockwise
 
     def _ellipse_angle(self, t: Float32) -> Float32:
         """Return the angle an ellipse has reached at `t`.

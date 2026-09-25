@@ -40,11 +40,14 @@ dresses each part in its own.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
+    CONE_GEOMETRY,
+    CYLINDER_GEOMETRY,
     MaterialIndex,
     NORMAL,
     POSITION,
     UV,
 )
+from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from std.math import cos, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -269,6 +272,22 @@ def cylinder(
             begin, runs[part] - begin, MaterialIndex(dressed[part])
         )
         begin = runs[part]
+    geometry.kind = CYLINDER_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radiusTop", Float64(radius_top.to(METER)))
+    geometry.parameters.set_number(
+        "radiusBottom", Float64(radius_bottom.to(METER))
+    )
+    geometry.parameters.set_number("height", Float64(height.to(METER)))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    geometry.parameters.set_boolean("openEnded", open_ended)
+    geometry.parameters.set_number(
+        "thetaStart", Float64(theta_start.to(RADIAN))
+    )
+    geometry.parameters.set_number(
+        "thetaLength", Float64(theta_length.to(RADIAN))
+    )
     return geometry^
 
 
@@ -303,7 +322,7 @@ def cone(
             count is too small, or the sweep is not positive or is more than
             a turn.
     """
-    return cylinder(
+    var geometry = cylinder(
         Length(0.0, METER),
         radius,
         height,
@@ -313,3 +332,17 @@ def cone(
         theta_start,
         theta_length,
     )
+    geometry.kind = CONE_GEOMETRY
+    geometry.parameters = UserData()
+    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_number("height", Float64(height.to(METER)))
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    geometry.parameters.set_boolean("openEnded", open_ended)
+    geometry.parameters.set_number(
+        "thetaStart", Float64(theta_start.to(RADIAN))
+    )
+    geometry.parameters.set_number(
+        "thetaLength", Float64(theta_length.to(RADIAN))
+    )
+    return geometry^
