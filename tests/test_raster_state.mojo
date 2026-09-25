@@ -338,11 +338,11 @@ def test_a_state_refuses_what_no_backend_can_draw() raises:
             wrong[index].check()
 
 
-def test_only_an_opaque_fragment_under_both_switches_writes_depth() raises:
-    assert_true(RasterState().writes_depth(False))
-    assert_false(RasterState().writes_depth(True))
-    assert_false(RasterState(depth_write=False).writes_depth(False))
-    assert_false(RasterState(depth_test=False).writes_depth(False))
+def test_a_fragment_under_both_switches_writes_depth() raises:
+    # Blending or not, as three.js writes a transparent material's depth.
+    assert_true(RasterState().writes_depth())
+    assert_false(RasterState(depth_write=False).writes_depth())
+    assert_false(RasterState(depth_test=False).writes_depth())
 
 
 def test_the_stencil_test_runs_before_the_depth_test() raises:
@@ -639,7 +639,8 @@ def test_a_line_obeys_the_stencil_the_depth_and_the_color_switches() raises:
     assert_equal(target.color_at(1, 3).b, 1)
     assert_equal(target.depth_at(1, 3), Float32(0.5))
     assert_equal(target.color_at(6, 3).b, 0)
-    # A blended line that writes no color changes nothing.
+    # A blended line that writes no color changes no color, but claims
+    # its depth, as three.js's transparent line with `depthWrite` does.
     var quiet = RasterState(color_write=False)
     var green = FloatColor(0, 1, 0, 0.5)
     rasterize_line(
@@ -648,14 +649,15 @@ def test_a_line_obeys_the_stencil_the_depth_and_the_color_switches() raises:
         target,
     )
     assert_equal(target.color_at(1, 3).g, 0)
-    # A blended line with the default state mixes and claims no depth.
+    assert_equal(target.depth_at(1, 3), Float32(0.1))
+    # A blended line with the default state mixes and claims its depth.
     rasterize_line(
-        _end(0, 0.1, green, RasterState(), BLEND),
-        _end(8, 0.1, green, RasterState(), BLEND),
+        _end(0, 0.05, green, RasterState(), BLEND),
+        _end(8, 0.05, green, RasterState(), BLEND),
         target,
     )
     assert_true(target.color_at(1, 3).g > 0)
-    assert_equal(target.depth_at(1, 3), Float32(0.5))
+    assert_equal(target.depth_at(1, 3), Float32(0.05))
 
 
 def test_a_line_refuses_ends_that_disagree_about_their_state() raises:
@@ -692,7 +694,7 @@ def test_a_point_obeys_the_stencil_the_depth_and_the_color_switches() raises:
     )
     assert_equal(target.stencil_at(4, 4), 2)
     assert_equal(target.color_at(4, 4).b, 1)
-    # A blended point that writes no color changes nothing.
+    # A blended point that writes no color changes no color.
     rasterize_point(
         _dot(
             0.1,
@@ -703,17 +705,19 @@ def test_a_point_obeys_the_stencil_the_depth_and_the_color_switches() raises:
         target,
     )
     assert_equal(target.color_at(4, 4).g, 0)
+    # But it claims its depth, as a blended line does.
+    assert_equal(target.depth_at(4, 4), Float32(0.1))
     # And the uv view obeys the color and the depth switches.
     rasterize_point(
-        _dot(0.25, RED, RasterState(color_write=False, depth_write=False)),
+        _dot(0.05, RED, RasterState(color_write=False, depth_write=False)),
         target,
         SHADE_UV,
     )
     assert_false(target.is_data(4, 4))
-    assert_equal(target.depth_at(4, 4), Float32(0.5))
-    rasterize_point(_dot(0.25, RED, RasterState()), target, SHADE_UV)
+    assert_equal(target.depth_at(4, 4), Float32(0.1))
+    rasterize_point(_dot(0.05, RED, RasterState()), target, SHADE_UV)
     assert_true(target.is_data(4, 4))
-    assert_equal(target.depth_at(4, 4), Float32(0.25))
+    assert_equal(target.depth_at(4, 4), Float32(0.05))
 
 
 def test_a_point_refuses_a_state_no_backend_can_draw() raises:

@@ -1692,6 +1692,8 @@ struct _Writer(Movable):
         """Write an instanced mesh's header and fields."""
         ref mesh = scene.instanced_meshes[which]
         header.type = "InstancedMesh"
+        header.cast_shadow = mesh.cast_shadow
+        header.receive_shadow = mesh.receive_shadow
         header.frustum_culled = mesh.frustum_culled
         header.write(writer)
         writer.key("geometry")
@@ -1736,6 +1738,8 @@ struct _Writer(Movable):
         var geometry = self.library.add_geometry(joined.geometry, -1)
         header.type = "BatchedMesh"
         header.frustum_culled = batch.frustum_culled
+        header.cast_shadow = batch.cast_shadow
+        header.receive_shadow = batch.receive_shadow
         header.write(writer)
         writer.key("geometry")
         writer.string(object_uuid(_GEOMETRY_UUID, geometry))
@@ -1869,6 +1873,8 @@ struct _Writer(Movable):
         ref mesh = scene.skinned_meshes[which]
         var mode = bind_mode_name(mesh.bind_mode)
         header.type = "SkinnedMesh"
+        header.cast_shadow = mesh.cast_shadow
+        header.receive_shadow = mesh.receive_shadow
         header.frustum_culled = mesh.frustum_culled
         header.write(writer)
         writer.key("geometry")
@@ -1902,6 +1908,8 @@ struct _Writer(Movable):
         if not line.mode.is_valid():
             raise Error("Object JSON: a line mode that is none of the three")
         header.type = line_type_names()[line.mode.value]
+        header.cast_shadow = line.cast_shadow
+        header.receive_shadow = line.receive_shadow
         header.frustum_culled = line.frustum_culled
         header.write(writer)
         writer.key("geometry")
@@ -1920,6 +1928,8 @@ struct _Writer(Movable):
         """Write points and their `PointsMaterial`."""
         ref points = scene.points[which]
         header.type = "Points"
+        header.cast_shadow = points.cast_shadow
+        header.receive_shadow = points.receive_shadow
         header.frustum_culled = points.frustum_culled
         header.write(writer)
         writer.key("geometry")

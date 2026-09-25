@@ -290,14 +290,15 @@ def test_a_point_behind_something_is_hidden() raises:
     assert_equal(target.shown(4, 4).r, UInt8(0))
 
 
-def test_a_blended_point_mixes_and_claims_no_depth() raises:
+def test_a_blended_point_mixes_and_claims_its_depth() raises:
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_point(
         dot(4.5, 4.5, 3, 0.5, FloatColor(1, 0, 0, 0.5), BLEND), target
     )
     assert_equal(target.shown(4, 4).r, UInt8(188))
-    assert_equal(target.depth_at(4, 4), inf[DType.float32]())
-    # Hidden by what is in front, tested without claiming.
+    # As three.js's transparent material with `depthWrite` writes it.
+    assert_equal(target.depth_at(4, 4), Float32(0.5))
+    # Hidden by what is in front.
     var covered = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_point(dot(4.5, 4.5, 3, 0.2, FloatColor(0, 0, 1)), covered)
     rasterize_point(

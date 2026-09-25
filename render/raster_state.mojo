@@ -390,7 +390,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     # disabled depth test writes none.
     var depth_test: Bool
     # Whether a fragment that passes writes its depth, three.js's
-    # `depthWrite`. A blending surface never writes depth in this port;
+    # `depthWrite`. A blending surface writes depth too, as in three.js;
     # see `writes_depth`.
     var depth_write: Bool
     var depth_func: DepthFunc
@@ -578,21 +578,18 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
                 " blend color or alpha outside 0 to 1"
             )
 
-    def writes_depth(self, mixes: Bool) -> Bool:
+    def writes_depth(self) -> Bool:
         """Return True if a fragment that passes writes its depth.
 
-        A blending fragment never writes depth, as `Renderer.prepare`
-        sorts it; see `docs/wiki/Why-transparency-is-sorted.md`. A
-        fragment with the depth test off writes none, as OpenGL's does.
-
-        Args:
-            mixes: Whether the fragment blends into the pixel.
+        A blending fragment writes its depth as an opaque one does, as
+        three.js's `transparent` material with `depthWrite` on writes it;
+        see `docs/wiki/Why-transparency-is-sorted.md`. A fragment with the
+        depth test off writes none, as OpenGL's does.
 
         Returns:
-            Whether the depth test is on, the depth write is on and the
-            fragment does not blend.
+            Whether the depth test and the depth write are both on.
         """
-        return self.depth_test and self.depth_write and not mixes
+        return self.depth_test and self.depth_write
 
     def ops_word(self) -> Int:
         """Return the switches, the functions and the operations packed

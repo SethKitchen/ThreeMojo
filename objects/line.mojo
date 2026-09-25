@@ -182,6 +182,13 @@ struct Line(ImplicitlyCopyable):
     # frustum. On by default, as the flag of a `Mesh` is and as the
     # three.js `frustumCulled` is.
     var frustum_culled: Bool
+    # Whether the line is drawn into the lights' shadow maps, three.js's
+    # `castShadow`, and whether it counts as a receiver, `receiveShadow`.
+    # Both off by default, as there. A line is unlit, so no shadow falls
+    # on it; a receiving line is drawn into a variance map, as three.js
+    # draws every receiver into one. See `Renderer.shadow_maps`.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -191,6 +198,8 @@ struct Line(ImplicitlyCopyable):
         *,
         mode: LineMode = STRIP,
         frustum_culled: Bool = True,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -208,6 +217,10 @@ struct Line(ImplicitlyCopyable):
                 otherwise, as the three.js `Line` is the base of the three.
             frustum_culled: Whether the renderer can skip this line when
                 its bounds are out of view.
+            cast_shadow: Whether the line is drawn into the shadow maps,
+                three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the line is a receiver, three.js's
+                `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If any id is negative, or the mode is not a named one.
@@ -225,6 +238,8 @@ struct Line(ImplicitlyCopyable):
         self.node = node
         self.mode = mode
         self.frustum_culled = frustum_culled
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
 
     def segment_count(self, vertices: Int) raises -> Int:
         """Return how many segments this line makes of `vertices` points.

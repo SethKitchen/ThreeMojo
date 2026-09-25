@@ -2180,6 +2180,8 @@ struct _Loader(Movable):
                     id,
                     mode=LineMode(line),
                     frustum_culled=culled,
+                    cast_shadow=self.flag(item, "castShadow", False),
+                    receive_shadow=self.flag(item, "receiveShadow", False),
                 )
             )
         elif kind == "Points":
@@ -2189,6 +2191,8 @@ struct _Loader(Movable):
                     self.material_named(item),
                     id,
                     frustum_culled=culled,
+                    cast_shadow=self.flag(item, "castShadow", False),
+                    receive_shadow=self.flag(item, "receiveShadow", False),
                 )
             )
         elif kind == "Sprite":
@@ -2268,6 +2272,8 @@ struct _Loader(Movable):
             per_object_frustum_culled=self.flag(
                 item, "perObjectFrustumCulled", True
             ),
+            cast_shadow=self.flag(item, "castShadow", False),
+            receive_shadow=self.flag(item, "receiveShadow", False),
         )
         var whole = assets.geometries.get(self.geometry_named(item)).clone()
         var infos = self.array(item, "geometryInfo")
@@ -2452,6 +2458,8 @@ struct _Loader(Movable):
             id,
             count,
             frustum_culled=self.flag(item, "frustumCulled", True),
+            cast_shadow=self.flag(item, "castShadow", False),
+            receive_shadow=self.flag(item, "receiveShadow", False),
         )
         var matrices = self.entry(item, "instanceMatrix")
         if matrices == NO_NODE:
@@ -2873,6 +2881,8 @@ struct _Loader(Movable):
                 bind^,
                 bind_mode=bind_mode_of(self.text(item, "bindMode", "attached")),
                 frustum_culled=self.flag(item, "frustumCulled", True),
+                cast_shadow=self.flag(item, "castShadow", False),
+                receive_shadow=self.flag(item, "receiveShadow", False),
             )
             self.wear(item, mesh.morph_influences)
             scene.add_skinned_mesh(mesh^)

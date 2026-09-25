@@ -235,11 +235,36 @@ The renderer draws the scene once per casting light, from the light, keeping onl
 
 A focus below one puts the map's texels on the middle of the cone, so the shadow is sharper there. A surface outside the narrowed camera is lit, as in three.js. The spot light's map, in [Spot light maps](#spot-light-maps), is seen through the same camera. `LightShadow.validate` refuses a focus that is not a positive finite number.
 
-Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
+Only what casts is drawn, under lit shading with no lights. Every kind of object can cast; see [What casts and what receives](#what-casts-and-what-receives). A cut-out map cuts nothing out of a shadow.
 
 Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Seventeen taps are compared on their own and averaged: three.js's `PCFShadowMap`, its default. Nine taps are `radius` texels apart, and eight more are at half that spread. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
 
 Every lit sum reads the map: the diffuse term, the toon ramp, the highlight and the physical lobe. Each is scaled by what the light's map lets through, as three.js scales `directLight.color`. A surface that does not receive skips every map.
+
+### What casts and what receives
+
+Every object that three.js draws into a shadow map casts here: a mesh, a line or points with `cast_shadow` set. This is three.js's `WebGLShadowMap.renderObject`. Each kind takes `cast_shadow` and `receive_shadow`, both off by default.
+
+| Object | Casts | Receives |
+|---|---|---|
+| `Mesh` | Its triangles, or its edges as a wireframe. | Yes. |
+| `SkinnedMesh` | Its triangles, posed by the bones. | Yes. |
+| `InstancedMesh` | Each instance, where its matrix puts it. | Yes. |
+| `BatchedMesh` | Each instance, where its matrix puts it. | Yes. |
+| An `Lod` level | The meshes on the level shown. A level is a node, and each mesh on it has its own flags, as in three.js. | Yes. |
+| `Line` | Its segments, one texel wide and never dashed. | No: a line is unlit. |
+| `Points` | Each point, one texel wide. | No: a point is unlit. |
+| `Sprite`, `LineSegments2` | Nothing. | No. |
+
+A point casts one texel whatever its `point_size`. three.js draws a point with its depth material, whose shader sets no `gl_PointSize`, and WebGL then draws one pixel. A dashed line casts a whole line, as the depth material has no dashes.
+
+A translucent surface casts a whole shadow. three.js draws a caster with its own depth material, which writes the depth whatever the caster's opacity or `depth_write`. A translucent surface also writes its depth in the frame while `depth_write` is on. See [Why transparency is sorted](Why-transparency-is-sorted).
+
+An LOD casts the level that it shows. three.js updates each LOD for the camera before it draws the maps, and a map draws the level left visible. Here `Scene.update_lods` shows one level and hides the others, and a hidden node casts nothing. Call it before each frame, as [LOD](Meshes-and-assets#lod) says.
+
+Under `VSM_SHADOW_MAP`, every object that receives is drawn into the maps too, lines and points included. A line or points can receive no shadow, because they are unlit, as three.js's `LineBasicMaterial` and `PointsMaterial` are. A cascade of a `CSM` is a directional light, so every kind casts into each cascade.
+
+Scene JSON carries `castShadow` and `receiveShadow` on every kind. See [Scene JSON](Scene-JSON).
 
 ### Shadow intensity
 

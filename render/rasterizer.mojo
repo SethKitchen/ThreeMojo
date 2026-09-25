@@ -3156,10 +3156,10 @@ def rasterize_shaded(
     # Whether an opaque fragment keeps the tone mapping off its pixel,
     # three.js's `toneMapped: false`, as a data fragment keeps it off.
     var untoned = data or not a.state.tone_mapped
-    # Whether a fragment that passes writes its depth: an opaque one with
-    # the depth test and the depth write on. A blending fragment never
-    # does; see `render.raster_state.RasterState.writes_depth`.
-    var writes_depth = a.state.writes_depth(blended)
+    # Whether a fragment that passes writes its depth: one with the depth
+    # test and the depth write on, blending or not, as in three.js; see
+    # `render.raster_state.RasterState.writes_depth`.
+    var writes_depth = a.state.writes_depth()
     # Whether these fragments reflect an environment: only when they name
     # one and the mode opens textures, since a reflection is one. A
     # reflecting surface needs its normal and its world position whether
@@ -4688,7 +4688,7 @@ def rasterize_line(
     var horizontal = major_is_x(first, second)
     var fogged = fog.is_on() and a.fog
     # Whether a pixel that passes writes its depth; see `rasterize_shaded`.
-    var writes_depth = a.state.writes_depth(a.blend.mixes())
+    var writes_depth = a.state.writes_depth()
     # Which steps can land on the target at all, worked out before the
     # walk rather than discovered inside it. A projection can put an
     # endpoint a very long way off the image -- a segment from x = -1e6 to
@@ -4782,12 +4782,10 @@ def rasterize_line(
             target.keep_stencil(x, y, test)
             if not test.passes:
                 continue
-            # A blended segment is hidden by what is in front of it and
-            # hides nothing behind it, exactly as a blended triangle: it
-            # tests the depth without claiming it. Claiming it, as this
-            # once did, dropped every later blended segment at a shared
-            # pixel, so a translucent wireframe lost the second edge at
-            # every corner, while the kernel kept it.
+            # A blended segment claims its depth as a blended triangle
+            # does, three.js's `depthWrite` on a transparent material. The
+            # kernel claims it at the same step, so a later segment behind
+            # it at a shared pixel is dropped on both backends.
             if writes_depth:
                 target.claim_depth(x, y, stored_z)
             if not a.state.color_write:
@@ -4948,7 +4946,7 @@ def rasterize_point(
     var tested = point.alpha_test > 0 and mode != SHADE_UV
     var covered = point.state.alpha_to_coverage and mode != SHADE_UV
     var may_discard = tested or covered
-    var writes_depth = point.state.writes_depth(blended)
+    var writes_depth = point.state.writes_depth()
     var sampled = mode == SHADE_TEXTURE
     var center = Vector2(point.x, point.y)
     var size = point.point_size

@@ -184,6 +184,11 @@ struct SkinnedMesh(Copyable, Movable):
     var morph_influences: MorphInfluences
     # Each target's name and index, as a `Mesh` carries them.
     var morph_target_dictionary: Dict[String, Int]
+    # Whether the posed mesh is drawn into the lights' shadow maps, and
+    # whether their shadows fall on it: three.js's `castShadow` and
+    # `receiveShadow`, both off by default as there. See `lights.shadow`.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -195,6 +200,8 @@ struct SkinnedMesh(Copyable, Movable):
         *,
         bind_mode: BindMode = ATTACHED,
         frustum_culled: Bool = False,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node and a
         skeleton.
@@ -217,6 +224,10 @@ struct SkinnedMesh(Copyable, Movable):
                 and nothing else, so a mesh the bones have carried out of
                 that bound can be culled while it is on screen. It is an
                 opt-in to a known wrong answer, not a free saving.
+            cast_shadow: Whether the posed mesh is drawn into the shadow
+                maps, three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the shadows fall on this mesh,
+                three.js's `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If any id is negative, if the bind mode is neither of
@@ -249,6 +260,8 @@ struct SkinnedMesh(Copyable, Movable):
         self.bind_mode = bind_mode
         self.morph_influences = MorphInfluences()
         self.morph_target_dictionary = Dict[String, Int]()
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
 
     def bone_count(self) -> Int:
         """Return how many bones carry this mesh."""

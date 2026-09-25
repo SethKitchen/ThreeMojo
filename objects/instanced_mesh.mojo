@@ -122,6 +122,11 @@ struct InstancedMesh(Copyable, Movable):
     # empty until the first `set_color_at`. `color_at` reads an instance
     # past its end as white, and so does the renderer.
     var colors: List[Color]
+    # Whether the instances are drawn into the lights' shadow maps, and
+    # whether their shadows fall on them: three.js's `castShadow` and
+    # `receiveShadow`, both off by default as there.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -131,6 +136,8 @@ struct InstancedMesh(Copyable, Movable):
         count: Int,
         *,
         frustum_culled: Bool = True,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node, `count`
         times over.
@@ -143,6 +150,10 @@ struct InstancedMesh(Copyable, Movable):
             count: How many instances, each starting at the identity.
             frustum_culled: Whether the renderer may skip an instance whose
                 bounds are out of view.
+            cast_shadow: Whether the instances are drawn into the shadow
+                maps, three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the shadows fall on the instances,
+                three.js's `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If any id is negative, or the count is.
@@ -161,6 +172,8 @@ struct InstancedMesh(Copyable, Movable):
         self.frustum_culled = frustum_culled
         self.matrices = List[Matrix4](length=count, fill=Matrix4())
         self.colors = List[Color]()
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
 
     def count(self) -> Int:
         """Return how many instances there are, three.js's `count`."""
@@ -390,6 +403,11 @@ struct BatchedMesh(Copyable, Movable):
     # three.js's `customSort`, used when `custom_sorted` is set.
     var custom_sort: BatchedSort
     var custom_sorted: Bool
+    # Whether the instances are drawn into the lights' shadow maps, and
+    # whether their shadows fall on them: three.js's `castShadow` and
+    # `receiveShadow`, both off by default as there.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -401,6 +419,8 @@ struct BatchedMesh(Copyable, Movable):
         max_instance_count: Int = NO_LIMIT,
         max_vertex_count: Int = NO_LIMIT,
         max_index_count: Int = NO_LIMIT,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Start an empty batch on a scene node, three.js's
         `new BatchedMesh(maxInstanceCount, maxVertexCount, maxIndexCount,
@@ -420,6 +440,10 @@ struct BatchedMesh(Copyable, Movable):
                 `add_geometry` hold at most. No limit by default.
             max_index_count: How many indices the ranges hold at most. No
                 limit by default. three.js's default is twice the vertices.
+            cast_shadow: Whether the instances are drawn into the shadow
+                maps, three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the shadows fall on the instances,
+                three.js's `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If either id is negative, or a count is.
@@ -450,6 +474,8 @@ struct BatchedMesh(Copyable, Movable):
         self.indexed = None
         self.custom_sort = _keep_order
         self.custom_sorted = False
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
 
     def count(self) -> Int:
         """Return how many instance indices are in use or free: three.js's

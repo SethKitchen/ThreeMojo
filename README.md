@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 183 features are ported and 19 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 184 features are ported and 18 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -177,11 +177,11 @@ The port is not at parity with three.js yet. 183 features are ported and 19 are 
 
 ### Lights
 
-- [ ] Shadows from skinned, instanced, batched, LOD, line, point and translucent objects [#187](https://github.com/SethKitchen/ThreeMojo/issues/187)
 
 <details>
-<summary>Ported: 13</summary>
+<summary>Ported: 14</summary>
 
+- [x] [Shadows from skinned, instanced, batched, LOD, line, point and translucent objects](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#what-casts-and-what-receives): every kind casts and receives, and translucent surfaces write depth [#187](https://github.com/SethKitchen/ThreeMojo/issues/187)
 - [x] [Shadow camera frustum, light power, CSM and room environments](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#cascaded-shadow-maps): shadow camera edges and intensity, light power, cascades, and PMREM from a scene [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)

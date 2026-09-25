@@ -63,6 +63,13 @@ struct Points(ImplicitlyCopyable):
     # not their squares: a point just outside the view whose square
     # reaches into it is left out, as three.js leaves it out.
     var frustum_culled: Bool
+    # Whether the points are drawn into the lights' shadow maps, three.js's
+    # `castShadow`, and whether they count as a receiver, `receiveShadow`.
+    # Both off by default, as there. A point is unlit, so no shadow falls
+    # on it; receiving points are drawn into a variance map, as three.js
+    # draws every receiver into one. See `Renderer.shadow_maps`.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -71,6 +78,8 @@ struct Points(ImplicitlyCopyable):
         node: NodeId,
         *,
         frustum_culled: Bool = True,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -86,6 +95,10 @@ struct Points(ImplicitlyCopyable):
             node: Index of the scene node giving their world transform.
             frustum_culled: Whether the renderer can skip these points
                 when their bounds are out of view.
+            cast_shadow: Whether the points are drawn into the shadow
+                maps, three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the points are a receiver, three.js's
+                `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If any id is negative.
@@ -100,3 +113,5 @@ struct Points(ImplicitlyCopyable):
         self.material = material
         self.node = node
         self.frustum_culled = frustum_culled
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow

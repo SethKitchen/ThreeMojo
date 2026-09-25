@@ -296,11 +296,11 @@ def test_a_blended_line_mixes_with_what_is_there() raises:
     assert_almost_equal(mixed.g, Float32(0.5), atol=TOLERANCE)
 
 
-def test_a_blended_line_claims_no_depth() raises:
-    # Two blended segments crossing: the second is behind the first and
-    # still contributes, because a blended segment tests the depth without
-    # claiming it, as a blended triangle does. Claiming it dropped the
-    # second at the crossing, and the kernel never did.
+def test_a_blended_line_claims_its_depth() raises:
+    # Two blended segments crossing: the second is behind the first and is
+    # dropped at the crossing, because a blended segment claims its depth,
+    # as three.js's transparent line with `depthWrite` does. The kernel
+    # claims it too.
     var target = RenderTarget(16, 16, Color(0, 0, 0))
     rasterize_line(
         end(2.5, 8.5, 0.2, FloatColor(1, 0, 0, 0.5), BLEND),
@@ -313,13 +313,13 @@ def test_a_blended_line_claims_no_depth() raises:
         target,
     )
     var crossing = target.color_at(8, 8)
-    # Half blue over half red over opaque black, premultiplied: a quarter
-    # red and a half blue, and the clear color's full coverage kept.
-    assert_almost_equal(crossing.r, Float32(0.25), atol=TOLERANCE)
-    assert_almost_equal(crossing.b, Float32(0.5), atol=TOLERANCE)
+    # Half red over opaque black, premultiplied, and no blue: the clear
+    # color's full coverage kept.
+    assert_almost_equal(crossing.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(crossing.b, Float32(0), atol=TOLERANCE)
     assert_almost_equal(crossing.a, Float32(1), atol=TOLERANCE)
-    # And neither claimed the pixel's depth.
-    assert_equal(target.depth_at(8, 8), inf[DType.float32]())
+    # The first claimed the pixel's depth.
+    assert_almost_equal(target.depth_at(8, 8), Float32(0.2), atol=TOLERANCE)
     # An opaque segment still claims it.
     rasterize_line(end(2.5, 8.5, 0.1), end(14.5, 8.5, 0.1), target)
     assert_almost_equal(target.depth_at(8, 8), Float32(0.1), atol=TOLERANCE)

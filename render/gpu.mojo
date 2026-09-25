@@ -3784,9 +3784,8 @@ def rasterize_kernel(
     # host's target is.
     var nearest = FURTHEST
     var found = False
-    # True once an *opaque* fragment has claimed this pixel's depth. A
-    # translucent one tests depth without claiming it, exactly as on the host,
-    # so the depth that comes back is the nearest solid surface.
+    # True once a fragment has claimed this pixel's depth, opaque or
+    # translucent, exactly as on the host.
     var solid = False
     var red = Float32(0)
     var green = Float32(0)
@@ -4011,13 +4010,15 @@ def rasterize_kernel(
                 var mixes = policy != OPAQUE.value and mode != Int32(
                     SHADE_UV.value
                 )
+                # Claimed before the color, blending or not, as the host
+                # claims it; see the triangle pass below.
+                if state.writes_depth():
+                    nearest = stored_z
+                    solid = True
                 if mixes and policy == NORMAL_MODE and share == 0:
                     continue
                 found = True
                 if not mixes:
-                    if state.writes_depth(mixes):
-                        nearest = stored_z
-                        solid = True
                     if not state.color_write:
                         continue
                     share = 1
@@ -4202,13 +4203,13 @@ def rasterize_kernel(
                     ]
                 )
                 var mixes = policy != OPAQUE.value
+                if state.writes_depth():
+                    nearest = stored_z
+                    solid = True
                 if mixes and policy == NORMAL_MODE and share_a == 0:
                     continue
                 found = True
                 if not mixes:
-                    if state.writes_depth(mixes):
-                        nearest = stored_z
-                        solid = True
                     if not state.color_write:
                         continue
                     # Opaque, so written with an alpha of one, as on the host.
@@ -6391,17 +6392,20 @@ def rasterize_kernel(
                 maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND]
             )
             var mixes = policy != OPAQUE.value and mode != Int32(SHADE_UV.value)
-            # A source-over fragment that covers nothing contributes no color,
-            # so it must contribute no depth and no answer about what the pixel
-            # holds either. `RenderTarget.blend` returns early for the same
-            # reason; see `render.target`.
+            # The depth is claimed first, by every fragment that writes it,
+            # blending or not: three.js writes the depth of a transparent
+            # material with `depthWrite` on, even where its alpha is zero,
+            # and the host claims it before it blends.
+            if state.writes_depth():
+                nearest = stored_z
+                solid = True
+            # A source-over fragment that covers nothing contributes no color
+            # and no answer about what the pixel holds. `RenderTarget.blend`
+            # returns early for the same reason; see `render.target`.
             if mixes and policy == NORMAL_MODE and share == 0:
                 continue
             found = True
             if not mixes:
-                if state.writes_depth(mixes):
-                    nearest = stored_z
-                    solid = True
                 if not state.color_write:
                     continue
                 # Nothing behind contributes, and the fragment is written with

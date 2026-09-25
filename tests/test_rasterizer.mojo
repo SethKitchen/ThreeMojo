@@ -990,10 +990,9 @@ def test_a_half_transparent_white_over_black_is_half_the_light() raises:
     assert_true(fb.shown(3, 3).r > 180)
 
 
-def test_a_transparent_surface_does_not_claim_the_depth() raises:
-    # Two panes one behind the other both show, which is the whole point: a
-    # translucent surface is hidden by what is in front of it without hiding
-    # what is behind it.
+def test_a_transparent_surface_claims_the_depth() raises:
+    # Two panes drawn furthest first both show, and each claims its depth,
+    # as three.js's transparent material with `depthWrite` does.
     var fb = RenderTarget(6, 6, Color(0, 0, 0))
     var far = covering(0.8)
     var near = covering(0.2)
@@ -1014,9 +1013,9 @@ def test_a_transparent_surface_does_not_claim_the_depth() raises:
     assert_true(fb.shown(3, 3).r > 0)
     assert_true(fb.shown(3, 3).r < behind_only)
     assert_true(fb.shown(3, 3).b > 0)
-    # And the depth buffer still says nothing is there, so an opaque surface
-    # behind both would still draw.
-    assert_equal(fb.depth_at(3, 3), inf[DType.float32]())
+    # And the depth buffer holds the near pane, so a surface behind both
+    # would not draw.
+    assert_almost_equal(fb.depth_at(3, 3), Float32(0.2), atol=Float64(1e-5))
 
 
 def test_an_opaque_surface_in_front_hides_a_transparent_one() raises:
@@ -1868,12 +1867,11 @@ def test_a_frame_draws_its_runs_in_the_order_given() raises:
         SHADE_LIT,
         textures,
     )
-    # The pane blended without claiming the depth, so the stroke passes
-    # the test and replaces the pixel: the wrong picture, and exactly what
-    # two passes drew.
+    # The pane claims its depth as it blends, so the stroke behind it,
+    # drawn second, fails the test and never shows: the order decides.
     var replaced = over.shown(4, 4)
-    assert_equal(replaced.r, UInt8(0))
-    assert_equal(replaced.b, UInt8(255))
+    assert_equal(replaced.r, UInt8(188))
+    assert_equal(replaced.b, UInt8(0))
     # And an empty order draws nothing at all, nor does a run of nothing.
     var untouched = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_frame(pane, stroke, List[Draw](), untouched)
@@ -1922,8 +1920,9 @@ def test_a_frame_draws_the_same_on_one_worker_and_on_four() raises:
             assert_equal(one.g, four.g)
             assert_equal(one.b, four.b)
             assert_equal(alone.depth_at(x, y), crowd.depth_at(x, y))
-    # The last stroke was drawn over the pane, the first two under it.
-    assert_equal(alone.shown(4, 6).b, UInt8(255))
+    # The last stroke was drawn after the pane and behind it, so it is
+    # hidden where the pane claimed the depth; the first two show under it.
+    assert_equal(alone.shown(4, 6).b, UInt8(0))
     assert_equal(alone.shown(4, 1).b, UInt8(188))
 
 

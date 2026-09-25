@@ -35,7 +35,7 @@ A mesh holds no transform. The node holds it. One geometry can be drawn at many 
 
 `frustum_culled` lets the renderer skip the mesh when its bounds are out of view. It is on by default, as three.js's `Object3D.frustumCulled` is. See [Renderer](Renderer#frustum-culling).
 
-`cast_shadow` and `receive_shadow` are three.js's `castShadow` and `receiveShadow`, both off by default. See [Shadows](Lights#shadows).
+`cast_shadow` and `receive_shadow` are three.js's `castShadow` and `receiveShadow`, both off by default. A `SkinnedMesh`, an `InstancedMesh`, a `BatchedMesh`, a `Line` and `Points` take the same two flags. An `Lod` level is a node, and its meshes have their own. See [What casts and what receives](Lights#what-casts-and-what-receives).
 
 ## Several materials
 

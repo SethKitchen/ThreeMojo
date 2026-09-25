@@ -276,9 +276,13 @@ def test_render_order_decides_which_translucent_surface_is_on_top() raises:
     var quad = assets.geometries.add(
         plane(Length(2.0, METER), Length(2.0, METER))
     )
-    var red = assets.materials.add(
-        Material(Color(255, 0, 0), kind=BASIC, opacity=0.5, transparent=True)
+    # The near red writes no depth, so the far blue drawn after it is not
+    # hidden, as in three.js, where `depthWrite` would hide it.
+    var glass = Material(
+        Color(255, 0, 0), kind=BASIC, opacity=0.5, transparent=True
     )
+    glass.depth_write = False
+    var red = assets.materials.add(glass^)
     var blue = assets.materials.add(
         Material(Color(0, 0, 255), kind=BASIC, opacity=0.5, transparent=True)
     )
