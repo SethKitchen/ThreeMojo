@@ -117,7 +117,7 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 <details>
 <summary>Ported: 14</summary>
 
-- [x] [MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope](https://github.com/SethKitchen/ThreeMojo/wiki/Animated-objects): morph flip-books blended by weight, Quake II characters that walk and fight, and a node that keeps its turn [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
+- [x] [MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope](https://github.com/SethKitchen/ThreeMojo/wiki/Animated-objects): blended morph flip-books, Quake II characters, and a node that keeps its turn [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [x] [Skeleton, morph, batch and LOD tools](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#skeleton-tools): clone and retarget, CCD IK, uncapped morphs, batch deletion and sorting, any node as a level [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 - [x] [Multi-material meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#several-materials): geometry groups drawn with a material list by both rasterizers, the raycaster, loaders, exporters and SceneUtils [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
