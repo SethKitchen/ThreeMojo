@@ -40,15 +40,16 @@ from controls.orbit_controls import (
     ROTATE,
 )
 from math.vector3 import Vector3
-from std.math import cos, pi, sin, sqrt
+from std.math import cos, inf, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Duration, Length, METER, SECOND
+from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
 comptime HEIGHT = 100
 comptime TOLERANCE = Float64(1e-4)
@@ -356,6 +357,105 @@ def test_arrows_pan_and_with_a_modifier_rotate() raises:
         _key(controls, camera, ARROW_DOWN, shift=True)
         _key(controls, camera, ARROW_UP, shift=True)
     assert_false(controls.update(camera, _frame()))
+
+
+def test_a_key_turns_by_its_own_speed() raises:
+    # three.js's `keyRotateSpeed` is apart from `rotateSpeed`: tripling the
+    # pointer's speed leaves the keys where they were.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.rotate_speed = 3
+    for _ in range(25):
+        _key(controls, camera, ARROW_LEFT, shift=True)
+    _ = controls.update(camera, _frame())
+    _at(camera, -5, 0, 0)
+    # A key speed of two turns twice as far: half a turn.
+    controls.key_rotate_speed = 2
+    for _ in range(25):
+        _key(controls, camera, ARROW_LEFT, shift=True)
+    _ = controls.update(camera, _frame())
+    _at(camera, 5, 0, 0)
+
+
+def test_the_keys_can_be_rebound() raises:
+    # three.js's `keys`: a letter pans where the arrow did, and the arrow
+    # does nothing.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.key_pan_speed = 10
+    controls.key_up = Key(119)
+    controls.key_left = Key(97)
+    controls.key_bottom = Key(115)
+    controls.key_right = Key(100)
+    _key(controls, camera, ARROW_UP)
+    assert_false(controls.update(camera, _frame()))
+    _key(controls, camera, Key(119))
+    _key(controls, camera, Key(97))
+    _ = controls.update(camera, _frame())
+    _at(camera, -1, 1, 5)
+    _key(controls, camera, Key(115))
+    _key(controls, camera, Key(100))
+    _ = controls.update(camera, _frame())
+    _at(camera, 0, 0, 5)
+
+
+def test_the_angles_and_the_distance_after_an_update() raises:
+    # three.js's `getPolarAngle`, `getAzimuthalAngle` and `getDistance`.
+    var camera = _camera()
+    var controls = OrbitControls()
+    _ = controls.update(camera, _frame())
+    assert_almost_equal(
+        controls.get_polar_angle().to(RADIAN), Float32(pi / 2), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        controls.get_azimuthal_angle().to(RADIAN), Float32(0), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        controls.get_distance(camera.position).to(METER),
+        Float32(5),
+        atol=TOLERANCE,
+    )
+    controls.rotate_left(Angle(Float32(pi / 2), RADIAN))
+    _ = controls.update(camera, _frame())
+    assert_almost_equal(
+        controls.get_azimuthal_angle().to(RADIAN),
+        Float32(-pi / 2),
+        atol=TOLERANCE,
+    )
+
+
+def test_the_target_stays_near_the_cursor() raises:
+    # three.js clamps the target's distance from `cursor` after a pan.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.max_target_radius = Length(1.0, METER)
+    controls.target = Vector3(3, 0, 0)
+    _ = controls.update(camera, _frame())
+    assert_almost_equal(controls.target.length(), Float32(1), atol=TOLERANCE)
+    # And never nearer than its least radius.
+    controls.cursor = Vector3(0, 0, 0)
+    controls.min_target_radius = Length(0.5, METER)
+    controls.max_target_radius = Length(inf[DType.float32](), METER)
+    controls.target = Vector3(0, 0, 0)
+    _ = controls.update(camera, _frame())
+    assert_almost_equal(controls.target.length(), Float32(0), atol=TOLERANCE)
+
+
+def test_a_saved_state_is_put_back() raises:
+    # three.js's `saveState` and `reset`.
+    var camera = _camera()
+    var controls = OrbitControls()
+    with assert_raises(contains="save_state"):
+        controls.reset(camera)
+    controls.save_state(camera)
+    controls.rotate_left(Angle(1.0, RADIAN))
+    controls.target = Vector3(1, 0, 0)
+    camera.zoom = 2
+    _ = controls.update(camera, _frame())
+    controls.reset(camera)
+    _at(camera, 0, 0, 5)
+    assert_equal(camera.zoom, 1)
+    assert_almost_equal(controls.target.length(), Float32(0), atol=TOLERANCE)
 
 
 def test_keys_that_do_nothing() raises:

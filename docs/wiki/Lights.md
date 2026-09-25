@@ -421,7 +421,7 @@ These are the differences from three.js:
 - A custom split is a list of breaks, not a callback.
 - An argument of zero is kept. three.js's `data.x || default` replaces it with the default.
 - `update` also updates the scene's world matrices.
-- `CSMHelper` and `CSMShadowNode` are not ported.
+- `CSMShadowNode` is not ported. For `CSMHelper`, see [Helpers](Helpers#csmhelper).
 
 ## Highlights
 

@@ -80,6 +80,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from render.framebuffer import Color, FloatColor
 from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-3)
@@ -327,6 +328,139 @@ def test_translate_along_x_in_the_world() raises:
     var controls = _controls(TRANSLATE_MODE, WORLD_SPACE, _last(scene))
     _drag(controls, camera, scene, 67, 49, 8, 3, HANDLE_X)
     _assert_vector(scene.get(_last(scene)).position, 1.592724, 0.2, -0.3)
+
+
+def test_a_move_is_kept_in_the_limits() raises:
+    # three.js's `minX` to `maxZ`: every coordinate is kept, whichever axis
+    # is dragged.
+    var scene = _scene()
+    var camera = _camera()
+    var controls = _controls(TRANSLATE_MODE, WORLD_SPACE, _last(scene))
+    controls.max_x = Length(1.0, METER)
+    controls.min_y = Length(0.5, METER)
+    _drag(controls, camera, scene, 67, 49, 8, 3, HANDLE_X)
+    _assert_vector(scene.get(_last(scene)).position, 1.0, 0.5, -0.3)
+
+
+def test_the_handles_take_their_colors() raises:
+    # three.js's `setColors`: no handle is red, green or blue after.
+    var scene = _scene()
+    var camera = _camera()
+    var controls = _controls(TRANSLATE_MODE, WORLD_SPACE, _last(scene))
+    var x = Color(10, 20, 30)
+    controls.set_colors(x, Color(40, 50, 60), Color(70, 80, 90), Color(1, 2, 3))
+    assert_true(controls.x_color.r == x.r and controls.x_color.b == x.b)
+    var colors = (
+        controls.gizmo(camera, scene).clone_attribute(String(COLOR)).data.copy()
+    )
+    var tint = FloatColor(srgb=x)
+    var found = False
+    for at in range(0, len(colors), 3):
+        assert_false(
+            colors[at] == 1 and colors[at + 1] == 0 and colors[at + 2] == 0
+        )
+        if (
+            abs(colors[at] - tint.r) < 1e-6
+            and abs(colors[at + 2] - tint.b) < 1e-6
+        ):
+            found = True
+    assert_true(found, "the x handles did not take their color")
+
+
+def test_the_helper_lines() raises:
+    # three.js's helper objects: an axis line while a handle is picked, and
+    # a move's line from where the drag began while it is dragged.
+    var scene = _scene()
+    var camera = _camera()
+    var controls = _controls(TRANSLATE_MODE, WORLD_SPACE, _last(scene))
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        0,
+    )
+    _ = controls.handle(
+        _event(POINTER_MOVE, 67, 49, NO_BUTTON), camera, scene, SIZE, SIZE
+    )
+    var lines = (
+        controls.helper(camera, scene)
+        .clone_attribute(String(POSITION))
+        .data.copy()
+    )
+    assert_equal(len(lines), 6)
+    _ = controls.handle(_event(POINTER_DOWN, 67, 49), camera, scene, SIZE, SIZE)
+    _ = controls.handle(_event(POINTER_MOVE, 75, 52), camera, scene, SIZE, SIZE)
+    scene.update()
+    lines = (
+        controls.helper(camera, scene)
+        .clone_attribute(String(POSITION))
+        .data.copy()
+    )
+    assert_equal(len(lines), 12)
+    # The move's line ends where the node is.
+    var node = scene.world_position(_last(scene))
+    assert_almost_equal(lines[3], node.x, atol=1e-5)
+    # A turn's axis line shows while its ring is picked.
+    controls.mode = ROTATE_MODE
+    lines = (
+        controls.helper(camera, scene)
+        .clone_attribute(String(POSITION))
+        .data.copy()
+    )
+    assert_equal(len(lines), 6)
+    # A free turn's line shows only while it is dragged, and the eye's ring
+    # has none.
+    controls.dragging = False
+    controls.axis = HANDLE_XYZE
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        0,
+    )
+    controls.dragging = True
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        6,
+    )
+    controls.axis = HANDLE_E
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        0,
+    )
+    # A scale's drag has its axis line and no line from the start.
+    controls.mode = SCALE_MODE
+    controls.axis = HANDLE_X
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        6,
+    )
+    controls.dragging = False
+    controls.detach()
+    assert_equal(
+        len(
+            controls.helper(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data
+        ),
+        0,
+    )
 
 
 def test_translate_on_a_local_plane_with_a_snap() raises:
@@ -631,7 +765,9 @@ def test_detached_or_disabled_controls_do_nothing() raises:
     _kinds(events, [])
     assert_equal(
         len(
-            controls.gizmo(camera, scene).clone_attribute(String(POSITION)).data
+            controls.gizmo(camera, scene)
+            .clone_attribute(String(POSITION))
+            .data.copy()
         ),
         0,
     )

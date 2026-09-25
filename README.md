@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 185 features are ported and 18 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 186 features are ported and 17 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -301,7 +301,7 @@ The port is not at parity with three.js yet. 185 features are ported and 18 are 
 
 ### Windowing and controls
 
-- [ ] SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
+- [x] [SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#selectionbox) [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
 
 <details>
 <summary>Ported: 7</summary>

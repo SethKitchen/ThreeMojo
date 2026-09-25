@@ -30,8 +30,8 @@ the lights, so every surface reads them and there is no `setupMaterial`.
 A custom split is the list of breaks, not a callback that fills it. An
 argument of zero is kept, where three.js's `data.x || default` replaces
 it with the default. `update` also updates the scene's world matrices,
-as the renderer needs them fresh. `CSMHelper` and the node material
-`CSMShadowNode` are not ported.
+as the renderer needs them fresh. The node material `CSMShadowNode` is
+not ported; `CSMHelper` is `helpers.csm`.
 """
 
 from cameras.camera import Camera

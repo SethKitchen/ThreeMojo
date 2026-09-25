@@ -6,7 +6,7 @@ Four helpers draw more than lines. The light probe helper and the texture helper
 
 ![A camera circles a cube outlined in yellow, over a grid, beside the axes and a second camera's frustum](out/helpers.png)
 
-three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`. From `examples/jsm`: `OctreeHelper`, `LightProbeHelper`, `TextureHelper`, `ViewHelper` and `ShadowMapViewer`.
+three.js: `AxesHelper`, `GridHelper`, `PolarGridHelper`, `BoxHelper`, `Box3Helper`, `CameraHelper`, `ArrowHelper`, `PlaneHelper`, `SkeletonHelper`, `DirectionalLightHelper`, `PointLightHelper`, `HemisphereLightHelper`, `SpotLightHelper`, `RectAreaLightHelper`, `VertexNormalsHelper`, `VertexTangentsHelper`. From `examples/jsm`: `OctreeHelper`, `LightProbeHelper`, `TextureHelper`, `ViewHelper`, `ShadowMapViewer` and `CSMHelper`.
 
 ## A helper is a geometry
 
@@ -342,6 +342,30 @@ The gray is `1 - depth`, as the `UnpackDepthRGBAShader` of three.js gives it. th
 To draw on the GPU, use `hud(renderer, scene, assets)`. It gives the scene, the assets and the camera of the plane. Prepare the scene with `Renderer.prepare_frame`, and upload its textures. Then give `rect(width, height)` to the draw as its scissor.
 
 The viewer refuses a point light, a light that casts no shadow, and a variance shadow map. The shader of three.js reads none of these. It also refuses a light index that is not in the scene, and a size that is not positive. The label with the name of the light is not ported, because this port has no canvas text.
+
+## CSMHelper
+
+`helpers/csm.mojo`. A `CSMHelper` shows what a [`CSM`](Lights) cuts, and where its lights look. Call it after `csm.update`.
+
+```mojo
+var helper = CSMHelper()
+var lines = assets.geometries.add(helper.lines(csm, scene, camera))
+scene.add_line(Line(lines, paint, node, mode=SEGMENTS))
+var sheet = assets.materials.add(csm_plane_material())
+var faces = helper.planes(csm, scene, camera)
+```
+
+`lines` returns segments in world space. The frustum of the camera, out to `max_far`, is white. A box around the far face of each cascade is white. The box that the shadow camera of each cascade light sees is yellow.
+
+`planes` returns one rectangle for each cascade, on its far face, in world space. Draw each one with `csm_plane_material()`: white, a tenth opaque, two-sided, and with no depth write.
+
+| Member | Default | Meaning |
+|---|---|---|
+| `display_frustum` | `True` | Show the frustum and the cascade boxes. |
+| `display_planes` | `True` | Show the planes, when the frustum shows. |
+| `display_shadow_bounds` | `True` | Show the shadow boxes. |
+
+three.js's helper is a group that copies the camera's position, rotation and scale. Here the parts are in world space, which is the same for a camera outside a group. three.js reads each shadow box from its shadow camera, which moves at a render, so its boxes are one frame late. Here each box is where its light is now. There is no `updateVisibility`: each call reads the three members.
 
 ## Members
 
