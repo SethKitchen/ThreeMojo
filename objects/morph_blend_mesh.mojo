@@ -80,9 +80,7 @@ struct MorphBlendAnimation(Copyable, Movable):
     # Whether it plays back and forth, three.js's `mirroredLoop`.
     var mirrored_loop: Bool
 
-    def __init__(
-        out self, name: String, start: Int, end: Int, fps: Float64
-    ):
+    def __init__(out self, name: String, start: Int, end: Int, fps: Float64):
         """Create an animation, three.js's record in `createAnimation`.
 
         Args:
@@ -380,7 +378,9 @@ struct MorphBlendMesh(Movable):
                 mesh.
         """
         if not isfinite(delta):
-            raise Error("A blend mesh cannot move on by a time that is not a number")
+            raise Error(
+                "A blend mesh cannot move on by a time that is not a number"
+            )
         _check(self.mesh, scene)
         ref mesh = scene.meshes[self.mesh.value]
         for at in range(len(self.animations)):
@@ -410,7 +410,9 @@ struct MorphBlendMesh(Movable):
                 # frame is not a number, and sets no target.
                 continue
             var step = Int(ratio)
-            var keyframe = animation.start + max(0, min(step, animation.length - 1))
+            var keyframe = animation.start + max(
+                0, min(step, animation.length - 1)
+            )
             var weight = animation.weight
             if keyframe != animation.current_frame:
                 mesh.set_morph_influence(animation.last_frame, 0)
@@ -418,12 +420,16 @@ struct MorphBlendMesh(Movable):
                 mesh.set_morph_influence(keyframe, 0)
                 animation.last_frame = animation.current_frame
                 animation.current_frame = keyframe
-            var mix = Float32(js_remainder(animation.time, frame_time) / frame_time)
+            var mix = Float32(
+                js_remainder(animation.time, frame_time) / frame_time
+            )
             if animation.direction_backwards:
                 mix = 1 - mix
             if animation.current_frame != animation.last_frame:
                 mesh.set_morph_influence(animation.current_frame, mix * weight)
-                mesh.set_morph_influence(animation.last_frame, (1 - mix) * weight)
+                mesh.set_morph_influence(
+                    animation.last_frame, (1 - mix) * weight
+                )
             else:
                 mesh.set_morph_influence(animation.current_frame, weight)
 

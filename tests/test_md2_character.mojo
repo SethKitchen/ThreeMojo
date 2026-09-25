@@ -388,9 +388,7 @@ def test_a_character_without_a_weapon_plays_its_body() raises:
         List[TextureId](),
     )
     assert_equal(character.weapon, -1)
-    assert_equal(
-        assets.materials.get(character.body.textured).map, NO_TEXTURE
-    )
+    assert_equal(assets.materials.get(character.body.textured).map, NO_TEXTURE)
     character.set_animation("run")
     character.set_wireframe(scene, True)
     character.update(scene, Duration(0.1, SECOND))

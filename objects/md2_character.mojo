@@ -104,9 +104,7 @@ def _make_part(
     var wire_id = assets.materials.add(wire^)
     var textured_id = assets.materials.add(textured^)
     var node = Object3D()
-    node.set_euler(
-        Angle(0.0, DEGREE), Angle(-90.0, DEGREE), Angle(0.0, DEGREE)
-    )
+    node.set_euler(Angle(0.0, DEGREE), Angle(-90.0, DEGREE), Angle(0.0, DEGREE))
     node.set_scale(scale, scale, scale)
     node.visible = visible
     node.name = name
@@ -127,13 +125,11 @@ def _skin(skins: List[TextureId], index: Int) -> TextureId:
     return skins[index]
 
 
-def _wear(
-    mut scene: Scene, part: Md2Part, wireframe: Bool
-):
+def _wear(mut scene: Scene, part: Md2Part, wireframe: Bool):
     """Give a part its wireframe or its textured material."""
-    scene.meshes[part.mesh].material = (
-        part.wireframe if wireframe else part.textured
-    )
+    scene.meshes[
+        part.mesh
+    ].material = part.wireframe if wireframe else part.textured
 
 
 struct MD2Character(Movable):
@@ -281,7 +277,9 @@ struct MD2Character(Movable):
         var worn = scene.meshes[self.body.mesh].material
         if assets.materials.get(worn).wireframe:
             return
-        assets.materials.materials[worn.value].map = _skin(self.skins_body, index)
+        assets.materials.materials[worn.value].map = _skin(
+            self.skins_body, index
+        )
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
         """Show one weapon and hide the rest, three.js's `setWeapon`, and
@@ -351,9 +349,10 @@ struct MD2Character(Movable):
         three.js's `clipAction` caches one."""
         for at in range(self.mixer.action_count()):
             ref held = self.mixer.actions[at].clip
-            if held.name == clip.name and held.tracks[0].target == clip.tracks[
-                0
-            ].target:
+            if (
+                held.name == clip.name
+                and held.tracks[0].target == clip.tracks[0].target
+            ):
                 return at
         return self.mixer.add(AnimationAction(clip.copy()))
 
@@ -656,7 +655,9 @@ struct MD2CharacterComplex(Movable):
         var worn = scene.meshes[self.body.mesh].material
         if assets.materials.get(worn).wireframe:
             return
-        assets.materials.materials[worn.value].map = _skin(self.skins_body, index)
+        assets.materials.materials[worn.value].map = _skin(
+            self.skins_body, index
+        )
         self.current_skin = index
 
     def set_weapon(mut self, mut scene: Scene, index: Int) raises:
@@ -731,9 +732,9 @@ struct MD2CharacterComplex(Movable):
         """
         var mix = Float32(1)
         if self.blend_counter > 0:
-            mix = Float32(self.transition_frames - self.blend_counter) / Float32(
-                self.transition_frames
-            )
+            mix = Float32(
+                self.transition_frames - self.blend_counter
+            ) / Float32(self.transition_frames)
             self.blend_counter -= 1
         var seconds = Float64(delta.to(SECOND))
         self.body_blend.update(scene, seconds)
@@ -778,9 +779,9 @@ struct MD2CharacterComplex(Movable):
         )
         if moving and self.active_animation != move:
             self.set_animation(move)
-        var slow = abs(self.speed.to(METER_PER_SECOND)) < 0.2 * self.max_speed.to(
-            METER_PER_SECOND
-        )
+        var slow = abs(
+            self.speed.to(METER_PER_SECOND)
+        ) < 0.2 * self.max_speed.to(METER_PER_SECOND)
         if slow and not moving and self.active_animation != idle:
             self.set_animation(idle)
         if controls.move_forward:
@@ -806,7 +807,9 @@ struct MD2CharacterComplex(Movable):
                         self.weapon
                     ].set_animation_direction_backward(names[at])
 
-    def update_movement_model(mut self, mut scene: Scene, delta: Duration) raises:
+    def update_movement_model(
+        mut self, mut scene: Scene, delta: Duration
+    ) raises:
         """Speed up, slow down, turn and move the root, three.js's
         `updateMovementModel`.
 
@@ -860,9 +863,7 @@ struct MD2CharacterComplex(Movable):
         )
 
 
-def _blend(
-    scene: Scene, part: Md2Part, fps: Float64
-) raises -> MorphBlendMesh:
+def _blend(scene: Scene, part: Md2Part, fps: Float64) raises -> MorphBlendMesh:
     """Return a part's blend mesh with an animation for each of its frame
     runs, three.js's `_createPart` and `autoCreateAnimations`."""
     var blend = MorphBlendMesh(MeshIndex(part.mesh), scene)
