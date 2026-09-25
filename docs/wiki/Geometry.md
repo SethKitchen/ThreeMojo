@@ -411,7 +411,7 @@ The four wall coordinates go to the quad's six vertices in the order a, b, d, b,
 
 ### Where this port differs
 
-A shape is cut into triangles by this port's own ear clipping. three.js turns an outline clockwise and cuts it with earcut. So the same surface can come in another vertex order, and a cap can take the other diagonal. The tests compare a shape and an extrusion with three.js as a surface. Each group has the same triangles, by count and by area. It also has the same vertices, each with its normal and texture coordinate. See issue #215.
+A shape is cut into triangles by this port's own ear clipping. three.js turns an outline clockwise and cuts it with earcut. So the same surface can come in another vertex order, and a cap can take the other diagonal. The tests compare a shape and an extrusion with three.js as a surface. Each group has the same triangles by count and by area, and the same vertices, each with its normal and texture coordinate. See issue #215.
 
 ### Along a path
 
