@@ -33,6 +33,11 @@ A target can take several samples a pixel; see [Multisampled render targets](#mu
 | `lerp_hsl(other, alpha)` | Move toward `other` in linear HSL. The hue goes the long way, as in three.js. |
 | `offset_hsl(h, s, l)` | Add to the linear hue, saturation and lightness. three.js's `offsetHSL`. |
 | `multiply(other)`, `add(other)` | Red, green and blue only. Alpha is kept. |
+| `sub(other)` | Subtract red, green and blue. A channel stops at zero, as in three.js. Alpha is kept. |
+| `add_scalar(s)`, `set_scalar(s)` | Add a number to red, green and blue, or set all three to it. Alpha is kept. |
+| `lerp_colors(a, b, alpha)` | Set this color a fraction of the way from `a` to `b`, every channel. three.js's `lerpColors`. |
+| `set_rgb(r, g, b, space=LINEAR)` | Set red, green and blue as given in `space`. three.js's `setRGB`. `SRGB` decodes them. Alpha is kept. |
+| `rgb(space=LINEAR) -> FloatColor` | The channels in `space`, with this color's alpha. three.js's `getRGB`. |
 | `a == b` | Every channel equal. three.js's `equals`. |
 
 `HSL(hue, saturation, lightness)` holds the three floats `hsl()` returns. A gray has a hue and a saturation of zero. A half-lightness gray is linear 0.5, which encodes to 188. In sRGB it is the gray that `0x808080` decodes to.

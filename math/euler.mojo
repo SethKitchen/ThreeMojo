@@ -280,6 +280,23 @@ struct Euler(ImplicitlyCopyable):
         combined.multiply(_rotation_about(self.order.third, self))
         return combined^
 
+    def reorder(mut self, order: EulerOrder) raises:
+        """Keep the rotation and change the order, three.js's `reorder`.
+
+        The angles become a quaternion and are read back out of it in the
+        new order, as three.js does. The new angles describe the same
+        rotation, and they are three.js's triple where more than one
+        triple does.
+
+        Args:
+            order: The new order.
+
+        Raises:
+            Error: If this order or the new one does not name three
+                different axes. The angles are left as they were.
+        """
+        self = Euler.from_quaternion(self.to_quaternion(), order)
+
 
 def _rotation_about(axis: Int, euler: Euler) -> Matrix4:
     """Return the matrix rotation about one axis by that axis's angle."""

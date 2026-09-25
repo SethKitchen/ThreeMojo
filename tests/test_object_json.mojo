@@ -1108,6 +1108,36 @@ def test_separate_transform_keys() raises:
     assert_equal(fixed.position.x, 0)
 
 
+def test_up_is_written_and_read_as_three_js_does() raises:
+    """A node's `up` is written for every object and read back, with or
+    without a matrix; an object without one keeps the default."""
+    var scene = Scene()
+    var turned = Object3D()
+    turned.up = Vector3(0, 0, 1)
+    _ = scene.add(turned^)
+    _ = scene.add(Object3D())
+    var assets = Assets()
+    var text = object_to_json(scene, assets)
+    # three.js 0.180: a Group with `up.set(0, 0, 1)` writes [0,0,1]. This
+    # writer spells every float with a point, as in its matrices.
+    assert_true(text.find('"up":[0.0,0.0,1.0]') >= 0)
+    assert_true(text.find('"up":[0.0,1.0,0.0]') >= 0)
+    var again = Scene()
+    var read = Assets()
+    _ = read_object_json(text, again, read)
+    assert_equal(again.get(NodeId(0)).up.z, 1)
+    assert_equal(again.get(NodeId(1)).up.y, 1)
+    var parts = _read(
+        '"object":{"uuid":"a","type":"Object3D","up":[1,0,0],'
+        + '"position":[1,2,3],"children":[{"uuid":"b","type":"Object3D"}]}'
+    )
+    assert_equal(parts[0].get(NodeId(0)).up.x, 1)
+    assert_equal(parts[0].get(NodeId(0)).position.z, 3)
+    assert_equal(parts[0].get(NodeId(1)).up.y, 1)
+    with assert_raises(contains="up must hold 3 numbers"):
+        _ = _read('"object":{"uuid":"a","type":"Object3D","up":[1,0]}')
+
+
 def test_a_flipped_matrix_decomposes_with_a_negative_scale() raises:
     """A matrix with a negative determinant gives a negative x scale."""
     var node = Object3D()

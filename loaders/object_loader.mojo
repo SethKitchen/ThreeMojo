@@ -19,7 +19,7 @@ became and which cameras it held.
 **What maps to what.** Every object becomes one scene node at its
 `matrix`, decomposed as three.js decomposes it, or at its `position`,
 `quaternion` or `rotation`, and `scale`; with its `name`, `visible`,
-`layers`, `renderOrder` and `userData`. A `matrixAutoUpdate` of false
+`layers`, `renderOrder`, `userData` and `up`. A `matrixAutoUpdate` of false
 keeps the matrix as it is. A `Group` becomes a node of `GROUP_TYPE`. Then
 the object's type says what the node carries:
 
@@ -2042,7 +2042,11 @@ struct _Loader(Movable):
             self.place(self.document.at(list, at), parent, scene, assets)
 
     def transform(self, item: Int, mut node: Object3D) raises:
-        """Set a node from an object's matrix, or its separate parts."""
+        """Set a node from an object's matrix, or its separate parts, and
+        its `up`."""
+        var up = self.numbers(item, "up", 3)
+        if len(up) == 3:
+            node.up = Vector3(up[0], up[1], up[2])
         var matrix = self.numbers(item, "matrix", 16)
         if len(matrix) == 16:
             node.matrix_auto_update = self.flag(item, "matrixAutoUpdate", True)

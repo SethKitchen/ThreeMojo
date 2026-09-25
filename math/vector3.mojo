@@ -188,6 +188,23 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         """
         self = self + other * factor
 
+    def add_scalar(mut self, value: Float32):
+        """Add one number to every component, three.js's `addScalar`.
+
+        Args:
+            value: The number to add.
+        """
+        self = Vector3(self.x + value, self.y + value, self.z + value)
+
+    def sub_scalar(mut self, value: Float32):
+        """Subtract one number from every component, three.js's
+        `subScalar`.
+
+        Args:
+            value: The number to subtract.
+        """
+        self = Vector3(self.x - value, self.y - value, self.z - value)
+
     def length_sq(self) -> Float32:
         """Return the squared length, three.js's `lengthSq`.
 

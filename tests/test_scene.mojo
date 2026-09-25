@@ -7,7 +7,7 @@
 
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from core.object3d import NO_PARENT, Object3D, facing
+from core.object3d import DEFAULT_UP, NO_PARENT, Object3D, facing
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.projection import look_at
 from math.quaternion import Quaternion
@@ -685,6 +685,103 @@ def test_looking_straight_up_is_nudged_off_up() raises:
     )
     var ahead = along_z.rotate(Vector3(0, 0, 1))
     assert_almost_equal(ahead.z, Float32(1), atol=Float64(1e-4))
+
+
+def assert_quaternion(
+    got: Quaternion, x: Float32, y: Float32, z: Float32, w: Float32
+) raises:
+    """Assert a quaternion matches four components, within tolerance.
+
+    Args:
+        got: The quaternion to check.
+        x: Expected x.
+        y: Expected y.
+        z: Expected z.
+        w: Expected w.
+
+    Raises:
+        Error: If any component differs.
+    """
+    assert_almost_equal(got.x, x, atol=TOLERANCE)
+    assert_almost_equal(got.y, y, atol=TOLERANCE)
+    assert_almost_equal(got.z, z, atol=TOLERANCE)
+    assert_almost_equal(got.w, w, atol=TOLERANCE)
+
+
+def test_look_at_keeps_the_nodes_up_as_three_js_does() raises:
+    # three.js 0.180 in Node: an Object3D, a camera and a spot light, each
+    # at (1, 2, 3) with its own `up`, told to look at a point.
+    var node = node_at(1, 2, 3)
+    assert_point(node.up, DEFAULT_UP.x, DEFAULT_UP.y, DEFAULT_UP.z)
+    node.look_at(Vector3(0, 0, 0))
+    assert_quaternion(
+        node.quaternion,
+        -0.044570654466371644,
+        0.9481061752931873,
+        -0.27465674831720593,
+        -0.1538564517177697,
+    )
+    node.up = Vector3(0, 0, 1)
+    node.look_at(Vector3(4, 6, 3))
+    assert_quaternion(
+        node.quaternion,
+        0.223606797749979,
+        0.670820393249937,
+        0.6708203932499369,
+        0.223606797749979,
+    )
+    var camera = node_at(1, 2, 3)
+    camera.up = Vector3(1, 0, 0)
+    camera.look_at(Vector3(0, 0, 0), camera=True)
+    assert_quaternion(
+        camera.quaternion,
+        -0.294306871137486,
+        -0.11176583884455328,
+        -0.6982180155706192,
+        0.6429490381058698,
+    )
+    # A light turns the way a camera does, down its -z.
+    var light = node_at(1, 2, 3)
+    light.up = Vector3(0, 0, 1)
+    light.look_at(Vector3(0, 0, 0), camera=True)
+    assert_quaternion(
+        light.quaternion,
+        0.07232953902702399,
+        0.3063928440996976,
+        0.9237624264844595,
+        0.2180707277104845,
+    )
+    # The copy carries the up.
+    var copied = Object3D(copy=light)
+    assert_point(copied.up, 0, 0, 1)
+
+
+def test_a_scene_look_at_uses_the_nodes_up() raises:
+    var scene = Scene()
+    var placed = node_at(1, 2, 3)
+    placed.up = Vector3(0, 0, 1)
+    var index = scene.add(placed^)
+    scene.update()
+    scene.look_at(index, Vector3(0, 0, 0), camera=True)
+    assert_quaternion(
+        scene.node(index).quaternion,
+        0.07232953902702399,
+        0.3063928440996976,
+        0.9237624264844595,
+        0.2180707277104845,
+    )
+
+
+def test_an_up_that_names_no_direction_is_refused() raises:
+    var node = node_at(1, 2, 3)
+    var before = node.quaternion
+    node.up = Vector3(0, 0, 0)
+    with assert_raises(contains="up direction"):
+        node.look_at(Vector3(0, 0, 0))
+    node.up = Vector3(1e30, 1e30, 0)
+    with assert_raises(contains="up direction"):
+        node.look_at(Vector3(0, 0, 0))
+    assert_true(node.quaternion == before)
 
 
 def test_a_scene_look_at_is_in_world_space() raises:

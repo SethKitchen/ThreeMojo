@@ -50,7 +50,9 @@ three.js gives each thing a random uuid. The writer makes each uuid from the kin
 
 ## Objects
 
-Each object becomes one scene node. The node gets the `name`, `visible`, `layers`, `renderOrder`, `userData` and `matrix` of the object. See [User data](Scene-graph#user-data). The reader decomposes the matrix as three.js's `Matrix4.decompose` does. Without a matrix, the reader reads `position`, `rotation`, `quaternion` and `scale`. An object with `matrixAutoUpdate` false keeps its matrix as it is.
+Each object becomes one scene node. The node gets the `name`, `visible`, `layers`, `renderOrder`, `userData`, `up` and `matrix` of the object. The writer writes each node's `up`, as three.js writes it for every object. A child object that the writer makes for a second thing on a node gets three.js's default `[0, 1, 0]`. See [User data](Scene-graph#user-data).
+
+The reader decomposes the matrix as three.js's `Matrix4.decompose` does. Without a matrix, the reader reads `position`, `rotation`, `quaternion` and `scale`. An object with `matrixAutoUpdate` false keeps its matrix as it is.
 
 The type of the object tells what the node carries:
 

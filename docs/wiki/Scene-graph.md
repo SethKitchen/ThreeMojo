@@ -19,6 +19,7 @@ A node is a transform relative to its parent: a position, a quaternion and a sca
 | `layers: Layers` | Which layers the node is on. Layer zero by default. See below. |
 | `object_type: ObjectType` | `OBJECT3D_TYPE`, or `GROUP_TYPE` for a group. See [Groups](#groups). |
 | `user_data: UserData` | What the caller keeps on the node. See [User data](#user-data). |
+| `up: Vector3` | Which way is up when the node turns to face a point. `DEFAULT_UP`, `(0, 1, 0)`, by default. See [Rotations](Rotations#up). |
 | `set_position(x, y, z)` | Set the position. |
 | `set_scale(x, y, z)` | Set the scale. Three factors, so a non-uniform scale is possible. |
 | `set_euler(x, y, z, order=XYZ)` | Set the rotation from three angles. |
@@ -140,11 +141,20 @@ Each method returns a list of node ids. three.js calls a function on each node i
 | `descendants(id)` | `traverse` | The same as `traverse` from a node. |
 | `find(name, root=NO_PARENT)` | `getObjectByName` | The first node with the name, or None. |
 | `objects_by_name(name, root=NO_PARENT)` | `getObjectsByProperty('name', name)` | Every node with the name. |
+| `object_by_property[read](value, root=NO_PARENT)` | `getObjectByProperty` | The first node whose property equals `value`, or None. |
+| `objects_by_property[read](value, root=NO_PARENT)` | `getObjectsByProperty` | Every node whose property equals `value`. |
 | `object_by_id(id, root=NO_PARENT)` | `getObjectById` | The node, when it is the root or under it. Else None. |
 
 `traverse` from a removed node walks its subtree, as three.js walks an object with no parent.
 
-three.js's `getObjectsByProperty` takes the name of any property as a string. A Mojo struct has no lookup by name. Filter the list from `traverse` for any other property.
+three.js's `getObjectsByProperty` takes the name of a property as a string. A Mojo struct has no lookup by name. Here the property is a function that reads it from an `Object3D`, given as a compile-time parameter:
+
+```mojo
+def render_order_of(node: Object3D) -> Int:
+    return node.render_order
+
+var late = scene.objects_by_property[render_order_of](3)
+```
 
 ## Clone and copy
 
@@ -314,6 +324,8 @@ var where = scene.world_position(moon_node)
 - A removed node stays in the scene's array. See [Removed nodes](#removed-nodes).
 - The mixer does not animate a removed node. three.js goes on changing an object that it holds after the object leaves the scene.
 - The walks return lists. three.js calls a function on each node.
+- `objects_by_property` takes a function that reads the property. three.js takes the property's name.
+- `DEFAULT_UP` is fixed. three.js lets a program change it.
 - `traverse_ancestors` ends at the top node. three.js ends at the `Scene` object.
 - A world query raises on a stale scene. three.js updates the world matrices first.
 - `apply_matrix4`, `set_from_matrix` and `world_quaternion` refuse a matrix that flattens an axis.

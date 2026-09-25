@@ -159,6 +159,23 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         """
         self = self + other * factor
 
+    def add_scalar(mut self, value: Float32):
+        """Add one number to both components, three.js's `addScalar`.
+
+        Args:
+            value: The number to add.
+        """
+        self = Vector2(self.x + value, self.y + value)
+
+    def sub_scalar(mut self, value: Float32):
+        """Subtract one number from both components, three.js's
+        `subScalar`.
+
+        Args:
+            value: The number to subtract.
+        """
+        self = Vector2(self.x - value, self.y - value)
+
     def length_sq(self) -> Float32:
         """Return the squared length, three.js's `lengthSq`.
 

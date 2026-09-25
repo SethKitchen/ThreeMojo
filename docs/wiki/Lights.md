@@ -224,13 +224,18 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 | `shadow.blur_samples` | `shadow.blurSamples` | `8` | How many samples each pass of a variance map's blur takes, one to 256. |
 | `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. A point or spot light with a `distance` puts the far plane at that distance, as three.js does. |
 | `shadow.left`, `shadow.right`, `shadow.top`, `shadow.bottom` | `shadow.camera.left`, `right`, `top`, `bottom` | `-5 m`, `5 m`, `5 m`, `-5 m` | Where the edges of a directional light's camera are, from its axis. `set_extent` sets all four to one distance. A spot light's camera is as wide as its cone. |
+| `shadow.focus` | `shadow.focus` | `1.0` | How much of a spot light's cone its shadow camera sees. A half narrows the camera to the middle of the cone. See [How a shadow is drawn](#how-a-shadow-is-drawn). |
 | `shadow.intensity` | `shadow.intensity` | `1.0` | How much of the light the shadow takes away, from zero to one. See [Shadow intensity](#shadow-intensity). |
 | `shadow.auto_update` | `shadow.autoUpdate` | `True` | Whether the map is drawn again for each frame. See [Frozen shadows](#frozen-shadows). |
 | `shadow.needs_update` | `shadow.needsUpdate` | `False` | Whether a frozen map is drawn one more time. |
 
 ### How a shadow is drawn
 
-The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, between its `left`, `right`, `top` and `bottom` edges. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
+The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, between its `left`, `right`, `top` and `bottom` edges. A spot light draws through a perspective camera twice its angle wide, times `shadow.focus`, as three.js's `SpotLightShadow` does. `shadow.spot_field_of_view(angle)` gives that width.
+
+A focus below one puts the map's texels on the middle of the cone, so the shadow is sharper there. A surface outside the narrowed camera is lit, as in three.js. The spot light's map, in [Spot light maps](#spot-light-maps), is seen through the same camera. `LightShadow.validate` refuses a focus that is not a positive finite number.
+
+Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
 
 Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Seventeen taps are compared on their own and averaged: three.js's `PCFShadowMap`, its default. Nine taps are `radius` texels apart, and eight more are at half that spread. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
 
