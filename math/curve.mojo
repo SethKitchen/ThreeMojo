@@ -449,7 +449,11 @@ struct Curve(Copyable, Movable):
         if t < 0 or t > 1:
             raise Error("A curve's t must lie from zero through one")
         if self.kind == LINE:
-            return self.points[0] + (self.points[1] - self.points[0]) * t
+            # three.js's `LineCurve.getPoint`: the end itself at one, so a
+            # closed path ends exactly where it began.
+            if t == 1:
+                return self.points[1]
+            return (self.points[1] - self.points[0]) * t + self.points[0]
         var rest = 1 - t
         if self.kind == QUADRATIC:
             return (

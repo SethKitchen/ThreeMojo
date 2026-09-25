@@ -10,6 +10,11 @@ gives for made polygons: small ones, flat and repeated ones, crossing
 ones that need each of earcut's passes, and ones of more than 80 points
 that earcut searches by z-order. It also holds what
 `ShapeUtils.triangulateShape` gives for four outlines.
+
+`assets/earcut/holes.json` holds the same for polygons with holes: one,
+two, two whose leftmost points share an x, a hole of one point, a hole
+that touches the outline, a large polygon of three holes, and outlines
+and holes closed by a repeat of their first point.
 """
 
 from geometries.earcut import earcut, triangulate_shape
@@ -50,6 +55,49 @@ def test_triangulate_shape_matches_three_js() raises:
         var item = doc.at(shapes, c)
         var data = numbers(doc, doc.get(item, "data"))
         check(doc, item, triangulate_shape(data))
+
+
+def _holes() raises -> JsonDocument:
+    """Return the hole cases three.js cut."""
+    return parse_json(Path("assets/earcut/holes.json").read_text())
+
+
+def test_earcut_with_holes_matches_three_js() raises:
+    var doc = _holes()
+    var cases = doc.get(doc.root(), "cases")
+    for c in range(doc.length(cases)):
+        var item = doc.at(cases, c)
+        var data = numbers(doc, doc.get(item, "data"))
+        var starts = doc.get(item, "holeIndices")
+        var holes = List[Int]()
+        for at in range(doc.length(starts)):
+            holes.append(doc.integer(doc.at(starts, at)))
+        check(doc, item, earcut(data, holes))
+
+
+def test_triangulate_shape_with_holes_matches_three_js() raises:
+    var doc = _holes()
+    var shapes = doc.get(doc.root(), "shapes")
+    for c in range(doc.length(shapes)):
+        var item = doc.at(shapes, c)
+        var contour = numbers(doc, doc.get(item, "contour"))
+        var list = doc.get(item, "holes")
+        var holes = List[List[Float64]]()
+        for at in range(doc.length(list)):
+            holes.append(numbers(doc, doc.at(list, at)))
+        check(doc, item, triangulate_shape(contour, holes))
+
+
+def test_a_hole_must_start_inside_and_in_order() raises:
+    var square: List[Float64] = [0, 0, 10, 0, 10, 10, 0, 10, 3, 3, 5, 5, 3, 5]
+    with assert_raises(contains="a hole must start"):
+        _ = earcut(square, [0])
+    with assert_raises(contains="a hole must start"):
+        _ = earcut(square, [7])
+    with assert_raises(contains="a hole must start"):
+        _ = earcut(square, [4, 4])
+    with assert_raises(contains="odd length"):
+        _ = triangulate_shape([0, 0, 1, 0, 0, 1], [[Float64(1)]])
 
 
 def test_odd_lists_are_refused() raises:

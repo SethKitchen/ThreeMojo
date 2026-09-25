@@ -196,7 +196,7 @@ plate.add_hole(hole^)
 | `outline_points(divisions)` | The outline as points. |
 | `hole_points(index, divisions)` | One hole as points. |
 
-The winding does not matter. `shape_geometry` turns the outline counter-clockwise and each hole clockwise before it cuts them up.
+The winding does not matter. `shape_geometry` turns the outline clockwise and each hole counter-clockwise before it cuts them up, as three.js does.
 
 ## Curves in space
 

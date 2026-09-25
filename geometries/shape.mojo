@@ -4,56 +4,36 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """A flat surface filled in from a drawn outline, from three.js
-`src/geometries/ShapeGeometry.js` and the triangulation in `ShapeUtils.js`.
+`src/geometries/ShapeGeometry.js` and `ShapeUtils.triangulateShape`.
 
 Every other geometry here is a grid. A box, a sphere, a lathe: rows and
 columns of vertices, and two triangles per cell. A shape is not. It is an
 outline drawn by hand, with holes in it, and nothing says how to cut it
-up. That is the whole problem this module solves, and it is the reason
-three.js carries a triangulator of its own.
+up. three.js cuts it with earcut, and so does this, through
+`geometries.earcut.triangulate_shape`.
 
-## How it is cut up
+## The order three.js builds it in
 
-By ear clipping, which is the oldest answer and the one three.js used
-before it took earcut. A corner of a polygon is an *ear* when the triangle
-it makes with its two neighbors lies inside the polygon and holds no other
-corner. Clip that triangle off, and what is left is a polygon with one
-corner fewer. Repeat until three corners are left. Every simple polygon
-has at least two ears at every step, so this always finishes.
-
-## How a hole is joined on
-
-A hole is a separate loop, and ear clipping knows only one loop. So each
-hole is cut into the outline first: pick a point of the hole and a point of
-the outline that can see each other, and run the outline out along that
-line, around the hole and back. The loop is now one loop, with a seam that
-goes out and back along the same line and so has no area.
-
-three.js and earcut pick that seam by casting a ray from the hole's
-rightmost point, which is quick and needs a second pass to fix the cases
-it gets wrong. This picks the *shortest* pair that can see each other,
-which is slower and has no cases to fix: a pair that sees each other is a
-seam that works, and nothing else has to be true of it.
-
-Two points see each other when the line between them crosses no edge of
-the outline and no edge of any hole. That is checked against the holes not
-yet joined on as well, which is what keeps two holes from being seamed
-through one another.
+`ShapeGeometry.addShape` turns the outline clockwise and every hole
+counter-clockwise, reversing whichever runs the other way. It reverses
+with the closing point still in the list, and then `triangulateShape`
+drops that point, so a reversed contour starts at the closing point and
+leaves out the first one drawn. The vertices are the outline's points and
+then each hole's, one after another, and the triangles are earcut's, in
+earcut's order. This builds the same arrays in the same order, so a shape
+here is three.js's shape number for number.
 
 ## What is refused
 
 A hole outside the outline, or inside another hole: neither describes a
 surface. A contour of fewer than three corners, or one with no area, such
-as a line drawn out and back.
+as a line drawn out and back. three.js fills each of these with something,
+or with nothing, and says nothing. This says so instead. The checks read
+the contours and change none of them, so a shape that passes is built
+exactly as three.js builds it.
 
-An outline that crosses itself is usually refused as well, because the
-clipping runs out of ears on it. That is a symptom and not a test. An
-outline is simple or it is not, and nothing here asks the question
-directly; a crossing outline that happens to keep finding ears will be
-filled in, and the triangles will be wrong rather than missing. Checking
-properly means testing every edge against every other, which is the same
-sweep the seams already pay for, and it is worth doing when there is a
-reason to trust the answer.
+An outline that crosses itself is not refused. earcut fills it in, as
+three.js does, and the triangles follow the outline where it crosses.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -64,6 +44,7 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
+from geometries.earcut import triangulate_shape
 from math.path import Shape
 from math.vector2 import Vector2
 
@@ -137,42 +118,6 @@ def extent(points: List[Vector2], start: Int, count: Int) -> Float32:
         low = Vector2(min(low.x, here.x), min(low.y, here.y))
         high = Vector2(max(high.x, here.x), max(high.y, here.y))
     return (high - low).length()
-
-
-def on_diagonal(
-    probe: Vector2, first: Vector2, second: Vector2, flat: Float32
-) -> Bool:
-    """Return True if `probe` lies along the run from `first` to `second`,
-    between its ends and at neither of them.
-
-    This is what the strictly-inside test cannot see, and what a corner
-    exactly on a proposed diagonal needs. A vertex there is on the
-    boundary of the triangle rather than within it, so clipping the ear
-    would run the new edge through a part of the outline, and the piece
-    left behind is no longer a simple loop.
-
-    A probe at either end is not on the run. That is not a nicety: the
-    seam that joins a hole to its outline deliberately names both of its
-    ends twice, so the same point really is in the ring twice, and a rule
-    that blocked on it would block every ear near a hole.
-
-    Args:
-        probe: The point to test, in meters.
-        first: Where the run starts, in meters.
-        second: Where it ends, in meters.
-        flat: How much area counts as none; see `NOISE`.
-
-    Returns:
-        True if the probe is on the run and is neither end of it.
-    """
-    if abs(turn(first, second, probe)) > flat:
-        return False
-    var reach = second - first
-    var out = probe - first
-    var along = out.dot(reach)
-    if along <= 0:
-        return False
-    return along < reach.dot(reach)
 
 
 def _clean(points: List[Vector2]) raises -> List[Vector2]:
@@ -258,191 +203,141 @@ def _contains(
     return inside
 
 
-def _crosses(
-    first: Vector2, second: Vector2, third: Vector2, fourth: Vector2
-) -> Bool:
-    """Return True if the run from `first` to `second` crosses the run from
-    `third` to `fourth`.
-
-    Crossing means each run has one end on each side of the other, which is
-    what the four turns say. A run that only touches the other, at an end
-    or along it, does not cross it: the seam this answers for shares its
-    ends with the contour by design.
-    """
-    var start = turn(third, fourth, first)
-    var end = turn(third, fourth, second)
-    var left = turn(first, second, third)
-    var right = turn(first, second, fourth)
-    return (start > 0) != (end > 0) and (left > 0) != (right > 0)
-
-
-def _blocked(
-    points: List[Vector2],
-    ring: List[Int],
-    from_point: Int,
-    to_point: Int,
-) -> Bool:
-    """Return True if the seam from `from_point` to `to_point` crosses an
-    edge of `ring`.
-
-    An edge that ends at either end of the seam is skipped. Such an edge
-    touches the seam by construction, and touching is not crossing.
-    """
-    for index in range(len(ring)):  # pragma: no branch
-        var here = ring[index]
-        var next = ring[(index + 1) % len(ring)]
-        if (
-            here == from_point
-            or here == to_point
-            or next == from_point
-            or next == to_point
-        ):
-            continue
-        if _crosses(
-            points[from_point], points[to_point], points[here], points[next]
-        ):
-            return True
-    return False
-
-
-def _bridge(
-    points: List[Vector2], ring: List[Int], pending: List[List[Int]]
-) -> List[Int]:
-    """Return `ring` with the first pending hole seamed into it.
-
-    The seam is the shortest pair of points, one on the hole and one on the
-    ring, that can see each other: the line between them crosses no edge of
-    the ring and none of any hole still to be joined on, the hole's own
-    edges included.
-
-    A hole inside the outline and outside every other hole always has such
-    a pair, and `triangulate` has already refused a hole that is neither.
-    If no pair is found regardless, the first one is taken: the loop that
-    leaves crosses itself, so the clipping refuses it and says so.
-    """
-    ref hole = pending[0]
-    var shortest = Float32(0)
-    var at_ring = 0
-    var at_hole = 0
-    var found = False
-    for outer in range(len(ring)):  # pragma: no branch
-        for inner in range(len(hole)):  # pragma: no branch
-            var span = (points[ring[outer]] - points[hole[inner]]).length()
-            if found and span >= shortest:
-                continue
-            if _blocked(points, ring, hole[inner], ring[outer]):
-                continue
-            var crossed = False
-            for other in range(len(pending)):  # pragma: no branch
-                if _blocked(points, pending[other], hole[inner], ring[outer]):
-                    crossed = True
-            if crossed:
-                continue
-            shortest = span
-            at_ring = outer
-            at_hole = inner
-            found = True
-
-    # Out along the seam, once around the hole, back along the seam, and on
-    # around the ring. Both ends of the seam appear twice, which is what
-    # makes one loop out of two.
-    var joined = List[Int]()
-    for index in range(at_ring + 1):  # pragma: no branch
-        joined.append(ring[index])
-    for step in range(len(hole)):  # pragma: no branch
-        joined.append(hole[(at_hole + step) % len(hole)])
-    joined.append(hole[at_hole])
-    for index in range(at_ring, len(ring)):  # pragma: no branch
-        joined.append(ring[index])
-    return joined^
-
-
-def _find_ear(points: List[Vector2], ring: List[Int], flat: Float32) -> Int:
-    """Return where in `ring` a corner sits that can be clipped off, or
-    minus one when no corner can be.
-
-    A corner is an ear when it turns left, so its triangle lies inside the
-    loop, and no other corner of the loop lies *on or within* that
-    triangle. Within is not enough on its own. A corner sitting exactly on
-    the diagonal the ear would cut is on the triangle's boundary and not
-    inside it, and clipping across it cuts the loop into a piece that is no
-    longer simple, after which the clipping covers ground the shape does
-    not.
-
-    The smallest L shows it: two by two with a one by one bite out of the
-    far corner, whose first diagonal runs corner to corner straight through
-    the notch. The triangles came out covering three and a half square
-    meters of a three square meter shape, one of them wound backwards.
-    """
-    for at in range(len(ring)):  # pragma: no branch
-        var before = (at + len(ring) - 1) % len(ring)
-        var after = (at + 1) % len(ring)
-        var corner = points[ring[at]]
-        var left = points[ring[before]]
-        var right = points[ring[after]]
-        if turn(left, corner, right) <= flat:
-            continue
-        var clear = True
-        for other in range(len(ring)):  # pragma: no branch
-            if other == before or other == at or other == after:
-                continue
-            var probe = points[ring[other]]
-            if (
-                turn(left, corner, probe) > 0
-                and turn(corner, right, probe) > 0
-                and turn(right, left, probe) > 0
-            ):
-                clear = False
-            elif on_diagonal(probe, left, right, flat):
-                clear = False
-        if clear:
-            return at
-    return -1
-
-
-def _ear_clip(
-    points: List[Vector2], var ring: List[Int], flat: Float32
-) raises -> List[Int]:
-    """Return the triangles that fill `ring`, three vertex numbers each.
+def _corners(points: List[Vector2]) raises -> List[Vector2]:
+    """Return a closed contour's corners, and refuse a contour with no
+    inside.
 
     Args:
-        points: Every point, the ring's numbers index into it.
-        ring: One loop, counter-clockwise, holes already seamed in.
-        flat: How much area counts as none; see `NOISE`.
+        points: A contour's sampled points, the last the first again.
 
     Returns:
-        Three vertex numbers per triangle, each wound counter-clockwise.
+        The corners `_clean` keeps.
 
     Raises:
-        Error: If the loop runs out of ears before it runs out of corners.
-            Every simple loop has an ear at every step, so a loop that has
-            none crosses itself.
+        Error: If fewer than three corners are left, or they enclose no
+            area.
     """
-    var index = List[Int]()
-    while len(ring) > 3:
-        var ear = _find_ear(points, ring, flat)
-        if ear < 0:
-            raise Error("A shape that crosses itself cannot be filled in")
-        var before = (ear + len(ring) - 1) % len(ring)
-        var after = (ear + 1) % len(ring)
-        index.append(ring[before])
-        index.append(ring[ear])
-        index.append(ring[after])
-        _ = ring.pop(ear)
-    index.append(ring[0])
-    index.append(ring[1])
-    index.append(ring[2])
-    return index^
+    var corners = _clean(points)
+    var doubled = _area(corners, 0, len(corners))
+    var span = extent(corners, 0, len(corners))
+    if abs(doubled) <= NOISE * span * span:
+        raise Error("A shape's contour must enclose an area")
+    return corners^
+
+
+struct ShapePoints(Movable):
+    """A shape's points, three.js's `Shape.extractPoints`: the outline and
+    each hole, each closed, as drawn."""
+
+    var outline: List[Vector2]
+    var holes: List[List[Vector2]]
+
+    def __init__(
+        out self, var outline: List[Vector2], var holes: List[List[Vector2]]
+    ):
+        """Hold the outline's points and each hole's.
+
+        Args:
+            outline: The outline's points, the last the first again.
+            holes: Each hole's points, likewise.
+        """
+        self.outline = outline^
+        self.holes = holes^
+
+
+def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
+    """Return `shape`'s points, three.js's `Shape.extractPoints`, once
+    they are checked.
+
+    Args:
+        shape: The outline and its holes.
+        curve_segments: How many straight runs each curve is sampled into;
+            at least one.
+
+    Returns:
+        The outline's points and each hole's, as `Path.sample` gives them.
+
+    Raises:
+        Error: If `curve_segments` is less than one, if a contour has fewer
+            than three distinct corners or no area, or if a hole lies
+            outside the outline or inside another hole.
+    """
+    var outline = shape.outline_points(curve_segments)
+    var corners = _corners(outline)
+    var holes = List[List[Vector2]]()
+    var hole_corners = List[List[Vector2]]()
+    for hole in range(shape.hole_count()):
+        var points = shape.hole_points(hole, curve_segments)
+        hole_corners.append(_corners(points))
+        holes.append(points^)
+
+    # A hole outside the outline, or inside another hole, describes no
+    # surface.
+    for hole in range(len(hole_corners)):
+        var probe = hole_corners[hole][0]
+        if not _contains(corners, 0, len(corners), probe):
+            raise Error("A shape's hole must lie inside its outline")
+        for other in range(len(hole_corners)):  # pragma: no branch
+            if other == hole:
+                continue
+            ref around = hole_corners[other]
+            if _contains(around, 0, len(around), probe):
+                raise Error("A shape's hole cannot lie inside another hole")
+    return ShapePoints(outline^, holes^)
+
+
+def is_clockwise(points: List[Vector2]) -> Bool:
+    """Return True if `points` run clockwise, three.js's
+    `ShapeUtils.isClockWise`: its `area` is negative.
+
+    Args:
+        points: A contour's points, closed or not.
+
+    Returns:
+        True if the signed area is below zero.
+    """
+    var total = Float64(0)
+    var n = len(points)
+    for q in range(n):  # pragma: no branch
+        var p = (q + n - 1) % n
+        total += Float64(points[p].x) * Float64(points[q].y) - Float64(
+            points[q].x
+        ) * Float64(points[p].y)
+    return total * 0.5 < 0
+
+
+def flat_points(points: List[Vector2]) -> List[Float64]:
+    """Return `points` as earcut reads them, x then y for each.
+
+    Args:
+        points: The points.
+
+    Returns:
+        Two numbers a point.
+    """
+    var out = List[Float64]()
+    for point in points:  # pragma: no branch
+        out.append(Float64(point.x))
+        out.append(Float64(point.y))
+    return out^
+
+
+def _drop_closing(mut points: List[Vector2]):
+    """Drop a last point equal to the first, three.js's `removeDupEndPts`.
+    Its test for more than two points always passes here: every contour
+    has three corners at least."""
+    var n = len(points)
+    if points[n - 1] == points[0]:
+        _ = points.pop()
 
 
 struct Contours(Movable):
     """A shape's points, cut into triangles.
 
-    The points are the outline's first, then each hole's, every contour
-    cleaned and turned the way the clipping wants it: the outline
-    counter-clockwise, every hole clockwise. `starts` and `counts` say
-    where each contour begins and how long it is, the outline first. The
-    extrusion reads them to build its walls.
+    The points are the outline's first, then each hole's, each without its
+    closing point, in the order three.js keeps them. `starts` and `counts`
+    say where each contour begins and how long it is, the outline first.
+    The extrusion reads them to build its walls.
     """
 
     var points: List[Vector2]
@@ -451,24 +346,32 @@ struct Contours(Movable):
     var counts: List[Int]
 
     def __init__(
-        out self,
-        var points: List[Vector2],
-        var index: List[Int],
-        var starts: List[Int],
-        var counts: List[Int],
-    ):
-        """Hold the points, the triangles and where each contour is.
+        out self, var outline: List[Vector2], var holes: List[List[Vector2]]
+    ) raises:
+        """Drop each contour's closing point and cut the whole into
+        triangles, three.js's `ShapeUtils.triangulateShape`.
 
         Args:
-            points: Every contour's points, one after another.
-            index: Three vertex numbers per triangle.
-            starts: Where each contour begins in `points`.
-            counts: How many points each contour has.
+            outline: The outline's points, turned as three.js turns them.
+            holes: Each hole's points, likewise.
+
+        Raises:
+            Error: If earcut refuses the points; see
+                `geometries.earcut.earcut`.
         """
-        self.points = points^
-        self.index = index^
-        self.starts = starts^
-        self.counts = counts^
+        _drop_closing(outline)
+        var flat_holes = List[List[Float64]]()
+        for at in range(len(holes)):
+            _drop_closing(holes[at])
+            flat_holes.append(flat_points(holes[at]))
+        self.index = triangulate_shape(flat_points(outline), flat_holes)
+        self.starts = [0]
+        self.counts = [len(outline)]
+        self.points = outline^
+        for at in range(len(holes)):
+            self.starts.append(len(self.points))
+            self.counts.append(len(holes[at]))
+            self.points.extend(holes[at].copy())
 
     def contour_count(self) -> Int:
         """Return how many contours there are: the outline and its holes."""
@@ -479,46 +382,12 @@ struct Contours(Movable):
         return len(self.index) // 3
 
 
-def _add_contour(
-    var contour: List[Vector2],
-    want_counter_clockwise: Bool,
-    mut points: List[Vector2],
-) raises -> Int:
-    """Clean `contour`, turn it the way the clipping wants it, and append
-    it to `points`.
-
-    Args:
-        contour: The contour's sampled points.
-        want_counter_clockwise: True for the outline, False for a hole.
-        points: The list every contour is appended to.
-
-    Returns:
-        How many points were appended.
-
-    Raises:
-        Error: If the contour has fewer than three distinct points, or no
-            area at all.
-    """
-    var cleaned = _clean(contour)
-    var start = len(points)
-    for index in range(len(cleaned)):  # pragma: no branch
-        points.append(cleaned[index])
-    var doubled = _area(points, start, len(cleaned))
-    var span = extent(points, start, len(cleaned))
-    if abs(doubled) <= NOISE * span * span:
-        raise Error("A shape's contour must enclose an area")
-    if (doubled > 0) != want_counter_clockwise:
-        for step in range(len(cleaned) // 2):  # pragma: no branch
-            var low = start + step
-            var high = start + len(cleaned) - 1 - step
-            var held = points[low]
-            points[low] = points[high]
-            points[high] = held
-    return len(cleaned)
-
-
 def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
-    """Return `shape`'s points and the triangles that fill them.
+    """Return `shape`'s points and the triangles that fill them, as
+    three.js's `ShapeGeometry.addShape` builds them.
+
+    The outline is turned clockwise and each hole counter-clockwise, with
+    the closing point still in the list, and earcut cuts the whole.
 
     Args:
         shape: The outline and its holes.
@@ -527,61 +396,24 @@ def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
 
     Returns:
         The contours, and three vertex numbers per triangle, each triangle
-        wound counter-clockwise.
+        wound counter-clockwise, in earcut's order.
 
     Raises:
         Error: If `curve_segments` is less than one, if a contour has fewer
-            than three distinct points or no area, if a hole lies outside
-            the outline or inside another hole, or if the outline crosses
-            itself.
+            than three distinct corners or no area, or if a hole lies
+            outside the outline or inside another hole.
     """
-    var points = List[Vector2]()
-    var starts = List[Int]()
-    var counts = List[Int]()
-
-    starts.append(0)
-    counts.append(
-        _add_contour(shape.outline_points(curve_segments), True, points)
-    )
-    for hole in range(shape.hole_count()):  # pragma: no branch
-        starts.append(len(points))
-        counts.append(
-            _add_contour(shape.hole_points(hole, curve_segments), False, points)
-        )
-
-    # A hole outside the outline, or inside another hole, describes no
-    # surface. Neither is caught by the seaming, which would run a line to
-    # it and leave a loop that crosses itself.
-    for hole in range(1, len(starts)):  # pragma: no branch
-        if not _contains(points, 0, counts[0], points[starts[hole]]):
-            raise Error("A shape's hole must lie inside its outline")
-        for other in range(1, len(starts)):  # pragma: no branch
-            if other == hole:
-                continue
-            if _contains(
-                points, starts[other], counts[other], points[starts[hole]]
-            ):
-                raise Error("A shape's hole cannot lie inside another hole")
-
-    var ring = List[Int]()
-    for index in range(counts[0]):  # pragma: no branch
-        ring.append(index)
-    var pending = List[List[Int]]()
-    for hole in range(1, len(starts)):  # pragma: no branch
-        var loop = List[Int]()
-        for index in range(counts[hole]):  # pragma: no branch
-            loop.append(starts[hole] + index)
-        pending.append(loop^)
-    while len(pending) > 0:
-        ring = _bridge(points, ring, pending)
-        _ = pending.pop(0)
-
-    # One tolerance for the whole shape, taken from the size of the whole
-    # shape, so a hole is measured against the outline it sits in rather
-    # than against itself.
-    var flat = NOISE * extent(points, 0, len(points)) ** 2
-    var index = _ear_clip(points, ring^, flat)
-    return Contours(points^, index^, starts^, counts^)
+    var sampled = extract_points(shape, curve_segments)
+    var outline = sampled.outline.copy()
+    if not is_clockwise(outline):
+        outline.reverse()
+    var holes = List[List[Vector2]]()
+    for at in range(len(sampled.holes)):
+        var hole = sampled.holes[at].copy()
+        if is_clockwise(hole):
+            hole.reverse()
+        holes.append(hole^)
+    return Contours(outline^, holes^)
 
 
 def shape_geometry(

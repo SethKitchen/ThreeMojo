@@ -345,17 +345,18 @@ Every other builder here is a grid. A shape is not, and cutting one up is the wh
 
 ### How it is cut up
 
-By ear clipping. A corner of a loop is an ear when the triangle it makes with its two neighbors lies inside the loop. That triangle must hold no other corner. Clip that triangle off, and the loop has one corner fewer. Every simple loop has an ear at every step, so this always finishes.
+By earcut, as three.js cuts it. `shape_geometry` builds the same arrays as three.js's `ShapeGeometry`, in the same order.
 
-A hole is a separate loop, and ear clipping knows one loop. So each hole is seamed into the outline first. Two points that can see each other are joined. The outline then runs out along that line, around the hole and back. Two points see each other when the line between them crosses no edge of the outline and no edge of any hole.
+1. The outline turns clockwise and each hole counter-clockwise. A contour that runs the other way is reversed, with its closing point still in the list.
+2. The closing point of each contour is dropped. A reversed contour therefore starts at its closing point.
+3. The vertices are the outline's points, then each hole's points.
+4. earcut cuts them into triangles, and the index keeps earcut's order.
 
-three.js casts a ray from the hole's rightmost point and fixes the cases that go wrong. This takes the shortest pair that can see each other, which has no cases to fix.
+`triangulate(shape, curve_segments)` returns the points, the triangles and where each contour starts. `extract_points` returns the sampled contours after the checks below.
 
-### Corners in a line are dropped
+### What is refused
 
-A straight edge sampled into eight runs leaves seven corners that turn by nothing. None of them can be an ear, so the clipping would stop with a row of them left. They describe one edge, and `triangulate` says so once.
-
-`triangulate(shape, curve_segments)` returns the points, the triangles and where each contour starts, for a caller that needs more than a flat surface. `extrude` is that caller.
+A hole outside the outline, or inside another hole, is refused. A contour with fewer than three corners, or with no area, is refused too. three.js builds something from each of these and gives no error. The checks change no point, so a shape that passes is built as three.js builds it. An outline that crosses itself is filled in by earcut, as in three.js.
 
 ## Extrude
 
@@ -382,9 +383,18 @@ A bevel rounds the two edges off. It adds `bevel_segments` layers at each end. T
 
 three.js measures a bevel *out* from the shape drawn, and so does this. The two end faces are the outline itself, and the body between them stands proud of it all the way round. `bevel_offset` moves every layer out before the bevel is measured, the end faces included, which makes a lip rather than rounding an edge.
 
-A corner sharper than a right angle is not drawn out to a spike. three.js's `getBevelVec` keeps the exact miter while it is no longer than the square root of two bevel widths. It shrinks a longer one to that length, and so does this. A corner whose edges fold straight back moves along its incoming edge by the same length.
+Each point moves along three.js's `getBevelVec`, in doubles. The vector is the miter while it is no longer than the square root of two. A longer miter shrinks to that length, so a sharp corner does not become a spike. A point between two edges in a line moves square to them, or back along them.
 
-A corner moves along its miter, the line that keeps both of its edges parallel to where they were.
+With a bevel, earcut cuts the contours moved out by `bevel_offset`, as three.js does. That cut can take another diagonal than the contours themselves.
+
+### The order of the vertices
+
+`extrude` builds the same arrays as three.js's `ExtrudeGeometry`, in the same order.
+
+1. An outline that runs counter-clockwise turns clockwise. Only then does each clockwise hole turn counter-clockwise. An outline drawn clockwise keeps its holes as they are drawn.
+2. A point on top of the point before it is merged, the closing point included. This takes out the *first* point of each contour.
+3. The back cap's triangles come first, then the front cap's triangles.
+4. The walls follow, contour by contour, each contour from its last point back to its first.
 
 ### The faces are flat
 
@@ -395,13 +405,13 @@ A wall is measured along x or along y, whichever it runs further in, and up the 
 ### A UV generator of your own
 
 ```mojo
-def halved(vertices: List[Float32], a: Int, b: Int, c: Int) -> List[Vector2]:
+def halved(vertices: List[Float64], a: Int, b: Int, c: Int) -> List[Vector2]:
     ...                                          # three coordinates for a cap triangle
 
 var solid = extrude(plate, Length(2, METER), uv_generator=UVGenerator(halved, walls))
 ```
 
-`uv_generator` is three.js's `UVGenerator` option, on every form of `extrude`. A `UVGenerator` holds two functions. `top` gives a cap triangle's three coordinates, and `side_wall` gives a wall quad's four. Each gets the vertices written so far, three floats each, and the indices of its corners among them, as three.js's `generateTopUV` and `generateSideWallUV` get them.
+`uv_generator` is three.js's `UVGenerator` option, on every form of `extrude`. A `UVGenerator` holds two functions. `top` gives a cap triangle's three coordinates, and `side_wall` gives a wall quad's four. Each gets the vertices written so far, three doubles each, and the indices of its corners among them, as three.js's `generateTopUV` and `generateSideWallUV` get them.
 
 The four wall coordinates go to the quad's six vertices in the order a, b, d, b, c, d, as three.js's `f4` puts them. A generator that gives another count is refused. `UVGenerator()` is `WorldUVGenerator`.
 
@@ -411,7 +421,7 @@ The four wall coordinates go to the quad's six vertices in the order a, b, d, b,
 
 ### Where this port differs
 
-A shape is cut into triangles by this port's own ear clipping. three.js turns an outline clockwise and cuts it with earcut. So the same surface can come in another vertex order, and a cap can take the other diagonal. The tests compare a shape and an extrusion with three.js as a surface. Each group has the same triangles by count and by area, and the same vertices, each with its normal and texture coordinate. See issue #215.
+The shape and its holes are sampled in `Float32`, and three.js samples them in doubles. The positions agree to about a millionth of a meter. A wall at exactly 45 degrees is a tie between x and y for its texture coordinate. The rounding can then choose the other axis than three.js.
 
 ### Along a path
 
