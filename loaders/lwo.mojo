@@ -1108,7 +1108,7 @@ def _normalize(mut normals: List[Float32]):
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
         var length = sqrt(x * x + y * y + z * z)
-        var scale = 1 / (length if length != 0 else 1)
+        var scale = 1 / (length if length != 0 and length == length else 1)
         normals[v * 3] = Float32(x * scale)
         normals[v * 3 + 1] = Float32(y * scale)
         normals[v * 3 + 2] = Float32(z * scale)

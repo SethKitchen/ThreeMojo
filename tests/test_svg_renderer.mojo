@@ -60,6 +60,7 @@ from renderers.svg_renderer import (
     SVGRenderer,
     SvgImage,
     SvgQuality,
+    _unit,
     color_style,
 )
 from renderers.projector import Vec
@@ -396,6 +397,14 @@ def test_the_settings_are_checked() raises:
     # An odd size puts the origin between pixels.
     renderer.set_size(5, 3)
     assert_equal(renderer.view_box(), "-2.5 -1.5 5 3")
+
+
+def test_a_direction_of_no_length_is_kept() raises:
+    # JavaScript's `length || 1`: zero and NaN divide by one, so a finite
+    # part of a direction with a NaN in it is kept.
+    var nan = Float64(0) / Float64(0)
+    assert_equal(_unit(Vec(0, nan, 0, 0))[0], 0)
+    assert_equal(_unit(Vec(0))[0], 0)
 
 
 def test_a_color_is_written_as_three_js_writes_it() raises:

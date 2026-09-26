@@ -26,6 +26,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [NRRD](#nrrd) | `loaders/nrrd.mojo` | `read_nrrd(path) -> Volume` | `NRRDLoader`, and `Volume` |
 | [USD](#usd) | `loaders/usd.mojo` | `read_usd(path, scene, assets) -> UsdModel` | `USDLoader` |
 | [LWO](#lwo) | `loaders/lwo.mojo` | `read_lwo(path, scene, assets) -> LwoModel` | `LWOLoader` |
+| [LDraw](#ldraw) | `loaders/ldraw.mojo` | `read_ldraw(path, loader) -> LDrawModel` | `LDrawLoader` |
 | [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader`, and `DRACOExporter` in [Exporters](Exporters#draco) |
 
 ## PCD
@@ -1213,3 +1214,57 @@ The loader also refuses these, which three.js reads in a way that the port does 
 `assets/lwo/make_lwo.py` writes the files. `scene.lwo` is LWO2, with three layers, three surfaces, UV and morph maps. `standard.lwo`, `phong.lwo` and `physical.lwo` are LWO3, with node materials, image nodes, image maps and an environment. `kitchen.lwo` and `kitchen3.lwo` hold every chunk and form that three.js reads. `broken/` holds 32 files that the loader refuses.
 
 `assets/lwo/lwo.json` has what three.js 0.180 gives for each. `tests/test_lwo.mojo` compares each material, mesh, attribute, group and morph target.
+
+## LDraw
+
+`loaders/ldraw.mojo` and `loaders/ldraw_parse.mojo`. `read_ldraw(path, loader)` reads an LDraw model, `.ldr`, `.dat` or `.mpd`, and builds it from the parts in a parts library. three.js: `LDrawLoader`.
+
+```mojo
+var model = read_ldraw("models/car.mpd", LDrawLoader("ldraw/"))
+var scene = Scene()
+var assets = Assets()
+load_ldraw(model, scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_ldraw(path, loader) -> LDrawModel` | Read a file, three.js's `load`. The default colors 16 and 24 come first. |
+| `parse_ldraw(text, loader) -> LDrawModel` | Read text, three.js's `parse`, with only the colors that the loader and the text define. |
+| `load_ldraw(model, scene, assets, parent)` | Put a built model into a scene. |
+
+`LDrawLoader(parts_library_path)` holds what three.js's loader holds. Set `smooth_normals` to `False` for flat faces, and call `set_file_map` to read some names from other files.
+
+### What is built
+
+- Each part becomes a group, placed by its matrix.
+- A primitive or a subpart is merged into the part that places it. Its faces and edges are carried through the matrix and colored. A mirrored placement winds them the other way.
+- Each group holds up to three objects: a mesh of its faces, its edges, and its conditional edges. Each object is sorted by color and split into groups by color.
+- Color 16 is the color that a part is placed with, and color 24 is its edge color. A color that no file defines is three.js's magenta `__DEFAULT`.
+- `!COLOUR` makes a standard material of its finish, an edge material, and a [conditional line](Lines#conditional-lines) material. `0x2RRGGBB` is a direct color.
+- With `smooth_normals`, faces share their normals across an edge that no line marks as hard, at less than about 75 degrees.
+- Each group gets its building step, from the `STEP` lines.
+
+A file is looked for under `parts/`, `p/` and `models/` in the library, as named, and beside the file that names it. Then the loader tries all of that again in lower case. A part is built once and copied for each placement.
+
+In the scene, each color group of edges becomes one `Line`, because a line draws one material. Conditional edges become lines with `conditional` set.
+
+### Same as three.js
+
+- A number where a color directive expects a keyword sets the luminance.
+- `parseInt` reads a leading `0x` as hexadecimal. A color style that is not `#RGB` or `#RRGGBB` leaves the color white.
+- The colors of a file's own faces are not counted when the loader decides to split normals at the ends of lines. three.js's loop over them never runs.
+- The conditional edges of a missing color have no material, because three.js caches that material before it makes it. They are not drawn.
+- A part that fails is left out, and the rest of the model is built.
+
+### Errors
+
+The loader refuses these, as three.js throws on them:
+
+- A line of an unknown type.
+- A color with no name, an unknown token, a fill color that is not hexadecimal, and an edge color that names no color.
+- An alpha or a luminance that is not a number.
+- A file that is not found.
+
+### Example
+
+`assets/ldraw/scene.mpd` embeds a model and a submodel. It places a brick, a mirrored brick, a plate in several colors, and the submodel. The parts in `assets/ldraw/library/` use a primitive, a high-resolution primitive, a subpart and BFC directives. `assets/ldraw/ldraw.json` has what three.js 0.180 builds: loaded, loaded without smoothing, parsed, and loaded with a file map. `tests/test_ldraw.mojo` compares each group, object, attribute, material group and material.

@@ -41,7 +41,7 @@ from materials.material import (
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
-from objects.line import Line, SEGMENTS
+from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.lod import Lod
 from objects.mesh import Mesh
 from objects.points import Points
@@ -520,6 +520,29 @@ def line_scene(
                 receive_shadow=receive,
             )
         )
+    elif what == "conditional":
+        # Controls on opposite sides: the camera's view leaves every
+        # segment out, and the light's view draws them all.
+        var shape = a_row()
+        var up: List[Float32] = [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]
+        var down: List[Float32] = [0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0]
+        var along: List[Float32] = [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0]
+        shape.set_attribute(String(CONTROL0), BufferAttribute(up^, 3))
+        shape.set_attribute(String(CONTROL1), BufferAttribute(down^, 3))
+        shape.set_attribute(String(DIRECTION), BufferAttribute(along^, 3))
+        scene.add_line(
+            Line(
+                assets.geometries.add(shape^),
+                assets.materials.add(
+                    Material(Color(255, 255, 255), kind=BASIC)
+                ),
+                node,
+                mode=SEGMENTS,
+                cast_shadow=cast,
+                receive_shadow=receive,
+                conditional=True,
+            )
+        )
     else:
         var paint = Material(Color(255, 255, 255), kind=BASIC)
         if what == "dashed":
@@ -634,6 +657,15 @@ def test_a_wireframe_casts_its_edges() raises:
         ),
         0,
     )
+
+
+def test_a_conditional_line_casts_whole() raises:
+    # three.js draws a line into a shadow map with its depth material, which
+    # does not discard: the conditional line casts every segment.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var scene = line_scene(assets, "conditional", True, False)
+    assert_true(drawn(renderer.shadow_maps(scene, assets)[0]) > 0)
 
 
 def test_a_light_view_keeps_a_lines_own_material() raises:

@@ -368,7 +368,7 @@ def apply_normal(m: List[Float64], v: Vec) -> Vec:
     var y = m[1] * v[0] + m[4] * v[1] + m[7] * v[2]
     var z = m[2] * v[0] + m[5] * v[1] + m[8] * v[2]
     var length = sqrt(x * x + y * y + z * z)
-    var scale = 1 / (length if length != 0 else 1)
+    var scale = 1 / (length if length != 0 and length == length else 1)
     return Vec(x * scale, y * scale, z * scale, 0)
 
 

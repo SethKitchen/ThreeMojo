@@ -144,7 +144,18 @@ from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
-from objects.line import SEGMENTS, line_distances, segment_count, segment_ends
+from objects.line import (
+    CONDITIONAL_DASH,
+    CONDITIONAL_GAP,
+    CONTROL0,
+    CONTROL1,
+    DIRECTION,
+    SEGMENTS,
+    conditional_discard,
+    line_distances,
+    segment_count,
+    segment_ends,
+)
 from objects.line_segments2 import cap_steps, dash_spans
 from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite
@@ -5537,6 +5548,56 @@ struct Renderer(Movable):
                 along = line_distances(line.mode, positions)
                 for vertex in range(vertex_count):
                     along[vertex] *= material.dash_scale
+            # A conditional line's flag, worked out here for each vertex
+            # and blended along its segment, is drawn as a dash of one half,
+            # so both backends leave out what three.js's shader discards. A
+            # light's view draws it with its depth material, which does not.
+            if line.conditional and not casters_only:
+                if material.is_dashed():
+                    raise Error(
+                        "A conditional line is not dashed: its dash draws"
+                        " its condition"
+                    )
+                for name in [
+                    CONTROL0,
+                    CONTROL1,
+                    DIRECTION,
+                ]:  # pragma: no branch
+                    if not geometry.has_attribute(String(name)):
+                        raise Error(
+                            "A conditional line's geometry carries control0,"
+                            " control1 and direction"
+                        )
+                ref first = geometry.attribute_view(String(CONTROL0))
+                ref second = geometry.attribute_view(String(CONTROL1))
+                ref toward = geometry.attribute_view(String(DIRECTION))
+                var mvp = clip * view * world
+                for vertex in range(vertex_count):  # pragma: no branch
+                    along[vertex] = conditional_discard(
+                        mvp,
+                        Vector3(
+                            positions.component(vertex, 0),
+                            positions.component(vertex, 1),
+                            positions.component(vertex, 2),
+                        ),
+                        Vector3(
+                            toward.component(vertex, 0),
+                            toward.component(vertex, 1),
+                            toward.component(vertex, 2),
+                        ),
+                        Vector3(
+                            first.component(vertex, 0),
+                            first.component(vertex, 1),
+                            first.component(vertex, 2),
+                        ),
+                        Vector3(
+                            second.component(vertex, 0),
+                            second.component(vertex, 1),
+                            second.component(vertex, 2),
+                        ),
+                    )
+                dash = CONDITIONAL_DASH
+                gap = CONDITIONAL_GAP
 
             # The whole line must suit its mode, and then only the points
             # the draw range lets through are joined, as `drawArrays` joins

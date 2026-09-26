@@ -379,6 +379,11 @@ def test_the_double_matrix() raises:
     assert_equal(copied.e[5], 2)
     var zero = apply_normal(twice.normal_matrix(), Vec(0))
     assert_equal(zero[0], 0)
+    # A length of NaN divides by one, as JavaScript's `length || 1` does.
+    var lost = apply_normal(
+        twice.normal_matrix(), Vec(Float64.MAX * 2, 0, 0, 0)
+    )
+    assert_true(isnan(lost[1]))
 
 
 def test_a_segment_is_clipped_at_the_far_plane() raises:

@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 194 features are ported and 9 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 195 features are ported and 8 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -228,12 +228,12 @@ The port is not at parity with three.js yet. 194 features are ported and 9 are o
 ### Loaders and exporters
 
 - [ ] TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
-- [ ] LWO and LDraw loaders [#202](https://github.com/SethKitchen/ThreeMojo/issues/202)
 - [ ] glTF meshopt compression, WebP textures and material variants [#201](https://github.com/SethKitchen/ThreeMojo/issues/201)
 
 <details>
-<summary>Ported: 19</summary>
+<summary>Ported: 20</summary>
 
+- [x] [LWO and LDraw loaders](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files): LWO2 and LWO3 objects with node materials, and LDraw models from a parts library, with conditional edges [#202](https://github.com/SethKitchen/ThreeMojo/issues/202)
 - [x] [USD, KMZ, NRRD, VTK, PDB, G-code and MDD loaders](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files#usd): seven more model and volume formats, read as three.js reads them [#203](https://github.com/SethKitchen/ThreeMojo/issues/203)
 - [x] [Exporter and loader options](https://github.com/SethKitchen/ThreeMojo/wiki/Exporters#world-space): skinned and instanced meshes, OBJ lines and points, PLY and MTL options, and glTF extras [#200](https://github.com/SethKitchen/ThreeMojo/issues/200)
 - [x] [More loaders and exporters](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files): SVG, Draco, VRML, 3DS, BVH, LUT, EXR, USDZ, KTX2 and others, with a byte-exact Draco exporter [#176](https://github.com/SethKitchen/ThreeMojo/issues/176)

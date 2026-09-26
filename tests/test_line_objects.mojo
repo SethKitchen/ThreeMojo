@@ -24,10 +24,15 @@ from materials.material import (
     OPAQUE,
     line_dashed_material,
 )
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.line import (
+    CONTROL0,
+    CONTROL1,
+    DIRECTION,
     LOOP,
     Line,
+    conditional_discard,
     LineMode,
     SEGMENTS,
     STRIP,
@@ -950,6 +955,100 @@ def test_a_dashed_line_prepares_its_scaled_distance_and_its_dashes() raises:
         assert_almost_equal(
             Float64(segments[end].gap_size), Float64(0.2), atol=TOLERANCE
         )
+
+
+def test_a_conditional_vertex_is_kept_when_its_controls_agree() raises:
+    # A segment along x through the origin, seen head on: the controls
+    # above it agree, one above and one below do not.
+    var at = Vector3(0, 0, 0)
+    var along = Vector3(1, 0, 0)
+    var up = Vector3(0, 1, 0)
+    assert_equal(
+        conditional_discard(Matrix4(), at, along, up, Vector3(0, 2, 0)), 0
+    )
+    assert_equal(
+        conditional_discard(Matrix4(), at, along, up, Vector3(0, -1, 0)), 1
+    )
+    # A control on the segment's own line is of neither side.
+    assert_equal(
+        conditional_discard(Matrix4(), at, along, up, Vector3(3, 0, 0)), 1
+    )
+
+
+def _conditional(control1_y: Float32) raises -> BufferGeometry:
+    """A conditional segment along x, a control above it and one at
+    `control1_y`."""
+    var geometry = points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0])
+    var above: List[Float32] = [0, 1, 0, 0, 1, 0]
+    var other: List[Float32] = [0, control1_y, 0, 0, control1_y, 0]
+    var toward: List[Float32] = [1, 0, 0, 1, 0, 0]
+    geometry.set_attribute(String(CONTROL0), BufferAttribute(above^, 3))
+    geometry.set_attribute(String(CONTROL1), BufferAttribute(other^, 3))
+    geometry.set_attribute(String(DIRECTION), BufferAttribute(toward^, 3))
+    return geometry^
+
+
+def test_a_conditional_line_prepares_its_flags_as_a_dash() raises:
+    var assets = Assets()
+    var shown = assets.geometries.add(_conditional(1))
+    var hidden = assets.geometries.add(_conditional(-1))
+    var material = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = a_scene_with_one_node()
+    scene.add_line(
+        Line(shown, material, NodeId(0), mode=SEGMENTS, conditional=True)
+    )
+    scene.add_line(
+        Line(hidden, material, NodeId(0), mode=SEGMENTS, conditional=True)
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    assert_equal(len(segments), 4)
+    assert_equal(segments[0].line_distance, Float32(0))
+    assert_equal(segments[1].line_distance, Float32(0))
+    assert_equal(segments[2].line_distance, Float32(1))
+    assert_equal(segments[3].line_distance, Float32(1))
+    for end in range(4):
+        assert_equal(segments[end].dash_size, Float32(0.5))
+        assert_equal(segments[end].gap_size, Float32(1))
+    # Drawn, the first shows and the second does not.
+    var image = renderer.render(scene, assets, a_camera())
+    var red = 0
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            if image.get_pixel(x, y).r > 200:
+                red += 1
+    assert_true(red > 0)
+    var alone = a_scene_with_one_node()
+    alone.add_line(
+        Line(hidden, material, NodeId(0), mode=SEGMENTS, conditional=True)
+    )
+    var none = renderer.render(alone, assets, a_camera())
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            assert_true(none.get_pixel(x, y).r < 200)
+
+
+def test_a_conditional_line_refuses_what_it_cannot_draw() raises:
+    var assets = Assets()
+    with assert_raises(contains="SEGMENTS"):
+        _ = Line(GeometryId(0), MaterialId(0), NodeId(0), conditional=True)
+    var bare = assets.geometries.add(points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0]))
+    var plain = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = a_scene_with_one_node()
+    scene.add_line(
+        Line(bare, plain, NodeId(0), mode=SEGMENTS, conditional=True)
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises(contains="control0"):
+        _ = renderer.prepare_lines(scene, assets, a_camera())
+    var dashed = assets.materials.add(line_dashed_material(Color(255, 0, 0)))
+    var shape = assets.geometries.add(_conditional(1))
+    var again = a_scene_with_one_node()
+    again.add_line(
+        Line(shape, dashed, NodeId(0), mode=SEGMENTS, conditional=True)
+    )
+    with assert_raises(contains="not dashed"):
+        _ = renderer.prepare_lines(again, assets, a_camera())
 
 
 def test_a_dashed_line_with_no_points_prepares_nothing() raises:
