@@ -25,6 +25,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [VTK](#vtk) | `loaders/vtk.mojo` | `read_vtk(path) -> BufferGeometry` | `VTKLoader` |
 | [NRRD](#nrrd) | `loaders/nrrd.mojo` | `read_nrrd(path) -> Volume` | `NRRDLoader`, and `Volume` |
 | [USD](#usd) | `loaders/usd.mojo` | `read_usd(path, scene, assets) -> UsdModel` | `USDLoader` |
+| [LWO](#lwo) | `loaders/lwo.mojo` | `read_lwo(path, scene, assets) -> LwoModel` | `LWOLoader` |
 | [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader`, and `DRACOExporter` in [Exporters](Exporters#draco) |
 
 ## PCD
@@ -1126,3 +1127,89 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/usd/cube.usda` has meshes of quads and triangles, normals, texture coordinates and a material. `assets/usd/scene.usdz` references a mesh in another layer, and has a textured material. `tests/test_usd.mojo` compares both with three.js 0.180.
+
+## LWO
+
+`loaders/lwo.mojo` and `loaders/lwo_iff.mojo`. `read_lwo(path, scene, assets)` reads a LightWave object, LWO2 or LWO3, into a scene and its assets. three.js: `LWOLoader`.
+
+```mojo
+var scene = Scene()
+var assets = Assets()
+var model = read_lwo("assets/lwo/scene.lwo", scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_lwo(path, scene, assets, parent) -> LwoModel` | Read a file. The name and the texture folder come from the path, as three.js's `load` finds them. |
+| `load_lwo(bytes, scene, assets, model_name, path, parent) -> LwoModel` | Read the bytes of a file into a scene. |
+| `parse_lwo(bytes, model_name, path) -> LwoModel` | Read the bytes of a file, as three.js's `parse` does, without a scene. |
+| `parse_lwo_tree(bytes) -> LwoTree` | Read the chunks into three.js's tree of objects. |
+
+three.js's `load` takes the texture folder from the path, up to the folder above `Objects`, or `./`. It names the model after the rest of the path, up to its first dot. A layer with no name takes the model name, `_layer_` and its number.
+
+### LwoModel
+
+| Field | What it holds |
+|---|---|
+| `materials`, `surfaces` | The first `surfaces` materials are three.js's `materials`, one for each surface. After them come the materials that three.js makes for each layer of points or lines. |
+| `meshes` | Each layer, in the order of the file, as an `LwoMesh`: its class, name, place and pivot, parent, geometry, groups and materials. |
+| `roots` | The meshes with no parent, three.js's `meshes`. |
+| `nodes` | The node of each mesh, after `load_lwo`. |
+
+An `LwoMaterial` holds what three.js's material holds. Its colors are linear. `load_lwo` makes each one into a `Material`, with its colors as sRGB bytes. It decodes the file of each map if the file is there.
+
+### What is read
+
+- A layer becomes a mesh. If its first polygon has one point, it becomes points. If the first polygon has two points, it becomes lines.
+- The loader splits a quad into two triangles, and a polygon of more sides into a fan.
+- The pivot of a layer moves its points. The pivot also places its node, less the pivot of its parent.
+- The loader computes the normals. It takes the texture coordinates from each UV map in turn. A morph map becomes an absolute morph target.
+- A run of polygons with one surface becomes a group.
+- An LWO2 surface becomes a Phong material, from its color, diffuse, luminosity, specular, glossiness, reflection, side and smoothing.
+- An LWO3 surface becomes a Phong, standard or physical material. It gets the attributes of its material node, the maps of its image nodes and image maps, and an environment map.
+- A layer of points or lines gets a plain material of the color of its surface.
+
+### Same as three.js
+
+The loader keeps these three.js behaviors:
+
+- An LWO2 chunk whose length runs past the file is read again with a two-byte length. three.js reads the sub-chunks of a surface this way.
+- A chunk writes into the form that is current in three.js, even when the format does not mean it to go there.
+- The x of each point is negated, and the z of each morph point.
+- A surface with no side is back-sided. The transparency of an LWO2 surface is not read.
+- three.js tests a group index for truth. So a later run of the first surface gets a new index, and the surface has a second name.
+- The morph targets are not moved by the pivot.
+- A `double` value of LWO3 is read as a 64-bit integer.
+
+### Differences from three.js
+
+- A group whose material three.js cannot name is hidden. three.js leaves its material undefined.
+- In the scene, the points and lines of a layer are read through its index, because the renderer draws them from positions in order. They have no normals. three.js computes their normals from triangles that they do not have.
+- The environment map stays in `LwoMaterial`. A `Material` takes a cube texture as its environment.
+
+### Errors
+
+The loader refuses what three.js throws on, with a message that names the problem:
+
+- A file with no `FORM` of `LWO2` or `LWO3`, and a read past the end.
+- An empty `TAGS` chunk.
+- A chunk that writes into a form, a node or a surface that is not there.
+- A layer with no polygons, surface tags before any polygons, and polygons with no surface tags.
+- A layer whose parent is not an earlier layer.
+- A layer of points or lines whose surface is not there.
+- An LWO3 surface with no connections, no node names or no material node.
+- An image node that is not there or has no file.
+
+The loader also refuses these, which three.js reads in a way that the port does not follow:
+
+- Polygons before any points. three.js makes a mesh with no positions.
+- Fewer surface tags than polygons.
+- A polygon or a UV that names a point that the layer does not have.
+- A surface value of the wrong shape, and an attribute with no value.
+- A texture wrap mode that is not 0 to 3. three.js leaves the wrap undefined.
+
+### Example
+
+`assets/lwo/make_lwo.py` writes the files. `scene.lwo` is LWO2, with three layers, three surfaces, UV and morph maps. `standard.lwo`, `phong.lwo` and `physical.lwo` are LWO3, with node materials, image nodes, image maps and an environment. `kitchen.lwo` and `kitchen3.lwo` hold every chunk and form that three.js reads. `broken/` holds 32 files that the loader refuses.
+
+`assets/lwo/lwo.json` has what three.js 0.180 gives for each. `tests/test_lwo.mojo` compares each material, mesh, attribute, group and morph target.
