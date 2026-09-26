@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 192 features are ported and 11 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 193 features are ported and 10 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -261,12 +261,12 @@ The port is not at parity with three.js yet. 192 features are ported and 11 are 
 - [ ] SVGRenderer and Projector [#205](https://github.com/SethKitchen/ThreeMojo/issues/205)
 - [ ] GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
-- [ ] Blur, chromatic aberration, anamorphic, lens flare and Bayer passes [#190](https://github.com/SethKitchen/ThreeMojo/issues/190)
 - [ ] Output color space and post-processing leftovers [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
 
 <details>
-<summary>Ported: 27</summary>
+<summary>Ported: 28</summary>
 
+- [x] [TSL display nodes as passes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#display-nodes): Gaussian, box and hash blurs, chromatic aberration, the anamorphic streak, the lens flare and bayer16 [#190](https://github.com/SethKitchen/ThreeMojo/issues/190)
 - [x] [Render-target features](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#multisampled-render-targets): per-target MSAA, 3D, array and cube targets, drawing into a layer or mip level, and texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)
 - [x] [Renderer hooks and material flags](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer-hooks-and-material-flags): hooks, override material, custom sorts, autoClear, info, custom tone mapping and material flags [#170](https://github.com/SethKitchen/ThreeMojo/issues/170)
 - [x] [View, light probe, octree and texture helpers, and a shadow map viewer](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): drawn by both rasterizers, except the view helper [#182](https://github.com/SethKitchen/ThreeMojo/issues/182)

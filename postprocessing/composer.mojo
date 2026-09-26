@@ -62,6 +62,16 @@ from postprocessing.antialiasing import (
     jitter_offsets,
     smaa_light,
 )
+from postprocessing.display_nodes import (
+    DisplaySettings,
+    anamorphic_light,
+    box_blur_light,
+    check_display,
+    chromatic_aberration_light,
+    gaussian_blur_light,
+    hash_blur_light,
+    lensflare_light,
+)
 from postprocessing.effects import (
     BokehSettings,
     Bokeh2Settings,
@@ -227,6 +237,12 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == CLASSIC_BLOOM
             or self == DOF_MIPMAP
             or self == BOKEH2
+            or self == GAUSSIAN_BLUR
+            or self == BOX_BLUR
+            or self == HASH_BLUR
+            or self == CHROMATIC_ABERRATION
+            or self == ANAMORPHIC
+            or self == LENSFLARE
         )
 
 
@@ -312,6 +328,22 @@ comptime DOF_MIPMAP = PassKind(36)
 # Blur by depth with a lens's rings of taps: a `ShaderPass` of three.js's
 # `BokehShader2`.
 comptime BOKEH2 = PassKind(37)
+# Blur the frame across and down by a Gaussian, at a resolution scale:
+# three.js's `GaussianBlurNode`.
+comptime GAUSSIAN_BLUR = PassKind(38)
+# Average a square of taps: three.js's `boxBlur`.
+comptime BOX_BLUR = PassKind(39)
+# Average taps round a circle at hashed distances: three.js's `hashBlur`.
+comptime HASH_BLUR = PassKind(40)
+# Read red further out and blue further in: three.js's
+# `ChromaticAberrationNode`.
+comptime CHROMATIC_ABERRATION = PassKind(41)
+# Add a blue streak of the bright light along each row: three.js's
+# `AnamorphicNode`.
+comptime ANAMORPHIC = PassKind(42)
+# Add ghosts of the bright light mirrored through the center: three.js's
+# `LensflareNode`.
+comptime LENSFLARE = PassKind(43)
 # `BloomPass.blurX` and `blurY`: how far apart the convolution's taps are,
 # in texture widths or heights, whatever the frame's size.
 comptime CONVOLUTION_STEP = Float32(0.001953125)
@@ -442,6 +474,8 @@ struct Pass(Copyable, Movable):
     # What a `BokehShader2` pass reads; see
     # `postprocessing.effects.bokeh2_light`.
     var bokeh2: Bokeh2Settings
+    # What a display node pass reads; see `postprocessing.display_nodes`.
+    var display: DisplaySettings
     # A render pass's `overrideMaterial`, `clearColor` and `clearAlpha`,
     # each none by default, and three.js's `clear` and `clearDepth`:
     # whether a pass clears the frame before it draws, true for a render
@@ -499,6 +533,7 @@ struct Pass(Copyable, Movable):
         self.sigma = 4
         self.dof = DofMipMapSettings()
         self.bokeh2 = Bokeh2Settings()
+        self.display = DisplaySettings()
         self.override_material = None
         self.render_clear_color = None
         self.render_clear_alpha = None
@@ -582,6 +617,7 @@ def check_pass(step: Pass) raises:
         check_shader(step.shader)
     check_dof_mipmap(step.dof)
     check_bokeh2(step.bokeh2)
+    check_display(step.display)
     var alpha = Bool(step.render_clear_alpha)
     if alpha:
         var value = step.render_clear_alpha.value()
@@ -1837,6 +1873,179 @@ def bokeh2_pass(settings: Bokeh2Settings = Bokeh2Settings()) raises -> Pass:
     return step^
 
 
+def gaussian_blur_pass(
+    sigma: Float32 = 4,
+    resolution_scale: Float32 = 1,
+    premultiplied_alpha: Bool = False,
+) raises -> Pass:
+    """Return a pass of three.js's `gaussianBlur( frame, null, sigma )`:
+    the frame blurred across and then down, at a resolution scale, and
+    read back at the frame's size.
+
+    Args:
+        sigma: The blur's `sigma`; its kernel is `3 + 2 * sigma` taps each
+            way.
+        resolution_scale: The size the blur works at, as a share of the
+            frame's; positive.
+        premultiplied_alpha: Whether the blur works on premultiplied
+            light, three.js's `premultipliedAlpha`.
+
+    Returns:
+        The pass. Its `display.direction_x` and `direction_y` are the
+        node's `directionNode`, one each.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(GAUSSIAN_BLUR)
+    step.display.sigma = sigma
+    step.display.resolution_scale = resolution_scale
+    step.display.premultiplied_alpha = premultiplied_alpha
+    check_pass(step)
+    return step^
+
+
+def box_blur_pass(
+    size: Int = 1, separation: Int = 1, premultiplied_alpha: Bool = False
+) raises -> Pass:
+    """Return a pass of three.js's `boxBlur`.
+
+    Args:
+        size: How many taps each way from the pixel.
+        separation: How many pixels apart the taps are; at least one is
+            used.
+        premultiplied_alpha: Whether the blur works on premultiplied
+            light.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(BOX_BLUR)
+    step.display.size = size
+    step.display.separation = separation
+    step.display.premultiplied_alpha = premultiplied_alpha
+    check_pass(step)
+    return step^
+
+
+def hash_blur_pass(
+    blur_amount: Float32 = 0.1,
+    repeats: Int = 45,
+    premultiplied_alpha: Bool = False,
+) raises -> Pass:
+    """Return a pass of three.js's `hashBlur`.
+
+    Args:
+        blur_amount: How far the taps reach, `bluramount`.
+        repeats: How many taps, `repeats`; at least one.
+        premultiplied_alpha: Whether the blur works on premultiplied
+            light.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(HASH_BLUR)
+    step.display.blur_amount = blur_amount
+    step.display.repeats = repeats
+    step.display.premultiplied_alpha = premultiplied_alpha
+    check_pass(step)
+    return step^
+
+
+def chromatic_aberration_pass(
+    strength: Float32 = 1,
+    center_u: Float32 = 0.5,
+    center_v: Float32 = 0.5,
+    scale: Float32 = 1.1,
+) raises -> Pass:
+    """Return a pass of three.js's `chromaticAberration`.
+
+    Args:
+        strength: How far the channels part.
+        center_u: The center the channels part from, across.
+        center_v: The center, up.
+        scale: How much the red is scaled out and the blue in.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(CHROMATIC_ABERRATION)
+    step.display.strength = strength
+    step.display.center_u = center_u
+    step.display.center_v = center_v
+    step.display.scale = scale
+    check_pass(step)
+    return step^
+
+
+def anamorphic_pass(
+    threshold: Float32 = 0.9, scale: Float32 = 3, samples: Int = 32
+) raises -> Pass:
+    """Return a pass that adds three.js's `anamorphic` to the frame.
+
+    Args:
+        threshold: The luminance the streak starts above.
+        scale: How many pixels apart the streak's taps are.
+        samples: How many taps; at least two.
+
+    Returns:
+        The pass. Its `display.resolution_scale` is the node's
+        `resolutionScale`, one.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(ANAMORPHIC)
+    step.display.threshold = threshold
+    step.display.anamorphic_scale = scale
+    step.display.samples = samples
+    check_pass(step)
+    return step^
+
+
+def lensflare_pass(
+    threshold: Float32 = 0.5,
+    ghost_samples: Int = 4,
+    ghost_spacing: Float32 = 0.25,
+    ghost_attenuation: Float32 = 25,
+    down_sample_ratio: Float32 = 4,
+) raises -> Pass:
+    """Return a pass that adds three.js's `lensflare` to the frame.
+
+    Args:
+        threshold: The light the ghosts start above.
+        ghost_samples: How many ghosts.
+        ghost_spacing: How far apart they are.
+        ghost_attenuation: How fast a ghost fades from the center.
+        down_sample_ratio: How many times smaller the flare is drawn;
+            positive.
+
+    Returns:
+        The pass. Its `display.ghost_tint_r`, `_g` and `_b` are the node's
+        `ghostTint`, white.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(LENSFLARE)
+    step.display.flare_threshold = threshold
+    step.display.ghost_samples = ghost_samples
+    step.display.ghost_spacing = ghost_spacing
+    step.display.ghost_attenuation = ghost_attenuation
+    step.display.down_sample_ratio = down_sample_ratio
+    check_pass(step)
+    return step^
+
+
 def god_rays_pass(
     sun: Vector3, intensity: Float32 = 0.69, fake_sun: Bool = False
 ) raises -> Pass:
@@ -2277,6 +2486,18 @@ struct EffectComposer(Movable):
                 assets,
                 camera,
             )
+        elif step.kind == GAUSSIAN_BLUR:
+            gaussian_blur_light(frame, step.display)
+        elif step.kind == BOX_BLUR:
+            box_blur_light(frame, step.display)
+        elif step.kind == HASH_BLUR:
+            hash_blur_light(frame, step.display)
+        elif step.kind == CHROMATIC_ABERRATION:
+            chromatic_aberration_light(frame, step.display)
+        elif step.kind == ANAMORPHIC:
+            anamorphic_light(frame, step.display)
+        elif step.kind == LENSFLARE:
+            lensflare_light(frame, step.display)
         elif step.kind == BOKEH2:
             bokeh2_light(
                 frame, depth_view(renderer, scene, assets, camera), step.bokeh2

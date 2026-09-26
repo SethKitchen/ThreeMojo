@@ -349,5 +349,5 @@ A fragment that the mask can throw away claims no depth until it survives, as a 
 - Integer types and the bit operations, and the matrix functions `transpose`, `determinant` and `inverse`.
 - The Worley and cell noises, `mx_noise_vec3` and `mx_noise_vec4`.
 - Other outputs: `backdropNode`, `lightsNode`, `shadowNode`, `castShadowNode` and `fragmentNode`.
-- Post-processing nodes.
+- Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
 - Reading and writing node materials in files.
