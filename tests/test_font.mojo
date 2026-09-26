@@ -289,8 +289,10 @@ def test_an_outline_puts_the_end_point_last() raises:
 
 
 def test_a_bad_outline_is_refused() raises:
-    with assert_raises(contains="unknown command 'z'"):
-        _ = parse_outline("m 0 0 l 1 0 z")
+    with assert_raises(contains="unknown command 'y'"):
+        _ = parse_outline("m 0 0 l 1 0 y")
+    # `z`, which three.js's TTFLoader writes, is stepped over.
+    assert_equal(len(parse_outline("m 0 0 l 1 0 l 0 1 z")), 3)
     with assert_raises(contains="too few numbers"):
         _ = parse_outline("m 0")
     with assert_raises(contains="'x' is not a number"):
@@ -495,8 +497,8 @@ def test_a_bad_glyph_is_refused_by_name() raises:
         _ = fallback_font('{"x": {"o": ""}}')
     with assert_raises(contains="glyph 'x': 'o' must be a string"):
         _ = fallback_font('{"x": {"ha": 1, "o": 3}}')
-    with assert_raises(contains="glyph 'x': unknown command 'z'"):
-        _ = fallback_font('{"x": {"ha": 1, "o": "z"}}')
+    with assert_raises(contains="glyph 'x': unknown command 'y'"):
+        _ = fallback_font('{"x": {"ha": 1, "o": "y"}}')
     with assert_raises(contains="glyph 'x': an outline draws before it moves"):
         _ = fallback_font('{"x": {"ha": 1, "o": "l 1 1"}}')
     with assert_raises(contains="glyph 'x': its advance is not finite"):

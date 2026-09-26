@@ -984,8 +984,30 @@ An outline is a string of commands, each with its numbers, in font units. Other 
 | `l x y` | A straight run to the point. |
 | `q x y cx cy` | A quadratic Bezier curve to `x y`, with the control point `cx cy`. |
 | `b x y c1x c1y c2x c2y` | A cubic Bezier curve to `x y`, with two control points. |
+| `z` | Nothing. three.js's `TTFLoader` writes it to close an outline, and `Font` steps over it. |
 
 The end point comes first in `q` and `b`. That is the order of the file, and three.js reads it the same way.
+
+### TrueType fonts
+
+```mojo
+from loaders.ttf import read_ttf
+
+var font = read_ttf("assets/ttf/kenpixel.ttf")
+```
+
+`loaders/ttf.mojo`. `read_ttf(path, reversed)` reads a TrueType font into a `Font`. `ttf_json(bytes, reversed)` gives the typeface JSON that three.js's `TTFLoader` makes, which `parse_font` reads. three.js reads the font with opentype.js. This reader follows opentype.js for TrueType outlines:
+
+- The `cmap` subtable is the last for Unicode or Windows Unicode, of format 4 or 12. A format 4 table's last segment is not read, as in opentype.js.
+- A simple glyph gives a line to each point on the curve, and a quadratic curve through each point off it. Two points off the curve in a row meet at their midpoint.
+- A composite glyph places its parts by an offset, a scale, a 2 by 2 matrix or matched points.
+- The advances come from `hmtx`, and the full name from `name`, in US English.
+
+The numbers are scaled by `100000 / (unitsPerEm * 72)` and rounded. A glyph with no outline has no `x_min` or `x_max`. With `reversed`, three.js reverses a glyph's commands once for each code point that maps to it. So a glyph of two code points comes back in its first order, without its `z`. The reader keeps this.
+
+The reader refuses a font that is not TrueType, CFF outlines and WOFF. It also refuses a font with no `glyf` or `cmap` it can read, and a code point that is a surrogate. It does not write `original_font_information`: `FontLoader` does not read it. A lone surrogate in the full name becomes U+FFFD, because a Mojo string cannot hold one.
+
+The tests compare six fonts with three.js 0.180, plain and reversed: `kenpixel.ttf` from three.js's examples, and five from `assets/ttf/make_fonts.py`. A font with Apple's `true` signature must read as its TrueType twin. The reader must refuse fourteen broken fonts.
 
 ### Layout
 

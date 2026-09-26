@@ -69,6 +69,7 @@ from render.etc import (
     eac_r11_block,
     etc2_color_block,
 )
+from render.pvrtc import decode_pvrtc, pvrtc_bytes
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -106,8 +107,20 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eighteen formats there are."""
-        return self.value >= 0 and self.value <= 17
+        """Return True if this is one of the twenty-three formats there
+        are."""
+        return self.value >= 0 and self.value <= 22
+
+    def is_pvrtc(self) -> Bool:
+        """Return True for the four PVRTC1 formats, which `render.pvrtc`
+        decodes a whole level at a time."""
+        return self.value >= 19 and self.value <= 22
+
+    def is_two_bit(self) -> Bool:
+        """Return True for the PVRTC formats of 2 bits a texel."""
+        return (
+            self == RGB_PVRTC_2BPPV1_FORMAT or self == RGBA_PVRTC_2BPPV1_FORMAT
+        )
 
     def is_s3tc(self) -> Bool:
         """Return True for BC1, BC2 and BC3, the formats `decode_s3tc`
@@ -128,17 +141,28 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_color(self) -> Bool:
         """Return True if this format holds bytes of color, the formats an
-        sRGB file can hold: S3TC, BC7 and ETC."""
-        return self.is_s3tc() or (self.value >= 10 and self.value <= 13)
+        sRGB file can hold: S3TC, BC7, ETC and uncompressed RGBA."""
+        return (
+            self.is_s3tc()
+            or (self.value >= 10 and self.value <= 13)
+            or self.value >= 18
+        )
 
     def block_bytes(self) -> Int:
-        """Return how many bytes one 4x4 block takes: eight for BC1, BC4,
-        ETC1, ETC2 RGB and R11, sixteen for the rest, including a format
-        that is none of these, which `compressed_texture` has refused
-        before asking."""
+        """Return how many bytes one block takes: eight for BC1, BC4,
+        ETC1, ETC2 RGB and R11, four for one texel of uncompressed RGBA,
+        and sixteen for the rest, including a format that is none of
+        these, which `compressed_texture` has refused before asking."""
         if self._half_block():
             return 8
+        if self == RGBA_FORMAT:
+            return 4
         return 16
+
+    def block_size(self) -> Int:
+        """Return how many texels square a block is: one for uncompressed
+        RGBA, four for every other format."""
+        return 1 if self == RGBA_FORMAT else BLOCK
 
     def _half_block(self) -> Bool:
         """Return True for the formats whose block is eight bytes."""
@@ -178,6 +202,11 @@ struct CompressedFormat(Equatable, ImplicitlyCopyable, Writable):
             "SIGNED_R11_EAC_Format",
             "RG11_EAC_Format",
             "SIGNED_RG11_EAC_Format",
+            "RGBAFormat",
+            "RGB_PVRTC_4BPPV1_Format",
+            "RGB_PVRTC_2BPPV1_Format",
+            "RGBA_PVRTC_4BPPV1_Format",
+            "RGBA_PVRTC_2BPPV1_Format",
         ]
         if self.is_valid():
             writer.write(names[self.value])
@@ -227,6 +256,15 @@ comptime SIGNED_R11_EAC_FORMAT = CompressedFormat(15)
 comptime RG11_EAC_FORMAT = CompressedFormat(16)
 # The same, signed: `SIGNED_RG11_EAC_Format`.
 comptime SIGNED_RG11_EAC_FORMAT = CompressedFormat(17)
+# Uncompressed eight-bit RGBA, three.js's `RGBAFormat`, which `DDSLoader`
+# gives for an uncompressed file. Its "block" is one texel.
+comptime RGBA_FORMAT = CompressedFormat(18)
+# PVRTC1, three.js's `RGB_PVRTC_4BPPV1_Format` and the next three: 4 or 2
+# bits a texel, the RGB forms opaque. `render.pvrtc` decodes them.
+comptime RGB_PVRTC_4BPPV1_FORMAT = CompressedFormat(19)
+comptime RGB_PVRTC_2BPPV1_FORMAT = CompressedFormat(20)
+comptime RGBA_PVRTC_4BPPV1_FORMAT = CompressedFormat(21)
+comptime RGBA_PVRTC_2BPPV1_FORMAT = CompressedFormat(22)
 
 # A block is four texels square.
 comptime BLOCK = 4
@@ -428,8 +466,11 @@ def _byte_block(
         tables: The fixed tables.
 
     Returns:
-        Sixty-four bytes, row-major from the block's top left.
+        Sixty-four bytes, row-major from the block's top left; four for
+        uncompressed RGBA, whose block is one texel.
     """
+    if format == RGBA_FORMAT:
+        return [data[at], data[at + 1], data[at + 2], data[at + 3]]
     if format == RGB_S3TC_DXT1_FORMAT:
         var colors = _color_block(data, at, False)
         # The transparent index is opaque black here.
@@ -616,9 +657,7 @@ def _check_payload(
             + String(format)
         )
     check_decoded_size(width, height, format.is_float())
-    var across = (width + BLOCK - 1) // BLOCK
-    var down = (height + BLOCK - 1) // BLOCK
-    if len(data) != across * down * format.block_bytes():
+    if len(data) != level_bytes(width, height, format):
         raise Error("Compressed payload length does not match the dimensions")
 
 
@@ -644,9 +683,18 @@ def decode_compressed(
             the named ones, or the payload's length is not the block grid's.
     """
     _check_payload(width, height, data, format)
+    if format.is_pvrtc():
+        var decoded = DecodedBlocks(width, height, UNSIGNED_BYTE_TYPE)
+        decoded.pixels = decode_pvrtc(width, height, data, format.is_two_bit())
+        # The RGB forms are opaque, as the GPU reads them.
+        if format.value <= RGB_PVRTC_2BPPV1_FORMAT.value:
+            for at in range(3, len(decoded.pixels), 4):  # pragma: no branch
+                decoded.pixels[at] = 255
+        return decoded^
     var tables = _Tables()
-    var across = (width + BLOCK - 1) // BLOCK
-    var down = (height + BLOCK - 1) // BLOCK
+    var size = format.block_size()
+    var across = (width + size - 1) // size
+    var down = (height + size - 1) // size
     var result: DecodedBlocks
     if format.is_float():
         result = DecodedBlocks(width, height, FLOAT_TYPE)
@@ -663,15 +711,15 @@ def decode_compressed(
                 texels_f = _float_block(data, at, format, tables)
             else:
                 texels_b = _byte_block(data, at, format, tables)
-            for row in range(BLOCK):  # pragma: no branch
-                var y = block_row * BLOCK + row
+            for row in range(size):  # pragma: no branch
+                var y = block_row * size + row
                 if y >= height:
                     continue
-                for column in range(BLOCK):  # pragma: no branch
-                    var x = block_column * BLOCK + column
+                for column in range(size):  # pragma: no branch
+                    var x = block_column * size + column
                     if x >= width:
                         continue
-                    var texel = (row * BLOCK + column) * 4
+                    var texel = (row * size + column) * 4
                     var slot = (y * width + x) * 4
                     for channel in range(4):  # pragma: no branch
                         if format.is_float():
@@ -809,9 +857,12 @@ def level_bytes(width: Int, height: Int, format: CompressedFormat) -> Int:
     Returns:
         The block grid's size in bytes, rounded up to whole blocks.
     """
+    if format.is_pvrtc():
+        return pvrtc_bytes(width, height, format.is_two_bit())
+    var size = format.block_size()
     return (
-        ((width + BLOCK - 1) // BLOCK)
-        * ((height + BLOCK - 1) // BLOCK)
+        ((width + size - 1) // size)
+        * ((height + size - 1) // size)
         * format.block_bytes()
     )
 

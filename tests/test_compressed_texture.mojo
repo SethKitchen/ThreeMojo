@@ -210,8 +210,8 @@ def test_a_payload_must_match_the_block_grid_and_the_format() raises:
         _ = decode_s3tc(4, 4, data, CompressedFormat(99))
     with assert_raises(contains="use decode_compressed"):
         _ = decode_s3tc(4, 4, data, RED_RGTC1_FORMAT)
-    with assert_raises(contains="CompressedFormat(18)"):
-        _ = decode_compressed(4, 4, data, CompressedFormat(18))
+    with assert_raises(contains="CompressedFormat(23)"):
+        _ = decode_compressed(4, 4, data, CompressedFormat(23))
     with assert_raises():
         _ = decode_compressed(4, 4, data, CompressedFormat(-1))
     assert_false(CompressedFormat(99).is_valid())
@@ -244,7 +244,7 @@ def test_a_compressed_texture_takes_threejs_defaults() raises:
     assert_equal(custom.levels, 3)
     assert_equal(custom.alpha, IGNORED)
     with assert_raises():
-        _ = compressed_texture(4, 4, data, CompressedFormat(18))
+        _ = compressed_texture(4, 4, data, CompressedFormat(23))
 
 
 # --- more than one block, and not square ------------------------------------

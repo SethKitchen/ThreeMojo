@@ -38,6 +38,15 @@ six faces, +x, -x, +y, -y, +z, -z.
 The second DXGI number of each pair is the sRGB form, and the image's
 color space is `SRGB` only for those. A four-character code does not say,
 so its image is `LINEAR`, as three.js leaves it.
+
+**Uncompressed files.** A code that names none of these is read as three.js
+reads it: by the pixel format's bit count and masks. Thirty-two bits with a
+red, a green, a blue and an alpha mask is `RGBA_FORMAT`, read from bytes in
+blue, green, red, alpha order. Twenty-four bits with the three color masks
+is `RGBA_FORMAT` too, read from blue, green, red, with an opaque alpha. As in
+three.js, a mask only has to overlap its byte, and the bytes are read in
+that order whatever the masks say. The format flags are not read: a known
+code is a block format even when the flags say RGB, as in three.js.
 """
 
 from render.compressed_texture import (
@@ -50,6 +59,7 @@ from render.compressed_texture import (
     RGBA_BPTC_FORMAT,
     RGBA_S3TC_DXT1_FORMAT,
     RGBA_S3TC_DXT3_FORMAT,
+    RGBA_FORMAT,
     RGBA_S3TC_DXT5_FORMAT,
     SIGNED_RED_GREEN_RGTC2_FORMAT,
     SIGNED_RED_RGTC1_FORMAT,
@@ -134,9 +144,32 @@ def format_of_four_cc(code: Int) raises -> CompressedFormat:
     raise Error(
         "DDS: the pixel format's four-character code "
         + hex(code)
-        + " is not one this reader decodes; uncompressed, premultiplied"
-        " DXT2 and DXT4, and other codes are not ported"
+        + " is not one this reader decodes; premultiplied DXT2 and DXT4,"
+        " and other codes, are not ported"
     )
+
+
+def uncompressed_bytes(bytes: List[UInt8]) -> Int:
+    """Return how many bytes a texel of an uncompressed file takes, as
+    three.js's `DDSLoader` tells by the pixel format's bit count and masks.
+
+    Args:
+        bytes: The file, its header whole.
+
+    Returns:
+        Four for 32-bit BGRA, three for 24-bit BGR, or zero for neither.
+    """
+    var bits = _u32(bytes, 88)
+    var red = (_u32(bytes, 92) & 0xFF0000) != 0
+    var green = (_u32(bytes, 96) & 0xFF00) != 0
+    var blue = (_u32(bytes, 100) & 0xFF) != 0
+    var alpha = (_u32(bytes, 104) & 0xFF000000) != 0
+    var color = red and green and blue
+    if bits == 32 and color and alpha:
+        return 4
+    if bits == 24 and color:
+        return 3
+    return 0
 
 
 def format_of_dxgi(dxgi: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
@@ -186,8 +219,31 @@ def _space(srgb: Bool) -> ColorSpace:
     return LINEAR
 
 
+def _rgba(bytes: List[UInt8], at: Int, size: Int, texel: Int) -> List[UInt8]:
+    """Return an uncompressed level as RGBA bytes, three.js's
+    `loadARGBMip` or `loadRGBMip`.
+
+    Args:
+        bytes: The file.
+        at: Where the level starts.
+        size: Its bytes.
+        texel: Four for BGRA, three for BGR.
+
+    Returns:
+        Red, green, blue and alpha for each texel; an opaque alpha for BGR.
+    """
+    var out = List[UInt8](capacity=size // texel * 4)
+    for k in range(at, at + size, texel):  # pragma: no branch
+        out.append(bytes[k + 2])
+        out.append(bytes[k + 1])
+        out.append(bytes[k])
+        out.append(bytes[k + 3] if texel == 4 else 255)
+    return out^
+
+
 def read(bytes: List[UInt8]) raises -> CompressedImage:
-    """Return every level of every face of a DDS file, as block bytes.
+    """Return every level of every face of a DDS file, as block bytes, or
+    as RGBA bytes for an uncompressed file.
 
     Args:
         bytes: The whole file.
@@ -197,9 +253,9 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
 
     Raises:
         Error: If the magic, the header size or the pixel format's size is
-            wrong; the dimensions are not positive; the pixel format is
-            not a four-character code or names a format this reader does
-            not decode; the size would decode to more than
+            wrong; the dimensions are not positive; the pixel format
+            names no format this reader decodes, by its code or by its bit
+            masks; the size would decode to more than
             `MAX_DECODED_BYTES`; there are more levels than the size has; a cube
             lacks a face; a DX10 file is an array or is not a 2D texture;
             or the file ends before its last level.
@@ -219,12 +275,6 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         levels = max(1, _u32(bytes, 28))
     if levels > chain_length(width, height):
         raise Error("DDS: the file names more levels than its size has")
-    # DDPF_FOURCC: the format is named by a code, not by bit masks.
-    if (_u32(bytes, 80) & 0x4) == 0:
-        raise Error(
-            "DDS: the pixel format is not a four-character code; uncompressed"
-            " DDS files are not ported"
-        )
     var faces = 1
     var caps2 = _u32(bytes, 112)
     if (caps2 & DDSCAPS2_CUBEMAP) != 0:
@@ -235,6 +285,8 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     var start = 4 + HEADER_BYTES
     var format: CompressedFormat
     var space = LINEAR
+    # Bytes a texel of an uncompressed file, or zero for a block format.
+    var texel = 0
     if code == four_cc("DX10"):
         if len(bytes) < start + DX10_HEADER_BYTES:
             raise Error("DDS: the file is shorter than its DX10 header")
@@ -250,17 +302,28 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
             faces = 6
         start += DX10_HEADER_BYTES
     else:
-        format = format_of_four_cc(code)
+        try:
+            format = format_of_four_cc(code)
+        except e:
+            texel = uncompressed_bytes(bytes)
+            if texel == 0:
+                raise e^
+            format = RGBA_FORMAT
     check_decoded_size(width, height, format.is_float())
     var image = CompressedImage(width, height, format, space, faces, levels)
     var at = start
     for _ in range(faces):  # pragma: no branch
         for level in range(levels):  # pragma: no branch
-            var size = level_bytes(
-                image.level_width(level), image.level_height(level), format
-            )
+            var width_at = image.level_width(level)
+            var height_at = image.level_height(level)
+            var size = level_bytes(width_at, height_at, format)
+            if texel > 0:
+                size = width_at * height_at * texel
             if size > len(bytes) - at:
                 raise Error("DDS: the file ends before its last level")
-            image.mipmaps.append(List[UInt8](bytes[at : at + size]))
+            if texel > 0:
+                image.mipmaps.append(_rgba(bytes, at, size, texel))
+            else:
+                image.mipmaps.append(List[UInt8](bytes[at : at + size]))
             at += size
     return image^

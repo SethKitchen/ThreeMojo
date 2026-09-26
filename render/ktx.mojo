@@ -34,6 +34,10 @@ from render.compressed_texture import (
     RGB_BPTC_UNSIGNED_FORMAT,
     RGB_ETC1_FORMAT,
     RGB_ETC2_FORMAT,
+    RGB_PVRTC_2BPPV1_FORMAT,
+    RGB_PVRTC_4BPPV1_FORMAT,
+    RGBA_PVRTC_2BPPV1_FORMAT,
+    RGBA_PVRTC_4BPPV1_FORMAT,
     RGB_S3TC_DXT1_FORMAT,
     RGBA_BPTC_FORMAT,
     RGBA_ETC2_EAC_FORMAT,
@@ -105,7 +109,7 @@ def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
 
     Raises:
         Error: If the word names a format this reader does not decode:
-            ASTC, PVRTC, ETC2 with punch-through alpha, or anything else.
+            ASTC, ETC2 with punch-through alpha, or anything else.
     """
     # S3TC, and its sRGB forms from EXT_texture_sRGB.
     if internal == 0x83F0:
@@ -161,10 +165,19 @@ def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
         return (RG11_EAC_FORMAT, LINEAR)
     if internal == 0x9273:
         return (SIGNED_RG11_EAC_FORMAT, LINEAR)
+    # PVRTC1, from IMG_texture_compression_pvrtc.
+    if internal == 0x8C00:
+        return (RGB_PVRTC_4BPPV1_FORMAT, LINEAR)
+    if internal == 0x8C01:
+        return (RGB_PVRTC_2BPPV1_FORMAT, LINEAR)
+    if internal == 0x8C02:
+        return (RGBA_PVRTC_4BPPV1_FORMAT, LINEAR)
+    if internal == 0x8C03:
+        return (RGBA_PVRTC_2BPPV1_FORMAT, LINEAR)
     raise Error(
         "KTX: internal format "
         + hex(internal)
-        + " is not one this reader decodes; ASTC, PVRTC and ETC2 with"
+        + " is not one this reader decodes; ASTC and ETC2 with"
         " punch-through alpha are not ported"
     )
 

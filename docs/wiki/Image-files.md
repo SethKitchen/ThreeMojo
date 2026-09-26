@@ -1,10 +1,10 @@
 # Image files
 
-`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo` and `render/ppm.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, TGA, Radiance HDR and OpenEXR. No compression or image library is involved.
+`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo` and `render/tiff.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
 
 ![A triangle turns in an animated PNG](out/spin.png)
 
-three.js: `TextureLoader` for reading PNG and JPEG, and `TGALoader` for TGA. three.js writes nothing; the browser does.
+three.js: `TextureLoader` for reading PNG and JPEG, `TGALoader` for TGA, and `TIFFLoader` for TIFF. three.js writes nothing; the browser does.
 
 ## Formats
 
@@ -15,6 +15,7 @@ three.js: `TextureLoader` for reading PNG and JPEG, and `TGALoader` for TGA. thr
 | PPM | No | Yes | No | Plain text, for reading pixel values in an editor. |
 | JPEG | Yes | No | No | Baseline and progressive. See [Read a JPEG](#read-a-jpeg). |
 | TGA | Yes | No | 8-bit | See [Read a TGA](#read-a-tga). |
+| TIFF | Yes | No | 8-bit | Baseline TIFF. See [Read a TIFF](#read-a-tiff). |
 | Radiance HDR | Yes | No | No | Linear floats. See [HDR images](Textures#hdr-images). |
 | OpenEXR | Yes | No | Float | Linear floats. See [HDR images](Textures#hdr-images). |
 
@@ -136,6 +137,51 @@ The descriptor byte gives the origin. The reader reads all four corners: bottom 
 - The reader refuses an index past the color map, a packet past the image and a file that ends early. three.js reads these as whatever its array holds.
 
 `decode_image` in `loaders/gltf.mojo` reads a TGA when the bytes are neither PNG nor JPEG. A TGA has no signature, so the header check alone tells a TGA from other bytes. glTF names only PNG and JPEG, so this fallback is an addition of this port.
+
+## Read a TIFF
+
+```mojo
+from render.tiff import read_tiff
+
+var scan = assets.textures.add(read_tiff(Path("assets/tiff/rgb_lzw.tif").read_bytes()))
+```
+
+`render/tiff.mojo`. `read_tiff` reads the first image of a TIFF file into a texture, as three.js's `TIFFLoader` makes it. three.js reads the file with UTIF. This decoder follows UTIF's arithmetic for baseline TIFF. The texture is `LINEAR`, filtered linearly with a chain of levels, and flipped.
+
+| Part | Read |
+|---|---|
+| Byte order | `II` and `MM`. A 16-bit sample of either order. |
+| Layout | Strips and tiles. |
+| Compression | None, LZW, Deflate and PackBits, with or without the horizontal predictor. |
+| White is zero, 0 | 1, 4, 8 and 16-bit gray. |
+| Black is zero, 1 | 1, 2, 8 and 16-bit gray, and 32-bit float gray. |
+| RGB, 2 | 8-bit with one, three, or four or more samples. 16-bit with three or four samples. 32-bit floats with three or four samples. |
+| Palette, 3 | 1, 2, 4 and 8-bit indices. An extra sample is the alpha. |
+| CMYK, 5 | UTIF's formula. A fifth sample is the alpha. |
+
+A 16-bit sample keeps its high byte. A 32-bit float RGB sample is clamped to zero to one and encoded with sRGB's curve, through UTIF's table of 65536 steps.
+
+### Same as three.js
+
+The decoder keeps these UTIF behaviors:
+
+- 4-bit black-is-zero gray, 2-bit white-is-zero gray, and RGB of other sample counts are transparent black.
+- A float RGB image with a negative sample is read in the other byte order, as UTIF guesses.
+- CMYK with four samples reads a fifth sample anyway, times zero. Past the end of the data that is NaN, so the last pixel is transparent.
+- An uncompressed image of one strip is read as long as the image, whatever its byte count says. A Deflate strip that does not fit is dropped.
+- An LZW code past the table is read as the next code.
+
+### Errors
+
+The decoder refuses these, with a message that names the problem:
+
+- What three.js throws on. In three.js's build of UTIF, each log is a throw. So an unknown compression, an unknown photometric form, planar configuration 2 and an unknown tag type throw, as does 32-bit gray that is not float.
+- What this decoder does not read: CCITT, JPEG, YCbCr, and the camera and raw formats.
+- An LZW code past the table right after a clear code. UTIF reads it from a table that it shares between decodes, so its output depends on what it decoded before.
+- Strips that cover fewer rows than the image. UTIF cuts the data short, and each photometric form reads the missing bytes in its own way.
+- An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
+
+The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
 
 ## Color space of a decoded file
 
