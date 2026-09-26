@@ -275,20 +275,20 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4`, and `sampler2D` uniforms.
-- Uniforms: every type above but `void`. An `int` or a `bool` uniform is a float that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero.
+- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
+- Uniforms: every type above but `void`. An `int` or a `bool` uniform is a float that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Functions: functions with `in` parameters. A call inlines the body. A `return` can come before the end of its function.
 - Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, constant indexes, and constructors of scalars, vectors and matrices.
-- Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`.
+- Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture` and `texture2D`.
 - The preprocessor: `#version` in a raw shader, and object-like `#define`.
 
-A local matrix gets its value where you declare it, and keeps that value. A register holds four floats, so a local matrix is a name for the matrix that its initializer builds. `break` and `continue` must be in a loop of the same function.
+A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` and `continue` must be in a loop of the same function.
 
 An `int` is a whole number that a float holds. An `int` division drops the fraction toward zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
@@ -296,7 +296,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 
 - A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint`, `ivec`, `uvec`, `bvec`, `mat2`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
+- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do`, `switch` and recursion.
