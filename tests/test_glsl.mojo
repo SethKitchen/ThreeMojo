@@ -1870,9 +1870,11 @@ def test_break_continue_and_an_early_return_are_read() raises:
         "break needs a loop to be in",
     )
     refused(
-        VERTEX.replace("void main() {", "void main() {\n    if (true) { return; }"),
+        "void main() { gl_FragColor = vec4(1.0); }",
         "a vertex shader's main, cannot return early",
-        vertex=VERTEX.replace("void main() {", "void main() {\n    if (true) { return; }"),
+        vertex=String(VERTEX).replace(
+            "void main() {", "void main() {\n    if (true) { return; }"
+        ),
     )
     refused(
         "uniform mat3 m;\n"
