@@ -643,27 +643,11 @@ struct Fn(Copyable, Movable):
                     + graph.type_of(args[index]).name()
                 )
         var depth = len(graph._blocks)
-        var returned = graph.Var(graph.float(0))
-        var result = graph.Var(
-            graph._match(graph.float(0), self.output, "hold")
-        )
-        graph._returns.append(
-            _Return(returned.value, result.value, depth, False)
-        )
+        graph.open_call(self.output)
         var answer = self.body(graph, args)
-        var frame = graph._returns.pop()
-        graph._retired[frame.returned] = True
-        graph._retired[frame.result] = True
         if len(graph._blocks) != depth:
             raise Error("The Fn " + self.name + " leaves an If or a Loop open")
-        if frame.used and graph.type_of(answer) == self.output:
-            # A `Return` gives its value where it ran; the body's answer is
-            # the value everywhere else.
-            answer = graph.select(
-                graph.get(NodeVar(frame.returned)),
-                graph.get(NodeVar(frame.result)),
-                answer,
-            )
+        answer = graph.close_call(answer)
         if graph.type_of(answer) != self.output:
             raise Error(
                 "The Fn "
@@ -3268,6 +3252,55 @@ struct NodeGraph(Copyable, Movable):
         """Return True if a node is the constant zero."""
         return (
             self._kinds[node] == NODE_CONSTANT and self._values[node * 4] == 0
+        )
+
+    def open_call(mut self, output: ValueType) raises:
+        """Begin building a function's body, so that `Return` has a call to
+        return from: what `Fn.call` does, for a caller that inlines its own
+        bodies.
+
+        Args:
+            output: The type the function returns: a `float` or a vector.
+
+        Raises:
+            Error: If the type is not a `float` or a vector.
+        """
+        if not output.is_vector():
+            raise Error("A call returns a float or a vector")
+        var returned = self.Var(self.float(0))
+        var result = self.Var(self._match(self.float(0), output, "hold"))
+        self._returns.append(
+            _Return(returned.value, result.value, len(self._blocks), False)
+        )
+
+    def close_call(mut self, answer: NodeRef) raises -> NodeRef:
+        """End the innermost call `open_call` began, and return its answer:
+        what a `Return` gave where one ran, and `answer` everywhere else.
+
+        Args:
+            answer: What the body gives at its end.
+
+        Returns:
+            The call's answer.
+
+        Raises:
+            Error: If no call is open, or `answer` is not a node of the
+                call's type when a `Return` ran.
+        """
+        if len(self._returns) == 0:
+            raise Error("A close_call needs an open_call")
+        var frame = self._returns.pop()
+        self._retired[frame.returned] = True
+        self._retired[frame.result] = True
+        self._check(answer)
+        if not frame.used or self.type_of(answer) != self._var_types[frame.result]:
+            return answer
+        # A `Return` gives its value where it ran; the body's answer is the
+        # value everywhere else.
+        return self.select(
+            self.get(NodeVar(frame.returned)),
+            self.get(NodeVar(frame.result)),
+            answer,
         )
 
     def _innermost_loop(self, what: String) raises -> Int:

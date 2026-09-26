@@ -1398,7 +1398,8 @@ def test_the_statements_build_the_graph() raises:
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
     refused_statement("while (true) {}", "while is outside the subset")
-    refused_statement("break;", "break is outside the subset")
+    refused_statement("break;", "break needs a loop to be in")
+    refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
     refused("void main() { float a = 1.0;", "a function's body is never closed")
     refused_statement("float x = 1.0 float y;", "expected ; before 'float'")
@@ -1536,17 +1537,7 @@ def test_a_function_is_inlined_at_each_call() raises:
         ),
         "a function cannot call itself",
     )
-    refused(
-        (
-            "float f(float x) { if (x > 1.0) { return 1.0; } return 0.0;"
-            " }\nvoid main() { f(1.0); }"
-        ),
-        "a return must be the last statement of its function",
-    )
-    refused(
-        "float f() { return 1.0; float y = 1.0; }\nvoid main() { f(); }",
-        "a return must be the last statement of its function",
-    )
+
     refused(
         "float f() { }\nvoid main() { f(); }",
         "the function f ends with no return",
@@ -1731,7 +1722,7 @@ def test_the_corners_of_the_grammar() raises:
     )
     refused(
         "float f() { if (true) return 1.0; }\nvoid main() { f(); }",
-        "a return must be the last statement of its function",
+        "the function f ends with no return",
     )
     refused(
         "const float x = foo(1.0);\nvoid main() {}",
@@ -1813,6 +1804,81 @@ def test_a_matrix_uniform_multiplies_a_vector() raises:
     refused(
         uniform + "void main() { vec4 v = m * vec4(1.0); }",
         "cannot multiply a mat3 and a vec4",
+    )
+
+
+def test_break_continue_and_an_early_return_are_read() raises:
+    # Odd numbers skipped, and the loop left past seven: 0 + 2 + 4 + 6.
+    var loop = (
+        "float sum = 0.0;\n"
+        "for (int i = 0; i < 10; i++) {\n"
+        "    if (i > 7) break;\n"
+        "    if (mod(float(i), 2.0) > 0.5) { continue; }\n"
+        "    sum += float(i);\n"
+        "}\n"
+    )
+    assert_equal(
+        paint(
+            "void main() {\n"
+            + loop
+            + "    gl_FragColor = vec4(sum / 12.0);\n}\n"
+        )[0],
+        1,
+    )
+    # A function that returns early, from a branch and from a loop.
+    var early = (
+        "float capped(float x) { if (x > 1.0) { return 1.0; } return x * 0.5; }\n"
+        "float first(float limit) {\n"
+        "    for (int i = 0; i < 8; i++) {\n"
+        "        if (float(i * i) > limit) { return float(i); }\n"
+        "    }\n"
+        "    return -1.0;\n"
+        "}\n"
+        "void nothing() { return; }\n"
+    )
+    assert_equal(number("capped(3.0)", early), 1)
+    assert_equal(number("capped(0.5)", early), 0.25)
+    assert_equal(number("first(10.0) / 4.0", early), 1)
+    assert_equal(number("first(100.0)", early), -1)
+    # A statement after a return takes no effect.
+    assert_equal(
+        number(
+            "late()",
+            "float late() { float y = 2.0; return y; y = 3.0; return y; }",
+        ),
+        2,
+    )
+    # A fragment shader's main that returns early keeps what it wrote.
+    assert_lanes(
+        paint(
+            early
+            + "void main() {\n"
+            + "    gl_FragColor = vec4(1.0);\n"
+            + "    if (true) { gl_FragColor = vec4(0.5); nothing(); return; }\n"
+            + "    gl_FragColor = vec4(0.0);\n"
+            + "}\n"
+        ),
+        0.5,
+        0.5,
+        0.5,
+    )
+    # A loop around a call is not the call's to break.
+    refused(
+        "void stop() { break; }\nvoid main() {\n"
+        "    for (int i = 0; i < 2; i++) { stop(); }\n"
+        "    gl_FragColor = vec4(1.0);\n}\n",
+        "break needs a loop to be in",
+    )
+    refused(
+        VERTEX.replace("void main() {", "void main() {\n    if (true) { return; }"),
+        "a vertex shader's main, cannot return early",
+        vertex=VERTEX.replace("void main() {", "void main() {\n    if (true) { return; }"),
+    )
+    refused(
+        "uniform mat3 m;\n"
+        "mat3 pick() { if (true) { return m; } return m; }\n"
+        "void main() { gl_FragColor = vec4(pick() * vec3(1.0), 1.0); }\n",
+        "a function that returns a matrix",
     )
 
 

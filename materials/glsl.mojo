@@ -101,7 +101,7 @@ comptime _REFUSED_FUNCTIONS = (
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
-comptime _REFUSED_STATEMENTS = " while do switch break continue case default "
+comptime _REFUSED_STATEMENTS = " while do switch case default "
 comptime _BIT_MARKS = " | & ^ << >> ~ "
 
 
@@ -848,6 +848,9 @@ struct _Compiler(Movable):
     var returned: List[_Value]
     # How many branches and loops the parse is inside, in this function.
     var depth: Int
+    # How many loops the function being built is inside, for `break` and
+    # `continue`: a loop around a call is its caller's, not its own.
+    var loops: Int
     # The uniforms both shaders declare, and the varyings.
     var uniforms: List[_Symbol]
     var varyings: List[_Varying]
@@ -873,6 +876,7 @@ struct _Compiler(Movable):
         self.calling = List[Int]()
         self.returned = List[_Value]()
         self.depth = 0
+        self.loops = 0
         self.uniforms = List[_Symbol]()
         self.varyings = List[_Varying]()
         self.position = -1
@@ -1548,6 +1552,7 @@ struct _Compiler(Movable):
                 raise self.error("a function cannot call itself")
         var back = self.at
         var depth = self.depth
+        var loops = self.loops
         # A function sees the built-ins, the globals and its own names, not
         # its caller's.
         var globals_end = self.scopes[2] if len(self.scopes) > 2 else len(
@@ -1573,21 +1578,34 @@ struct _Compiler(Movable):
             )
         self.at = called.first + 1
         self.depth = 0
+        self.loops = 0
+        # A call is a frame of the graph's, for an early return, unless it
+        # returns a matrix, which no register holds.
+        var framed = not called.result.is_matrix()
+        if framed:
+            var frame = called.result if called.result != _VOID else _FLOAT
+            self.graph.open_call(ValueType(frame.width()))
         while self.at < called.last:
             self.statement()
         _ = self.calling.pop()
         var result = self.returned.pop()
         if called.result == _VOID:
+            _ = self.graph.close_call(self.graph.float(0))
             result = _plain(_VOID, -1)
         elif result.type == _VOID:
             raise self.error(
                 "the function " + called.name + " ends with no return"
             )
+        elif framed:
+            # An early `return` gives its value where it ran.
+            var answer = self.graph.close_call(NodeRef(result.node))
+            result.node = answer.value
         self.close()
         for index in range(len(hidden)):
             self.symbols.append(hidden[index].copy())
         self.scopes = scopes^
         self.depth = depth
+        self.loops = loops
         self.at = back
         return result^
 
@@ -1621,6 +1639,16 @@ struct _Compiler(Movable):
             self.graph.Discard()
         elif self.is_word("return"):
             self.return_statement()
+        elif self.is_word("break") or self.is_word("continue"):
+            var word = self.peek()
+            if self.loops == 0:
+                raise self.error(word + " needs a loop to be in")
+            self.at += 1
+            self.expect(";")
+            if word == "break":
+                self.graph.Break()
+            else:
+                self.graph.Continue()
         elif _listed(self.peek(), _REFUSED_STATEMENTS):
             raise self.error(self.peek() + " is outside the subset")
         elif self.starts_declaration():
@@ -1792,7 +1820,9 @@ struct _Compiler(Movable):
         self.open()
         self.declare(_Symbol(name, _INDEX, _plain(type, node.value), -1, False))
         self.depth += 1
+        self.loops += 1
         self.statement()
+        self.loops -= 1
         self.depth -= 1
         self.close()
         self.graph.End()
@@ -1850,10 +1880,19 @@ struct _Compiler(Movable):
             )
         self.expect(";")
         if self.at != called.last or self.depth != 0:
-            self.at -= 1
-            raise self.error(
-                "a return must be the last statement of its function"
+            # An early return: nothing after it takes effect where it runs.
+            if called.result.is_matrix() or (
+                called.name == "main" and self.stage == _VERTEX
+            ):
+                self.at -= 1
+                raise self.error(
+                    "a function that returns a matrix, and a vertex"
+                    " shader's main, cannot return early"
+                )
+            self.graph.Return(
+                NodeRef(value.node) if called.result != _VOID else self.graph.float(0)
             )
+            return
         value.symbol = -1
         value.components = ""
         if called.result == _VOID:
