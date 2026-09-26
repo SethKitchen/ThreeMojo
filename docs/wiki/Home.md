@@ -53,6 +53,7 @@ Look something up.
 - [Render target and framebuffer](Render-target-and-framebuffer)
 - [Post-processing](Post-processing)
 - [GPU computation](GPU-computation)
+- [SVG renderer](SVG-renderer)
 - [Image files](Image-files)
 - [Model files](Model-files)
 - [Exporters](Exporters)
