@@ -324,7 +324,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, points, lines, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and eighteen [extensions](#gltf-extensions). three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, points, lines, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and twenty [extensions](#gltf-extensions). three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -470,7 +470,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads eighteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads twenty extensions. Nineteen are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `KHR_materials_variants` is read as the plugin that three.js names for it reads it. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -492,6 +492,8 @@ The loader reads eighteen extensions. They are the ones three.js's `GLTFLoader` 
 | `KHR_draco_mesh_compression` | The primitive's Draco data, decoded by `loaders/draco.mojo`. See [Draco primitives](#draco-primitives). |
 | `EXT_materials_bump` | A `PHYSICAL` material. `bumpTexture` sets `bump_map`, read as data, and `bumpFactor` sets `bump_scale`. See [Bump maps](#bump-maps). |
 | `KHR_texture_basisu` | The texture reads the KTX 2.0 image that the extension names, before its own `source`. See [KTX 2.0 textures](#ktx-20-textures). |
+| `EXT_meshopt_compression` | The buffer view's compressed bytes, decoded by `loaders/meshopt.mojo`. See [Compressed buffer views](#compressed-buffer-views). |
+| `KHR_materials_variants` | The variant names, and the material that each variant gives each mapped object. `select_variant` changes the materials. See [Material variants](#material-variants). |
 
 A file that lists another extension in `extensionsRequired` is refused, as three.js refuses it. A file that lists an extension only in `extensionsUsed` is read without that extension.
 
@@ -542,6 +544,56 @@ The loader refuses an id that is not in the Draco data, and a value that does no
 
 The loader tells a KTX 2.0 image by its identifier, `is_ktx2(bytes)`. `ktx2_texture(bytes, sampling, space, alpha)` builds the texture.
 
+#### Compressed buffer views
+
+`EXT_meshopt_compression` stores a buffer view in a smaller form. The loader decodes each such view when it reads the buffers, as three.js does with its `MeshoptDecoder` set. Accessors, images and animations then read the decoded bytes.
+
+| Mode | What it holds |
+|---|---|
+| `ATTRIBUTES` | Elements of any size, as byte deltas from the element before. A filter can follow it. |
+| `TRIANGLES` | A triangle list, as one code for each triangle, from a cache of recent edges and vertices. |
+| `INDICES` | Any list of indices, as deltas from one of two running values. |
+
+| Filter | What it makes |
+|---|---|
+| `OCTAHEDRAL` | Unit vectors, from two octahedral coordinates. |
+| `QUATERNION` | Unit quaternions, from their three smallest components. |
+| `EXPONENTIAL` | Floats, from an 8-bit exponent and a 24-bit mantissa. |
+
+The decoder is a port of meshoptimizer 0.22, which three.js 0.180 ships. Its output is the same bytes as three.js's decoder, filters included. The filters round each product before they add to it, as WebAssembly does.
+
+A buffer that the extension marks as a `fallback` is not read. A buffer with no URI after the first is not read either. Only a compressed view can name such a buffer.
+
+`decode_gltf_buffer(count, stride, source, mode, filter)` decodes one view. `decode_vertex_buffer`, `decode_index_buffer` and `decode_index_sequence` decode one mode each.
+
+The loader refuses these:
+
+- A compressed stream that is too short, has the wrong header, or does not end where its tail starts. The message has meshoptimizer's code, as three.js's does.
+- A mode or a filter that is not known.
+- A view whose `byteLength` is not its `count` times its `byteStride`, or whose `byteStride` is not the extension's.
+- A stride, a count or a filter that the specification does not allow for the mode. meshoptimizer does not examine these.
+
+#### Material variants
+
+`KHR_materials_variants` gives a model several sets of materials, for example one for each color of a product. three.js's `GLTFLoader` does not read it. Its documentation names a plugin that does: `GLTFMaterialsVariantsExtension` of takahirox/three-gltf-extensions. The loader reads the extension as that plugin reads it.
+
+```mojo
+var model = read_gltf("chair.gltf", scene, assets)
+select_variant(model, scene, String("red"))
+select_variant(model, scene)
+```
+
+- `model.variants` holds the variant names. A name that is already taken gets `.1`, then `.2`, until it is unique, as the plugin makes it.
+- `model.variant_objects` holds each drawn object whose primitive has mappings. Each has its scene list, its index there, its original material, and one material for each variant.
+- The loader makes every variant's material when it reads the file, as the plugin's `ensureLoadVariants` makes them. A material is made final as three.js makes it: a copy with vertex colors, or a points or line material.
+- A later mapping of a variant replaces an earlier one, as in the plugin.
+- `select_variant(model, scene, name)` gives each mapped object the variant's material. A variant that does not map an object, an unknown name, and no name give the object its original material back.
+- The loader reads no mappings when the root does not have the extension, as the plugin does.
+
+The plugin selects the variant under one object. `select_variant` selects it for the whole model. The plugin cannot restore the original material of a primitive that names no material, or of points or lines. `select_variant` restores them.
+
+The loader refuses a variant with no name, a mapping with no material, and a mapping that names a variant that is not there.
+
 #### WebP images
 
 `EXT_texture_webp` is not read, because this port has no WebP decoder. A lossless WebP decoder is a bounded task, but most WebP textures in glTF files are lossy. A lossy decoder is a large task, and it is left for later.
@@ -552,8 +604,7 @@ The loader tells a KTX 2.0 image by its identifier, `is_ktx2(bytes)`. `ktx2_text
 
 #### Not ported
 
-- `KHR_materials_variants`.
-- `EXT_meshopt_compression`, `EXT_texture_webp` and `EXT_texture_avif`.
+- `EXT_texture_webp` and `EXT_texture_avif`.
 
 #### Differences from three.js
 
@@ -575,7 +626,8 @@ A primitive of triangle strips or triangle fans is refused. three.js turns them 
 The loader raises for:
 
 - A file it cannot read. A document that is not JSON or not glTF 2. A required extension that the loader does not read.
-- A buffer shorter than its length. A buffer view or accessor that runs past its buffer.
+- A buffer shorter than its length. A buffer view or accessor that runs past its buffer. A buffer view that reads a buffer with no data.
+- A compressed buffer view that is malformed. See [Compressed buffer views](#compressed-buffer-views).
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
 - An image that is not PNG, JPEG, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image, or with only a WebP image.
 - A primitive mode that is not points, lines or triangles. A point or a line on a skinned or instanced node.
