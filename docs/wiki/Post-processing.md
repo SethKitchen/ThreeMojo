@@ -560,6 +560,32 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 
 `ShaderEffect` and `MirrorSide` are types. A bare number does not compile. `tests/compile_fail/` proves it.
 
+## Display nodes
+
+`postprocessing/display_nodes.mojo`. Six of three.js's TSL display nodes run as composer passes, with three.js's defaults.
+
+| Builder | three.js | What it does |
+|---|---|---|
+| `gaussian_blur_pass(sigma=4, resolution_scale=1)` | `gaussianBlur` | Blur across and then down, at a resolution scale. |
+| `box_blur_pass(size=1, separation=1)` | `boxBlur` | Average a square of taps. |
+| `hash_blur_pass(blur_amount=0.1, repeats=45)` | `hashBlur` | Average taps round a circle, at hashed distances. |
+| `chromatic_aberration_pass(strength=1, center_u=0.5, center_v=0.5, scale=1.1)` | `chromaticAberration` | Read red further out and blue further in. |
+| `anamorphic_pass(threshold=0.9, scale=3, samples=32)` | `anamorphic` | Add a blue streak of the bright light along each row. |
+| `lensflare_pass(threshold=0.5, ghost_samples=4)` | `lensflare` | Add ghosts of the bright light, mirrored through the center. |
+
+Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's names.
+
+- A blur and the chromatic aberration replace the frame, as a node set as the output does.
+- The anamorphic streak and the lens flare are added to the frame, as three.js's examples add them to the scene pass.
+- A node that draws into a smaller target is worked out at that size and read back bilinear.
+- The three blurs take `premultiplied_alpha`, three.js's `premultipliedAlpha`. Off, they blur straight color, as three.js's texture holds it. The alpha is blurred too, so the stored light is scaled by it.
+
+`GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does.
+
+`bayer16(x, y)` is three.js's `bayer16`: the 16 by 16 Bayer matrix, zero to one, from the node's own image.
+
+These passes run on the host in a `GpuComposer` frame.
+
 ## Renderer effects
 
 `renderers/stereo_effects.mojo`, `renderers/ascii_effect.mojo` and `renderers/outline_effect.mojo`. Five of three.js's `examples/jsm/effects/`. Each wraps a renderer and draws the scene in its own way.
