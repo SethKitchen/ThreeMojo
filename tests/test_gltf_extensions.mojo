@@ -335,7 +335,8 @@ def test_every_read_extension_can_be_required() raises:
             + '"KHR_texture_transform","KHR_lights_punctual",'
             + '"KHR_mesh_quantization","EXT_mesh_gpu_instancing",'
             + '"KHR_materials_transmission","KHR_materials_volume",'
-            + '"KHR_materials_dispersion","KHR_draco_mesh_compression"]'
+            + '"KHR_materials_dispersion","KHR_draco_mesh_compression",'
+            + '"EXT_meshopt_compression","KHR_materials_variants"]'
         ),
         scene,
         assets,
@@ -345,28 +346,29 @@ def test_every_read_extension_can_be_required() raises:
     assert_true(is_supported_extension("KHR_materials_sheen"))
     assert_true(is_supported_extension("KHR_materials_transmission"))
     assert_true(is_supported_extension("KHR_draco_mesh_compression"))
-    assert_false(is_supported_extension("KHR_materials_variants"))
+    assert_true(is_supported_extension("KHR_materials_variants"))
+    assert_false(is_supported_extension("EXT_texture_avif"))
 
 
 def test_a_required_extension_that_is_not_read_is_refused() raises:
     # The first entry that is not read is named, wherever it is.
     refuses(
-        doc(',"extensionsRequired":["KHR_materials_variants"]'),
-        "KHR_materials_variants",
+        doc(',"extensionsRequired":["EXT_texture_avif"]'),
+        "EXT_texture_avif",
     )
     refuses(
         doc(
             ',"extensionsRequired":["KHR_texture_transform",'
-            + '"KHR_materials_variants","KHR_draco_mesh_compression"]'
+            + '"EXT_texture_avif","KHR_draco_mesh_compression"]'
         ),
-        "KHR_materials_variants",
+        "EXT_texture_avif",
     )
-    # An extension only used is read without it: the variants are not
-    # there.
+    # An extension only used is read without it: the specular-glossiness
+    # model is not read.
     var scene = Scene()
     var assets = Assets()
     var index = first_material(
-        '{"extensions":{"KHR_materials_variants":{"mappings":[]}}}',
+        '{"extensions":{"KHR_materials_pbrSpecularGlossiness":{}}}',
         assets,
     )
     var material = assets.materials.get(index)

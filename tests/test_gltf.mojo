@@ -426,7 +426,9 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     with assert_raises():
         _ = split_glb(no_json)
     # A container loads through `load_gltf` with its chunk as the first
-    # buffer, and refuses a second buffer without a URI or no chunk.
+    # buffer, and refuses to read a second buffer without a URI, or a first
+    # one with no chunk. three.js reads a buffer only when a view does, so
+    # a buffer that no view reads is not refused.
     var scene = Scene()
     var assets = Assets()
     var tri = List[UInt8]()
@@ -443,10 +445,23 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     assert_equal(assets.geometries.get(model.geometries[0]).vertex_count(), 3)
     with assert_raises():
         _ = load_gltf(text, List[UInt8](), HERE, scene, assets)
-    with assert_raises():
+    _ = loaded(
+        doc(
+            '"buffers":[{"byteLength":1,"uri":"data:x;base64,AA=="},{"byteLength":1}]'
+        ),
+        scene,
+        assets,
+    )
+    with assert_raises(contains="only the first buffer of a .glb"):
         _ = loaded(
             doc(
-                '"buffers":[{"byteLength":1,"uri":"data:x;base64,AA=="},{"byteLength":1}]'
+                '"buffers":[{"byteLength":36,"uri":"data:x;base64,'
+                + TRI
+                + '"},{"byteLength":36}]'
+                + ',"bufferViews":[{"buffer":1,"byteLength":36}]'
+                + ',"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}]'
+                + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}]'
+                + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
             ),
             scene,
             assets,
@@ -731,8 +746,8 @@ def test_a_document_that_is_not_gltf_2_is_refused() raises:
         refused('{"asset":{"version":2}}').find("no asset version") >= 0
     )
     assert_true(
-        refused(doc('"extensionsRequired":["KHR_materials_variants"]')).find(
-            "KHR_materials_variants"
+        refused(doc('"extensionsRequired":["EXT_texture_avif"]')).find(
+            "EXT_texture_avif"
         )
         >= 0
     )

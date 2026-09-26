@@ -111,7 +111,7 @@ index here holds triangles, so an indexed one is read out in index
 order. A mesh's `extras.targetNames` name its morph targets, the
 geometry's `morph_names`.
 
-**Extensions.** Eighteen are read, the ones three.js's `GLTFLoader` reads
+**Extensions.** Twenty are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
 `KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors and
@@ -132,6 +132,13 @@ draws none of them then.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
 `KHR_mesh_quantization` needs nothing: every attribute is read at any
 component type already.
+`EXT_meshopt_compression` decodes each buffer view it compresses with
+`loaders.meshopt`, as three.js does with its `MeshoptDecoder` set, and
+reads the view from the decoded bytes. A buffer it marks as a fallback is
+not read.
+`KHR_materials_variants` is read as the plugin three.js's documentation
+names reads it, takahirox's `GLTFMaterialsVariantsExtension`: see
+`select_variant`.
 `KHR_draco_mesh_compression` decodes a primitive's Draco data with
 `loaders.draco`, as three.js's `DRACOLoader` decodes it: each attribute
 the extension names is read from the Draco data at its accessor's
@@ -202,6 +209,12 @@ from loaders.draco import (
     decode_draco,
 )
 from loaders.draco_attributes import DracoDataType
+from loaders.meshopt import (
+    FILTER_NONE,
+    decode_gltf_buffer,
+    meshopt_filter,
+    meshopt_mode,
+)
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -413,6 +426,8 @@ comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
 comptime DRACO_MESH_COMPRESSION = "KHR_draco_mesh_compression"
 comptime MATERIALS_BUMP = "EXT_materials_bump"
 comptime TEXTURE_BASISU = "KHR_texture_basisu"
+comptime MESHOPT_COMPRESSION = "EXT_meshopt_compression"
+comptime MATERIALS_VARIANTS = "KHR_materials_variants"
 # WebP images, which this port does not decode. A texture that names a
 # WebP image reads its fallback `source`, and a file that requires the
 # extension is refused.
@@ -538,6 +553,56 @@ struct GltfCamera(Copyable, Movable):
         return self._orthographic.value().copy()
 
 
+@fieldwise_init
+struct GltfObjectKind(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the scene's lists an object the loader drew is in, as a
+    type rather than a bare int.
+
+    `select_variant` stops `GltfObjectKind(9)` with `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the five kinds.
+
+        Returns:
+            Whether it is `GLTF_MESH`, `GLTF_SKINNED_MESH`,
+            `GLTF_INSTANCED_MESH`, `GLTF_LINE` or `GLTF_POINTS`.
+        """
+        return self.value >= GLTF_MESH.value and self.value <= GLTF_POINTS.value
+
+
+# In `scene.meshes`.
+comptime GLTF_MESH = GltfObjectKind(0)
+# In `scene.skinned_meshes`.
+comptime GLTF_SKINNED_MESH = GltfObjectKind(1)
+# In `scene.instanced_meshes`.
+comptime GLTF_INSTANCED_MESH = GltfObjectKind(2)
+# In `scene.lines`.
+comptime GLTF_LINE = GltfObjectKind(3)
+# In `scene.points`.
+comptime GLTF_POINTS = GltfObjectKind(4)
+
+
+@fieldwise_init
+struct GltfVariantObject(Copyable, Movable):
+    """An object whose primitive `KHR_materials_variants` maps, and the
+    material it draws with for each variant: the plugin's
+    `userData.variantMaterials`, with every material already made, as its
+    `ensureLoadVariants` makes them."""
+
+    # Which scene list the object is in, and where.
+    var kind: GltfObjectKind
+    var index: Int
+    # The material it was drawn with, which no variant or an unknown one
+    # puts back.
+    var original: MaterialId
+    # One per `GltfModel.variants`: the material the variant draws it
+    # with, or `original` when the variant does not map the primitive.
+    var materials: List[MaterialId]
+
+
 struct GltfModel(Copyable, Movable):
     """What `read_gltf` put into the scene and the assets, by the file's
     own indices."""
@@ -595,6 +660,11 @@ struct GltfModel(Copyable, Movable):
     var material_extras: List[UserData]
     # The loaded scene's `extras`, three.js's `scene.userData`, or empty.
     var scene_extras: UserData
+    # `KHR_materials_variants`' variant names, made unique as the plugin's
+    # `gltf.userData.variants` are: a second "red" is "red.1".
+    var variants: List[String]
+    # Each drawn object whose primitive the variants map.
+    var variant_objects: List[GltfVariantObject]
 
     def __init__(out self):
         """Start empty."""
@@ -623,6 +693,8 @@ struct GltfModel(Copyable, Movable):
         self.mesh_extras = List[UserData]()
         self.material_extras = List[UserData]()
         self.scene_extras = UserData()
+        self.variants = List[String]()
+        self.variant_objects = List[GltfVariantObject]()
 
     def node_count(self) -> Int:
         """Return how many nodes the file has."""
@@ -794,10 +866,70 @@ def load_gltf(
     loader.read_buffers()
     loader.read_textures()
     loader.read_materials(assets)
+    loader.read_variants()
     loader.read_meshes(assets)
     loader.read_nodes(scene, assets)
     loader.read_animations()
     return loader.model.copy()
+
+
+def select_variant(
+    model: GltfModel, mut scene: Scene, name: Optional[String] = None
+) raises:
+    """Draw every object that `KHR_materials_variants` maps with a
+    variant's material: the plugin's `selectVariant` over the whole
+    scene.
+
+    A variant that does not map an object's primitive, a name that is no
+    variant, and no name at all each put the object's original material
+    back, as the plugin does.
+
+    Args:
+        model: What `read_gltf` read, with its variants.
+        scene: The scene it read them into.
+        name: The variant, as `model.variants` names it, or none.
+
+    Raises:
+        If an object's kind is not one there is, or the scene no longer
+        has the object.
+    """
+    var which = -1
+    if Bool(name):
+        for slot in range(len(model.variants)):
+            if model.variants[slot] == name.value():
+                which = slot
+    for ref object in model.variant_objects:
+        if not object.kind.is_valid():
+            raise Error("glTF: an object kind that is not known")
+        var material = object.original
+        if which >= 0:
+            material = object.materials[which]
+        var index = object.index
+        var count: Int
+        if object.kind == GLTF_MESH:
+            count = len(scene.meshes)
+        elif object.kind == GLTF_SKINNED_MESH:
+            count = len(scene.skinned_meshes)
+        elif object.kind == GLTF_INSTANCED_MESH:
+            count = len(scene.instanced_meshes)
+        elif object.kind == GLTF_LINE:
+            count = len(scene.lines)
+        else:
+            count = len(scene.points)
+        if index < 0 or index >= count:
+            raise Error(
+                "glTF: the scene no longer has an object that a variant maps"
+            )
+        if object.kind == GLTF_MESH:
+            scene.meshes[index].material = material
+        elif object.kind == GLTF_SKINNED_MESH:
+            scene.skinned_meshes[index].material = material
+        elif object.kind == GLTF_INSTANCED_MESH:
+            scene.instanced_meshes[index].material = material
+        elif object.kind == GLTF_LINE:
+            scene.lines[index].material = material
+        else:
+            scene.points[index].material = material
 
 
 def is_supported_extension(name: String) -> Bool:
@@ -808,7 +940,7 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the eighteen this loader reads.
+        Whether it is one of the twenty this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
@@ -828,6 +960,8 @@ def is_supported_extension(name: String) -> Bool:
         or name == LIGHTS_PUNCTUAL
         or name == MESH_QUANTIZATION
         or name == GPU_INSTANCING
+        or name == MESHOPT_COMPRESSION
+        or name == MATERIALS_VARIANTS
         or name == DRACO_MESH_COMPRESSION
     )
 
@@ -957,6 +1091,16 @@ struct _Loader(Movable):
     var bin: List[UInt8]
     var directory: String
     var buffers: List[List[UInt8]]
+    # Per buffer, whether it holds no bytes: one with no URI past a
+    # `.glb`'s binary chunk, or one `EXT_meshopt_compression` marks as a
+    # fallback. Only a compressed buffer view can name it.
+    var placeholders: List[Bool]
+    # Per buffer view, the buffer that holds its decoded bytes when
+    # `EXT_meshopt_compression` compresses it, or -1.
+    var decoded_views: List[Int]
+    # Whether the root has `KHR_materials_variants`; without it, the
+    # plugin reads no primitive's mappings.
+    var has_variants: Bool
     var model: GltfModel
     # The material a primitive without one draws with, made once.
     var default_material: MaterialId
@@ -997,6 +1141,9 @@ struct _Loader(Movable):
         self.bin = bin.copy()
         self.directory = directory
         self.buffers = List[List[UInt8]]()
+        self.placeholders = List[Bool]()
+        self.decoded_views = List[Int]()
+        self.has_variants = False
         self.model = GltfModel()
         self.default_material = MaterialId(0)
         self.has_default_material = False
@@ -1186,29 +1333,99 @@ struct _Loader(Movable):
             var buffer = self.entry("buffers", index)
             var length = self.required_integer(buffer, "byteLength")
             var uri = self.text(buffer, "uri")
-            var bytes: List[UInt8]
-            if uri == "":
-                if index != 0 or len(self.bin) == 0:
-                    raise Error(
-                        "glTF: only the first buffer of a .glb can have no URI"
-                    )
+            var meshopt = self.extension(buffer, MESHOPT_COMPRESSION)
+            var fallback = meshopt != NO_NODE and self.flag(meshopt, "fallback")
+            var bytes = List[UInt8]()
+            var placeholder = False
+            if fallback or (uri == "" and (index != 0 or len(self.bin) == 0)):
+                # three.js loads a buffer only when a view reads it, and a
+                # compressed view reads its compressed buffer instead.
+                placeholder = True
+            elif uri == "":
                 bytes = self.bin.copy()
             else:
                 bytes = _uri_bytes(uri, self.directory)
-            if len(bytes) < length:
+            if not placeholder and len(bytes) < length:
                 raise Error("glTF: a buffer is shorter than its byteLength")
             self.buffers.append(bytes^)
+            self.placeholders.append(placeholder)
+        self.decode_views()
+
+    def decode_views(mut self) raises:
+        """Decode every buffer view that `EXT_meshopt_compression`
+        compresses into a buffer of its own, as three.js's
+        `GLTFMeshoptCompression.loadBufferView` does with the decoder set.
+        """
+        for index in range(self.count("bufferViews")):
+            var view = self.entry("bufferViews", index)
+            var found = self.extension(view, MESHOPT_COMPRESSION)
+            if found == NO_NODE:
+                self.decoded_views.append(-1)
+                continue
+            var buffer = self.required_integer(found, "buffer")
+            if (
+                buffer < 0
+                or buffer >= len(self.buffers)
+                or self.placeholders[buffer]
+            ):
+                raise Error(
+                    "glTF: a compressed buffer view names a buffer that is"
+                    " not there"
+                )
+            var offset = self.integer(found, "byteOffset", 0)
+            var length = self.required_integer(found, "byteLength")
+            var stride = self.required_integer(found, "byteStride")
+            var count = self.required_integer(found, "count")
+            if (
+                offset < 0
+                or length < 0
+                or offset + length > len(self.buffers[buffer])
+            ):
+                raise Error(
+                    "glTF: a compressed buffer view runs past its buffer"
+                )
+            if self.required_integer(view, "byteLength") != count * stride:
+                raise Error(
+                    "glTF: a compressed buffer view's byteLength must be its"
+                    " count times its byteStride"
+                )
+            if self.integer(view, "byteStride", stride) != stride:
+                raise Error(
+                    "glTF: a compressed buffer view's byteStride must match"
+                    " the extension's"
+                )
+            var mode = meshopt_mode(self.text(found, "mode"))
+            var filter = FILTER_NONE
+            if self.document.has(found, "filter"):
+                filter = meshopt_filter(self.text(found, "filter"))
+            var source = List[UInt8](capacity=length)
+            for at in range(offset, offset + length):
+                source.append(self.buffers[buffer][at])
+            var decoded = decode_gltf_buffer(
+                count, stride, source, mode, filter
+            )
+            self.decoded_views.append(len(self.buffers))
+            self.buffers.append(decoded^)
+            self.placeholders.append(False)
 
     def view_bytes(self, index: Int) raises -> Tuple[Int, Int, Int, Int]:
         """Return a buffer view's buffer, byte offset, byte length and byte
         stride, checked against the buffer."""
         var view = self.entry("bufferViews", index)
+        var length = self.required_integer(view, "byteLength")
+        var stride = self.integer(view, "byteStride", 0)
+        if self.decoded_views[index] >= 0:
+            # Checked against the decoded bytes when they were decoded.
+            return (self.decoded_views[index], 0, length, stride)
         var buffer = self.required_integer(view, "buffer")
         if buffer < 0 or buffer >= len(self.buffers):
             raise Error("glTF: a buffer view names a buffer that is not there")
+        if self.placeholders[buffer]:
+            raise Error(
+                "glTF: only the first buffer of a .glb can have no URI, and"
+                " only a compressed buffer view can name a fallback buffer"
+            )
         var offset = self.integer(view, "byteOffset", 0)
-        var length = self.required_integer(view, "byteLength")
-        var stride = self.integer(view, "byteStride", 0)
         if (
             offset < 0
             or length < 0
@@ -2008,6 +2225,76 @@ struct _Loader(Movable):
             self.has_tinted[index] = True
         return self.tinted_materials[index]
 
+    # --- material variants --------------------------------------------------
+
+    def read_variants(mut self) raises:
+        """Read `KHR_materials_variants`' variant names, made unique as the
+        plugin's `ensureUniqueNames` makes them: a name already taken gets
+        ".1", then ".2", until it is free."""
+        var found = self.extension(self.document.root(), MATERIALS_VARIANTS)
+        if found == NO_NODE:
+            return
+        self.has_variants = True
+        if not self.document.has(found, "variants"):
+            return
+        var variants = self.array_of(found, "variants")
+        for slot in range(self.document.length(variants)):
+            var entry = self.object_at(variants, slot)
+            if not self.document.has(entry, "name"):
+                raise Error("glTF: a material variant needs a name")
+            var name = self.text(entry, "name")
+            var unique = name
+            var suffix = 0
+            while unique in self.model.variants:
+                suffix += 1
+                unique = name + "." + String(suffix)
+            self.model.variants.append(unique)
+
+    def note_variants(
+        mut self,
+        primitive: Int,
+        kind: GltfObjectKind,
+        index: Int,
+        original: MaterialId,
+        tinted: Bool,
+        mode: Int,
+        mut assets: Assets,
+    ) raises:
+        """Record the material each variant draws a primitive's object
+        with, as the plugin's `mappingsArrayToTable` and
+        `ensureLoadVariants` do: the mapped material made final as
+        three.js's `assignFinalMaterial` makes it, and a later mapping of
+        a variant over an earlier one."""
+        var found = self.extension(primitive, MATERIALS_VARIANTS)
+        if found == NO_NODE or not self.has_variants:
+            return
+        var materials = List[MaterialId](
+            length=len(self.model.variants), fill=original
+        )
+        var mappings = self.array_of(found, "mappings")
+        for slot in range(self.document.length(mappings)):
+            var mapping = self.object_at(mappings, slot)
+            var material = self.required_integer(mapping, "material")
+            var chosen: MaterialId
+            if mode == MODE_TRIANGLES:
+                chosen = self.material_for(material, tinted, assets)
+            else:
+                chosen = self.unlit_material(material, tinted, mode, assets)
+            var variants = self.array_of(mapping, "variants")
+            for at in range(self.document.length(variants)):
+                var variant = self.document.integer(
+                    self.document.at(variants, at)
+                )
+                if variant < 0 or variant >= len(materials):
+                    raise Error(
+                        "glTF: a mapping names a material variant that is"
+                        " not there"
+                    )
+                materials[variant] = chosen
+        self.model.variant_objects.append(
+            GltfVariantObject(kind, index, original, materials^)
+        )
+
     # --- meshes -------------------------------------------------------------
 
     def read_meshes(mut self, mut assets: Assets) raises:
@@ -2509,8 +2796,26 @@ struct _Loader(Movable):
             if mode != MODE_TRIANGLES:
                 var worn = self.unlit_material(chosen, tinted, mode, assets)
                 if mode == MODE_POINTS:
+                    self.note_variants(
+                        primitive,
+                        GLTF_POINTS,
+                        len(scene.points),
+                        worn,
+                        tinted,
+                        mode,
+                        assets,
+                    )
                     scene.add_points(Points(geometry, worn, node))
                 else:
+                    self.note_variants(
+                        primitive,
+                        GLTF_LINE,
+                        len(scene.lines),
+                        worn,
+                        tinted,
+                        mode,
+                        assets,
+                    )
                     scene.add_line(
                         Line(geometry, worn, node, mode=_line_mode(mode))
                     )
@@ -2521,6 +2826,15 @@ struct _Loader(Movable):
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
             self.node_meshes[index].append(len(scene.meshes))
+            self.note_variants(
+                primitive,
+                GLTF_MESH,
+                len(scene.meshes),
+                material,
+                tinted,
+                MODE_TRIANGLES,
+                assets,
+            )
             scene.add_mesh(drawn)
 
     def unlit_material(
@@ -2661,6 +2975,15 @@ struct _Loader(Movable):
                             1,
                         ).encode(),
                     )
+            self.note_variants(
+                primitive,
+                GLTF_INSTANCED_MESH,
+                len(scene.instanced_meshes),
+                material,
+                tinted,
+                MODE_TRIANGLES,
+                assets,
+            )
             scene.add_instanced_mesh(drawn^)
 
     # --- lights -------------------------------------------------------------
@@ -2803,6 +3126,15 @@ struct _Loader(Movable):
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
             self.node_skins[index].append(len(scene.skinned_meshes))
+            self.note_variants(
+                primitive,
+                GLTF_SKINNED_MESH,
+                len(scene.skinned_meshes),
+                material,
+                tinted,
+                MODE_TRIANGLES,
+                assets,
+            )
             scene.add_skinned_mesh(drawn^)
 
     # --- cameras ------------------------------------------------------------

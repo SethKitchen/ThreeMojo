@@ -1,0 +1,192 @@
+{
+ "variants": [
+  "red",
+  "red.1",
+  "blue",
+  "red.1.1"
+ ],
+ "original": [
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "ffffff",
+   "vertexColors": false
+  },
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "ffffff",
+   "vertexColors": true
+  },
+  {
+   "type": "Points",
+   "material": "PointsMaterial",
+   "color": "ffffff",
+   "vertexColors": false
+  },
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "0000ff",
+   "vertexColors": false
+  }
+ ],
+ "selected": {
+  "red": [
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ff0000",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ffffff",
+    "vertexColors": true
+   },
+   {
+    "type": "Points",
+    "material": "PointsMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   }
+  ],
+  "red.1": [
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ff0000",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": true
+   },
+   {
+    "type": "Points",
+    "material": "PointsMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   }
+  ],
+  "blue": [
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ffffff",
+    "vertexColors": true
+   },
+   {
+    "type": "Points",
+    "material": "PointsMaterial",
+    "color": "00ff00",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   }
+  ],
+  "red.1.1": [
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": true
+   },
+   {
+    "type": "Points",
+    "material": "PointsMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   }
+  ],
+  "none": [
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "ffffff",
+    "vertexColors": true
+   },
+   {
+    "type": "Points",
+    "material": "PointsMaterial",
+    "color": "ffffff",
+    "vertexColors": false
+   },
+   {
+    "type": "Mesh",
+    "material": "MeshStandardMaterial",
+    "color": "0000ff",
+    "vertexColors": false
+   }
+  ]
+ },
+ "restored": [
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "ffffff",
+   "vertexColors": false
+  },
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "ffffff",
+   "vertexColors": true
+  },
+  {
+   "type": "Points",
+   "material": "PointsMaterial",
+   "color": "ffffff",
+   "vertexColors": false
+  },
+  {
+   "type": "Mesh",
+   "material": "MeshStandardMaterial",
+   "color": "0000ff",
+   "vertexColors": false
+  }
+ ]
+}
