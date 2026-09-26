@@ -324,7 +324,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, points, lines, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and twenty [extensions](#gltf-extensions). three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, points, lines, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and twenty-one [extensions](#gltf-extensions). three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -470,7 +470,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads twenty extensions. Nineteen are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `KHR_materials_variants` is read as the plugin that three.js names for it reads it. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads twenty-one extensions. Twenty are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `KHR_materials_variants` is read as the plugin that three.js names for it reads it. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -493,6 +493,7 @@ The loader reads twenty extensions. Nineteen are the ones three.js's `GLTFLoader
 | `EXT_materials_bump` | A `PHYSICAL` material. `bumpTexture` sets `bump_map`, read as data, and `bumpFactor` sets `bump_scale`. See [Bump maps](#bump-maps). |
 | `KHR_texture_basisu` | The texture reads the KTX 2.0 image that the extension names, before its own `source`. See [KTX 2.0 textures](#ktx-20-textures). |
 | `EXT_meshopt_compression` | The buffer view's compressed bytes, decoded by `loaders/meshopt.mojo`. See [Compressed buffer views](#compressed-buffer-views). |
+| `EXT_texture_webp` | The texture reads the WebP image that the extension names, before its own `source`. See [WebP images](#webp-images). |
 | `KHR_materials_variants` | The variant names, and the material that each variant gives each mapped object. `select_variant` changes the materials. See [Material variants](#material-variants). |
 
 A file that lists another extension in `extensionsRequired` is refused, as three.js refuses it. A file that lists an extension only in `extensionsUsed` is read without that extension.
@@ -596,15 +597,14 @@ The loader refuses a variant with no name, a mapping with no material, and a map
 
 #### WebP images
 
-`EXT_texture_webp` is not read, because this port has no WebP decoder. A lossless WebP decoder is a bounded task, but most WebP textures in glTF files are lossy. A lossy decoder is a large task, and it is left for later.
+`EXT_texture_webp` names a WebP image, which `render/webp.mojo` decodes. See [Read a WebP](Image-files#read-a-webp).
 
-- A file that requires `EXT_texture_webp` is refused with a message that says so.
-- A texture that uses the extension and has a `source` reads that PNG or JPEG image, as three.js reads the fallback.
-- A texture with only a WebP image is refused.
+- A texture with the extension reads that image, before its own `source`. three.js registers its WebP plugin after its KTX 2.0 plugin, so `KHR_texture_basisu` comes first.
+- The texture's own `source` is not needed, and a file can require the extension.
 
 #### Not ported
 
-- `EXT_texture_webp` and `EXT_texture_avif`.
+- `EXT_texture_avif`. It needs an AV1 decoder, and this port has none. A texture with the extension reads its own `source`.
 
 #### Differences from three.js
 
@@ -629,7 +629,7 @@ The loader raises for:
 - A buffer shorter than its length. A buffer view or accessor that runs past its buffer. A buffer view that reads a buffer with no data.
 - A compressed buffer view that is malformed. See [Compressed buffer views](#compressed-buffer-views).
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
-- An image that is not PNG, JPEG, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image, or with only a WebP image.
+- An image that is not PNG, JPEG, WebP, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image.
 - A primitive mode that is not points, lines or triangles. A point or a line on a skinned or instanced node.
 - `targetNames` that do not hold one name per morph target.
 - An unknown wrap mode or alpha mode.

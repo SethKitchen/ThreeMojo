@@ -1,0 +1,508 @@
+{
+ "cases": [
+  {
+   "name": "lossy_q75",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_q0",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_q30",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_q100",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_m0",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_m6",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_one_segment",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_no_sns",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_sns100",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_no_filter",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_strong_sharp",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_sharpness3",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_simple",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_simple_strong",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_two_partitions",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_four_partitions",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_sharp_yuv",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_auto_filter",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_big",
+   "error": false,
+   "width": 130,
+   "height": 97
+  },
+  {
+   "name": "lossy_big_simple",
+   "error": false,
+   "width": 130,
+   "height": 97
+  },
+  {
+   "name": "lossy_relative",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_lf_delta",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_lf_delta_off",
+   "error": false,
+   "width": 130,
+   "height": 97
+  },
+  {
+   "name": "lossy_no_update",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_lf_no_update",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossy_flat",
+   "error": false,
+   "width": 64,
+   "height": 48
+  },
+  {
+   "name": "lossy_flat_simple",
+   "error": false,
+   "width": 64,
+   "height": 48
+  },
+  {
+   "name": "lossy_uniform",
+   "error": false,
+   "width": 64,
+   "height": 48
+  },
+  {
+   "name": "lossy_uniform_i4",
+   "error": false,
+   "width": 64,
+   "height": 48
+  },
+  {
+   "name": "lossy_one",
+   "error": false,
+   "width": 1,
+   "height": 1
+  },
+  {
+   "name": "lossy_tiny",
+   "error": false,
+   "width": 3,
+   "height": 2
+  },
+  {
+   "name": "lossy_line",
+   "error": false,
+   "width": 17,
+   "height": 1
+  },
+  {
+   "name": "alpha_default",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_raw",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_no_filter",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_best_filter",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_levels",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_exact",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z0",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z1",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z2",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z3",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z4",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z5",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z6",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z7",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z8",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_z9",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_alpha",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_alpha_exact",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_near",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "lossless_big",
+   "error": false,
+   "width": 130,
+   "height": 97
+  },
+  {
+   "name": "lossless_one",
+   "error": false,
+   "width": 1,
+   "height": 1
+  },
+  {
+   "name": "lossless_line",
+   "error": false,
+   "width": 17,
+   "height": 1
+  },
+  {
+   "name": "lossless_palette2_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette2_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette3_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette3_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette5_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette5_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette16_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette16_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette17_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette17_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette200_w13",
+   "error": false,
+   "width": 13,
+   "height": 9
+  },
+  {
+   "name": "lossless_palette200_w40",
+   "error": false,
+   "width": 40,
+   "height": 9
+  },
+  {
+   "name": "cut_lossy",
+   "error": true
+  },
+  {
+   "name": "cut_lossless",
+   "error": true
+  },
+  {
+   "name": "cut_alpha",
+   "error": true
+  },
+  {
+   "name": "riff_too_big",
+   "error": true
+  },
+  {
+   "name": "riff_too_small",
+   "error": true
+  },
+  {
+   "name": "animated",
+   "error": true
+  },
+  {
+   "name": "canvas_mismatch",
+   "error": true
+  },
+  {
+   "name": "alpha_bad_method",
+   "error": true
+  },
+  {
+   "name": "alpha_reserved",
+   "error": true
+  },
+  {
+   "name": "alpha_levels_bad",
+   "error": true
+  },
+  {
+   "name": "alpha_raw_vertical",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_raw_gradient",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_default_vertical",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "alpha_default_gradient",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossy0",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossless0",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossy1",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossless1",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossy2",
+   "error": true
+  },
+  {
+   "name": "flip_lossless2",
+   "error": false,
+   "width": 67,
+   "height": 45
+  },
+  {
+   "name": "flip_lossy3",
+   "error": true
+  },
+  {
+   "name": "flip_lossless3",
+   "error": false,
+   "width": 67,
+   "height": 45
+  }
+ ]
+}
