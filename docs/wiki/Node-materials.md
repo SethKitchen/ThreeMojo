@@ -293,7 +293,8 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - `out` and `inout` parameters, prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
-- A matrix times a matrix of another size, an assignment to a local matrix, a sampler in a local variable, and a column index that is not a constant.
+- A matrix times a matrix of another size, and an assignment to a local matrix.
+- A sampler in a local variable, and a column index that is not a constant.
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
 - A column of one of these or of `viewMatrix`, and a matrix constructor that reads one.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
