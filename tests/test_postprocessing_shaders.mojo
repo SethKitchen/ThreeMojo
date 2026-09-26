@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `postprocessing.shaders`: each of the fifteen screen shaders
+"""Tests for `postprocessing.shaders`: each of the eighteen screen shaders
 and the god-rays chain against worked-out answers on hand-built frames,
 their settings checks, and their passes in the composer."""
 
@@ -29,6 +29,9 @@ from postprocessing.composer import (
     colorify_pass,
     effect_pass,
     exposure_pass,
+    focus_pass,
+    normal_map_pass,
+    triangle_blur_pass,
     frei_chen_pass,
     gamma_correction_pass,
     god_rays_pass,
@@ -44,7 +47,7 @@ from postprocessing.composer import (
     tilt_shift_pass,
 )
 from postprocessing.sampling import LightView, u_of, v_of
-from postprocessing.screen_space import DepthView
+from postprocessing.screen_space import DepthView, glsl_rand
 from postprocessing.shaders import (
     BLEACH_BYPASS,
     BRIGHTNESS_CONTRAST,
@@ -52,6 +55,12 @@ from postprocessing.shaders import (
     COLORIFY,
     EFFECT_FLOATS,
     EXPOSURE,
+    FOCUS,
+    NORMAL_MAP,
+    TRIANGLE_BLUR,
+    focus_pixel,
+    normal_map_pixel,
+    triangle_blur_pixel,
     FREI_CHEN,
     GAMMA_CORRECTION,
     GOD_RAYS_PASSES,
@@ -168,9 +177,9 @@ def frame_of(
 
 
 def test_the_effects_and_the_sides_are_types_with_a_range() raises:
-    for value in range(15):
+    for value in range(18):
         assert_true(ShaderEffect(value).is_valid())
-    assert_false(ShaderEffect(15).is_valid())
+    assert_false(ShaderEffect(18).is_valid())
     assert_false(ShaderEffect(-1).is_valid())
     for value in range(4):
         assert_true(MirrorSide(value).is_valid())
@@ -178,7 +187,7 @@ def test_the_effects_and_the_sides_are_types_with_a_range() raises:
     assert_false(MirrorSide(-1).is_valid())
     assert_true(PassKind(33) == SHADER_EFFECT)
     assert_true(PassKind(34) == GOD_RAYS)
-    assert_false(PassKind(35).is_valid())
+    assert_false(PassKind(60).is_valid())
 
 
 def test_the_defaults_are_three_js_s() raises:
@@ -196,6 +205,15 @@ def test_the_defaults_are_three_js_s() raises:
     near(settings.spread, 1.0 / 512.0)
     near(settings.focus, 0.35)
     near(settings.exposure, 1)
+    near(settings.delta_u, 1)
+    near(settings.delta_v, 1)
+    near(settings.height, 0.05)
+    near(settings.resolution_x, 512)
+    near(settings.resolution_y, 512)
+    near(settings.sample_distance, 0.94)
+    near(settings.wave_factor, 0.00125)
+    near(settings.screen_width, 1024)
+    near(settings.screen_height, 1024)
     var rays = GodRaysSettings()
     near(rays.sun.y, 1000)
     near(rays.intensity, 0.69)
@@ -208,8 +226,16 @@ def test_the_defaults_are_three_js_s() raises:
 
 
 def test_effect_settings_no_shader_could_run_are_refused() raises:
-    with assert_raises(contains="fifteen"):
-        check_effect(EffectSettings(ShaderEffect(15)))
+    with assert_raises(contains="eighteen"):
+        check_effect(EffectSettings(ShaderEffect(18)))
+    var flat = EffectSettings(NORMAL_MAP)
+    flat.resolution_x = 0
+    with assert_raises(contains="positive"):
+        check_effect(flat)
+    var narrow = EffectSettings(FOCUS)
+    narrow.screen_height = -1
+    with assert_raises(contains="positive"):
+        check_effect(narrow)
     var bad = EffectSettings()
     bad.side = MirrorSide(4)
     with assert_raises(contains="four"):
@@ -325,6 +351,15 @@ def test_the_settings_survive_the_trip_through_floats() raises:
     settings.spread = 0.25
     settings.focus = 0.75
     settings.exposure = 2
+    settings.delta_u = 0.1
+    settings.delta_v = 0.2
+    settings.height = 0.3
+    settings.resolution_x = 40
+    settings.resolution_y = 50
+    settings.sample_distance = 0.6
+    settings.wave_factor = 0.7
+    settings.screen_width = 80
+    settings.screen_height = 90
     var floats = effect_floats(settings)
     assert_equal(len(floats), EFFECT_FLOATS)
     var back = effect_from_floats(
@@ -350,6 +385,15 @@ def test_the_settings_survive_the_trip_through_floats() raises:
     near(back.spread, 0.25)
     near(back.focus, 0.75)
     near(back.exposure, 2)
+    near(back.delta_u, 0.1)
+    near(back.delta_v, 0.2)
+    near(back.height, 0.3)
+    near(back.resolution_x, 40)
+    near(back.resolution_y, 50)
+    near(back.sample_distance, 0.6)
+    near(back.wave_factor, 0.7)
+    near(back.screen_width, 80)
+    near(back.screen_height, 90)
 
 
 # --- the color transforms ----------------------------------------------------
@@ -650,6 +694,120 @@ def test_tilt_shift_is_sharp_at_the_focus_and_blurs_away_from_it() raises:
     _ = colors^
 
 
+def test_the_triangle_blur_weighs_its_taps_by_a_tent() raises:
+    var colors = ramp(8, 8)
+    var view = LightView(colors, 8, 8)
+    var u = u_of(3, 8)
+    var v = v_of(4, 8)
+    # No reach: every tap is the pixel.
+    same_color(triangle_blur_pixel(view, u, v, 0, 0), view.sample(u, v), 1e-5)
+    # A reach: twenty-one taps, each weighted by one less its distance.
+    var offset = glsl_rand(u, v)
+    var sum = FloatColor(0, 0, 0, 0)
+    var total = Float32(0)
+    for step in range(-10, 11):
+        var percent = (Float32(step) + offset - 0.5) / 10
+        var weight = 1 - abs(percent)
+        var tap = view.sample(u + 0.2 * percent, v + 0.1 * percent)
+        sum = FloatColor(
+            sum.r + tap.r * weight,
+            sum.g + tap.g * weight,
+            sum.b + tap.b * weight,
+            sum.a + tap.a * weight,
+        )
+        total += weight
+    same_color(
+        triangle_blur_pixel(view, u, v, 0.2, 0.1),
+        FloatColor(sum.r / total, sum.g / total, sum.b / total, sum.a / total),
+    )
+    _ = colors^
+
+
+def test_the_normal_map_turns_a_slope_into_a_normal() raises:
+    # Flat: the normal points straight out, blue at one.
+    var even = List[FloatColor](length=16, fill=FloatColor(0.4, 0, 0, 1))
+    var flat = LightView(even, 4, 4)
+    same_color(
+        normal_map_pixel(flat, 0.5, 0.5, 0.05, 4, 4),
+        FloatColor(0.5, 0.5, 1, 1),
+    )
+    # No slope and no height: no direction, a half in each channel.
+    same_color(
+        normal_map_pixel(flat, 0.5, 0.5, 0, 4, 4),
+        FloatColor(0.5, 0.5, 0.5, 1),
+    )
+    # Red rising to the right: the normal leans left.
+    var colors = ramp(4, 4)
+    var view = LightView(colors, 4, 4)
+    var u = u_of(1, 4)
+    var v = v_of(1, 4)
+    var here = view.sample(u, v).r
+    var across = view.sample(u + 0.25, v).r
+    var up = view.sample(u, v + 0.25).r
+    var n = Vector3(here - across, here - up, 0.05)
+    n.normalize()
+    same_color(
+        normal_map_pixel(view, u, v, 0.05, 4, 4),
+        FloatColor(0.5 * n.x + 0.5, 0.5 * n.y + 0.5, 0.5 * n.z + 0.5, 1),
+    )
+    _ = even^
+    _ = colors^
+
+
+def test_the_focus_is_sharp_where_the_frame_is_even() raises:
+    # Every tap the same: the darkest is the color, the mean is the
+    # color, and the shader writes the color plus its square, dimmed.
+    var even = List[FloatColor](length=64, fill=FloatColor(0.2, 0.4, 0.6, 1))
+    var view = LightView(even, 8, 8)
+    for u in [Float32(0.5), Float32(0.1)]:
+        same_color(
+            focus_pixel(view, u, 0.5, EffectSettings(FOCUS)),
+            FloatColor(
+                0.2 * 0.2 * 0.95 + 0.2,
+                0.4 * 0.4 * 0.95 + 0.4,
+                0.6 * 0.6 * 0.95 + 0.6,
+                1,
+            ),
+            1e-4,
+        )
+    # On a ramp, away from the center, the darkest blue pulls the pixel.
+    var colors = ramp(8, 8)
+    var slope = LightView(colors, 8, 8)
+    var settings = EffectSettings(FOCUS)
+    settings.screen_width = 8
+    settings.screen_height = 8
+    var edge = focus_pixel(slope, u_of(1, 8), v_of(1, 8), settings)
+    assert_true(edge.a == 1)
+    # Blue that grows across: a tap to the left is darker than the
+    # pixel, so it is taken, and the pixel comes out darker than an even
+    # frame of its own color.
+    var across = List[FloatColor]()
+    for _ in range(8):
+        for x in range(8):
+            across.append(FloatColor(0.5, 0.5, Float32(x) / 8, 1))
+    var pulled = focus_pixel(
+        LightView(across, 8, 8), u_of(4, 8), v_of(4, 8), settings
+    )
+    assert_true(pulled.b < 0.5 * 0.5 * 0.95 + 0.5)
+    _ = even^
+    _ = colors^
+    _ = across^
+
+
+def test_the_new_builders_set_their_uniforms() raises:
+    var blur = triangle_blur_pass(0.3, 0.4)
+    assert_true(blur.effect.effect == TRIANGLE_BLUR)
+    near(blur.effect.delta_v, 0.4)
+    var normals = normal_map_pass(0.2, 64, 32)
+    assert_true(normals.effect.effect == NORMAL_MAP)
+    near(normals.effect.resolution_y, 32)
+    var focus = focus_pass(0.5, 0.01, 640, 480)
+    assert_true(focus.effect.effect == FOCUS)
+    near(focus.effect.screen_height, 480)
+    with assert_raises(contains="positive"):
+        _ = normal_map_pass(resolution_x=0)
+
+
 def test_effect_pixel_runs_each_shader() raises:
     var colors = ramp(4, 4)
     var view = LightView(colors, 4, 4)
@@ -683,6 +841,27 @@ def test_effect_pixel_runs_each_shader() raises:
     same_color(
         effect_pixel(view, 2, 1, settings),
         tilt_shift_pixel(view, u, v, settings.spread, 0.35, False),
+    )
+    settings.effect = TRIANGLE_BLUR
+    same_color(
+        effect_pixel(view, 2, 1, settings),
+        triangle_blur_pixel(view, u, v, settings.delta_u, settings.delta_v),
+    )
+    settings.effect = NORMAL_MAP
+    same_color(
+        effect_pixel(view, 2, 1, settings),
+        normal_map_pixel(
+            view,
+            u,
+            v,
+            settings.height,
+            settings.resolution_x,
+            settings.resolution_y,
+        ),
+    )
+    settings.effect = FOCUS
+    same_color(
+        effect_pixel(view, 2, 1, settings), focus_pixel(view, u, v, settings)
     )
     # A color transform reads the straight texel and writes premultiplied.
     settings.effect = EXPOSURE
@@ -921,7 +1100,7 @@ def test_each_builder_sets_its_shader_and_uniforms() raises:
 
 
 def test_a_builder_refuses_what_its_check_refuses() raises:
-    with assert_raises(contains="fifteen"):
+    with assert_raises(contains="eighteen"):
         _ = effect_pass(ShaderEffect(20))
     with assert_raises(contains="contrast"):
         _ = brightness_contrast_pass(0, 1)

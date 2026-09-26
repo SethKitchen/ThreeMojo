@@ -39,7 +39,7 @@ XYZ times the source's matrix to XYZ, the matrix that `convert` applies.
 three.js's internal `_getMatrix` multiplies the two the other way round.
 """
 
-from render.framebuffer import FloatColor
+from render.framebuffer import Color, FloatColor
 from std.benchmark import black_box
 from std.math import pow
 
@@ -554,3 +554,155 @@ def convert(
         g = linear_to_srgb_three(g)
         b = linear_to_srgb_three(b)
     return FloatColor(Float32(r), Float32(g), Float32(b), color.a)
+
+
+# How many floats an `OutputEncoding` crosses to the device as: the nine
+# numbers of its matrix, whether it encodes sRGB, whether the matrix is
+# the identity.
+comptime OUTPUT_FLOATS = 11
+
+
+@fieldwise_init
+struct OutputEncoding(ImplicitlyCopyable):
+    """How the renderer writes linear light out: three.js's
+    `linearToOutputTexel` for its `outputColorSpace`.
+
+    three.js turns the working space's light into the output space's with
+    a matrix, then applies the output space's transfer function. The
+    matrix is `ColorManagement._getMatrix`, each number rounded to four
+    places as `WebGLProgram` writes it into the shader, and it multiplies
+    the color as the shader does, `value.rgb * mat3( ... )`. For an output
+    space with sRGB's primaries it is the identity, and it is skipped.
+    """
+
+    # The shader's `mat3`, column by column: three.js's `elements`.
+    var elements: SIMD[DType.float32, 16]
+    # True to apply the sRGB transfer function, False to write the light
+    # as it is.
+    var srgb: Bool
+    # True when the matrix is the identity, and is skipped.
+    var identity: Bool
+
+    def __init__(out self):
+        """Return three.js's default output: sRGB."""
+        self.elements = SIMD[DType.float32, 16](0)
+        self.elements[0] = 1
+        self.elements[4] = 1
+        self.elements[8] = 1
+        self.srgb = True
+        self.identity = True
+
+    def light(self, color: FloatColor) -> FloatColor:
+        """Return light carried into the output space's primaries, before
+        its transfer function.
+
+        Args:
+            color: Straight linear light in the working space.
+
+        Returns:
+            The light in the output space's primaries. Alpha is kept.
+        """
+        if self.identity:
+            return color
+        ref m = self.elements
+        return FloatColor(
+            color.r * m[0] + color.g * m[1] + color.b * m[2],
+            color.r * m[3] + color.g * m[4] + color.b * m[5],
+            color.r * m[6] + color.g * m[7] + color.b * m[8],
+            color.a,
+        )
+
+    def encode(self, color: FloatColor) -> Color:
+        """Return the eight-bit color the output space stores for light.
+
+        Args:
+            color: Straight linear light in the working space.
+
+        Returns:
+            The bytes: sRGB encoded for an sRGB output, the light itself
+            for a linear one. Alpha is never encoded.
+        """
+        var out = self.light(color)
+        if self.srgb:
+            return out.encode()
+        return out.quantize()
+
+    def flatten(self) -> List[Float32]:
+        """Return the encoding as `OUTPUT_FLOATS` floats, as the device
+        reads it back with `output_from`."""
+        var flat = List[Float32]()
+        for at in range(9):  # pragma: no branch
+            flat.append(self.elements[at])
+        flat.append(Float32(1) if self.srgb else Float32(0))
+        flat.append(Float32(1) if self.identity else Float32(0))
+        return flat^
+
+
+def output_from(
+    floats: MutPointer[Float32, MutAnyOrigin], start: Int
+) -> OutputEncoding:
+    """Return the encoding `OutputEncoding.flatten` wrote at `start`.
+
+    Args:
+        floats: The buffer.
+        start: Where the encoding's floats begin.
+
+    Returns:
+        The encoding.
+    """
+    var elements = SIMD[DType.float32, 16](0)
+    for at in range(9):  # pragma: no branch
+        elements[at] = floats[unsafe_offset=start + at]
+    return OutputEncoding(
+        elements,
+        floats[unsafe_offset=start + 9] != 0,
+        floats[unsafe_offset=start + 10] != 0,
+    )
+
+
+def _four_places(value: Float64) -> Float32:
+    """Return a number rounded to four places, as JavaScript's
+    `toFixed( 4 )` writes it into a shader."""
+    var scaled = value * 10000
+    var whole = Float64(Int(scaled + 0.5)) if scaled >= 0 else -Float64(
+        Int(-scaled + 0.5)
+    )
+    return Float32(whole / 10000)
+
+
+def output_encoding(space: ColorSpaceId) raises -> OutputEncoding:
+    """Return how the renderer writes light out in `space`, three.js's
+    `getEncodingComponents` for an `outputColorSpace`.
+
+    Args:
+        space: The output color space.
+
+    Returns:
+        The encoding: three.js's matrix from linear sRGB, the working
+        space, and the space's transfer function.
+
+    Raises:
+        Error: If the value names no color space, or it is
+            `NO_COLOR_SPACE`, which three.js cannot write out.
+    """
+    check_color_space(space)
+    if space == NO_COLOR_SPACE:
+        raise Error("The output must be a color space, not NO_COLOR_SPACE")
+    # three.js's `_getMatrix`: the working space's `toXYZ` times the
+    # output's `fromXYZ`, in that order.
+    var matrix = color_space(LINEAR_SRGB_COLOR_SPACE).to_xyz.times(
+        color_space(space).from_xyz
+    )
+    # The shader's `mat3` takes three.js's `elements`, column by column,
+    # and `value.rgb * m` dots the color with each column.
+    var elements = SIMD[DType.float32, 16](0)
+    var identity = True
+    for column in range(3):  # pragma: no branch
+        for row in range(3):  # pragma: no branch
+            var value = _four_places(matrix.get(row, column))
+            elements[column * 3 + row] = value
+            if value != (Float32(1) if row == column else Float32(0)):
+                identity = False
+    return OutputEncoding(
+        elements, transfer_of(space) == SRGB_TRANSFER, identity
+    )

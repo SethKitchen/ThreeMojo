@@ -84,6 +84,7 @@ kernel keeps its running color the same way.
 
 from math.vector3 import Vector3
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
+from render.color_spaces import OutputEncoding
 from render.float_image import FloatImage
 from render.raster_state import (
     STANDARD_DEPTH,
@@ -460,6 +461,7 @@ def _encode_run(
     clear: FloatColor,
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
+    output: OutputEncoding,
 ):
     """Encode the pixels in `[first, past)` from linear light to bytes.
 
@@ -488,9 +490,16 @@ def _encode_run(
                 curve = NO_TONE_MAPPING
             else:
                 straight = straight.unpremultiplied()
-            shown = tone_map_with(
+            var mapped = tone_map_with(
                 straight, curve, exposure, ProgramCurve(program)
-            ).encode()
+            )
+            # A data pixel skips the output space, as three.js's normal
+            # and depth materials skip `linearToOutputTexel`: it is stored
+            # so that sRGB's curve gives back its bytes.
+            if data[unsafe_offset=slot]:
+                shown = mapped.encode()
+            else:
+                shown = output.encode(mapped)
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -509,6 +518,7 @@ async def _encode_band(
     clear: FloatColor,
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
+    output: OutputEncoding,
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
     _encode_run(
@@ -522,6 +532,7 @@ async def _encode_band(
         clear,
         clear_shown,
         program,
+        output,
     )
 
 
@@ -1036,6 +1047,7 @@ struct RenderTarget(Movable, SampleSource):
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
         program: List[Float32] = List[Float32](),
+        output: OutputEncoding = OutputEncoding(),
     ) raises -> Color:
         """Return what a display should show for pixel (x, y).
 
@@ -1051,6 +1063,7 @@ struct RenderTarget(Movable, SampleSource):
             program: The custom curve's program, `NodeProgram.code`, read
                 under `CUSTOM_TONE_MAPPING`; see `render.tonemap`. None by
                 default, which leaves the light as it is.
+            output: How the light is written out; see `resolve`.
 
         Returns:
             The resolved eight-bit color.
@@ -1067,9 +1080,12 @@ struct RenderTarget(Movable, SampleSource):
             curve = NO_TONE_MAPPING
         else:
             straight = straight.unpremultiplied()
-        return tone_map_with(
+        var mapped = tone_map_with(
             straight, curve, exposure, ProgramCurve(Pointer(to=program))
-        ).encode()
+        )
+        if self.data[slot]:
+            return mapped.encode()
+        return output.encode(mapped)
 
     def downsampled(self, factor: Int) raises -> Self:
         """Return this target shrunk by `factor` each way, every pixel of
@@ -1256,6 +1272,7 @@ struct RenderTarget(Movable, SampleSource):
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
         program: List[Float32] = List[Float32](),
+        output: OutputEncoding = OutputEncoding(),
     ) raises -> Framebuffer:
         """Return the finished image, encoded for a display.
 
@@ -1290,9 +1307,13 @@ struct RenderTarget(Movable, SampleSource):
             program: The custom curve's program, `NodeProgram.code`, read
                 under `CUSTOM_TONE_MAPPING`; see `render.tonemap`. None by
                 default, which leaves the light as it is.
+            output: How the light is written out, three.js's
+                `outputColorSpace`; see `render.color_spaces.
+                output_encoding`. sRGB by default.
 
         Returns:
-            The image as eight-bit sRGB with unassociated alpha, which is what
+            The image as eight-bit color in the output space, sRGB unless
+            `output` says otherwise, with unassociated alpha, which is what
             PNG stores.
 
         Raises:
@@ -1307,12 +1328,14 @@ struct RenderTarget(Movable, SampleSource):
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
         # The background, by the same three steps every other pixel takes.
         var words = Pointer(to=program).unsafe_origin_cast[ImmutAnyOrigin]()
-        var clear_shown = tone_map_with(
-            self.clear.unpremultiplied(),
-            tone_mapping,
-            exposure,
-            ProgramCurve(words),
-        ).encode()
+        var clear_shown = output.encode(
+            tone_map_with(
+                self.clear.unpremultiplied(),
+                tone_mapping,
+                exposure,
+                ProgramCurve(words),
+            )
+        )
         var bands = min(workers, count)
         if bands == 1:
             _encode_run(
@@ -1326,6 +1349,7 @@ struct RenderTarget(Movable, SampleSource):
                 self.clear,
                 clear_shown,
                 words,
+                output,
             )
         else:
             var group = TaskGroup()
@@ -1347,6 +1371,7 @@ struct RenderTarget(Movable, SampleSource):
                         self.clear,
                         clear_shown,
                         words,
+                        output,
                     )
                 )
             group.wait()

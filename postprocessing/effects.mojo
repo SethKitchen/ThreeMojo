@@ -36,7 +36,8 @@ from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
 from math.vector2 import Vector2
-from postprocessing.screen_space import DepthView
+from math.vector3 import Vector3
+from postprocessing.screen_space import DepthView, glsl_rand
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
 from render.framebuffer import Color, FloatColor
 from render.raster_state import (
@@ -741,6 +742,11 @@ struct HalftoneSettings(ImplicitlyCopyable):
     var grayscale: Bool
     # Whether the pass leaves the frame alone: `disable`.
     var disable: Bool
+    # The size the grid is laid over, in pixels: the shader's `width` and
+    # `height`, which `HalftonePass.setSize` sets. Zero, the default,
+    # takes the frame's own size, as the composer's `setSize` gives it.
+    var width: Float32
+    var height: Float32
 
     def __init__(out self):
         """Start with `HalftoneShader`'s defaults: dots four pixels apart,
@@ -756,6 +762,19 @@ struct HalftoneSettings(ImplicitlyCopyable):
         self.blending_mode = HALFTONE_LINEAR
         self.grayscale = False
         self.disable = False
+        self.width = 0
+        self.height = 0
+
+    def set_size(mut self, width: Float32, height: Float32):
+        """Lay the grid over another size than the frame's, three.js's
+        `HalftonePass.setSize`.
+
+        Args:
+            width: The width, in pixels; zero for the frame's.
+            height: The height, in pixels; zero for the frame's.
+        """
+        self.width = width
+        self.height = height
 
 
 def check_halftone(settings: HalftoneSettings) raises:
@@ -780,8 +799,12 @@ def check_halftone(settings: HalftoneSettings) raises:
         and isfinite(settings.rotate_b.value)
         and isfinite(settings.scatter)
         and isfinite(settings.blending)
+        and isfinite(settings.width)
+        and isfinite(settings.height)
     ):
         raise Error("A halftone setting must be finite")
+    if settings.width < 0 or settings.height < 0:
+        raise Error("A halftone size must not be negative")
     if settings.radius <= 0:
         raise Error("A halftone radius must be positive")
     if settings.scatter < 0:
@@ -937,7 +960,11 @@ def reference_cell(
 
 
 def halftone_sample(
-    source: LightView, point: Vector2, radius: Float32
+    source: LightView,
+    point: Vector2,
+    radius: Float32,
+    width: Float32 = 0,
+    height: Float32 = 0,
 ) -> FloatColor:
     """Return the light around a grid point: `HalftoneShader`'s
     `getSample`, the point and eight taps on a ring about it, averaged.
@@ -946,12 +973,15 @@ def halftone_sample(
         source: The frame, row by row from the top.
         point: The grid point, in pixels up from the bottom left.
         radius: The grid's spacing; the ring is two thirds of it.
+        width: The size the grid is laid over, the shader's `width`; zero
+            for the frame's.
+        height: Its `height`; zero for the frame's.
 
     Returns:
         The average of nine bilinear reads.
     """
-    var w = Float32(source.width)
-    var h = Float32(source.height)
+    var w = width if width > 0 else Float32(source.width)
+    var h = height if height > 0 else Float32(source.height)
     var tex = source.sample(point.x / w, point.y / h)
     var base = sine_hash(floor(point.x), floor(point.y)) * HALFTONE_PI2
     var step = HALFTONE_PI2 / Float32(HALFTONE_SAMPLES)
@@ -1058,14 +1088,18 @@ struct _Corners(ImplicitlyCopyable):
 
 
 def _corners(
-    source: LightView, cell: HalftoneCell, radius: Float32
+    source: LightView,
+    cell: HalftoneCell,
+    radius: Float32,
+    width: Float32,
+    height: Float32,
 ) -> _Corners:
     """Return `halftone_sample` at a cell's four points, by channel."""
     return _Corners(
-        halftone_sample(source, cell.p1, radius),
-        halftone_sample(source, cell.p2, radius),
-        halftone_sample(source, cell.p3, radius),
-        halftone_sample(source, cell.p4, radius),
+        halftone_sample(source, cell.p1, radius, width, height),
+        halftone_sample(source, cell.p2, radius, width, height),
+        halftone_sample(source, cell.p3, radius, width, height),
+        halftone_sample(source, cell.p4, radius, width, height),
     )
 
 
@@ -1117,12 +1151,11 @@ def halftone_pixel(
     """
     var width = source.width
     var height = source.height
+    var size_x = settings.width if settings.width > 0 else Float32(width)
+    var size_y = settings.height if settings.height > 0 else Float32(height)
     var radius = settings.radius
     var aa = radius * 0.5 if radius < 2.5 else Float32(1.25)
-    var p = Vector2(
-        u_of(x, width) * Float32(width),
-        v_of(y, height) * Float32(height),
-    )
+    var p = Vector2(u_of(x, width) * size_x, v_of(y, height) * size_y)
     var cell_r = reference_cell(
         p, settings.rotate_r.value, radius, settings.scatter
     )
@@ -1132,9 +1165,9 @@ def halftone_pixel(
     var cell_b = reference_cell(
         p, settings.rotate_b.value, radius, settings.scatter
     )
-    var at_r = _corners(source, cell_r, radius)
-    var at_g = _corners(source, cell_g, radius)
-    var at_b = _corners(source, cell_b, radius)
+    var at_r = _corners(source, cell_r, radius, size_x, size_y)
+    var at_g = _corners(source, cell_g, radius, size_x, size_y)
+    var at_b = _corners(source, cell_b, radius, size_x, size_y)
     var r = _dot_color(at_r.r, cell_r, p, settings.rotate_r.value, aa, settings)
     var g = _dot_color(at_g.g, cell_g, p, settings.rotate_g.value, aa, settings)
     var b = _dot_color(at_b.b, cell_b, p, settings.rotate_b.value, aa, settings)
@@ -1203,7 +1236,12 @@ struct MaskSettings(ImplicitlyCopyable):
         self.inverse = False
 
 
-def mask_stencil(mut frame: RenderTarget, depth: List[Float32], inverse: Bool):
+def mask_stencil(
+    mut frame: RenderTarget,
+    depth: List[Float32],
+    inverse: Bool,
+    clear: Bool = True,
+):
     """Write the mask into the frame's stencil buffer: three.js's
     `MaskPass`, which replaces the stencil with one where the mask's
     objects are drawn and clears it to zero elsewhere, or the other way
@@ -1215,11 +1253,17 @@ def mask_stencil(mut frame: RenderTarget, depth: List[Float32], inverse: Bool):
         depth: The mask's objects drawn alone, one NDC depth per pixel; a
             pixel is covered where the depth is finite.
         inverse: Whether to write zero where covered and one elsewhere.
+        clear: Whether the stencil is cleared first, three.js's `clear`.
+            Not cleared, a pixel the objects do not cover keeps its
+            stencil, so a mask adds to the one before it.
     """
     var write = 0 if inverse else 1
-    var clear = 1 if inverse else 0
+    var cleared = 1 if inverse else 0
     for slot in range(len(frame.stencil)):  # pragma: no branch
-        var value = write if isfinite(depth[slot]) else clear
+        var covered = isfinite(depth[slot])
+        if not covered and not clear:
+            continue
+        var value = write if covered else cleared
         frame.stencil[slot] = UInt8(
             stencil_apply(REPLACE_STENCIL_OP, 0, value, STENCIL_MAX)
         )
@@ -1488,3 +1532,488 @@ def lut_light(
     lut.validate()
     for index in range(len(frame.colors)):  # pragma: no branch
         frame.colors[index] = lut_pixel(frame.colors[index], lut, intensity)
+
+
+# --- DOFMipMapShader ---------------------------------------------------------
+
+
+@fieldwise_init
+struct DofMipMapSettings(ImplicitlyCopyable):
+    """What three.js's `DOFMipMapShader` reads: `focus`, the window depth
+    that stays sharp, and `maxblur`, how many mip levels a unit of depth
+    away from it blurs by, halved. Both one by default, as in three.js."""
+
+    var focus: Float32
+    var max_blur: Float32
+
+    def __init__(out self):
+        """Return three.js's defaults."""
+        self.focus = 1.0
+        self.max_blur = 1.0
+
+
+def check_dof_mipmap(settings: DofMipMapSettings) raises:
+    """Refuse settings the shader could not run.
+
+    Args:
+        settings: The settings.
+
+    Raises:
+        Error: If either is not finite, or `maxblur` is negative.
+    """
+    if not (isfinite(settings.focus) and isfinite(settings.max_blur)):
+        raise Error("A mip map depth of field's settings must be finite")
+    if settings.max_blur < 0:
+        raise Error("A mip map depth of field's blur must not be negative")
+
+
+def frame_mips(
+    colors: List[FloatColor], width: Int, height: Int
+) -> List[List[FloatColor]]:
+    """Return a frame's mip chain, as `generateMipmap` builds it: each level
+    half the last, floored, down to one pixel, every pixel the mean of the
+    two by two it covers, held at the last row and column.
+
+    Args:
+        colors: The frame, premultiplied.
+        width: Its width.
+        height: Its height.
+
+    Returns:
+        The levels, the frame itself first.
+    """
+    var levels = List[List[FloatColor]]()
+    levels.append(colors.copy())
+    var w = width
+    var h = height
+    while w > 1 or h > 1:
+        var next_w = max(w // 2, 1)
+        var next_h = max(h // 2, 1)
+        ref above = levels[len(levels) - 1]
+        var level = List[FloatColor](capacity=next_w * next_h)
+        for y in range(next_h):  # pragma: no branch
+            for x in range(next_w):  # pragma: no branch
+                var x0 = min(x * 2, w - 1)
+                var x1 = min(x * 2 + 1, w - 1)
+                var y0 = min(y * 2, h - 1)
+                var y1 = min(y * 2 + 1, h - 1)
+                var a = above[y0 * w + x0]
+                var b = above[y0 * w + x1]
+                var c = above[y1 * w + x0]
+                var d = above[y1 * w + x1]
+                level.append(
+                    FloatColor(
+                        (a.r + b.r + c.r + d.r) / 4,
+                        (a.g + b.g + c.g + d.g) / 4,
+                        (a.b + b.b + c.b + d.b) / 4,
+                        (a.a + b.a + c.a + d.a) / 4,
+                    )
+                )
+        levels.append(level^)
+        w = next_w
+        h = next_h
+    return levels^
+
+
+def mip_sample(
+    levels: List[List[FloatColor]],
+    width: Int,
+    height: Int,
+    u: Float32,
+    v: Float32,
+    level: Float32,
+) -> FloatColor:
+    """Return a trilinear read of a mip chain: bilinear on the two levels
+    around `level`, mixed, as `LINEAR_MIPMAP_LINEAR` reads a texture.
+
+    Args:
+        levels: The chain, `frame_mips`.
+        width: The first level's width.
+        height: Its height.
+        u: Across, zero to one.
+        v: Up, zero to one.
+        level: Which level, fractional; held between the first and the
+            last.
+
+    Returns:
+        The light there.
+    """
+    var last = Float32(len(levels) - 1)
+    var at = max(Float32(0), min(level, last))
+    var low = Int(floor(at))
+    var high = min(low + 1, len(levels) - 1)
+    var t = at - Float32(low)
+    var low_w = max(width >> low, 1)
+    var low_h = max(height >> low, 1)
+    var high_w = max(width >> high, 1)
+    var high_h = max(height >> high, 1)
+    var a = LightView(levels[low], low_w, low_h).sample(u, v)
+    var b = LightView(levels[high], high_w, high_h).sample(u, v)
+    return FloatColor(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        a.a + (b.a - a.a) * t,
+    )
+
+
+def dof_mipmap_light(
+    mut frame: RenderTarget, depth: DepthView, settings: DofMipMapSettings
+):
+    """Blur each pixel by how far its depth is from the focus: three.js's
+    `DOFMipMapShader`, which reads the frame at a mip level of
+    `2 * maxblur * abs(focus - depth)`.
+
+    The shader writes the texel's color with an alpha of one; the frame
+    holds premultiplied light, so the texel is unpremultiplied first.
+
+    Args:
+        frame: The frame, changed in place.
+        depth: The scene's depth, as `depth_view` draws it.
+        settings: The focus and the blur.
+    """
+    var levels = frame_mips(frame.colors, frame.width, frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        for x in range(frame.width):  # pragma: no branch
+            var u = u_of(x, frame.width)
+            var v = v_of(y, frame.height)
+            var z = depth.depth_at(u, v)
+            var level = 2 * settings.max_blur * abs(settings.focus - z)
+            var color = mip_sample(
+                levels, frame.width, frame.height, u, v, level
+            ).unpremultiplied()
+            frame.colors[y * frame.width + x] = FloatColor(
+                color.r, color.g, color.b, 1
+            )
+
+
+# --- BokehShader2 ------------------------------------------------------------
+
+# `BokehShader2`'s fixed numbers, as the shader spells them.
+comptime _NDOF_START = Float32(1.0)
+comptime _NDOF_DIST = Float32(2.0)
+comptime _FDOF_START = Float32(1.0)
+comptime _FDOF_DIST = Float32(3.0)
+comptime _COC = Float32(0.03)
+comptime _VIGN_OUT = Float32(1.3)
+comptime _VIGN_IN = Float32(0.0)
+comptime _VIGN_FADE = Float32(22.0)
+comptime _DB_SIZE = Float32(1.25)
+comptime _FEATHER = Float32(0.4)
+
+
+struct Bokeh2Settings(ImplicitlyCopyable):
+    """What three.js's `BokehShader2` reads: its uniforms, named as three.js
+    names them, with its defaults, and its `RINGS` and `SAMPLES` defines,
+    three and four as three.js's depth of field example sets them.
+
+    `texture_width` and `texture_height` of zero read the frame's own
+    size. three.js starts them at one and has the caller set them.
+    """
+
+    var texture_width: Float32
+    var texture_height: Float32
+    # The focal plane's distance in meters, read when `shader_focus` is
+    # off, and the lens's focal length in millimeters and f-stop.
+    var focal_depth: Float32
+    var focal_length: Float32
+    var fstop: Float32
+    var max_blur: Float32
+    var show_focus: Bool
+    var manual_dof: Bool
+    var vignetting: Bool
+    var depth_blur: Bool
+    # The highlight threshold and gain, the edge bias and the fringe.
+    var threshold: Float32
+    var gain: Float32
+    var bias: Float32
+    var fringe: Float32
+    # The camera's near and far planes, in meters.
+    var znear: Float32
+    var zfar: Float32
+    var dithering: Float32
+    var pentagon: Bool
+    # Whether the focal plane is the depth at `focus_u`, `focus_v`.
+    var shader_focus: Bool
+    var focus_u: Float32
+    var focus_v: Float32
+    var rings: Int
+    var samples: Int
+
+    def __init__(out self):
+        """Return three.js's defaults."""
+        self.texture_width = 0
+        self.texture_height = 0
+        self.focal_depth = 1.0
+        self.focal_length = 24.0
+        self.fstop = 0.9
+        self.max_blur = 1.0
+        self.show_focus = False
+        self.manual_dof = False
+        self.vignetting = False
+        self.depth_blur = False
+        self.threshold = 0.5
+        self.gain = 2.0
+        self.bias = 0.5
+        self.fringe = 0.7
+        self.znear = 0.1
+        self.zfar = 100
+        self.dithering = 0.0001
+        self.pentagon = False
+        self.shader_focus = True
+        self.focus_u = 0
+        self.focus_v = 0
+        self.rings = 3
+        self.samples = 4
+
+
+def check_bokeh2(settings: Bokeh2Settings) raises:
+    """Refuse settings the shader could not run.
+
+    Args:
+        settings: The settings.
+
+    Raises:
+        Error: If a number is not finite; a texture size is negative; the
+            near plane is not in front of the far one; or there are fewer
+            than one ring or one sample.
+    """
+    var finite = (
+        isfinite(settings.texture_width)
+        and isfinite(settings.texture_height)
+        and isfinite(settings.focal_depth)
+        and isfinite(settings.focal_length)
+        and isfinite(settings.fstop)
+        and isfinite(settings.max_blur)
+        and isfinite(settings.threshold)
+        and isfinite(settings.gain)
+        and isfinite(settings.bias)
+        and isfinite(settings.fringe)
+        and isfinite(settings.znear)
+        and isfinite(settings.zfar)
+        and isfinite(settings.dithering)
+        and isfinite(settings.focus_u)
+        and isfinite(settings.focus_v)
+    )
+    if not finite:
+        raise Error("A bokeh 2 setting must be finite")
+    if settings.texture_width < 0 or settings.texture_height < 0:
+        raise Error("A bokeh 2 texture size must not be negative")
+    if not (settings.znear > 0 and settings.zfar > settings.znear):
+        raise Error("A bokeh 2 near plane must lie in front of its far plane")
+    if settings.rings < 1 or settings.samples < 1:
+        raise Error("A bokeh 2 needs a ring and a sample at least")
+
+
+def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return GLSL's `smoothstep`, its edges in either order."""
+    var t = min(max((x - edge0) / (edge1 - edge0), Float32(0)), Float32(1))
+    return t * t * (3 - 2 * t)
+
+
+def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
+    """Return `BokehShader2`'s `penta`: how far a tap lies inside a
+    pentagon, feathered, zero to one.
+
+    Args:
+        pw: The tap's offset across, in rings.
+        ph: Its offset up.
+        rings: How many rings there are.
+
+    Returns:
+        The shape's weight for the tap.
+    """
+    var scale = Float32(rings) - 1.3
+    var inorout = Float32(-4)
+    inorout += _smoothstep(-_FEATHER, _FEATHER, pw + scale)
+    inorout += _smoothstep(
+        -_FEATHER, _FEATHER, 0.309016994 * pw + 0.951056516 * ph + scale
+    )
+    inorout += _smoothstep(
+        -_FEATHER, _FEATHER, -0.809016994 * pw + 0.587785252 * ph + scale
+    )
+    inorout += _smoothstep(
+        -_FEATHER, _FEATHER, -0.809016994 * pw - 0.587785252 * ph + scale
+    )
+    inorout += _smoothstep(
+        -_FEATHER, _FEATHER, 0.309016994 * pw - 0.951056516 * ph + scale
+    )
+    return min(max(inorout, Float32(0)), Float32(1))
+
+
+def _linearize(depth: Float32, znear: Float32, zfar: Float32) -> Float32:
+    """Return `BokehShader2`'s `linearize`: a window depth as meters."""
+    return -zfar * znear / (depth * (zfar - znear) - zfar)
+
+
+def _bdepth(
+    depth: DepthView, u: Float32, v: Float32, tw: Float32, th: Float32
+) -> Float32:
+    """Return `BokehShader2`'s `bdepth`: the depth blurred by a three by
+    three tent. The shader spells its third offset `vec2( wh.x -wh.y )`,
+    which puts the difference in both lanes, and so does this."""
+    var wx = 1 / tw * _DB_SIZE
+    var wy = 1 / th * _DB_SIZE
+    var dx: List[Float32] = [-wx, 0, wx - wy, -wx, 0, wx, -wx, 0, wx]
+    var dy: List[Float32] = [-wy, -wy, wx - wy, 0, 0, 0, wy, wy, wy]
+    var kernel: List[Float32] = [1, 2, 1, 2, 4, 2, 1, 2, 1]
+    var d = Float32(0)
+    for i in range(9):  # pragma: no branch
+        d += depth.depth_at(u + dx[i], v + dy[i]) * kernel[i] / 16
+    return d
+
+
+def _bokeh2_color(
+    source: LightView,
+    u: Float32,
+    v: Float32,
+    blur: Float32,
+    settings: Bokeh2Settings,
+    tw: Float32,
+    th: Float32,
+) -> Vector3:
+    """Return `BokehShader2`'s `color`: a tap fringed by the blur, its
+    highlights raised."""
+    var fx = 1 / tw * settings.fringe * blur
+    var fy = 1 / th * settings.fringe * blur
+    var r = source.sample(u, v + fy).r
+    var g = source.sample(u - 0.866 * fx, v - 0.5 * fy).g
+    var b = source.sample(u + 0.866 * fx, v - 0.5 * fy).b
+    var lum = r * 0.299 + g * 0.587 + b * 0.114
+    var thresh = max((lum - settings.threshold) * settings.gain, Float32(0))
+    var lift = thresh * blur
+    return Vector3(r + r * lift, g + g * lift, b + b * lift)
+
+
+def bokeh2_pixel(
+    source: LightView,
+    depth: DepthView,
+    x: Int,
+    y: Int,
+    settings: Bokeh2Settings,
+) -> FloatColor:
+    """Return one pixel of three.js's `BokehShader2`.
+
+    Args:
+        source: The frame, premultiplied.
+        depth: The scene's depth, as `depth_view` draws it.
+        x: The column.
+        y: The row, down from the top.
+        settings: The uniforms and the ring and sample counts.
+
+    Returns:
+        The pixel, opaque.
+    """
+    var tw = settings.texture_width
+    var th = settings.texture_height
+    if tw == 0:
+        tw = Float32(source.width)
+    if th == 0:
+        th = Float32(source.height)
+    var u = u_of(x, source.width)
+    var v = v_of(y, source.height)
+    var z = _linearize(depth.depth_at(u, v), settings.znear, settings.zfar)
+    if settings.depth_blur:
+        z = _linearize(
+            _bdepth(depth, u, v, tw, th), settings.znear, settings.zfar
+        )
+    var f_depth = settings.focal_depth
+    if settings.shader_focus:
+        f_depth = _linearize(
+            depth.depth_at(settings.focus_u, settings.focus_v),
+            settings.znear,
+            settings.zfar,
+        )
+    var blur: Float32
+    if settings.manual_dof:
+        var a = z - f_depth
+        var far = (a - _FDOF_START) / _FDOF_DIST
+        var near = (-a - _NDOF_START) / _NDOF_DIST
+        blur = far if a > 0 else near
+    else:
+        var f = settings.focal_length
+        var d = f_depth * 1000
+        var o = z * 1000
+        var a = (o * f) / (o - f)
+        var b = (d * f) / (d - f)
+        var c = (d - f) / (d * settings.fstop * _COC)
+        blur = abs(a - b) * c
+    blur = min(max(blur, Float32(0)), Float32(1))
+    var noise_x = glsl_rand(u, v) * settings.dithering * blur
+    var noise_y = glsl_rand(u + 0.4, v + 0.6) * settings.dithering * blur
+    var w = 1 / tw * blur * settings.max_blur + noise_x
+    var h = 1 / th * blur * settings.max_blur + noise_y
+    var here = source.sample(u, v)
+    var col = Vector3(here.r, here.g, here.b)
+    if blur >= 0.05:
+        var s = Float32(1)
+        var rings = Float32(settings.rings)
+        for i in range(1, settings.rings + 1):  # pragma: no branch
+            var ring_samples = i * settings.samples
+            var step = Float32(pi) * 2 / Float32(ring_samples)
+            for j in range(ring_samples):  # pragma: no branch
+                var pw = cos(Float32(j) * step) * Float32(i)
+                var ph = sin(Float32(j) * step) * Float32(i)
+                var p = Float32(1)
+                if settings.pentagon:
+                    p = bokeh2_penta(pw, ph, settings.rings)
+                # `mix( 1.0, i / rings, bias )`.
+                var weight = (1 + (Float32(i) / rings - 1) * settings.bias) * p
+                var tap = _bokeh2_color(
+                    source, u + pw * w, v + ph * h, blur, settings, tw, th
+                )
+                col = col + tap * weight
+                s += weight
+        col = col * (1 / s)
+    if settings.show_focus:
+        var edge = 0.002 * z
+        var m = min(max(_smoothstep(0, edge, blur), Float32(0)), Float32(1))
+        var e = min(max(_smoothstep(1 - edge, 1, blur), Float32(0)), Float32(1))
+        var warm = (1 - m) * 0.6
+        col = Vector3(
+            col.x + (1 - col.x) * warm,
+            col.y + (0.5 - col.y) * warm,
+            col.z + (0 - col.z) * warm,
+        )
+        var cool = ((1 - e) - (1 - m)) * 0.2
+        col = Vector3(
+            col.x + (0 - col.x) * cool,
+            col.y + (0.5 - col.y) * cool,
+            col.z + (1 - col.z) * cool,
+        )
+    if settings.vignetting:
+        var du = u - 0.5
+        var dv = v - 0.5
+        var dist = sqrt(du * du + dv * dv)
+        var fade = settings.fstop / _VIGN_FADE
+        var shade = min(
+            max(
+                _smoothstep(_VIGN_OUT + fade, _VIGN_IN + fade, dist),
+                Float32(0),
+            ),
+            Float32(1),
+        )
+        col = col * shade
+    return FloatColor(col.x, col.y, col.z, 1)
+
+
+def bokeh2_light(
+    mut frame: RenderTarget, depth: DepthView, settings: Bokeh2Settings
+):
+    """Run three.js's `BokehShader2` over the frame, every pixel reading
+    the frame as it was before the pass.
+
+    Args:
+        frame: The frame, changed in place.
+        depth: The scene's depth, as `depth_view` draws it.
+        settings: The uniforms and the ring and sample counts.
+    """
+    var before = frame.colors.copy()
+    var view = LightView(before, frame.width, frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        for x in range(frame.width):  # pragma: no branch
+            frame.colors[y * frame.width + x] = bokeh2_pixel(
+                view, depth, x, y, settings
+            )
+    # The view does not keep the copy alive; this does.
+    _ = before^

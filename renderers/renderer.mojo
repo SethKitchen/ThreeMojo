@@ -77,6 +77,12 @@ of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
 """
 
+from render.color_spaces import (
+    ColorSpaceId,
+    OutputEncoding,
+    SRGB_COLOR_SPACE,
+    output_encoding,
+)
 from cameras.array_camera import ArrayCamera
 from cameras.camera import Camera
 from cameras.cube_camera import CubeCamera
@@ -1373,6 +1379,7 @@ def _draws(
     casters_only: Bool = False,
     receivers_cast: Bool = False,
     distance_casters: Bool = False,
+    override: Optional[MaterialId] = None,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -1438,11 +1445,13 @@ def _draws(
         distance_casters: Whether a light's view is a point light's, which
             draws a mesh with its `custom_distance_material` rather than
             its `custom_depth_material`.
+        override: The material that takes the place of every object's,
+            `Renderer.drawn_override`: the renderer's or the scene's, or
+            none.
 
     Returns:
         The draws the camera makes, in the order to make them. A frame's
-        draws are drawn with the scene's `override_material` where it
-        applies; a light's view keeps each mesh's own, or its custom one.
+        draws are drawn with `override` where it applies; a light's view keeps each mesh's own, or its custom one.
 
     Raises:
         Error: If anything drawn names a node, a geometry or a material
@@ -1731,11 +1740,11 @@ def _draws(
     # The scene's override draws what the frame draws, each in the list
     # its own material put it in, as three.js's `renderObjects` swaps it
     # in after the lists are made. A light's view keeps the casters' own.
-    var overridden = Bool(scene.override_material)
+    var overridden = Bool(override)
     if overridden and not casters_only:
         for position in range(len(ordered)):
             ordered[position].material = _drawn_material(
-                scene,
+                override,
                 assets.materials.get(ordered[position].material),
                 ordered[position].material,
             )
@@ -2410,22 +2419,25 @@ def _draw_state(
     return state
 
 
-def _drawn_material(scene: Scene, own: Material, id: MaterialId) -> MaterialId:
+def _drawn_material(
+    override: Optional[MaterialId], own: Material, id: MaterialId
+) -> MaterialId:
     """Return the material an object is drawn with: the scene's
     `override_material` when it has one and the object's own material
     allows it, three.js's `renderObjects`, and the object's own otherwise.
 
     Args:
-        scene: The scene, for its override.
+        override: The material that takes the place of every object's,
+            `Renderer.drawn_override`, or none.
         own: The object's own material.
         id: Its id.
 
     Returns:
         The id to draw with.
     """
-    var overridden = Bool(scene.override_material)
+    var overridden = Bool(override)
     if overridden and own.allow_override:
-        return scene.override_material.value()
+        return override.value()
     return id
 
 
@@ -3871,6 +3883,14 @@ struct Renderer(Movable):
     # composited image -- see `render.tonemap`.
     var tone_mapping: ToneMapping
     var tone_mapping_exposure: Float32
+    # A material that takes the place of every object's while it is set,
+    # before the scene's own `override_material`: what three.js's
+    # `RenderPass` puts on the scene for its draw. None by default.
+    var override_material: Optional[MaterialId]
+    # The space the finished image is written in, three.js's
+    # `outputColorSpace`: sRGB unless `set_output_color_space` says
+    # otherwise. See `render.color_spaces.output_encoding`.
+    var output_color_space: ColorSpaceId
     # Where on the target the camera's image lands: three.js's
     # `setViewport`. The whole target by default. Folded into the screen
     # matrix by `prepare` and `prepare_lines`, so both backends draw the
@@ -3977,6 +3997,8 @@ struct Renderer(Movable):
         self.workers = workers
         self.tone_mapping = NO_TONE_MAPPING
         self.tone_mapping_exposure = 1.0
+        self.output_color_space = SRGB_COLOR_SPACE
+        self.override_material = None
         self.viewport = Rect.whole(width, height)
         self.scissor = Rect.whole(width, height)
         self.scissor_test = False
@@ -4142,6 +4164,8 @@ struct Renderer(Movable):
         big.shading = self.shading
         big.tone_mapping = self.tone_mapping
         big.tone_mapping_exposure = self.tone_mapping_exposure
+        big.output_color_space = self.output_color_space
+        big.override_material = self.override_material
         big.viewport = _scaled(self.viewport, factor)
         big.scissor = _scaled(self.scissor, factor)
         big.scissor_test = self.scissor_test
@@ -4283,6 +4307,54 @@ struct Renderer(Movable):
         check_tone_mapping(mode, exposure)
         self.tone_mapping = mode
         self.tone_mapping_exposure = exposure
+
+    def set_output_color_space(mut self, space: ColorSpaceId) raises:
+        """Choose the color space the finished image is written in,
+        three.js's `outputColorSpace`.
+
+        The light is carried into the space's primaries by three.js's
+        matrix, then through its transfer function: sRGB's curve for
+        `SRGB_COLOR_SPACE` and `DISPLAY_P3_COLOR_SPACE`, none for a linear
+        space. See `render.color_spaces.output_encoding`.
+
+        Args:
+            space: The output color space; sRGB by default.
+
+        Raises:
+            Error: If the value names no color space, or it is
+                `NO_COLOR_SPACE`.
+        """
+        _ = output_encoding(space)
+        self.output_color_space = space
+
+    def drawn_override(self, scene: Scene) -> Optional[MaterialId]:
+        """Return the material that takes the place of every object's in a
+        frame: the renderer's `override_material` when it is set, and the
+        scene's otherwise.
+
+        Args:
+            scene: The scene, for its own override.
+
+        Returns:
+            The material, or none.
+        """
+        var own = Bool(self.override_material)
+        if own:
+            return self.override_material
+        return scene.override_material
+
+    def output_encoding(self) raises -> OutputEncoding:
+        """Return how the finished image is written out, for a caller
+        that resolves a target of its own the way `render` does.
+
+        Returns:
+            The encoding of `output_color_space`.
+
+        Raises:
+            Error: If `output_color_space` was set by hand to a value that
+                names no color space, or to `NO_COLOR_SPACE`.
+        """
+        return output_encoding(self.output_color_space)
 
     def set_depth_mode(mut self, mode: DepthMode) raises:
         """Choose how a frame's depth is stored and compared: three.js's
@@ -4531,6 +4603,7 @@ struct Renderer(Movable):
             casters_only,
             receivers_cast,
             distance_casters,
+            self.drawn_override(scene),
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -5365,7 +5438,7 @@ struct Renderer(Movable):
             # A light's view keeps the line's own material, as it keeps a
             # mesh's; the scene's override is the frame's alone.
             var drawn = line.material if casters_only else _drawn_material(
-                scene, own, line.material
+                self.drawn_override(scene), own, line.material
             )
             var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A line")
@@ -5774,7 +5847,7 @@ struct Renderer(Movable):
                 continue
             var blends = own.is_transparent()
             var drawn = points.material if casters_only else _drawn_material(
-                scene, own, points.material
+                self.drawn_override(scene), own, points.material
             )
             var material = assets.materials.get(drawn)
             _refuse_nodes(material, "A point")
@@ -6106,6 +6179,7 @@ struct Renderer(Movable):
                 self.tone_curve(),
                 self.tone_mapping_exposure,
                 self.curve_program(assets),
+                self.output_encoding(),
             )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_into_with(hooks, target, scene, assets, camera)
@@ -6120,6 +6194,7 @@ struct Renderer(Movable):
             self.tone_curve(),
             self.tone_mapping_exposure,
             self.curve_program(assets),
+            self.output_encoding(),
         )
 
     def render_array(
@@ -6167,6 +6242,7 @@ struct Renderer(Movable):
                 self.tone_curve(),
                 self.tone_mapping_exposure,
                 self.curve_program(assets),
+                self.output_encoding(),
             )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_array_into(target, scene, assets, array)
@@ -6175,6 +6251,7 @@ struct Renderer(Movable):
             self.tone_curve(),
             self.tone_mapping_exposure,
             self.curve_program(assets),
+            self.output_encoding(),
         )
 
     def render_array_into(

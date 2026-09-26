@@ -77,6 +77,9 @@ from render.target import (
     RenderTarget,
     TargetOutput,
 )
+from render.srgb import SRGB
+from render.texture import COVERAGE, NEAREST, REPEAT, Texture
+from render.texture_store import TextureId
 from renderers.renderer import Renderer
 from std.math import exp, inf, nan, pi, sqrt
 from std.testing import (
@@ -236,7 +239,7 @@ def test_the_four_new_kinds_and_their_builders() raises:
     assert_true(SAO.is_valid())
     assert_true(SSR.is_valid())
     assert_true(OUTLINE.is_valid())
-    assert_false(PassKind(35).is_valid())
+    assert_false(PassKind(60).is_valid())
     var ssao = ssao_pass()
     assert_equal(ssao.kind, SSAO)
     assert_equal(ssao.ssao.kernel_radius.value, Float32(8))
@@ -987,6 +990,56 @@ def test_a_hit_farther_from_the_surface_than_the_reach_is_not_reflected() raises
     assert_true(far[0].a > 0)
 
 
+def test_ssr_reflects_only_the_selected_and_bounces_off_the_last_frame() raises:
+    var camera = a_camera()
+    var target = drawn(camera)
+    var view = view_of(target, camera)
+    var settings = SsrSettings()
+    settings.opacity = 1
+    settings.max_distance = meters(5)
+    settings.thickness = meters(0.2)
+    # Selective, and nothing selected: no surface reflects.
+    settings.selective = True
+    var none = drawn(camera)
+    ssr_light(none, view, settings, List[Bool]())
+    assert_equal(count_changed(none, target), 0)
+    # Every pixel selected: the reflections are laid over as before.
+    var every = drawn(camera)
+    ssr_light(
+        every, view, settings, List[Bool](length=WIDTH * HEIGHT, fill=True)
+    )
+    assert_true(count_changed(every, target) > 0)
+    # Bouncing, the first time: the reflections read black.
+    settings.selective = False
+    settings.bouncing = True
+    var first = drawn(camera)
+    ssr_light(first, view, settings)
+    var plain = drawn(camera)
+    settings.bouncing = False
+    ssr_light(plain, view, settings)
+    assert_true(count_changed(first, plain) > 0)
+    # Bouncing off a frame of its own, it reflects that frame.
+    settings.bouncing = True
+    var again = drawn(camera)
+    ssr_light(again, view, settings, List[Bool](), target.colors)
+    assert_equal(count_changed(again, plain), 0)
+
+
+def test_the_composer_runs_a_selective_bouncing_ssr() raises:
+    var camera = a_camera()
+    var scene_assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var composer = EffectComposer()
+    var step = ssr_pass(1, meters(5), meters(0.2))
+    step.ssr.selective = True
+    step.ssr.selects = Layers(UInt32(1))
+    step.ssr.bouncing = True
+    composer.add_pass(step^)
+    var scene = Scene()
+    _ = composer.render(renderer, scene, scene_assets, camera)
+    assert_equal(len(composer.memories[0]), WIDTH * HEIGHT)
+
+
 def test_the_ssr_blur_weighs_each_neighbor_by_its_strength() raises:
     var source = List[FloatColor](length=9, fill=FloatColor(0, 0, 0, 0))
     source[4] = FloatColor(1, 0.5, 0, 1)
@@ -1112,6 +1165,32 @@ def test_the_outline_glows_around_the_selection_and_not_inside() raises:
 # --- in the composer ---------------------------------------------------------
 
 
+def test_an_outline_fills_its_objects_with_a_pattern() raises:
+    # A square selected in the middle of a four by four frame; the pattern
+    # is black, so one less its red is one, and the fill adds a full unit
+    # to every channel there, times its own alpha.
+    var depth = List[Float32](length=16, fill=inf[DType.float32]())
+    for y in range(1, 3):
+        for x in range(1, 3):
+            depth[y * 4 + x] = 0.5
+    var settings = OutlineSettings()
+    settings.selection = Layers(UInt32(2))
+    settings.use_pattern_texture = True
+    settings.pattern_texture = TextureId(0)
+    var black: List[UInt8] = [0, 0, 0, 255]
+    var pattern = Texture(1, 1, black^, REPEAT, NEAREST, SRGB, False, COVERAGE)
+    var frame = RenderTarget(4, 4, Color(0, 0, 0, 255))
+    outline_light(
+        frame, depth, depth, settings, Duration(0.0, SECOND), pattern=pattern
+    )
+    assert_true(frame.colors[1 * 4 + 1].r > 0.5)
+    # A pattern named by no texture is refused.
+    var unnamed = OutlineSettings()
+    unnamed.use_pattern_texture = True
+    with assert_raises(contains="name its texture"):
+        check_outline(unnamed)
+
+
 def test_the_four_passes_run_in_the_composer() raises:
     var renderer = a_renderer()
     var assets = Assets()
@@ -1169,6 +1248,21 @@ def test_the_four_passes_run_in_the_composer() raises:
             if ringed.get_pixel(x, y).b > base.get_pixel(x, y).b:
                 brighter += 1
     assert_true(brighter > 0, "The outline added nothing")
+    # A pattern fills the selected objects: a white one adds nothing past
+    # the edges, a black one adds light inside them too.
+    var black: List[UInt8] = [0, 0, 0, 255]
+    outline.passes[1].outline.use_pattern_texture = True
+    outline.passes[1].outline.pattern_texture = assets.textures.add(
+        Texture(1, 1, black^, REPEAT, NEAREST, SRGB, False, COVERAGE)
+    )
+    var filled = outline.render(renderer, scene, assets, camera, 0.5)
+    var more = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if filled.get_pixel(x, y).r > ringed.get_pixel(x, y).r:
+                more += 1
+    assert_true(more > 0, "The pattern added nothing")
+    outline.passes[1].outline.use_pattern_texture = False
     # With no layer selected the pass outlines nothing.
     outline.passes[1].outline.selection = Layers(UInt32(0))
     var bare = outline.render(renderer, scene, assets, camera)

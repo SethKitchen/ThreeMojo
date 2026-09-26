@@ -42,6 +42,9 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `ssr_pass(opacity=0.5, max_distance=180 m, thickness=0.018 m)` | `SSRPass` | Draw the scene, and lay what each surface reflects over it. |
 | `outline_pass(selection, edge_strength=3, edge_thickness=1)` | `OutlinePass` | Draw a glowing edge around the objects on the selected layers. |
 | `bokeh_pass(focus=1 m, aperture=0.025, max_blur=1)` | `BokehPass` | Blur each pixel by its distance from the focus. |
+| `bokeh2_pass(settings)` | `ShaderPass` with `BokehShader2` | Blur by depth through a lens's rings of taps. |
+| `dof_mipmap_pass(focus=1, max_blur=1)` | `ShaderPass` with `DOFMipMapShader` | Read each pixel from a mip level set by its depth. |
+| `classic_bloom_pass(strength=1, kernel_size=25, sigma=4)` | `BloomPass` | Blur the frame by a Gaussian and add it back. |
 | `glitch_pass(size=64, seed=0)` | `GlitchPass` | Shift the channels, tear the frame and add snow, at random moments. |
 | `halftone_pass(radius=4)` | `HalftonePass` | Redraw each channel as a grid of dots. |
 | `mask_pass(selection, inverse=False)` | `MaskPass` | Let the passes after it change only the pixels that the selected objects cover. |
@@ -55,7 +58,7 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `cube_texture_pass(cube, opacity=1)` | `CubeTexturePass` | Draw a cube texture as the camera sees it. |
 | `save_pass()` | `SavePass` | Keep a copy of the frame. |
 | `shader_pass(program, input="tDiffuse")` | `ShaderPass` | Run a node program over the screen. |
-| `effect_pass(effect)` | `ShaderPass` with one of fifteen shaders | Run a screen shader. Each shader also has a builder of its own. |
+| `effect_pass(effect)` | `ShaderPass` with one of eighteen shaders | Run a screen shader. Each shader also has a builder of its own. |
 | `god_rays_pass(sun, intensity=0.69, fake_sun=False)` | The god-rays example | Lay rays from a sun over the frame. |
 
 Each builder returns a `Pass`. A `Pass` has a `kind`, an `enabled` flag and every setting any kind reads. The effect passes read `strength`, `radius`, `threshold`, `offset`, `scale`, `angle`, `center`, `grayscale` and `time`. The SSAA and TAA passes read `sample_level`, `unbiased`, `accumulate` and `accumulate_index`. The screen-space passes read `ssao`, `sao`, `ssr` and `outline`. See [Screen-space passes](#screen-space-passes).
@@ -67,6 +70,12 @@ The pixelated, GTAO, transition, shader, shader effect and god-rays passes read 
 Change a setting after the pass is added, as three.js changes a uniform. A pass that is not enabled is skipped.
 
 The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number does not compile. `tests/compile_fail/` proves it.
+
+### Render pass options
+
+`render_pass(override_material, clear_color, clear_alpha)` takes three.js's `RenderPass` arguments. The override material draws every object in the place of its own, as three.js puts it on the scene. `Renderer.override_material` carries it for the draw. The clear color and alpha take the place of the renderer's background, and a scene's own background still wins, as in three.js.
+
+The pass has `clear` on and `clear_depth` off, as three.js's has. With `clear` off, the pass draws over the frame that it is given. That draw is not supersampled, because a supersampled draw starts from a fresh target. With `clear_depth` on, the depth is cleared first.
 
 ## The composer
 
@@ -85,7 +94,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## Validation
 
-`PassKind` is a type. `is_valid` names the thirty-five kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
+`PassKind` is a type. `is_valid` names the kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
 
 `check_pass` also refuses a sample level outside zero through five. three.js clamps the level; this port refuses it. It refuses an accumulate index outside minus one through 32. `jitter_offsets` refuses a level outside zero through five. `JitteredCamera` refuses an offset that is not finite and an image size that is not positive.
 
@@ -212,6 +221,10 @@ The pass walks the ray across the screen one pixel at a time. The first surface 
 
 The strength of a reflection starts at `opacity`. With `distance_attenuation` on, it fades with the square of the distance. With `fresnel` on, it fades as the view meets the surface square on. With `blur` on, `ssr_blur` is `SSRBlurShader`, applied twice. The pass lays each reflection over the light by its strength, as three.js's `NormalBlending` does.
 
+With `selective` on, only the objects on the `selects` layers reflect. three.js takes a list of objects and draws a metalness mask. This port draws the selected layers alone, as the outline pass does, and a pixel that they do not cover reflects nothing.
+
+With `bouncing` on, the reflections are read from the frame that the pass made last time, as three.js reads its `prevRenderTarget`. So the reflections gather one more bounce each frame. The first frame reads transparent black, as three.js's fresh target holds.
+
 ### Outline
 
 `outline_pass(selection)` is three.js's `OutlinePass`. three.js takes a list of objects. This port takes a set of layers: the objects on those layers are selected. An empty set outlines nothing, as three.js's pass does with no objects.
@@ -223,6 +236,8 @@ The strength of a reflection starts at `opacity`. With `distance_attenuation` on
 5. The pass adds the narrow blur plus the wide blur times `edge_glow`, scaled by `edge_strength`, to the light outside the selected objects.
 
 With a `pulse_period` above zero, the edge colors pulse. three.js reads the clock. This port reads the time that `delta_time` adds up.
+
+With `use_pattern_texture` on, the selected objects are filled with a pattern. The pattern is the texture that `pattern_texture` names, in the assets, read at six times the frame's texture coordinate. The fill adds one less the pattern's red, and half of that where the object is hidden, as three.js's overlay adds it.
 
 ### Outputs
 
@@ -259,8 +274,8 @@ With a `pulse_period` above zero, the edge colors pulse. three.js reads the cloc
 
 ### Not ported in the screen-space passes
 
-- SSR's `selects`, its metalness pass, `bouncing` and `groundReflector`.
-- The outline's `usePatternTexture` and `patternTexture`, and its `downSampleRatio`, which is fixed at two as in three.js.
+- SSR's `groundReflector` and three.js's `ReflectorForSSRPass`.
+- The outline's `downSampleRatio`, which is fixed at two as in three.js.
 - A pass that the renderer's viewport or scissor narrows. The passes take the camera to fill the whole frame.
 
 `GTAOPass` is ported. See [GTAO](#gtao).
@@ -290,6 +305,27 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 `focus` is a `Length`. `aperture` is in texture widths per meter. `max_blur` is in texture widths.
 
+### Bokeh 2
+
+`bokeh2_pass` is a `ShaderPass` of three.js's `BokehShader2`. Put it after a `render_pass`. It draws the scene's depth itself and blurs the frame that it is given. `Bokeh2Settings` holds the shader's uniforms with three.js's defaults, and its `RINGS` and `SAMPLES` defines, three and four.
+
+- The blur comes from the lens: the focal length, the f-stop and the distance to the focal plane. With `manual_dof`, it comes from the fixed near and far ranges of the shader instead.
+- With `shader_focus`, the focal plane is the depth at `focus_u`, `focus_v`. Otherwise it is `focal_depth`, in meters.
+- Each ring of taps holds `samples` times its number of taps. A tap is fringed by `fringe`, and a bright tap is raised by `threshold` and `gain`.
+- `pentagon`, `depth_blur`, `show_focus` and `vignetting` are the shader's own switches.
+
+`texture_width` and `texture_height` of zero read the frame's size. three.js starts them at one and has the caller set them. The shader's `bdepth` spells one offset `vec2( wh.x -wh.y )`, and the port keeps that.
+
+### Mip map depth of field
+
+`dof_mipmap_pass` is a `ShaderPass` of three.js's `DOFMipMapShader`. Put it after a `render_pass`. It draws the scene's depth itself. Each pixel reads the frame at a mip level of `2 * max_blur * abs(focus - depth)`, where the depth is the window depth, zero to one. The mips halve the frame to one pixel, a two by two mean each, and a level between two mixes them, as `LINEAR_MIPMAP_LINEAR` does.
+
+### Classic bloom
+
+`classic_bloom_pass` is three.js's `BloomPass`. `bloom_pass` is `UnrealBloomPass`. The frame is blurred across and then up by `ConvolutionShader`, with `kernel_size` taps 1/512 of the texture apart. The kernel is `buildKernel( sigma )`, at most 25 taps, and the uniforms past it are zero. The blur, times `strength`, is added with three.js's additive blend, so the added light is the blur times the strength twice.
+
+These three passes run on the host in a `GpuComposer` frame, as the other passes that draw depth do.
+
 ### Glitch
 
 `glitch_pass(size, seed)` is three.js's `GlitchPass`. Each frame that `render` draws advances it. The draws come from `SeededRandom`, in three.js's order.
@@ -313,6 +349,8 @@ That is three.js's masking example. The texture fills only the pixels that the o
 
 With `grayscale` on, the three channels are averaged. With `disable` on, the frame is not changed. The result is opaque.
 
+`halftone.set_size(width, height)` is three.js's `HalftonePass.setSize`. It lays the grid over that size in pixels. A size of zero, the default, is the frame's own size, as the composer's `setSize` gives it.
+
 ### Mask and clear mask
 
 `mask_pass(selection, inverse)` is three.js's `MaskPass`. `clear_mask_pass()` is `ClearMaskPass`. Between the two, a pass changes only the pixels inside the mask.
@@ -323,6 +361,10 @@ With `grayscale` on, the three channels are averaged. With `disable` on, the fra
 4. The clear mask pass stops the test. A disabled mask pass or clear mask pass does nothing, as in three.js.
 
 The mask pass does not change the light or the depth, as three.js turns off those writes.
+
+three.js's mask pass takes a scene of its own. This port draws the selected layers of the composer's scene, whatever layers the camera shows. So put the mask's objects on a layer that the camera does not show, and they draw in the mask alone.
+
+A mask pass has `clear` on, as three.js's has. With `clear` off, the stencil is not cleared first. A pixel that the objects do not cover keeps its stencil, so the mask adds to the one before it. A texture pass has `clear` off. With `clear` on, it clears the frame to the renderer's background first.
 
 ### Clear and texture
 
@@ -387,8 +429,6 @@ Put the LUT pass after the output pass, as three.js's example does. Then the tab
 
 ### Not ported in the more passes
 
-- A mask pass with its own scene, and the `clear` flag of a mask pass or a texture pass.
-- `HalftonePass.setSize`. The halftone always uses the frame's size.
 - The LUT pass's 2D table, which three.js once used for WebGL 1.
 
 `LUT3dlLoader` and `LUTImageLoader` are ported. They read `.3dl` files and image strips into a 3D texture for `lut_pass`. See [More model files](More-model-files#3dl) and [LUT image](More-model-files#lut-image).
@@ -471,7 +511,7 @@ composer.add_pass(step^)
 
 ## Shader effects
 
-`postprocessing/shaders.mojo`. Fifteen of three.js's screen shaders, each run as a `ShaderPass` runs it, and its god-rays chain.
+`postprocessing/shaders.mojo`. Eighteen of three.js's screen shaders, each run as a `ShaderPass` runs it, and its god-rays chain.
 
 ```mojo
 composer.add_pass(render_pass())
@@ -497,8 +537,11 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 | `HORIZONTAL_TILT_SHIFT` and `VERTICAL_TILT_SHIFT` | `tilt_shift_pass(across=True, spread=1/512, focus=0.35)` | `HorizontalTiltShiftShader` and `VerticalTiltShiftShader` |
 | `EXPOSURE` | `exposure_pass(exposure=1)` | `ExposureShader` |
 | `GAMMA_CORRECTION` | `gamma_correction_pass()` | `GammaCorrectionShader` |
+| `TRIANGLE_BLUR` | `triangle_blur_pass(delta_u, delta_v)` | `TriangleBlurShader`, reading the frame as its `texture` |
+| `NORMAL_MAP` | `normal_map_pass(height, resolution_x, resolution_y)` | `NormalMapShader`, reading the frame's red as its `heightMap` |
+| `FOCUS` | `focus_pass(sample_distance, wave_factor, screen_width, screen_height)` | `FocusShader` |
 
-`effect_pixel` is one pixel of any of the fifteen, line for line with its fragment shader. A color transform reads the straight color of the pixel and premultiplies the result. The shift, the edge filters, the kaleidoscope, the mirror and the tilt shifts read their neighbors bilinear, clamped at the edges.
+`effect_pixel` is one pixel of any of the eighteen, line for line with its fragment shader. A color transform reads the straight color of the pixel and premultiplies the result. Some effects read their neighbors, bilinear and clamped at the edges. They are the shift, the edge filters, the kaleidoscope, the mirror, the tilt shifts, the triangle blur, the normal map and the focus.
 
 ### God rays
 
@@ -573,4 +616,4 @@ The outline meshes, their materials and their programs are added to the scene an
 
 The passes run on the host. `GpuComposer` runs the same composer with the frame on the GPU. See [GPU backend](GPU-backend#post-processing-on-the-gpu).
 
-The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA or TAA pass moves the camera's projection by the jitter, after the camera's own view offset. three.js adds the jitter to the view offset instead. The two agree when the view's `width` and `height` are the frame's size.
+The SSAA and TAA passes take a `clear_color` and a `clear_alpha`, three.js's `clearColor` and `clearAlpha`. Without them, each sample clears to the renderer's background. three.js clears to transparent black by default. An SSAA or TAA pass moves the camera's projection by the jitter, after the camera's own view offset. three.js adds the jitter to the view offset instead. The two agree when the view's `width` and `height` are the frame's size.
