@@ -1596,10 +1596,14 @@ struct _Compiler(Movable):
             raise self.error(
                 "the function " + called.name + " ends with no return"
             )
-        elif framed:
+        elif framed and result.node >= 0:
             # An early `return` gives its value where it ran.
             var answer = self.graph.close_call(NodeRef(result.node))
             result.node = answer.value
+        elif framed:
+            # A transform known only as a step: an early return of one is
+            # refused, so there is nothing to choose between.
+            _ = self.graph.close_call(self.graph.float(0))
         self.close()
         for index in range(len(hidden)):
             self.symbols.append(hidden[index].copy())
@@ -1881,13 +1885,15 @@ struct _Compiler(Movable):
         self.expect(";")
         if self.at != called.last or self.depth != 0:
             # An early return: nothing after it takes effect where it runs.
-            if called.result.is_matrix() or (
-                called.name == "main" and self.stage == _VERTEX
+            if (
+                called.result.is_matrix()
+                or (called.name == "main" and self.stage == _VERTEX)
+                or (called.result != _VOID and value.node < 0)
             ):
                 self.at -= 1
                 raise self.error(
-                    "a function that returns a matrix, and a vertex"
-                    " shader's main, cannot return early"
+                    "a function that returns a matrix or a transform, and a"
+                    " vertex shader's main, cannot return early"
                 )
             self.graph.Return(
                 NodeRef(value.node) if called.result != _VOID else self.graph.float(0)

@@ -1882,6 +1882,18 @@ def test_break_continue_and_an_early_return_are_read() raises:
         "void main() { gl_FragColor = vec4(pick() * vec3(1.0), 1.0); }\n",
         "a function that returns a matrix",
     )
+    # A transform known only as a step cannot return early either.
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "returns a matrix or a transform",
+        vertex=(
+            "vec4 place() {\n"
+            + "    if (true) { return modelViewMatrix * vec4(position, 1.0); }\n"
+            + "    return modelViewMatrix * vec4(position, 1.0);\n"
+            + "}\n"
+            + "void main() { gl_Position = projectionMatrix * place(); }\n"
+        ),
+    )
 
 
 def main() raises:
