@@ -97,6 +97,20 @@ A pixel in a gap is thrown away before the depth test, as three.js's `discard` t
 
 Only a `BASIC` material can be dashed, because only a line has a length to measure along. A dashed material on a mesh is refused when it is built. A [wireframe](Materials#wireframe) cannot be dashed either: its edges are paired from a surface and carry no distance along them. A gap with no dash before it would draw nothing, and is refused too.
 
+## Conditional lines
+
+A conditional line draws each segment only where its two control points lie on one side of it on screen. It is three.js's `ConditionalLineSegments` with an `LDrawConditionalLineMaterial`. An LDraw model uses it for the outline of a curved surface: the outline shows only where the surface turns away.
+
+```mojo
+var line = Line(shape, material, node, mode=SEGMENTS, conditional=True)
+```
+
+The geometry holds three attributes beside the positions, one item a vertex: `control0` and `control1`, the control points, and `direction`, the segment's direction. The mode must be `SEGMENTS`.
+
+`conditional_discard` in `objects/line.mojo` is three.js's vertex shader. For each vertex, it puts the segment through the vertex, with its end one direction further. It measures each control point from that end, on the screen. The flag is one when the two lie on opposite sides, and zero otherwise. Each vertex computes its own flag, so the two ends of a segment can disagree.
+
+The flag is carried along the segment as a dash is. The line is drawn as a dash of one half and a gap of one. So a pixel whose blended flag is past one half is thrown away, as three.js's shader discards it. Both backends draw dashes by one rule, so they draw conditional lines by it too. A conditional line cannot also be dashed. A light's view draws it whole, as three.js's depth material does.
+
 ## The rule
 
 A line is walked along whichever axis it covers more of. That is its major axis. It lights exactly one pixel in each row or column of that axis.

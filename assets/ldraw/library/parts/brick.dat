@@ -1,0 +1,19 @@
+0 Brick 1 x 1
+0 Name: brick.dat
+0 Author: Tester
+0 !LDRAW_ORG Part UPDATE 2026-01
+0 !CATEGORY Brick
+0 !KEYWORDS small, cube
+0 !KEYWORDS square
+0 BFC CERTIFY CCW
+1 16 0 0 0 1 0 0 0 1 0 0 0 1 s/brick_s01.dat
+1 4 0 -1 0 1 0 0 0 1 0 0 0 1 48/tri.dat
+4 16 1 -2 1 1 0 1 1 0 -1 1 -2 -1
+4 16 -1 -2 1 -1 -2 -1 -1 0 -1 -1 0 1
+2 24 1 -2 1 1 0 1
+5 24 1 0 1 1 -2 1 2 0 1 1 0 2
+0 BFC NOCLIP
+3 16 0 -2 0 1 -2 1 -1 -2 1
+0 BFC CLIP CW
+3 16 0 0 0 1 0 1 -1 0 1
+0 BFC UNKNOWN

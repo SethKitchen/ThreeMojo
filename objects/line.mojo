@@ -74,6 +74,21 @@ from core.buffer_attribute import BufferAttribute
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
+from math.matrix4 import Matrix4
+from math.vector3 import Vector3
+from std.math import sqrt
+
+# The attributes a conditional line reads at each vertex: its two control
+# points, and the direction of its segment, as three.js's LDraw loader
+# names them.
+comptime CONTROL0 = "control0"
+comptime CONTROL1 = "control1"
+comptime DIRECTION = "direction"
+# A conditional line's flag is drawn as a dash: a pixel whose flag, blended
+# along the segment, is past one half is left out, as three.js's shader
+# discards it. So the dash is one half long and the gap after it one.
+comptime CONDITIONAL_DASH = Float32(0.5)
+comptime CONDITIONAL_GAP = Float32(1.0)
 
 
 @fieldwise_init
@@ -189,6 +204,12 @@ struct Line(ImplicitlyCopyable):
     # draws every receiver into one. See `Renderer.shadow_maps`.
     var cast_shadow: Bool
     var receive_shadow: Bool
+    # Whether each segment is drawn only where its two control points lie
+    # on one side of it on screen: three.js's `ConditionalLineSegments`
+    # with an `LDrawConditionalLineMaterial`. Its geometry carries
+    # `CONTROL0`, `CONTROL1` and `DIRECTION`, and its mode is `SEGMENTS`.
+    # See `conditional_discard`.
+    var conditional: Bool
 
     def __init__(
         out self,
@@ -200,6 +221,7 @@ struct Line(ImplicitlyCopyable):
         frustum_culled: Bool = True,
         cast_shadow: Bool = False,
         receive_shadow: Bool = False,
+        conditional: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -221,9 +243,13 @@ struct Line(ImplicitlyCopyable):
                 three.js's `castShadow`. Off unless said otherwise.
             receive_shadow: Whether the line is a receiver, three.js's
                 `receiveShadow`. Off unless said otherwise.
+            conditional: Whether each segment is drawn only where its
+                control points lie on one side of it, three.js's
+                `ConditionalLineSegments`. Off unless said otherwise.
 
         Raises:
-            Error: If any id is negative, or the mode is not a named one.
+            Error: If any id is negative, the mode is not a named one, or
+                a conditional line's mode is not `SEGMENTS`.
         """
         if node.value < 0:
             raise Error("A line must name a scene node")
@@ -233,6 +259,10 @@ struct Line(ImplicitlyCopyable):
             raise Error("A line must name a material")
         if not mode.is_valid():
             raise Error("A line needs a mode that exists")
+        if conditional and not (mode == SEGMENTS):
+            raise Error(
+                "A conditional line is a list of sticks: its mode is SEGMENTS"
+            )
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -240,6 +270,7 @@ struct Line(ImplicitlyCopyable):
         self.frustum_culled = frustum_culled
         self.cast_shadow = cast_shadow
         self.receive_shadow = receive_shadow
+        self.conditional = conditional
 
     def segment_count(self, vertices: Int) raises -> Int:
         """Return how many segments this line makes of `vertices` points.
@@ -254,6 +285,67 @@ struct Line(ImplicitlyCopyable):
             Error: If the count is negative, or is odd under `SEGMENTS`.
         """
         return segment_count(self.mode, vertices)
+
+
+def _on_screen(mvp: Matrix4, point: Vector3) -> SIMD[DType.float32, 2]:
+    """Return a point's x and y in clip space over its w, as the shader
+    divides them."""
+    ref e = mvp.elements
+    var x = e[0] * point.x + e[4] * point.y + e[8] * point.z + e[12]
+    var y = e[1] * point.x + e[5] * point.y + e[9] * point.z + e[13]
+    var w = e[3] * point.x + e[7] * point.y + e[11] * point.z + e[15]
+    return SIMD[DType.float32, 2](x / w, y / w)
+
+
+def _unit(v: SIMD[DType.float32, 2]) -> SIMD[DType.float32, 2]:
+    """Return GLSL's `normalize`: no guard for a vector of no length."""
+    return v / sqrt(v[0] * v[0] + v[1] * v[1])
+
+
+def _sign(x: Float32) -> Float32:
+    """Return GLSL's `sign`, and zero for NaN."""
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
+def conditional_discard(
+    mvp: Matrix4,
+    position: Vector3,
+    direction: Vector3,
+    control0: Vector3,
+    control1: Vector3,
+) -> Float32:
+    """Return a vertex's `discardFlag` of three.js's
+    `LDrawConditionalLineMaterial`: one if the segment's two control points
+    lie on opposite sides of it on screen, else zero.
+
+    The shader puts the segment through the vertex and its end one
+    `direction` further, and measures each control point from that end.
+    Each vertex does this for itself, so the two ends of a segment can
+    disagree, and the flag is blended between them.
+
+    Args:
+        mvp: The projection, times the view, times the line's world.
+        position: The vertex.
+        direction: Its segment's direction, three.js's `direction`.
+        control0: The first control point.
+        control1: The second.
+
+    Returns:
+        One or zero.
+    """
+    var p0 = _on_screen(mvp, position)
+    var p1 = _on_screen(mvp, position + direction)
+    var dir = p1 - p0
+    var norm = _unit(SIMD[DType.float32, 2](-dir[1], dir[0]))
+    var c0 = _unit(_on_screen(mvp, control0) - p1)
+    var c1 = _unit(_on_screen(mvp, control1) - p1)
+    var d0 = norm[0] * c0[0] + norm[1] * c0[1]
+    var d1 = norm[0] * c1[0] + norm[1] * c1[1]
+    return 1.0 if _sign(d0) != _sign(d1) else 0.0
 
 
 def line_distances(

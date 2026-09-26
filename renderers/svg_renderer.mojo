@@ -717,7 +717,7 @@ def _dot(a: Vec, b: Vec) -> Float64:
 def _unit(v: Vec) -> Vec:
     """Return a direction scaled to length one, three.js's `normalize`."""
     var length = sqrt(_dot(v, v))
-    return v * (1 / (length if length != 0 else 1))
+    return v * (1 / (length if length != 0 and length == length else 1))
 
 
 def _light(scene: Scene, light: Light, center: Vec, normal: Vec) raises -> Vec:
