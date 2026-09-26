@@ -194,7 +194,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_WORLEY.value
+            and self.value <= NODE_FRONT_FACING.value
         )
 
 
@@ -325,6 +325,12 @@ comptime NODE_NOISE_VEC3 = NodeKind(92)
 comptime NODE_CELL_NOISE = NodeKind(93)
 comptime NODE_CELL_NOISE_VEC3 = NodeKind(94)
 comptime NODE_WORLEY = NodeKind(95)
+# Which way the fragment's triangle faces, one or zero. Its immediate picks
+# the rule: zero for TSL's `frontFacing`, false where the triangle is seen
+# from its back; one for GLSL's `gl_FrontFacing` in three.js's WebGL
+# renderer, which turns a `BACK_SIDE` material's front face round. See
+# `NodeSource.seen_from_behind`.
+comptime NODE_FRONT_FACING = NodeKind(96)
 
 
 @fieldwise_init
@@ -509,6 +515,7 @@ def _is_attribute(kind: NodeKind) -> Bool:
         (kind.value >= NODE_UV.value and kind.value <= NODE_VERTEX_COLOR.value)
         or kind == NODE_LIT
         or kind == NODE_FRAG_COORD
+        or kind == NODE_FRONT_FACING
     )
 
 
@@ -1107,6 +1114,42 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_FRAG_COORD, NODE_VEC4)
+
+    def front_facing(mut self) -> NodeRef:
+        """Return one where the fragment's triangle is seen from its front
+        and zero where it is seen from its back, a `float`, TSL's
+        `frontFacing`. Only a fragment reads it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_FRONT_FACING, NODE_FLOAT)
+
+    def face_direction(mut self) raises -> NodeRef:
+        """Return one where the fragment's triangle is seen from its front
+        and minus one where it is seen from its back, TSL's
+        `faceDirection`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: Never: the operands are floats.
+        """
+        return self.sub(
+            self.mul(self.front_facing(), self.float(2)), self.float(1)
+        )
+
+    def gl_front_facing(mut self) -> NodeRef:
+        """Return GLSL's `gl_FrontFacing` as three.js's WebGL renderer
+        gives it, one or zero: as `front_facing`, except that a
+        `BACK_SIDE` material turns the front face round, so it is one on
+        every face such a material draws.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_FRONT_FACING, NODE_FLOAT, value=Lanes(1))
 
     def time(mut self) -> NodeRef:
         """Return the frame's time in seconds, a `float`, three.js's `time`.
@@ -4783,6 +4826,26 @@ trait NodeSource:
         """
         ...
 
+    def seen_from_behind(self) -> Bool:
+        """Return whether the fragment's triangle is seen from its back,
+        where TSL's `frontFacing` is false. A source with no triangle is
+        seen from its front.
+
+        Returns:
+            Whether the triangle faces away.
+        """
+        return False
+
+    def flip_sided(self) -> Bool:
+        """Return whether the fragment's triangle has a `BACK_SIDE`
+        material, which three.js's WebGL renderer draws with the front face
+        turned round. A source with no triangle has none.
+
+        Returns:
+            Whether the material is `BACK_SIDE`.
+        """
+        return False
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's attributes, as the triangle carries them.
 
@@ -5089,6 +5152,12 @@ def _leaf[
         return _lanes(inputs.lit)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
+    if op == NODE_FRONT_FACING.value:
+        var behind = source.seen_from_behind()
+        if immediate != 0:
+            # WebGL's front face turns round under `BACK_SIDE`.
+            behind = behind != source.flip_sided()
+        return Lanes(0 if behind else 1)
     # An attribute, of the fragment or of the context the node runs in.
     var given = inputs
     if context != AT_FRAGMENT.value:
@@ -5723,8 +5792,13 @@ def run_nodes[
         var z = registers[third]
         var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
         written = Int(source.word(at + INSTRUCTION_DEST))
-        # The leaves, and `gl_FragCoord`, a leaf numbered after them.
-        if op < NODE_ADD.value or op == NODE_FRAG_COORD.value:
+        # The leaves, and `gl_FragCoord` and the facing, leaves numbered
+        # after them.
+        if (
+            op < NODE_ADD.value
+            or op == NODE_FRAG_COORD.value
+            or op == NODE_FRONT_FACING.value
+        ):
             registers[written] = _leaf(source, op, x, immediate, third, inputs)
         else:
             registers[written] = _operation(source, op, x, y, z, immediate)

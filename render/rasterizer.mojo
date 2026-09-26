@@ -1075,6 +1075,12 @@ struct RasterVertex(ImplicitlyCopyable):
     # The frames the environment and the normal map are read in. Set after
     # construction, by `Renderer.prepare`; the defaults are three.js's.
     var frames: TextureFrames
+    # Whether the triangle is seen from its back, and whether its material
+    # is `BACK_SIDE`, for a node program's facing. Per-triangle, read from
+    # the first corner. Set after construction, by `Renderer.prepare`; the
+    # default is a front seen from the front.
+    var seen_from_behind: Bool
+    var flip_sided: Bool
 
     def __init__(
         out self,
@@ -1237,6 +1243,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.layers = layers
         self.nodes = nodes
         self.frames = TextureFrames()
+        self.seen_from_behind = False
+        self.flip_sided = False
 
 
 @fieldwise_init
@@ -4578,6 +4586,14 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.depth * 0.5 + 0.5,
             1,
         )
+
+    def seen_from_behind(self) -> Bool:
+        """Return whether the triangle is seen from its back."""
+        return self.a[].seen_from_behind
+
+    def flip_sided(self) -> Bool:
+        """Return whether the triangle's material is `BACK_SIDE`."""
+        return self.a[].flip_sided
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's coordinates, world position, normal and

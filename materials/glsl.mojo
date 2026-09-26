@@ -1137,6 +1137,11 @@ struct _Compiler(Movable):
                 _ATTRIBUTE,
                 _plain(_VEC4, self.graph.frag_coord().value),
             )
+            self.builtin(
+                "gl_FrontFacing",
+                _ATTRIBUTE,
+                _plain(_BOOL, self.graph.gl_front_facing().value),
+            )
             return
         self.builtin("modelMatrix", _TRANSFORM, _tagged(_MAT4, -1, _MODEL, -1))
         self.builtin(

@@ -270,6 +270,13 @@ def test_a_fragment_reads_where_it_is() raises:
     assert_equal(here[1], 20.5)
     assert_equal(here[2], 0.75)
     assert_equal(value("vec3(gl_FragCoord.w)")[0], 1)
+    # The made-up triangle is seen from its front.
+    assert_equal(number("gl_FrontFacing ? 1.0 : 0.0"), 1)
+    refused(
+        WHITE,
+        "gl_FrontFacing is outside the subset",
+        "void main() { gl_Position = vec4(gl_FrontFacing ? 1.0 : 0.0); }",
+    )
     # One pixel to the next, as the neighbors are.
     var step = value(
         "vec3(dFdx(gl_FragCoord.x), dFdy(gl_FragCoord.y), dFdx(gl_FragCoord.y))"

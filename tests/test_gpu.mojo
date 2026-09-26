@@ -11245,6 +11245,52 @@ def test_both_backends_run_node_control_flow_and_matrices_alike() raises:
         assert_true(count_mismatches(gpu, plain) > 50)
 
 
+def test_both_backends_read_a_triangles_facing_alike() raises:
+    # TSL's frontFacing and GLSL's gl_FrontFacing ride in the triangle's
+    # state: the kernel must read them as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read the facing alike"):
+        return
+    var graph = NodeGraph()
+    graph.set_output(
+        NODES_COLOR,
+        graph.join(
+            [
+                graph.front_facing(),
+                graph.gl_front_facing(),
+                graph.mul(graph.face_direction(), graph.float(-1)),
+            ]
+        ),
+    )
+    var textures = TextureStore()
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var lighting = phong_lighting()
+    for flip in [False, True]:
+        var corners = with_nodes(
+            phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+        )
+        # The first triangle is seen from behind, the second from the front.
+        corners[0].seen_from_behind = True
+        corners[0].flip_sided = flip
+        corners[3].flip_sided = flip
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, SHADE_LIT, textures, lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_LIT,
+            textures,
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=0), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a

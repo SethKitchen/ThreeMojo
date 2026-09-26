@@ -2382,6 +2382,9 @@ struct _Paint(ImplicitlyCopyable):
             one = _turned_around(one)
             two = _turned_around(two)
             three = _turned_around(three)
+        # What a node program's facing reads, from the first corner.
+        one.seen_from_behind = away
+        one.flip_sided = self.side == BACK_SIDE
         corners.append(one)
         corners.append(two)
         corners.append(three)

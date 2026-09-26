@@ -660,7 +660,10 @@ comptime STATE_CLEARCOAT_ROUGHNESS_MAP = STATE_NODES + 4
 comptime STATE_CLEARCOAT_NORMAL_MAP = STATE_NODES + 5
 # The triangle's normal map type's value; see `TextureFrames`.
 comptime STATE_NORMAL_MAP_TYPE = STATE_CLEARCOAT_NORMAL_MAP + 1
-comptime STATE_PER_TRIANGLE = STATE_NORMAL_MAP_TYPE + 1
+# The triangle's facing: one if it is seen from its back, plus two if its
+# material is `BACK_SIDE`; see `RasterVertex.seen_from_behind`.
+comptime STATE_FACING = STATE_NORMAL_MAP_TYPE + 1
+comptime STATE_PER_TRIANGLE = STATE_FACING + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -2996,8 +2999,8 @@ def triangle_state(
         iridescence, film thickness and anisotropy map ids, then where its
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
-        ids, then the normal map type's value, per triangle, from its
-        first corner.
+        ids, then the normal map type's value, then its facing, per
+        triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -3045,6 +3048,12 @@ def triangle_state(
         state.append(Int32(layers.clearcoat_roughness_map.value))
         state.append(Int32(layers.clearcoat_normal_map.value))
         state.append(Int32(corners[triangle * 3].frames.normal_map_type.value))
+        state.append(
+            Int32(
+                (1 if corners[triangle * 3].seen_from_behind else 0)
+                + (2 if corners[triangle * 3].flip_sided else 0)
+            )
+        )
     return state^
 
 
@@ -3551,6 +3560,8 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     # The target's height, and the fragment's depth, for `frag_coord`.
     var height: Int
     var depth: Float32
+    # The triangle's facing, as `STATE_FACING` holds it.
+    var facing: Int
 
     def __init__(
         out self,
@@ -3573,10 +3584,12 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         py: Int,
         height: Int,
         depth: Float32,
+        facing: Int,
     ):
         """Read the program that starts `start` floats into `fog`, at the
         sample (`px`, `py`) of a target `height` pixels high, at the depth
-        `depth` in normalized device space."""
+        `depth` in normalized device space, on a triangle whose facing is
+        `facing`, as `STATE_FACING` holds it."""
         self.fog = fog
         self.start = start
         self.texels = texels
@@ -3596,6 +3609,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         self.py = py
         self.height = height
         self.depth = depth
+        self.facing = facing
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -3672,6 +3686,14 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             self.depth * 0.5 + 0.5,
             1,
         )
+
+    def seen_from_behind(self) -> Bool:
+        """Return whether the triangle is seen from its back."""
+        return self.facing & 1 != 0
+
+    def flip_sided(self) -> Bool:
+        """Return whether the triangle's material is `BACK_SIDE`."""
+        return self.facing & 2 != 0
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's coordinates, world position, normal and
@@ -4428,6 +4450,11 @@ def rasterize_kernel(
                 py,
                 Int(height),
                 z,
+                Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_FACING
+                    ]
+                ),
             )
             # Whether the graph can throw the fragment away, and its depth
             # in place of the plane's, as `rasterize_shaded` asks both.

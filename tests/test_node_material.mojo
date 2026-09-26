@@ -34,6 +34,8 @@ from materials.material import (
     STANDARD,
     TOON,
     BACK_SIDE,
+    DOUBLE_SIDE,
+    FRONT_SIDE,
     Material,
     Side,
     points_material,
@@ -666,6 +668,33 @@ def test_a_fragment_knows_its_pixel_and_its_neighbors() raises:
     assert_equal(seen.r, 255)
     assert_equal(seen.g, 255)
     assert_equal(seen.b, 0)
+
+
+def test_a_fragment_knows_which_way_its_triangle_faces() raises:
+    # TSL's frontFacing and faceDirection, and GLSL's gl_FrontFacing, which
+    # three.js's WebGL renderer turns round under BACK_SIDE.
+    var graph = NodeGraph()
+    var direction = graph.add(
+        graph.mul(graph.face_direction(), graph.float(0.5)), graph.float(0.5)
+    )
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.front_facing(), graph.gl_front_facing(), direction]),
+    )
+    var sides = [FRONT_SIDE, DOUBLE_SIDE, DOUBLE_SIDE, BACK_SIDE]
+    var heights = [Float32(4), Float32(4), Float32(-4), Float32(-4)]
+    var greens = [255, 255, 0, 255]
+    for index in range(4):
+        var assets = Assets()
+        var id = assets.programs.add(graph.compile())
+        var scene = a_scene(assets, shader_material(id, side=sides[index]))
+        var camera = a_camera()
+        camera.place(Vector3(0, 0, heights[index]), Vector3(0, 0, 0))
+        var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, camera))
+        var front = 255 if heights[index] > 0 else 0
+        assert_equal(Int(seen.r), front)
+        assert_equal(Int(seen.g), greens[index])
+        assert_equal(Int(seen.b), front)
 
 
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:
