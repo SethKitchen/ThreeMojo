@@ -1898,7 +1898,8 @@ def test_matrices_are_built_indexed_and_inverted() raises:
         "a matrix is indexed by a constant int",
     )
     refused_statement(
-        "vec3 v = transpose(vec3(1.0));", "transpose() takes one mat3 or mat4"
+        "vec3 v = transpose(vec3(1.0));",
+        "transpose() takes one mat2, mat3 or mat4",
     )
     refused_statement(
         "mat4 m = mat4(viewMatrix);", "cannot make a mat4 of a mat4"
@@ -1906,6 +1907,105 @@ def test_matrices_are_built_indexed_and_inverted() raises:
     refused_statement(
         "vec4 c = viewMatrix[0];", "a transform's columns are outside"
     )
+
+
+def test_a_mat2_is_a_vec4_of_its_columns() raises:
+    # A quarter turn: its columns are (0, 1) and (-1, 0).
+    var r = "mat2 r = mat2(0.0, 1.0, -1.0, 0.0);\n"
+    assert_lanes(
+        value("vec3(r * vec2(1.0, 2.0), 0.0)", "", before_main=r), -2, 1, 0
+    )
+    assert_lanes(
+        value("vec3(vec2(1.0, 2.0) * r, 0.0)", "", before_main=r), 2, -1, 0
+    )
+    # Two quarter turns are a half turn.
+    assert_lanes(
+        value("vec3((r * r)[0], (r * r)[1].y)", "", before_main=r), -1, 0, -1
+    )
+    assert_lanes(
+        value("vec3(determinant(r), transpose(r)[0])", "", before_main=r),
+        1,
+        0,
+        -1,
+    )
+    assert_lanes(
+        value("vec3(inverse(mat2(2.0))[0], inverse(mat2(2.0))[1].y)"),
+        0.5,
+        0,
+        0.5,
+    )
+    # Each component, with a mat2 or a float.
+    assert_lanes(
+        value("vec3((r + mat2(1.0))[0], (r * 2.0)[1].x)", "", before_main=r),
+        1,
+        1,
+        -2,
+    )
+    assert_lanes(
+        value("vec3((-r)[0], (r / 2.0 - r)[0].y)", "", before_main=r),
+        0,
+        -1,
+        -0.5,
+    )
+    assert_lanes(
+        value("vec3((2.0 * r)[0], float(r == mat2(r)))", "", before_main=r),
+        0,
+        2,
+        1,
+    )
+    # A column, and a component of one, is assigned through the vec4.
+    var w = "mat2 w = mat2(1.0); w[1] = vec2(3.0, 4.0); w[0].y = 5.0;\n"
+    assert_lanes(value("vec3(w[0], w[1].y)", "", before_main=w), 1, 5, 4)
+    # Into a mat3 and a mat4 and back, and a vector of its components.
+    var sizes = r + "mat3 big = mat3(r); mat4 huge = mat4(r);\n"
+    assert_lanes(
+        value("big * vec3(1.0, 2.0, 3.0)", "", before_main=sizes), -2, 1, 3
+    )
+    assert_lanes(
+        value("(huge * vec4(1.0, 2.0, 3.0, 4.0)).xyw", "", before_main=sizes),
+        -2,
+        1,
+        4,
+    )
+    assert_lanes(
+        value(
+            "vec3(mat2(huge) * vec2(1.0, 2.0), mat2(big)[1].x)",
+            "",
+            before_main=sizes,
+        ),
+        -2,
+        1,
+        -1,
+    )
+    assert_lanes(value("vec4(r).yzw", "", before_main=r), 1, -1, 0)
+    # A mat2 uniform is set as a Vector4 of its columns.
+    var program = compile_shader_material(
+        VERTEX,
+        "uniform mat2 turn;\n"
+        + "void main() { gl_FragColor = vec4(turn * vec2(1.0, 2.0), 0.0, 1.0); }\n",
+    )
+    program.set_uniform("turn", Vector4(0, 1, -1, 0))
+    assert_lanes(run(program), -2, 1, 0)
+    refused_statement(
+        "mat2 m = mat2(1.0); vec3 v = m * vec3(1.0);",
+        "cannot use * on a mat2 and a vec3",
+    )
+    refused_statement(
+        "mat2 m = mat2(mat2(1.0), 1.0);", "a mat2 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat3 m = mat3(mat2(1.0), 1.0);", "a mat3 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat2 m = mat2(1.0); vec2 c = m[2];", "the index is outside the mat2"
+    )
+    refused_statement(
+        "mat2 m = mat2(viewMatrix);", "cannot make a mat2 of a mat4"
+    )
+    refused_statement(
+        "float x = mat2(1.0).x;", "only a vector has components to pick"
+    )
+    refused_statement("mat2 m = !mat2(1.0);", "! takes a bool, not a mat2")
 
 
 def test_break_continue_and_an_early_return_are_read() raises:

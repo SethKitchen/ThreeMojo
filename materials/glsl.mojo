@@ -77,10 +77,10 @@ comptime _KEYWORDS = (
     " attribute const uniform varying layout centroid flat smooth break"
     " continue do for while switch case default if else in out inout true"
     " false invariant discard return struct precision highp mediump lowp"
-    " void float int bool vec2 vec3 vec4 mat3 mat4 sampler2D "
+    " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D "
 )
 comptime _REFUSED_TYPES = (
-    " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2 mat2x2"
+    " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
     " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
     " usampler2D struct "
@@ -500,15 +500,17 @@ struct _Lexer(Movable):
 @fieldwise_init
 struct _Type(Equatable, ImplicitlyCopyable, Writable):
     """A GLSL type of the subset: `void`, `bool`, `int`, `float`, `vec2` to
-    `vec4`, `mat3`, `mat4` or `sampler2D`. A float's or a vector's value is
-    its width, as `ValueType` counts it."""
+    `vec4`, `mat2`, `mat3`, `mat4` or `sampler2D`. A float's or a vector's
+    value is its width, as `ValueType` counts it. A `mat2` is held as a
+    `vec4` of its two columns, so it is four wide."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the ten types."""
+        """Return True if this is one of the eleven types."""
         return (
             (self.value >= 0 and self.value <= 6)
+            or self.value == 8
             or self.value == 9
             or self.value == 16
             or self.value == 32
@@ -524,6 +526,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "int"
         if self.value == 6:
             return "bool"
+        if self.value == 8:
+            return "mat2"
         if self.value == 9:
             return "mat3"
         if self.value == 16:
@@ -534,7 +538,9 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
 
     def width(self) -> Int:
         """Return how many components a value of this type has: one for a
-        `bool` or an `int`."""
+        `bool` or an `int`, and four for a `mat2`."""
+        if self.value == 8:
+            return 4
         return 1 if self.is_scalar() else self.value
 
     def is_scalar(self) -> Bool:
@@ -559,8 +565,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
 
     def holds(self) -> Bool:
         """Return True for what a local variable can hold: a `bool`, an
-        `int`, a `float` or a vector."""
-        return self.value >= 1 and self.value <= 6
+        `int`, a `float`, a vector or a `mat2`."""
+        return (self.value >= 1 and self.value <= 6) or self.value == 8
 
 
 comptime _VOID = _Type(0)
@@ -570,6 +576,7 @@ comptime _VEC3 = _Type(3)
 comptime _VEC4 = _Type(4)
 comptime _TINT = _Type(5)
 comptime _BOOL = _Type(6)
+comptime _MAT2 = _Type(8)
 comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
@@ -592,6 +599,8 @@ def _type_named(name: String) -> _Type:
         return _TINT
     if name == "bool":
         return _BOOL
+    if name == "mat2":
+        return _MAT2
     if name == "mat3":
         return _MAT3
     if name == "mat4":
@@ -1315,7 +1324,8 @@ struct _Compiler(Movable):
             node = self.graph.uniform(name, Vector2(0, 0))
         elif type == _VEC3:
             node = self.graph.uniform(name, Vector3(0, 0, 0))
-        elif type == _VEC4:
+        elif type == _VEC4 or type == _MAT2:
+            # A mat2 is set as a Vector4 of its two columns.
             node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
         else:
             node = self.graph.uniform(name, Float32(0))
@@ -2280,6 +2290,8 @@ struct _Compiler(Movable):
         var b = right.type
         if mark == "%" and (a != _TINT or b != _TINT):
             raise self.error("% takes two ints: write mod() for floats")
+        if a == _MAT2 or b == _MAT2:
+            return self.mat2_arithmetic(mark, left, right)
         if a.is_matrix() or b.is_matrix():
             return self.matrix_product(mark, left, right)
         var numeric = (a.is_float() and b.is_float()) or (
@@ -2317,6 +2329,71 @@ struct _Compiler(Movable):
             value.known = True
             value.number = _fold(mark, left.number, right.number, type == _TINT)
         return value^
+
+    def mat2_arithmetic(
+        mut self, mark: String, left: _Value, right: _Value
+    ) raises -> _Value:
+        """Return an operation on a `mat2`, which a `vec4` of its columns
+        holds: a product with a `mat2` or a `vec2`, or `+`, `-`, `*` and
+        `/` of each component with a `mat2` or a `float`.
+
+        Raises:
+            Error: If the other operand is none of those.
+        """
+        var a = left.type
+        var b = right.type
+        var x = self.node(left)
+        var y = self.node(right)
+        if mark == "*" and a == _MAT2 and b == _MAT2:
+            var both = self.graph.join(
+                [
+                    self.mat2_times(x, self.graph.swizzle(y, "xy")),
+                    self.mat2_times(x, self.graph.swizzle(y, "zw")),
+                ]
+            )
+            return self.derived(_MAT2, both, left, right)
+        if mark == "*" and a == _MAT2 and b == _VEC2:
+            return self.derived(_VEC2, self.mat2_times(x, y), left, right)
+        if mark == "*" and a == _VEC2 and b == _MAT2:
+            var row = self.graph.join(
+                [
+                    self.graph.dot(x, self.graph.swizzle(y, "xy")),
+                    self.graph.dot(x, self.graph.swizzle(y, "zw")),
+                ]
+            )
+            return self.derived(_VEC2, row, left, right)
+        var other = b if a == _MAT2 else a
+        if other != _MAT2 and other != _FLOAT:
+            raise self.error(
+                "cannot use "
+                + mark
+                + " on a "
+                + a.name()
+                + " and a "
+                + b.name()
+            )
+        var node: NodeRef
+        if mark == "+":
+            node = self.graph.add(x, y)
+        elif mark == "-":
+            node = self.graph.sub(x, y)
+        elif mark == "*":
+            node = self.graph.mul(x, y)
+        else:
+            node = self.graph.div(x, y)
+        return self.derived(_MAT2, node, left, right)
+
+    def mat2_times(mut self, m: NodeRef, v: NodeRef) raises -> NodeRef:
+        """Return a `mat2` times a `vec2`: each column times its component,
+        summed."""
+        return self.graph.add(
+            self.graph.mul(
+                self.graph.swizzle(m, "xy"), self.graph.swizzle(v, "x")
+            ),
+            self.graph.mul(
+                self.graph.swizzle(m, "zw"), self.graph.swizzle(v, "y")
+            ),
+        )
 
     def matrix_product(
         mut self, mark: String, left: _Value, right: _Value
@@ -2435,7 +2512,7 @@ struct _Compiler(Movable):
             return self.derived(
                 _BOOL, self.graph.logical_not(NodeRef(value.node)), value, value
             )
-        if not value.type.is_number():
+        if not value.type.is_number() and value.type != _MAT2:
             raise self.error(
                 "cannot use " + mark + " on a " + value.type.name()
             )
@@ -2468,6 +2545,16 @@ struct _Compiler(Movable):
                 if value.type.is_matrix():
                     value = self.column(value, index)
                     continue
+                if value.type == _MAT2:
+                    # A column is two components of the vec4, and can be
+                    # assigned as they can.
+                    self.check_column(value.type, 2, index)
+                    var columns = value.copy()
+                    columns.type = _VEC4
+                    value = self.swizzle(
+                        columns, "xy" if index.number == 0 else "zw"
+                    )
+                    continue
                 if not value.type.is_vector():
                     raise self.error(
                         "only a vector or a matrix can be indexed in this"
@@ -2497,10 +2584,7 @@ struct _Compiler(Movable):
                 "a transform's columns are outside the subset"
             )
         var size = 3 if value.type == _MAT3 else 4
-        if index.type != _TINT or not index.known:
-            raise self.error("a matrix is indexed by a constant int")
-        if index.number < 0 or index.number >= Float64(size):
-            raise self.error("the index is outside the " + value.type.name())
+        self.check_column(value.type, size, index)
         var out = _plain(
             _VEC3 if size == 3 else _VEC4,
             self.graph.column(
@@ -2510,6 +2594,20 @@ struct _Compiler(Movable):
         out.constant = value.constant
         out.local = value.local
         return out^
+
+    def check_column(
+        mut self, type: _Type, size: Int, index: _Value
+    ) raises:
+        """Refuse a matrix index that is not a constant int below `size`.
+
+        Raises:
+            Error: If the index is not a constant int, or is outside the
+                matrix.
+        """
+        if index.type != _TINT or not index.known:
+            raise self.error("a matrix is indexed by a constant int")
+        if index.number < 0 or index.number >= Float64(size):
+            raise self.error("the index is outside the " + type.name())
 
     def swizzle(mut self, value: _Value, letters: String) raises -> _Value:
         """Return a vector's components picked by letters of one of the sets
@@ -2696,6 +2794,16 @@ struct _Compiler(Movable):
             )
         if type.is_matrix():
             return self.construct_matrix(type, args)
+        var alone = len(args) == 1 and (
+            args[0].type.is_matrix() or args[0].type.is_scalar()
+        )
+        if type == _MAT2 and alone:
+            return self.mat2_of(args[0])
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type == _MAT2 and len(args) > 1:
+                raise self.error(
+                    "a " + type.name() + " is made of one matrix alone"
+                )
         if not type.holds():
             raise self.error(
                 "a " + type.name() + " constructor is outside the subset"
@@ -2759,6 +2867,31 @@ struct _Compiler(Movable):
             value.point = args[0].node
         return value^
 
+    def mat2_of(mut self, arg: _Value) raises -> _Value:
+        """Return `mat2(s)`, `s` down the diagonal, or `mat2(m)`, the upper
+        left of a `mat3` or a `mat4`.
+
+        Raises:
+            Error: If the matrix is one of three.js's transforms.
+        """
+        if arg.tag != _PLAIN:
+            raise self.error("cannot make a mat2 of a " + arg.type.name())
+        var node = self.node(arg)
+        var value = _plain(_MAT2, -1)
+        value.constant = arg.constant
+        value.local = arg.local
+        if arg.type.is_scalar():
+            var zero = self.graph.float(0)
+            value.node = self.graph.join([node, zero, zero, node]).value
+            return value^
+        value.node = self.graph.join(
+            [
+                self.graph.swizzle(self.graph.column(node, 0), "xy"),
+                self.graph.swizzle(self.graph.column(node, 1), "xy"),
+            ]
+        ).value
+        return value^
+
     def construct_matrix(
         mut self, type: _Type, args: List[_Value]
     ) raises -> _Value:
@@ -2802,9 +2935,28 @@ struct _Compiler(Movable):
                     columns.append(self.graph.vec4(0, 0, 0, 1))
             value.node = self._matrix_of(columns).value
             return value^
+        if len(args) == 1 and args[0].type == _MAT2:
+            # A mat2 in the upper left of the identity.
+            var held = NodeRef(self.node(args[0]).value)
+            var pad = self.graph.float(0)
+            for c in range(size):  # pragma: no branch
+                var lanes = List[NodeRef]()
+                if c < 2:
+                    lanes.append(
+                        self.graph.swizzle(held, "xy" if c == 0 else "zw")
+                    )
+                    lanes.append(pad)
+                    if size == 4:
+                        lanes.append(pad)
+                else:
+                    for r in range(size):  # pragma: no branch
+                        lanes.append(self.graph.float(Float32(1 if r == c else 0)))
+                columns.append(self.graph.join(lanes))
+            value.node = self._matrix_of(columns).value
+            return value^
         var parts = List[NodeRef]()
         for index in range(len(args)):  # pragma: no branch
-            if args[index].type.is_matrix():
+            if args[index].type.is_matrix() or args[index].type == _MAT2:
                 raise self.error(
                     "a " + type.name() + " is made of one matrix alone"
                 )
@@ -2840,6 +2992,26 @@ struct _Compiler(Movable):
             columns.append(self.graph.join(lanes))
         value.node = self._matrix_of(columns).value
         return value^
+
+    def mat2_function(mut self, name: String, m: NodeRef) raises -> NodeRef:
+        """Return `transpose`, `determinant` or `inverse` of a `mat2`, a
+        `vec4` of its columns."""
+        if name == "transpose":
+            return self.graph.swizzle(m, "xzyw")
+        var det = self.graph.sub(
+            self.graph.mul(
+                self.graph.swizzle(m, "x"), self.graph.swizzle(m, "w")
+            ),
+            self.graph.mul(
+                self.graph.swizzle(m, "z"), self.graph.swizzle(m, "y")
+            ),
+        )
+        if name == "determinant":
+            return det
+        var adjugate = self.graph.mul(
+            self.graph.swizzle(m, "wyzx"), self.graph.vec4(1, -1, -1, 1)
+        )
+        return self.graph.div(adjugate, det)
 
     def _matrix_of(mut self, columns: List[NodeRef]) raises -> NodeRef:
         """Return the matrix of three or four columns."""
@@ -2897,11 +3069,14 @@ struct _Compiler(Movable):
         if _listed(name, " transpose determinant inverse "):
             if (
                 len(args) != 1
-                or not args[0].type.is_matrix()
+                or not (args[0].type.is_matrix() or args[0].type == _MAT2)
                 or args[0].tag != _PLAIN
             ):
-                raise self.error(name + "() takes one mat3 or mat4")
+                raise self.error(name + "() takes one mat2, mat3 or mat4")
             value.type = _FLOAT if name == "determinant" else args[0].type
+            if args[0].type == _MAT2:
+                value.node = self.mat2_function(name, nodes[0]).value
+                return value^
             if name == "transpose":
                 value.node = self.graph.transpose(nodes[0]).value
             elif name == "inverse":
