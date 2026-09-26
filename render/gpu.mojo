@@ -397,6 +397,11 @@ from postprocessing.shaders import (
 )
 from render.target import RenderTarget
 from render.volume_texture import DecodedVolume, decoded_texels
+from render.computation import (
+    ComputeNodes,
+    GPUComputationRenderer,
+    compute_texel,
+)
 from renderers.renderer import Renderer
 from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
@@ -1653,6 +1658,17 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return no weights: a curve has no triangle."""
         return SIMD[DType.float32, 4](0)
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return no place: there is no pixel here.
+
+        Args:
+            context: Not read.
+
+        Returns:
+            Zeros, and one.
+        """
+        return SIMD[DType.float32, 4](0, 0, 0, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return a corner of nothing: a curve has no triangle."""
@@ -3531,6 +3547,9 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     var swapped: Bool
     var px: Int
     var py: Int
+    # The target's height, and the fragment's depth, for `frag_coord`.
+    var height: Int
+    var depth: Float32
 
     def __init__(
         out self,
@@ -3551,8 +3570,12 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         swapped: Bool,
         px: Int,
         py: Int,
+        height: Int,
+        depth: Float32,
     ):
-        """Read the program that starts `start` floats into `fog`."""
+        """Read the program that starts `start` floats into `fog`, at the
+        sample (`px`, `py`) of a target `height` pixels high, at the depth
+        `depth` in normalized device space."""
         self.fog = fog
         self.start = start
         self.texels = texels
@@ -3570,6 +3593,8 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         self.swapped = swapped
         self.px = px
         self.py = py
+        self.height = height
+        self.depth = depth
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -3626,6 +3651,25 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             self.corners[
                 unsafe_offset=self.base + 2 * FLOATS_PER_VERTEX + LANE_INV_W
             ],
+        )
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the fragment is, GLSL's `gl_FragCoord`, as
+        `rasterizer._HostNodes.frag_coord` does from the same sample.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
+        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        return SIMD[DType.float32, 4](
+            Float32(px) / Float32(SUBPIXEL),
+            Float32(self.height) - Float32(py) / Float32(SUBPIXEL),
+            self.depth * 0.5 + 0.5,
+            1,
         )
 
     def corner(self, context: NodeContext) -> NodeInputs:
@@ -4381,6 +4425,8 @@ def rasterize_kernel(
                 swapped,
                 px,
                 py,
+                Int(height),
+                z,
             )
             # Whether the graph can throw the fragment away, and its depth
             # in place of the plane's, as `rasterize_shaded` asks both.
@@ -9777,3 +9823,161 @@ struct GpuComposer(Movable):
                 self._keep_outside_mask()
         self.download(frame)
         return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
+
+
+def compute_kernel(
+    image: MutPointer[Float32, MutAnyOrigin],
+    code: MutPointer[Float32, MutAnyOrigin],
+    images: MutPointer[Float32, MutAnyOrigin],
+    wraps: MutPointer[Int32, MutAnyOrigin],
+    size_x: Int32,
+    size_y: Int32,
+):
+    """Run one variable's step at every texel: `compute_texel` on a
+    `ComputeNodes`, as `render.computation.step_image` runs it on the host.
+    `image` holds the variable's other image, and a texel the shader throws
+    away keeps it."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(size_x)
+    var h = Int(size_y)
+    if x >= w or y >= h:
+        return
+    var source = ComputeNodes(
+        code.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        images.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        wraps.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        w,
+        h,
+        x,
+        y,
+    )
+    var texel = compute_texel(
+        source,
+        (Float32(x) + 0.5) / Float32(w),
+        (Float32(y) + 0.5) / Float32(h),
+    )
+    if not texel[1]:
+        return
+    var at = (y * w + x) * 4
+    for lane in range(4):
+        image[unsafe_offset=at + lane] = texel[0][lane]
+
+
+struct GpuComputation(Movable):
+    """Runs a `GPUComputationRenderer`'s steps on the device, three.js's
+    render to its targets. Each variable's program runs at every texel of
+    its image in one launch."""
+
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    var image: DeviceBuffer[DType.float32]
+    var code: DeviceBuffer[DType.float32]
+    var images: DeviceBuffer[DType.float32]
+    var wraps: DeviceBuffer[DType.int32]
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.image^
+        _ = self.code^
+        _ = self.images^
+        _ = self.wraps^
+        _ = self.context^
+
+    def __init__(out self) raises:
+        """Open the device.
+
+        Raises:
+            Error: If no GPU is present.
+        """
+        if not available():
+            raise Error("No GPU available")
+        self.context = DeviceContext()
+        self.image = self.context.enqueue_create_buffer[DType.float32](4)
+        self.code = self.context.enqueue_create_buffer[DType.float32](4)
+        self.images = self.context.enqueue_create_buffer[DType.float32](4)
+        self.wraps = self.context.enqueue_create_buffer[DType.int32](4)
+
+    def compute(mut self, mut computation: GPUComputationRenderer) raises:
+        """Step every variable once on the device, as
+        `GPUComputationRenderer.compute` does on the host.
+
+        Args:
+            computation: The computation. Its images are read from and
+                written back to it.
+
+        Raises:
+            Error: If `init` has not compiled the shaders.
+        """
+        if len(computation.programs) != len(computation.variables):
+            raise Error("A computation must be initialized before it runs")
+        var packed = computation.packed()
+        var w = computation.size_x
+        var h = computation.size_y
+        # A launch in flight may still read the old buffers.
+        self.context.synchronize()
+        self.images = self.context.enqueue_create_buffer[DType.float32](
+            max(len(packed[0]), 4)
+        )
+        self.wraps = self.context.enqueue_create_buffer[DType.int32](
+            max(len(packed[1]), 4)
+        )
+        self.image = self.context.enqueue_create_buffer[DType.float32](
+            w * h * 4
+        )
+        with self.images.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=packed[0].unsafe_ptr(),
+                count=len(packed[0]),
+            )
+        with self.wraps.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=packed[1].unsafe_ptr(),
+                count=len(packed[1]),
+            )
+        var next = 1 - computation.current
+        for at in range(len(computation.variables)):
+            ref program = computation.programs[at].code
+            self.context.synchronize()
+            self.code = self.context.enqueue_create_buffer[DType.float32](
+                max(len(program), 4)
+            )
+            with self.code.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=program.unsafe_ptr(),
+                    count=len(program),
+                )
+            ref before = computation.variables[at].images[next]
+            with self.image.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=before.unsafe_ptr(),
+                    count=w * h * 4,
+                )
+            self.context.enqueue_function[compute_kernel](
+                self.image.unsafe_ptr(),
+                self.code.unsafe_ptr(),
+                self.images.unsafe_ptr(),
+                self.wraps.unsafe_ptr(),
+                Int32(w),
+                Int32(h),
+                grid_dim=(ceildiv(w, TILE), ceildiv(h, TILE)),
+                block_dim=(TILE, TILE),
+            )
+            var out = List[Float32](length=w * h * 4, fill=0)
+            with self.image.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=out.unsafe_ptr(),
+                    src=host.unsafe_ptr(),
+                    count=w * h * 4,
+                )
+            computation.variables[at].images[next] = out^
+        computation.current = next

@@ -219,7 +219,7 @@ The world and view positions are of the point that `gl_Position` draws.
 
 ### The fragment shader
 
-`gl_FragColor`, `pc_fragColor` or the one `out vec4` is the color and the opacity. `gl_FragDepth` is the depth node. `discard` throws the fragment away.
+`gl_FragColor`, `pc_fragColor` or the one `out vec4` is the color and the opacity. `gl_FragDepth` is the depth node. `discard` throws the fragment away. `gl_FragCoord` is where the fragment is: the pixel's center in pixels from the bottom left, its depth from zero to one, and one for `w`. three.js's `w` is one over the clip-space `w`.
 
 ### The subset
 
@@ -251,7 +251,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
-- `gl_FragCoord`, `gl_FrontFacing`, `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable.
+- `gl_FrontFacing`, `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord`.
 - The built-ins outside the list above, for example `sinh`, `isnan`, `transpose`, `inverse`, `lessThan`, `textureLod` and `texelFetch`.
 - A vector compared with `<`, and a scalar swizzled.
 

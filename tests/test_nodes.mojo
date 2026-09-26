@@ -168,8 +168,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(82).is_valid())
-    assert_true(NodeKind(81).is_valid())
+    assert_false(NodeKind(83).is_valid())
+    assert_true(NodeKind(82).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -254,6 +254,10 @@ def test_the_lit_color_reaches_an_output_node() raises:
         0.3,
         0,
     )
+    # A program on its own is at no pixel.
+    var place = ProgramSource(Pointer(to=program)).frag_coord(AT_FRAGMENT)
+    assert_equal(place[0], 0)
+    assert_equal(place[3], 1)
 
 
 struct Checker(NodeSource):
@@ -277,6 +281,10 @@ struct Checker(NodeSource):
     def shares(self, context: NodeContext) -> Lanes:
         """Return the weights `Corners` gives."""
         return Corners().shares(context)
+
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return no place."""
+        return Lanes(0, 0, 0, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the corners `Corners` gives."""
@@ -849,6 +857,15 @@ struct Corners(NodeSource):
         if context == AT_UP:
             return Lanes(0.25, 0.25, 0.5, 0)
         return Lanes(0.5, 0.25, 0.25, 0)
+
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return a made-up place: the pixel (10, 20) from the bottom
+        left, at a depth of 0.75, and its neighbors a pixel over."""
+        if context == AT_RIGHT:
+            return Lanes(11.5, 20.5, 0.75, 1)
+        if context == AT_UP:
+            return Lanes(10.5, 21.5, 0.75, 1)
+        return Lanes(10.5, 20.5, 0.75, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners: normals two long, to see them made

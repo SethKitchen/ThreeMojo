@@ -256,6 +256,26 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             v += 1 / Float32(self.input.height)
         return Lanes(1 - u - v, u, v, 0)
 
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return where the pixel is, GLSL's `gl_FragCoord`: its center,
+        or its neighbor's for a derivative, in pixels from the bottom left,
+        the quad's depth of one half, and one.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        return Lanes(
+            Float32(x) + 0.5,
+            Float32(self.input.height - y) - 0.5,
+            0.5,
+            1,
+        )
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner of the screen quad's triangle.
 
@@ -340,6 +360,17 @@ struct HostScreenNodes[origin: Origin[mut=False]](NodeSource):
             The weights.
         """
         return self.screen.shares(context)
+
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return where the pixel is; see `ScreenNodes.frag_coord`.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        return self.screen.frag_coord(context)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner of the screen quad; see `ScreenNodes.corner`.

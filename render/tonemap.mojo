@@ -449,6 +449,17 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         """
         return SIMD[DType.float32, 4](0)
 
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return no place: there is no pixel here.
+
+        Args:
+            context: Not read.
+
+        Returns:
+            Zeros, and one.
+        """
+        return SIMD[DType.float32, 4](0, 0, 0, 1)
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return a corner of nothing: a curve has no triangle.
 

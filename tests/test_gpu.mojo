@@ -412,7 +412,8 @@ from postprocessing.shaders import MIRROR_TOP, ShaderEffect
 from postprocessing.shaders import MIRROR as MIRROR_SHADER
 from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram, NodeProgramId
-from render.gpu import GpuComposer, runs_on_device
+from render.computation import GPUComputationRenderer
+from render.gpu import GpuComposer, GpuComputation, runs_on_device
 from render.volume_texture import Data3DTexture, VolumeImage
 from render.volume_texture_store import Data3DTextureId
 
@@ -9313,6 +9314,71 @@ def test_both_backends_copy_their_framebuffer_to_a_texture_alike() raises:
     gpu.copy_framebuffer_to_texture(got, TexelPoint(3, 3, 0))
     for at in range(len(want.pixels)):
         assert_equal(want.pixels[at], got.pixels[at])
+
+
+def _computation() raises -> GPUComputationRenderer:
+    """Return a computation of a position moved by a velocity read across
+    a wrapped edge, and a velocity that halves and gains, each texel
+    starting where it is."""
+    var computation = GPUComputationRenderer(6, 3)
+    var start = computation.create_texture()
+    for y in range(3):
+        for x in range(6):
+            var at = (y * 6 + x) * 4
+            start[at] = Float32(x) * 0.3
+            start[at + 1] = Float32(y) - 0.7
+            start[at + 3] = Float32(x % 2)
+    var position = computation.add_variable(
+        "position",
+        """
+void main() {
+    vec2 uv = gl_FragCoord.xy / resolution.xy;
+    vec2 right = ( gl_FragCoord.xy + vec2( 1.0, 0.0 ) ) / resolution.xy;
+    vec4 p = texture2D( position, uv );
+    vec4 v = texture2D( velocity, right );
+    if ( p.w < 0.5 && gl_FragCoord.y > 2.0 ) discard;
+    gl_FragColor = vec4( p.xyz + v.xyz * 0.1, p.w );
+}
+""",
+        start^,
+    )
+    var velocity = computation.add_variable(
+        "velocity",
+        """
+uniform float gain;
+void main() {
+    vec2 uv = gl_FragCoord.xy / resolution.xy;
+    vec4 v = texture2D( velocity, uv );
+    gl_FragColor = v * 0.5 + vec4( gain, sin( gl_FragCoord.x ), 0.0, 0.0 );
+}
+""",
+        computation.create_texture(),
+    )
+    computation.set_variable_dependencies(position, [position, velocity])
+    computation.set_variable_dependencies(velocity, [velocity])
+    computation.variables[velocity].wrap_s = REPEAT
+    computation.init()
+    computation.programs[velocity].set_uniform("gain", Float32(1.5))
+    return computation^
+
+
+def test_both_backends_step_a_computation_alike() raises:
+    # `GPUComputationRenderer`: the device steps each variable with the
+    # host's own `compute_texel`. The device's `sin` can differ from the
+    # host's in the last bit, so the images agree to a few ulps.
+    var host = _computation()
+    var device_steps = _computation()
+    var device = GpuComputation()
+    for _ in range(4):
+        host.compute()
+        device.compute(device_steps)
+    for variable in range(2):
+        var want = host.current_image(variable)
+        var got = device_steps.current_image(variable)
+        assert_equal(len(got), len(want))
+        for at in range(len(want)):
+            assert_almost_equal(got[at], want[at], atol=1e-5)
+    assert_equal(device_steps.current, host.current)
 
 
 def main() raises:
