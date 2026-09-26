@@ -106,6 +106,10 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `camera_position()` | `vec3` | `cameraPosition` | The camera's position in world space, from the frame's view. |
 | `camera_view_matrix()` | `mat4` | `cameraViewMatrix` | The frame's world-to-camera matrix. |
 | `time()` | `float` | `time` | `Renderer.time`, in seconds. |
+| `front_facing()` | `float` | `frontFacing` | One where the triangle is seen from its front, and zero where it is seen from its back. A fragment only. |
+| `face_direction()` | `float` | `faceDirection` | One where the triangle is seen from its front, and minus one where it is seen from its back. A fragment only. |
+| `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
+| `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
 | `lit()` | `vec3` | `output` | The color that the material's own shading made. An output node only. |
 
@@ -263,6 +267,12 @@ The world and view positions are of the point that `gl_Position` draws.
 
 `gl_FragColor`, `pc_fragColor` or the one `out vec4` is the color and the opacity. `gl_FragDepth` is the depth node. `discard` throws the fragment away. `gl_FragCoord` is where the fragment is: the pixel's center in pixels from the bottom left, its depth from zero to one, and one for `w`. three.js's `w` is one over the clip-space `w`.
 
+`gl_FrontFacing` is `gl_front_facing()`. It is true on every face that a `BACK_SIDE` material draws. See [Facing](#facing).
+
+### Facing
+
+TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` material. three.js's WebGL renderer turns the front face round for such a material, so `gl_FrontFacing` is true on the faces that it draws. TSL's `frontFacing` is false on those faces, because they are seen from their back. For `FRONT_SIDE` and `DOUBLE_SIDE`, the two agree. A mirrored mesh keeps the same rule, as [Side](Materials#side) states.
+
 ### The subset
 
 - Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4`, and `sampler2D` uniforms.
@@ -300,7 +310,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - A column of one of these or of `viewMatrix`, and a matrix constructor that reads one.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
-- `gl_FrontFacing`, `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord`.
+- `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
 - The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `lessThan`, `textureLod` and `texelFetch`.
 - A vector compared with `<`, and a scalar swizzled.
 

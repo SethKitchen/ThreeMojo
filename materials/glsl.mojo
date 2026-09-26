@@ -32,7 +32,9 @@ those: `(modelMatrix * vec4(position, 1.0)).xyz`, `normalMatrix * normal`,
 
 **The fragment shader.** `gl_FragColor`, `pc_fragColor` or the one `out
 vec4` is the color and the opacity. `gl_FragDepth` is the depth node.
-`discard` throws the fragment away.
+`discard` throws the fragment away. `gl_FragCoord` is where the fragment
+is, and `gl_FrontFacing` is true on every face that three.js's WebGL
+renderer calls front: under `BACK_SIDE`, every face drawn.
 
 **The subset.** The types `void`, `bool`, `int`, `float`, `vec2` to
 `vec4`, `mat3` and `mat4`, and `sampler2D` uniforms. Uniforms, varyings,
