@@ -2784,7 +2784,8 @@ struct _Compiler(Movable):
                         column = self.graph.join([column, self.graph.float(0)])
                     columns.append(column)
                 else:
-                    columns.append(self._identity_column(size, c))
+                    # A mat3 padded to a mat4 takes the identity's last column.
+                    columns.append(self.graph.vec4(0, 0, 0, 1))
             value.node = self._matrix_of(columns).value
             return value^
         var parts = List[NodeRef]()
@@ -2825,19 +2826,6 @@ struct _Compiler(Movable):
             columns.append(self.graph.join(lanes))
         value.node = self._matrix_of(columns).value
         return value^
-
-    def _identity_column(mut self, size: Int, c: Int) -> NodeRef:
-        """Return the identity's column `c`."""
-        if size == 3:
-            return self.graph.vec3(
-                1 if c == 0 else 0, 1 if c == 1 else 0, 1 if c == 2 else 0
-            )
-        return self.graph.vec4(
-            1 if c == 0 else 0,
-            1 if c == 1 else 0,
-            1 if c == 2 else 0,
-            1 if c == 3 else 0,
-        )
 
     def _matrix_of(mut self, columns: List[NodeRef]) raises -> NodeRef:
         """Return the matrix of three or four columns."""
