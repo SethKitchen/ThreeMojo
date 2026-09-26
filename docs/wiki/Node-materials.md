@@ -265,16 +265,19 @@ The world and view positions are of the point that `gl_Position` draws.
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, and `mat3`, `mat4` and `sampler2D` uniforms.
+- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4`, and `sampler2D` uniforms.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
-- Functions: functions with `in` parameters. A call inlines the body. A `return` is the last statement of its function.
-- Statements: local variables, `if` and `else`, blocks, `discard`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
+- Functions: functions with `in` parameters. A call inlines the body. A `return` can come before the end of its function.
+- Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
-- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, constant indexes, and constructors of scalars and vectors.
+- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, constant indexes, and constructors of scalars, vectors and matrices.
+- Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture` and `texture2D`.
 - The preprocessor: `#version` in a raw shader, and object-like `#define`.
+
+A local matrix gets its value where you declare it, and keeps that value. A register holds four floats, so a local matrix is a name for the matrix that its initializer builds. `break` and `continue` must be in a loop of the same function.
 
 An `int` is a whole number that a float holds. An `int` division drops the fraction toward zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
@@ -285,16 +288,18 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - The types `uint`, `ivec`, `uvec`, `bvec`, `mat2`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
 - Uniforms of type `int` or `bool`, global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
-- `while`, `do`, `switch`, `break`, `continue`, a `return` before the end of its function, and recursion.
+- `while`, `do`, `switch` and recursion.
+- A `return` before the end of a function that returns a matrix or a transform, or of a vertex shader's `main`.
 - `out` and `inout` parameters, prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
-- A matrix times a matrix, a matrix constructor, and a matrix or a sampler in a local variable.
+- A matrix times a matrix of another size, an assignment to a local matrix, a sampler in a local variable, and a column index that is not a constant.
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
+- A column of one of these or of `viewMatrix`, and a matrix constructor that reads one.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
 - `gl_FrontFacing`, `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord`.
-- The built-ins outside the list above, for example `sinh`, `isnan`, `transpose`, `inverse`, `lessThan`, `textureLod` and `texelFetch`.
+- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `lessThan`, `textureLod` and `texelFetch`.
 - A vector compared with `<`, and a scalar swizzled.
 
 ### Why no chunks
