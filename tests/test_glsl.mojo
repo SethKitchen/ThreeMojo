@@ -149,19 +149,26 @@ def paint(
     return run(compile_shader_material(vertex, fragment))
 
 
-def value(expression: String, before: String = "") raises -> Lanes:
-    """Return a `vec3` expression's value in a fragment shader's `main`."""
+def value(
+    expression: String, before: String = "", before_main: String = ""
+) raises -> Lanes:
+    """Return a `vec3` expression's value in a fragment shader's `main`,
+    after `before` outside it and `before_main` inside it."""
     return paint(
         before
-        + "\nvoid main() {\n    gl_FragColor = vec4("
+        + "\nvoid main() {\n"
+        + before_main
+        + "    gl_FragColor = vec4("
         + expression
         + ", 1.0);\n}\n"
     )
 
 
-def number(expression: String, before: String = "") raises -> Float32:
+def number(
+    expression: String, before: String = "", before_main: String = ""
+) raises -> Float32:
     """Return a `float` expression's value in a fragment shader's `main`."""
-    return value("vec3(" + expression + ")", before)[0]
+    return value("vec3(" + expression + ")", before, before_main)[0]
 
 
 def refused(
@@ -1044,7 +1051,7 @@ def test_a_swizzle_or_an_index_picks_components() raises:
     )
     refused_statement(
         "float f = 1.0; float g = f[0];",
-        "only a vector can be indexed in this subset",
+        "only a vector or a matrix can be indexed in this subset",
     )
     refused_statement(
         "vec2 v = vec2(1.0); int i = 0; float g = v[i];",
@@ -1097,11 +1104,11 @@ def test_a_constructor_converts_or_lays_components_end_to_end() raises:
         "float f = float(1.0, 2.0);", "a float constructor takes one argument"
     )
     refused_statement(
-        "mat3 m = mat3(1.0);", "a local variable of type mat3 is outside"
+        "mat3 m;", "a local mat3 needs its value where it is declared"
     )
     refused_statement(
-        "vec3 v = mat3(1.0) * vec3(1.0);",
-        "a mat3 constructor is outside the subset",
+        "mat3 m = mat3(1.0); m = mat3(2.0);",
+        "cannot assign m: it is a local matrix",
     )
     refused_statement(
         "ivec2 v = ivec2(1);", "the type ivec2 is outside the subset"
@@ -1799,11 +1806,74 @@ def test_a_matrix_uniform_multiplies_a_vector() raises:
     )
     refused(
         uniform + "void main() { vec3 v = m * m; }",
-        "cannot use * on a mat3 and a mat3",
+        "cannot give a vec3 a mat3",
     )
     refused(
         uniform + "void main() { vec4 v = m * vec4(1.0); }",
         "cannot multiply a mat3 and a vec4",
+    )
+
+
+def test_matrices_are_built_indexed_and_inverted() raises:
+    # Columns, a scalar's diagonal, sixteen scalars, and a mat4's upper
+    # left.
+    var built = (
+        "mat3 a = mat3(vec3(2.0, 0.0, 0.0), vec3(1.0, 3.0, 0.0), vec3(0.0, 0.0, 4.0));\n"
+    )
+    assert_lanes(value("a * vec3(1.0)", "", before_main=built), 3, 3, 4)
+    assert_lanes(value("vec3(1.0) * a", "", before_main=built), 2, 4, 4)
+    assert_lanes(value("a[1]", "", before_main=built), 1, 3, 0)
+    assert_equal(number("determinant(a)", "", before_main=built), 24)
+    assert_lanes(
+        value("transpose(a) * vec3(1.0)", "", before_main=built), 2, 4, 4
+    )
+    var back = value(
+        "a * (inverse(a) * vec3(1.0, 2.0, 3.0))", "", before_main=built
+    )
+    for lane in range(3):
+        assert_almost_equal(back[lane], Float32(lane + 1), atol=1e-5)
+    assert_lanes(value("mat3(2.0) * vec3(1.0, 2.0, 3.0)"), 2, 4, 6)
+    assert_lanes(
+        value("(a * mat3(2.0)) * vec3(1.0)", "", before_main=built), 6, 6, 8
+    )
+    var sixteen = (
+        "mat4 f = mat4(1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0,"
+        " 0.0, 0.0, 3.0, 0.0, 1.0, 1.0, 1.0, 1.0);\n"
+    )
+    assert_lanes(
+        value("(f * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4
+    )
+    assert_lanes(
+        value("mat3(f) * vec3(1.0)", "", before_main=sixteen), 1, 2, 3
+    )
+    assert_lanes(
+        value("(mat4(a) * vec4(1.0)).xyw", "", before_main=built), 3, 3, 1
+    )
+    assert_lanes(
+        value("(mat4(f) * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0, 2.0);",
+        "a mat3 constructor needs 9 components, not 2",
+    )
+    refused_statement(
+        "mat3 m = mat3(mat3(1.0), 1.0);", "a mat3 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0); vec3 c = m[3];", "the index is outside the mat3"
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0); int i = 0; vec3 c = m[i];",
+        "a matrix is indexed by a constant int",
+    )
+    refused_statement(
+        "vec3 v = transpose(vec3(1.0));", "transpose() takes one mat3 or mat4"
+    )
+    refused_statement(
+        "mat4 m = mat4(viewMatrix);", "cannot make a mat4 of a mat4"
+    )
+    refused_statement(
+        "vec4 c = viewMatrix[0];", "a transform's columns are outside"
     )
 
 

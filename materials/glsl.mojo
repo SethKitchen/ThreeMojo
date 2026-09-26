@@ -87,14 +87,15 @@ comptime _BUILTINS = (
     " radians degrees sin cos tan asin acos atan pow exp log exp2 log2 sqrt"
     " inversesqrt abs sign floor ceil trunc round roundEven fract mod min max"
     " clamp mix step smoothstep length distance dot cross normalize"
-    " faceforward reflect refract dFdx dFdy fwidth texture texture2D "
+    " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
+    " transpose determinant inverse "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
     " floatBitsToUint intBitsToFloat uintBitsToFloat packSnorm2x16"
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
-    " unpackHalf2x16 matrixCompMult outerProduct transpose determinant"
-    " inverse lessThan lessThanEqual greaterThan greaterThanEqual equal"
+    " unpackHalf2x16 matrixCompMult outerProduct"
+    " lessThan lessThanEqual greaterThan greaterThanEqual equal"
     " notEqual any all not textureSize textureLod textureOffset texelFetch"
     " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
     " texture2DProj textureCube "
@@ -676,6 +677,9 @@ comptime _OUTPUT = 5
 comptime _INDEX = 6
 comptime _TRANSFORM = 7
 comptime _POSITION = 8
+# A local matrix, given its value once: a register holds no matrix, so the
+# name stands for the matrix its initializer built.
+comptime _MATRIX_LOCAL = 9
 
 
 @fieldwise_init
@@ -1681,6 +1685,9 @@ struct _Compiler(Movable):
         """
         var constant = self.qualifiers()
         var type = self.type()
+        if type.is_matrix():
+            self.matrix_declaration(type)
+            return
         if not type.holds():
             raise self.error(
                 "a local variable of type "
@@ -1728,6 +1735,37 @@ struct _Compiler(Movable):
                     False,
                 )
             )
+            if not self.is_mark(","):
+                break
+            self.at += 1
+        self.expect(";")
+
+    def matrix_declaration(mut self, type: _Type) raises:
+        """Parse `mat3 a = e, b = f;`: each name stands for the matrix its
+        initializer builds, and cannot be given another.
+
+        Raises:
+            Error: If a name has no initializer, or its value is another
+                type.
+        """
+        while True:
+            var name = self.name()
+            if self.is_mark("["):
+                raise self.error("arrays are outside the subset")
+            if not self.is_mark("="):
+                raise self.error(
+                    "a local " + type.name() + " needs its value where it is"
+                    " declared"
+                )
+            self.at += 1
+            var value = self.expression()
+            if value.type != type:
+                raise self.error(
+                    "cannot give a " + type.name() + " a " + value.type.name()
+                )
+            value.symbol = -1
+            value.components = ""
+            self.declare(_Symbol(name, _MATRIX_LOCAL, value^, -1, False))
             if not self.is_mark(","):
                 break
             self.at += 1
@@ -2277,7 +2315,7 @@ struct _Compiler(Movable):
         """
         var a = left.type
         var b = right.type
-        if mark != "*" or (a.is_matrix() and b.is_matrix()):
+        if mark != "*" or (a.is_matrix() and b.is_matrix() and a != b):
             raise self.error(
                 "cannot use "
                 + mark
@@ -2286,6 +2324,9 @@ struct _Compiler(Movable):
                 + " and a "
                 + b.name()
             )
+        if a.is_matrix() and b.is_matrix():
+            var both = self.graph.mul(self.node(left), self.node(right))
+            return self.derived(a, both, left, right)
         var matrix = a if a.is_matrix() else b
         var vector = b if a.is_matrix() else a
         var wanted = _VEC3 if matrix == _MAT3 else _VEC4
@@ -2410,9 +2451,13 @@ struct _Compiler(Movable):
                 self.at += 1
                 var index = self.expression()
                 self.expect("]")
+                if value.type.is_matrix():
+                    value = self.column(value, index)
+                    continue
                 if not value.type.is_vector():
                     raise self.error(
-                        "only a vector can be indexed in this subset"
+                        "only a vector or a matrix can be indexed in this"
+                        " subset"
                     )
                 if index.type != _TINT or not index.known:
                     raise self.error("a vector is indexed by a constant int")
@@ -2425,6 +2470,32 @@ struct _Compiler(Movable):
                 value = self.swizzle(value, _letter("xyzw", Int(index.number)))
             else:
                 return value^
+
+    def column(mut self, value: _Value, index: _Value) raises -> _Value:
+        """Return a matrix's column, `m[i]`.
+
+        Raises:
+            Error: If the matrix is one of three.js's transforms, or the
+                index is not a constant int in range.
+        """
+        if value.tag != _PLAIN:
+            raise self.error(
+                "a transform's columns are outside the subset"
+            )
+        var size = 3 if value.type == _MAT3 else 4
+        if index.type != _TINT or not index.known:
+            raise self.error("a matrix is indexed by a constant int")
+        if index.number < 0 or index.number >= Float64(size):
+            raise self.error("the index is outside the " + value.type.name())
+        var out = _plain(
+            _VEC3 if size == 3 else _VEC4,
+            self.graph.column(
+                NodeRef(self.node(value).value), Int(index.number)
+            ).value,
+        )
+        out.constant = value.constant
+        out.local = value.local
+        return out^
 
     def swizzle(mut self, value: _Value, letters: String) raises -> _Value:
         """Return a vector's components picked by letters of one of the sets
@@ -2605,13 +2676,15 @@ struct _Compiler(Movable):
             Error: If the type cannot be constructed, or the arguments are
                 too few or too many.
         """
-        if not type.holds():
-            raise self.error(
-                "a " + type.name() + " constructor is outside the subset"
-            )
         if len(args) == 0:
             raise self.error(
                 "a " + type.name() + " constructor needs arguments"
+            )
+        if type.is_matrix():
+            return self.construct_matrix(type, args)
+        if not type.holds():
+            raise self.error(
+                "a " + type.name() + " constructor is outside the subset"
             )
         var value = _plain(type, -1)
         value.constant = True
@@ -2672,6 +2745,106 @@ struct _Compiler(Movable):
             value.point = args[0].node
         return value^
 
+    def construct_matrix(
+        mut self, type: _Type, args: List[_Value]
+    ) raises -> _Value:
+        """Return a matrix constructor's value: from a matrix, its upper
+        left or padded with the identity; from one scalar, that many times
+        the identity; or from columns of scalars and vectors in order.
+
+        Raises:
+            Error: If the arguments give too few or too many components, or
+                an argument is a transform or a sampler.
+        """
+        var size = 3 if type == _MAT3 else 4
+        var value = _plain(type, -1)
+        value.constant = True
+        for index in range(len(args)):  # pragma: no branch
+            value.constant = value.constant and args[index].constant
+            value.local = value.local or args[index].local
+            if args[index].tag != _PLAIN or not (
+                args[index].type.holds() or args[index].type.is_matrix()
+            ):
+                raise self.error(
+                    "cannot make a "
+                    + type.name()
+                    + " of a "
+                    + args[index].type.name()
+                )
+        var columns = List[NodeRef]()
+        if len(args) == 1 and args[0].type.is_matrix():
+            var from_size = 3 if args[0].type == _MAT3 else 4
+            var matrix = NodeRef(self.node(args[0]).value)
+            for c in range(size):  # pragma: no branch
+                if c < from_size:
+                    var column = self.graph.column(matrix, c)
+                    if size == 3 and from_size == 4:
+                        column = self.graph.swizzle(column, "xyz")
+                    elif size == 4 and from_size == 3:
+                        column = self.graph.join([column, self.graph.float(0)])
+                    columns.append(column)
+                else:
+                    columns.append(self._identity_column(size, c))
+            value.node = self._matrix_of(columns).value
+            return value^
+        var parts = List[NodeRef]()
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type.is_matrix():
+                raise self.error(
+                    "a " + type.name() + " is made of one matrix alone"
+                )
+            var node = NodeRef(self.node(args[index]).value)
+            var width = args[index].type.width()
+            if width == 1:
+                parts.append(node)
+            else:
+                for lane in range(width):  # pragma: no branch
+                    parts.append(self.graph.swizzle(node, _letter("xyzw", lane)))
+        if len(parts) == 1:
+            # One scalar down the diagonal.
+            for c in range(size):  # pragma: no branch
+                var lanes = List[NodeRef]()
+                for r in range(size):  # pragma: no branch
+                    lanes.append(parts[0] if r == c else self.graph.float(0))
+                columns.append(self.graph.join(lanes))
+            value.node = self._matrix_of(columns).value
+            return value^
+        if len(parts) != size * size:
+            raise self.error(
+                "a "
+                + type.name()
+                + " constructor needs "
+                + String(size * size)
+                + " components, not "
+                + String(len(parts))
+            )
+        for c in range(size):  # pragma: no branch
+            var lanes = List[NodeRef]()
+            for r in range(size):  # pragma: no branch
+                lanes.append(parts[c * size + r])
+            columns.append(self.graph.join(lanes))
+        value.node = self._matrix_of(columns).value
+        return value^
+
+    def _identity_column(mut self, size: Int, c: Int) -> NodeRef:
+        """Return the identity's column `c`."""
+        if size == 3:
+            return self.graph.vec3(
+                1 if c == 0 else 0, 1 if c == 1 else 0, 1 if c == 2 else 0
+            )
+        return self.graph.vec4(
+            1 if c == 0 else 0,
+            1 if c == 1 else 0,
+            1 if c == 2 else 0,
+            1 if c == 3 else 0,
+        )
+
+    def _matrix_of(mut self, columns: List[NodeRef]) raises -> NodeRef:
+        """Return the matrix of three or four columns."""
+        if len(columns) == 3:
+            return self.graph.mat3(columns[0], columns[1], columns[2])
+        return self.graph.mat4(columns[0], columns[1], columns[2], columns[3])
+
     def convert(
         mut self, type: _Type, args: List[_Value], var value: _Value
     ) raises -> _Value:
@@ -2719,6 +2892,21 @@ struct _Compiler(Movable):
             value.local = value.local or args[index].local
         if name == "texture" or name == "texture2D":
             return self.texture(name, args, nodes, value^)
+        if _listed(name, " transpose determinant inverse "):
+            if (
+                len(args) != 1
+                or not args[0].type.is_matrix()
+                or args[0].tag != _PLAIN
+            ):
+                raise self.error(name + "() takes one mat3 or mat4")
+            value.type = _FLOAT if name == "determinant" else args[0].type
+            if name == "transpose":
+                value.node = self.graph.transpose(nodes[0]).value
+            elif name == "inverse":
+                value.node = self.graph.inverse(nodes[0]).value
+            else:
+                value.node = self.graph.determinant(nodes[0]).value
+            return value^
         if _derivative(name) and self.stage == _VERTEX:
             raise self.error(name + "() is a fragment shader's")
         var type = self.signature(name, args)
@@ -2894,6 +3082,8 @@ def _kind_name(kind: Int) -> String:
         return "a varying the vertex shader wrote"
     if kind == _INDEX:
         return "a for loop's index"
+    if kind == _MATRIX_LOCAL:
+        return "a local matrix, which is given its value once"
     return "a built-in transform"
 
 
