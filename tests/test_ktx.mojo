@@ -15,7 +15,11 @@ from render.compressed_texture import (
     RGB_BPTC_UNSIGNED_FORMAT,
     RGB_ETC1_FORMAT,
     RGB_ETC2_FORMAT,
+    RGB_PVRTC_2BPPV1_FORMAT,
+    RGB_PVRTC_4BPPV1_FORMAT,
     RGB_S3TC_DXT1_FORMAT,
+    RGBA_PVRTC_2BPPV1_FORMAT,
+    RGBA_PVRTC_4BPPV1_FORMAT,
     RGBA_BPTC_FORMAT,
     RGBA_ETC2_EAC_FORMAT,
     RGBA_S3TC_DXT1_FORMAT,
@@ -164,10 +168,19 @@ def test_every_internal_format_names_its_format_and_space() raises:
             assert_equal(named[1], SRGB)
         else:
             assert_equal(named[1], LINEAR)
-    # ASTC 4x4 and PVRTC are not ported.
-    for number in [0x93B0, 0x8C00]:
-        with assert_raises(contains="not ported"):
-            _ = format_of_gl(number)
+    # PVRTC decodes; ASTC 4x4 is not ported.
+    var pvrtc: List[CompressedFormat] = [
+        RGB_PVRTC_4BPPV1_FORMAT,
+        RGB_PVRTC_2BPPV1_FORMAT,
+        RGBA_PVRTC_4BPPV1_FORMAT,
+        RGBA_PVRTC_2BPPV1_FORMAT,
+    ]
+    for index in range(4):
+        var named = format_of_gl(0x8C00 + index)
+        assert_equal(named[0], pvrtc[index])
+        assert_equal(named[1], LINEAR)
+    with assert_raises(contains="not ported"):
+        _ = format_of_gl(0x93B0)
 
 
 def test_a_malformed_file_is_refused() raises:

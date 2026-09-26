@@ -91,7 +91,7 @@ The S3TC formats are below. See [KTX2 and compressed formats](#ktx2-and-compress
 
 The 565 channels widen to eight bits by copying their top bits down, as the hardware widens them. The blends round to nearest. An image need not be whole blocks: the texels past the edge are decoded and dropped. `decode_s3tc` returns the RGBA bytes of an S3TC payload without building a texture. `decode_compressed` does the same for every format.
 
-`compressed_texture` refuses a format that is none of the eighteen, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
+`compressed_texture` refuses a format that is none of the twenty-three, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
 
 ## KTX2 and compressed formats
 
@@ -145,8 +145,9 @@ The tests check each decoder against hand-built blocks with worked-out texels. T
 
 | Reader | Returns | Reads |
 |---|---|---|
-| `render.dds.read(bytes)` | `CompressedImage` | A four-character code or a DX10 header, levels and cubes. |
-| `render.ktx.read(bytes)` | `CompressedImage` | KTX 1 in both byte orders, levels and cubes. |
+| `render.dds.read(bytes)` | `CompressedImage` | A four-character code or a DX10 header, uncompressed BGRA and BGR, levels and cubes. |
+| `render.ktx.read(bytes)` | `CompressedImage` | KTX 1 in both byte orders, levels and cubes, PVRTC included. |
+| `render.pvr.read(bytes)` | `CompressedImage` | PVR versions 2 and 3 of PVRTC, levels and cubes. |
 | `render.ktx2.read(bytes)` | `KTX2Container` | KTX 2.0: the header, the level index, the data format descriptor, levels, cubes and arrays. |
 
 `CompressedImage.mipmaps` holds each face's levels in turn: `mipmaps[face * levels + level]`. `texture(face, level, ...)` decodes one of them. `KTX2Container.level_data` holds each level with its supercompression removed. `texture(face, layer, level, ...)` decodes one image of it.
@@ -192,6 +193,18 @@ The tests decode files that the Basis Universal 2.50 encoder wrote. Between them
 
 A second UASTC HDR file holds 240 random ASTC blocks that the transcoder accepts. They use every endpoint mode, partition count, grid and range. The transcoder and this decoder also agree on 200,000 random blocks, valid and not.
 
+### Uncompressed DDS
+
+A DDS file whose code names no block format is read as three.js's `DDSLoader` reads it: by its bit count and masks. Thirty-two bits with red, green, blue and alpha masks is BGRA. Twenty-four bits with the three color masks is BGR, with an opaque alpha. Its format is `RGBA_FORMAT`, three.js's `RGBAFormat`. As in three.js, a mask only has to overlap its byte, and the format flags are not read.
+
+### PVRTC
+
+`render/pvrtc.mojo` decodes PVRTC1 at 4 and 2 bits a texel: three.js's `RGB_PVRTC_4BPPV1_Format` and the next three. three.js hands PVRTC to a GPU that decodes it. This decoder follows Imagination's reference decoder, `PVRTDecompress.cpp`, whose output the tests compare with. The RGB forms are opaque.
+
+The width and the height must be powers of two. A level holds two words across and down at least, as three.js's `PVRLoader` reads it.
+
+`render.pvr.read` reads a PVR file as `PVRLoader` does. Version 3 names its format by a pixel format, 0 to 3. Version 2 names it by its flags, 24 or 25, and an alpha mask makes it RGBA. Six faces make a cube. KTX 1 reads PVRTC by its GL formats, `0x8C00` to `0x8C03`.
+
 ### Zstandard
 
 `render/zstd.mojo` decodes Zstandard, RFC 8878, with no compression library. `zstd_decompress(bytes, limit)` returns the bytes of every frame, joined. A KTX2 level with scheme 2 is one Zstandard frame, and `read` decompresses it to its stated size.
@@ -212,8 +225,9 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 - UASTC HDR with alpha. three.js has no transcoder target for it and throws, so `read` refuses it too.
 - The transcode from UASTC, UASTC HDR or ETC1S to a GPU block format. Each image decodes to the texels of the transcoder's `RGBA32` or `RGBA_HALF` target.
 - Zstandard dictionaries. A frame that names a dictionary is refused. three.js cannot read one either: its transcoder and its Zstandard decoder read no dictionary.
-- ASTC, PVRTC and ETC2 with punch-through alpha as Vulkan formats. Each container refuses them by name. three.js uploads ASTC and PVRTC as they are, to a GPU that takes them.
-- Uncompressed DDS files, the premultiplied DXT2 and DXT4, and DDS texture arrays.
+- ASTC, PVRTC and ETC2 with punch-through alpha as Vulkan formats in KTX2, and ASTC and ETC2 with punch-through alpha in KTX 1. Each container refuses them by name. three.js uploads ASTC as it is, to a GPU that takes it.
+- PVRTC2, and PVRTC1 of a size that is not a power of two.
+- The premultiplied DXT2 and DXT4, and DDS texture arrays.
 - 1D, 3D and array textures in KTX 1, and 1D and 3D textures in KTX2.
 - The GPU upload of the blocks. Each image decodes on the host and keeps RGBA in memory.
 - A file's own smaller levels in the texture. The container gives them, but a texture builds its chain from the level it decodes.

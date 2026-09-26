@@ -232,8 +232,10 @@ def parse_outline(outline: String) raises -> List[OutlineStep]:
         The steps, each with its points in drawing order.
 
     Raises:
-        Error: If a command is not `m`, `l`, `q` or `b`, has too few
-            numbers, or has a number that is not a finite `Float32`.
+        Error: If a command is not `m`, `l`, `q`, `b` or `z`, has too few
+            numbers, or has a number that is not a finite `Float32`. A
+            `z`, which three.js's `TTFLoader` writes to close a contour,
+            is stepped over, as three.js's `Font` steps over it.
     """
     var tokens = List[String]()
     for token in outline.split():
@@ -242,6 +244,9 @@ def parse_outline(outline: String) raises -> List[OutlineStep]:
     var at = 0
     while at < len(tokens):
         var command = tokens[at]
+        if command == "z":
+            at += 1
+            continue
         var verb: OutlineVerb
         if command == "m":
             verb = MOVE_TO

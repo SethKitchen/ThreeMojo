@@ -20,10 +20,13 @@ from render.compressed_texture import (
     SIGNED_RED_GREEN_RGTC2_FORMAT,
     SIGNED_RED_RGTC1_FORMAT,
     CompressedFormat,
+    RGBA_FORMAT,
 )
+from loaders.json import parse_json
 from render.dds import four_cc, format_of_dxgi, format_of_four_cc, read
+from std.pathlib import Path
 from render.srgb import LINEAR, SRGB
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def red_block() -> List[UInt8]:
@@ -245,10 +248,12 @@ def test_a_malformed_file_is_refused() raises:
         _ = read(dds(0, 4, "DXT1"))
     with assert_raises(contains="positive"):
         _ = read(dds(4, 0, "DXT1"))
+    # The flags are not read: a known code is a block format even when the
+    # flags say RGB, as in three.js.
     var masks = dds(4, 4, "DXT1")
     put(masks, 80, 0x41)
-    with assert_raises(contains="uncompressed"):
-        _ = read(masks)
+    masks.extend(red_block())
+    assert_true(read(masks).format == RGB_S3TC_DXT1_FORMAT)
     with assert_raises(contains="more levels"):
         _ = read(dds(4, 4, "DXT1", levels=4))
     with assert_raises(contains="ends before"):
@@ -257,6 +262,59 @@ def test_a_malformed_file_is_refused() raises:
         _ = read(dds(100000, 100000, "DXT1"))
     with assert_raises(contains="not ported"):
         _ = read(dds(4, 4, "DXT2"))
+    # Thirty-two bits with no alpha mask, and twenty-four with no blue
+    # mask, are neither of three.js's uncompressed layouts.
+    var no_alpha = dds(1, 1, "NONE")
+    put(no_alpha, 88, 32)
+    put(no_alpha, 92, 0xFF0000)
+    put(no_alpha, 96, 0xFF00)
+    put(no_alpha, 100, 0xFF)
+    with assert_raises(contains="not ported"):
+        _ = read(no_alpha)
+    var no_color = dds(1, 1, "NONE")
+    put(no_color, 88, 32)
+    put(no_color, 104, 0xFF000000)
+    with assert_raises(contains="not ported"):
+        _ = read(no_color)
+    var no_blue = dds(1, 1, "NONE")
+    put(no_blue, 88, 24)
+    put(no_blue, 92, 0xFF0000)
+    put(no_blue, 96, 0xFF00)
+    with assert_raises(contains="not ported"):
+        _ = read(no_blue)
+    var short = dds(2, 2, "NONE")
+    put(short, 88, 24)
+    put(short, 92, 0xFF0000)
+    put(short, 96, 0xFF00)
+    put(short, 100, 0xFF)
+    short.extend(List[UInt8](length=11, fill=0))
+    with assert_raises(contains="ends before"):
+        _ = read(short)
+
+
+def test_uncompressed_files_are_read_as_three_js_reads_them() raises:
+    var doc = parse_json(Path("assets/dds/dds.json").read_text())
+    for name in ["bgra.dds", "bgr.dds"]:
+        var image = read(Path("assets/dds/" + name).read_bytes())
+        var want = doc.get(doc.root(), name)
+        assert_true(image.format == RGBA_FORMAT)
+        assert_equal(image.width, doc.integer(doc.get(want, "width")))
+        assert_equal(image.levels, doc.integer(doc.get(want, "mipmapCount")))
+        var mipmaps = doc.get(want, "mipmaps")
+        assert_equal(len(image.mipmaps), doc.length(mipmaps))
+        for level in range(len(image.mipmaps)):
+            var data = doc.get(doc.at(mipmaps, level), "data")
+            ref got = image.mipmaps[level]
+            assert_equal(len(got), doc.length(data), name)
+            for k in range(len(got)):
+                assert_equal(Int(got[k]), doc.integer(doc.at(data, k)), name)
+    # An RGBA level decodes to its own bytes.
+    var bgra = read(Path("assets/dds/bgra.dds").read_bytes())
+    var texture = bgra.texture(level=1)
+    assert_equal(texture.width, 2)
+    assert_equal(texture.pixels[0], bgra.mipmaps[1][0])
+    assert_equal(texture.pixels[7], bgra.mipmaps[1][7])
+    assert_equal(String(RGBA_FORMAT), "RGBAFormat")
 
 
 def main() raises:
