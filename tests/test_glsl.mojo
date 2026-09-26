@@ -859,6 +859,31 @@ def test_a_varying_carries_what_a_corner_keeps() raises:
 # --- uniforms -----------------------------------------------------------------
 
 
+def test_int_and_bool_uniforms_are_floats_the_caller_sets() raises:
+    var program = compile_shader_material(
+        VERTEX,
+        """
+        uniform int count;
+        uniform bool on;
+        void main() {
+            float total = 0.0;
+            for (int i = 0; i < 4; i++) {
+                if (i < count) { total += 1.0; }
+            }
+            gl_FragColor = vec4(total, on ? 1.0 : 0.0, float(count), 1.0);
+        }
+        """,
+    )
+    assert_lanes(run(program), 0, 0, 0)
+    # WebGL's uniform1i drops the fraction; a bool is true where not zero.
+    program.set_uniform("count", Float32(2.75))
+    program.set_uniform("on", Float32(-3))
+    assert_lanes(run(program), 2, 1, 2)
+    program.set_uniform("count", Float32(-1.5))
+    program.set_uniform("on", Float32(0))
+    assert_lanes(run(program), 0, 0, -1)
+
+
 def test_uniforms_are_shared_and_set_by_name() raises:
     var program = compile_shader_material(
         "uniform float scale;\n" + VERTEX,
@@ -891,8 +916,7 @@ def test_uniforms_are_shared_and_set_by_name() raises:
         "the uniform scale is a float in the other shader",
         "uniform float scale;\n" + VERTEX,
     )
-    refused("uniform int count;\n" + WHITE, "a uniform of type int is outside")
-    refused("uniform bool on;\n" + WHITE, "a uniform of type bool is outside")
+    refused("uniform void none;\n" + WHITE, "a uniform of type void is outside")
     refused("uniform float many[4];\n" + WHITE, "arrays are outside the subset")
     refused(
         "uniform samplerCube sky;\n" + WHITE, "the type samplerCube is outside"

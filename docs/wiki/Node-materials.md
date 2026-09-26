@@ -266,6 +266,7 @@ The world and view positions are of the point that `gl_Position` draws.
 ### The subset
 
 - Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4`, and `sampler2D` uniforms.
+- Uniforms: every type above but `void`. An `int` or a `bool` uniform is a float that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Functions: functions with `in` parameters. A call inlines the body. A `return` can come before the end of its function.
 - Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
@@ -286,7 +287,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
 - The types `uint`, `ivec`, `uvec`, `bvec`, `mat2`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
-- Uniforms of type `int` or `bool`, global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
+- Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do`, `switch` and recursion.
 - A `return` before the end of a function that returns a matrix or a transform, or of a vertex shader's `main`.

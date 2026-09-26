@@ -35,7 +35,7 @@ vec4` is the color and the opacity. `gl_FragDepth` is the depth node.
 `discard` throws the fragment away.
 
 **The subset.** The types `void`, `bool`, `int`, `float`, `vec2` to
-`vec4`, and `mat3`, `mat4` and `sampler2D` uniforms. Uniforms, varyings,
+`vec4`, `mat3` and `mat4`, and `sampler2D` uniforms. Uniforms, varyings,
 `const` globals, functions with `in` parameters, `if` and `else`, `for`
 with a constant count, the operators but the bit ones, `?:`, swizzles,
 constant indexes, constructors, object-like `#define`s, and the built-in
@@ -1263,13 +1263,16 @@ struct _Compiler(Movable):
 
     def uniform(mut self, type: _Type, name: String) raises:
         """Declare a uniform: the one the other shader declared, or a new
-        one, zero until the caller sets it.
+        one, zero until the caller sets it. An `int` or a `bool` uniform is
+        a float that the caller sets: an `int` drops the fraction toward
+        zero, and a `bool` is true where it is not zero, as WebGL's
+        `uniform1i` does.
 
         Raises:
             Error: If the type is not one a uniform takes, or the other
                 shader gave the name another type.
         """
-        if not type.is_float() and not type.is_matrix() and type != _SAMPLER:
+        if not type.holds() and not type.is_matrix() and type != _SAMPLER:
             raise self.error(
                 "a uniform of type " + type.name() + " is outside the subset"
             )
@@ -1309,6 +1312,10 @@ struct _Compiler(Movable):
             node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
         else:
             node = self.graph.uniform(name, Float32(0))
+            if type == _TINT:
+                node = self.graph.trunc(node)
+            elif type == _BOOL:
+                node = self.graph.not_equal(node, self.graph.float(0))
         var symbol = _Symbol(
             name, _UNIFORM, _plain(type, node.value), -1, False
         )
