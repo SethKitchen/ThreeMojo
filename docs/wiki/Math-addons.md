@@ -8,12 +8,19 @@ These are the math addons of three.js's `examples/jsm/math/`. They are noise, an
 | `math/obb.mojo` | `OBB` |
 | `math/capsule.mojo` | `Capsule` |
 | `math/octree.mojo` | `Octree`, and `Box3.intersectsTriangle` |
+| `math/sort_utils.mojo` | `SortUtils.radixSort` |
 | `geometries/surface_sampler.mojo` | `MeshSurfaceSampler` |
 | `render/lut.mojo` | `Lut` |
 | `render/color_spaces.mojo` | `ColorManagement`, `ColorSpaces` |
 | `render/color_converter.mojo` | `ColorConverter` |
 
 The shapes hold bare `Float32` meters, as `Box3` and `Ray` do. See [Math](Math).
+
+## Radix sort
+
+`radix_sort(items, keys, reversed)` sorts items by a 32-bit unsigned key each. It is three.js's `radixSort`. It sorts eight bits at a time from the top, and finishes a run of 32 items or fewer by insertion. The sort is stable, and it gives three.js's order.
+
+three.js takes a `get` that reads each item's key. Here the items are indices into `keys`, so `get` is `keys[item]`. `radix_sort_keys(keys, reversed)` sorts the keys themselves. An item that names no key raises.
 
 ## Noise
 

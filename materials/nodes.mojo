@@ -193,7 +193,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_VIEW_MATRIX.value
+            and self.value <= NODE_FRAG_COORD.value
         )
 
 
@@ -297,6 +297,10 @@ comptime NODE_DFDX = NodeKind(78)
 comptime NODE_DFDY = NodeKind(79)
 comptime NODE_COPY = NodeKind(80)
 comptime NODE_VIEW_MATRIX = NodeKind(81)
+# Where the fragment is on the target, GLSL's `gl_FragCoord`: the pixel's
+# center in pixels from the bottom left, its depth from zero to one, and
+# one. See `NodeSource.frag_coord`.
+comptime NODE_FRAG_COORD = NodeKind(82)
 
 
 @fieldwise_init
@@ -460,8 +464,10 @@ def _pool_size(type: ValueType) -> Int:
 def _is_attribute(kind: NodeKind) -> Bool:
     """Return True for a node that reads the surface where it runs."""
     return (
-        kind.value >= NODE_UV.value and kind.value <= NODE_VERTEX_COLOR.value
-    ) or kind == NODE_LIT
+        (kind.value >= NODE_UV.value and kind.value <= NODE_VERTEX_COLOR.value)
+        or kind == NODE_LIT
+        or kind == NODE_FRAG_COORD
+    )
 
 
 # What an open block is: an `If` before and after its `Else`, and a `Loop`.
@@ -1022,6 +1028,16 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_VERTEX_COLOR, NODE_VEC3)
+
+    def frag_coord(mut self) -> NodeRef:
+        """Return where the fragment is on the target, a `vec4`, GLSL's
+        `gl_FragCoord`: the pixel's center in pixels from the bottom left,
+        its depth from zero to one, and one. Only a fragment reads it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_FRAG_COORD, NODE_VEC4)
 
     def time(mut self) -> NodeRef:
         """Return the frame's time in seconds, a `float`, three.js's `time`.
@@ -3816,6 +3832,21 @@ trait NodeSource:
         """
         ...
 
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return where a fragment is on the target, GLSL's
+        `gl_FragCoord`: the center of the pixel, the pixel to its right or
+        the pixel above it, in pixels from the bottom left; its depth from
+        zero to one; and one.
+
+        Args:
+            context: Which sample: the fragment, or a neighbor for a
+                derivative. The depth is the fragment's for all three.
+
+        Returns:
+            The four numbers. A source with no pixel gives zeros and one.
+        """
+        ...
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's attributes, as the triangle carries them.
 
@@ -3908,6 +3939,17 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
             One, then zeros.
         """
         return Lanes(1, 0, 0, 0)
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return no place: there is no pixel here.
+
+        Args:
+            context: Not read.
+
+        Returns:
+            Zeros, and one.
+        """
+        return SIMD[DType.float32, 4](0, 0, 0, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return a corner of nothing: every attribute zero.
@@ -4109,6 +4151,8 @@ def _leaf[
         return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
+    if op == NODE_FRAG_COORD.value:
+        return source.frag_coord(NodeContext(context))
     # An attribute, of the fragment or of the context the node runs in.
     var given = inputs
     if context != AT_FRAGMENT.value:
@@ -4511,7 +4555,8 @@ def run_nodes[
         var z = registers[third]
         var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
         written = Int(source.word(at + INSTRUCTION_DEST))
-        if op < NODE_ADD.value:
+        # The leaves, and `gl_FragCoord`, a leaf numbered after them.
+        if op < NODE_ADD.value or op == NODE_FRAG_COORD.value:
             registers[written] = _leaf(source, op, x, immediate, third, inputs)
         else:
             registers[written] = _operation(source, op, x, y, z, immediate)

@@ -169,6 +169,14 @@ With `per_object_frustum_culled`, each instance out of view is left out, as in t
 
 With a custom sort, the batch draws as one object at its node's depth, in the order the function leaves. three.js draws a batch as one object too. Without one, each instance sorts on its own among the scene's draws. An item that names an instance that is not drawn raises.
 
+### Merge meshes into batches
+
+`SceneOptimizer.to_batched_mesh(scene, assets)` in `core/scene_optimizer.mojo` merges the meshes that can be drawn as one. It is three.js's `SceneOptimizer.toBatchedMesh`. Two meshes can merge when their materials agree in everything but their color, and their geometries have the same attributes.
+
+Each set of two or more meshes becomes one `BatchedMesh` beside the first mesh. The batch wears the first mesh's material in white. Each mesh becomes an instance: its geometry, its place relative to the batch, and its material's color. The meshes leave the scene. Then every node that carries nothing and holds nothing leaves too. The result tells how many meshes merged, into how many batches.
+
+Only plain meshes of one material merge. three.js also merges skinned and instanced meshes as plain ones. A node that a camera rides carries nothing that the scene knows of. List it in `keep` to keep it. `to_instancing_mesh` raises, because three.js does not have it either.
+
 ## LOD
 
 `objects/lod.mojo`. An `Lod` shows one of several objects under a node, by the camera's distance to the node. A level is any object: a node, with what it carries and what hangs under it. three.js: `LOD`, `addLevel`, `removeLevel`, `getCurrentLevel`, `getObjectForDistance`, `update`, `autoUpdate`.

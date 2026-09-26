@@ -279,6 +279,7 @@ def test_a_custom_curve_is_a_node_program() raises:
     assert_equal(curve.sample(0, 0.5, 0.5).g, 1)
     assert_equal(curve.shares(AT_RIGHT)[0], 0)
     assert_equal(curve.corner(CORNER_A).u, 0)
+    assert_equal(curve.frag_coord(AT_RIGHT)[3], 1)
     assert_equal(curve.word(len(code) + 5), 0)
     # A target resolves through it, and shows a pixel through it.
     var target = RenderTarget(1, 1, Color(255, 255, 255))

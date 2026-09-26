@@ -968,6 +968,14 @@ def test_a_screen_source_reads_the_quad() raises:
     near(here[0], 0)
     near(screen.shares(AT_RIGHT)[1], 0.75)
     near(screen.shares(AT_UP)[2], 1.25)
+    # The top-left pixel of two rows, from the bottom left, and its
+    # neighbors.
+    var place = screen.frag_coord(AT_FRAGMENT)
+    near(place[0], 0.5)
+    near(place[1], 1.5)
+    near(place[2], 0.5)
+    near(screen.frag_coord(AT_RIGHT)[0], 1.5)
+    near(screen.frag_coord(AT_UP)[1], 2.5)
     var a = screen.corner(CORNER_A)
     var b = screen.corner(CORNER_B)
     var c = screen.corner(CORNER_C)
@@ -985,6 +993,7 @@ def test_a_screen_source_reads_the_quad() raises:
     near(host.sample(0, 0.5, 0.5).g, 0)
     same_color(host.sample(INPUT_SLOT, 0.25, 0.75), FloatColor(1, 0, 0, 0.5))
     near(host.shares(AT_UP)[2], 1.25)
+    near(host.frag_coord(AT_UP)[1], 2.5)
     near(host.corner(CORNER_B).u, 1)
     _ = colors^
     _ = kept^

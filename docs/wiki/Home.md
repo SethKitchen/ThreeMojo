@@ -52,6 +52,7 @@ Look something up.
 - [GPU backend](GPU-backend)
 - [Render target and framebuffer](Render-target-and-framebuffer)
 - [Post-processing](Post-processing)
+- [GPU computation](GPU-computation)
 - [Image files](Image-files)
 - [Model files](Model-files)
 - [Exporters](Exporters)

@@ -95,6 +95,15 @@ struct Corners(NodeSource):
             return Lanes(0.25, 0.25, 0.5, 0)
         return Lanes(0.5, 0.25, 0.25, 0)
 
+    def frag_coord(self, context: NodeContext) -> Lanes:
+        """Return a made-up place: the pixel (10, 20) from the bottom
+        left, at a depth of 0.75, and its neighbors a pixel over."""
+        if context == AT_RIGHT:
+            return Lanes(11.5, 20.5, 0.75, 1)
+        if context == AT_UP:
+            return Lanes(10.5, 21.5, 0.75, 1)
+        return Lanes(10.5, 20.5, 0.75, 1)
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners."""
         var none = Vector3(0, 0, 0)
@@ -245,6 +254,28 @@ def test_the_lexer_refuses_what_is_outside_the_subset() raises:
     refused("void main() { 2.0e1x; }", "a letter cannot follow a number")
     refused("void main() { 0x1g; }", "a letter cannot follow a number")
     refused("void main() { a # b }", "a # must begin its line")
+
+
+def test_a_fragment_reads_where_it_is() raises:
+    # `gl_FragCoord`: the made-up pixel's center, its depth and one.
+    var here = value("gl_FragCoord.xyz")
+    assert_equal(here[0], 10.5)
+    assert_equal(here[1], 20.5)
+    assert_equal(here[2], 0.75)
+    assert_equal(value("vec3(gl_FragCoord.w)")[0], 1)
+    # One pixel to the next, as the neighbors are.
+    var step = value(
+        "vec3(dFdx(gl_FragCoord.x), dFdy(gl_FragCoord.y), dFdx(gl_FragCoord.y))"
+    )
+    assert_equal(step[0], 1)
+    assert_equal(step[1], 1)
+    assert_equal(step[2], 0)
+    # A vertex shader has no fragment.
+    with assert_raises():
+        _ = paint(
+            "void main() { gl_FragColor = vec4(1.0); }",
+            "void main() { gl_Position = gl_FragCoord; }",
+        )
 
 
 def test_a_define_stands_for_its_tokens() raises:
@@ -1361,7 +1392,8 @@ def test_the_statements_build_the_graph() raises:
         "float gl_Thing = 1.0;", "a name that begins gl_ is GLSL's"
     )
     refused_statement(
-        "float x = gl_FragCoord.x;", "GLSL's gl_FragCoord is outside the subset"
+        "float x = gl_PointCoord.x;",
+        "GLSL's gl_PointCoord is outside the subset",
     )
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")

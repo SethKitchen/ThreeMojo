@@ -3211,6 +3211,7 @@ def rasterize_shaded(
         Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=c).unsafe_origin_cast[ImmutAnyOrigin](),
         coverage,
+        target.height,
     )
     var textured = mode == SHADE_TEXTURE
     # Whether the graph can throw a fragment away, as an alpha test can:
@@ -3257,6 +3258,7 @@ def rasterize_shaded(
             # that makes the rest has not run yet.
             nodes.x = x
             nodes.y = y
+            nodes.depth = z
             if deep:
                 stored_z = node_depth(
                     run_nodes(nodes, DEPTH_NODE, here_inputs(nodes, textured))[
@@ -4492,6 +4494,10 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
     var coverage: _Coverage
     var x: Int
     var y: Int
+    # The target's height, and the fragment's depth in normalized device
+    # space, for `frag_coord`.
+    var height: Int
+    var depth: Float32
 
     def __init__(
         out self,
@@ -4502,8 +4508,10 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         b: Pointer[RasterVertex, Self.origin],
         c: Pointer[RasterVertex, Self.origin],
         coverage: _Coverage,
+        height: Int,
     ):
-        """Borrow a program and a triangle, at the pixel (0, 0)."""
+        """Borrow a program and a triangle on a target `height` pixels
+        high, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
         self.textures = textures
@@ -4513,6 +4521,8 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         self.coverage = coverage
         self.x = 0
         self.y = 0
+        self.height = height
+        self.depth = 0
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -4547,6 +4557,26 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.a[].inv_w,
             self.b[].inv_w,
             self.c[].inv_w,
+        )
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the fragment is, GLSL's `gl_FragCoord`: the pixel's
+        center, or its neighbor's for a derivative, in pixels from the
+        bottom left; the fragment's depth from zero to one; and one.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        return SIMD[DType.float32, 4](
+            Float32(x) + 0.5,
+            Float32(self.height - y) - 0.5,
+            self.depth * 0.5 + 0.5,
+            1,
         )
 
     def corner(self, context: NodeContext) -> NodeInputs:

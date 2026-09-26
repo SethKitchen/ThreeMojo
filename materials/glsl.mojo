@@ -1124,6 +1124,11 @@ struct _Compiler(Movable):
         self.builtin("viewMatrix", _TRANSFORM, self.view_matrix())
         self.builtin("cameraPosition", _UNIFORM, self.camera())
         if self.stage == _FRAGMENT:
+            self.builtin(
+                "gl_FragCoord",
+                _ATTRIBUTE,
+                _plain(_VEC4, self.graph.frag_coord().value),
+            )
             return
         self.builtin("modelMatrix", _TRANSFORM, _tagged(_MAT4, -1, _MODEL, -1))
         self.builtin(

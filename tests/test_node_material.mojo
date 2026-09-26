@@ -651,6 +651,23 @@ def test_a_uniform_changed_between_frames_changes_the_next() raises:
     assert_equal(blue.b, 255)
 
 
+def test_a_fragment_knows_its_pixel_and_its_neighbors() raises:
+    var assets = Assets()
+    var graph = NodeGraph()
+    var place = graph.frag_coord()
+    var across = graph.dfdx(graph.swizzle(place, "x"))
+    var up = graph.dfdy(graph.swizzle(place, "y"))
+    graph.set_output(COLOR_NODE, graph.join([across, up, graph.float(0)]))
+    var id = assets.programs.add(graph.compile())
+    var scene = a_scene(assets, shader_material(id))
+    var image = Renderer(SIZE, SIZE).render(scene, assets, a_camera())
+    # One pixel right is one more across, and one pixel up one more up.
+    var seen = middle(image)
+    assert_equal(seen.r, 255)
+    assert_equal(seen.g, 255)
+    assert_equal(seen.b, 0)
+
+
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:
     var assets = Assets()
     var graph = NodeGraph()

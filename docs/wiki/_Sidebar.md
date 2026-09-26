@@ -40,6 +40,7 @@
 - [GPU backend](GPU-backend)
 - [Render target](Render-target-and-framebuffer)
 - [Post-processing](Post-processing)
+- [GPU computation](GPU-computation)
 - [Image files](Image-files)
 - [Model files](Model-files)
 - [More model files](More-model-files)
