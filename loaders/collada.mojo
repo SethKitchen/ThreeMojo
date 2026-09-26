@@ -92,9 +92,11 @@ from loaders.collada_animation import read_collada_animations
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
-    texture_from_file,
+    texture_from_bytes,
 )
+from loaders.three_mf import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
+from loaders.zip import ZipEntry
 from materials.material import (
     BASIC,
     DOUBLE_SIDE,
@@ -294,7 +296,11 @@ def read_collada(
 
 
 def load_collada(
-    text: String, directory: String, mut scene: Scene, mut assets: Assets
+    text: String,
+    directory: String,
+    mut scene: Scene,
+    mut assets: Assets,
+    archive: List[ZipEntry] = List[ZipEntry](),
 ) raises -> ColladaModel:
     """Read a Collada document into a scene and its assets.
 
@@ -304,6 +310,11 @@ def load_collada(
             a slash, or empty for the working directory.
         scene: The scene to add the nodes, meshes, lines and lights to.
         assets: Where the geometries, materials and textures go.
+        archive: The files of the archive the document came from, as
+            `KMZLoader` hands them to three.js's loader. An image is the
+            first file whose name ends with its path, and is read from
+            the directory when no name does. Empty, the default, reads
+            every image from the directory.
 
     Returns:
         What went where.
@@ -324,7 +335,7 @@ def load_collada(
     var document = parse_xml(text)
     if document.name(document.root()) != "COLLADA":
         raise Error("Collada: the root element is not <COLLADA>")
-    var loader = _Loader(document^, directory)
+    var loader = _Loader(document^, directory, archive.copy())
     loader.read_asset()
     loader.read_materials(assets)
     loader.model.first_skinned_mesh = len(scene.skinned_meshes)
@@ -621,6 +632,9 @@ struct _Loader(Movable):
 
     var document: XmlDocument
     var directory: String
+    # The files of the archive the document came from, which images are
+    # read from first, or none to read them from `directory`.
+    var archive: List[ZipEntry]
     var model: ColladaModel
     # Every library entry by `id`. A later entry of one id replaces an
     # earlier one, as three.js's libraries do; a node keeps the first.
@@ -645,9 +659,15 @@ struct _Loader(Movable):
     # The controllers, the placed nodes and the skins waiting for them.
     var rig: _ColladaRig
 
-    def __init__(out self, var document: XmlDocument, directory: String) raises:
+    def __init__(
+        out self,
+        var document: XmlDocument,
+        directory: String,
+        var archive: List[ZipEntry],
+    ) raises:
         self.document = document^
         self.directory = directory
+        self.archive = archive^
         self.model = ColladaModel()
         self.effects = Dict[String, Int]()
         self.images = Dict[String, Int]()
@@ -1076,12 +1096,48 @@ struct _Loader(Movable):
                 Float32(settings.get("offsetU", 0)),
                 Float32(settings.get("offsetV", 0)),
             )
-        var built = texture_from_file(self.directory + path, space, wrap, alpha)
+        var built = texture_from_bytes(
+            self.image_bytes(path), space, wrap, alpha
+        )
         built.repeat = repeat
         built.offset = offset
         var id = assets.textures.add(built^)
         self.model.textures.append(id)
         return id
+
+    def image_bytes(self, path: String) raises -> List[UInt8]:
+        """Return an image's file, as `KMZLoader`'s URL modifier finds it:
+        the first file of the archive, in JavaScript key order, whose name
+        ends with the path. With no archive, or no such file, the file is
+        read from the directory.
+
+        Args:
+            path: The image's `init_from`.
+
+        Returns:
+            The file's bytes.
+
+        Raises:
+            Error: If the file is not in the archive and cannot be read.
+        """
+        var names = List[String]()
+        for entry in self.archive:
+            if entry.name not in names:
+                names.append(entry.name)
+        for name in js_key_order(names):
+            # JavaScript's `path.slice( - url.length ) === url`, which an
+            # empty url matches only in an empty path.
+            var ends = name.endswith(path) and (
+                path.byte_length() > 0 or name.byte_length() == 0
+            )
+            if ends:
+                # fflate keeps the last file of a name.
+                var found = List[UInt8]()
+                for entry in self.archive:  # pragma: no branch
+                    if entry.name == name:
+                        found = entry.data.copy()
+                return found^
+        return Path(self.directory + path).read_bytes()
 
     def or_default(
         self, settings: Dict[String, Float64], key: String, default: Float64

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader  -->
+<VTKFile type="PolyData" version="1.0">
+  <PolyData>
+    <Piece NumberOfPoints="1" NumberOfPolys="1">
+      <PointData Normals="N"><DataArray type="Float32" Name="N" NumberOfComponents="3" format="binary">AAAAPw==</DataArray></PointData>
+      <Points><DataArray type="Int32" NumberOfComponents="3" format="binary">_________wA=</DataArray></Points>
+      <Polys>
+        <DataArray type="Int32" Name="connectivity" format="binary">*AAAAAAAAAA=</DataArray>
+        <DataArray type="Int32" Name="offsets" format="binary">AwAAAA==</DataArray>
+      </Polys>
+    </Piece></PolyData>
+</VTKFile>

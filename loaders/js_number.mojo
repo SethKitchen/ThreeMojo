@@ -3,16 +3,21 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""JavaScript's `parseFloat` and `parseInt`, for the loaders that read
-text the way three.js reads it.
+"""JavaScript's `parseFloat`, `parseInt` and `Number`, for the loaders that
+read text the way three.js reads it.
 
-Both read the longest number at the start of a text, after white space,
-and ignore what follows it. So `parseFloat("12px")` is 12, and
-`parseInt("1.5")` is 1. Where JavaScript gives `NaN`, so do these.
+`parseFloat` and `parseInt` read the longest number at the start of a
+text, after white space, and ignore what follows it. So
+`parseFloat("12px")` is 12, and `parseInt("1.5")` is 1. `Number` reads
+the whole text, less white space at its ends, or gives NaN: `Number("12px")`
+is NaN, `Number("")` is 0 and `Number("0x1F")` is 31. Where JavaScript
+gives `NaN`, so do these.
 
 **Where this differs.** White space is ASCII white space here;
 JavaScript also skips the Unicode spaces. A number with more digits than
-Mojo's parser reads gives NaN; JavaScript rounds it.
+Mojo's parser reads gives NaN; JavaScript rounds it. A `0x`, `0o` or `0b`
+integer past 2 to the 53 is summed a digit at a time, so it can round
+differently.
 """
 
 from std.math import inf, isfinite, isnan, nan
@@ -122,6 +127,92 @@ def js_parse_int(text: String) -> Float64:
         return Float64(String(text[byte=start:i]))
     except:
         return nan[DType.float64]()
+
+
+def _digit_value(byte: UInt8, radix: Int) -> Int:
+    """Return a digit's value in a radix, or -1.
+
+    Args:
+        byte: The character.
+        radix: 2, 8 or 16.
+
+    Returns:
+        The value, or -1 when the character is not a digit of the radix.
+    """
+    var value = -1
+    if byte >= 48 and byte <= 57:
+        value = Int(byte) - 48
+    elif byte >= 97 and byte <= 102:
+        value = Int(byte) - 87
+    elif byte >= 65 and byte <= 70:
+        value = Int(byte) - 55
+    return value if value < radix else -1
+
+
+def js_string_to_number(text: String) -> Float64:
+    """Return JavaScript's `Number(text)` for a string.
+
+    Args:
+        text: The text.
+
+    Returns:
+        The number the whole text less white space at its ends writes:
+        a decimal, `Infinity` with a sign or without, or a `0x`, `0o` or
+        `0b` integer with no sign. Zero for an empty text. NaN for any
+        other text.
+    """
+    var b = text.as_bytes()
+    var start = 0
+    var end = len(b)
+    while _space_at(b, start):
+        start += 1
+    while end > start and _is_space(b[end - 1]):
+        end -= 1
+    if start == end:
+        return 0
+    var body = String(text[byte=start:end])
+    var bytes = body.as_bytes()
+    var n = len(bytes)
+    if n > 2 and bytes[0] == 48:
+        var marker = bytes[1] | 32
+        var radix = 16 if marker == 120 else (
+            8 if marker == 111 else (2 if marker == 98 else 0)
+        )
+        if radix > 0:
+            var value = Float64(0)
+            for k in range(2, n):  # pragma: no branch
+                var digit = _digit_value(bytes[k], radix)
+                if digit < 0:
+                    return nan[DType.float64]()
+                value = value * Float64(radix) + Float64(digit)
+            return value
+    var i = 1 if _sign_at(bytes, 0) else 0
+    if String(body[byte=i:]) == "Infinity":
+        return js_parse_float(body)
+    var digits = 0
+    while _digit_at(bytes, i):
+        i += 1
+        digits += 1
+    if i < n and bytes[i] == 46:
+        i += 1
+        while _digit_at(bytes, i):
+            i += 1
+            digits += 1
+    if digits == 0:
+        return nan[DType.float64]()
+    if i < n and (bytes[i] | 32) == 101:
+        i += 1
+        if _sign_at(bytes, i):
+            i += 1
+        var exponent = 0
+        while _digit_at(bytes, i):
+            i += 1
+            exponent += 1
+        if exponent == 0:
+            return nan[DType.float64]()
+    if i != n:
+        return nan[DType.float64]()
+    return js_parse_float(body)
 
 
 struct _Decimal(Movable):

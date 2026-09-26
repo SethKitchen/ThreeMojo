@@ -18,6 +18,13 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [3DL](#3dl) | `loaders/lut_3dl.mojo` | `read_lut_3dl(path) -> Lut3dl` | `LUT3dlLoader` |
 | [LUT image](#lut-image) | `loaders/lut_image.mojo` | `read_lut_image(path) -> LutImage` | `LUTImageLoader` |
 | [VRML](#vrml) | `loaders/vrml.mojo` | `read_vrml(path, scene, assets) -> VrmlModel` | `VRMLLoader` |
+| [PDB](#pdb) | `loaders/pdb.mojo` | `read_pdb(path) -> PdbModel` | `PDBLoader` |
+| [MDD](#mdd) | `loaders/mdd.mojo` | `read_mdd(path) -> MddModel` | `MDDLoader` |
+| [G-code](#g-code) | `loaders/gcode.mojo` | `read_gcode(path, scene, assets) -> GCodeModel` | `GCodeLoader` |
+| [KMZ](#kmz) | `loaders/kmz.mojo` | `read_kmz(path, scene, assets) -> ColladaModel` | `KMZLoader` |
+| [VTK](#vtk) | `loaders/vtk.mojo` | `read_vtk(path) -> BufferGeometry` | `VTKLoader` |
+| [NRRD](#nrrd) | `loaders/nrrd.mojo` | `read_nrrd(path) -> Volume` | `NRRDLoader`, and `Volume` |
+| [USD](#usd) | `loaders/usd.mojo` | `read_usd(path, scene, assets) -> UsdModel` | `USDLoader` |
 | [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader`, and `DRACOExporter` in [Exporters](Exporters#draco) |
 
 ## PCD
@@ -792,3 +799,330 @@ The decoder raises for a file that does not start with `DRACO`, and for another 
 `three.json` and `three.bin` hold what three.js 0.180's decoder gives for each file, in node. `tests/test_draco.mojo` compares each value by its bits.
 
 `assets/draco/export/` holds the files that three.js's `DRACOExporter` writes for 14 geometries, with many options. `tests/test_draco_export.mojo` compares the files that `export_draco` writes with them, byte for byte. It also reads each file back with this decoder.
+
+## PDB
+
+`loaders/pdb.mojo`. `read_pdb(path)` reads a Protein Data Bank file into its atoms and bonds. three.js: `PDBLoader`.
+
+```mojo
+var molecule = read_pdb("assets/pdb/fixture.pdb")
+var atoms = assets.geometries.add(molecule.atoms_geometry.clone())
+var bonds = assets.geometries.add(molecule.bonds_geometry.clone())
+```
+
+| Function | What it does |
+|---|---|
+| `read_pdb(path) -> PdbModel` | Read a file. |
+| `parse_pdb(text) -> PdbModel` | Read the text of one. |
+| `cpk_color(element) -> Tuple[Int, Int, Int]` | The CPK color of an element, in sRGB bytes, or -1 in each channel. |
+
+### PdbModel
+
+| Field | What it holds |
+|---|---|
+| `atoms_geometry` | The atoms as points: `position`, and `color` in linear light. |
+| `bonds_geometry` | The bonds as line segments: `position`, two points for each bond. |
+| `atoms` | Each atom's position, its CPK color in sRGB bytes, and its element with a capital letter first. |
+
+### What is read
+
+An `ATOM` or `HETATM` line gives an atom. The loader reads the columns that three.js reads. The element is in columns 77 and 78, or in columns 13 and 14 when those are blank. A `CONECT` line bonds an atom to up to four others.
+
+The loader keeps each bond once. It steps over a bond to atom zero, as three.js does. It steps over the other lines.
+
+### Errors
+
+The loader refuses these, with a message that names the problem. three.js throws on both when it builds the geometry.
+
+- An element that has no CPK color.
+- A bond to an atom that no line gives.
+
+### Example
+
+`assets/pdb/fixture.pdb` has atoms, hetero atoms, bonds that repeat, and an element in the name columns. `tests/test_pdb.mojo` compares the geometries and the atoms with three.js 0.180.
+
+## MDD
+
+`loaders/mdd.mojo`. `read_mdd(path)` reads a point cache into morph targets and their times. `mdd_clip` makes the clip that plays them. three.js: `MDDLoader`.
+
+```mojo
+var cache = read_mdd("assets/mdd/fixture.mdd")
+for i in range(len(cache.morph_targets)):
+    geometry.add_morph_target(cache.morph_targets[i].copy(), name=cache.names[i])
+geometry.morph_relative = False
+var clip = mdd_clip(cache, MeshIndex(0))
+```
+
+| Function | What it does |
+|---|---|
+| `read_mdd(path) -> MddModel` | Read a file. |
+| `parse_mdd(bytes) -> MddModel` | Read the bytes of one. |
+| `mdd_clip(model, mesh) -> AnimationClip` | The clip `default`, which shows each frame at its time. |
+
+### MddModel
+
+| Field | What it holds |
+|---|---|
+| `times` | The time of each frame, in seconds. |
+| `morph_targets` | The positions of each frame, three numbers for each point. |
+| `names` | The name of each target: `morph_0`, `morph_1` and on. |
+
+A target holds each point's position, not how far the point moves. So clear `morph_relative` on the geometry.
+
+### Differences from three.js
+
+- three.js makes one track that holds every influence. `mdd_clip` makes one track for each target. The weights are the same: a target is at one at its frame's time and at zero at the other times.
+- `mdd_clip` refuses a file with no frames. It also refuses times that are negative, that do not rise, or that end at zero. three.js makes a clip of these, but the clip has no length or plays its keys out of order.
+
+### Errors
+
+The loader refuses a file that ends inside a value. three.js's `DataView` throws on this. The loader steps over bytes after the last frame, as three.js does.
+
+### Example
+
+`assets/mdd/fixture.mdd` has three frames of four points. `tests/test_mdd.mojo` compares the targets and the clip with three.js 0.180.
+
+## G-code
+
+`loaders/gcode.mojo`. `read_gcode(path, scene, assets)` reads the moves of a 3D printer file and adds them to the scene as line segments. three.js: `GCodeLoader`.
+
+```mojo
+var toolpath = read_gcode("assets/gcode/fixture.gcode", scene, assets)
+var layers = len(toolpath.layers)
+```
+
+| Function | What it does |
+|---|---|
+| `read_gcode(path, scene, assets, split_layer, parent) -> GCodeModel` | Read a file into the scene. |
+| `parse_gcode(text, scene, assets, split_layer, parent) -> GCodeModel` | Read the text of one into the scene. |
+| `gcode_layers(text) -> List[GCodeLayer]` | Read the moves into layers, and add nothing. |
+| `gcode_scene(layers, scene, assets, split_layer, parent) -> GCodeModel` | Add layers to the scene. |
+
+### What is read
+
+| Command | What it does |
+|---|---|
+| `G0`, `G1` | Move to the `X`, `Y` and `Z` it gives. A move that raises `E` extrudes. |
+| `G90`, `G91` | Set absolute or relative positions. |
+| `G92` | Set the position without a move. |
+
+The loader steps over other commands, and over `G2` and `G3` arcs, as three.js does. A `;` and the text after it on its line is a comment. A move that extrudes at a new height starts a layer.
+
+### What is built
+
+The root node is named `gcode`. It turns a quarter turn back about x, so that z is up. Under it are line segments named `layer` and a number. There is one pair for each layer when `split_layer` is True. There is one pair for the whole file when it is False, the default.
+
+The extruded lines are green. The travel lines are red.
+
+### Same as three.js
+
+The loader keeps these three.js behaviors:
+
+- The loader compares a command with its letters made capital, but it keeps a carriage return. So `G90` at the end of a CRLF line does nothing.
+- Each move starts a new state. So `G91` holds for the next move only.
+- A comment needs a character after its `;`. A lone `;` stays in its word.
+- A letter with no number gives NaN.
+
+### Example
+
+`assets/gcode/fixture.gcode` has comments, relative moves, a reset of `E`, an arc and three layers. `tests/test_gcode.mojo` compares both kinds of group with three.js 0.180.
+
+## KMZ
+
+`loaders/kmz.mojo`. `read_kmz(path, scene, assets)` reads a zipped KML model into a scene. The model is a Collada file in the archive. three.js: `KMZLoader`.
+
+```mojo
+var model = read_kmz("assets/kmz/model.kmz", scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_kmz(path, scene, assets) -> ColladaModel` | Read a file. An image that is not in the archive is read from the file's folder. |
+| `parse_kmz(bytes, scene, assets, directory) -> ColladaModel` | Read the bytes of one. |
+| `kml_model_path(kml) -> Optional[String]` | The model a `doc.kml` names. |
+
+### What is read
+
+When the archive has a `doc.kml`, the model is the file that its first `href` in a `Link`, in a `Model`, in a `Placemark` names. With no `doc.kml`, the model is the first file with the extension `dae`, in upper or lower case. `load_collada` reads the model. An image is the first file in the archive whose name ends with the image's path.
+
+A `doc.kml` that names no model gives an empty node, as three.js gives an empty `Group`. So does an archive with no `doc.kml` and no `.dae` file.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A `doc.kml` that names a file that is not in the archive. three.js throws on this.
+- A `doc.kml` or a model that is not UTF-8 or not XML.
+- A ZIP or a Collada file that `unzip` or `load_collada` refuses.
+
+### Example
+
+`assets/kmz/model.kmz` holds a `doc.kml`, the model `models/tri.dae` and the texture `images/brick.png`. `tests/test_kmz.mojo` compares it with the same model read from the disk.
+
+## VTK
+
+`loaders/vtk.mojo`. `read_vtk(path)` reads VTK poly data into a geometry. It reads legacy text, legacy binary and XML files. three.js: `VTKLoader`.
+
+```mojo
+var shape = assets.geometries.add(read_vtk("assets/vtk/ascii.vtk"))
+```
+
+| Function | What it does |
+|---|---|
+| `read_vtk(path) -> BufferGeometry` | Read a file. |
+| `parse_vtk(bytes) -> BufferGeometry` | Read the bytes of one, and choose its kind as three.js does. |
+| `parse_vtk_ascii(text) -> BufferGeometry` | Read a legacy text file. |
+| `parse_vtk_binary(bytes) -> BufferGeometry` | Read a legacy binary file. |
+| `parse_vtk_xml(text) -> BufferGeometry` | Read an XML poly data file. |
+
+### What is read
+
+The loader looks at the first 250 bytes, as three.js does. A first line that holds `xml` is an XML file. A third line that holds `ASCII` is a legacy text file. Any other file is a legacy binary file.
+
+- **Legacy text.** `POINTS`, `POLYGONS`, `TRIANGLE_STRIPS`, and `NORMALS` and `COLOR_SCALARS` in `POINT_DATA` or `CELL_DATA`. Each section of cells adds to the index.
+- **Legacy binary.** Big-endian `POINTS`, `POLYGONS` and `TRIANGLE_STRIPS`, and the normals after `POINT_DATA`. Each section of cells replaces the index.
+- **XML.** The first `Piece` of a `PolyData`: its `Points`, the normals that `PointData` names, `Strips` and `Polys`. A data array can be text, base64, base64 zlib blocks or appended base64.
+
+The geometry has an index, `position`, and `normal` when there is one normal for each point. A legacy text file can also give `color`.
+
+### Same as three.js
+
+The loader keeps these three.js behaviors:
+
+- A colors section with one color for each index entry is a set of cell colors. The geometry loses its index, and each color is decoded from sRGB two times.
+- The text patterns share one `lastIndex`, as three.js's global pattern does. So a line that starts with a word changes where the next line is read from.
+- An index entry that is not a number is point zero.
+- An empty index gives an empty draw range, so the geometry draws nothing.
+- In XML, `Polys` replaces the index of `Strips`. Each strip reads the connectivity from its start.
+- An `Int64` array keeps the low half of each value.
+
+### Errors
+
+The loader refuses these, with a message that names the problem. three.js throws on most of them.
+
+- A file that is shorter than 250 bytes, or whose third line is past them.
+- A `DATASET` that is not `POLYDATA`.
+- A value past the end of the file, base64 that is not a multiple of four characters, and zlib data that is not zlib.
+- An XML file with no cells or no points, or a part that three.js reads but the file does not have.
+- A binary line with no end, and a count that is not a number. three.js reads these for ever.
+- An index past the points. three.js keeps it and draws from undefined positions.
+- A text or XML file that is not UTF-8.
+
+### Example
+
+`assets/vtk/` holds each kind and each XML encoding, and files of the quirks above. `tests/test_vtk.mojo` compares each one with three.js 0.180.
+
+## NRRD
+
+`loaders/nrrd.mojo`. `read_nrrd(path)` reads an NRRD volume into a `Volume`. three.js: `NRRDLoader`. The `Volume` is in `objects/volume.mojo`. three.js: `Volume`.
+
+```mojo
+var volume = read_nrrd("assets/nrrd/raw.nrrd")
+var value = volume.get_data(1, 0, 1)
+```
+
+| Function | What it does |
+|---|---|
+| `read_nrrd(path) -> Volume` | Read a file. |
+| `parse_nrrd(bytes) -> Volume` | Read the bytes of one. |
+| `parse_nrrd_header(text) -> NrrdHeader` | Read a header only. |
+| `gunzip(bytes) -> List[UInt8]` | Expand gzip data, as fflate's `gunzipSync` does. |
+
+### Volume
+
+| Field or method | What it holds or does |
+|---|---|
+| `data` | One value for each voxel, x fastest. |
+| `x_length`, `y_length`, `z_length`, `dimensions` | The lengths of the grid. |
+| `spacing`, `axis_order` | The distance between voxels, and the axis that each index runs along. |
+| `matrix`, `inverse_matrix` | From voxel indices to RAS space, and back. |
+| `ras_dimensions` | The lengths times the spacings. |
+| `min`, `max`, `window_low`, `window_high`, `lower_threshold`, `upper_threshold` | The range of the values. |
+| `get_data(i, j, k)`, `access(i, j, k)`, `reverse_access(index)` | Read a voxel, and change between indices and places in `data`. |
+| `Volume(x, y, z, type, bytes)` | Make a volume from a buffer, as three.js's constructor does. |
+
+### What is read
+
+The loader reads the header fields that three.js reads, and keeps the others in `field_names` and `field_values`. It reads `raw`, `gzip`, and the text encodings `ascii`, `text`, `txt` and `hex`. With no `space directions`, the directions are the axes, scaled by `spacings`.
+
+### Same as three.js
+
+The loader keeps these three.js behaviors:
+
+- three.js cuts the header one character short. So the last line before the blank line loses its last character. `encoding: raw` on that line reads as `ra`.
+- An encoding that three.js does not know reads the whole file, with the header, as the data.
+- The `endian` field is read but not applied. The data is little-endian.
+- gzip data is cut or filled with zeros to the length in its trailer.
+
+### Errors
+
+The loader refuses these, with a message that names the problem. three.js throws on all of them.
+
+- A file with no blank line after the header, or that is not NRRD.
+- A `bz2` or `bzip2` encoding, a type that three.js does not know, and no type or no encoding.
+- A `space origin` with no `(`, and `space directions` with no `( )` or fewer than three.
+- gzip data that is not gzip, and data that is not whole values of its type.
+
+### Differences from three.js
+
+- The port does not have `extractSlice`, `repaintAllSlices` or `VolumeSlice`. They draw on a canvas, which this port does not have.
+
+### Example
+
+`assets/nrrd/` holds raw, gzip, text and hexadecimal volumes, and a file whose data is the whole file. `tests/test_nrrd.mojo` compares each one with three.js 0.180.
+
+## USD
+
+`loaders/usd.mojo`. `read_usd(path, scene, assets)` reads a USDZ archive into a scene. `read_usda` reads USDA text. three.js: `USDLoader`.
+
+```mojo
+var model = read_usd("assets/usd/scene.usdz", scene, assets)
+```
+
+| Function | What it does |
+|---|---|
+| `read_usd(path, scene, assets) -> UsdModel` | Read a file as bytes, as three.js's `load` does. |
+| `read_usda(path, scene, assets) -> UsdModel` | Read a file as USDA text. |
+| `parse_usd(bytes, scene, assets) -> UsdModel` | Read the bytes of a USDZ archive or a USDC crate. |
+| `parse_usda(text, scene, assets) -> UsdModel` | Read USDA text. |
+| `usda_tree(text) -> UsdaTree` | Read USDA text into three.js's tree of names and values. |
+
+### UsdModel
+
+| Field | What it holds |
+|---|---|
+| `root` | The node that three.js's `Group` becomes. |
+| `objects` | Each node that was added, a mesh or a node with nothing to draw, in the order added. |
+| `textures` | Each texture that a material read. |
+| `missing_textures` | The file of each map whose image is not in the archive. |
+
+### What is built
+
+Each `def Xform` is a node under the `def Xform` or `def Scope` that holds it. Its name is its quoted word. It is a mesh when a `def Mesh` is in it, or in the layer that its `prepend references` names. The mesh has `position`, `normal` and `uv`, and no index. Its material is a physical material from a `UsdPreviewSurface`, with the maps that three.js reads. A `matrix4d xformOp:transform` places the node.
+
+A USDC crate gives an empty node, as three.js's crate reader does.
+
+### Same as three.js
+
+The loader keeps these three.js behaviors:
+
+- A node takes the first `def Mesh` that is in it. So a parent shows the mesh of its first child too.
+- `material:binding` finds a material by the second part of its path.
+- The corners of a face start at its index times its count of corners.
+- A corner past the list is NaN.
+- A map whose image is not in the archive is one black texel. three.js keeps a texture with no image, which draws black.
+- A texture's rotation is in radians.
+- `read_usd` refuses a `.usda` file, because three.js's `load` reads it as a ZIP.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A value that is not JSON, and a line that writes into a string or into nothing. three.js throws on these.
+- A reference with no `@`, a texture input that names no shader, and a shader with no file. three.js throws on these too.
+- An array value that is not an array, a color outside zero to one, and a wrap that three.js does not know.
+- Points that are not three numbers each, a transform that is not sixteen finite numbers, and text that is not UTF-8.
+
+### Example
+
+`assets/usd/cube.usda` has meshes of quads and triangles, normals, texture coordinates and a material. `assets/usd/scene.usdz` references a mesh in another layer, and has a textured material. `tests/test_usd.mojo` compares both with three.js 0.180.

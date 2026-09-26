@@ -1,0 +1,68 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{
+    def Xform "Cube" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        matrix4d xformOp:transform = ( (2, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (1, 2, 3, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+        rel material:binding = </Materials/Red>
+
+        def Mesh "Box"
+        {
+            int[] faceVertexCounts = [4, 4]
+            int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+            normal3f[] normals = [(0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+                interpolation = "faceVarying"
+            )
+            texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+                interpolation = "faceVarying"
+            )
+            int[] primvars:st:indices = [0, 1, 2, 3, 3, 2, 1, 0]
+        }
+    }
+
+    def Xform "Tri"
+    {
+        rel material:binding = </Root/Looks/Blue>
+        def Mesh "Face"
+        {
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(0, 0, 0), (2, 0, 0), (0, 2, 1)]
+            float2[] primvars:st = [(0, 0), (1, 0), (0, 1)]
+        }
+    }
+
+    def Xform "not-a-word"
+    {
+    }
+}
+
+def Scope "Materials"
+{
+    def Material "Red"
+    {
+        token outputs:surface.connect = </Materials/Red/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.8, 0.1, 0.05)
+            color3f inputs:emissiveColor = (0.1, 0.2, 0.3)
+            float inputs:roughness = 0.3
+            float inputs:metallic = 0.5
+            float inputs:clearcoat = 0.25
+            float inputs:clearcoatRoughness = 0.75
+            float inputs:ior = 1.4
+            token outputs:surface
+        }
+    }
+}

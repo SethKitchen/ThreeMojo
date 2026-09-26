@@ -1,0 +1,10 @@
+NRRD0004
+type: short
+dimension: 3
+sizes: 2 2 1
+space directions: (1,0,0) (0,1,0) (0,0,1)
+encoding: ascii
+endian: little
+
+1 -2	3
+40000  5 6

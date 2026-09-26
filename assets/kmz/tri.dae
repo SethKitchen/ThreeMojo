@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset><unit meter="1"/><up_axis>Y_UP</up_axis></asset>
+  <library_images><image id="brick"><init_from>brick.png</init_from></image></library_images>
+  <library_effects><effect id="fx"><profile_COMMON><technique sid="t"><phong>
+    <diffuse><texture texture="brick" texcoord="uv"/></diffuse>
+  </phong></technique></profile_COMMON></effect></library_effects>
+  <library_materials><material id="mat" name="Brick"><instance_effect url="#fx"/></material></library_materials>
+  <library_geometries><geometry id="g"><mesh>
+    <source id="p"><float_array id="pa" count="9">0 0 0 1 0 0 0 1 0</float_array>
+      <technique_common><accessor source="#pa" count="3" stride="3"/></technique_common></source>
+    <source id="t"><float_array id="ta" count="6">0 0 1 0 0 1</float_array>
+      <technique_common><accessor source="#ta" count="3" stride="2"/></technique_common></source>
+    <vertices id="v"><input semantic="POSITION" source="#p"/></vertices>
+    <triangles count="1" material="m">
+      <input semantic="VERTEX" source="#v" offset="0"/>
+      <input semantic="TEXCOORD" source="#t" offset="0"/>
+      <p>0 1 2</p>
+    </triangles>
+  </mesh></geometry></library_geometries>
+  <library_visual_scenes><visual_scene id="vs"><node name="tri"><instance_geometry url="#g">
+    <bind_material><technique_common><instance_material symbol="m" target="#mat"/></technique_common></bind_material>
+  </instance_geometry></node></visual_scene></library_visual_scenes>
+  <scene><instance_visual_scene url="#vs"/></scene>
+</COLLADA>

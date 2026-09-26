@@ -1,0 +1,9 @@
+NRRD0004
+type: uint
+dimension: 3
+sizes: 2 1 2
+space directions: (0,0,2) (0,3,0) (4,0,0)
+encoding: hex
+endian: little
+
+ff 0x10 -1 zz
