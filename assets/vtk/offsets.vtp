@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader  -->
+<VTKFile type="PolyData" header_type="UInt32">
+  <PolyData>
+    <Piece NumberOfPoints="1" NumberOfPolys="1">
+      <CellData><DataArray type="Int32" Name="skipped" format="appended"/></CellData>
+      <Points><DataArray type="Float32" NumberOfComponents="3" format="appended" offset="word"/></Points>
+      <Polys><DataArray type="Int32" Name="connectivity" format="appended" offset="-36"/><DataArray type="Int32" Name="offsets" format="appended" offset="48"/></Polys>
+    </Piece></PolyData>
+  <AppendedData encoding="base64">_DAAAAAAAgD8AAABAAABAQA==DAAAAAAAAAAAAAAAAAAAAA==BAAAAAMAAAA=</AppendedData>
+</VTKFile>

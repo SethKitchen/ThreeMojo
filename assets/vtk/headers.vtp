@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader an edge case of the VTK XML reader  -->
+<VTKFile type="PolyData" header_type="UInt64" compressor="vtkZLibDataCompressor">
+  <PolyData>
+    <Piece NumberOfPoints="1" NumberOfPolys="1">
+      <PointData Normals="Normals"><DataArray type="Float32" Name="Normals" NumberOfComponents="3" format="binary">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</DataArray></PointData>
+      <Points><DataArray type="Float32" NumberOfComponents="3" format="binary">AAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAA</DataArray></Points>
+      <Polys><DataArray type="Int32" Name="connectivity" format="ascii">0 0 0</DataArray><DataArray type="Int32" Name="offsets" format="ascii">3</DataArray></Polys>
+    </Piece></PolyData>
+</VTKFile>

@@ -12,13 +12,15 @@ hex of its double.
 """
 
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.math import inf, isnan
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from loaders.js_number import (
     js_float32_text,
     js_log2,
     js_number_text,
     js_pow,
+    js_string_to_number,
     js_to_fixed,
     js_to_precision,
     srgb_to_linear,
@@ -92,6 +94,74 @@ def test_texts_match_v8() raises:
             var mine = js_float32_text(Float32(value))
             assert_equal(mine.byte_length(), doc.string(f32).byte_length())
             assert_equal(Float32(_read(mine)), Float32(value))
+
+
+def test_number_reads_the_whole_text() raises:
+    # Each text and what V8's `Number( text )` gives, NaN as -1.
+    var texts: List[String] = [
+        "",
+        "  ",
+        " 12 ",
+        "12px",
+        "-1.5e3",
+        "+.5",
+        "5.",
+        ".",
+        "1e",
+        "1E+2",
+        "0x1F",
+        "0X1f",
+        "0o17",
+        "0b101",
+        "0b12",
+        "0x",
+        "-0x10",
+        "Infinity",
+        "-Infinity",
+        "infinity",
+        "1_0",
+        "\t7\n",
+        "0x/",
+        "0x:",
+        "0xG",
+        "0xz",
+        "0z1",
+    ]
+    var want: List[Float64] = [
+        0,
+        0,
+        12,
+        -1,
+        -1500,
+        0.5,
+        5,
+        -1,
+        -1,
+        100,
+        31,
+        31,
+        15,
+        5,
+        -1,
+        -1,
+        -1,
+        inf[DType.float64](),
+        -inf[DType.float64](),
+        -1,
+        -1,
+        7,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+    ]
+    for k in range(len(texts)):
+        var got = js_string_to_number(texts[k])
+        if want[k] == -1:
+            assert_true(isnan(got), texts[k])
+        else:
+            assert_equal(got, want[k], texts[k])
 
 
 def test_srgb_to_linear() raises:
