@@ -5,8 +5,7 @@
 
 """Tests for what `loaders.gltf` reads beyond triangles and the material
 extensions: primitives of points and lines, morph target names,
-`EXT_materials_bump`, `KHR_texture_basisu`, and the refusal of a WebP
-image, which is not decoded.
+`EXT_materials_bump`, `KHR_texture_basisu` and `EXT_texture_webp`.
 
 Each document is written inline. The KTX 2.0 images are the Basis
 Universal fixtures under `assets/ktx2/`, carried in data URIs.
@@ -28,6 +27,7 @@ from render.framebuffer import Color
 from render import ktx2
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
+from render.webp import decode as decode_webp
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -404,41 +404,40 @@ def test_a_basisu_texture_needs_no_fallback() raises:
     assert_equal(hdr.levels, 1)
 
 
-def test_a_webp_image_is_not_decoded() raises:
-    # Required: refused with a message that says what to do.
-    refuses(
-        textured(
-            '[{"source":0,"extensions":{"EXT_texture_webp":{"source":0}}}]',
-            "[" + png_image() + "]",
-            ',"extensionsRequired":["EXT_texture_webp"]',
-        ),
-        "WebP images are not decoded",
+def test_a_webp_image_is_read_before_the_fallback() raises:
+    # The WebP source wins over the texture's own, as three.js's plugin
+    # is registered: required or not, with a fallback or without.
+    var webp = "data:image/webp;base64," + encode_base64(
+        Path("assets/webp/lossless_alpha.webp").read_bytes()
     )
-    # Optional: the fallback source is read.
-    var scene = Scene()
-    var assets = Assets()
-    var model = loaded(
+    var expected = decode_webp(
+        Path("assets/webp/lossless_alpha.webp").read_bytes()
+    )
+    var cases: List[String] = [
         textured(
             '[{"source":0,"extensions":{"EXT_texture_webp":{"source":1}}}]',
-            "[" + png_image() + ',{"uri":"image.webp"}]',
+            "[" + png_image() + ',{"uri":"' + webp + '"}]',
+            ',"extensionsRequired":["EXT_texture_webp"]',
         ),
-        scene,
-        assets,
-    )
-    var worn = assets.materials.get(model.materials[0])
-    assert_equal(assets.textures.get(worn.map).width, 2)
-    # A WebP image and no fallback.
-    refuses(
         textured(
             '[{"extensions":{"EXT_texture_webp":{"source":0}}}]',
-            '[{"uri":"image.webp"}]',
+            '[{"uri":"' + webp + '"}]',
         ),
-        "names only a WebP image",
-    )
+    ]
+    for text in cases:
+        var scene = Scene()
+        var assets = Assets()
+        var model = loaded(text, scene, assets)
+        var worn = assets.materials.get(model.materials[0])
+        ref read = assets.textures.get(worn.map)
+        assert_equal(read.width, expected.width)
+        assert_equal(read.height, expected.height)
+        for at in range(len(expected.pixels)):
+            assert_equal(read.pixels[at], expected.pixels[at])
     refuses(textured("[{}]", "[" + png_image() + "]"), "source is required")
     assert_true(is_supported_extension("KHR_texture_basisu"))
     assert_true(is_supported_extension("EXT_materials_bump"))
-    assert_false(is_supported_extension("EXT_texture_webp"))
+    assert_true(is_supported_extension("EXT_texture_webp"))
 
 
 def test_ktx2_is_told_by_its_identifier() raises:

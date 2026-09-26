@@ -111,7 +111,7 @@ index here holds triangles, so an indexed one is read out in index
 order. A mesh's `extras.targetNames` name its morph targets, the
 geometry's `morph_names`.
 
-**Extensions.** Twenty are read, the ones three.js's `GLTFLoader` reads
+**Extensions.** Twenty-one are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
 `KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors and
@@ -149,9 +149,9 @@ integer type; a file that asks for that is not valid glTF, and it is
 refused.
 `EXT_materials_bump` makes a `PHYSICAL` one with a bump map, as three.js
 reads it. `KHR_texture_basisu` reads the KTX 2.0 image it names through
-`render.ktx2`; see `ktx2_texture`. `EXT_texture_webp` is not read: a
-WebP image is not decoded, so a texture reads its fallback `source`, and
-a file that requires the extension is refused.
+`render.ktx2`; see `ktx2_texture`. `EXT_texture_webp` reads the WebP
+image it names through `render.webp`, before the texture's own `source`,
+as three.js's plugin reads it.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
@@ -261,6 +261,7 @@ from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.tga import decode as decode_tga
+from render.webp import decode as decode_webp, is_webp
 from render import ktx2
 from render.texture import (
     Alpha,
@@ -428,9 +429,6 @@ comptime MATERIALS_BUMP = "EXT_materials_bump"
 comptime TEXTURE_BASISU = "KHR_texture_basisu"
 comptime MESHOPT_COMPRESSION = "EXT_meshopt_compression"
 comptime MATERIALS_VARIANTS = "KHR_materials_variants"
-# WebP images, which this port does not decode. A texture that names a
-# WebP image reads its fallback `source`, and a file that requires the
-# extension is refused.
 comptime TEXTURE_WEBP = "EXT_texture_webp"
 
 # A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
@@ -838,8 +836,9 @@ def load_gltf(
             texture transforms differ, a specular color factor is outside
             zero to one, a skinned node is instanced, a point or a line is
             on a skinned or an instanced node, `targetNames` do not name
-            each target, a texture names no image or only a WebP one, a
-            KTX 2.0 image is refused by `render.ktx2`, or a material, a
+            each target, a texture names no image, a KTX 2.0 image is
+            refused by `render.ktx2`, a WebP image by `render.webp`, or a
+            material, a
             light or an instance matrix is one its type refuses.
     """
     var document = parse_json(text)
@@ -851,12 +850,6 @@ def load_gltf(
     if required != NO_NODE:
         for slot in range(document.length(required)):
             var name = document.string(document.at(required, slot))
-            if name == TEXTURE_WEBP:
-                raise Error(
-                    "glTF: the file requires EXT_texture_webp, and WebP"
-                    " images are not decoded: give each texture a PNG or"
-                    " JPEG source as well"
-                )
             if not is_supported_extension(name):
                 raise Error(
                     "glTF: the file requires an extension that is not read: "
@@ -940,7 +933,7 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the twenty this loader reads.
+        Whether it is one of the twenty-one this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
@@ -962,6 +955,7 @@ def is_supported_extension(name: String) -> Bool:
         or name == GPU_INSTANCING
         or name == MESHOPT_COMPRESSION
         or name == MATERIALS_VARIANTS
+        or name == TEXTURE_WEBP
         or name == DRACO_MESH_COMPRESSION
     )
 
@@ -1622,18 +1616,16 @@ struct _Loader(Movable):
     def image_of(self, texture: Int) raises -> Int:
         """Return the image a texture reads: its `KHR_texture_basisu`
         source when it has one, as three.js's plugin reads it first, and
-        its own `source` otherwise. A texture that names only a WebP image
-        is refused: see `TEXTURE_WEBP`."""
+        its `EXT_texture_webp` source next, and its own `source`
+        otherwise, in the order three.js's plugins are registered."""
         var basis = self.extension(texture, TEXTURE_BASISU)
         if basis != NO_NODE:
             return self.required_integer(basis, "source")
+        var webp = self.extension(texture, TEXTURE_WEBP)
+        if webp != NO_NODE:
+            return self.required_integer(webp, "source")
         if self.document.has(texture, "source"):
             return self.required_integer(texture, "source")
-        if self.extension(texture, TEXTURE_WEBP) != NO_NODE:
-            raise Error(
-                "glTF: a texture names only a WebP image, and WebP images"
-                " are not decoded"
-            )
         raise Error("glTF: source is required")
 
     def image_bytes(self, index: Int) raises -> List[UInt8]:
@@ -3630,25 +3622,28 @@ def ktx2_texture(
 def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
     """Return an image decoded by what its first bytes say it is.
 
-    A PNG and a JPEG each begin with a signature. A TGA has none, so bytes
-    that begin as neither are read as a TGA, whose header check refuses
-    most other files. glTF itself names only PNG and JPEG; the TGA
-    fallback is this port's, for a model that points at a TGA texture.
+    A PNG, a JPEG and a WebP file each begin with a signature. A TGA has
+    none, so bytes that begin as none of those are read as a TGA, whose
+    header check refuses most other files. glTF names PNG and JPEG, and
+    `EXT_texture_webp` WebP; the TGA fallback is this port's, for a model
+    that points at a TGA texture.
 
     Args:
-        bytes: A PNG, a JPEG or a TGA file.
+        bytes: A PNG, a JPEG, a WebP or a TGA file.
 
     Returns:
         The image.
 
     Raises:
-        Error: If the bytes begin as neither PNG nor JPEG and are not a
-            TGA either, or the decoder refuses them.
+        Error: If the bytes begin as none of PNG, JPEG and WebP and are not
+            a TGA either, or the decoder refuses them.
     """
     if len(bytes) >= 8 and bytes[0] == 0x89 and bytes[1] == 0x50:
         return decode_png(bytes)
     if len(bytes) >= 2 and bytes[0] == 0xFF and bytes[1] == 0xD8:
         return decode_jpeg(bytes)
+    if is_webp(bytes):
+        return decode_webp(bytes)
     try:
         return decode_tga(bytes)
     except error:

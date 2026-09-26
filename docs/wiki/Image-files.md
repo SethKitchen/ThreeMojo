@@ -1,10 +1,10 @@
 # Image files
 
-`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo` and `render/tiff.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
+`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo`, `render/ppm.mojo`, `render/tiff.mojo` and `render/webp.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, WebP, TGA, TIFF, Radiance HDR and OpenEXR. No compression or image library is involved.
 
 ![A triangle turns in an animated PNG](out/spin.png)
 
-three.js: `TextureLoader` for reading PNG and JPEG, `TGALoader` for TGA, and `TIFFLoader` for TIFF. three.js writes nothing; the browser does.
+three.js: `TextureLoader` for reading PNG, JPEG and WebP, `TGALoader` for TGA, and `TIFFLoader` for TIFF. three.js writes nothing; the browser does.
 
 ## Formats
 
@@ -14,6 +14,7 @@ three.js: `TextureLoader` for reading PNG and JPEG, `TGALoader` for TGA, and `TI
 | APNG | No | Yes | 8-bit | Many frames in one file. The first frame is a plain PNG. |
 | PPM | No | Yes | No | Plain text, for reading pixel values in an editor. |
 | JPEG | Yes | No | No | Baseline and progressive. See [Read a JPEG](#read-a-jpeg). |
+| WebP | Yes | No | 8-bit | Lossy and lossless. See [Read a WebP](#read-a-webp). |
 | TGA | Yes | No | 8-bit | See [Read a TGA](#read-a-tga). |
 | TIFF | Yes | No | 8-bit | Baseline TIFF. See [Read a TIFF](#read-a-tiff). |
 | Radiance HDR | Yes | No | No | Linear floats. See [HDR images](Textures#hdr-images). |
@@ -182,6 +183,37 @@ The decoder refuses these, with a message that names the problem:
 - An image of no width or no height, and a file that starts with neither `II` nor `MM`. Also a tile with no offset or no byte count. three.js gives an empty image for the first two. For such a tile, UTIF reads what it can, differently for each compression.
 
 The tests read 96 files that `assets/tiff/make_tiff.py` wrote, with Pillow and by hand. Each one must have the bytes that three.js 0.180 gives, or be one of the seven that the decoder refuses on purpose.
+
+## Read a WebP
+
+```mojo
+from render.webp import decode
+from render.texture import texture_from
+
+var image = decode(Path("assets/webp/lossy_q75.webp").read_bytes())
+var photo = assets.textures.add(texture_from(image, REPEAT, BILINEAR))
+```
+
+`render/webp.mojo`, `render/webp_lossless.mojo` and `render/webp_lossy.mojo`. `decode` returns a `DecodedImage`, eight-bit RGBA from the top, always `SRGB`. In three.js, the browser decodes WebP with libwebp. This decoder is a port of libwebp 1.6.0, and its output is the same bytes as libwebp's `dwebp`.
+
+| Part | Read |
+|---|---|
+| Container | A RIFF `WEBP` file, with or without a `VP8X` chunk. Other chunks, such as metadata, are skipped. |
+| Lossless, `VP8L` | The predictor, cross-color, subtract-green and color-indexing transforms, the color cache, and groups of Huffman codes. |
+| Lossy, `VP8 ` | A VP8 key frame with segments, one to eight token partitions, and the simple or normal loop filter. |
+| Alpha, `ALPH` | Raw or lossless, with no filter or a horizontal, vertical or gradient filter. |
+
+A lossy image becomes RGB as libwebp makes it by default: fancy upsampling of the chroma, and libwebp's fixed-point conversion. The last `ALPH` chunk counts, as in libwebp.
+
+### Errors
+
+The decoder refuses these:
+
+- What libwebp refuses. For example, a chunk or a RIFF size that runs past the file, a canvas that is not the image's size, or a malformed stream. Also alpha that does not decode.
+- An animation. libwebp's still-image decoder refuses it too.
+- A bare VP8 or VP8L stream without its RIFF container. libwebp reads one, but a WebP file always has the container.
+
+The tests read 88 files that `assets/webp/make_webp.py` wrote with libwebp's `cwebp`, some damaged on purpose. Each one must have the bytes that libwebp's `dwebp` gives, or be one of the files that libwebp refuses.
 
 ## Color space of a decoded file
 
