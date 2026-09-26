@@ -1888,7 +1888,7 @@ struct _Compiler(Movable):
             if (
                 called.result.is_matrix()
                 or (called.name == "main" and self.stage == _VERTEX)
-                or (called.result != _VOID and value.node < 0)
+                or (called.result != _VOID and value.tag != _PLAIN)
             ):
                 self.at -= 1
                 raise self.error(
