@@ -1,0 +1,2243 @@
+{
+ "scene": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Base",
+    "position": [
+     -0.5,
+     0,
+     0
+    ],
+    "pivot": [
+     -0.5,
+     0,
+     0
+    ],
+    "material": [
+     "Red|MeshPhongMaterial",
+     "Blue|MeshPhongMaterial",
+     "Red|MeshPhongMaterial"
+    ],
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0.5,
+      0,
+      0,
+      -0.5,
+      0,
+      0,
+      -0.5,
+      1,
+      0,
+      0.5,
+      1,
+      0,
+      -1.5,
+      0,
+      0,
+      -2.5,
+      0,
+      1,
+      -2.5,
+      1,
+      1,
+      -2,
+      2,
+      0.5,
+      -1.5,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      -0.7071067690849304,
+      0,
+      -0.7071067690849304,
+      -0.7071067690849304,
+      0,
+      -0.7071067690849304,
+      -0.7071067690849304,
+      0,
+      -0.7071067690849304,
+      -0.7071067690849304,
+      0,
+      -0.7071067690849304,
+      -0.7071067690849304,
+      0,
+      -0.7071067690849304
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      1,
+      0,
+      1,
+      0.5,
+      0.5,
+      0.25,
+      0.75,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3,
+     0,
+     3,
+     2,
+     0,
+     2,
+     1,
+     4,
+     5,
+     6,
+     4,
+     6,
+     7,
+     4,
+     7,
+     8
+    ],
+    "groups": [
+     [
+      0,
+      6,
+      0
+     ],
+     [
+      6,
+      6,
+      1
+     ],
+     [
+      12,
+      9,
+      2
+     ]
+    ],
+    "morphs": [
+     {
+      "name": "Grow",
+      "array": [
+       0,
+       0,
+       0,
+       -0.5,
+       0,
+       0,
+       -0.5,
+       1.5,
+       -0.25,
+       0,
+       1,
+       0,
+       -2,
+       0,
+       0,
+       -3,
+       0,
+       1,
+       -3,
+       1,
+       1,
+       -2.5,
+       2,
+       0.5,
+       -2,
+       1,
+       0
+      ]
+     },
+     {
+      "name": "Moved",
+      "array": [
+       -1,
+       -1,
+       1,
+       -1,
+       0,
+       0,
+       -1,
+       1,
+       0,
+       0,
+       1,
+       0,
+       -2,
+       0,
+       0,
+       -3,
+       0,
+       1,
+       -3,
+       1,
+       1,
+       -2.5,
+       2,
+       0.5,
+       -2,
+       1,
+       0
+      ]
+     }
+    ],
+    "morphRelative": false,
+    "matNames": [
+     "Red",
+     "Blue",
+     "Red"
+    ],
+    "children": [
+     {
+      "type": "LineSegments",
+      "name": "scene_layer_1",
+      "position": [
+       0.5,
+       1,
+       0
+      ],
+      "pivot": [
+       0,
+       1,
+       0
+      ],
+      "material": "|LineBasicMaterial",
+      "position_attribute": {
+       "itemSize": 3,
+       "array": [
+        0,
+        -1,
+        0,
+        -1,
+        0,
+        1,
+        -2,
+        -1,
+        1
+       ]
+      },
+      "normal": {
+       "itemSize": 3,
+       "array": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        "NaN",
+        "NaN",
+        "NaN"
+       ]
+      },
+      "uv": {
+       "itemSize": 2,
+       "array": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+       ]
+      },
+      "index": [
+       0,
+       1,
+       1,
+       2
+      ],
+      "groups": [],
+      "morphs": [],
+      "morphRelative": false,
+      "matNames": [
+       "Green"
+      ],
+      "children": []
+     }
+    ]
+   },
+   {
+    "type": "Points",
+    "name": "Dots",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "|PointsMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      2,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN"
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "Blue"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Red",
+    "side": 2,
+    "flatShading": false,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 0.25,
+    "shininess": 263,
+    "reflectivity": 0.30000001192092896,
+    "combine": 2,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     0.7199999916553494,
+     0.17999999791383736,
+     0.08999999895691868
+    ],
+    "emissive": [
+     0.7199999916553494,
+     0.17999999791383736,
+     0.08999999895691868
+    ],
+    "specular": [
+     0.4000000059604645,
+     0.4000000059604645,
+     0.4000000059604645
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   },
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Blue",
+    "side": 0,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     0.10000000149011612,
+     0.20000000298023224,
+     0.8999999761581421
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.5,
+     0.5,
+     0.5
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   },
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Green",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     0.20000000298023224,
+     0.8999999761581421,
+     0.30000001192092896
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "standard": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Only",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "Shiny|MeshStandardMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      1,
+      0,
+      1
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "Shiny"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshStandardMaterial",
+    "name": "Shiny",
+    "side": 2,
+    "flatShading": false,
+    "opacity": 1,
+    "transparent": true,
+    "emissiveIntensity": 0.4,
+    "roughness": 0.35,
+    "metalness": 1,
+    "bumpScale": 0.2,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0.21586050010324415,
+     0.21586050010324415,
+     0.21586050010324415
+    ],
+    "map": {
+     "name": "models/images/color.png",
+     "wrapS": 1000,
+     "wrapT": 1002,
+     "mapping": 300,
+     "colorSpace": "srgb"
+    },
+    "normalMap": {
+     "name": "models/images/normal.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "envMap": {
+     "name": "models/images/env.hdr",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 304,
+     "colorSpace": ""
+    },
+    "normalScale": [
+     0.5,
+     0.5
+    ]
+   }
+  ]
+ },
+ "phong": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Only",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "Shiny|MeshPhongMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      1,
+      0,
+      1
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "Shiny"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Shiny",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": true,
+    "emissiveIntensity": 0.3,
+    "shininess": 39,
+    "reflectivity": 0.2,
+    "combine": 2,
+    "refractionRatio": 0.7000000000000001,
+    "bumpScale": 1,
+    "color": [
+     0.8,
+     0.8,
+     0.8
+    ],
+    "emissive": [
+     0.21586050010324415,
+     0.21586050010324415,
+     0.21586050010324415
+    ],
+    "specular": [
+     0.54,
+     0.54,
+     0.54
+    ],
+    "map": {
+     "name": "models/images/clip.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": "srgb"
+    },
+    "emissiveMap": {
+     "name": "models/images/glow.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": "srgb"
+    },
+    "alphaMap": {
+     "name": "models/images/cut.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "physical": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Only",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "Shiny|MeshPhysicalMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      1,
+      0,
+      1
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "Shiny"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhysicalMaterial",
+    "name": "Shiny",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "reflectivity": 0.49999999999999983,
+    "roughness": 1,
+    "metalness": 1,
+    "clearcoat": 0.7,
+    "clearcoatRoughness": 0.3,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0.21586050010324415,
+     0.21586050010324415,
+     0.21586050010324415
+    ],
+    "roughnessMap": {
+     "name": "models/images/rough.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "metalnessMap": {
+     "name": "models/images/metal.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "envMap": {
+     "name": "models/images/sky.hdr",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 303,
+     "colorSpace": ""
+    },
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "kitchen": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Main",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": [
+     "Red|MeshPhongMaterial",
+     null,
+     "Red|MeshPhongMaterial",
+     "Blues|MeshPhongMaterial"
+    ],
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3,
+     0,
+     1,
+     3,
+     1,
+     2,
+     3,
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [
+     [
+      0,
+      6,
+      0
+     ],
+     [
+      6,
+      3,
+      1
+     ],
+     [
+      9,
+      3,
+      2
+     ],
+     [
+      12,
+      3,
+      3
+     ],
+     [
+      15,
+      3,
+      1
+     ],
+     [
+      18,
+      3,
+      2
+     ]
+    ],
+    "morphs": [
+     {
+      "name": "Far",
+      "array": [
+       0,
+       0,
+       0,
+       -1,
+       1,
+       0,
+       -1,
+       1,
+       0,
+       0,
+       1,
+       0
+      ]
+     }
+    ],
+    "morphRelative": false,
+    "matNames": [
+     "Red",
+     "Gone",
+     "Red",
+     "Blues"
+    ],
+    "children": []
+   },
+   {
+    "type": "Mesh",
+    "name": "Empty",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": [],
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0
+     ]
+    },
+    "index": [],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Red",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     1,
+     0,
+     0
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   },
+   {
+    "type": "MeshPhongMaterial",
+    "name": "Blues",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     0,
+     0,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "kitchen3": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "Only",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "Shiny|MeshPhysicalMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [
+     [
+      0,
+      3,
+      0
+     ],
+     [
+      3,
+      3,
+      1
+     ]
+    ],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "Shiny",
+     "Missing"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhysicalMaterial",
+    "name": "Shiny",
+    "side": 0,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": true,
+    "emissiveIntensity": 0.5,
+    "reflectivity": 0.5,
+    "roughness": 1,
+    "metalness": 1,
+    "clearcoat": 0.5,
+    "clearcoatRoughness": 0,
+    "bumpScale": 1,
+    "color": [
+     0.27999999999999997,
+     0.42,
+     0.63
+    ],
+    "emissive": [
+     0.21586050010324415,
+     0.21586050010324415,
+     0.21586050010324415
+    ],
+    "aoMap": {
+     "name": "models/images/three.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "roughnessMap": {
+     "name": "models/images/three.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "emissiveMap": {
+     "name": "models/images/six.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": "srgb"
+    },
+    "metalnessMap": {
+     "name": "models/images/six.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "alphaMap": {
+     "name": "models/images/three.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "normalMap": {
+     "name": "models/images/three.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "bumpMap": {
+     "name": "models/images/three.png",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": ""
+    },
+    "envMap": {
+     "name": "models/images/env.hdr",
+     "wrapS": 1001,
+     "wrapT": 1001,
+     "mapping": 304,
+     "colorSpace": ""
+    },
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/color_no_value": {
+  "error": "TypeError: Cannot read properties of undefined (reading '0')"
+ },
+ "broken/color_shape": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshStandardMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshStandardMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "roughness": 0.5,
+    "metalness": 0,
+    "bumpScale": 1,
+    "color": [
+     null,
+     null,
+     null
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/empty_tags": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'split')"
+ },
+ "broken/entry_on_text": {
+  "error": "TypeError: Cannot create property 'value' on string 't\u0000'"
+ },
+ "broken/far_point": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshPhongMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     9
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/far_uv": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshPhongMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      "NaN",
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/few_tags": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshPhongMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2,
+     0,
+     2,
+     3
+    ],
+    "groups": [
+     [
+      0,
+      3,
+      0
+     ],
+     [
+      3,
+      3,
+      1
+     ]
+    ],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S",
+     null
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/lines_no_surface": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'color')"
+ },
+ "broken/no_connections": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'forEach')"
+ },
+ "broken/no_form": {
+  "error": "TypeError: Cannot set properties of undefined (setting 'description')"
+ },
+ "broken/no_material": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'Color')"
+ },
+ "broken/no_material_node": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'attributes')"
+ },
+ "broken/no_node": {
+  "error": "TypeError: Cannot set properties of undefined (setting 'UVChannel')"
+ },
+ "broken/no_node_names": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'forEach')"
+ },
+ "broken/no_parent": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'add')"
+ },
+ "broken/no_polygons": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'points')"
+ },
+ "broken/no_surface": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'attributes')"
+ },
+ "broken/no_tags": {
+  "error": "TypeError: Cannot read properties of undefined (reading '0')"
+ },
+ "broken/no_texture_file": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'roughnessMap')"
+ },
+ "broken/no_texture_node": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'fileName')"
+ },
+ "broken/no_value": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshStandardMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshStandardMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "roughness": 1,
+    "metalness": 0,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/not_form": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'materials')"
+ },
+ "broken/not_lwo": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'materials')"
+ },
+ "broken/not_surface": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'side')"
+ },
+ "broken/open_string": {
+  "error": "RangeError: Invalid typed array length: -181"
+ },
+ "broken/points_after": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshPhongMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": []
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": []
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": []
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshPhongMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "shininess": 30,
+    "reflectivity": 1,
+    "combine": 0,
+    "refractionRatio": 0.98,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "specular": [
+     0.005605391621829107,
+     0.005605391621829107,
+     0.005605391621829107
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/scalar_shape": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshStandardMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshStandardMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "roughness": [
+     1,
+     2,
+     3
+    ],
+    "metalness": 0,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ "broken/short": {
+  "error": "RangeError: Offset is outside the bounds of the DataView"
+ },
+ "broken/short_inputs": {
+  "error": "TypeError: Cannot read properties of undefined (reading '0')"
+ },
+ "broken/short_node_inputs": {
+  "error": "TypeError: Cannot read properties of undefined (reading 'fileName')"
+ },
+ "broken/tags_first": {
+  "error": "TypeError: Cannot set properties of undefined (setting 'materialIndices')"
+ },
+ "broken/wrap7": {
+  "meshes": [
+   {
+    "type": "Mesh",
+    "name": "L",
+    "position": [
+     0,
+     0,
+     0
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "material": "S|MeshStandardMaterial",
+    "position_attribute": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      1,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    "normal": {
+     "itemSize": 3,
+     "array": [
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0
+     ]
+    },
+    "uv": {
+     "itemSize": 2,
+     "array": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "index": [
+     0,
+     1,
+     2
+    ],
+    "groups": [],
+    "morphs": [],
+    "morphRelative": false,
+    "matNames": [
+     "S"
+    ],
+    "children": []
+   }
+  ],
+  "materials": [
+   {
+    "type": "MeshStandardMaterial",
+    "name": "S",
+    "side": 1,
+    "flatShading": true,
+    "opacity": 1,
+    "transparent": false,
+    "emissiveIntensity": 1,
+    "roughness": 0.5,
+    "metalness": 0,
+    "bumpScale": 1,
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "emissive": [
+     0,
+     0,
+     0
+    ],
+    "map": {
+     "name": "models/a.png",
+     "wrapT": 1001,
+     "mapping": 300,
+     "colorSpace": "srgb"
+    },
+    "normalScale": [
+     1,
+     1
+    ]
+   }
+  ]
+ }
+}
