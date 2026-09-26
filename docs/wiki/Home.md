@@ -66,6 +66,20 @@ Look something up.
 - [Commands](Commands)
 - [Examples](Examples)
 - [Benchmarks](Benchmarks)
+- [Extensions](Extensions)
+- [Water](Water)
+- [Femur](Femur)
+- [Tibia](Tibia)
+- [Fibula](Fibula)
+- [Patella](Patella)
+- [Knee](Knee)
+- [Muscles](Muscles)
+- [Vessels](Vessels)
+- [Lymph](Lymph)
+- [Nerves](Nerves)
+- [Integument](Integument)
+- [Leg](Leg)
+- [Foot](Foot)
 
 ## Explanation
 
@@ -84,6 +98,7 @@ Understand why.
 - [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code)
 - [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands)
 - [Why the PNG reader checks structure](Why-the-PNG-reader-checks-structure)
+- [Why extensions sit beside the port](Why-extensions-sit-beside-the-port)
 - [The CUDA teardown hang](The-CUDA-teardown-hang)
 - [The Mojo compiler hang](The-Mojo-compiler-hang)
 

@@ -354,6 +354,24 @@ The port is not at parity with three.js yet. 194 features are ported and 9 are o
 
 <!-- /features -->
 
+### Extensions
+
+Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
+
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look
+- [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue
+- [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue
+- [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue
+- [x] [Knee](https://github.com/SethKitchen/ThreeMojo/wiki/Knee): articular cartilage, menisci and collateral ligaments
+- [x] [Muscles](https://github.com/SethKitchen/ThreeMojo/wiki/Muscles): stature-scaled leg muscles, with toned and untoned templates
+- [x] [Vessels](https://github.com/SethKitchen/ThreeMojo/wiki/Vessels): stature-scaled arteries and veins of the leg
+- [x] [Lymph](https://github.com/SethKitchen/ThreeMojo/wiki/Lymph): stature-scaled lymph nodes and trunks of the leg
+- [x] [Nerves](https://github.com/SethKitchen/ThreeMojo/wiki/Nerves): stature-scaled peripheral nerves of the leg
+- [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): stature-scaled skin envelope and hair of the leg
+- [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers
+- [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot, with ligaments, muscles and the later layers
+- [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
+
 ### Out of scope
 
 Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.

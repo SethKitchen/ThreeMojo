@@ -16,6 +16,7 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 - Every public symbol must have a docstring with `Args`, `Returns` and `Raises` sections.
 - Every id, mode and kind must be a type, not a bare integer. Add a file to `tests/compile_fail/` that proves the compiler rejects the integer.
 - Every value that a type can hold but the code does not accept must be refused at the boundary. Add a test that constructs the wrong value.
+- Original content that is not a three.js port lives under `extensions/`.
 - The CPU and GPU rasterizers must agree. Add a parity test to `tests/test_gpu.mojo` for any change that touches shading.
 - Documentation must follow the [writing rules](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation). `make docs-check` enforces the ones a tool can check.
 - Everything is written in American English: `color`, `meter`, `center`, `gray`. That includes identifiers, docstrings and comments.

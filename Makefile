@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing controls window exporters environments \
+                  postprocessing controls window exporters environments extensions \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
@@ -438,10 +438,14 @@ else
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
-	@# Each suite's capture is handed over on its own. Concatenated they
-	@# pass two gigabytes, and one read of that fails on macOS.
+	@# Mesh suites write gigabytes of repeated probe records. The report
+	@# only needs each line id once and each distinct MC-DC vector once.
+	@# The raw captures stay in separate files. One concatenated read of
+	@# them fails on macOS once they pass two gigabytes. The report reads
+	@# the compact stream instead.
+	@python3 coverage/compact_hits.py $(COV_DIR)/hits > $(COV_DIR)/hits.txt
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
-	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits/*.txt); \
+	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits.txt); \
 	[ $$rc -eq 0 ] || exit 1
 endif
 	@$(call stamp,coverage)
@@ -569,7 +573,15 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/nodes.png $(OUT_DIR)/ktx2.png \
            $(OUT_DIR)/coats.png $(OUT_DIR)/environment.png \
            $(OUT_DIR)/sky.png $(OUT_DIR)/faces.png \
-           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png
+           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png \
+           $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
+           $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
+           $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
+           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
+           $(OUT_DIR)/foot.png $(OUT_DIR)/limb.png \
+           $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
+           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
+           $(OUT_DIR)/water.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -904,6 +916,81 @@ $(OUT_DIR)/teapot.png: $(LIB_SOURCES) examples/utah.mojo
 $(OUT_DIR)/blobs.png: $(LIB_SOURCES) examples/blobs.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/blobs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/femur.png: $(LIB_SOURCES) examples/femur.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/tibia.png: $(LIB_SOURCES) examples/tibia.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/tibia.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fibula.png: $(LIB_SOURCES) examples/fibula.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fibula.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/knee.png: $(LIB_SOURCES) examples/knee.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/knee.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/muscles.png: $(LIB_SOURCES) examples/muscles.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/muscles.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/leg.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/legs.png: $(LIB_SOURCES) examples/legs.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/legs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/foot.png: $(LIB_SOURCES) examples/foot.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/foot.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/limb.png: $(LIB_SOURCES) examples/limb.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/limb.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vessels.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/lymph.png: $(LIB_SOURCES) examples/lymph.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lymph.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/nerves.png: $(LIB_SOURCES) examples/nerves.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/nerves.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/integument.png: $(LIB_SOURCES) examples/integument.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/water.png: $(LIB_SOURCES) examples/water.mojo assets/pebbles.jpg
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

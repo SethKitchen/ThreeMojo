@@ -72,6 +72,21 @@ mkdir -p out
 | `faces.mojo` | `faces.png` | [Meshes and assets](Meshes-and-assets#several-materials) |
 | `utah.mojo` | `teapot.png` | [Geometry addons](Geometry-addons#teapot) |
 | `blobs.mojo` | `blobs.png` | [Scene objects](Scene-objects#marching-cubes) |
+| `femur.mojo` | `femur.png` | [Femur](Femur) |
+| `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
+| `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
+| `patella.mojo` | `patella.png` | [Patella](Patella) |
+| `knee.mojo` | `knee.png` | [Knee](Knee) |
+| `muscles.mojo` | `muscles.png` | [Muscles](Muscles) |
+| `leg.mojo` | `leg.png` | [Leg](Leg) |
+| `legs.mojo` | `legs.png` | [Leg](Leg) |
+| `foot.mojo` | `foot.png` | [Foot](Foot) |
+| `limb.mojo` | `limb.png` | [Leg](Leg) |
+| `vessels.mojo` | `vessels.png` | [Vessels](Vessels) |
+| `lymph.mojo` | `lymph.png` | [Lymph](Lymph) |
+| `nerves.mojo` | `nerves.png` | [Nerves](Nerves) |
+| `integument.mojo` | `integument.png` | [Integument](Integument) |
+| `water.mojo` | `water.png` | [Water](Water) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
