@@ -335,6 +335,7 @@ from render.target import (
 )
 from render.rasterizer import (
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
@@ -10184,6 +10185,50 @@ def test_both_backends_shape_received_shadows_alike() raises:
             programs=frame.programs,
         )
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_read_transmitted_shadows_alike() raises:
+    # The block casts red through a sun's and a spot's squares and a
+    # bulb's cube: the kernel reads each map's colors as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read colored shadows alike"):
+        return
+    from test_cast_shadow import casting
+    from test_received_shadow import a_camera as shadow_camera
+    from test_received_shadow import a_shadowed_scene as shaped_scene
+    from test_received_shadow import paints
+
+    for paint in paints():
+        var assets = Assets()
+        var block = casting(assets, 1, 0)
+        var scene = shaped_scene(assets, paint.copy(), block^)
+        var camera = shadow_camera()
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        renderer.shadow_map_transmitted = True
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var device = GpuRenderer(48, 36)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            lighting,
+            draws=frame.draws,
+            programs=frame.programs,
+        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+        # The shadow pass's own mode is the host's alone.
+        with assert_raises(contains="drawn on the host"):
+            device.draw(frame.corners, BACKGROUND, SHADE_SHADOW)
 
 
 def test_both_backends_light_each_material_by_its_own_lights() raises:
