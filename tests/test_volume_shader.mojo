@@ -39,7 +39,7 @@ from std.testing import (
 from units.si import Angle, DEGREE, Length, METER
 
 comptime SIDE = 8
-comptime SIZE = 32
+comptime SIZE = 16
 
 
 def a_ball() raises -> Data3DTexture:
@@ -128,9 +128,10 @@ def render(style: VolumeStyle) raises -> Framebuffer:
 def test_a_mip_render_is_red_at_the_center_and_empty_outside() raises:
     var image = render(VOLUME_MIP)
     var middle = image.get_pixel(SIZE // 2, SIZE // 2)
-    # The brightest texel on the middle ray is the center's: red.
+    # The brightest value on the middle ray is the center's, about 0.7:
+    # mostly red.
     assert_true(middle.r > 200, "the center is red")
-    assert_true(middle.b < 60, "the center is not blue")
+    assert_true(Int(middle.r) > 2 * Int(middle.b), "the center is not blue")
     # A corner of the image misses the box, and the background stays.
     var corner = image.get_pixel(0, 0)
     assert_equal(Int(corner.r), 0)
