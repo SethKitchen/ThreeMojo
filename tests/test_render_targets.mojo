@@ -36,6 +36,8 @@ from render.target import (
     HALF_MAX,
     OUTPUT_COLOR,
     OUTPUT_NORMAL,
+    OUTPUT_METAL_ROUGH,
+    OUTPUT_VELOCITY,
     UNSIGNED_BYTE_TARGET,
     RenderTarget,
     TargetOutput,
@@ -70,14 +72,17 @@ def normal_outputs() -> List[TargetOutput]:
 # --- the two types ----------------------------------------------------------
 
 
-def test_the_three_types_and_the_two_outputs_are_valid() raises:
+def test_the_three_types_and_the_four_outputs_are_valid() raises:
     assert_true(UNSIGNED_BYTE_TARGET.is_valid())
     assert_true(HALF_FLOAT_TARGET.is_valid())
     assert_true(FLOAT_TARGET.is_valid())
     assert_false(TargetType(3).is_valid())
     assert_true(OUTPUT_COLOR.is_valid())
     assert_true(OUTPUT_NORMAL.is_valid())
-    assert_false(TargetOutput(2).is_valid())
+    assert_true(OUTPUT_VELOCITY.is_valid())
+    assert_true(OUTPUT_METAL_ROUGH.is_valid())
+    assert_false(TargetOutput(4).is_valid())
+    assert_false(TargetOutput(-1).is_valid())
 
 
 def test_a_target_no_attachment_could_hold_is_refused() raises:
@@ -89,8 +94,8 @@ def test_a_target_no_attachment_could_hold_is_refused() raises:
         check_target(FLOAT_TARGET, List[TargetOutput]())
     with assert_raises(contains="first output"):
         check_target(FLOAT_TARGET, [OUTPUT_NORMAL, OUTPUT_COLOR])
-    with assert_raises(contains="one of the two"):
-        check_target(FLOAT_TARGET, [OUTPUT_COLOR, TargetOutput(2)])
+    with assert_raises(contains="one of the four"):
+        check_target(FLOAT_TARGET, [OUTPUT_COLOR, TargetOutput(4)])
     with assert_raises(contains="repeat"):
         check_target(FLOAT_TARGET, [OUTPUT_COLOR, OUTPUT_COLOR])
     with assert_raises(contains="repeat"):

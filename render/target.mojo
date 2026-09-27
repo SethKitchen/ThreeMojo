@@ -34,7 +34,9 @@ keeps the light as it is, above one included, with no curve and no
 encode. The outputs say what each color attachment holds, three.js's
 `count` with the fragment shader's `layout(location = i)` outputs: the
 lit color first, then optionally the view-space normal of the nearest
-opaque surface, a G-buffer the screen-space passes read. See
+opaque surface, a G-buffer the screen-space passes read, and its
+velocity: how far it moved on the screen since the frame before, and its
+metalness and roughness, which three.js's SSR example reads. See
 `TargetType` and `TargetOutput`.
 
 **Data.** Not every pixel holds light. A normal material writes its normal
@@ -82,6 +84,7 @@ and `light_at` premultiply it first, where they read it as light. The
 kernel keeps its running color the same way.
 """
 
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
 from render.color_spaces import OutputEncoding
@@ -188,12 +191,18 @@ struct TargetOutput(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the two outputs there are.
+        """Return True if this is one of the four outputs there are.
 
         Returns:
-            True for `OUTPUT_COLOR` and `OUTPUT_NORMAL`.
+            True for `OUTPUT_COLOR`, `OUTPUT_NORMAL`, `OUTPUT_VELOCITY` and
+            `OUTPUT_METAL_ROUGH`.
         """
-        return self == OUTPUT_COLOR or self == OUTPUT_NORMAL
+        return (
+            self == OUTPUT_COLOR
+            or self == OUTPUT_NORMAL
+            or self == OUTPUT_VELOCITY
+            or self == OUTPUT_METAL_ROUGH
+        )
 
 
 # The lit color, what a single-attachment target holds: `pc_fragColor`.
@@ -202,6 +211,17 @@ comptime OUTPUT_COLOR = TargetOutput(0)
 # normal or bump map: three.js's `gNormal` in its multiple render targets
 # example. Zero where no triangle wrote one.
 comptime OUTPUT_NORMAL = TargetOutput(1)
+# How far the nearest opaque surface moved since the frame before, in
+# normalized device coordinates: three.js's `velocity` node in a pass's
+# multiple render targets. The current place less the place the last
+# frame's camera and object matrices put the same point. Zero where no
+# triangle wrote one. See `Renderer` for which frame is the one before.
+comptime OUTPUT_VELOCITY = TargetOutput(2)
+# The metalness and the roughness of the nearest opaque surface, after its
+# maps and its node graph, the roughness as the lighting reads it: three.js's
+# `vec2( metalness, roughness )` in the SSR example's `mrt`. Zero where no
+# triangle wrote one, and for a surface that is not standard or physical.
+comptime OUTPUT_METAL_ROUGH = TargetOutput(3)
 
 
 def color_only() -> List[TargetOutput]:
@@ -223,7 +243,7 @@ def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
     Raises:
         Error: If the type is none of the three, the list is empty, its
             first output is not `OUTPUT_COLOR`, an output is none of the
-            two, or an output repeats.
+            four, or an output repeats.
     """
     if not type.is_valid():
         raise Error("A render target type must be one of the three")
@@ -232,7 +252,7 @@ def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
     for index in range(1, len(outputs)):
         var output = outputs[index]
         if not output.is_valid():
-            raise Error("A render target output must be one of the two")
+            raise Error("A render target output must be one of the four")
         # An output written twice is one attachment too many. `index` is
         # at least one, so this loop always runs.
         for earlier in range(index):  # pragma: no branch
@@ -355,6 +375,82 @@ trait SampleSource:
             The normal, or zero where no surface wrote one.
         """
         ...
+
+    def velocity_in(self, slot: Int) -> Vector2:
+        """Return one sample's velocity.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The velocity, or zero where no surface wrote one.
+        """
+        ...
+
+    def metal_rough_in(self, slot: Int) -> Vector2:
+        """Return one sample's metalness and roughness.
+
+        Args:
+            slot: The sample's index, row by row.
+
+        Returns:
+            The two, or zero where no surface wrote them.
+        """
+        ...
+
+
+def block_metal_rough[
+    S: SampleSource
+](source: S, width: Int, factor: Int, x: Int, y: Int) -> Vector2:
+    """Return the average metalness and roughness of the `factor` by
+    `factor` block of samples under pixel (x, y) of a target `factor` times
+    smaller. Both backends call this.
+
+    Args:
+        source: The samples.
+        width: How many samples a row of `source` holds.
+        factor: How many samples across and down make one pixel.
+        x: The pixel's column.
+        y: The pixel's row.
+
+    Returns:
+        The block's average.
+    """
+    var sum = Vector2(0, 0)
+    # A factor is at least one, so both loops run.
+    for dy in range(factor):  # pragma: no branch
+        for dx in range(factor):  # pragma: no branch
+            sum = sum + source.metal_rough_in(
+                (y * factor + dy) * width + x * factor + dx
+            )
+    return sum / Float32(factor * factor)
+
+
+def block_velocity[
+    S: SampleSource
+](source: S, width: Int, factor: Int, x: Int, y: Int) -> Vector2:
+    """Return the average velocity of the `factor` by `factor` block of
+    samples under pixel (x, y) of a target `factor` times smaller: what a
+    resolved velocity attachment holds. Both backends call this.
+
+    Args:
+        source: The samples.
+        width: How many samples a row of `source` holds.
+        factor: How many samples across and down make one pixel.
+        x: The pixel's column.
+        y: The pixel's row.
+
+    Returns:
+        The block's average velocity.
+    """
+    var sum = Vector2(0, 0)
+    # A factor is at least one, so both loops run.
+    for dy in range(factor):  # pragma: no branch
+        for dx in range(factor):  # pragma: no branch
+            sum = sum + source.velocity_in(
+                (y * factor + dy) * width + x * factor + dx
+            )
+    return sum / Float32(factor * factor)
 
 
 @fieldwise_init
@@ -575,6 +671,14 @@ struct RenderTarget(Movable, SampleSource):
     # where none wrote one: the `OUTPUT_NORMAL` attachment. Empty when the
     # target has no such output, so a plain target pays nothing for it.
     var normals: List[Vector3]
+    # How far each pixel's nearest opaque surface moved on the screen since
+    # the frame before, zero where none wrote one: the `OUTPUT_VELOCITY`
+    # attachment. Empty when the target has no such output.
+    var velocities: List[Vector2]
+    # The metalness and roughness of each pixel's nearest opaque surface:
+    # the `OUTPUT_METAL_ROUGH` attachment. Empty when the target has no
+    # such output.
+    var metal_roughs: List[Vector2]
     # How many samples each pixel takes when the renderer draws into it,
     # three.js's `samples`: zero or one for none, or a square up to
     # `MAX_SAMPLES`. The samples live only while one draw lasts; the
@@ -603,7 +707,9 @@ struct RenderTarget(Movable, SampleSource):
                 `FLOAT_TARGET`. It changes what `attachment` reads back.
             outputs: What each color attachment holds, in order: three.js's
                 `count` and the shader's outputs. The color alone by
-                default. Add `OUTPUT_NORMAL` for a normal attachment.
+                default. Add `OUTPUT_NORMAL` for a normal attachment and
+                `OUTPUT_VELOCITY` for a velocity attachment, and
+                `OUTPUT_METAL_ROUGH` for the metalness and roughness.
             samples: How many samples each pixel takes when the renderer
                 draws into the target, three.js's `samples`. Zero, the
                 default, takes one.
@@ -624,6 +730,16 @@ struct RenderTarget(Movable, SampleSource):
         if OUTPUT_NORMAL in outputs:
             self.normals = List[Vector3](
                 length=width * height, fill=Vector3(0, 0, 0)
+            )
+        self.velocities = List[Vector2]()
+        if OUTPUT_VELOCITY in outputs:
+            self.velocities = List[Vector2](
+                length=width * height, fill=Vector2(0, 0)
+            )
+        self.metal_roughs = List[Vector2]()
+        if OUTPUT_METAL_ROUGH in outputs:
+            self.metal_roughs = List[Vector2](
+                length=width * height, fill=Vector2(0, 0)
             )
         self.width = width
         self.height = height
@@ -666,8 +782,9 @@ struct RenderTarget(Movable, SampleSource):
         stencil: Bool = True,
     ) raises:
         """Reset every pixel inside `rect` to `clear`, its depth to the
-        far distance, its stencil to zero, its normal to none and its flag
-        to light, leaving the rest alone.
+        far distance, its stencil to zero, its normal, velocity, metalness
+        and roughness to none
+        and its flag to light, leaving the rest alone.
 
         Each of the three buffers can be left as it is, three.js's
         `clear(color, depth, stencil)`: the color takes the normal and the
@@ -721,6 +838,18 @@ struct RenderTarget(Movable, SampleSource):
                     rect.x, rect.x + rect.width
                 ):  # pragma: no branch
                     self.normals[y * self.width + x] = Vector3(0, 0, 0)
+        if color and self.has_velocities():
+            for y in range(top, top + rect.height):  # pragma: no branch
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    self.velocities[y * self.width + x] = Vector2(0, 0)
+        if color and self.has_metal_roughs():
+            for y in range(top, top + rect.height):  # pragma: no branch
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    self.metal_roughs[y * self.width + x] = Vector2(0, 0)
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
@@ -869,6 +998,34 @@ struct RenderTarget(Movable, SampleSource):
             return Vector3(0, 0, 0)
         return self.normals[slot]
 
+    def velocity_in(self, slot: Int) -> Vector2:
+        """Return the velocity in slot `slot`.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The velocity, or zero where no surface wrote one or the target
+            has no velocity attachment.
+        """
+        if not self.has_velocities():
+            return Vector2(0, 0)
+        return self.velocities[slot]
+
+    def metal_rough_in(self, slot: Int) -> Vector2:
+        """Return the metalness and roughness in slot `slot`.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The two, or zero where no surface wrote them or the target has
+            no such attachment.
+        """
+        if not self.has_metal_roughs():
+            return Vector2(0, 0)
+        return self.metal_roughs[slot]
+
     def is_data(self, x: Int, y: Int) raises -> Bool:
         """Return True if pixel (x, y) holds data rather than light, and
         so is not tone mapped when resolved."""
@@ -946,6 +1103,8 @@ struct RenderTarget(Movable, SampleSource):
         color: FloatColor,
         data: Bool = False,
         normal: Vector3 = Vector3(0, 0, 0),
+        velocity: Vector2 = Vector2(0, 0),
+        metal_rough: Vector2 = Vector2(0, 0),
     ) raises:
         """Replace pixel (x, y) with `color`, given in straight alpha.
 
@@ -966,6 +1125,11 @@ struct RenderTarget(Movable, SampleSource):
             normal: The surface's view-space unit normal, kept when the
                 target has an `OUTPUT_NORMAL` attachment. Zero, the
                 default, is no surface: what a line or a point leaves.
+            velocity: How far the surface moved since the frame before,
+                kept when the target has an `OUTPUT_VELOCITY` attachment.
+                Zero, the default, is no motion.
+            metal_rough: The surface's metalness and roughness, kept when
+                the target has an `OUTPUT_METAL_ROUGH` attachment.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -982,6 +1146,10 @@ struct RenderTarget(Movable, SampleSource):
         self.data[slot] = data
         if self.has_normals():
             self.normals[slot] = normal
+        if self.has_velocities():
+            self.velocities[slot] = velocity
+        if self.has_metal_roughs():
+            self.metal_roughs[slot] = metal_rough
 
     def blend(
         mut self,
@@ -1114,7 +1282,9 @@ struct RenderTarget(Movable, SampleSource):
         largest depth under `REVERSED_DEPTH`.
 
         **The normal is the average of the block's, made unit length
-        again**, when the target has a normal attachment.
+        again**, when the target has a normal attachment. **The velocity
+        is the average of the block's**, when it has a velocity
+        attachment.
 
         **A pixel is data only if every sample in it is.** A block holding
         a normal beside lit smoke is not a normal any more, and the module
@@ -1164,7 +1334,8 @@ struct RenderTarget(Movable, SampleSource):
         `resolve_samples`.
 
         Every sample starts as its pixel: its color, depth, data flag,
-        stencil and normal. So a draw that clears nothing, with the
+        stencil, normal, velocity, metalness and roughness. So a draw that
+        clears nothing, with the
         renderer's `auto_clear` off, draws over what the target holds, as
         three.js draws over its multisampled renderbuffer. The clear color
         and the depth mode are the target's too.
@@ -1186,6 +1357,8 @@ struct RenderTarget(Movable, SampleSource):
         buffer.clear = self.clear
         buffer.depth_mode = self.depth_mode
         var keeps = self.has_normals()
+        var moves = self.has_velocities()
+        var surfaces = self.has_metal_roughs()
         # Walked flat, over the samples; both sides are positive, so it
         # runs.
         for sample in range(buffer.width * buffer.height):  # pragma: no branch
@@ -1198,6 +1371,10 @@ struct RenderTarget(Movable, SampleSource):
             buffer.stencil[sample] = self.stencil[slot]
             if keeps:
                 buffer.normals[sample] = self.normals[slot]
+            if moves:
+                buffer.velocities[sample] = self.velocities[slot]
+            if surfaces:
+                buffer.metal_roughs[sample] = self.metal_roughs[slot]
         return buffer^
 
     def resolve_samples(mut self, buffer: RenderTarget, rect: Rect) raises:
@@ -1205,8 +1382,9 @@ struct RenderTarget(Movable, SampleSource):
         three.js's resolve of `samples` into the target's textures.
 
         Each pixel inside `rect` becomes `resolve_block` of its block of
-        samples: the average light, the nearest depth, the unit normal
-        and the data flag, as `downsampled` resolves them. The stencil
+        samples: the average light, the nearest depth, the unit normal,
+        the average velocity and the data flag, as `downsampled` resolves
+        them. The stencil
         takes the first sample of the block, as a blit of a stencil takes
         one sample and never an average. Pixels outside `rect` are left
         as they were. The target takes the buffer's clear color and depth
@@ -1231,7 +1409,11 @@ struct RenderTarget(Movable, SampleSource):
                 "A multisample buffer must be the sample grid times the"
                 " target's size"
             )
-        if buffer.has_normals() != self.has_normals():
+        if (
+            buffer.has_normals() != self.has_normals()
+            or buffer.has_velocities() != self.has_velocities()
+            or buffer.has_metal_roughs() != self.has_metal_roughs()
+        ):
             raise Error("A multisample buffer must have the target's outputs")
         if not rect.fits(self.width, self.height):
             raise Error("A resolve must lie inside the target")
@@ -1246,6 +1428,8 @@ struct RenderTarget(Movable, SampleSource):
         self.clear = source.clear
         self.depth_mode = source.depth_mode
         var keeps = self.has_normals()
+        var moves = self.has_velocities()
+        var surfaces = self.has_metal_roughs()
         var top = rect.top(self.height)
         # Walked flat, over the rectangle's pixels: two loops around the
         # two inside `resolve_block` is the nesting that has hung codegen
@@ -1265,6 +1449,14 @@ struct RenderTarget(Movable, SampleSource):
             ]
             if keeps:
                 self.normals[slot] = resolved.normal
+            if moves:
+                self.velocities[slot] = block_velocity(
+                    source, source.width, factor, x, y
+                )
+            if surfaces:
+                self.metal_roughs[slot] = block_metal_rough(
+                    source, source.width, factor, x, y
+                )
 
     def resolve(
         self,
@@ -1488,6 +1680,65 @@ struct RenderTarget(Movable, SampleSource):
         """
         return len(self.normals) != 0
 
+    def has_velocities(self) -> Bool:
+        """Return True if this target has an `OUTPUT_VELOCITY` attachment.
+
+        Returns:
+            Whether a triangle's opaque write keeps its velocity here.
+        """
+        return len(self.velocities) != 0
+
+    def has_metal_roughs(self) -> Bool:
+        """Return True if this target has an `OUTPUT_METAL_ROUGH`
+        attachment.
+
+        Returns:
+            Whether a triangle's opaque write keeps its metalness and
+            roughness here.
+        """
+        return len(self.metal_roughs) != 0
+
+    def metal_rough_at(self, x: Int, y: Int) raises -> Vector2:
+        """Return the metalness and roughness kept at pixel (x, y).
+
+        Args:
+            x: Column.
+            y: Row.
+
+        Returns:
+            The metalness in x and the roughness in y, or zero where no
+            triangle wrote them.
+
+        Raises:
+            Error: If the coordinate is out of bounds, or the target has no
+                such attachment.
+        """
+        var slot = self._slot(x, y)
+        if not self.has_metal_roughs():
+            raise Error("This render target has no metalness attachment")
+        return self.metal_roughs[slot]
+
+    def velocity_at(self, x: Int, y: Int) raises -> Vector2:
+        """Return the velocity kept at pixel (x, y).
+
+        Args:
+            x: Column.
+            y: Row.
+
+        Returns:
+            How far the nearest opaque surface moved since the frame
+            before, in normalized device coordinates, or zero where no
+            triangle wrote one.
+
+        Raises:
+            Error: If the coordinate is out of bounds, or the target has no
+                velocity attachment.
+        """
+        var slot = self._slot(x, y)
+        if not self.has_velocities():
+            raise Error("This render target has no velocity attachment")
+        return self.velocities[slot]
+
     def normal_at(self, x: Int, y: Int) raises -> Vector3:
         """Return the view-space normal kept at pixel (x, y).
 
@@ -1520,7 +1771,11 @@ struct RenderTarget(Movable, SampleSource):
         normal with an alpha of one, and zero where no surface wrote one.
         In an `UNSIGNED_BYTE_TARGET` a normal cannot be negative, so it is
         packed first, halved and moved up by a half, three.js's
-        `packNormalToRGB`; a pixel with no normal stays zero.
+        `packNormalToRGB`; a pixel with no normal stays zero. The velocity
+        attachment holds the velocity in red and green, zero in blue and
+        one in alpha, as three.js widens its `vec2`. A byte target clamps
+        a negative velocity to zero, as WebGL does. The metalness and
+        roughness attachment holds the two in red and green the same way.
 
         Args:
             index: Which attachment, from zero to `count() - 1`.
@@ -1538,10 +1793,18 @@ struct RenderTarget(Movable, SampleSource):
         var pixels = List[Float32](capacity=total * FloatImage.CHANNELS)
         var packs = self.type == UNSIGNED_BYTE_TARGET
         var normal = self.outputs[index] == OUTPUT_NORMAL
+        var velocity = self.outputs[index] == OUTPUT_VELOCITY
+        var surface = self.outputs[index] == OUTPUT_METAL_ROUGH
         # Both dimensions are positive, so the loop always runs.
         for slot in range(total):  # pragma: no branch
             var value: FloatColor
-            if normal:
+            if surface:
+                var kept = self.metal_roughs[slot]
+                value = FloatColor(kept.x, kept.y, 0, 1)
+            elif velocity:
+                var moved = self.velocities[slot]
+                value = FloatColor(moved.x, moved.y, 0, 1)
+            elif normal:
                 var n = self.normals[slot]
                 value = FloatColor(n.x, n.y, n.z, 1)
                 if n.length() == 0:

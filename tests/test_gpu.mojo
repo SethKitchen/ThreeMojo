@@ -328,6 +328,7 @@ from materials.material import (
 from render.target import (
     FLOAT_TARGET,
     OUTPUT_COLOR,
+    OUTPUT_METAL_ROUGH,
     OUTPUT_NORMAL,
     RenderTarget,
     TargetOutput,
@@ -10049,6 +10050,101 @@ def test_both_backends_draw_a_light_map_in_texture_space_alike() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_keep_the_same_velocities() raises:
+    # A square that moves and turns between two frames, seen in
+    # perspective, so the last frame's place is interpolated as a varying
+    # and divided at each fragment on both backends.
+    if skipped_for_lack_of_a_gpu("both backends keep velocities alike"):
+        return
+    from test_velocity import a_square, moving
+
+    var assets = Assets()
+    var scene = Scene()
+    a_square(assets, scene)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 1, Length(0.1, METER), Length(20.0, METER)
+    )
+    camera.place(Vector3(0.3, 0.4, 2.5), Vector3(0, 0, 0))
+    # The host draws into a target; the device's frames are prepared by a
+    # renderer of their own, with its own history.
+    var host = Renderer(32, 32)
+    var prepares = Renderer(32, 32)
+    var first = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, moving())
+    host.render_into(first, scene, assets, camera)
+    _ = prepares.prepare_frame(scene, assets, camera, True)
+    var id = scene.meshes[0].node
+    var held = scene.get(id)
+    held.set_position(0.2, -0.1, 0.3)
+    held.set_euler(Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    scene.set(id, held^)
+    scene.update()
+    var cpu = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, moving())
+    host.render_into(cpu, scene, assets, camera)
+    var frame = prepares.prepare_frame(scene, assets, camera, True)
+    var gpu = GpuRenderer(32, 32)
+    gpu.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        draws=frame.draws,
+        programs=frame.programs,
+    )
+    var device = gpu.read_back_target(FLOAT_TARGET, moving())
+    var moved = 0
+    for y in range(32):
+        for x in range(32):
+            var want = cpu.velocity_at(x, y)
+            var got = device.velocity_at(x, y)
+            assert_true(
+                abs(want.x - got.x) <= 1e-5 and abs(want.y - got.y) <= 1e-5,
+                "the backends' velocities differ",
+            )
+            if want.length() > 0.01:
+                moved += 1
+    assert_true(moved > 100, "too little of the square moved")
+
+
+def test_both_backends_keep_the_same_metalness_and_roughness() raises:
+    # A rough metal floor and a basic box: the floor keeps its metalness
+    # and its roughness after the floor and the geometry roughness, the
+    # box keeps zeros, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends keep metalness alike"):
+        return
+    from test_ssr_node import a_camera as ssr_camera, a_scene as ssr_scene
+
+    var assets = Assets()
+    var scene = ssr_scene(assets, 0.6)
+    var camera = ssr_camera()
+    var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_METAL_ROUGH]
+    var renderer = Renderer(32, 32)
+    var cpu = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, outputs)
+    renderer.render_into(cpu, scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var gpu = GpuRenderer(32, 32)
+    gpu.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        draws=frame.draws,
+        programs=frame.programs,
+    )
+    var device = gpu.read_back_target(FLOAT_TARGET, outputs)
+    var metal = 0
+    for y in range(32):
+        for x in range(32):
+            var want = cpu.metal_rough_at(x, y)
+            var got = device.metal_rough_at(x, y)
+            assert_true(
+                abs(want.x - got.x) <= 1e-5 and abs(want.y - got.y) <= 1e-5,
+                "the backends' metalness and roughness differ",
+            )
+            if want.x == 1:
+                metal += 1
+    assert_true(metal > 100, "too little of the floor is metal")
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
@@ -10324,6 +10420,45 @@ def test_the_gpu_composer_matches_the_host_on_a_render_alone() raises:
     if skipped_for_lack_of_a_gpu("post render"):
         return
     assert_equal(compare_post(List[Pass]()), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_motion_blur() raises:
+    # The camera slides between frames, so the second frame's velocities
+    # blur it. Each composer draws with a renderer of its own, which keeps
+    # its own history.
+    if skipped_for_lack_of_a_gpu("post motion blur"):
+        return
+    var assets = Assets()
+    var scene = post_scene(assets)
+    var host_renderer = post_renderer()
+    var device_renderer = post_renderer()
+    var host = EffectComposer()
+    var device_side = EffectComposer()
+    from postprocessing.composer import motion_blur_pass
+
+    host.add_pass(render_pass())
+    host.add_pass(motion_blur_pass(2, 8))
+    device_side.add_pass(render_pass())
+    device_side.add_pass(motion_blur_pass(2, 8))
+    var device = GpuComposer(POST_WIDTH, POST_HEIGHT)
+    var still = EffectComposer()
+    still.add_pass(render_pass())
+    for frame in range(2):
+        var camera = post_camera()
+        camera.place(
+            Vector3(Float32(frame) * 0.2, 0.3, 3.0),
+            Vector3(Float32(frame) * 0.2, 0, 0),
+        )
+        var cpu = host.render(host_renderer, scene, assets, camera, 0.25)
+        var gpu = device.render(
+            device_side, device_renderer, scene, assets, camera, 0.25
+        )
+        assert_equal(count_mismatches(cpu, gpu, 1), 0)
+        if frame == 1:
+            var sharp = still.render(
+                post_renderer(), scene, assets, camera, 0.25
+            )
+            assert_true(count_mismatches(cpu, sharp, 2) > 20)
 
 
 def test_the_gpu_composer_matches_the_host_on_a_copy() raises:

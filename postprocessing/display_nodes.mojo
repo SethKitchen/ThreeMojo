@@ -5,8 +5,14 @@
 
 """Post-processing from three.js's TSL display nodes, run as composer
 passes: `GaussianBlurNode`, `boxBlur`, `hashBlur`,
-`ChromaticAberrationNode`, `AnamorphicNode` and `LensflareNode`, and
-`Bayer`'s `bayer16`.
+`ChromaticAberrationNode`, `AnamorphicNode`, `LensflareNode`,
+`motionBlur` and `DepthOfFieldNode`, and `Bayer`'s `bayer16`.
+
+**What the motion blur reads.** `motionBlur` reads the frame's velocity
+attachment, which the render pass fills: each pixel sums taps along its
+own velocity, as three.js's node sums them. The node adds the velocity
+to a texture coordinate that grows down the image, so its vertical taps
+go against the velocity. So do these.
 
 **What each reads.** A node reads a texture three.js keeps straight. The
 frame holds premultiplied light, so a node that reads straight color
@@ -23,8 +29,11 @@ three.js's `resolutionScale` and `downSampleRatio`, is worked out at that
 size and read back bilinear at the frame's.
 """
 
+from math.smoothstep import smoothstep
+from math.vector2 import Vector2
 from postprocessing.sampling import LightView, u_of, v_of
-from postprocessing.screen_space import glsl_rand
+from postprocessing.screen_space import DepthView, glsl_rand
+from units.si import Length, METER
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pi, pow, sin, sqrt
@@ -74,6 +83,16 @@ struct DisplaySettings(ImplicitlyCopyable):
     var ghost_spacing: Float32
     var ghost_attenuation: Float32
     var down_sample_ratio: Float32
+    # `motionBlur`'s `numSamples`, and what the velocity is scaled by
+    # first, the `blurAmount` three.js's example multiplies it by.
+    var motion_samples: Int
+    var motion_amount: Float32
+    # `dof`'s `focusDistance`, `focalLength` and `bokehScale`: where the
+    # focus is, how far from it the blur is whole, and how wide the bokeh
+    # is, in pixels.
+    var focus_distance: Length
+    var focal_length: Length
+    var bokeh_scale: Float32
 
     def __init__(out self):
         """Start with three.js's defaults."""
@@ -101,6 +120,11 @@ struct DisplaySettings(ImplicitlyCopyable):
         self.ghost_spacing = 0.25
         self.ghost_attenuation = 25
         self.down_sample_ratio = 4
+        self.motion_samples = 16
+        self.motion_amount = 1
+        self.focus_distance = Length(1, METER)
+        self.focal_length = Length(1, METER)
+        self.bokeh_scale = 1
 
 
 def check_display(settings: DisplaySettings) raises:
@@ -112,8 +136,9 @@ def check_display(settings: DisplaySettings) raises:
     Raises:
         Error: If a number is not finite; the sigma is negative; the
             resolution scale or the down sample ratio is not positive; a
-            size, a separation, a repeat count, a sample count or a ghost
-            count is below what each needs.
+            size, a separation, a repeat count, a sample count, a ghost
+            count or a motion blur's sample count is below what each
+            needs; or a depth of field's focal length is not positive.
     """
     var finite = (
         isfinite(settings.sigma)
@@ -134,6 +159,10 @@ def check_display(settings: DisplaySettings) raises:
         and isfinite(settings.ghost_spacing)
         and isfinite(settings.ghost_attenuation)
         and isfinite(settings.down_sample_ratio)
+        and isfinite(settings.motion_amount)
+        and isfinite(settings.focus_distance.value)
+        and isfinite(settings.focal_length.value)
+        and isfinite(settings.bokeh_scale)
     )
     if not finite:
         raise Error("A display pass setting must be finite")
@@ -147,6 +176,10 @@ def check_display(settings: DisplaySettings) raises:
         raise Error("A hash blur needs a repeat, an anamorphic two samples")
     if settings.ghost_samples < 0:
         raise Error("A lens flare's ghost count must not be negative")
+    if settings.motion_samples < 2:
+        raise Error("A motion blur takes at least two samples")
+    if settings.focal_length.value <= 0:
+        raise Error("A depth of field's focal length must be positive")
 
 
 # --- reading a frame ---------------------------------------------------------
@@ -434,6 +467,323 @@ def hash_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
             frame.colors[slot] = hash_blur_pixel(view, x, y, settings)
             frame.data[slot] = False
     _ = before^
+
+
+# --- motionBlur --------------------------------------------------------------
+
+
+def motion_blur_pixel(
+    source: LightView, x: Int, y: Int, velocity: Vector2, samples: Int
+) -> FloatColor:
+    """Return one pixel of three.js's `motionBlur`: the pixel, and a tap
+    `i / (samples - 1) - 0.5` of the velocity along for each `i` from one
+    to `samples`, summed and divided by `samples`. The node's loop runs
+    one step more than its divisor, so the sum of an even frame is a
+    little above it, as three.js's is.
+
+    Both the composer and the GPU composer call this.
+
+    Args:
+        source: The frame.
+        x: The column.
+        y: The row, down from the top.
+        velocity: The pixel's velocity, scaled by the pass's amount, in
+            texture coordinates: three.js adds it to the uv as it is, and
+            its uv grows down.
+        samples: `numSamples`, at least two.
+
+    Returns:
+        The mean, as the frame holds it.
+    """
+    var u = u_of(x, source.width)
+    var v = v_of(y, source.height)
+    var count = Float32(samples)
+    var sum = _tap(source, u, v, False)
+    # At least two samples, so the loop runs.
+    for index in range(1, samples + 1):  # pragma: no branch
+        var along = Float32(index) / (count - 1) - 0.5
+        sum = _add(
+            sum,
+            _tap(source, u + velocity.x * along, v - velocity.y * along, False),
+            1,
+        )
+    var share = 1 / count
+    return _stored(
+        FloatColor(sum.r * share, sum.g * share, sum.b * share, sum.a * share),
+        False,
+    )
+
+
+def motion_blur_light(
+    mut frame: RenderTarget, settings: DisplaySettings
+) raises:
+    """Run `motionBlur` over the frame, every pixel reading the frame as it
+    was before the pass and its own velocity.
+
+    Args:
+        frame: The frame, replaced. It must have a velocity attachment.
+        settings: The motion blur's samples and amount.
+
+    Raises:
+        Error: If the frame has no velocity attachment.
+    """
+    if not frame.has_velocities():
+        raise Error("A motion blur reads the frame's velocity attachment")
+    var before = frame.colors.copy()
+    var view = LightView(before, frame.width, frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        for x in range(frame.width):  # pragma: no branch
+            var slot = y * frame.width + x
+            frame.colors[slot] = motion_blur_pixel(
+                view,
+                x,
+                y,
+                frame.velocities[slot] * settings.motion_amount,
+                settings.motion_samples,
+            )
+            frame.data[slot] = False
+    _ = before^
+
+
+# --- DepthOfFieldNode --------------------------------------------------------
+
+# `_generateKernels`: 80 points on a golden-angle spiral, every fifth in
+# the 16-tap kernel and the rest in the 64-tap one.
+comptime DOF_GOLDEN_ANGLE = 2.39996323
+comptime DOF_SAMPLES = 80
+
+
+def dof_kernel(small: Bool) -> List[Vector2]:
+    """Return one of `DepthOfFieldNode`'s two kernels.
+
+    Args:
+        small: True for the 16 points, False for the 64.
+
+    Returns:
+        The points, inside the unit circle.
+    """
+    var points = List[Vector2]()
+    # The spiral has 80 points, so the loop runs.
+    for i in range(DOF_SAMPLES):  # pragma: no branch
+        if (i % 5 == 0) != small:
+            continue
+        var theta = Float64(i) * DOF_GOLDEN_ANGLE
+        var r = sqrt(Float64(i)) / sqrt(Float64(DOF_SAMPLES))
+        points.append(Vector2(Float32(r * cos(theta)), Float32(r * sin(theta))))
+    return points^
+
+
+def _resampled(view: LightView, width: Int, height: Int) -> List[FloatColor]:
+    """Return a view read bilinear at the pixel centers of a target of
+    another size, as a pass samples a texture at its own coordinates."""
+    var out = List[FloatColor](capacity=width * height)
+    for y in range(height):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            out.append(view.sample(u_of(x, width), v_of(y, height)))
+    return out^
+
+
+def dof_bokeh(
+    beauty: LightView,
+    coc: LightView,
+    width: Int,
+    height: Int,
+    full_width: Int,
+    full_height: Int,
+    bokeh_scale: Float32,
+    kernel: List[Vector2],
+) -> List[FloatColor]:
+    """Return `DepthOfFieldNode`'s `blur64` pass over a target of `width` by
+    `height`: the mean of the beauty's taps on the 64-point kernel, spread
+    by the circle of confusion, with the circle in alpha.
+
+    Args:
+        beauty: The frame, straight.
+        coc: The circle of confusion, in red.
+        width: The pass's width in pixels.
+        height: Its height.
+        full_width: The frame's width, which a step is a fraction of.
+        full_height: The frame's height.
+        bokeh_scale: The bokeh's width, in pixels.
+        kernel: The 64 points.
+
+    Returns:
+        The blur.
+    """
+    var out = List[FloatColor](capacity=width * height)
+    for y in range(height):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var u = u_of(x, width)
+            var v = v_of(y, height)
+            var circle = coc.sample(u, v).r
+            var step_u = bokeh_scale * circle / Float32(full_width)
+            var step_v = bokeh_scale * circle / Float32(full_height)
+            var r = Float32(0)
+            var g = Float32(0)
+            var b = Float32(0)
+            for i in range(len(kernel)):  # pragma: no branch
+                # The node's `uv` grows down the image.
+                var tap = beauty.sample(
+                    u + step_u * kernel[i].x, v - step_v * kernel[i].y
+                )
+                r += tap.r
+                g += tap.g
+                b += tap.b
+            var share = Float32(len(kernel))
+            out.append(FloatColor(r / share, g / share, b / share, circle))
+    return out^
+
+
+def dof_spread(
+    blurred: LightView,
+    full_width: Int,
+    full_height: Int,
+    bokeh_scale: Float32,
+    kernel: List[Vector2],
+) -> List[FloatColor]:
+    """Return `DepthOfFieldNode`'s `blur16` pass: the brightest of the
+    64-tap blur's taps on the 16-point kernel, each channel on its own,
+    with the circle of confusion kept in alpha.
+
+    Args:
+        blurred: The `dof_bokeh` pass.
+        full_width: The frame's width, which a step is a fraction of.
+        full_height: The frame's height.
+        bokeh_scale: The bokeh's width, in pixels.
+        kernel: The 16 points.
+
+    Returns:
+        The pass, the size of `blurred`.
+    """
+    var width = blurred.width
+    var height = blurred.height
+    var out = List[FloatColor](capacity=width * height)
+    for y in range(height):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var u = u_of(x, width)
+            var v = v_of(y, height)
+            var here = blurred.sample(u, v)
+            var step_u = bokeh_scale * here.a / Float32(full_width)
+            var step_v = bokeh_scale * here.a / Float32(full_height)
+            var r = here.r
+            var g = here.g
+            var b = here.b
+            for i in range(len(kernel)):  # pragma: no branch
+                var tap = blurred.sample(
+                    u + step_u * kernel[i].x, v - step_v * kernel[i].y
+                )
+                r = max(tap.r, r)
+                g = max(tap.g, g)
+                b = max(tap.b, b)
+            out.append(FloatColor(r, g, b, here.a))
+    return out^
+
+
+def dof_light(
+    mut frame: RenderTarget, view: DepthView, settings: DisplaySettings
+):
+    """Run three.js's `DepthOfFieldNode` over the frame.
+
+    The circle of confusion is worked out at every pixel from its view
+    distance, apart for the near field and the far field. The near field's
+    is blurred and halved in size. Each field then blurs the frame at half
+    size, 64 taps spread by its circle, and spreads the brightest of 16
+    taps of that. The two are mixed over the frame by their circles.
+
+    Args:
+        frame: The frame, replaced.
+        view: The frame's depth, which gives each pixel's view distance.
+        settings: The focus distance, the focal length and the bokeh's
+            scale.
+    """
+    var w = frame.width
+    var h = frame.height
+    var half_w = scaled_size(w, 0.5)
+    var half_h = scaled_size(h, 0.5)
+    var focus = settings.focus_distance.value
+    var focal = settings.focal_length.value
+    var beauty = List[FloatColor](capacity=w * h)
+    var near_field = List[FloatColor](capacity=w * h)
+    var far_field = List[FloatColor](capacity=w * h)
+    for slot in range(w * h):  # pragma: no branch
+        beauty.append(frame.straight_at(slot))
+        var signed = -view.view_z(view.depth[slot]) - focus
+        var circle = smoothstep(0, focal, abs(signed))
+        near_field.append(
+            FloatColor(circle if signed <= 0 else Float32(0), 0, 0, 1)
+        )
+        far_field.append(
+            FloatColor(circle if signed >= 0 else Float32(0), 0, 0, 1)
+        )
+    # The near field's circle, blurred as `gaussianBlur( coc, 1, 2 )` blurs
+    # it at its own size, and read at half size.
+    var weights = gaussian_coefficients(2)
+    var across = _gaussian_along(
+        LightView(near_field, w, h), w, h, weights, 1 / Float32(w), 0, True
+    )
+    var down = _gaussian_along(
+        LightView(across, w, h), w, h, weights, 0, 1 / Float32(h), True
+    )
+    var near_coc = _resampled(LightView(down, w, h), half_w, half_h)
+    var wide = dof_kernel(False)
+    var narrow = dof_kernel(True)
+    var beauty_view = LightView(beauty, w, h)
+    var near_64 = dof_bokeh(
+        beauty_view,
+        LightView(near_coc, half_w, half_h),
+        half_w,
+        half_h,
+        w,
+        h,
+        settings.bokeh_scale,
+        wide,
+    )
+    var near_16 = dof_spread(
+        LightView(near_64, half_w, half_h), w, h, settings.bokeh_scale, narrow
+    )
+    var far_64 = dof_bokeh(
+        beauty_view,
+        LightView(far_field, w, h),
+        half_w,
+        half_h,
+        w,
+        h,
+        settings.bokeh_scale,
+        wide,
+    )
+    var far_16 = dof_spread(
+        LightView(far_64, half_w, half_h), w, h, settings.bokeh_scale, narrow
+    )
+    var near_view = LightView(near_16, half_w, half_h)
+    var far_view = LightView(far_16, half_w, half_h)
+    for y in range(h):  # pragma: no branch
+        for x in range(w):  # pragma: no branch
+            var u = u_of(x, w)
+            var v = v_of(y, h)
+            var near = near_view.sample(u, v)
+            var far = far_view.sample(u, v)
+            var here = beauty_view.sample(u, v)
+            var blend_near = min(near.a, 0.5) * 2
+            var blend_far = min(far.a, 0.5) * 2
+            var r = here.r + (far.r - here.r) * blend_far
+            var g = here.g + (far.g - here.g) * blend_far
+            var b = here.b + (far.b - here.b) * blend_far
+            r = r + (near.r - r) * blend_near
+            g = g + (near.g - g) * blend_near
+            b = b + (near.b - b) * blend_near
+            var slot = y * w + x
+            frame.colors[slot] = FloatColor(r, g, b, 1)
+            frame.data[slot] = False
+    _ = beauty^
+    _ = near_field^
+    _ = far_field^
+    _ = across^
+    _ = down^
+    _ = near_coc^
+    _ = near_64^
+    _ = far_64^
+    _ = near_16^
+    _ = far_16^
 
 
 # --- ChromaticAberrationNode -------------------------------------------------

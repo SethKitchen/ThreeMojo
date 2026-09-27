@@ -69,9 +69,22 @@ from postprocessing.display_nodes import (
     check_display,
     chromatic_aberration_light,
     gaussian_blur_light,
+    dof_light,
     hash_blur_light,
     lensflare_light,
+    motion_blur_light,
 )
+from postprocessing.denoise import (
+    DenoiseSettings,
+    check_denoise,
+    denoise_light,
+)
+from postprocessing.ssr_node import (
+    SsrNodeSettings,
+    check_ssr_node,
+    ssr_node_light,
+)
+from postprocessing.traa import TraaSettings, check_traa, traa_render
 from postprocessing.effects import (
     BokehSettings,
     Bokeh2Settings,
@@ -172,6 +185,8 @@ from render.raster_state import cleared_depth, is_nearer
 from render.target import (
     OUTPUT_COLOR,
     OUTPUT_NORMAL,
+    OUTPUT_METAL_ROUGH,
+    OUTPUT_VELOCITY,
     RenderTarget,
     TargetOutput,
     color_only,
@@ -243,6 +258,11 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == CHROMATIC_ABERRATION
             or self == ANAMORPHIC
             or self == LENSFLARE
+            or self == MOTION_BLUR
+            or self == TRAA
+            or self == DENOISE
+            or self == DOF
+            or self == SSR_NODE
         )
 
 
@@ -344,6 +364,21 @@ comptime ANAMORPHIC = PassKind(42)
 # Add ghosts of the bright light mirrored through the center: three.js's
 # `LensflareNode`.
 comptime LENSFLARE = PassKind(43)
+# Blur each pixel along its velocity: three.js's `motionBlur`, reading the
+# frame's velocity attachment.
+comptime MOTION_BLUR = PassKind(44)
+# Draw the scene through a camera moved by a fraction of a pixel, and mix
+# it into the last frames where each pixel was: three.js's `TRAANode`.
+comptime TRAA = PassKind(45)
+# Average each pixel with the taps around it that are like it, by
+# luminance, depth and normal: three.js's `DenoiseNode`.
+comptime DENOISE = PassKind(46)
+# Blur the near and the far field apart by their circles of confusion,
+# with a bokeh: three.js's `DepthOfFieldNode`.
+comptime DOF = PassKind(47)
+# Add what each metallic surface reflects, marched across the frame and
+# blurred by its roughness: three.js's `SSRNode`.
+comptime SSR_NODE = PassKind(48)
 # `BloomPass.blurX` and `blurY`: how far apart the convolution's taps are,
 # in texture widths or heights, whatever the frame's size.
 comptime CONVOLUTION_STEP = Float32(0.001953125)
@@ -476,6 +511,13 @@ struct Pass(Copyable, Movable):
     var bokeh2: Bokeh2Settings
     # What a display node pass reads; see `postprocessing.display_nodes`.
     var display: DisplaySettings
+    # What a TRAA pass reads, and the history it keeps; see
+    # `postprocessing.traa`.
+    var traa: TraaSettings
+    # What a denoise pass reads; see `postprocessing.denoise`.
+    var denoise: DenoiseSettings
+    # What an SSR node pass reads; see `postprocessing.ssr_node`.
+    var ssr_node: SsrNodeSettings
     # A render pass's `overrideMaterial`, `clearColor` and `clearAlpha`,
     # each none by default, and three.js's `clear` and `clearDepth`:
     # whether a pass clears the frame before it draws, true for a render
@@ -534,6 +576,9 @@ struct Pass(Copyable, Movable):
         self.dof = DofMipMapSettings()
         self.bokeh2 = Bokeh2Settings()
         self.display = DisplaySettings()
+        self.traa = TraaSettings()
+        self.denoise = DenoiseSettings()
+        self.ssr_node = SsrNodeSettings()
         self.override_material = None
         self.render_clear_color = None
         self.render_clear_alpha = None
@@ -618,6 +663,9 @@ def check_pass(step: Pass) raises:
     check_dof_mipmap(step.dof)
     check_bokeh2(step.bokeh2)
     check_display(step.display)
+    check_traa(step.traa)
+    check_denoise(step.denoise)
+    check_ssr_node(step.ssr_node)
     var alpha = Bool(step.render_clear_alpha)
     if alpha:
         var value = step.render_clear_alpha.value()
@@ -1905,6 +1953,164 @@ def gaussian_blur_pass(
     return step^
 
 
+def motion_blur_pass(amount: Float32 = 1, samples: Int = 16) raises -> Pass:
+    """Return a pass of three.js's `motionBlur`, over the frame's velocity
+    attachment scaled by `amount`: three.js's example's
+    `motionBlur(beauty, velocity.mul(blurAmount))`. The composer's frame
+    gets a velocity attachment while the pass is enabled.
+
+    Args:
+        amount: What the velocity is scaled by, `blurAmount`.
+        samples: How many taps each pixel takes, `numSamples`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(MOTION_BLUR)
+    step.display.motion_amount = amount
+    step.display.motion_samples = samples
+    check_pass(step)
+    return step^
+
+
+def ssr_node_pass(
+    max_distance: Length = Length(1, METER),
+    thickness: Length = Length(0.1, METER),
+    intensity: Float32 = 1,
+    quality: Float32 = 0.5,
+    blur_quality: Int = 2,
+    use_roughness: Bool = True,
+) raises -> Pass:
+    """Return a pass of three.js's `ssr`, added over the frame as the SSR
+    example adds it. The composer's frame gets a normal attachment and a
+    metalness attachment while the pass is enabled.
+
+    Args:
+        max_distance: How far a ray reaches, `maxDistance`.
+        thickness: How far from the ray a surface is hit, `thickness`.
+        intensity: What the reflections are scaled by, `intensity`.
+        quality: The share of a pixel's steps the march takes, `quality`.
+        blur_quality: The roughness blur's reach, `blurQuality`.
+        use_roughness: Whether the roughness blurs the reflections, as the
+            example's `roughnessNode` does.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_ssr_node` raises.
+    """
+    var step = Pass(SSR_NODE)
+    step.ssr_node.max_distance = max_distance
+    step.ssr_node.thickness = thickness
+    step.ssr_node.intensity = intensity
+    step.ssr_node.quality = quality
+    step.ssr_node.blur_quality = blur_quality
+    step.ssr_node.use_roughness = use_roughness
+    check_pass(step)
+    return step^
+
+
+def dof_pass(
+    focus_distance: Length = Length(1, METER),
+    focal_length: Length = Length(1, METER),
+    bokeh_scale: Float32 = 1,
+) raises -> Pass:
+    """Return a pass of three.js's `dof`, over the frame and its depth.
+
+    Args:
+        focus_distance: How far from the camera the focus is,
+            `focusDistance`.
+        focal_length: How far from the focus the blur is whole,
+            `focalLength`.
+        bokeh_scale: How wide the bokeh is, in pixels, `bokehScale`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_display` raises.
+    """
+    var step = Pass(DOF)
+    step.display.focus_distance = focus_distance
+    step.display.focal_length = focal_length
+    step.display.bokeh_scale = bokeh_scale
+    check_pass(step)
+    return step^
+
+
+def denoise_pass(
+    luma_phi: Float32 = 5,
+    depth_phi: Float32 = 5,
+    normal_phi: Float32 = 5,
+    radius: Float32 = 5,
+    seed: Int = 1,
+) raises -> Pass:
+    """Return a pass of three.js's `DenoiseNode` over the frame, with the
+    frame's depth and normals. The composer's frame gets a normal
+    attachment while the pass is enabled.
+
+    Args:
+        luma_phi: How unlike in luminance a tap may be, `lumaPhi`.
+        depth_phi: How far along the normal, `depthPhi`.
+        normal_phi: How sharply the normals must agree, `normalPhi`.
+        radius: How far the outermost tap is, in pixels, `radius`.
+        seed: The seed of the noise that turns the taps.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_denoise` raises.
+    """
+    var step = Pass(DENOISE)
+    step.denoise.luma_phi = luma_phi
+    step.denoise.depth_phi = depth_phi
+    step.denoise.normal_phi = normal_phi
+    step.denoise.radius = radius
+    step.denoise.seed = seed
+    check_pass(step)
+    return step^
+
+
+def traa_pass(
+    depth_threshold: Float32 = 0.0005,
+    edge_depth_diff: Float32 = 0.001,
+    max_velocity_length: Float32 = 128,
+    use_subpixel_correction: Bool = True,
+) raises -> Pass:
+    """Return a pass of three.js's `TRAANode`, with the scene pass it reads:
+    it draws the scene itself, as a TAA pass does. Put it where a render
+    pass would go.
+
+    Args:
+        depth_threshold: How much nearer the last frame's surface may be
+            before a pixel counts as uncovered, `depthThreshold`.
+        edge_depth_diff: How far apart the depths are at an edge,
+            `edgeDepthDiff`.
+        max_velocity_length: The motion, in pixels, at which the new frame
+            takes over, `maxVelocityLength`.
+        use_subpixel_correction: Whether a velocity that is a fraction of
+            a pixel weighs the new frame up, `useSubpixelCorrection`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_traa` raises.
+    """
+    var step = Pass(TRAA)
+    step.traa.depth_threshold = depth_threshold
+    step.traa.edge_depth_diff = edge_depth_diff
+    step.traa.max_velocity_length = max_velocity_length
+    step.traa.use_subpixel_correction = use_subpixel_correction
+    check_pass(step)
+    return step^
+
+
 def box_blur_pass(
     size: Int = 1, separation: Int = 1, premultiplied_alpha: Bool = False
 ) raises -> Pass:
@@ -2430,13 +2636,13 @@ struct EffectComposer(Movable):
             _premultiply_data(frame)
             ssao_light(frame, _depth_view(frame, camera), step.ssao)
         elif step.kind == SAO:
-            # The frame's own outputs, so the drawn target carries the
-            # normals the SAO reads, as `render`'s frame does.
+            # The normals the SAO reads, as `render`'s frame carries them,
+            # and no velocity: a second frame would move the history on.
             var drawn = RenderTarget(
                 renderer.width,
                 renderer.height,
                 renderer.background,
-                outputs=frame_outputs(self.passes),
+                outputs=[OUTPUT_COLOR, OUTPUT_NORMAL],
             )
             _draw(drawn, renderer, scene, assets, camera)
             # three.js draws a fresh `randomSeed` every frame.
@@ -2505,6 +2711,27 @@ struct EffectComposer(Movable):
             anamorphic_light(frame, step.display)
         elif step.kind == LENSFLARE:
             lensflare_light(frame, step.display)
+        elif step.kind == MOTION_BLUR:
+            motion_blur_light(frame, step.display)
+        elif step.kind == SSR_NODE:
+            var world = camera.view_matrix_in(scene)
+            world.invert()
+            ssr_node_light(
+                frame, _depth_view(frame, camera), world, step.ssr_node
+            )
+        elif step.kind == DOF:
+            dof_light(frame, _depth_view(frame, camera), step.display)
+        elif step.kind == DENOISE:
+            denoise_light(frame, _depth_view(frame, camera), step.denoise)
+        elif step.kind == TRAA:
+            traa_render(
+                frame,
+                self.passes[index].traa,
+                renderer,
+                scene,
+                assets,
+                camera,
+            )
         elif step.kind == BOKEH2:
             bokeh2_light(
                 frame, depth_view(renderer, scene, assets, camera), step.bokeh2
@@ -2614,7 +2841,7 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
     zero keeps no color through the two.
 
     The passes that leave the frame's color alone or draw it new do not:
-    a mask, a clear mask, a render, the SSAA, TAA, pixelated and
+    a mask, a clear mask, a render, the SSAA, TAA, TRAA, pixelated and
     transition passes, which store their data straight themselves. Nor
     does the output pass, which leaves every data pixel as it is.
 
@@ -2630,6 +2857,7 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
         or kind == RENDER
         or kind == SSAA_RENDER
         or kind == TAA_RENDER
+        or kind == TRAA
         or kind == OUTPUT
         or kind == RENDER_PIXELATED
         or kind == RENDER_TRANSITION
@@ -2787,9 +3015,11 @@ def draw_scene[
 
 
 def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
-    """Return the outputs a composer's frame is drawn with: the color and
-    a normal attachment when an enabled SSAO, SAO, SSR or GTAO pass reads
-    normals, and the color alone otherwise.
+    """Return the outputs a composer's frame is drawn with: the color; a
+    normal attachment when an enabled SSAO, SAO, SSR, GTAO, denoise or SSR
+    node pass reads normals; a velocity attachment when an enabled motion
+    blur pass reads velocities; and a metalness attachment when an enabled
+    SSR node pass reads it.
 
     Args:
         passes: The composer's passes.
@@ -2797,6 +3027,9 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     Returns:
         The outputs.
     """
+    var normals = False
+    var velocities = False
+    var surfaces = False
     for index in range(len(passes)):
         ref step = passes[index]
         var reads = (
@@ -2804,10 +3037,23 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
             or step.kind == SAO
             or step.kind == SSR
             or step.kind == GTAO
+            or step.kind == DENOISE
+            or step.kind == SSR_NODE
         )
         if step.enabled and reads:
-            return [OUTPUT_COLOR, OUTPUT_NORMAL]
-    return color_only()
+            normals = True
+        if step.enabled and step.kind == SSR_NODE:
+            surfaces = True
+        if step.enabled and step.kind == MOTION_BLUR:
+            velocities = True
+    var outputs = color_only()
+    if normals:
+        outputs.append(OUTPUT_NORMAL)
+    if velocities:
+        outputs.append(OUTPUT_VELOCITY)
+    if surfaces:
+        outputs.append(OUTPUT_METAL_ROUGH)
+    return outputs^
 
 
 def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:

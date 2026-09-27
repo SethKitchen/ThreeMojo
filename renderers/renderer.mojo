@@ -947,12 +947,116 @@ struct _RendererState(Movable):
     var info: RenderInfo
     var shadow_items: List[RenderItem]
     var shadow_lights: List[Int]
+    # What a velocity attachment reads, three.js's `VelocityNode`: whether
+    # the frame being drawn keeps velocities, the camera's view and
+    # projection the frame before and this frame, and each object's world
+    # matrix when a frame last drew it, by its node. `drawn_worlds` holds
+    # this frame's until the frame is done.
+    var tracks_velocity: Bool
+    var knows_camera: Bool
+    # The projection velocities are measured with in the place of the
+    # camera's, or `None`: three.js's `VelocityNode.setProjectionMatrix`,
+    # which TRAA sets to the camera's projection before its jitter.
+    var velocity_projection: Optional[Matrix4]
+    var previous_view: Matrix4
+    var previous_projection: Matrix4
+    var current_view: Matrix4
+    var current_projection: Matrix4
+    var previous_worlds: Dict[Int, Matrix4]
+    var drawn_worlds: Dict[Int, Matrix4]
 
     def __init__(out self):
         """Count nothing yet."""
         self.info = RenderInfo(0, 0, 0, 0, 0)
         self.shadow_items = List[RenderItem]()
         self.shadow_lights = List[Int]()
+        self.tracks_velocity = False
+        self.knows_camera = False
+        self.velocity_projection = None
+        self.previous_view = Matrix4()
+        self.previous_projection = Matrix4()
+        self.current_view = Matrix4()
+        self.current_projection = Matrix4()
+        self.previous_worlds = Dict[Int, Matrix4]()
+        self.drawn_worlds = Dict[Int, Matrix4]()
+
+    def advance_camera(mut self, view: Matrix4, projection: Matrix4):
+        """Begin a frame that keeps velocities: the camera's matrices of the
+        last such frame become the previous ones, and these the current.
+        The first frame's previous matrices are its own, so nothing has
+        moved yet, as three.js's first frame.
+
+        Args:
+            view: The camera's view matrix this frame.
+            projection: Its projection matrix this frame, which
+                `velocity_projection` takes the place of when it is set.
+        """
+        var measured = projection
+        if Bool(self.velocity_projection):
+            measured = self.velocity_projection.value()
+        if self.knows_camera:
+            self.previous_view = self.current_view
+            self.previous_projection = self.current_projection
+        else:
+            self.previous_view = view
+            self.previous_projection = measured
+            self.knows_camera = True
+        self.current_view = view
+        self.current_projection = measured
+
+    def current_clip(self, world: Matrix4) -> Matrix4:
+        """Return the matrix that puts a draw's vertex where this frame has
+        it, in clip space, for a velocity: three.js's
+        `clipPositionCurrent`.
+
+        Args:
+            world: The draw's world matrix this frame.
+
+        Returns:
+            The projection, view and model, in one.
+        """
+        return self.current_projection * self.current_view * world
+
+    def previous_clip(
+        mut self, node: NodeId, node_world: Matrix4, world: Matrix4
+    ) raises -> Matrix4:
+        """Return the matrix that puts a draw's vertex where the last frame
+        had it, in clip space, and note the object's world matrix for the
+        next frame: three.js's `previousProjectionMatrix`,
+        `previousCameraViewMatrix` and `previousModelWorldMatrix`.
+
+        An object first drawn now has not moved. One that moved carries
+        what its node's matrix does not, an instance's own matrix, from
+        this frame.
+
+        Args:
+            node: The draw's node.
+            node_world: The node's world matrix this frame.
+            world: The draw's world matrix this frame.
+
+        Returns:
+            The last frame's projection, view and model, in one.
+
+        Raises:
+            Error: Never: the node is looked up after it is known.
+        """
+        self.drawn_worlds[node.value] = node_world
+        var model = world
+        if node.value in self.previous_worlds:
+            var then = self.previous_worlds[node.value]
+            if then != node_world:
+                var undo = node_world
+                undo.invert()
+                model = then * undo * world
+        return self.previous_projection * self.previous_view * model
+
+    def commit_worlds(mut self):
+        """End a frame that keeps velocities: each object it drew keeps its
+        world matrix for the next, three.js's `updateAfter`."""
+        for entry in self.drawn_worlds.items():
+            self.previous_worlds[entry.key] = entry.value
+        self.drawn_worlds = Dict[Int, Matrix4]()
+        self.tracks_velocity = False
 
     def begin_frame(mut self, auto_reset: Bool):
         """Count one more frame, and forget the last one's draws unless
@@ -1989,6 +2093,18 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
     return turned
 
 
+def _clip_of(matrix: Matrix4, point: Vector3) -> Vector3:
+    """Return a point's clip-space x, y and w under `matrix`, which takes
+    it as a position: what a velocity attachment interpolates. See
+    `render.rasterizer.fragment_velocity`."""
+    ref e = matrix.elements
+    return Vector3(
+        e[0] * point.x + e[4] * point.y + e[8] * point.z + e[12],
+        e[1] * point.x + e[5] * point.y + e[9] * point.z + e[13],
+        e[3] * point.x + e[7] * point.y + e[11] * point.z + e[15],
+    )
+
+
 def _to_raster(
     vertex: ClipVertex,
     to_screen: Matrix4,
@@ -2430,6 +2546,8 @@ struct _Paint(ImplicitlyCopyable):
             corner.scatter_attenuation = scattering.attenuation
             corner.scatter_power = scattering.power
             corner.scatter_scale = scattering.scale
+        corner.current = vertex.current
+        corner.previous = vertex.previous
         return corner^
 
     def emit_in_uv_space(
@@ -4468,6 +4586,20 @@ struct Renderer(Movable):
         """
         self.scissor_test = enabled
 
+    def set_velocity_projection(self, projection: Optional[Matrix4]):
+        """Measure velocities with a projection in the place of the
+        camera's, or with the camera's again: three.js's
+        `VelocityNode.setProjectionMatrix`. TRAA sets the camera's
+        projection before its jitter, so the jitter is not motion.
+
+        Kept with the renderer's history, which every copy that shares it
+        sees; see `_RendererState`.
+
+        Args:
+            projection: The projection, or `None` for the camera's own.
+        """
+        self._state[].velocity_projection = projection
+
     def _to_screen[C: Camera](self, camera: C) raises -> Matrix4:
         """Return the transform from camera space to the viewport's pixels.
 
@@ -4931,6 +5063,21 @@ struct Renderer(Movable):
                 )
                 continue
             var world = draws[slot].world
+            # For a frame that keeps velocities, the matrix that puts a
+            # vertex where the last frame had it. A light map's frame is
+            # not seen through the camera, and keeps none.
+            var tracks = self._state[].tracks_velocity and not in_uv_space
+            var front = Matrix4()
+            var back = Matrix4()
+            if tracks:
+                front = self._state[].current_clip(world)
+                back = self._state[].previous_clip(
+                    draws[slot].node,
+                    scene.world_matrix(draws[slot].node),
+                    world,
+                )
+            var current_points = List[Vector3]()
+            var previous_points = List[Vector3]()
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
             # geometric-normal fallback upside down. Asked once per draw, of
@@ -5207,6 +5354,9 @@ struct Renderer(Movable):
                 var point = world.transform_point(local)
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
+                if tracks:
+                    current_points.append(_clip_of(front, local))
+                    previous_points.append(_clip_of(back, local))
 
             # Texture coordinates do not go through the world transform:
             # they name a place in an image, not a place in the world. Nor
@@ -5499,6 +5649,13 @@ struct Renderer(Movable):
                     _light_at_corner(
                         corner_c, gouraud_lights, normal_c, world_points[third]
                     )
+                if tracks:
+                    corner_a.current = current_points[first]
+                    corner_b.current = current_points[second]
+                    corner_c.current = current_points[third]
+                    corner_a.previous = previous_points[first]
+                    corner_b.previous = previous_points[second]
+                    corner_c.previous = previous_points[third]
                 # In texture space the triangle is placed by its second
                 # coordinates, whole: nothing clips it and neither side
                 # is culled.
@@ -6466,7 +6623,13 @@ struct Renderer(Movable):
 
     def prepare_frame[
         C: Camera
-    ](self, scene: Scene, assets: Assets, camera: C,) raises -> Frame:
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        keeps_velocity: Bool = False,
+    ) raises -> Frame:
         """Turn a scene into a frame: its triangles, its segments, its
         points, and the one order all three are drawn in.
 
@@ -6489,6 +6652,11 @@ struct Renderer(Movable):
                 and lights in it.
             assets: The geometry, materials and textures they name.
             camera: The camera to project through.
+            keeps_velocity: Whether the frame is drawn into a target with
+                a velocity attachment. The camera's matrices move on, as
+                three.js's `VelocityNode` moves them once a frame, and
+                each mesh's corners carry where the last such frame had
+                them. See `render.rasterizer.fragment_velocity`.
 
         Returns:
             The frame. `Renderer.render` fills it with `rasterize_frame`
@@ -6500,7 +6668,19 @@ struct Renderer(Movable):
                 its view.
         """
         var corner_spans = List[_Span]()
-        var corners = self._prepared(scene, assets, camera, False, corner_spans)
+        self._state[].tracks_velocity = keeps_velocity
+        if keeps_velocity:
+            self._state[].advance_camera(
+                camera.view_matrix_in(scene), camera.projection_matrix()
+            )
+        var corners: List[RasterVertex]
+        try:
+            corners = self._prepared(scene, assets, camera, False, corner_spans)
+        finally:
+            # Each object drawn keeps its matrix for the next frame, even
+            # when this one is refused, and no later frame keeps
+            # velocities it did not ask for.
+            self._state[].commit_worlds()
         var segment_spans = List[_Span]()
         var segments = self._prepared_lines(
             scene, assets, camera, segment_spans
@@ -6960,7 +7140,11 @@ struct Renderer(Movable):
         hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
-        var frame = self.prepare_frame(scene, assets, camera)
+        # A target with a velocity attachment makes a frame that keeps
+        # velocities.
+        var frame = self.prepare_frame(
+            scene, assets, camera, target.has_velocities()
+        )
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
         # asks it before a launch. The uv view is data throughout and is
