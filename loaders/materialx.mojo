@@ -333,7 +333,10 @@ struct _Reader(Movable):
             var wanted = port
             var target: String
             if self.attr(element, "nodegraph") != "" and self.attr(element, "output") != "":
+                # Here `output` names the graph's output, which says its
+                # own port.
                 target = self.attr(element, "nodegraph") + "/" + self.attr(element, "output")
+                wanted = ""
             else:
                 var named = self.attr(element, "nodename")
                 if named == "":
