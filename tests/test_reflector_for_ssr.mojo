@@ -78,11 +78,14 @@ def drawn(
 
 
 def total_red(image: Framebuffer) raises -> Int:
-    """Return the red of every pixel added up."""
+    """Return how many pixels are bright red: the box, and its reflection
+    where that is at full strength."""
     var total = 0
     for y in range(SIZE):
         for x in range(SIZE):
-            total += Int(image.get_pixel(x, y).r)
+            var seen = image.get_pixel(x, y)
+            if seen.r > 200 and seen.g < 80:
+                total += 1
     return total
 
 
@@ -110,7 +113,7 @@ def test_with_depth_the_reflection_fades_by_height() raises:
         faded_assets.materials.get(mirror.mesh.material).transparent
     )
     var faded = total_red(drawn(mirror, faded_scene, faded_assets))
-    # The reflection blends at most half in, so it is less red.
+    # The reflection blends at most half in, so it is no longer bright.
     assert_true(faded < sharp)
     # Past the distance, nothing of the box is reflected.
     mirror.max_distance = meters(0.2)
