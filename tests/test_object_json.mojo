@@ -804,6 +804,30 @@ def test_a_node_material_round_trips_with_its_textures() raises:
         var nowhere = Scene()
         var nothing = Assets()
         _ = read_object_json(broken, nowhere, nothing)
+    with assert_raises(contains="a node uniform's type is none there is"):
+        var strange = text.replace('"name":"tint","offset":', '"name":"tint","type":7,"offset":')
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(strange, nowhere, nothing)
+    # A program the writer cannot write whole is refused.
+    from exporters.json_writer import JsonWriter
+    from materials.node_json import write_node_program
+
+    var writer = JsonWriter()
+    with assert_raises(contains="textures do not match it"):
+        write_node_program(writer, original, List[String](), List[String]())
+    var deep = NodeGraph()
+    deep.set_output(
+        COLOR_NODE,
+        deep.swizzle(
+            deep.texture_3d(deep.volume_uniform("cloud"), deep.vec3(0, 0, 0)),
+            "rgb",
+        ),
+    )
+    with assert_raises(contains="a 3D or an array texture is not written"):
+        write_node_program(
+            writer, deep.compile(), List[String](), List[String]()
+        )
 
 
 def test_several_things_on_a_node_become_parts() raises:
