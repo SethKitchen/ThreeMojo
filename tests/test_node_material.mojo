@@ -1360,9 +1360,7 @@ def every_read(mut assets: Assets) raises -> NodeProgramId:
         sum, graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
     )
     var extra = graph.add(
-        graph.add(
-            graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)
-        ),
+        graph.add(graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)),
         graph.varying(place),
     )
     var zero = graph.uniform("zero", Float32(0))
@@ -1394,9 +1392,9 @@ def test_points_and_lines_read_every_kind_of_texture() raises:
     faint.set_output(POSITION_NODE, faint.vec3(0, 0, 0))
     var faded = assets.materials.add(
         Material(
-            Color(255, 255, 255), kind=BASIC, nodes=assets.programs.add(
-                faint.compile()
-            )
+            Color(255, 255, 255),
+            kind=BASIC,
+            nodes=assets.programs.add(faint.compile()),
         )
     )
     var one = BufferGeometry()
