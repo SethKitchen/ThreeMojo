@@ -83,6 +83,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from render.cube_texture_store import CubeTextureId
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, isnan, sin, sqrt
 from std.testing import (
@@ -441,6 +442,62 @@ def test_a_custom_attribute_is_read_at_each_corner() raises:
     )
     with assert_raises(contains="A position node runs once per vertex"):
         _ = moved.compile()
+
+
+def test_a_3d_and_an_array_texture_are_read_at_a_vec3() raises:
+    var graph = NodeGraph()
+    var cloud = graph.volume_uniform("cloud", Data3DTextureId(3))
+    var stack = graph.array_uniform("stack")
+    var middle = graph.vec3(0.5, 0.5, 0.5)
+    var a = graph.texture_3d(cloud, middle)
+    var b = graph.texture_3d(cloud, graph.vec3(0, 0, 0))
+    var c = graph.texture_array(stack, middle)
+    graph.set_output(
+        COLOR_NODE, graph.swizzle(graph.add(a, graph.add(b, c)), "rgb")
+    )
+    var program = graph.compile()
+    # Each texture is listed once however often it is read.
+    assert_equal(len(program.volumes), 1)
+    assert_equal(program.volumes[0].value, 3)
+    assert_equal(len(program.arrays), 1)
+    assert_equal(program.arrays[0].value, -1)
+    program.set_array("stack", DataArrayTextureId(4))
+    assert_equal(program.arrays[0].value, 4)
+    program.set_volume("cloud", Data3DTextureId(1))
+    assert_equal(program.volumes[0].value, 1)
+    # A source with neither reads white.
+    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
+    with assert_raises(contains="A 3D texture uniform needs a texture"):
+        program.set_volume("cloud", Data3DTextureId(-1))
+    with assert_raises(contains="An array texture uniform needs a texture"):
+        program.set_array("stack", DataArrayTextureId(-1))
+    with assert_raises(contains="The uniform stack is a textureArray"):
+        program.set_volume("stack", Data3DTextureId(0))
+    var bad = NodeGraph()
+    with assert_raises(contains="A 3D texture uniform names no texture"):
+        _ = bad.volume_uniform("x", Data3DTextureId(-3))
+    with assert_raises(contains="An array texture uniform names no texture"):
+        _ = bad.array_uniform("y", DataArrayTextureId(-3))
+    var layers = bad.array_uniform("layers")
+    with assert_raises(contains="This read reads a texture3D, not a vec2"):
+        _ = bad.texture_3d(bad.uv(), bad.vec3(0, 0, 0))
+    with assert_raises(contains="A textureArray is read at a vec3, not a vec2"):
+        _ = bad.texture_array(layers, bad.uv())
+    # Only a fragment reads one.
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_3d(
+                    varied.volume_uniform("c"), varied.normal_world()
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
 
 
 def test_a_cube_is_read_in_a_direction() raises:

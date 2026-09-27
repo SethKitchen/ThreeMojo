@@ -90,6 +90,8 @@ from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, IGNORED, NEAREST, REPEAT, Texture
 from render.cube_texture import CubeTexture
 from render.cube_texture_store import CubeTextureId
+from render.volume_texture import Data3DTexture, DataArrayTexture, VolumeImage
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import sin, sqrt
@@ -901,6 +903,62 @@ def test_a_node_program_reads_a_cube_in_a_direction() raises:
     # A cube that is not in the store is refused.
     assets.programs.get(id).set_cube("sky", CubeTextureId(7))
     with assert_raises(contains="A node program reads a cube that is not there"):
+        _ = renderer.render(scene, assets, a_camera())
+
+
+def a_stack(first: Color, second: Color) raises -> VolumeImage:
+    """Return two texels a side and two deep: `first` in the front layer
+    and `second` in the back one."""
+    var pixels = List[UInt8]()
+    for color in [first, second]:
+        for _ in range(4):
+            pixels.append(color.r)
+            pixels.append(color.g)
+            pixels.append(color.b)
+            pixels.append(255)
+    return VolumeImage.of_bytes(2, 2, 2, pixels)
+
+
+def test_a_node_program_reads_a_3d_and_an_array_texture() raises:
+    # The 3D texture's back layer is green and the array's front layer
+    # blue, so the sum is cyan.
+    var assets = Assets()
+    var cloud = assets.data_3d_textures.add(
+        Data3DTexture(a_stack(Color(255, 0, 0), Color(0, 255, 0)))
+    )
+    var layers = assets.data_array_textures.add(
+        DataArrayTexture(a_stack(Color(0, 0, 255), Color(255, 255, 0)))
+    )
+    var graph = NodeGraph()
+    var deep = graph.texture_3d(
+        graph.volume_uniform("cloud"), graph.vec3(0.5, 0.5, 0.75)
+    )
+    var layered = graph.texture_array(
+        graph.array_uniform("layers"), graph.vec3(0.5, 0.5, 0)
+    )
+    graph.set_output(COLOR_NODE, graph.swizzle(graph.add(deep, layered), "rgb"))
+    var id = assets.programs.add(graph.compile())
+    var scene = a_scene(assets, shader_material(id))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    # Unset, each is refused before a pixel is drawn.
+    with assert_raises(contains="names no texture; call set_volume() first"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_volume("cloud", cloud)
+    with assert_raises(contains="names no texture; call set_array() first"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_array("layers", layers)
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 0)
+    assert_equal(Int(seen.g), 255)
+    assert_equal(Int(seen.b), 255)
+    # One that is not in the store is refused.
+    assets.programs.get(id).set_volume("cloud", Data3DTextureId(7))
+    with assert_raises(contains="reads a 3D texture that is not there"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_volume("cloud", cloud)
+    assets.programs.get(id).set_array("layers", DataArrayTextureId(7))
+    with assert_raises(contains="reads an array texture that is not there"):
         _ = renderer.render(scene, assets, a_camera())
 
 

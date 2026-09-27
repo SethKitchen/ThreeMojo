@@ -48,6 +48,10 @@ outside the subset is refused with the shader, the line and the reason.
 """
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
+from render.volume_texture_store import (
+    NO_DATA_3D_TEXTURE,
+    NO_DATA_ARRAY_TEXTURE,
+)
 from materials.nodes import (
     COLOR_NODE,
     DEPTH_NODE,
@@ -80,7 +84,7 @@ comptime _KEYWORDS = (
     " continue do for while switch case default if else in out inout true"
     " false invariant discard return struct precision highp mediump lowp"
     " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D ivec2"
-    " ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube "
+    " ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube sampler3D sampler2DArray "
 )
 # The most elements an array holds: each is a variable, and an index picked
 # where the shader runs reads every one.
@@ -88,7 +92,7 @@ comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
     " uint uvec2 uvec3 uvec4 mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4"
-    " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
+    " sampler2DShadow samplerCubeShadow isampler2D"
     " usampler2D "
 )
 comptime _BUILTINS = (
@@ -768,7 +772,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= _STRUCT_BASE
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seventeen types."""
+        """Return True if this is one of the nineteen types."""
         return (
             (self.value >= 0 and self.value <= 6)
             or (self.value >= 18 and self.value <= 20)
@@ -776,8 +780,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             or self.value == 8
             or self.value == 9
             or self.value == 16
-            or self.value == 32
-            or self.value == 33
+            or (self.value >= 32 and self.value <= 35)
         )
 
     def name(self) -> String:
@@ -804,6 +807,10 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "sampler2D"
         if self.value == 33:
             return "samplerCube"
+        if self.value == 34:
+            return "sampler3D"
+        if self.value == 35:
+            return "sampler2DArray"
         if self.value >= _STRUCT_BASE:
             return "struct"
         return "vec" + String(self.value)
@@ -858,6 +865,11 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         """Return True for `mat3` and `mat4`."""
         return self.value == 9 or self.value == 16
 
+    def is_sampler(self) -> Bool:
+        """Return True for `sampler2D`, `samplerCube`, `sampler3D` and
+        `sampler2DArray`."""
+        return self.value >= 32 and self.value <= 35
+
     def is_number(self) -> Bool:
         """Return True for `int`, `float` and their vectors."""
         return self.is_float() or self.is_int()
@@ -890,6 +902,8 @@ comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
 comptime _SAMPLER_CUBE = _Type(33)
+comptime _SAMPLER_3D = _Type(34)
+comptime _SAMPLER_ARRAY = _Type(35)
 comptime _NO_TYPE = _Type(-1)
 # A struct's type is this plus its place in the shader's list.
 comptime _STRUCT_BASE = 64
@@ -943,6 +957,10 @@ def _type_named(name: String) -> _Type:
         return _SAMPLER
     if name == "samplerCube":
         return _SAMPLER_CUBE
+    if name == "sampler3D":
+        return _SAMPLER_3D
+    if name == "sampler2DArray":
+        return _SAMPLER_ARRAY
     return _NO_TYPE
 
 
@@ -1967,11 +1985,18 @@ struct _Compiler(Movable):
         if (
             not type.holds()
             and not type.is_matrix()
-            and type != _SAMPLER
-            and type != _SAMPLER_CUBE
+            and not type.is_sampler()
         ):
             raise self.error(
                 "a uniform of type " + type.name() + " is outside the subset"
+            )
+        if (
+            (type == _SAMPLER_3D or type == _SAMPLER_ARRAY)
+            and self.raw
+            and self.version != 300
+        ):
+            raise self.error(
+                "a " + type.name() + " is not in this shader's GLSL version"
             )
         if self.transform(type, name):
             return
@@ -1992,6 +2017,10 @@ struct _Compiler(Movable):
             node = self.graph.texture_uniform(name, NO_TEXTURE)
         elif type == _SAMPLER_CUBE:
             node = self.graph.cube_uniform(name, NO_CUBE_TEXTURE)
+        elif type == _SAMPLER_3D:
+            node = self.graph.volume_uniform(name, NO_DATA_3D_TEXTURE)
+        elif type == _SAMPLER_ARRAY:
+            node = self.graph.array_uniform(name, NO_DATA_ARRAY_TEXTURE)
         elif type == _MAT3:
             var zero = Matrix3()
             zero.elements[0] = 0
@@ -3948,7 +3977,7 @@ struct _Compiler(Movable):
             if index.number < 0 or index.number >= Float64(size):
                 raise self.error("the index is outside the array")
             return self.value_of(first + Int(index.number) * span)
-        if type == _SAMPLER or type == _SAMPLER_CUBE:
+        if type.is_sampler():
             raise self.error("an array of samplers is indexed by a constant")
         var values = List[_Value]()
         for at in range(size):  # pragma: no branch
@@ -4553,10 +4582,23 @@ struct _Compiler(Movable):
         if self.stage == _VERTEX:
             raise self.error("a vertex shader reads no texture in this port")
         var cube = len(args) > 0 and args[0].type == _SAMPLER_CUBE
+        var volume = len(args) > 0 and args[0].type == _SAMPLER_3D
+        var layered = len(args) > 0 and args[0].type == _SAMPLER_ARRAY
         if name == "textureCube" or (name == "texture" and cube):
             if len(args) != 2 or not cube or args[1].type != _VEC3:
                 raise self.error(name + "() takes a samplerCube and a vec3")
             value.node = self.graph.texture_cube(nodes[0], nodes[1]).value
+        elif name == "texture" and (volume or layered):
+            if len(args) != 2 or args[1].type != _VEC3:
+                raise self.error(
+                    name + "() takes a " + args[0].type.name() + " and a vec3"
+                )
+            if volume:
+                value.node = self.graph.texture_3d(nodes[0], nodes[1]).value
+            else:
+                value.node = self.graph.texture_array(
+                    nodes[0], nodes[1]
+                ).value
         elif projective:
             if (
                 len(args) != 2

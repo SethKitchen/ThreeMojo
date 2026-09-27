@@ -45,6 +45,7 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import FloatColor
 from render.cube_texture_store import CubeTextureId
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, sin, sqrt
 from units.si import Duration, SECOND
@@ -100,6 +101,14 @@ struct Corners(NodeSource):
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return the direction and the slot as a color."""
         return FloatColor(direction.x, direction.y, direction.z, Float32(slot))
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return the coordinate and the slot plus ten as a color."""
+        return FloatColor(at.x, at.y, at.z, Float32(slot + 10))
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return the coordinate and the slot plus twenty as a color."""
+        return FloatColor(at.x, at.y, at.z, Float32(slot + 20))
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return the column, the row and the level as a color."""
@@ -353,6 +362,45 @@ def test_a_fragment_reads_where_it_is() raises:
         + "int k = 0; vec4 c = texture(skies[k], vec3(1.0));"
         + cube_end,
         "an array of samplers is indexed by a constant",
+    )
+    # A 3D texture and an array texture are read at a vec3, in GLSL ES
+    # 3.0 only.
+    var stacked = compile_shader_material(
+        VERTEX,
+        "uniform sampler3D cloud;\n"
+        + "uniform sampler2DArray layers;\n"
+        + "void main() {\n"
+        + "    vec4 a = texture(cloud, vec3(0.25, 0.5, 0.75));\n"
+        + "    vec4 b = texture(layers, vec3(1.0, 2.0, 3.0));\n"
+        + "    gl_FragColor = vec4(a.xyz, a.w + b.w);\n"
+        + "}\n",
+    )
+    stacked.set_volume("cloud", Data3DTextureId(2))
+    stacked.set_array("layers", DataArrayTextureId(1))
+    assert_lanes(run(stacked), 0.25, 0.5, 0.75)
+    assert_equal(run(stacked, OPACITY_NODE)[0], 33)
+    assert_equal(len(stacked.volumes), 1)
+    assert_equal(len(stacked.arrays), 1)
+    refused(
+        "uniform sampler3D cloud;\nvoid main() {\n"
+        + "vec4 c = texture(cloud, vec2(1.0));"
+        + cube_end,
+        "texture() takes a sampler3D and a vec3",
+    )
+    refused(
+        "uniform sampler2DArray layers;\nvoid main() {\n"
+        + "vec4 c = texture2D(layers, vec2(1.0));"
+        + cube_end,
+        "texture2D() takes a sampler2D and a vec2",
+    )
+    refused(
+        "#version 100\nprecision mediump float;\n"
+        + "uniform sampler3D cloud;\nvoid main() {\n"
+        + cube_end,
+        "a sampler3D is not in this shader's GLSL version",
+        "#version 100\nattribute vec3 position;\n"
+        + "void main() { gl_Position = vec4(position, 1.0); }",
+        True,
     )
     # textureProj divides through by the last component. The made-up
     # source gives the coordinate and the slot, none here.

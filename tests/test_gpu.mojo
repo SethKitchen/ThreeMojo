@@ -414,8 +414,19 @@ from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram, NodeProgramId
 from render.computation import GPUComputationRenderer
 from render.gpu import GpuComposer, GpuComputation, runs_on_device
-from render.volume_texture import Data3DTexture, VolumeImage
-from render.volume_texture_store import Data3DTextureId
+from render.volume_texture import (
+    Data3DTexture,
+    DataArrayTexture,
+    VolumeImage,
+)
+from render.volume_texture_store import (
+    Data3DTextureId,
+    Data3DTextureStore,
+    DataArrayTextureId,
+    DataArrayTextureStore,
+    NO_DATA_3D_TEXTURE,
+    NO_DATA_ARRAY_TEXTURE,
+)
 
 
 def light_the(mut scene: Scene) raises:
@@ -11511,6 +11522,154 @@ def test_both_backends_read_a_cube_in_a_graph_alike() raises:
         programs=store,
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def a_gpu_stack() raises -> VolumeImage:
+    """Return four texels a side and three deep, each its own color."""
+    var texels = List[UInt8]()
+    for z in range(3):
+        for y in range(4):
+            for x in range(4):
+                texels.append(UInt8(40 + 60 * x))
+                texels.append(UInt8(30 + 50 * y))
+                texels.append(UInt8(60 + 80 * z))
+                texels.append(255)
+    return VolumeImage.of_bytes(4, 4, 3, texels^)
+
+
+def a_stack_program(
+    cloud: Data3DTextureId, layers: DataArrayTextureId
+) raises -> NodeProgram:
+    """Return a program that reads a 3D texture and an array texture at
+    the surface's coordinate and multiplies the two."""
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var u = graph.swizzle(uv, "x")
+    var v = graph.swizzle(uv, "y")
+    var deep = graph.texture_3d(
+        graph.volume_uniform("cloud", cloud),
+        graph.join([u, v, graph.float(0.4)]),
+    )
+    var layered = graph.texture_array(
+        graph.array_uniform("layers", layers),
+        graph.join([v, u, graph.float(1.2)]),
+    )
+    graph.set_output(NODES_COLOR, graph.swizzle(graph.mul(deep, layered), "rgb"))
+    return graph.compile()
+
+
+def test_both_backends_read_a_3d_and_an_array_texture_alike() raises:
+    # The kernel reads each texture's decoded block after the programs in
+    # the fog buffer, through the same filters the host reads.
+    if skipped_for_lack_of_a_gpu("both backends read stacked textures alike"):
+        return
+    var textures = TextureStore()
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    var cloud = volumes.add(Data3DTexture(a_gpu_stack(), filter=BILINEAR))
+    var arrays = DataArrayTextureStore()
+    var layers = arrays.add(
+        DataArrayTexture(a_gpu_stack(), wrap=REPEAT, filter=BILINEAR)
+    )
+    var store = NodeProgramStore()
+    var id = store.add(a_stack_program(cloud, layers))
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        1,
+        programs=store,
+        volumes=volumes,
+        arrays=arrays,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+        volumes=volumes,
+        arrays=arrays,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses a stacked texture"):
+        return
+    var store = NodeProgramStore()
+    var no_cloud = store.add(
+        a_stack_program(NO_DATA_3D_TEXTURE, DataArrayTextureId(0))
+    )
+    var no_layers = store.add(
+        a_stack_program(Data3DTextureId(0), NO_DATA_ARRAY_TEXTURE)
+    )
+    var both = store.add(
+        a_stack_program(Data3DTextureId(0), DataArrayTextureId(0))
+    )
+    var graph = NodeGraph()
+    var read = graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    graph.set_output(NODES_COLOR, graph.swizzle(read, "rgb"))
+    var sky = store.add(graph.compile())
+    var pair = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    var renderer = GpuRenderer(36, 30)
+    with assert_raises(contains="names no texture; call set_volume() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), no_cloud.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="names no texture; call set_array() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), no_layers.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="reads a 3D texture that has not been"):
+        renderer.draw(
+            with_nodes(pair.copy(), both.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    renderer.set_textures(TextureStore(), volumes=volumes)
+    with assert_raises(contains="reads an array texture that has not been"):
+        renderer.draw(
+            with_nodes(pair.copy(), both.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="names no cube; call set_cube() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), sky.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    store.get(sky).set_cube("sky", CubeTextureId(0))
+    with assert_raises(contains="reads a cube that has not been uploaded"):
+        renderer.draw(
+            with_nodes(pair.copy(), sky.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
 
 
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
