@@ -2376,7 +2376,7 @@ def test_a_switch_falls_through_to_its_break() raises:
         + "    s += 10.0;\n"
         + "}\n"
     )
-    assert_lanes(value("vec3(s)", "", body), 51, 51, 51)
+    assert_lanes(value("vec3(s)", "", body), 60, 60, 60)
     # A switch in a switch passes the continue out.
     var nested = (
         "float s = 0.0;\n"
