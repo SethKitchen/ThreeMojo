@@ -493,7 +493,9 @@ def wood_program(params: WoodParams) raises -> NodeProgram:
     return g.compile()
 
 
-def wood_material(program: NodeProgramId, params: WoodParams) -> Material:
+def wood_material(
+    program: NodeProgramId, params: WoodParams
+) raises -> Material:
     """Return three.js's `WoodNodeMaterial`: a physical material with the
     wood's program as its color, and the finish's clear coat.
 
@@ -503,6 +505,9 @@ def wood_material(program: NodeProgramId, params: WoodParams) -> Material:
 
     Returns:
         The material.
+
+    Raises:
+        Error: Never: a physical material takes a clear coat.
     """
     var material = Material(Color(255, 255, 255), kind=PHYSICAL, nodes=program)
     material.clearcoat = params.clearcoat
