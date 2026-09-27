@@ -3871,7 +3871,7 @@ def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
     return frame.points[draw.first].blend.mixes()
 
 
-def _opaque_draws(frame: Frame) -> List[Draw]:
+def _opaque_draws(frame: Frame) raises -> List[Draw]:
     """Return the draws of a prepared frame the transmission pass draws:
     three.js's `opaqueObjects`, every run that neither transmits nor
     blends, in the frame's order."""
