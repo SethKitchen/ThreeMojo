@@ -454,6 +454,56 @@ def render_view(
     Raises:
         Error: If the node is not in the scene, or the render raises.
     """
+    return render_view_target(
+        renderer,
+        scene,
+        assets,
+        hidden,
+        camera,
+        cut,
+        width,
+        height,
+        type,
+        samples,
+    ).attachment_texture(0)
+
+
+def render_view_target(
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    hidden: NodeId,
+    camera: VirtualCamera,
+    cut: Plane,
+    width: Int,
+    height: Int,
+    type: TargetType,
+    samples: Int = 0,
+) raises -> RenderTarget:
+    """Render the scene through a virtual camera, with a node hidden and a
+    plane cut, and return the target itself: `render_view` for a caller
+    that reads its depth too.
+
+    Args:
+        renderer: The renderer the scene is drawn with; see
+            `view_renderer`.
+        scene: The scene, updated. The node is hidden while the target is
+            drawn and shown as it was afterward, even if the render raises.
+        assets: The stores the scene names.
+        hidden: The node of the object that renders the view.
+        camera: The virtual camera.
+        cut: The plane that cuts away what lies behind it, in world space.
+        width: The target's width in pixels.
+        height: The target's height in pixels.
+        type: What the target stores.
+        samples: How many samples each pixel of the target takes.
+
+    Returns:
+        The target, drawn.
+
+    Raises:
+        Error: If the node is not in the scene, or the render raises.
+    """
     var view = view_renderer(renderer, width, height)
     view.clipping_planes.append(cut)
     var target = RenderTarget(
@@ -465,7 +515,7 @@ def render_view(
         view.render_into(target, scene, assets, camera)
     finally:
         _show(scene, hidden, was)
-    return target.attachment_texture(0)
+    return target^
 
 
 def blank_texture(width: Int, height: Int, type: TargetType) raises -> Texture:
