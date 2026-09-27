@@ -30,6 +30,7 @@ from lights.shadow import (
     MAX_MAP_SIZE,
     PCF_TAPS,
     POINT_SHADOW_TAPS,
+    SHADOW_COLORS_AT,
     SHADOW_HEADER,
     SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
@@ -396,7 +397,7 @@ def test_a_tap_is_lit_when_the_fragment_is_not_beyond_the_stored_depth() raises:
     assert_equal(shadow_tap(-0.5, 0.2, 0.1), Float32(0))
     # Nothing stored is nothing in the way.
     assert_equal(shadow_tap(inf[DType.float32](), 1, 0), Float32(1))
-    assert_equal(SHADOW_HEADER, 22)
+    assert_equal(SHADOW_HEADER, 23)
 
 
 def test_a_map_lights_a_surface_by_how_many_taps_find_nothing() raises:
@@ -1095,8 +1096,9 @@ def test_a_shadow_map_type_is_one_of_three_js_four() raises:
     assert_false(ShadowMapType(-1).is_valid())
     # A map is PCF unless it says otherwise, as three.js's default is.
     assert_true(half_map(2).shadow_type == PCF_SHADOW_MAP)
-    assert_equal(SHADOW_TYPE_AT, SHADOW_HEADER - 2)
-    assert_equal(SHADOW_INTENSITY_AT, SHADOW_HEADER - 1)
+    assert_equal(SHADOW_TYPE_AT, SHADOW_HEADER - 3)
+    assert_equal(SHADOW_INTENSITY_AT, SHADOW_HEADER - 2)
+    assert_equal(SHADOW_COLORS_AT, SHADOW_HEADER - 1)
     # A type that is none of the four is refused, square or cube.
     with assert_raises():
         _ = ShadowMap(
