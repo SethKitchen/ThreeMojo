@@ -1017,7 +1017,11 @@ def _strap(
 
 
 def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0429)
+    """Return the gluteus maximus: a thick sheet over the buttock.
+
+    It is broad and a few centimeters deep, not round.
+    """
+    var rb = _r(S, scale, 0.0491)
     var origin = _at(d.iliac, d.ischial, 0.45) + Vector3(
         0, 0.002 * S, -0.010 * S
     )
@@ -1039,11 +1043,11 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
         r2,
         r3,
         r4,
-        0.62 * r0,
-        0.68 * r1,
-        0.70 * r2,
-        0.68 * r3,
-        0.60 * r4,
+        0.45 * r0,
+        0.48 * r1,
+        0.50 * r2,
+        0.48 * r3,
+        0.45 * r4,
     )
 
 
