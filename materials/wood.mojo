@@ -242,9 +242,10 @@ def _voronoi3d(
     # The weighted distances and the weights, summed as one `vec2`: two
     # sums would keep every weight alive until the second read it.
     var sums = g.vec2(0, 0)
-    for k in range(-1, 2):
-        for j in range(-1, 2):
-            for i in range(-1, 2):
+    # Three cells each way, fixed, so no loop runs zero times.
+    for k in range(-1, 2):  # pragma: no branch
+        for j in range(-1, 2):  # pragma: no branch
+            for i in range(-1, 2):  # pragma: no branch
                 var b = g.vec3(Float32(i), Float32(j), Float32(k))
                 var offset = g.mul(
                     _hash3d(g, g.add(p, b)), g.float(randomness)
