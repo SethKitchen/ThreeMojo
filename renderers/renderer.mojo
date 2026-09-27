@@ -5949,11 +5949,10 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each segment as it shades a
             # triangle: a `ShaderMaterial` on a `Line`. A light's view
-            # draws the depth alone, so it keeps the position node and
-            # runs no fragment of the program.
+            # runs it too, for its mask and its cast shadow node.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # A dashed line is three.js's `dashed` shader, which does not
             # dither; a plain one is its `basic` shader, which does. A
             # light's view takes the default state; see `_draw_state`.
@@ -6451,11 +6450,11 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each point's square as it shades a
             # triangle, three.js's `PointsNodeMaterial` and a
-            # `ShaderMaterial` on `Points`. A light's view draws the depth
-            # alone, as it does for a line.
+            # `ShaderMaterial` on `Points`. A light's view runs it too, as
+            # it does for a line.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # three.js's `points` shader premultiplies and does not dither.
             # A light's view takes the default state; see `_draw_state`.
             var state = _draw_state(material, casters_only, False, False, True)
