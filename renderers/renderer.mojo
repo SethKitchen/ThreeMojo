@@ -5630,6 +5630,8 @@ struct Renderer(Movable):
             # What a node program reads of each vertex: its coordinates
             # and its custom attributes, raw, as a mesh's corner has them.
             var coordinates = _coordinates(geometry, String(UV), vertex_count)
+            var vertex_u = coordinates[0].copy()
+            var vertex_v = coordinates[1].copy()
             var customs = _customs(assets, material, geometry, vertex_count)
             var moves = program != NO_NODES and assets.programs.get(
                 program
@@ -5739,8 +5741,8 @@ struct Renderer(Movable):
                     view_points[first],
                     colors[first],
                     Vector3(0, 0, 0),
-                    coordinates[0][first],
-                    coordinates[1][first],
+                    vertex_u[first],
+                    vertex_v[first],
                     world_points[first],
                     line_distance=along[first],
                 )
@@ -5749,8 +5751,8 @@ struct Renderer(Movable):
                     view_points[second],
                     colors[second],
                     Vector3(0, 0, 0),
-                    coordinates[0][second],
-                    coordinates[1][second],
+                    vertex_u[second],
+                    vertex_v[second],
                     world_points[second],
                     line_distance=along[second],
                 )
@@ -6122,6 +6124,8 @@ struct Renderer(Movable):
             # and its custom attributes, raw, as a mesh's corner has them.
             var noded = program != NO_NODES
             var coordinates = _coordinates(geometry, String(UV), vertex_count)
+            var vertex_u = coordinates[0].copy()
+            var vertex_v = coordinates[1].copy()
             var customs = _customs(assets, material, geometry, vertex_count)
             var moves = noded and assets.programs.get(program).has(
                 POSITION_NODE
@@ -6164,8 +6168,8 @@ struct Renderer(Movable):
                     continue
                 if not within_any(seen, any_of):
                     continue
-                var u = coordinates[0][vertex]
-                var v = coordinates[1][vertex]
+                var u = vertex_u[vertex]
+                var v = vertex_v[vertex]
                 # The size node, once per point, in pixels, in place of
                 # the material's size and its attenuation. A light's view
                 # draws every point one pixel across, as it does without.
