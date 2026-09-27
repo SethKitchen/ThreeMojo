@@ -988,11 +988,15 @@ struct _Compiler(Movable):
     var bundles: List[List[_Value]]
     # How many floats the custom attributes hold so far.
     var attribute_floats: Int
+    # Whether the fragment shader is ShaderToy's, which reads `iTime` and
+    # the other inputs ShaderToy gives.
+    var toy: Bool
 
-    def __init__(out self, raw: Bool):
+    def __init__(out self, raw: Bool, toy: Bool = False):
         """Start a compiler with an empty graph."""
         self.graph = NodeGraph()
         self.raw = raw
+        self.toy = toy
         self.stage = _VERTEX
         self.version = 0
         self.tokens = List[_Token]()
@@ -1277,6 +1281,8 @@ struct _Compiler(Movable):
                 _ATTRIBUTE,
                 _plain(_BOOL, self.graph.gl_front_facing().value),
             )
+            if self.toy:
+                self.declare_toy()
             return
         self.builtin("modelMatrix", _TRANSFORM, _tagged(_MAT4, -1, _MODEL, -1))
         self.builtin(
@@ -1291,6 +1297,26 @@ struct _Compiler(Movable):
         # Four names, always.
         for name in ["position", "normal", "uv", "color"]:  # pragma: no branch
             self.builtin(name, _ATTRIBUTE, self.attribute(name))
+
+    def declare_toy(mut self) raises:
+        """Declare what ShaderToy gives a shader: `iTime` is the renderer's
+        time, and the rest are uniforms the caller sets."""
+        self.builtin("iTime", _UNIFORM, _plain(_FLOAT, self.graph.time().value))
+        self.uniform(_VEC3, "iResolution")
+        self.uniform(_FLOAT, "iTimeDelta")
+        self.uniform(_FLOAT, "iFrameRate")
+        self.uniform(_TINT, "iFrame")
+        self.uniform(_VEC4, "iMouse")
+        self.uniform(_VEC4, "iDate")
+        self.uniform(_FLOAT, "iSampleRate")
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_SAMPLER, "iChannel" + String(channel))
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_VEC3, "iChannelResolution[" + String(channel) + "]")
+        self.declare_array("iChannelResolution", _VEC3, 4)
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_FLOAT, "iChannelTime[" + String(channel) + "]")
+        self.declare_array("iChannelTime", _FLOAT, 4)
 
     def view_matrix(mut self) -> _Value:
         """Return `viewMatrix`: the frame's view, a real `mat4`."""
@@ -4382,14 +4408,17 @@ def _kind_name(kind: Int) -> String:
 
 
 def _compile(
-    vertex_shader: String, fragment_shader: String, raw: Bool
+    vertex_shader: String,
+    fragment_shader: String,
+    raw: Bool,
+    toy: Bool = False,
 ) raises -> NodeGraph:
     """Return the graph two shaders build.
 
     Raises:
         Error: If either shader is outside the subset.
     """
-    var compiler = _Compiler(raw)
+    var compiler = _Compiler(raw, toy)
     compiler.shader(vertex_shader, _VERTEX)
     if compiler.drawn < 0:
         raise Error("GLSL vertex shader: main never writes gl_Position")
@@ -4487,6 +4516,46 @@ def compile_shader_material(
             the line and the reason, or the graph does not compile.
     """
     return _compile(vertex_shader, fragment_shader, False).compile()
+
+
+# The vertex shader and the `main` a ShaderToy shader is drawn with: its
+# `mainImage` fills the surface, at the pixel it is at.
+comptime _TOY_VERTEX = """void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+"""
+comptime _TOY_MAIN = """
+void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+"""
+
+
+def compile_shader_toy(source: String) raises -> NodeProgram:
+    """Return the node program of a ShaderToy shader, as three.js's
+    `ShaderToyDecoder` makes one: its `mainImage(out vec4 fragColor, in
+    vec2 fragCoord)` colors each pixel of the surface, at the pixel's
+    center from the bottom left. Give its id to `shader_material`.
+
+    `iTime` is the renderer's time. `iResolution`, `iTimeDelta`,
+    `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`,
+    `iChannelResolution[i]` and `iChannelTime[i]` are uniforms the caller
+    sets with `set_uniform`, and `iChannel0` to `iChannel3` are textures it
+    sets with `set_texture`.
+
+    Args:
+        source: The shader's GLSL, with `mainImage` and no `main`.
+
+    Returns:
+        The program.
+
+    Raises:
+        Error: If the shader has no `mainImage`, or is outside the subset,
+            naming the line and the reason.
+    """
+    if "mainImage" not in source:
+        raise Error("GLSL fragment shader: a ShaderToy shader defines mainImage")
+    return _compile(_TOY_VERTEX, source + _TOY_MAIN, False, True).compile()
 
 
 def compile_raw_shader_material(

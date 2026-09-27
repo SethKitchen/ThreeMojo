@@ -16,6 +16,7 @@ from materials.glsl import (
     _TokenKind,
     compile_raw_shader_material,
     compile_shader_material,
+    compile_shader_toy,
     shader_graph,
 )
 from materials.nodes import (
@@ -45,6 +46,7 @@ from math.vector4 import Vector4
 from render.framebuffer import FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, sin, sqrt
+from units.si import Duration, SECOND
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -2630,6 +2632,51 @@ def test_a_custom_attribute_reaches_the_fragment_through_a_varying() raises:
         "an attribute of type int is outside the subset",
         "attribute int count;\n" + VERTEX,
     )
+
+
+def test_a_shader_toy_shader_draws_its_main_image() raises:
+    # ShaderToy's own template, at the made-up pixel (10.5, 20.5).
+    var toy = compile_shader_toy(
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        + "    vec2 uv = fragCoord / iResolution.xy;\n"
+        + "    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));\n"
+        + "    fragColor = vec4(col, 1.0);\n"
+        + "}\n"
+    )
+    toy.set_uniform("iResolution", Vector3(100, 200, 1))
+    toy.set_frame(Duration(1.5, SECOND), Matrix4())
+    var got = run(toy)
+    assert_almost_equal(got[0], 0.5 + 0.5 * cos(Float32(1.605)), atol=1e-5)
+    assert_almost_equal(got[1], 0.5 + 0.5 * cos(Float32(3.6025)), atol=1e-5)
+    assert_almost_equal(got[2], 0.5 + 0.5 * cos(Float32(5.605)), atol=1e-5)
+    # The channels and the rest are uniforms and textures the caller sets.
+    var reads = compile_shader_toy(
+        "void mainImage(out vec4 c, in vec2 p) {\n"
+        + "    c = texture(iChannel1, p / iChannelResolution[1].xy);\n"
+        + "    c.w = float(iFrame) + iMouse.x + iChannelTime[2] + iTimeDelta\n"
+        + "        + iFrameRate + iDate.w + iSampleRate;\n"
+        + "}\n"
+    )
+    reads.set_texture("iChannel1", TextureId(7))
+    reads.set_uniform("iChannelResolution[1]", Vector3(100, 200, 1))
+    reads.set_uniform("iFrame", Float32(3))
+    reads.set_uniform("iMouse", Vector4(0.25, 0, 0, 0))
+    reads.set_uniform("iChannelTime[2]", Float32(0.5))
+    var read = run(reads)
+    assert_lanes(read, 0.105, 0.1025, 7)
+    with assert_raises(contains="a ShaderToy shader defines mainImage"):
+        _ = compile_shader_toy("void main() {}")
+    # The author's line numbers hold.
+    with assert_raises(contains="line 2: GLSL's sinh() is outside the subset"):
+        _ = compile_shader_toy(
+            "void mainImage(out vec4 c, in vec2 p) {\n"
+            + "    c = vec4(sinh(1.0));\n"
+            + "}\n"
+        )
+    with assert_raises(contains="cannot assign iTime: it is a uniform"):
+        _ = compile_shader_toy(
+            "void mainImage(out vec4 c, in vec2 p) { iTime = 1.0; }"
+        )
 
 
 def test_break_continue_and_an_early_return_are_read() raises:
