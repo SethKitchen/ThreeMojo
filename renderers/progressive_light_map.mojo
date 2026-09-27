@@ -173,7 +173,8 @@ struct ProgressiveLightMap(Movable):
         and scaled to the map, becomes its `uv1`. Its material reads the
         second map as its `light_map`, dithered, and the mesh casts and
         receives shadows. Its node draws after the rest, in the order
-        given, three.js's `renderOrder = 1000 + ob`.
+        given, three.js's `renderOrder = 1000 + ob`, and the scene is
+        updated.
 
         Args:
             scene: The scene the meshes are in.
@@ -236,6 +237,7 @@ struct ProgressiveLightMap(Movable):
                     ),
                 )
             geometry.set_attribute(UV1, uv1^)
+        scene.update()
 
     def update[
         C: Camera

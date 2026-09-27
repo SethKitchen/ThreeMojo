@@ -58,18 +58,19 @@ def a_camera() raises -> PerspectiveCamera:
 
 def two_planes(mut assets: Assets, mut scene: Scene) raises:
     """Add a plane that faces the light and one that faces away, each with
-    its own lambert material, and a light in front of them."""
-    var node = scene.add(Object3D())
+    its own node and lambert material, and a light in front of them."""
     var facing = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
     var turned = plane(Length(1, METER), Length(1, METER))
     turned.rotate_y(Angle(180, DEGREE))
     var away = assets.geometries.add(turned^)
-    scene.add_mesh(
-        Mesh(facing, assets.materials.add(Material(Color(255, 255, 255))), node)
-    )
-    scene.add_mesh(
-        Mesh(away, assets.materials.add(Material(Color(255, 255, 255))), node)
-    )
+    for geometry in [facing, away]:
+        scene.add_mesh(
+            Mesh(
+                geometry,
+                assets.materials.add(Material(Color(255, 255, 255))),
+                scene.add(Object3D()),
+            )
+        )
     var lamp = Object3D()
     lamp.set_position(0, 0, 5)
     var lamp_node = scene.add(lamp^)
@@ -167,7 +168,7 @@ def test_a_mesh_the_map_cannot_hold_is_refused() raises:
     scene.add_mesh(
         Mesh(
             scene.meshes[0].geometry,
-            assets.materials.add(Material(Color(0, 0, 0), kind=NORMALS)),
+            assets.materials.add(Material(Color(255, 255, 255), kind=NORMALS)),
             scene.meshes[0].node,
         )
     )
