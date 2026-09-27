@@ -1722,7 +1722,9 @@ def program_starts(programs: NodeProgramStore) -> List[Int]:
     return starts^
 
 
-def flatten_programs(programs: NodeProgramStore) -> List[Float32]:
+def flatten_programs(
+    programs: NodeProgramStore, cube_base: Int = 0
+) -> List[Float32]:
     """Return every node program's floats end to end, as they follow the
     fog in the fog buffer.
 
@@ -1734,7 +1736,17 @@ def flatten_programs(programs: NodeProgramStore) -> List[Float32]:
     """
     var flat = List[Float32]()
     for index in range(programs.count()):
-        flat.extend(programs.programs[index].code.copy())
+        var start = len(flat)
+        ref program = programs.programs[index]
+        flat.extend(program.code.copy())
+        # A cube read keeps its cube's first row in the texture table on
+        # the device, where the host keeps its id.
+        for at in range(len(program.cube_offsets)):
+            var cube = Int(program.code[program.cube_offsets[at]])
+            if cube >= 0:
+                flat[start + program.cube_offsets[at]] = Float32(
+                    cube_base + cube * CUBE_ROWS
+                )
     return flat^
 
 
@@ -3671,6 +3683,17 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, as `CubeTexture.sample` reads
+        it: `slot` is the cube's first row in the texture table."""
+        return _sample_cube(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            direction,
         )
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
@@ -7016,7 +7039,7 @@ struct GpuRenderer(Movable):
             Error: If the device buffer cannot be made or written.
         """
         var flat = flatten_fog(fog, curve_start, output)
-        flat.extend(flatten_programs(programs))
+        flat.extend(flatten_programs(programs, self.uploaded))
         if len(flat) > self.fog_room:
             # A draw still in flight may be reading the old buffer; see
             # `set_textures`, which waits for the same reason.
@@ -7260,6 +7283,17 @@ struct GpuRenderer(Movable):
                         raise Error(
                             "A node program reads a texture that has not"
                             " been uploaded; call set_textures() first"
+                        )
+                for slot in range(len(program.cubes)):
+                    if program.cubes[slot].value < 0:
+                        raise Error(
+                            "A node program reads a cube uniform that names"
+                            " no cube; call set_cube() first"
+                        )
+                    if program.cubes[slot].value >= self.uploaded_cubes:
+                        raise Error(
+                            "A node program reads a cube that has not been"
+                            " uploaded; call set_textures() first"
                         )
 
         # Every texture reference is checked here because it cannot be checked

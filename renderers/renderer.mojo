@@ -2732,6 +2732,9 @@ def _checked_nodes(
     for index in range(len(program.textures)):
         if program.textures[index].value >= assets.textures.count():
             raise Error("A node program reads a texture that is not there")
+    for index in range(len(program.cubes)):
+        if program.cubes[index].value >= assets.cube_textures.count():
+            raise Error("A node program reads a cube that is not there")
     return nodes
 
 

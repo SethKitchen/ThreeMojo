@@ -2816,6 +2816,13 @@ def check_triangle_maps(
                         " no texture; call set_texture() first"
                     )
                 _ = textures.get(program.textures[index]).width
+            for index in range(len(program.cubes)):
+                if program.cubes[index].value < 0:
+                    raise Error(
+                        "A node program reads a cube uniform that names no"
+                        " cube; call set_cube() first"
+                    )
+                _ = cubes.get(program.cubes[index]).size
 
 
 def check_channel(image: Texture) raises:
@@ -3220,6 +3227,7 @@ def rasterize_shaded(
         Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
         a.nodes.value,
         Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=a).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=c).unsafe_origin_cast[ImmutAnyOrigin](),
@@ -4501,6 +4509,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
     var textures: Pointer[TextureStore, Self.origin]
+    var cubes: Pointer[CubeTextureStore, Self.origin]
     var a: Pointer[RasterVertex, Self.origin]
     var b: Pointer[RasterVertex, Self.origin]
     var c: Pointer[RasterVertex, Self.origin]
@@ -4517,6 +4526,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         programs: Pointer[NodeProgramStore, Self.origin],
         program: Int,
         textures: Pointer[TextureStore, Self.origin],
+        cubes: Pointer[CubeTextureStore, Self.origin],
         a: Pointer[RasterVertex, Self.origin],
         b: Pointer[RasterVertex, Self.origin],
         c: Pointer[RasterVertex, Self.origin],
@@ -4528,6 +4538,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         self.programs = programs
         self.program = program
         self.textures = textures
+        self.cubes = cubes
         self.a = a
         self.b = b
         self.c = c
@@ -4562,6 +4573,10 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         """Return a texture read at (u, v) and a mip level, through the
         texture's two filters, as `Texture.sample_level` reads it."""
         return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, `CubeTexture.sample`."""
+        return self.cubes[].get(CubeTextureId(slot)).sample(direction)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""

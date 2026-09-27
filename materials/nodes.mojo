@@ -86,6 +86,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import Color, FloatColor
+from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import ceil, cos, exp, exp2, floor, log2, max, min, pow, sin, sqrt
 from std.memory import bitcast
@@ -127,22 +128,24 @@ comptime Lanes = SIMD[DType.float32, 4]
 @fieldwise_init
 struct ValueType(Equatable, ImplicitlyCopyable, Writable):
     """What a node's value is, as a type rather than a bare int: a `float`,
-    a vector of two, three or four, a `mat3` or a `mat4`, or a texture.
-    `value` is the component count, and 32 for a texture."""
+    a vector of two, three or four, a `mat3` or a `mat4`, a texture or a
+    cube texture. `value` is the component count, 32 for a texture and 33
+    for a cube texture."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven types there are.
+        """Return True if this is one of the eight types there are.
 
         Returns:
-            Whether the value is one to four, 9, 16 or 32.
+            Whether the value is one to four, 9, 16, 32 or 33.
         """
         return (
             (self.value >= 1 and self.value <= 4)
             or self.value == 9
             or self.value == 16
             or self.value == 32
+            or self.value == 33
         )
 
     def is_vector(self) -> Bool:
@@ -157,7 +160,8 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
         """Return the type's TSL name, for an error message.
 
         Returns:
-            `float`, `vec2` to `vec4`, `mat3`, `mat4` or `texture`.
+            `float`, `vec2` to `vec4`, `mat3`, `mat4`, `texture` or
+            `cubeTexture`.
         """
         if self.value == 1:
             return "float"
@@ -167,6 +171,8 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
             return "mat4"
         if self.value == 32:
             return "texture"
+        if self.value == 33:
+            return "cubeTexture"
         return "vec" + String(self.value)
 
 
@@ -177,6 +183,7 @@ comptime NODE_VEC4 = ValueType(4)
 comptime NODE_MAT3 = ValueType(9)
 comptime NODE_MAT4 = ValueType(16)
 comptime NODE_SAMPLER = ValueType(32)
+comptime NODE_SAMPLER_CUBE = ValueType(33)
 
 
 @fieldwise_init
@@ -194,7 +201,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_ATTRIBUTE.value
+            and self.value <= NODE_TEXTURE_CUBE.value
         )
 
 
@@ -346,6 +353,9 @@ comptime NODE_TEXTURE_SIZE = NodeKind(99)
 comptime NODE_ATTRIBUTE = NodeKind(100)
 # How many floats a corner carries for the custom attributes, all of them.
 comptime MAX_ATTRIBUTE_FLOATS = 8
+# A cube texture read in a direction, three.js's `cubeTexture(map, dir)`
+# and GLSL's `textureCube`. See `NodeSource.sample_cube`.
+comptime NODE_TEXTURE_CUBE = NodeKind(101)
 
 
 @fieldwise_init
@@ -1051,6 +1061,65 @@ struct NodeGraph(Copyable, Movable):
             raise Error("A texture uniform names no texture there can be")
         return self._uniform(
             name, NODE_SAMPLER, Lanes(Float32(map.value), 0, 0, 0)
+        )
+
+    def cube_uniform(
+        mut self, name: String, map: CubeTextureId = NO_CUBE_TEXTURE
+    ) raises -> NodeRef:
+        """Return a named cube texture the caller can change between frames,
+        three.js's `cubeTexture(map)` whose `value` is set later. Read it
+        with `texture_cube`, and change it with `NodeProgram.set_cube`.
+
+        Args:
+            name: A name no other uniform of this graph has.
+            map: Its first cube, or `NO_CUBE_TEXTURE` for one set later.
+
+        Returns:
+            The node, of type `cubeTexture`.
+
+        Raises:
+            Error: If the name is empty or already taken, or `map` is a
+                negative other than `NO_CUBE_TEXTURE`.
+        """
+        if map.value < 0 and map != NO_CUBE_TEXTURE:
+            raise Error("A cube uniform names no cube there can be")
+        return self._uniform(
+            name, NODE_SAMPLER_CUBE, Lanes(Float32(map.value), 0, 0, 0)
+        )
+
+    def texture_cube(
+        mut self, sampler: NodeRef, direction: NodeRef
+    ) raises -> NodeRef:
+        """Return a cube texture uniform read in a direction, a linear
+        `vec4` with straight alpha: three.js's `cubeTexture(map, dir)` and
+        GLSL's `textureCube`. The face the direction points at, read where
+        it points. A mode that opens no textures reads opaque white.
+
+        Args:
+            sampler: A node of type `cubeTexture`, from `cube_uniform`.
+            direction: Which way to look, a `vec3` of any length.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a cube
+                texture, or `direction` is not a `vec3`.
+        """
+        self._check(sampler)
+        self._check(direction)
+        if self._types[sampler.value] != NODE_SAMPLER_CUBE:
+            raise Error(
+                "A cube read reads a cube texture, not a "
+                + self._types[sampler.value].name()
+            )
+        if self._types[direction.value] != NODE_VEC3:
+            raise Error(
+                "A cube is read in a vec3 direction, not a "
+                + self._types[direction.value].name()
+            )
+        return self._add(
+            NODE_TEXTURE_CUBE, NODE_VEC4, direction.value, sampler.value
         )
 
     # --- attributes ---------------------------------------------------------
@@ -4131,6 +4200,7 @@ struct NodeGraph(Copyable, Movable):
                 or kind == NODE_TEXTURE_LEVEL
                 or kind == NODE_TEXEL_FETCH
                 or kind == NODE_TEXTURE_SIZE
+                or kind == NODE_TEXTURE_CUBE
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -4262,6 +4332,9 @@ struct NodeGraph(Copyable, Movable):
         for index in range(len(pool.textures)):
             program.texture_offsets.append(base + pool.textures[index])
         program._list_textures()
+        for index in range(len(pool.cubes)):
+            program.cube_offsets.append(base + pool.cubes[index])
+        program._list_cubes()
         program.attribute_names = self._attribute_names.copy()
         program.attribute_offsets = self._attribute_offsets.copy()
         program.attribute_widths = self._attribute_widths.copy()
@@ -4281,6 +4354,8 @@ struct _Pool(Movable):
     var types: List[ValueType]
     # Where each texture an instruction reads keeps its id.
     var textures: List[Int]
+    # Where each cube a cube read reads keeps its id.
+    var cubes: List[Int]
 
     def __init__(out self, graph: NodeGraph):
         """Lay out every uniform of a graph."""
@@ -4290,6 +4365,7 @@ struct _Pool(Movable):
         self.offsets = List[Int]()
         self.types = List[ValueType]()
         self.textures = List[Int]()
+        self.cubes = List[Int]()
         # Never empty: `compile` adds the zero a derivative can need.
         for node in range(graph.count()):  # pragma: no branch
             if graph._kinds[node] == NODE_UNIFORM:
@@ -4329,6 +4405,15 @@ struct _Pool(Movable):
             if self.textures[index] == place:
                 return place
         self.textures.append(place)
+        return place
+
+    def cube(mut self, graph: NodeGraph, node: Int) -> Int:
+        """Return where a cube read's cube id is: its uniform's place."""
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        for index in range(len(self.cubes)):
+            if self.cubes[index] == place:
+                return place
+        self.cubes.append(place)
         return place
 
 
@@ -4537,6 +4622,7 @@ def _children(
         or kind == NODE_TEXTURE_LEVEL
         or kind == NODE_TEXEL_FETCH
         or kind == NODE_TEXTURE_SIZE
+        or kind == NODE_TEXTURE_CUBE
         or kind == NODE_DFDX
         or kind == NODE_DFDY
     ):
@@ -4595,6 +4681,8 @@ def _emit(
         or kind == NODE_TEXTURE_SIZE
     ):
         pooled = pool.texture(graph, node)
+    elif kind == NODE_TEXTURE_CUBE:
+        pooled = pool.cube(graph, node)
         immediate = 0
     elif kind == NODE_VARYING:
         op = NODE_INTERPOLATE.value
@@ -4694,6 +4782,10 @@ struct NodeProgram(Copyable, Movable):
     # them before a fragment asks, and where each id is in `code`.
     var textures: List[TextureId]
     var texture_offsets: List[Int]
+    # Every cube the cube reads read, each once, and where each read keeps
+    # its cube's id; see `set_cube`.
+    var cubes: List[CubeTextureId]
+    var cube_offsets: List[Int]
     # The custom attributes the renderer gives each corner: name, first
     # float and width, as `NodeGraph.attribute` laid them out.
     var attribute_names: List[String]
@@ -4713,6 +4805,8 @@ struct NodeProgram(Copyable, Movable):
         self.uniform_types = List[ValueType]()
         self.textures = List[TextureId]()
         self.texture_offsets = List[Int]()
+        self.cubes = List[CubeTextureId]()
+        self.cube_offsets = List[Int]()
         self.attribute_names = List[String]()
         self.attribute_offsets = List[Int]()
         self.attribute_widths = List[Int]()
@@ -4860,6 +4954,36 @@ struct NodeProgram(Copyable, Movable):
         var at = self._find(name, NODE_MAT4)
         for index in range(16):  # pragma: no branch
             self.code[at + index] = value.elements[index]
+
+    def _list_cubes(mut self):
+        """List every cube the cube reads read now, each once."""
+        self.cubes = List[CubeTextureId]()
+        for index in range(len(self.cube_offsets)):
+            var cube = CubeTextureId(Int(self.code[self.cube_offsets[index]]))
+            var seen = False
+            for other in range(len(self.cubes)):
+                if self.cubes[other] == cube:
+                    seen = True
+            if not seen:
+                self.cubes.append(cube)
+
+    def set_cube(mut self, name: String, map: CubeTextureId) raises:
+        """Change a cube texture uniform, and list the cubes the program
+        reads again.
+
+        Args:
+            name: The uniform's name.
+            map: The cube. It must be in the store the renderer draws with.
+
+        Raises:
+            Error: If `map` is negative, no uniform has that name, or it is
+                not a cube texture.
+        """
+        if map.value < 0:
+            raise Error("A cube uniform needs a cube")
+        var at = self._find(name, NODE_SAMPLER_CUBE)
+        self.code[at] = Float32(map.value)
+        self._list_cubes()
 
     def set_texture(mut self, name: String, map: TextureId) raises:
         """Change a texture uniform, as three.js's `textureNode.value =`
@@ -5137,6 +5261,20 @@ trait NodeSource:
             The four numbers. A source with no pixel gives zeros and one.
         """
         ...
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube texture read in a direction, GLSL's
+        `textureCube`. A source with no cubes reads opaque white.
+
+        Args:
+            slot: The cube, as the source keeps it: its id on the host,
+                and its first row in the texture table on the device.
+            direction: Which way to look.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
 
     def seen_from_behind(self) -> Bool:
         """Return whether the fragment's triangle is seen from its back,
@@ -5524,6 +5662,13 @@ def _leaf[
             return Lanes(1)
         var texel = source.fetch(
             Int(source.word(Int(immediate))), Int(x[0]), Int(x[1]), Int(z[0])
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_CUBE.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.sample_cube(
+            Int(source.word(Int(immediate))), Vector3(x[0], x[1], x[2])
         )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_TEXTURE_SIZE.value:
@@ -6194,6 +6339,7 @@ def run_nodes[
             or op == NODE_TEXEL_FETCH.value
             or op == NODE_TEXTURE_SIZE.value
             or op == NODE_ATTRIBUTE.value
+            or op == NODE_TEXTURE_CUBE.value
         ):
             registers[written] = _leaf(
                 source, op, x, z, immediate, third, inputs
