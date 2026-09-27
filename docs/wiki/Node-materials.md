@@ -283,6 +283,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
+- Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
 - Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
 - Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
@@ -300,12 +301,14 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 
 - A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, and structs.
-- Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes or parameters, and an array read whole.
+- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers.
+- Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes, parameters or fields, and an array read whole.
+- A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
+- A struct's field written through an index that is not constant.
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do`, `switch` and recursion.
-- A `return` before the end of a function that returns a matrix or a transform, or of a vertex shader's `main`.
+- A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
 - Prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
