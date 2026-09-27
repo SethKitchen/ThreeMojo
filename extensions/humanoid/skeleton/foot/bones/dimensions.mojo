@@ -36,13 +36,14 @@ from extensions.humanoid.skeleton.field import (
     field_gradient,
     finite_point,
     flip_x,
+    mix_point,
     positive_length,
 )
 from extensions.humanoid.skeleton.foot.chain import (
     SegmentSet,
-    one_segment,
     segment_bounds,
     segment_distance,
+    three_segments,
     two_segments,
 )
 from extensions.humanoid.skeleton.leg.femur.dimensions import femur_dimensions
@@ -57,7 +58,7 @@ from extensions.humanoid.skeleton.leg.patella.dimensions import (
 )
 from extensions.humanoid.skeleton.leg.tibia.dimensions import tibia_dimensions
 from math.vector3 import Vector3
-from std.math import min
+from std.math import max, min
 from units.si import Length
 
 # Authored ratios of stature. Not a cited regression.
@@ -70,6 +71,16 @@ comptime FEMALE_ANKLE_HEIGHT = Float32(0.046)
 
 # Cortical shell as a fraction of the smaller end radius.
 comptime SHELL_FRACTION = Float32(0.38)
+
+# Where the heel's skin lies behind the tibial plafond, as a fraction of
+# foot length. The malleoli stand about a quarter of the way along a
+# standing foot.
+comptime HEEL_SKIN = Float32(0.245)
+# Distances along the foot from the heel's skin, as fractions of foot
+# length: the calcaneal tuberosity's center and the second toe's bony
+# tip. Authored template proportions, not a cited table.
+comptime HEEL_REACH = Float32(0.085)
+comptime TOE2_REACH = Float32(0.960)
 
 
 @fieldwise_init
@@ -306,8 +317,11 @@ def foot_dimensions(
     var L = length_ratio * S
     var W = breadth_ratio * S
     var H = height_ratio * S
-    var heel = Vector3(0, Float32(-0.042) * S, Float32(-0.052) * S)
-    var z0 = heel.z
+    # Each landmark is authored as a fraction of foot length forward of
+    # the heel's skin, of foot breadth lateral of the midline, and of
+    # ankle height above the ground. The plafond is the origin, so the
+    # ground lies at minus the ankle height.
+    var frame = _FootFrame(L, W, H, side)
     var dims = FootDimensions(
         stature,
         sex,
@@ -315,91 +329,47 @@ def foot_dimensions(
         Length(L),
         Length(W),
         Length(H),
-        heel,
-        _place(
-            Vector3(Float32(-0.20) * W, Float32(-0.034) * S, z0 + 0.16 * L),
-            side,
-        ),
-        _place(Vector3(0.06 * W, Float32(-0.036) * S, z0 + 0.30 * L), side),
-        _place(Vector3(0.22 * W, Float32(-0.038) * S, z0 + 0.18 * L), side),
-        _place(Vector3(0.02 * W, Float32(-0.020) * S, z0 + 0.14 * L), side),
-        _place(Vector3(0, Float32(-0.008) * S, z0 + 0.22 * L), side),
-        _place(
-            Vector3(Float32(-0.08) * W, Float32(-0.018) * S, z0 + 0.36 * L),
-            side,
-        ),
-        _place(Vector3(0.20 * W, Float32(-0.016) * S, z0 + 0.20 * L), side),
-        _place(
-            Vector3(Float32(-0.12) * W, Float32(-0.024) * S, z0 + 0.42 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.30) * W, Float32(-0.028) * S, z0 + 0.40 * L),
-            side,
-        ),
-        _place(Vector3(0.02 * W, Float32(-0.026) * S, z0 + 0.43 * L), side),
-        _place(Vector3(0.24 * W, Float32(-0.038) * S, z0 + 0.34 * L), side),
-        _place(
-            Vector3(Float32(-0.24) * W, Float32(-0.028) * S, z0 + 0.50 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.06) * W, Float32(-0.026) * S, z0 + 0.50 * L),
-            side,
-        ),
-        _place(Vector3(0.08 * W, Float32(-0.030) * S, z0 + 0.48 * L), side),
-        _place(
-            Vector3(Float32(-0.26) * W, Float32(-0.032) * S, z0 + 0.54 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.40) * W, Float32(-0.040) * S, z0 + 0.76 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.06) * W, Float32(-0.030) * S, z0 + 0.50 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.08) * W, Float32(-0.038) * S, z0 + 0.80 * L),
-            side,
-        ),
-        _place(Vector3(0.08 * W, Float32(-0.032) * S, z0 + 0.52 * L), side),
-        _place(Vector3(0.08 * W, Float32(-0.040) * S, z0 + 0.76 * L), side),
-        _place(Vector3(0.20 * W, Float32(-0.036) * S, z0 + 0.46 * L), side),
-        _place(Vector3(0.24 * W, Float32(-0.042) * S, z0 + 0.72 * L), side),
-        _place(Vector3(0.34 * W, Float32(-0.040) * S, z0 + 0.42 * L), side),
-        _place(Vector3(0.42 * W, Float32(-0.044) * S, z0 + 0.68 * L), side),
-        _place(Vector3(0.40 * W, Float32(-0.042) * S, z0 + 0.34 * L), side),
-        _place(
-            Vector3(Float32(-0.42) * W, Float32(-0.041) * S, z0 + 0.88 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.42) * W, Float32(-0.042) * S, z0 + 0.96 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.08) * W, Float32(-0.040) * S, z0 + 0.88 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.08) * W, Float32(-0.041) * S, z0 + 0.94 * L),
-            side,
-        ),
-        _place(
-            Vector3(Float32(-0.08) * W, Float32(-0.042) * S, z0 + 1.00 * L),
-            side,
-        ),
-        _place(Vector3(0.08 * W, Float32(-0.041) * S, z0 + 0.84 * L), side),
-        _place(Vector3(0.08 * W, Float32(-0.042) * S, z0 + 0.90 * L), side),
-        _place(Vector3(0.08 * W, Float32(-0.043) * S, z0 + 0.95 * L), side),
-        _place(Vector3(0.24 * W, Float32(-0.043) * S, z0 + 0.80 * L), side),
-        _place(Vector3(0.25 * W, Float32(-0.044) * S, z0 + 0.86 * L), side),
-        _place(Vector3(0.26 * W, Float32(-0.044) * S, z0 + 0.90 * L), side),
-        _place(Vector3(0.42 * W, Float32(-0.045) * S, z0 + 0.74 * L), side),
-        _place(Vector3(0.43 * W, Float32(-0.045) * S, z0 + 0.79 * L), side),
-        _place(Vector3(0.44 * W, Float32(-0.046) * S, z0 + 0.84 * L), side),
+        # Heel: the calcaneal tuberosity, on the midline above its pad.
+        frame.at(HEEL_REACH, 0.00, 0.34),
+        frame.at(0.25, -0.20, 0.56),  # sustentaculum tali
+        frame.at(0.37, 0.12, 0.36),  # calcaneal anterior process
+        frame.at(0.20, 0.17, 0.40),  # calcaneal lateral wall
+        frame.at(0.17, 0.02, 0.64),  # talar posterior process
+        frame.at(0.25, 0.00, 0.80),  # talar body under the plafond
+        frame.at(0.39, -0.08, 0.63),  # talar head
+        frame.at(0.25, 0.13, 0.72),  # talar lateral process
+        frame.at(0.445, -0.10, 0.57),  # navicular
+        frame.at(0.43, -0.27, 0.48),  # navicular tuberosity
+        frame.at(0.455, 0.05, 0.58),  # navicular lateral pole
+        frame.at(0.44, 0.21, 0.36),  # cuboid
+        frame.at(0.525, -0.19, 0.45),  # medial cuneiform
+        frame.at(0.53, -0.05, 0.55),  # intermediate cuneiform
+        frame.at(0.52, 0.08, 0.49),  # lateral cuneiform
+        frame.at(0.585, -0.21, 0.39),  # first metatarsal base
+        frame.at(0.745, -0.30, 0.16),  # first metatarsal head
+        frame.at(0.575, -0.06, 0.47),  # second metatarsal base
+        frame.at(0.775, -0.12, 0.14),  # second metatarsal head
+        frame.at(0.575, 0.05, 0.43),  # third metatarsal base
+        frame.at(0.760, 0.03, 0.13),  # third metatarsal head
+        frame.at(0.560, 0.15, 0.35),  # fourth metatarsal base
+        frame.at(0.725, 0.17, 0.13),  # fourth metatarsal head
+        frame.at(0.540, 0.26, 0.26),  # fifth metatarsal base
+        frame.at(0.680, 0.31, 0.13),  # fifth metatarsal head
+        frame.at(0.515, 0.34, 0.20),  # fifth metatarsal tuberosity
+        frame.at(0.875, -0.32, 0.16),  # hallux interphalangeal joint
+        frame.at(0.975, -0.33, 0.11),  # hallux tip
+        frame.at(0.860, -0.13, 0.21),  # second toe PIP
+        frame.at(0.915, -0.13, 0.15),  # second toe DIP
+        frame.at(TOE2_REACH, -0.13, 0.10),  # second toe tip
+        frame.at(0.835, 0.03, 0.20),  # third toe PIP
+        frame.at(0.885, 0.03, 0.14),  # third toe DIP
+        frame.at(0.925, 0.035, 0.10),  # third toe tip
+        frame.at(0.795, 0.18, 0.19),  # fourth toe PIP
+        frame.at(0.840, 0.185, 0.14),  # fourth toe DIP
+        frame.at(0.880, 0.19, 0.10),  # fourth toe tip
+        frame.at(0.745, 0.32, 0.18),  # fifth toe PIP
+        frame.at(0.785, 0.33, 0.14),  # fifth toe DIP
+        frame.at(0.820, 0.34, 0.10),  # fifth toe tip
         Vector3(0, 0, 0),
         Vector3(0, 0, 0),
     )
@@ -546,6 +516,36 @@ def named_foot_bones() -> List[FootBone]:
     return parts^
 
 
+@fieldwise_init
+struct _FootFrame(ImplicitlyCopyable):
+    """Turns authored fractions into points in the plafond frame."""
+
+    var length: Float32
+    var breadth: Float32
+    var height: Float32
+    var side: BodySide
+
+    def at(self, along: Float32, lateral: Float32, up: Float32) -> Vector3:
+        """Return one landmark.
+
+        Args:
+            along: Fraction of foot length forward of the heel's skin.
+            lateral: Fraction of foot breadth lateral of the midline.
+            up: Fraction of ankle height above the ground.
+
+        Returns:
+            The point, mirrored for a left foot.
+        """
+        return _place(
+            Vector3(
+                lateral * self.breadth,
+                (up - 1) * self.height,
+                (along - HEEL_SKIN) * self.length,
+            ),
+            self.side,
+        )
+
+
 def _place(point: Vector3, side: BodySide) -> Vector3:
     """Mirror an authored landmark when `side` is left."""
     if side == LEFT:
@@ -572,136 +572,195 @@ def _malleoli(
 
 
 def _segments(dimensions: FootDimensions, part: FootBone) -> SegmentSet:
-    """Return the tapered segments of one named bone."""
-    var L = dimensions.length.value
+    """Return the tapered segments of one named bone.
+
+    A long bone has a base, a shaft and a head, and stops short of the
+    next bone by a joint space. A tarsal is a block of two or three
+    rounded masses. Radii are authored fractions of foot breadth.
+    """
     var W = dimensions.width.value
+    var d = dimensions
     if part == TALUS:
-        return two_segments(
-            dimensions.talar_posterior,
-            dimensions.talar_head,
+        # Body under the plafond, neck, and head at the navicular.
+        return three_segments(
+            d.talar_posterior,
+            d.talar_body,
+            0.10 * W,
             0.15 * W,
-            0.09 * W,
-            dimensions.talar_body,
-            dimensions.talar_lateral,
-            0.16 * W,
-            0.07 * W,
+            d.talar_body,
+            d.talar_head,
+            0.15 * W,
+            0.12 * W,
+            d.talar_body,
+            d.talar_lateral,
+            0.13 * W,
+            0.08 * W,
         )
     if part == CALCANEUS:
-        return two_segments(
-            dimensions.heel,
-            dimensions.calcaneal_anterior,
-            0.18 * W,
+        # Tuberosity, body and anterior process, with the shelf that
+        # holds the talus on the medial side.
+        return three_segments(
+            d.heel,
+            d.calcaneal_lateral,
+            0.17 * W,
+            0.16 * W,
+            d.calcaneal_lateral,
+            d.calcaneal_anterior,
+            0.16 * W,
             0.12 * W,
-            dimensions.heel,
-            dimensions.sustentaculum,
+            d.calcaneal_lateral,
+            d.sustentaculum,
             0.12 * W,
-            0.08 * W,
-        )
-    if part == NAVICULAR:
-        return one_segment(
-            dimensions.navicular_tuberosity,
-            dimensions.navicular_lateral,
-            0.08 * W,
             0.09 * W,
         )
+    if part == NAVICULAR:
+        return two_segments(
+            d.navicular_tuberosity,
+            d.navicular,
+            0.09 * W,
+            0.11 * W,
+            d.navicular,
+            d.navicular_lateral,
+            0.11 * W,
+            0.08 * W,
+        )
     if part == CUBOID:
-        return _short(dimensions.cuboid, L, 0.11 * W, 0.10 * W)
+        return _block(d.cuboid, dimensions.length.value, 0.12 * W, 0.11 * W)
     if part == MEDIAL_CUNEIFORM:
-        return _short(dimensions.medial_cuneiform, L, 0.075 * W, 0.070 * W)
+        return _block(
+            d.medial_cuneiform, dimensions.length.value, 0.10 * W, 0.10 * W
+        )
     if part == INTERMEDIATE_CUNEIFORM:
-        return _short(
-            dimensions.intermediate_cuneiform, L, 0.060 * W, 0.055 * W
+        return _block(
+            d.intermediate_cuneiform,
+            dimensions.length.value,
+            0.075 * W,
+            0.07 * W,
         )
     if part == LATERAL_CUNEIFORM:
-        return _short(dimensions.lateral_cuneiform, L, 0.065 * W, 0.060 * W)
+        return _block(
+            d.lateral_cuneiform, dimensions.length.value, 0.085 * W, 0.08 * W
+        )
     if part == METATARSAL_1:
-        return one_segment(
-            dimensions.mt1_base, dimensions.mt1_head, 0.075 * W, 0.055 * W
+        return _long_bone(
+            d.mt1_base, d.mt1_head, 0.12 * W, 0.065 * W, 0.105 * W
         )
     if part == METATARSAL_2:
-        return one_segment(
-            dimensions.mt2_base, dimensions.mt2_head, 0.050 * W, 0.038 * W
+        return _long_bone(
+            d.mt2_base, d.mt2_head, 0.075 * W, 0.042 * W, 0.066 * W
         )
     if part == METATARSAL_3:
-        return one_segment(
-            dimensions.mt3_base, dimensions.mt3_head, 0.048 * W, 0.036 * W
+        return _long_bone(
+            d.mt3_base, d.mt3_head, 0.072 * W, 0.040 * W, 0.063 * W
         )
     if part == METATARSAL_4:
-        return one_segment(
-            dimensions.mt4_base, dimensions.mt4_head, 0.046 * W, 0.035 * W
+        return _long_bone(
+            d.mt4_base, d.mt4_head, 0.070 * W, 0.040 * W, 0.060 * W
         )
     if part == METATARSAL_5:
-        return one_segment(
-            dimensions.mt5_tuberosity,
-            dimensions.mt5_head,
-            0.055 * W,
-            0.040 * W,
+        return _long_bone(
+            d.mt5_tuberosity, d.mt5_head, 0.085 * W, 0.042 * W, 0.058 * W
         )
     if part == HALLUX_PROXIMAL:
-        return one_segment(
-            dimensions.mt1_head, dimensions.hallux_ip, 0.058 * W, 0.050 * W
+        return _phalanx(
+            d.mt1_head, 0.105 * W, d.hallux_ip, 0.085 * W, 0.058 * W
         )
     if part == HALLUX_DISTAL:
-        return one_segment(
-            dimensions.hallux_ip, dimensions.hallux_tip, 0.048 * W, 0.042 * W
+        return _phalanx(
+            d.hallux_ip, 0.068 * W, d.hallux_tip, 0.066 * W, 0.050 * W
         )
     if part == TOE2_PROXIMAL:
-        return one_segment(
-            dimensions.mt2_head, dimensions.toe2_pip, 0.034 * W, 0.028 * W
-        )
+        return _phalanx(d.mt2_head, 0.066 * W, d.toe2_pip, 0.052 * W, 0.036 * W)
     if part == TOE2_MIDDLE:
-        return one_segment(
-            dimensions.toe2_pip, dimensions.toe2_dip, 0.026 * W, 0.022 * W
-        )
+        return _phalanx(d.toe2_pip, 0.040 * W, d.toe2_dip, 0.042 * W, 0.032 * W)
     if part == TOE2_DISTAL:
-        return one_segment(
-            dimensions.toe2_dip, dimensions.toe2_tip, 0.024 * W, 0.020 * W
-        )
+        return _phalanx(d.toe2_dip, 0.034 * W, d.toe2_tip, 0.038 * W, 0.030 * W)
     if part == TOE3_PROXIMAL:
-        return one_segment(
-            dimensions.mt3_head, dimensions.toe3_pip, 0.032 * W, 0.026 * W
-        )
+        return _phalanx(d.mt3_head, 0.063 * W, d.toe3_pip, 0.050 * W, 0.034 * W)
     if part == TOE3_MIDDLE:
-        return one_segment(
-            dimensions.toe3_pip, dimensions.toe3_dip, 0.024 * W, 0.020 * W
-        )
+        return _phalanx(d.toe3_pip, 0.038 * W, d.toe3_dip, 0.040 * W, 0.030 * W)
     if part == TOE3_DISTAL:
-        return one_segment(
-            dimensions.toe3_dip, dimensions.toe3_tip, 0.022 * W, 0.018 * W
-        )
+        return _phalanx(d.toe3_dip, 0.032 * W, d.toe3_tip, 0.036 * W, 0.028 * W)
     if part == TOE4_PROXIMAL:
-        return one_segment(
-            dimensions.mt4_head, dimensions.toe4_pip, 0.030 * W, 0.024 * W
-        )
+        return _phalanx(d.mt4_head, 0.060 * W, d.toe4_pip, 0.048 * W, 0.032 * W)
     if part == TOE4_MIDDLE:
-        return one_segment(
-            dimensions.toe4_pip, dimensions.toe4_dip, 0.022 * W, 0.018 * W
-        )
+        return _phalanx(d.toe4_pip, 0.036 * W, d.toe4_dip, 0.038 * W, 0.028 * W)
     if part == TOE4_DISTAL:
-        return one_segment(
-            dimensions.toe4_dip, dimensions.toe4_tip, 0.020 * W, 0.016 * W
-        )
+        return _phalanx(d.toe4_dip, 0.030 * W, d.toe4_tip, 0.034 * W, 0.026 * W)
     if part == TOE5_PROXIMAL:
-        return one_segment(
-            dimensions.mt5_head, dimensions.toe5_pip, 0.028 * W, 0.022 * W
-        )
+        return _phalanx(d.mt5_head, 0.058 * W, d.toe5_pip, 0.046 * W, 0.031 * W)
     if part == TOE5_MIDDLE:
-        return one_segment(
-            dimensions.toe5_pip, dimensions.toe5_dip, 0.020 * W, 0.016 * W
-        )
-    return one_segment(
-        dimensions.toe5_dip, dimensions.toe5_tip, 0.018 * W, 0.015 * W
+        return _phalanx(d.toe5_pip, 0.034 * W, d.toe5_dip, 0.036 * W, 0.027 * W)
+    return _phalanx(d.toe5_dip, 0.029 * W, d.toe5_tip, 0.032 * W, 0.025 * W)
+
+
+def _long_bone(
+    base: Vector3,
+    head: Vector3,
+    r_base: Float32,
+    r_shaft: Float32,
+    r_head: Float32,
+) -> SegmentSet:
+    """Return a metatarsal: a broad base, a narrow shaft and a round head."""
+    var neck = mix_point(base, head, 0.80)
+    var waist = mix_point(base, head, 0.22)
+    return three_segments(
+        base,
+        waist,
+        r_base,
+        r_shaft,
+        waist,
+        neck,
+        r_shaft,
+        Float32(0.9) * r_shaft,
+        neck,
+        head,
+        Float32(0.9) * r_shaft,
+        r_head,
     )
 
 
-def _short(
+def _phalanx(
+    joint: Vector3,
+    joint_radius: Float32,
+    end: Vector3,
+    r_base: Float32,
+    r_shaft: Float32,
+) -> SegmentSet:
+    """Return a phalanx that starts a joint space past `joint`.
+
+    `joint` is the center of the head before it. The base begins past
+    that head's surface, so the joint keeps its cartilage space.
+    """
+    var run = end - joint
+    var reach = run.length()
+    var direction = run * (1 / max(reach, Float32(1.0e-6)))
+    var base = joint + direction * (joint_radius + Float32(0.6) * r_base)
+    var waist = mix_point(base, end, 0.55)
+    return two_segments(
+        base,
+        waist,
+        r_base,
+        r_shaft,
+        waist,
+        end,
+        r_shaft,
+        Float32(0.95) * r_base,
+    )
+
+
+def _block(
     center: Vector3, length: Float32, ra: Float32, rb: Float32
 ) -> SegmentSet:
-    """Return a short proximal-to-distal segment through `center`."""
-    var half = 0.018 * length
-    return one_segment(
-        center + Vector3(0, 0, -half),
-        center + Vector3(0, 0, half),
+    """Return a short tarsal block through `center`."""
+    var half = 0.020 * length
+    return two_segments(
+        center + Vector3(0, 0.25 * ra, -half),
+        center + Vector3(0, 0.25 * ra, half),
+        ra,
+        rb,
+        center + Vector3(0, -0.25 * ra, -half),
+        center + Vector3(0, -0.25 * ra, half),
         ra,
         rb,
     )

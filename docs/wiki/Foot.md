@@ -53,15 +53,30 @@ Length, breadth and ankle height are authored sex-specific ratios of stature. Th
 | Breadth | 0.058 | 0.054 | Authored template ratio |
 | Ankle height | 0.048 | 0.046 | Authored template ratio |
 
-The heel landmark matches the leg Achilles insertion. The malleoli come from the tibia and the fibula. A left foot mirrors x. The second toe tip is one foot length anterior of the heel.
+Each landmark is authored as three fractions. The first is of foot length, forward of the heel's skin. The second is of breadth, lateral of the midline. The third is of ankle height, above the ground. The heel's skin lies `HEEL_SKIN`, 0.245 of a foot length, behind the tibial plafond. The malleoli stand about a quarter of the way along a standing foot.
+
+| Landmark | Forward of the heel's skin | Above the ground |
+|---|---|---|
+| Calcaneal tuberosity, `heel` | 0.085 L | 0.34 H |
+| Talar body, under the plafond | 0.25 L | 0.80 H |
+| Navicular | 0.445 L | 0.57 H |
+| Cuboid | 0.44 L | 0.36 H |
+| First metatarsal head | 0.745 L | 0.16 H |
+| Second metatarsal head | 0.775 L | 0.14 H |
+| Fifth metatarsal head | 0.68 L | 0.13 H |
+| Second toe tip | 0.96 L | 0.10 H |
+
+L is foot length. H is ankle height. The navicular stands higher than the cuboid, so the medial arch rises over the lateral column. The metatarsal heads fall in a cascade: the second reaches farthest. The toes shorten from the second to the fifth.
+
+The heel landmark matches the leg Achilles insertion. The malleoli come from the tibia and the fibula. A left foot mirrors x.
 
 ## Bones
 
-The talus and the calcaneus are two segments. Each other bone is one segment. There is no marrow cavity. A cortical shell wraps trabecular bone.
+The talus is a body, a neck and a head, with a lateral process. The calcaneus is a tuberosity, a body and an anterior process, with the shelf that holds the talus. The navicular is two masses. The cuboid and the cuneiforms are rounded blocks. There is no marrow cavity. A cortical shell wraps trabecular bone.
 
-The second metatarsal base sits proximal of the first. The second metatarsal head is the longest of the five.
+A metatarsal is a broad base, a narrow shaft and a round head. The second metatarsal base sits proximal of the first. The second metatarsal head is the longest of the five.
 
-The hallux has two phalanges. Toes two through five have three. Short bones are capsules along z.
+The hallux has two phalanges. Toes two through five have three. A phalanx starts past the head before it, so each joint keeps its cartilage space.
 
 ## Ligaments
 
@@ -86,7 +101,9 @@ Mass uses the physical bands. The mesh uses those same radii.
 
 Nine extrinsic tendons enter the foot. Twelve intrinsic bellies fill the sole and the dorsum. Belly radii scale with athleticism. Tendon radii do not. `FIBULARIS_*` is the canonical name. `PERONEUS_*` is an alias.
 
-The calcaneal tendon meets the heel landmark shared with the leg. Tendon meshes use a diagrammatic minimum radius. Mass keeps the physical radius.
+The calcaneal tendon runs nearly vertically behind the ankle into the upper back of the tuberosity. The leg's copy of the tendon passes through the same two points. The extensor tendons lie on the dorsum: over the cuneiforms, along each metatarsal and over its head, to the toe. The long flexors pass under the metatarsal heads.
+
+Tendon meshes use a diagrammatic minimum radius. Mass keeps the physical radius.
 
 ## Vessels
 
@@ -133,7 +150,15 @@ Seven nerves enter the foot. `DEEP_PERONEAL_NERVE` is an alias of `DEEP_FIBULAR_
 
 ## Integument
 
-Skin fits sections around the modeled solids. Display radii do not move that surface. Hair roots lie on the fitted skin. Dorsal hair and digital hair are the two groups.
+### Skin
+
+The skin fits the modeled solids with the leg's method. See [Integument](Integument#envelope). One loft runs from behind the heel to the toe webs, at 0.80 of foot length. Five more run along the toes, one each. A toe's loft takes only the solids in its own lane, so the toes stay apart.
+
+The cover is 0.0028 of stature over the dorsum and the sides, and 0.0022 over the toes. Pads under the heel, the lateral column, the metatarsal heads and the toe pulps carry the skin to the ground. The medial arch does not reach it.
+
+Two columns over the distal tibia and fibula close the ankle at one height. The leg's skin covers that top. Draw the leg and the foot in one skin with `add_limb_skin`. See [Integument](Integument#one-skin-for-a-limb).
+
+Display radii do not move the skin. Hair roots lie on the fitted skin. Dorsal hair and digital hair are the two groups.
 
 Physical hair radius is an authored adult mean. The mesh draws a wider shaft so the gallery can show it. Mass uses the physical radius.
 

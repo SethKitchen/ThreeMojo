@@ -3,16 +3,23 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Visual stand-ins for the named hydrated tissues of the limb.
+"""Looks for the named hydrated tissues of the limb.
 
-The maps are visual approximations. MeshStandardMaterial is not ported,
-so these surfaces are what the current renderer can draw.
+Each tissue has a Phong look and a physically based one. The physical
+looks take a roughness, an index of refraction and, where the tissue
+has one, a sheen or a clear coat. They need an environment or a lamp
+and read best tone mapped. The maps are visual approximations.
 
     var map = muscle_albedo(64)
-    var paint = muscle_phong(store.add(map))
+    var paint = muscle_physical(store.add(map))
 """
 
-from materials.material import DOUBLE_SIDE, Material, phong_material
+from materials.material import (
+    DOUBLE_SIDE,
+    Material,
+    phong_material,
+    physical_material,
+)
 from render.framebuffer import Color
 from render.srgb import SRGB
 from render.texture import REPEAT, Texture
@@ -297,4 +304,128 @@ def hair_phong() raises -> Material:
         Color(128, 80, 50),
         specular=Color(150, 112, 82),
         shininess=24.0,
+    )
+
+
+def muscle_physical(map: TextureId = NO_TEXTURE) raises -> Material:
+    """Return a physically based material for skeletal muscle.
+
+    Muscle is wet. Its epimysium is a thin glossy film over a rough
+    fibrous body, so a soft lobe carries a sharper clear coat.
+
+    Args:
+        map: Id of a muscle albedo texture, or `NO_TEXTURE`.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    var color = Color(176, 54, 44)
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
+    return physical_material(
+        color,
+        map=map,
+        roughness=0.55,
+        ior=1.37,
+        clearcoat=0.35,
+        clearcoat_roughness=0.3,
+    )
+
+
+def tendon_physical() raises -> Material:
+    """Return a physically based material for tendon and fascia.
+
+    Tendon's collagen runs in parallel bundles, which gives it a silvery
+    sheen along its length.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(214, 200, 176),
+        roughness=0.45,
+        ior=1.40,
+        sheen=0.5,
+        sheen_color=Color(235, 230, 220),
+        sheen_roughness=0.4,
+    )
+
+
+def ligament_physical() raises -> Material:
+    """Return a physically based material for ligament.
+
+    Returns:
+        A `PHYSICAL` material with the look of `tendon_physical`, a shade
+        darker.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(198, 184, 160),
+        roughness=0.5,
+        ior=1.40,
+        sheen=0.4,
+        sheen_color=Color(225, 220, 208),
+        sheen_roughness=0.45,
+    )
+
+
+def cartilage_physical() raises -> Material:
+    """Return a physically based material for articular cartilage.
+
+    Hyaline cartilage is smooth and wet: a low roughness and a clear
+    coat over a pale blue-white body.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(206, 214, 222),
+        roughness=0.3,
+        ior=1.38,
+        clearcoat=0.6,
+        clearcoat_roughness=0.15,
+    )
+
+
+def skin_physical(map: TextureId = NO_TEXTURE) raises -> Material:
+    """Return a physically based material for dermis.
+
+    Skin reflects about three percent at normal incidence, an index of
+    refraction near 1.4. Light that enters it scatters and leaves warm
+    and soft at grazing angles. The renderer has no subsurface
+    scattering, so a warm sheen stands in for that rim.
+
+    Args:
+        map: Id of a skin albedo texture, or `NO_TEXTURE`.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    var color = Color(222, 174, 146)
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
+    return physical_material(
+        color,
+        map=map,
+        roughness=0.55,
+        ior=1.40,
+        specular_intensity=0.6,
+        sheen=0.35,
+        sheen_color=Color(230, 140, 120),
+        sheen_roughness=0.6,
+        side=DOUBLE_SIDE,
     )

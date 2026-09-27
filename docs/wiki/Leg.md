@@ -87,9 +87,26 @@ Run it with:
 
 `ankle_center()` returns the tibial plafond in the leg frame. That point is the origin of the foot. Pass it as `origin` to `add_foot`. See [Foot](Foot).
 
+## Looks
+
+`extensions/humanoid/skeleton/look.mojo` and `bone.mojo` hold two looks for each tissue. The Phong looks draw with any light. The physical looks are `PHYSICAL` materials and read best with an environment and tone mapping.
+
+| Tissue | Phong | Physical |
+|---|---|---|
+| Bone | `bone_phong` | `bone_physical`: rough, IOR 1.55 |
+| Skin | `skin_phong` | `skin_physical`: IOR 1.40, a warm sheen for scattered light |
+| Muscle | `muscle_phong` | `muscle_physical`: a clear coat for the wet epimysium |
+| Tendon | `tendon_phong` | `tendon_physical`: a silvery sheen along the fibers |
+| Ligament | `ligament_phong` | `ligament_physical` |
+| Cartilage | `cartilage_phong` | `cartilage_physical`: smooth, with a clear coat |
+
+The renderer has no subsurface scattering. The skin's sheen stands in for the soft, warm rim that scattered light gives skin.
+
 ## Limb
 
-`examples/limb.mojo` draws one right leg and its foot, twice. The left copy has bones and muscles and no skin. The right copy is the skin envelope. The foot uses `ankle_center()` as its origin. The picture is `out/limb.png`.
+`examples/limb.mojo` draws one right leg and its foot, twice, standing on a floor. The left copy has bones and muscles and no skin. The right copy is one skin over the leg and the foot, from `add_limb_skin`. The foot uses `ankle_center()` as its origin. The picture is `out/limb.png`.
+
+The gallery uses the physical looks. A room environment lights it through a PMREM. A lamp casts soft shadows. ACES Filmic tone maps it.
 
 ![A six-foot male right leg and foot turn twice, once open and once in skin](out/limb.png)
 

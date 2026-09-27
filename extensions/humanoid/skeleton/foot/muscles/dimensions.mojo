@@ -326,35 +326,88 @@ def _tendon(dimensions: FootMuscleDimensions, part: FootMuscle) -> TubeSet:
     var S = foot.stature.value
     var med = medial_axis(foot)
     var lateral = med * Float32(-1)
-    var dorsal = Vector3(0, 0.008 * S, 0)
+    # Just above a metatarsal: its radius and the tendon's.
+    var dorsal = Vector3(0, 0.0055 * S, 0)
     if part == CALCANEAL_TENDON:
+        # Nearly vertical behind the ankle, into the upper back of the
+        # calcaneal tuberosity.
         return one_tube(
             _line(
-                Vector3(0, 0.04 * S, Float32(-0.045) * S), foot.heel, 0.0036 * S
+                Vector3(0, 0.04 * S, foot.heel.z - 0.007 * S),
+                foot.heel + Vector3(0, 0.004 * S, Float32(-0.008) * S),
+                0.0036 * S,
             )
         )
     if part == TIBIALIS_ANTERIOR_TENDON:
         var start = Vector3(0, Float32(-0.004) * S, 0.016 * S) + med * (
             0.008 * S
         )
-        return one_tube(_line(start, foot.medial_cuneiform, 0.0020 * S))
+        # Over the talar head to the medial cuneiform's medial face.
+        return one_tube(
+            _via(
+                start,
+                foot.talar_head + Vector3(0, 0.010 * S, 0) + med * (0.004 * S),
+                foot.medial_cuneiform + med * (0.006 * S),
+                0.0020 * S,
+            )
+        )
     if part == EXTENSOR_HALLUCIS_LONGUS_TENDON:
         var start = Vector3(0, Float32(-0.002) * S, 0.018 * S) + med * (
             0.004 * S
         )
+        # On the dorsum: over the first ray to the distal phalanx.
         return one_tube(
-            _via(start, foot.mt1_head + dorsal, foot.hallux_tip, 0.0015 * S)
+            _stations(
+                start,
+                foot.medial_cuneiform + Vector3(0, 0.008 * S, 0),
+                mix_point(foot.mt1_base, foot.mt1_head, 0.5) + dorsal,
+                foot.mt1_head + dorsal,
+                foot.hallux_ip + Vector3(0, 0.0055 * S, 0),
+                0.0015 * S,
+            )
         )
     if part == EXTENSOR_DIGITORUM_LONGUS_TENDON:
         var start = Vector3(0, Float32(-0.002) * S, 0.016 * S) + lateral * (
             0.004 * S
         )
         var radius = 0.0013 * S
+        # Fanning over the lateral cuneiform, then along each ray's
+        # dorsum to the middle phalanx.
+        var fan = foot.lateral_cuneiform + Vector3(0, 0.008 * S, 0)
+        var low = Vector3(0, 0.0045 * S, 0)
         return four_tubes(
-            _via(start, foot.mt2_head + dorsal, foot.toe2_tip, radius),
-            _via(start, foot.mt3_head + dorsal, foot.toe3_tip, radius),
-            _via(start, foot.mt4_head + dorsal, foot.toe4_tip, radius),
-            _via(start, foot.mt5_head + dorsal, foot.toe5_tip, radius),
+            _stations(
+                start,
+                fan,
+                mix_point(foot.mt2_base, foot.mt2_head, 0.5) + low,
+                foot.mt2_head + low,
+                foot.toe2_dip + low,
+                radius,
+            ),
+            _stations(
+                start,
+                fan,
+                mix_point(foot.mt3_base, foot.mt3_head, 0.5) + low,
+                foot.mt3_head + low,
+                foot.toe3_dip + low,
+                radius,
+            ),
+            _stations(
+                start,
+                fan,
+                mix_point(foot.mt4_base, foot.mt4_head, 0.5) + low,
+                foot.mt4_head + low,
+                foot.toe4_dip + low,
+                radius,
+            ),
+            _stations(
+                start,
+                fan,
+                mix_point(foot.mt5_base, foot.mt5_head, 0.5) + low,
+                foot.mt5_head + low,
+                foot.toe5_dip + low,
+                radius,
+            ),
         )
     if part == FIBULARIS_LONGUS_TENDON:
         var radius = 0.0018 * S
@@ -410,13 +463,43 @@ def _tendon(dimensions: FootMuscleDimensions, part: FootMuscle) -> TubeSet:
     var start = foot.medial_malleolus + Vector3(
         0, 0.006 * S, Float32(-0.008) * S
     )
-    var plantar = Vector3(0, Float32(-0.003) * S, 0)
+    var under = Vector3(0, Float32(-0.0045) * S, 0)
     var radius = 0.0012 * S
+    # From the knot of Henry under each metatarsal head to the base of
+    # the distal phalanx.
     return four_tubes(
-        _via(start, knot, foot.toe2_tip + plantar, radius),
-        _via(start, knot, foot.toe3_tip + plantar, radius),
-        _via(start, knot, foot.toe4_tip + plantar, radius),
-        _via(start, knot, foot.toe5_tip + plantar, radius),
+        _stations(
+            start,
+            knot,
+            foot.mt2_head + under,
+            foot.toe2_pip + under,
+            foot.toe2_dip + under,
+            radius,
+        ),
+        _stations(
+            start,
+            knot,
+            foot.mt3_head + under,
+            foot.toe3_pip + under,
+            foot.toe3_dip + under,
+            radius,
+        ),
+        _stations(
+            start,
+            knot,
+            foot.mt4_head + under,
+            foot.toe4_pip + under,
+            foot.toe4_dip + under,
+            radius,
+        ),
+        _stations(
+            start,
+            knot,
+            foot.mt5_head + under,
+            foot.toe5_pip + under,
+            foot.toe5_dip + under,
+            radius,
+        ),
     )
 
 

@@ -315,22 +315,25 @@ def _outer_surface(
 def _assert_chain_inside(
     field: SkinField, chain: TubeChain, name: String
 ) raises:
-    """Assert that all five centerline stations lie below the skin."""
-    if field.distance(chain.p0) >= 0:
-        print(name, "p0 lies outside skin by", field.distance(chain.p0))
-    if field.distance(chain.p1) >= 0:
-        print(name, "p1 lies outside skin by", field.distance(chain.p1))
-    if field.distance(chain.p2) >= 0:
-        print(name, "p2 lies outside skin by", field.distance(chain.p2))
-    if field.distance(chain.p3) >= 0:
-        print(name, "p3 lies outside skin by", field.distance(chain.p3))
-    if field.distance(chain.p4) >= 0:
-        print(name, "p4 lies outside skin by", field.distance(chain.p4))
-    assert_true(field.distance(chain.p0) < 0)
-    assert_true(field.distance(chain.p1) < 0)
-    assert_true(field.distance(chain.p2) < 0)
-    assert_true(field.distance(chain.p3) < 0)
-    assert_true(field.distance(chain.p4) < 0)
+    """Assert that every centerline station above the ankle lies below
+    the skin. Below the tibial plafond the foot's skin covers them."""
+    var ankle = field.ankle
+    _assert_station_inside(field, chain.p0, ankle, name + " p0")
+    _assert_station_inside(field, chain.p1, ankle, name + " p1")
+    _assert_station_inside(field, chain.p2, ankle, name + " p2")
+    _assert_station_inside(field, chain.p3, ankle, name + " p3")
+    _assert_station_inside(field, chain.p4, ankle, name + " p4")
+
+
+def _assert_station_inside(
+    field: SkinField, station: Vector3, ankle: Float32, name: String
+) raises:
+    """Assert that one station lies below the skin, if above `ankle`."""
+    if station.y < ankle:
+        return
+    if field.distance(station) >= 0:
+        print(name, "lies outside skin by", field.distance(station))
+    assert_true(field.distance(station) < 0)
 
 
 def _assert_mesh(bone: BufferGeometry) raises:

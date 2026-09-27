@@ -5,15 +5,16 @@
 
 """Skin envelope derived from the modeled anatomy of one foot.
 
-A narrow cuff follows the Achilles tendon into the heel. Six more
-sections run from the heel to the metatarsal heads. Five toe
-sections continue to the tips. Each section is fitted to the bones,
-ligaments, muscles, vessels, lymphatic trunks and nerves. A separate
-shell is the dermis for occupancy and mass.
+One loft runs from behind the heel to the toe webs. Five more run
+along the toes, one each. Every section slices the bones, ligaments,
+muscles, vessels, lymphatic trunks and nerves, closes the outline as a
+convex hull, and adds the soft tissue that covers it. See
+`extensions.humanoid.skeleton.loft`. A separate shell is the dermis for
+occupancy and mass.
 
-Superficial veins use their physical radii. Diagrammatic display
-radii are not part of this fit. Deep vessels do not set the outer
-bulk when they lie inside the other solids.
+The sole is not a hull of the bones alone. Pads under the heel, the
+lateral column, the metatarsal heads and the toe pulps carry the skin
+to the ground, and the medial arch stays clear of it.
 
 The solid lives in the foot frame. The origin is the tibial plafond.
 Plus y is proximal. Plus x is body-right. Plus z is anterior.
@@ -23,17 +24,15 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
 """
 
 from extensions.humanoid.skeleton.field import (
-    Bounds,
     DistanceField,
     TubeChain,
-    empty_bounds,
     field_gradient,
-    mix_point,
-    sd_ellipse_segment,
     smin,
 )
 from extensions.humanoid.skeleton.foot.bones.dimensions import (
+    HEEL_SKIN,
     FootBoneField,
+    FootDimensions,
     named_foot_bones,
 )
 from extensions.humanoid.skeleton.foot.chain import SegmentSet, TubeSet
@@ -58,50 +57,36 @@ from extensions.humanoid.skeleton.foot.vessels.dimensions import (
     FootVesselField,
     named_foot_vessels,
 )
+from extensions.humanoid.skeleton.loft import (
+    AXIS_Z,
+    Loft,
+    LoftSample,
+    fit_loft,
+    loft_distance,
+)
 from math.vector3 import Vector3
-from std.math import max, min
+from std.math import abs, max, min
+
+# Sections of the loft from the heel to the toe webs.
+comptime FOOT_SECTIONS = 34
+# Sections of one toe's loft.
+comptime TOE_SECTIONS = 12
+# Passes that fill one-section dips along a loft. See `fit_loft`.
+comptime FILL_PASSES = 3
+# Where the toe webs end, as a fraction of foot length forward of the
+# heel's skin. The lofts of the toes carry on from there.
+comptime WEB_REACH = Float32(0.80)
 
 
-@fieldwise_init
-struct _Section(ImplicitlyCopyable):
-    """One fitted cross-section of the foot."""
-
-    var center: Vector3
-    var ml: Float32
-    var ap: Float32
-
-
-@fieldwise_init
-struct _Env(ImplicitlyCopyable):
-    """One anatomical sample used to fit the skin."""
-
-    var center: Vector3
-    var ml: Float32
-    var ap: Float32
-
-
-struct SkinField(DistanceField, ImplicitlyCopyable):
+struct SkinField(Copyable, DistanceField, Movable):
     """The outer skin surface around the modeled foot anatomy."""
 
-    var cuff: _Section
-    var ankle: _Section
-    var s0: _Section
-    var heel_back: _Section
-    var s1: _Section
-    var s2: _Section
-    var s3: _Section
-    var s4: _Section
-    var s5: _Section
-    var h0: _Section
-    var h1: _Section
-    var u0: _Section
-    var u1: _Section
-    var v0: _Section
-    var v1: _Section
-    var w0: _Section
-    var w1: _Section
-    var x0: _Section
-    var x1: _Section
+    var foot: Loft
+    var hallux: Loft
+    var toe2: Loft
+    var toe3: Loft
+    var toe4: Loft
+    var toe5: Loft
     var blend: Float32
     var dermis: Float32
     var epsilon: Float32
@@ -118,144 +103,67 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
             Error: If `dimensions.validate` refuses the copy.
         """
         dimensions.validate()
-        var sole = List[_Env]()
-        var toes = List[_Env]()
-        _collect(sole, toes, dimensions)
         var foot = dimensions.foot
         var S = foot.stature.value
-        # Wide enough that both neighboring sections see each station.
-        var slab = 0.25 * foot.length.value
-        var cover = 0.0032 * S + Float32(0.0018)
-        var mal = mix_point(foot.medial_malleolus, foot.lateral_malleolus, 0.5)
-        sole.append(_Env(foot.medial_malleolus, 0.010, 0.010))
-        sole.append(_Env(foot.lateral_malleolus, 0.010, 0.010))
-        sole.append(_Env(Vector3(0, 0, 0), 0.012, 0.012))
-        var tendon = Vector3(0, Float32(0.040) * S, Float32(-0.045) * S)
-        var tendon_r = 0.0036 * S + cover
-        self.cuff = _Section(tendon, tendon_r, tendon_r)
-        var local = 0.028 * S
-        self.ankle = _fit(sole, mal, 0.045 * foot.length.value, cover, local)
-        self.ankle.ml = max(self.ankle.ml, Float32(0.020) * S)
-        self.ankle.ap = max(self.ankle.ap, Float32(0.018) * S)
-        var heel_z = foot.heel.z
-        self.s0 = _fit(
-            sole,
-            Vector3(foot.heel.x, foot.heel.y, heel_z),
-            slab,
-            cover,
-            local,
+        var L = foot.length.value
+        # Soft tissue over the dorsum and the sides, and over the toes.
+        var cover = Float32(0.0028) * S
+        var toe_cover = Float32(0.0022) * S
+        var samples = List[LoftSample]()
+        _collect(samples, dimensions)
+        _pads(samples, foot, cover, toe_cover)
+        var heel_skin = -HEEL_SKIN * L
+        var web = (WEB_REACH - HEEL_SKIN) * L
+        # The first section stands behind the heel, where nothing is,
+        # so the heel rounds off to its cover.
+        var start = heel_skin - Float32(0.004) * S
+        self.foot = fit_loft(
+            samples,
+            AXIS_Z,
+            start,
+            web,
+            FOOT_SECTIONS,
+            List[Float32](length=FOOT_SECTIONS, fill=cover),
+            FILL_PASSES,
         )
-        # The calf's back line covers the calcaneus. A section behind the
-        # bone is the part of the heel a side view can see.
-        self.heel_back = _Section(
-            Vector3(
-                foot.heel.x,
-                foot.heel.y - Float32(0.012),
-                heel_z - Float32(0.10),
-            ),
-            Float32(0.038),
-            Float32(0.026),
+        self.hallux = _toe(
+            samples, foot.mt1_head, foot.hallux_tip, foot, toe_cover
         )
-        self.s1 = _fit(
-            sole,
-            Vector3(0, Float32(-0.030) * S, heel_z + 0.20 * foot.length.value),
-            slab,
-            cover,
-            local,
-        )
-        self.s2 = _fit(
-            sole, Vector3(0, Float32(-0.020) * S, 0), slab, cover, local
-        )
-        self.s3 = _fit(sole, foot.navicular, slab, cover)
-        self.s4 = _fit(
-            sole, mix_point(foot.mt2_base, foot.mt2_head, 0.45), slab, cover
-        )
-        self.s5 = _fit(sole, foot.mt2_head, slab, cover)
-        # A tall midfoot ellipse is a block. Keep the sole low and the
-        # forefoot shorter so the profile can taper into the toes.
-        self.s1.center.y = min(self.s1.center.y, foot.heel.y + Float32(0.006))
-        self.s1.ap = min(self.s1.ap, Float32(0.030))
-        self.s2.ap = min(self.s2.ap, Float32(0.038))
-        self.s5.ap = min(self.s5.ap, Float32(0.032))
-        self.s5.center.y = min(self.s5.center.y, foot.mt2_head.y)
-        var z_slab = 0.24 * foot.length.value
-        var x_slab = 0.22 * foot.width.value
-        self.h0 = _fit_toe(toes, foot.mt1_head, z_slab, x_slab, cover)
-        self.h1 = _fit_toe(toes, foot.hallux_tip, z_slab, x_slab, cover)
-        self.u0 = _fit_toe(toes, foot.mt2_head, z_slab, x_slab, cover)
-        self.u1 = _fit_toe(toes, foot.toe2_tip, z_slab, x_slab, cover)
-        self.v0 = _fit_toe(toes, foot.mt3_head, z_slab, x_slab, cover)
-        self.v1 = _fit_toe(toes, foot.toe3_tip, z_slab, x_slab, cover)
-        self.w0 = _fit_toe(toes, foot.mt4_head, z_slab, x_slab, cover)
-        self.w1 = _fit_toe(toes, foot.toe4_tip, z_slab, x_slab, cover)
-        self.x0 = _fit_toe(toes, foot.mt5_head, z_slab, x_slab, cover)
-        self.x1 = _fit_toe(toes, foot.toe5_tip, z_slab, x_slab, cover)
-        var toe_r = 0.012 * S
-        self.h1.ml = max(self.h1.ml, toe_r)
-        self.h1.ap = max(self.h1.ap, toe_r)
-        self.u1.ml = max(self.u1.ml, toe_r)
-        self.u1.ap = max(self.u1.ap, toe_r)
-        self.v1.ml = max(self.v1.ml, toe_r)
-        self.v1.ap = max(self.v1.ap, toe_r)
-        self.w1.ml = max(self.w1.ml, toe_r)
-        self.w1.ap = max(self.w1.ap, toe_r)
-        self.x1.ml = max(self.x1.ml, toe_r)
-        self.x1.ap = max(self.x1.ap, toe_r)
-        self.blend = 0.0045 * S
-        self.dermis = 0.0015 * S
-        self.epsilon = 0.0008 * S
-        var box = empty_bounds()
-        _include(box, self.cuff)
-        _include(box, self.ankle)
-        _include(box, self.s0)
-        _include(box, self.heel_back)
-        _include(box, self.s1)
-        _include(box, self.s2)
-        _include(box, self.s3)
-        _include(box, self.s4)
-        _include(box, self.s5)
-        _include(box, self.h0)
-        _include(box, self.h1)
-        _include(box, self.u0)
-        _include(box, self.u1)
-        _include(box, self.v0)
-        _include(box, self.v1)
-        _include(box, self.w0)
-        _include(box, self.w1)
-        _include(box, self.x0)
-        _include(box, self.x1)
-        var padded = box.padded(0.004)
-        self.low = padded.low
-        self.high = padded.high
+        self.toe2 = _toe(samples, foot.mt2_head, foot.toe2_tip, foot, toe_cover)
+        self.toe3 = _toe(samples, foot.mt3_head, foot.toe3_tip, foot, toe_cover)
+        self.toe4 = _toe(samples, foot.mt4_head, foot.toe4_tip, foot, toe_cover)
+        self.toe5 = _toe(samples, foot.mt5_head, foot.toe5_tip, foot, toe_cover)
+        self.blend = Float32(0.0015) * S
+        self.dermis = Float32(0.0015) * S
+        self.epsilon = Float32(0.0008) * S
+        var low = self.foot.low
+        var high = self.foot.high
+        _grow(low, high, self.hallux)
+        _grow(low, high, self.toe2)
+        _grow(low, high, self.toe3)
+        _grow(low, high, self.toe4)
+        _grow(low, high, self.toe5)
+        self.low = low
+        self.high = high
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the anatomy-derived outer surface.
 
         Negative is inside. Zero is the surface.
         """
-        var axis = Vector3(1, 0, 0)
-        var d = _span(point, self.cuff, self.ankle, axis)
-        d = smin(d, _span(point, self.cuff, self.s0, axis), self.blend)
-        d = smin(d, _span(point, self.ankle, self.s0, axis), self.blend)
-        d = smin(d, _span(point, self.ankle, self.s2, axis), self.blend)
-        d = smin(d, _span(point, self.s0, self.heel_back, axis), self.blend)
-        d = smin(d, _span(point, self.s0, self.s1, axis), self.blend)
-        d = smin(d, _span(point, self.s1, self.s2, axis), self.blend)
-        d = smin(d, _span(point, self.s2, self.s3, axis), self.blend)
-        d = smin(d, _span(point, self.s3, self.s4, axis), self.blend)
-        d = smin(d, _span(point, self.s4, self.s5, axis), self.blend)
-        d = smin(d, _span(point, self.h0, self.h1, axis), self.blend)
-        d = smin(d, _span(point, self.u0, self.u1, axis), self.blend)
-        d = smin(d, _span(point, self.v0, self.v1, axis), self.blend)
-        d = smin(d, _span(point, self.w0, self.w1, axis), self.blend)
-        return smin(d, _span(point, self.x0, self.x1, axis), self.blend)
+        var d = loft_distance(self.foot, point)
+        d = smin(d, loft_distance(self.hallux, point), self.blend)
+        d = smin(d, loft_distance(self.toe2, point), self.blend)
+        d = smin(d, loft_distance(self.toe3, point), self.blend)
+        d = smin(d, loft_distance(self.toe4, point), self.blend)
+        return smin(d, loft_distance(self.toe5, point), self.blend)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
 
 
-struct SkinLayerField(DistanceField, ImplicitlyCopyable):
+struct SkinLayerField(Copyable, DistanceField, Movable):
     """The dermal shell immediately inside a `SkinField`."""
 
     var outer: SkinField
@@ -311,206 +219,243 @@ def skin_distance(
     return SkinField(dimensions).distance(point)
 
 
+def _grow(mut low: Vector3, mut high: Vector3, loft: Loft):
+    """Grow the box from `low` to `high` around one loft."""
+    low = Vector3(
+        min(low.x, loft.low.x), min(low.y, loft.low.y), min(low.z, loft.low.z)
+    )
+    high = Vector3(
+        max(high.x, loft.high.x),
+        max(high.y, loft.high.y),
+        max(high.z, loft.high.z),
+    )
+
+
+def _toe(
+    samples: List[LoftSample],
+    head: Vector3,
+    tip: Vector3,
+    foot: FootDimensions,
+    cover: Float32,
+) raises -> Loft:
+    """Return the loft of one toe, from its metatarsal head to past its tip.
+
+    Only the solids in the toe's own lane reach it: a lane half as wide as
+    the space between two toes, centered on the line from the head to the
+    tip.
+    """
+    var lane = Float32(0.075) * foot.width.value
+    var own = List[LoftSample]()
+    var index = 0
+    while index < len(samples):
+        var sample = samples[index]
+        var inside = _in_lane(sample.center, head, tip, lane)
+        if inside and sample.center.z > head.z - lane:
+            var joins = sample.joins
+            # A run that starts outside the lane starts again here.
+            if joins and not _kept(own, samples, index):
+                joins = False
+            own.append(
+                LoftSample(
+                    sample.center, sample.ml, sample.ap, sample.reach, joins
+                )
+            )
+        index += 1
+    var end = tip.z + Float32(0.35) * lane + cover
+    return fit_loft(
+        own,
+        AXIS_Z,
+        head.z,
+        end,
+        TOE_SECTIONS,
+        List[Float32](length=TOE_SECTIONS, fill=cover),
+        FILL_PASSES,
+    )
+
+
+def _kept(own: List[LoftSample], samples: List[LoftSample], index: Int) -> Bool:
+    """Return whether the station before `index` was kept in `own`."""
+    if len(own) == 0:
+        return False
+    var before = samples[index - 1].center
+    var last = own[len(own) - 1].center
+    return (before - last).length() == 0
+
+
+def _in_lane(
+    point: Vector3, head: Vector3, tip: Vector3, lane: Float32
+) -> Bool:
+    """Return whether `point` lies within `lane` of the toe's line in x."""
+    var run = max(tip.z - head.z, Float32(1.0e-6))
+    var t = min(max((point.z - head.z) / run, Float32(0)), Float32(1))
+    var x = head.x + (tip.x - head.x) * t
+    return abs(point.x - x) <= lane
+
+
+def _pads(
+    mut samples: List[LoftSample],
+    foot: FootDimensions,
+    cover: Float32,
+    toe_cover: Float32,
+):
+    """Append the pads that carry the sole to the ground.
+
+    Each pad is a small sphere set its radius and the cover above the
+    ground, so the skin meets the ground under it. The heel, the lateral
+    column, the ball of the foot and each toe pulp bear weight. The
+    medial arch does not.
+    """
+    var S = foot.stature.value
+    var ground = -foot.height.value
+    var r = Float32(0.003) * S
+    var lift = ground + cover + r
+    var toe_lift = ground + toe_cover + r
+    var W = foot.width.value
+    # Plus one on a right foot, minus one on a left.
+    var span = foot.lateral_malleolus.x - foot.medial_malleolus.x
+    var lateral = span / abs(span)
+    # The heel pad: two either side of the midline, under the tuberosity.
+    for across in [Float32(-0.14), Float32(0.14)]:
+        for along in [Float32(0.0), Float32(0.014)]:
+            samples.append(
+                LoftSample(
+                    Vector3(
+                        foot.heel.x + lateral * across * W,
+                        lift,
+                        foot.heel.z + along * S,
+                    ),
+                    r,
+                    r,
+                    r,
+                    False,
+                )
+            )
+    # The lateral column, from the heel to the fifth metatarsal head.
+    for k in range(1, 5):
+        var t = Float32(k) / Float32(5)
+        var z = foot.heel.z + (foot.mt5_head.z - foot.heel.z) * t
+        var x = lateral * (Float32(0.14) + Float32(0.14) * t) * W
+        samples.append(LoftSample(Vector3(x, lift, z), r, r, r, False))
+    # The ball of the foot, under every metatarsal head.
+    for head in [
+        foot.mt1_head,
+        foot.mt2_head,
+        foot.mt3_head,
+        foot.mt4_head,
+        foot.mt5_head,
+    ]:
+        samples.append(
+            LoftSample(Vector3(head.x, lift, head.z), r, r, r, False)
+        )
+    # The toe pulps, just behind each tip.
+    for tip in [
+        foot.hallux_tip,
+        foot.toe2_tip,
+        foot.toe3_tip,
+        foot.toe4_tip,
+        foot.toe5_tip,
+    ]:
+        samples.append(
+            LoftSample(Vector3(tip.x, toe_lift, tip.z - r), r, r, r, False)
+        )
+
+
 def _collect(
-    mut sole: List[_Env], mut toes: List[_Env], dimensions: FootMuscleDimensions
+    mut samples: List[LoftSample], dimensions: FootMuscleDimensions
 ) raises:
-    """Append every modeled station to the sole list, the toe list, or both."""
-    var split_z = dimensions.foot.mt2_head.z
+    """Append the stations of every modeled foot solid."""
+    var foot = dimensions.foot
     var bones = named_foot_bones()
     for index in range(len(bones)):  # pragma: no branch
-        var field = FootBoneField(dimensions.foot, bones[index])
-        _append_segments(sole, toes, field.segments, split_z)
+        var field = FootBoneField(foot, bones[index])
+        _append_segments(samples, field.segments)
     var ligaments = named_foot_ligaments()
     for index in range(len(ligaments)):  # pragma: no branch
-        var field = FootLigamentField(dimensions.foot, ligaments[index])
-        _append_segments(sole, toes, field.segments, split_z)
+        var field = FootLigamentField(foot, ligaments[index])
+        _append_segments(samples, field.segments)
     var muscles = named_foot_muscles()
     for index in range(len(muscles)):  # pragma: no branch
         var field = FootMuscleField(dimensions, muscles[index])
-        _append_tubes(sole, toes, field.tubes, split_z)
+        _append_tubes(samples, field.tubes)
     var vessels = named_foot_vessels()
     for index in range(len(vessels)):  # pragma: no branch
-        var field = FootVesselField(dimensions.foot, vessels[index])
-        _append_tubes(sole, toes, field.tubes, split_z)
+        var field = FootVesselField(foot, vessels[index])
+        _append_tubes(samples, field.tubes)
     var lymph = named_foot_lymph()
     for index in range(len(lymph)):  # pragma: no branch
-        var field = FootLymphField(dimensions.foot, lymph[index])
-        _append_tubes(sole, toes, field.tubes, split_z)
+        var field = FootLymphField(foot, lymph[index])
+        _append_tubes(samples, field.tubes)
     var nerves = named_foot_nerves()
     for index in range(len(nerves)):  # pragma: no branch
-        var field = FootNerveField(dimensions.foot, nerves[index])
-        _append_tubes(sole, toes, field.tubes, split_z)
-
-
-def _append_segments(
-    mut sole: List[_Env],
-    mut toes: List[_Env],
-    segs: SegmentSet,
-    split_z: Float32,
-):
-    """Append the stations of one segment set."""
-    _station(sole, toes, segs.a0, segs.ra0, split_z)
-    _station(sole, toes, segs.b0, segs.rb0, split_z)
-    _station(
-        sole,
-        toes,
-        mix_point(segs.a0, segs.b0, 0.5),
-        Float32(0.5) * (segs.ra0 + segs.rb0),
-        split_z,
+        var field = FootNerveField(foot, nerves[index])
+        _append_tubes(samples, field.tubes)
+    var S = foot.stature.value
+    # The foot of the leg: the distal tibia and fibula as two columns
+    # that rise to where the tendons leave the leg. Every section across
+    # the ankle then ends at the same height, inside the leg's skin.
+    var top = Float32(0.045) * S
+    var medial = foot.medial_malleolus
+    var lateral = foot.lateral_malleolus
+    var tibia = Vector3(Float32(0.7) * medial.x, 0, Float32(0.5) * medial.z)
+    samples.append(
+        LoftSample(
+            tibia + Vector3(0, -0.006 * S, 0), 0.011 * S, 0.011 * S, 0, False
+        )
     )
+    samples.append(
+        LoftSample(tibia + Vector3(0, top, 0), 0.012 * S, 0.012 * S, 0, True)
+    )
+    samples.append(LoftSample(lateral, 0.006 * S, 0.006 * S, 0, False))
+    samples.append(
+        LoftSample(
+            Vector3(lateral.x, top, lateral.z), 0.005 * S, 0.005 * S, 0, True
+        )
+    )
+    var malleolus = Float32(0.0055) * S
+    samples.append(
+        LoftSample(foot.medial_malleolus, malleolus, malleolus, 0, False)
+    )
+    samples.append(
+        LoftSample(foot.lateral_malleolus, malleolus, malleolus, 0, False)
+    )
+
+
+def _append_segments(mut samples: List[LoftSample], segs: SegmentSet):
+    """Append each tapered segment of a set as a joined pair."""
+    _pair(samples, segs.a0, segs.ra0, segs.b0, segs.rb0)
     if segs.count >= 2:
-        _station(sole, toes, segs.a1, segs.ra1, split_z)
-        _station(sole, toes, segs.b1, segs.rb1, split_z)
-        _station(
-            sole,
-            toes,
-            mix_point(segs.a1, segs.b1, 0.5),
-            Float32(0.5) * (segs.ra1 + segs.rb1),
-            split_z,
-        )
+        _pair(samples, segs.a1, segs.ra1, segs.b1, segs.rb1)
     if segs.count >= 3:
-        _station(sole, toes, segs.a2, segs.ra2, split_z)
-        _station(sole, toes, segs.b2, segs.rb2, split_z)
-        _station(
-            sole,
-            toes,
-            mix_point(segs.a2, segs.b2, 0.5),
-            Float32(0.5) * (segs.ra2 + segs.rb2),
-            split_z,
-        )
+        _pair(samples, segs.a2, segs.ra2, segs.b2, segs.rb2)
 
 
-def _append_tubes(
-    mut sole: List[_Env], mut toes: List[_Env], tubes: TubeSet, split_z: Float32
+def _pair(
+    mut samples: List[LoftSample],
+    a: Vector3,
+    ra: Float32,
+    b: Vector3,
+    rb: Float32,
 ):
-    """Append the stations of one tube set."""
-    _append_chain(sole, toes, tubes.c0, split_z)
+    """Append one round tapered segment."""
+    samples.append(LoftSample(a, ra, ra, 0, False))
+    samples.append(LoftSample(b, rb, rb, 0, True))
+
+
+def _append_tubes(mut samples: List[LoftSample], tubes: TubeSet):
+    """Append each tube of a set as a run of joined stations."""
+    _append_chain(samples, tubes.c0)
     if tubes.count >= 2:
-        _append_chain(sole, toes, tubes.c1, split_z)
+        _append_chain(samples, tubes.c1)
     if tubes.count >= 3:
-        _append_chain(sole, toes, tubes.c2, split_z)
+        _append_chain(samples, tubes.c2)
     if tubes.count >= 4:
-        _append_chain(sole, toes, tubes.c3, split_z)
+        _append_chain(samples, tubes.c3)
 
 
-def _append_chain(
-    mut sole: List[_Env],
-    mut toes: List[_Env],
-    chain: TubeChain,
-    split_z: Float32,
-):
+def _append_chain(mut samples: List[LoftSample], chain: TubeChain):
     """Append the five stations of one tube."""
-    _station(sole, toes, chain.p0, chain.r0, split_z)
-    _station(sole, toes, chain.p1, chain.r1, split_z)
-    _station(sole, toes, chain.p2, chain.r2, split_z)
-    _station(sole, toes, chain.p3, chain.r3, split_z)
-    _station(sole, toes, chain.p4, chain.r4, split_z)
-
-
-def _station(
-    mut sole: List[_Env],
-    mut toes: List[_Env],
-    center: Vector3,
-    radius: Float32,
-    split_z: Float32,
-):
-    """File a sample on the sole, the toes, or both."""
-    var sample = _Env(center, radius, radius)
-    if center.z <= split_z:
-        sole.append(sample)
-    if center.z >= split_z - Float32(0.02):
-        toes.append(sample)
-
-
-def _fit(
-    points: List[_Env],
-    seed: Vector3,
-    slab: Float32,
-    cover: Float32,
-    y_slab: Float32 = 1.0,
-) -> _Section:
-    """Fit one enclosing ellipse to samples near `seed` along z."""
-    var least_x = seed.x
-    var most_x = seed.x
-    var least_y = seed.y
-    var most_y = seed.y
-    for index in range(len(points)):  # pragma: no branch
-        var sample = points[index]
-        var dz = sample.center.z - seed.z
-        if dz < 0:
-            dz = -dz
-        var dy = sample.center.y - seed.y
-        if dy < 0:
-            dy = -dy
-        if dz <= slab:
-            if dy <= y_slab:
-                least_x = min(least_x, sample.center.x - sample.ml)
-                most_x = max(most_x, sample.center.x + sample.ml)
-                least_y = min(least_y, sample.center.y - sample.ap)
-                most_y = max(most_y, sample.center.y + sample.ap)
-    return _section_from(least_x, most_x, least_y, most_y, seed.z, cover)
-
-
-def _fit_toe(
-    points: List[_Env],
-    seed: Vector3,
-    z_slab: Float32,
-    x_slab: Float32,
-    cover: Float32,
-) -> _Section:
-    """Fit one toe section to samples near `seed` in z and x."""
-    var least_x = seed.x
-    var most_x = seed.x
-    var least_y = seed.y
-    var most_y = seed.y
-    for index in range(len(points)):  # pragma: no branch
-        var sample = points[index]
-        var dz = sample.center.z - seed.z
-        if dz < 0:
-            dz = -dz
-        var dx = sample.center.x - seed.x
-        if dx < 0:
-            dx = -dx
-        if dz <= z_slab:
-            if dx <= x_slab:
-                least_x = min(least_x, sample.center.x - sample.ml)
-                most_x = max(most_x, sample.center.x + sample.ml)
-                least_y = min(least_y, sample.center.y - sample.ap)
-                most_y = max(most_y, sample.center.y + sample.ap)
-    return _section_from(least_x, most_x, least_y, most_y, seed.z, cover)
-
-
-def _section_from(
-    least_x: Float32,
-    most_x: Float32,
-    least_y: Float32,
-    most_y: Float32,
-    z: Float32,
-    cover: Float32,
-) -> _Section:
-    """Return an ellipse that holds the sampled bounds, plus `cover`."""
-    var center = Vector3(
-        Float32(0.5) * (least_x + most_x),
-        Float32(0.5) * (least_y + most_y),
-        z,
-    )
-    # Width uses 0.72 of the span so the corners stay inside.
-    # Height uses half the span plus cover, so the sole stays a foot
-    # instead of a tall oval.
-    var ml = Float32(0.72) * (most_x - least_x) + cover
-    var ap = Float32(0.50) * (most_y - least_y) + cover
-    return _Section(center, ml, ap)
-
-
-def _include(mut box: Bounds, section: _Section):
-    """Grow `box` around one skin section."""
-    box.include_ellipsoid(
-        section.center, Vector3(section.ml, section.ap, section.ml)
-    )
-
-
-def _span(point: Vector3, a: _Section, b: _Section, axis: Vector3) -> Float32:
-    """Return distance to one fitted skin segment."""
-    return sd_ellipse_segment(
-        point, a.center, b.center, a.ml, a.ap, b.ml, b.ap, axis
-    )
+    samples.append(LoftSample(chain.p0, chain.r0, chain.r0, 0, False))
+    samples.append(LoftSample(chain.p1, chain.r1, chain.r1, 0, True))
+    samples.append(LoftSample(chain.p2, chain.r2, chain.r2, 0, True))
+    samples.append(LoftSample(chain.p3, chain.r3, chain.r3, 0, True))
+    samples.append(LoftSample(chain.p4, chain.r4, chain.r4, 0, True))

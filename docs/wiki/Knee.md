@@ -92,7 +92,7 @@ Named mass wrappers exist for each of the five solids.
 
 ## Look
 
-`cartilage_phong` is opaque warm ivory. `meniscus_phong` is natural off-white fibrocartilage. `ligament_phong` is pale fibrous tissue. All three are visual approximations.
+`cartilage_phong` is opaque warm ivory. `meniscus_phong` is natural off-white fibrocartilage. `ligament_phong` is pale fibrous tissue. All three are visual approximations. `cartilage_physical` and `ligament_physical` are the physical looks. See [Leg](Leg#looks).
 
 ## Limits
 

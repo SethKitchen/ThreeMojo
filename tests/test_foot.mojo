@@ -21,10 +21,12 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FEMALE_ANKLE_HEIGHT,
     FEMALE_FOOT_BREADTH,
     FEMALE_FOOT_LENGTH,
+    HEEL_REACH,
     HALLUX_PROXIMAL,
     MALE_ANKLE_HEIGHT,
     MALE_FOOT_BREADTH,
     MALE_FOOT_LENGTH,
+    TOE2_REACH,
     METATARSAL_1,
     TALUS,
     TOE5_DISTAL,
@@ -301,8 +303,12 @@ def test_landmarks_follow_the_arch_and_meet_the_leg() raises:
     assert_true(foot.mt2_base.z < foot.mt1_base.z)
     assert_true(foot.mt2_head.z > foot.mt1_head.z)
     assert_true(foot.mt1_head.z > foot.mt5_head.z)
+    # The tuberosity sits HEEL_REACH and the second toe's tip TOE2_REACH
+    # of a foot length forward of the heel's skin.
     assert_almost_equal(
-        foot.toe2_tip.z, foot.heel.z + foot.length.value, atol=TOLERANCE
+        foot.toe2_tip.z,
+        foot.heel.z + (TOE2_REACH - HEEL_REACH) * foot.length.value,
+        atol=TOLERANCE,
     )
     assert_almost_equal(foot.heel.x, Float32(0), atol=TOLERANCE)
     var leg = assemble_leg(_person())

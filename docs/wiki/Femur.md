@@ -130,7 +130,7 @@ Left and right femurs match in mass at the same step, within sampling error.
 
 `bone_albedo` is a procedural sRGB map of dry cortical bone. `bone_roughness` is a linear roughness map. Both are visual approximations. Bone is a dielectric. Metalness is zero.
 
-`MeshStandardMaterial` is not ported. `bone_phong` draws the albedo with a dim highlight until that kind exists. The current renderer does not consume the roughness map as a full PBR material.
+`bone_phong` draws the albedo with a dim highlight. `bone_physical` is a `PHYSICAL` material: a rough dielectric with an index of refraction of 1.55. See [Leg](Leg#looks).
 
 ## Limits
 

@@ -3,47 +3,50 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""One leg and its foot, with skin and without it.
+"""One leg and its foot, with skin and without it, in a lit studio.
 
     mojo run -I . examples/limb.mojo [path.png]
 
-The pages are Leg and Foot. A six-foot male right limb stands twice.
-The left copy shows bones, knee tissues, muscles and foot ligaments.
-The right copy shows the skin envelope. The foot meets the leg at the
-tibial plafond.
+The pages are Leg, Foot and Integument. A six-foot male right limb
+stands twice on a floor. The left copy shows bones, knee tissues,
+muscles and foot ligaments. The right copy shows one skin over the leg
+and the foot. The surfaces are physically based, lit by a room
+environment and a lamp that casts soft shadows, and tone mapped.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from environments.room_environment import room_environment
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.bone import bone_albedo, bone_phong
+from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
 from extensions.humanoid.skeleton.foot.assembly import add_foot
 from extensions.humanoid.skeleton.foot.contents import BOTH as FOOT_BOTH
-from extensions.humanoid.skeleton.foot.contents import SKIN as FOOT_SKIN
-from extensions.humanoid.skeleton.foot.contents import FootContents
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import BOTH as LEG_BOTH
-from extensions.humanoid.skeleton.leg.contents import SKIN as LEG_SKIN
-from extensions.humanoid.skeleton.leg.contents import LegContents
+from extensions.humanoid.skeleton.limb.skin import add_limb_skin
 from extensions.humanoid.skeleton.look import (
-    cartilage_phong,
-    ligament_phong,
-    meniscus_phong,
+    cartilage_physical,
+    ligament_physical,
     muscle_albedo,
-    muscle_phong,
+    muscle_physical,
     skin_albedo,
-    skin_phong,
-    tendon_phong,
+    skin_physical,
+    tendon_physical,
 )
-from lights.light import ambient_light, directional_light
-from materials.material import MaterialId
+from geometries.plane import plane
+from lights.light import directional_light
+from lights.shadow import PCF_SOFT_SHADOW_MAP
+from materials.material import MaterialId, standard_material
 from math.vector3 import Vector3
+from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
+from render.tonemap import ACES_FILMIC_TONE_MAPPING
+from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
@@ -54,8 +57,8 @@ comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime LEG_DETAIL = 12
-comptime FOOT_DETAIL = 8
+comptime ANATOMY_DETAIL = 24
+comptime SKIN_DETAIL = 64
 comptime SPACING = Float32(0.42)
 
 
@@ -88,80 +91,27 @@ def frame_at(
     return renderer.render(scene, assets, camera)
 
 
-def _add_limb(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    person: HumanoidSpec,
-    x: Float32,
-    leg_layers: LegContents,
-    foot_layers: FootContents,
-    bone_paint: MaterialId,
-    cartilage_paint: MaterialId,
-    meniscus_paint: MaterialId,
-    ligament_paint: MaterialId,
-    muscle_paint: MaterialId,
-    tendon_paint: MaterialId,
-    skin_paint: MaterialId,
-) raises:
-    """Place one leg and the foot that meets it.
+def _stand(
+    mut scene: Scene, parent: NodeId, x: Float32, ground: Float32
+) raises -> NodeId:
+    """Return a node that stands a limb at `x` with its sole on the floor.
 
     Args:
-        scene: The scene that receives the nodes and the meshes.
-        assets: Geometry store for the new meshes.
+        scene: The scene that receives the node.
         parent: Shared parent that turns both limbs.
-        person: Stature, sex and athleticism.
         x: Position along the row, in meters.
-        leg_layers: Layers for the leg.
-        foot_layers: Layers for the foot.
-        bone_paint: Cortical look.
-        cartilage_paint: Cartilage look.
-        meniscus_paint: Meniscus look.
-        ligament_paint: Ligament look.
-        muscle_paint: Muscle look.
-        tendon_paint: Tendon look.
-        skin_paint: Skin look.
+        ground: Height of the sole below the leg frame's origin.
+
+    Returns:
+        The limb's node, turned to show the foot from the side.
 
     Raises:
-        Error: If the spec, a mesh or the scene is invalid.
+        Error: If the scene refuses the node.
     """
-    var pose = assemble_leg(person, RIGHT)
     var holder = Object3D()
-    holder.set_position(x, 0, 0)
-    # Side view, so the heel, arch and toes read as a foot.
+    holder.set_position(x, ground, 0)
     holder.rotate_y(Angle(90.0, DEGREE))
-    var nid = scene.attach(holder^, parent)
-    _ = add_leg(
-        scene,
-        assets,
-        nid,
-        person,
-        bone_paint,
-        cartilage_paint,
-        meniscus_paint,
-        ligament_paint,
-        muscle_paint,
-        tendon_paint,
-        RIGHT,
-        leg_layers,
-        LEG_DETAIL,
-        skin_paint=skin_paint,
-    )
-    _ = add_foot(
-        scene,
-        assets,
-        nid,
-        person,
-        bone_paint,
-        ligament_paint,
-        muscle_paint,
-        tendon_paint,
-        RIGHT,
-        foot_layers,
-        FOOT_DETAIL,
-        pose.ankle_center(),
-        skin_paint=skin_paint,
-    )
+    return scene.attach(holder^, parent)
 
 
 def main() raises:
@@ -172,68 +122,109 @@ def main() raises:
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    renderer.set_background(Color(20, 21, 24))
+    renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
+    renderer.tone_mapping_exposure = 1.1
+    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
 
     var assets = Assets()
-    var map = assets.textures.add(bone_albedo(64))
-    var muscle_map = assets.textures.add(muscle_albedo(64))
-    var skin_map = assets.textures.add(skin_albedo(64))
-    var bone_paint = assets.materials.add(bone_phong(map))
-    var cartilage_paint = assets.materials.add(cartilage_phong())
-    var meniscus_paint = assets.materials.add(meniscus_phong())
-    var ligament_paint = assets.materials.add(ligament_phong())
-    var muscle_paint = assets.materials.add(muscle_phong(muscle_map))
-    var tendon_paint = assets.materials.add(tendon_phong())
-    var skin_paint = assets.materials.add(skin_phong(skin_map))
+    var bone = assets.materials.add(
+        bone_physical(assets.textures.add(bone_albedo(64)))
+    )
+    var cartilage = assets.materials.add(cartilage_physical())
+    var ligament = assets.materials.add(ligament_physical())
+    var muscle = assets.materials.add(
+        muscle_physical(assets.textures.add(muscle_albedo(64)))
+    )
+    var tendon = assets.materials.add(tendon_physical())
+    var skin = assets.materials.add(
+        skin_physical(assets.textures.add(skin_albedo(64)))
+    )
+
+    # Image-based light: three.js's RoomEnvironment through a PMREM.
+    var room = room_environment(assets)
+    room.update()
+    var lighting = pmrem_from_scene(renderer, room, assets, size=64)
 
     var scene = Scene()
-    var pivot = scene.add(Object3D())
-    _add_limb(
-        scene,
-        assets,
-        pivot,
-        person,
-        -SPACING,
-        LEG_BOTH,
-        FOOT_BOTH,
-        bone_paint,
-        cartilage_paint,
-        meniscus_paint,
-        ligament_paint,
-        muscle_paint,
-        tendon_paint,
-        skin_paint,
+    scene.environment = assets.cube_textures.add(lighting^)
+    scene.environment_intensity = 0.55
+
+    var pose = assemble_leg(person, RIGHT)
+    # The sole's height below the knee's joint line: the plafond, less
+    # the foot's ankle height.
+    var ground = -(
+        pose.ankle_center().y - Float32(0.048) * person.stature.value
     )
-    _add_limb(
+    var pivot = scene.add(Object3D())
+    var anatomy = _stand(scene, pivot, -SPACING, ground)
+    _ = add_leg(
         scene,
         assets,
-        pivot,
+        anatomy,
         person,
-        SPACING,
-        LEG_SKIN,
-        FOOT_SKIN,
-        bone_paint,
-        cartilage_paint,
-        meniscus_paint,
-        ligament_paint,
-        muscle_paint,
-        tendon_paint,
-        skin_paint,
+        bone,
+        cartilage,
+        cartilage,
+        ligament,
+        muscle,
+        tendon,
+        RIGHT,
+        LEG_BOTH,
+        ANATOMY_DETAIL,
+    )
+    _ = add_foot(
+        scene,
+        assets,
+        anatomy,
+        person,
+        bone,
+        ligament,
+        muscle,
+        tendon,
+        RIGHT,
+        FOOT_BOTH,
+        ANATOMY_DETAIL,
+        pose.ankle_center(),
+    )
+    var covered = _stand(scene, pivot, SPACING, ground)
+    _ = add_limb_skin(scene, assets, covered, person, skin, RIGHT, SKIN_DETAIL)
+    for index in range(len(scene.meshes)):
+        scene.meshes[index].cast_shadow = True
+        scene.meshes[index].receive_shadow = True
+
+    var floor = Object3D()
+    floor.rotate_x(Angle(-90.0, DEGREE))
+    var ground_shape = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER))
+    )
+    var ground_look = assets.materials.add(
+        standard_material(Color(92, 90, 86), roughness=0.85)
+    )
+    scene.add_mesh(
+        Mesh(ground_shape, ground_look, scene.add(floor^), receive_shadow=True)
     )
 
     var lamp = Object3D()
-    lamp.set_position(0.7, 0.85, 1.6)
+    lamp.set_position(1.4, 2.6, 2.2)
     var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
+    var sun = directional_light(Color(255, 244, 228), lamp_node, 2.2)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 1024
+    sun.shadow.bias = -0.0005
+    sun.shadow.normal_bias = 0.01
+    sun.shadow.set_extent(Length(1.4, METER))
+    sun.shadow.near = Length(0.5, METER)
+    sun.shadow.far = Length(8.0, METER)
+    scene.add_light(sun)
 
     var camera = PerspectiveCamera(
-        Angle(26.0, DEGREE),
+        Angle(30.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
         Length(0.05, METER),
-        Length(20.0, METER),
+        Length(30.0, METER),
     )
-    camera.place(Vector3(0.06, 0.20, 3.40), Vector3(0.0, -0.02, 0.0))
+    camera.place(Vector3(0.0, 0.62, 3.3), Vector3(0.0, 0.50, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()

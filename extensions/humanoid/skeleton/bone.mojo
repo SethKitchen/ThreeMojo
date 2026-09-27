@@ -17,7 +17,7 @@ because a later standard material will read it.
     var paint = bone_phong(store.add(map))
 """
 
-from materials.material import Material, phong_material
+from materials.material import Material, phong_material, physical_material
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
@@ -159,6 +159,27 @@ def bone_phong(map: TextureId = NO_TEXTURE) raises -> Material:
         specular=Color(48, 44, 38),
         shininess=8.0,
     )
+
+
+def bone_physical(map: TextureId = NO_TEXTURE) raises -> Material:
+    """Return a physically based material for dry cortical bone.
+
+    Bone is a rough dielectric: hydroxyapatite in collagen, an index of
+    refraction near 1.55, with no metal in its reflection.
+
+    Args:
+        map: Id of an albedo texture, or `NO_TEXTURE`.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    var color = Color(232, 214, 180)
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
+    return physical_material(color, map=map, roughness=0.62, ior=1.55)
 
 
 def _check_look_size(size: Int) raises:

@@ -36,6 +36,9 @@ from extensions.humanoid.skeleton.field import (
     sd_ellipse_segment,
     smin,
 )
+from extensions.humanoid.skeleton.foot.bones.dimensions import (
+    foot_dimensions,
+)
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     FemurDimensions,
     femur_dimensions,
@@ -484,7 +487,8 @@ def muscle_dimensions_from_bones(
         plafond,
         med_mal,
         lat_mal,
-        plafond + Vector3(0, -0.042 * S, -0.052 * S),
+        # The calcaneal tuberosity, where the foot places it.
+        plafond + foot_dimensions(femur.stature, femur.sex, femur.side).heel,
         tibia_origin_point,
         fibula_origin_point,
         patella_origin_point,
@@ -1057,9 +1061,35 @@ def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _achilles(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, Float32(1), 0.007)
+    """Return the calcaneal tendon from the triceps surae to the heel.
+
+    Below the calf it runs nearly vertically, through the same two
+    points the foot's copy of the tendon uses: behind the ankle at the
+    height where it leaves the leg, and on the upper back of the
+    calcaneal tuberosity.
+    """
+    var width = _r(S, Float32(1), 0.007)
+    var depth = Float32(0.48) * width
     var origin = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
-    return _strap(origin, d.heel, Vector3(0, 0, -0.006 * S), rb, 0.48)
+    var low = Vector3(d.heel.x, d.plafond.y + 0.04 * S, d.heel.z - 0.007 * S)
+    var insertion = d.heel + Vector3(0, 0.004 * S, -0.008 * S)
+    return MuscleChain(
+        origin,
+        _at(origin, low, 0.5),
+        low,
+        _at(low, insertion, 0.5),
+        insertion,
+        0.60 * width,
+        0.85 * width,
+        width,
+        0.95 * width,
+        0.85 * width,
+        0.60 * depth,
+        0.85 * depth,
+        depth,
+        0.95 * depth,
+        0.85 * depth,
+    )
 
 
 def _patellar(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:

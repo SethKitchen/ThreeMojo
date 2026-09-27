@@ -30,17 +30,37 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 ## Envelope
 
-`SkinField` first builds the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
+`SkinField` fits the skin directly to the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
 
-The field collects actual primitive stations in ten transverse slabs from the iliac landmark to the ankle. Each fitted section encloses those stations.
+Thirty transverse sections run from just below the tibial plafond to the iliac landmark. Each section slices every structure at its height. A slanted structure is sliced along its length, so its cut is an ellipse or a strip.
 
-Smooth elliptical segments join the fitted sections. This removes gaps between structures while retaining the measured anatomical extents.
+Each slice outline is closed as a convex hull. Fat fills the gaps between muscles, so the hull is the outline you feel through the skin. `LOFT_RAYS` rays measure the hull's reach in each direction exactly. The polygon of those tangent lines exceeds the hull by less than half a percent.
 
-The male template adds 7.3 mm over the thigh and 5.5 mm over the calf. The female template adds 15.0 mm and 11.1 mm.
+The section's cover goes outside the hull. The male template adds 7.3 mm of fat over the thigh and 5.5 mm over the calf. The female template adds 15.0 mm and 11.1 mm. The knee blends the two over a band three percent of stature either side of the joint line. The dermis, 1.8 mm, is part of the cover.
 
-The knee interpolates those values. These measured means represent subcutaneous tissue over the modeled fascia.
+A Catmull-Rom spline joins the sections and the rays. Two passes fill a groove one section long, as the fat over two muscle bellies does. Radii only grow, so every structure stays inside.
 
-Tests require every vessel, lymphatic route and nerve station to lie below the fitted skin. Hair roots use ray projection onto the final surface.
+Below the plafond every structure belongs to the foot. The leg drops those stations, and its skin tapers inside the foot's skin. See [One skin for a limb](#one-skin-for-a-limb).
+
+Tests require every vessel, lymphatic route and nerve station above the plafond to lie below the skin. Hair roots use ray projection onto the final surface.
+
+The fit is in `extensions/humanoid/skeleton/loft.mojo`. The foot uses the same code. See [Foot](Foot#skin).
+
+## One skin for a limb
+
+A leg and its foot each fit their own skin. Drawn together, the two surfaces cross at the ankle. `add_limb_skin` draws their smooth union as one surface instead.
+
+```mojo
+from extensions.humanoid.skeleton.limb.skin import add_limb_skin
+from extensions.humanoid.skeleton.look import skin_physical
+
+var paint = assets.materials.add(skin_physical())
+_ = add_limb_skin(scene, assets, parent, person, paint)
+```
+
+Draw the leg and the foot without their `SKIN` layers, then call `add_limb_skin` once. The solid lives in the leg frame. `limb_skin_mesh` returns the geometry. `LimbSkinField` is the field.
+
+![A six-foot male right limb turns twice on a floor, once dissected and once in one skin](out/limb.png)
 
 ## Hair
 
