@@ -79,6 +79,9 @@ comptime _KEYWORDS = (
     " false invariant discard return struct precision highp mediump lowp"
     " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D "
 )
+# The most elements an array holds: each is a variable, and an index picked
+# where the shader runs reads every one.
+comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
     " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
@@ -691,6 +694,9 @@ comptime _POSITION = 8
 # A local matrix, given its value once: a register holds no matrix, so the
 # name stands for the matrix its initializer built.
 comptime _MATRIX_LOCAL = 9
+# An array: its value's type is the element's, its variable is its length,
+# and its elements are the symbols just before it, named `a[0]` and on.
+comptime _ARRAY = 10
 
 
 @fieldwise_init
@@ -1017,7 +1023,7 @@ struct _Compiler(Movable):
             return self.graph.vec2(0, 0).value
         if type == _VEC3:
             return self.graph.vec3(0, 0, 0).value
-        if type == _VEC4:
+        if type == _VEC4 or type == _MAT2:
             return self.graph.vec4(0, 0, 0, 0).value
         return self.graph.float(0).value
 
@@ -1262,8 +1268,14 @@ struct _Compiler(Movable):
                 raise self.error("a function has no storage qualifier")
             self.function(type, name)
             return
+        if self.is_mark("[") and (storage == "uniform" or constant):
+            self.global_array(storage == "uniform", type, name)
+            self.expect(";")
+            return
         if self.is_mark("["):
-            raise self.error("arrays are outside the subset")
+            raise self.error(
+                "only a uniform, a const or a local variable can be an array"
+            )
         if storage == "uniform":
             self.uniform(type, name)
         elif storage != "":
@@ -1480,6 +1492,100 @@ struct _Compiler(Movable):
         if type != wanted:
             raise self.error("the attribute " + name + " is a " + wanted.name())
         self.declare(_Symbol(name, _ATTRIBUTE, self.attribute(name), -1, False))
+
+    def array_size(mut self, open: Bool) raises -> Int:
+        """Parse `[n]` after an array's name, or `[]` where an initializer
+        gives the size, returned as zero.
+
+        Raises:
+            Error: If the size is not a positive constant int, or is left
+                out where it must be given.
+        """
+        self.expect("[")
+        if self.is_mark("]") and open:
+            self.at += 1
+            return 0
+        var size = self.additive()
+        self.expect("]")
+        if size.type != _TINT or not size.known or size.number < 1:
+            raise self.error("an array's size is a positive constant int")
+        if size.number > Float64(MAX_ARRAY_SIZE):
+            raise self.error(
+                "an array holds at most "
+                + String(MAX_ARRAY_SIZE)
+                + " elements"
+            )
+        return Int(size.number)
+
+    def array_values(
+        mut self, type: _Type, size: Int
+    ) raises -> List[_Value]:
+        """Parse an array's initializer, `T[n](a, b, ...)` or `T[](...)`.
+
+        Raises:
+            Error: If the constructor is of another type or size.
+        """
+        if self.peek() != type.name():
+            raise self.error(
+                "an array of " + type.name() + " is given by " + type.name()
+                + "[](...)"
+            )
+        self.at += 1
+        var given = self.array_size(True)
+        var values = self.arguments()
+        var wanted = size if size > 0 else len(values)
+        if (given > 0 and given != len(values)) or len(values) != wanted:
+            raise self.error(
+                "the array needs "
+                + String(wanted)
+                + " elements, not "
+                + String(len(values))
+            )
+        for index in range(len(values)):  # pragma: no branch
+            if values[index].type != type:
+                raise self.error(
+                    "cannot put a "
+                    + values[index].type.name()
+                    + " in an array of "
+                    + type.name()
+                )
+        return values^
+
+    def global_array(mut self, uniform: Bool, type: _Type, name: String) raises:
+        """Declare a uniform array, each element a uniform named `a[i]` as
+        three.js names it, or a `const` array of constant values.
+
+        Raises:
+            Error: If the size or an element is outside the subset.
+        """
+        var size = self.array_size(not uniform)
+        if uniform:
+            for index in range(size):  # pragma: no branch
+                self.uniform(type, name + "[" + String(index) + "]")
+            self.declare_array(name, type, size)
+            return
+        if not self.is_mark("="):
+            raise self.error("a const needs a value")
+        self.at += 1
+        var values = self.array_values(type, size)
+        for index in range(len(values)):  # pragma: no branch
+            if not values[index].constant:
+                raise self.error(
+                    "a const's value must be a constant expression"
+                )
+            var value = values[index].copy()
+            value.symbol = -1
+            value.components = ""
+            self.declare(
+                _Symbol(
+                    name + "[" + String(index) + "]", _CONST, value^, -1, False
+                )
+            )
+        self.declare_array(name, type, len(values))
+
+    def declare_array(mut self, name: String, type: _Type, size: Int) raises:
+        """Declare an array's name after its elements."""
+        self.declare(_Symbol(name, _ARRAY, _plain(type, -1), size, False))
 
     def constant(mut self, type: _Type, name: String) raises:
         """Declare a `const` global from its constant value.
@@ -1721,7 +1827,11 @@ struct _Compiler(Movable):
         while True:
             var name = self.name()
             if self.is_mark("["):
-                raise self.error("arrays are outside the subset")
+                self.local_array(type, name, constant)
+                if not self.is_mark(","):
+                    break
+                self.at += 1
+                continue
             var value = _plain(type, -1)
             if self.is_mark("="):
                 self.at += 1
@@ -1763,6 +1873,49 @@ struct _Compiler(Movable):
                 break
             self.at += 1
         self.expect(";")
+
+    def local_array(mut self, type: _Type, name: String, constant: Bool) raises:
+        """Parse a local array, `T a[n]` of zeros or `T a[n] = T[n](...)`,
+        each element a variable.
+
+        Raises:
+            Error: If the size or an element is outside the subset.
+        """
+        var size = self.array_size(True)
+        var values = List[_Value]()
+        if self.is_mark("="):
+            self.at += 1
+            values = self.array_values(type, size)
+        elif constant:
+            raise self.error("a const needs a value")
+        elif size == 0:
+            raise self.error("an array needs its size or its elements")
+        else:
+            for _ in range(size):  # pragma: no branch
+                values.append(_plain(type, self.zero(type)))
+        for index in range(len(values)):  # pragma: no branch
+            var value = values[index].copy()
+            if constant and not value.constant:
+                raise self.error(
+                    "a const's value must be a constant expression"
+                )
+            var variable = self.graph.Var(self.node(value)).value
+            value.symbol = -1
+            value.components = ""
+            value.tag = _PLAIN
+            if not constant:
+                value.known = False
+                value.constant = False
+            self.declare(
+                _Symbol(
+                    name + "[" + String(index) + "]",
+                    _CONST if constant else _LOCAL,
+                    value^,
+                    variable,
+                    False,
+                )
+            )
+        self.declare_array(name, type, len(values))
 
     def matrix_declaration(mut self, type: _Type) raises:
         """Parse `mat3 a = e, b = f;`: each name stands for the matrix its
@@ -2020,6 +2173,9 @@ struct _Compiler(Movable):
         if target.symbol < 0:
             raise self.error("that cannot be assigned")
         var kind = self.symbols[target.symbol].kind
+        if kind == _ARRAY:
+            self.assign_element(target, value)
+            return
         if kind == _POSITION:
             self.draw(target, value)
             return
@@ -2049,23 +2205,13 @@ struct _Compiler(Movable):
         var node = self.node(value)
         var variable = NodeVar(self.symbols[target.symbol].variable)
         if target.components != "":
-            # The components not written keep what the variable held.
-            var held = self.graph.get(variable)
-            var parts = List[NodeRef]()
-            for lane in range(
-                self.symbols[target.symbol].value.type.width()
-            ):  # pragma: no branch
-                var letter = _letter("xyzw", lane)
-                var found = target.components.find(letter)
-                if found < 0:
-                    parts.append(self.graph.swizzle(held, letter))
-                elif value.type.is_scalar():
-                    parts.append(node)
-                else:
-                    parts.append(
-                        self.graph.swizzle(node, _letter("xyzw", found))
-                    )
-            node = self.graph.join(parts)
+            node = self.merged(
+                self.graph.get(variable),
+                self.symbols[target.symbol].value.type,
+                target.components,
+                node,
+                value.type,
+            )
         self.graph.assign(variable, node)
         ref changed = self.symbols[target.symbol]
         changed.written = True
@@ -2074,6 +2220,87 @@ struct _Compiler(Movable):
         # branch, where it cannot be one of two values.
         changed.value.tag = value.tag if whole else _PLAIN
         changed.value.point = value.point
+
+    def merged(
+        mut self,
+        held: NodeRef,
+        type: _Type,
+        components: String,
+        node: NodeRef,
+        given: _Type,
+    ) raises -> NodeRef:
+        """Return a variable's value with some components written: the
+        components not written keep what it held."""
+        var parts = List[NodeRef]()
+        for lane in range(type.width()):  # pragma: no branch
+            var letter = _letter("xyzw", lane)
+            var found = components.find(letter)
+            if found < 0:
+                parts.append(self.graph.swizzle(held, letter))
+            elif given.is_scalar():
+                parts.append(node)
+            else:
+                parts.append(self.graph.swizzle(node, _letter("xyzw", found)))
+        return self.graph.join(parts)
+
+    def assign_element(mut self, target: _Value, value: _Value) raises:
+        """Write the element of an array that an index picks where the
+        shader runs: each element takes the value where the index is its
+        own, and keeps what it held elsewhere.
+
+        Raises:
+            Error: If the array's elements cannot be assigned, or the types
+                differ.
+        """
+        var size = self.symbols[target.symbol].variable
+        var first = target.symbol - size
+        var kind = self.symbols[first].kind
+        if kind != _LOCAL:
+            raise self.error(
+                "cannot assign "
+                + self.symbols[target.symbol].name
+                + ": it is an array of which each element is "
+                + _kind_name(kind)
+            )
+        if value.type != target.type:
+            raise self.error(
+                "cannot assign a "
+                + value.type.name()
+                + " to a "
+                + target.type.name()
+            )
+        var node = self.node(value)
+        for index in range(size):  # pragma: no branch
+            var variable = NodeVar(self.symbols[first + index].variable)
+            var held = self.graph.get(variable)
+            var written = node
+            if target.components != "":
+                written = self.merged(
+                    held,
+                    self.symbols[first + index].value.type,
+                    target.components,
+                    node,
+                    value.type,
+                )
+            var here = self.graph.equal(
+                NodeRef(target.point), self.graph.float(Float32(index))
+            )
+            self.graph.assign(variable, self.graph.select(here, written, held))
+            ref changed = self.symbols[first + index]
+            changed.written = True
+            changed.value.local = changed.value.local or value.local
+
+    def pick(mut self, values: List[NodeRef], index: NodeRef) raises -> NodeRef:
+        """Return the value an index picks where the shader runs, the first
+        where it picks none."""
+        var picked = values[0]
+        for at in range(1, len(values)):
+            picked = self.graph.select(
+                self.graph.equal(index, self.graph.float(Float32(at))),
+                values[at],
+                picked,
+            )
+        return picked
 
     def draw(mut self, target: _Value, value: _Value) raises:
         """Take `gl_Position`: `projectionMatrix * modelViewMatrix * vec4(p,
@@ -2545,6 +2772,15 @@ struct _Compiler(Movable):
                 if value.type.is_matrix():
                     value = self.column(value, index)
                     continue
+                if value.type == _MAT2 and not index.known:
+                    var halves = List[NodeRef]()
+                    for half in ["xy", "zw"]:  # pragma: no branch
+                        halves.append(self.graph.swizzle(self.node(value), half))
+                    self.check_column(value.type, 2, index)
+                    value = self.derived(
+                        _VEC2, self.pick(halves, self.node(index)), value, index
+                    )
+                    continue
                 if value.type == _MAT2:
                     # A column is two components of the vec4, and can be
                     # assigned as they can.
@@ -2560,8 +2796,21 @@ struct _Compiler(Movable):
                         "only a vector or a matrix can be indexed in this"
                         " subset"
                     )
-                if index.type != _TINT or not index.known:
-                    raise self.error("a vector is indexed by a constant int")
+                if index.type != _TINT:
+                    raise self.error("a vector is indexed by an int")
+                if not index.known:
+                    # Picked where the shader runs, and not assigned.
+                    var lanes = List[NodeRef]()
+                    for lane in range(value.type.width()):  # pragma: no branch
+                        lanes.append(
+                            self.graph.swizzle(
+                                self.node(value), _letter("xyzw", lane)
+                            )
+                        )
+                    value = self.derived(
+                        _FLOAT, self.pick(lanes, self.node(index)), value, index
+                    )
+                    continue
                 if index.number < 0 or index.number >= Float64(
                     value.type.width()
                 ):
@@ -2585,12 +2834,16 @@ struct _Compiler(Movable):
             )
         var size = 3 if value.type == _MAT3 else 4
         self.check_column(value.type, size, index)
-        var out = _plain(
-            _VEC3 if size == 3 else _VEC4,
-            self.graph.column(
-                NodeRef(self.node(value).value), Int(index.number)
-            ).value,
-        )
+        var matrix = NodeRef(self.node(value).value)
+        var node: NodeRef
+        if index.known:
+            node = self.graph.column(matrix, Int(index.number))
+        else:
+            var columns = List[NodeRef]()
+            for c in range(size):  # pragma: no branch
+                columns.append(self.graph.column(matrix, c))
+            node = self.pick(columns, self.node(index))
+        var out = _plain(_VEC3 if size == 3 else _VEC4, node.value)
         out.constant = value.constant
         out.local = value.local
         return out^
@@ -2598,15 +2851,15 @@ struct _Compiler(Movable):
     def check_column(
         mut self, type: _Type, size: Int, index: _Value
     ) raises:
-        """Refuse a matrix index that is not a constant int below `size`.
+        """Refuse a matrix index that is not an int, or a constant one not
+        below `size`.
 
         Raises:
-            Error: If the index is not a constant int, or is outside the
-                matrix.
+            Error: If the index is not an int, or is outside the matrix.
         """
-        if index.type != _TINT or not index.known:
-            raise self.error("a matrix is indexed by a constant int")
-        if index.number < 0 or index.number >= Float64(size):
+        if index.type != _TINT:
+            raise self.error("a matrix is indexed by an int")
+        if index.known and (index.number < 0 or index.number >= Float64(size)):
             raise self.error("the index is outside the " + type.name())
 
     def swizzle(mut self, value: _Value, letters: String) raises -> _Value:
@@ -2653,6 +2906,8 @@ struct _Compiler(Movable):
             through += letter
         result.symbol = value.symbol
         result.components = through
+        # The index of an array's element picked where the shader runs.
+        result.point = value.point
         return result^
 
     def primary(mut self) raises -> _Value:
@@ -2699,6 +2954,57 @@ struct _Compiler(Movable):
             if name.startswith("gl_"):
                 raise self.error("GLSL's " + name + " is outside the subset")
             raise self.error("the name " + name + " is not declared")
+        if self.symbols[index].kind == _ARRAY:
+            return self.element(index)
+        return self.read_symbol(index)
+
+    def element(mut self, array: Int) raises -> _Value:
+        """Parse `a[i]` or `a.length()` after an array's name: the element
+        a constant index names, or the one an index picks where the shader
+        runs, which can be assigned as a whole or by components.
+
+        Raises:
+            Error: If the array is read whole, or the index is outside it or
+                not an int.
+        """
+        var size = self.symbols[array].variable
+        var first = array - size
+        if self.is_mark(".") and self.peek(1) == "length":
+            self.at += 2
+            self.expect("(")
+            self.expect(")")
+            return self.literal(_TINT, Float64(size))
+        if not self.is_mark("["):
+            raise self.error("an array is read one element at a time")
+        self.at += 1
+        var index = self.expression()
+        self.expect("]")
+        if index.type != _TINT:
+            raise self.error("an array is indexed by an int")
+        if index.known:
+            if index.number < 0 or index.number >= Float64(size):
+                raise self.error("the index is outside the array")
+            return self.read_symbol(first + Int(index.number))
+        if self.symbols[array].value.type == _SAMPLER:
+            raise self.error("an array of samplers is indexed by a constant")
+        var nodes = List[NodeRef]()
+        var value = self.read_symbol(first)
+        for at in range(size):  # pragma: no branch
+            var one = self.read_symbol(first + at)
+            nodes.append(self.node(one))
+            value.constant = value.constant and one.constant
+            value.local = value.local or one.local
+        value.node = self.pick(nodes, self.node(index)).value
+        value.constant = value.constant and index.constant
+        value.local = value.local or index.local
+        value.known = False
+        value.tag = _PLAIN
+        value.symbol = array
+        value.point = index.node
+        return value^
+
+    def read_symbol(mut self, index: Int) raises -> _Value:
+        """Return the value a symbol holds here."""
         ref symbol = self.symbols[index]
         var value = symbol.value.copy()
         var held = symbol.kind == _LOCAL or symbol.kind == _OUTPUT
@@ -3261,6 +3567,8 @@ def _kind_name(kind: Int) -> String:
         return "a for loop's index"
     if kind == _MATRIX_LOCAL:
         return "a local matrix, which is given its value once"
+    if kind == _ARRAY:
+        return "an array"
     return "a built-in transform"
 
 

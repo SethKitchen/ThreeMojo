@@ -924,7 +924,11 @@ def test_uniforms_are_shared_and_set_by_name() raises:
         "uniform float scale;\n" + VERTEX,
     )
     refused("uniform void none;\n" + WHITE, "a uniform of type void is outside")
-    refused("uniform float many[4];\n" + WHITE, "arrays are outside the subset")
+    refused(
+        "varying float many[4];\n" + WHITE,
+        "only a uniform, a const or a local variable can be an array",
+        "varying float many[4];\n" + VERTEX,
+    )
     refused(
         "uniform samplerCube sky;\n" + WHITE, "the type samplerCube is outside"
     )
@@ -1085,12 +1089,7 @@ def test_a_swizzle_or_an_index_picks_components() raises:
         "only a vector or a matrix can be indexed in this subset",
     )
     refused_statement(
-        "vec2 v = vec2(1.0); int i = 0; float g = v[i];",
-        "a vector is indexed by a constant int",
-    )
-    refused_statement(
-        "vec2 v = vec2(1.0); float g = v[1.0];",
-        "a vector is indexed by a constant int",
+        "vec2 v = vec2(1.0); float g = v[1.0];", "a vector is indexed by an int"
     )
     refused_statement(
         "vec2 v = vec2(1.0); float g = v[2];", "the index is outside the vec2"
@@ -1098,9 +1097,10 @@ def test_a_swizzle_or_an_index_picks_components() raises:
     refused_statement(
         "vec2 v = vec2(1.0); float g = v[-1];", "the index is outside the vec2"
     )
+    # A component picked where the shader runs is read, not written.
     refused_statement(
         "vec2 v = vec2(1.0); v[0 == 0 ? 0 : 1] = 1.0;",
-        "a vector is indexed by a constant int",
+        "that cannot be assigned",
     )
 
 
@@ -1415,7 +1415,7 @@ def test_the_statements_build_the_graph() raises:
         "float u = 1.0; const float k = u;",
         "a const's value must be a constant expression",
     )
-    refused_statement("float a[2];", "arrays are outside the subset")
+    refused_statement("float a[];", "an array needs its size or its elements")
     refused_statement(
         "void v;", "a local variable of type void is outside the subset"
     )
@@ -1698,9 +1698,7 @@ def test_the_declarations_at_the_top_of_a_shader() raises:
     refused(
         "const float g = 1;\nvoid main() {}", "cannot give a const float a int"
     )
-    refused(
-        "const float g[2];\nvoid main() {}", "arrays are outside the subset"
-    )
+    refused("const float g[2];\nvoid main() {}", "a const needs a value")
     refused(
         "struct S { float x; };\nvoid main() {}",
         "the type struct is outside the subset",
@@ -1894,8 +1892,7 @@ def test_matrices_are_built_indexed_and_inverted() raises:
         "mat3 m = mat3(1.0); vec3 c = m[3];", "the index is outside the mat3"
     )
     refused_statement(
-        "mat3 m = mat3(1.0); int i = 0; vec3 c = m[i];",
-        "a matrix is indexed by a constant int",
+        "mat3 m = mat3(1.0); vec3 c = m[1.0];", "a matrix is indexed by an int"
     )
     refused_statement(
         "vec3 v = transpose(vec3(1.0));",
@@ -2006,6 +2003,132 @@ def test_a_mat2_is_a_vec4_of_its_columns() raises:
         "float x = mat2(1.0).x;", "only a vector has components to pick"
     )
     refused_statement("mat2 m = !mat2(1.0);", "! takes a bool, not a mat2")
+
+
+def test_arrays_hold_elements_that_an_index_picks() raises:
+    # Written and read by constant indexes and by a loop's.
+    var sums = (
+        "float a[4];\n"
+        + "for (int i = 0; i < 4; i++) { a[i] = float(i) * 2.0; }\n"
+        + "a[1] += 1.0;\n"
+        + "float total = 0.0;\n"
+        + "for (int i = 0; i < a.length(); i++) { total += a[i]; }\n"
+    )
+    assert_lanes(
+        value("vec3(total, a[1], a[3])", "", before_main=sums), 13, 3, 6
+    )
+    # Vectors, their components written through a loop's index.
+    var points = (
+        "vec2 p[2] = vec2[2](vec2(1.0, 2.0), vec2(3.0, 4.0));\n"
+        + "for (int i = 0; i < 2; i++) { p[i].y = 0.5; }\n"
+        + "int k = 1;\n"
+    )
+    assert_lanes(value("vec3(p[0], p[k].x)", "", before_main=points), 1, 0.5, 3)
+    # A vector's component and a matrix's column, picked where it runs.
+    assert_lanes(
+        value(
+            "vec3(vec3(1.0, 2.0, 3.0)[k], mat3(2.0)[k].y, mat2(3.0)[k].y)",
+            "",
+            before_main="int k = 1;\n",
+        ),
+        2,
+        2,
+        3,
+    )
+    # An index outside reads the first element, and writes none.
+    assert_lanes(
+        value(
+            "vec3(b[far], b[0], b[1])",
+            "",
+            before_main=(
+                "float b[2] = float[](5.0, 6.0); int far = 7; b[far] = 9.0;\n"
+            ),
+        ),
+        5,
+        5,
+        6,
+    )
+    # Const arrays, global and local, and an array of mat2.
+    assert_lanes(
+        value(
+            "vec3(w[1] * float(n[1]), m[1][1].y, m[0][0].x)",
+            "const float w[3] = float[3](0.25, 0.5, 0.25);\n",
+            "const int n[2] = int[](3, 4); mat2 m[2]; m[1] = mat2(2.0);\n",
+        ),
+        2,
+        2,
+        0,
+    )
+    # A uniform array's elements are uniforms named as three.js names them.
+    var program = compile_shader_material(
+        "uniform vec3 tints[2];\n" + VERTEX,
+        "uniform vec3 tints[2];\n"
+        + "uniform float scales[2];\n"
+        + "uniform sampler2D maps[2];\n"
+        + "void main() {\n"
+        + "    vec4 texel = texture2D(maps[1], vec2(0.5));\n"
+        + "    gl_FragColor = vec4(tints[1] * scales[0], 1.0);\n"
+        + "}\n",
+    )
+    program.set_uniform("tints[1]", Vector3(1, 2, 3))
+    program.set_uniform("scales[0]", Float32(2))
+    assert_lanes(run(program), 2, 4, 6)
+    refused_statement(
+        "float a[2]; float b = a;", "an array is read one element at a time"
+    )
+    refused_statement(
+        "float a[2]; float b = a[2];", "the index is outside the array"
+    )
+    refused_statement(
+        "float a[2]; float b = a[1.0];", "an array is indexed by an int"
+    )
+    refused_statement(
+        "float a[0];", "an array's size is a positive constant int"
+    )
+    refused_statement("float a[300];", "an array holds at most 256 elements")
+    refused_statement(
+        "float a[2] = float[3](1.0, 2.0, 3.0);",
+        "the array needs 2 elements, not 3",
+    )
+    refused_statement(
+        "float a[2] = float[](1.0, 2.0, 3.0);",
+        "the array needs 2 elements, not 3",
+    )
+    refused_statement(
+        "float a[2] = vec2[2](vec2(1.0), vec2(2.0));",
+        "an array of float is given by float[](...)",
+    )
+    refused_statement(
+        "float a[1] = float[1](1);", "cannot put a int in an array of float"
+    )
+    refused_statement("const float a[1];", "a const needs a value")
+    refused_statement(
+        "float u = 1.0; const float a[1] = float[1](u);",
+        "a const's value must be a constant expression",
+    )
+    refused(
+        "uniform float u;\nconst float g[1] = float[1](u);\n" + WHITE,
+        "a const's value must be a constant expression",
+    )
+    refused(
+        "uniform float s[2];\n"
+        + "void main() { s[0] = 1.0; gl_FragColor = vec4(1.0); }\n",
+        "cannot assign s[0]: it is a uniform",
+    )
+    refused(
+        "uniform float s[2];\n"
+        + "void main() { int k = 0; s[k] = 1.0; gl_FragColor = vec4(1.0); }\n",
+        "cannot assign s: it is an array of which each element is a uniform",
+    )
+    refused_statement(
+        "float a[2]; int k = 0; a[k] = vec2(1.0);",
+        "cannot assign a vec2 to a float",
+    )
+    refused(
+        "uniform sampler2D maps[2];\n"
+        + "void main() { int k = 0; gl_FragColor = texture2D(maps[k], vec2(0.5)); }\n",
+        "an array of samplers is indexed by a constant",
+    )
 
 
 def test_break_continue_and_an_early_return_are_read() raises:
