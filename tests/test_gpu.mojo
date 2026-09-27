@@ -12075,6 +12075,49 @@ def test_both_backends_shade_a_gouraud_surface_alike() raises:
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_let_light_through_a_phong_surface_alike() raises:
+    # The thickness map's red, read at the raw coordinates, scales the
+    # light through, which each light adds by `scattering_through`.
+    if skipped_for_lack_of_a_gpu("both backends scatter alike"):
+        return
+    var textures = TextureStore()
+    var thick = textures.add(
+        checkerboard(
+            8,
+            2,
+            Color(255, 255, 255),
+            Color(90, 90, 90),
+            REPEAT,
+            BILINEAR,
+            color_space=LINEAR,
+            alpha=IGNORED,
+        )
+    )
+    var corners = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    for index in range(len(corners)):
+        corners[index].scatter_map = thick
+        corners[index].scatter_color = FloatColor(0.8, 0.4, 0.2, 1.0)
+        corners[index].scatter_ambient = 0.2
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures, lighting, 1)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 36, 30, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    var plain = render_triangles(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    assert_true(count_mismatches(gpu, plain) > 50)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
