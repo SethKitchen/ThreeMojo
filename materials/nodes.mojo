@@ -5101,6 +5101,14 @@ struct NodeProgram(Copyable, Movable):
         self.attribute_widths = List[Int]()
         self.reads_scene = False
 
+    def list_maps(mut self):
+        """List every texture, cube, 3D texture and array texture the
+        program reads again, each once, after its ids were written in
+        place: what a loader calls once it knows each id.
+        """
+        self._list_textures()
+        self._list_cubes()
+
     def _list_textures(mut self):
         """List every texture the texture nodes read now, each once."""
         self.textures = List[TextureId]()

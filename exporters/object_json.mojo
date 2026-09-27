@@ -189,6 +189,8 @@ from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
 from render.cube_texture import NEGATIVE_X
+from materials.node_json import write_node_program
+from materials.nodes import NO_NODES
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -1125,6 +1127,24 @@ struct _Library(Movable):
         if unfogged:
             writer.key("fog")
             writer.boolean(False)
+        # A node material's program, with each texture it reads written
+        # to the file's list; see `materials.node_json`.
+        if material.nodes != NO_NODES:
+            ref program = assets.programs.get(material.nodes)
+            var textures = List[String]()
+            for index in range(len(program.texture_offsets)):
+                var named = Int(program.code[program.texture_offsets[index]])
+                textures.append(
+                    "" if named < 0 else self.texture(TextureId(named), assets)
+                )
+            var cubes = List[String]()
+            for index in range(len(program.cube_offsets)):
+                var named = Int(program.code[program.cube_offsets[index]])
+                cubes.append(
+                    "" if named < 0 else self.cube(CubeTextureId(named), assets)
+                )
+            writer.key("nodes")
+            write_node_program(writer, program, textures, cubes)
         writer.end_object()
         self.materials.append(writer.finish())
         self.material_keys.append(key)

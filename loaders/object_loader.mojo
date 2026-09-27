@@ -222,6 +222,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.gltf import decode_base64, decode_image
+from materials.node_json import read_node_program
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -1856,6 +1857,24 @@ struct _Loader(Movable):
         self.flags(item, built)
         self.raster(item, built)
         self.clipping(item, built)
+        # A node material's program, with the ids its textures get here.
+        var nodes = self.document.get(item, "nodes")
+        if nodes != NO_NODE:
+            var read = read_node_program(self.document, nodes)
+            for index in range(len(read.texture_offsets)):
+                if read.texture_uuids[index] != "":
+                    read.program.code[read.texture_offsets[index]] = Float32(
+                        self.texture(
+                            read.texture_uuids[index], COVERAGE, assets
+                        ).value
+                    )
+            for index in range(len(read.cube_offsets)):
+                if read.cube_uuids[index] != "":
+                    read.program.code[read.cube_offsets[index]] = Float32(
+                        self.cube(read.cube_uuids[index], False, assets).value
+                    )
+            read.program.list_maps()
+            built.nodes = assets.programs.add(read.program^)
         return built^
 
     def flags(self, item: Int, mut material: Material) raises:
