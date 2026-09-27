@@ -839,7 +839,9 @@ def test_a_bare_node_program_round_trips() raises:
     """A program that reads no uniform, texture or attribute, beside an
     unset cube, is written and read whole; the refusals are asked."""
     from exporters.json_writer import JsonWriter
+    from materials.material import shader_material
     from materials.node_json import write_node_program
+    from materials.nodes import COLOR_NODE, NodeGraph
 
     var assets = Assets()
     var scene = Scene()
