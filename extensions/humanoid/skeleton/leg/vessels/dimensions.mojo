@@ -435,7 +435,9 @@ def _great_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
     var p1 = mix_point(d.med_mal, d.tibia_mid, 0.58) + Vector3(
         -lat * 0.010 * S, 0, -0.004 * S
     )
-    var p2 = d.med_condyle + Vector3(-lat * 0.026 * S, 0, -0.010 * S)
+    # A hand's breadth behind the patella: just off the medial condyle's
+    # posterior border.
+    var p2 = d.med_condyle + Vector3(-lat * 0.014 * S, 0, -0.012 * S)
     var p3 = mix_point(d.med_condyle, d.hip, 0.62) + Vector3(
         -lat * 0.034 * S, 0, 0.006 * S
     )

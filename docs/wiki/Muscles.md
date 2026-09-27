@@ -61,8 +61,11 @@ Untoned muscle is calibrated toward typical adult muscle volumes measured by MRI
 | Tibialis anterior | 159 |
 | Tibialis posterior | 109 |
 | Extensor digitorum longus | 103 |
-| Peroneus longus | 126 |
-| Peroneus brevis | 61 |
+| Peroneus longus | 124 |
+| Peroneus brevis | 55 |
+| Flexor hallucis longus | 128 |
+| Flexor digitorum longus | 69 |
+| Extensor hallucis longus | 40 |
 
 ### Packing
 
@@ -101,8 +104,11 @@ The labeled set follows a standard dissection of the lower limb.
 | `TIBIALIS_ANTERIOR` | Proximal tibia to the medial midfoot analog. |
 | `TIBIALIS_POSTERIOR` | Deep calf to the medial ankle. |
 | `EXTENSOR_DIGITORUM_LONGUS` | Fibular head to the anterior ankle. |
-| `PERONEUS_LONGUS` | Fibular head to the lateral malleolus. |
-| `PERONEUS_BREVIS` | Distal fibula to the lateral malleolus. |
+| `PERONEUS_LONGUS` | Fibular head, along the fibula's lateral surface, then behind the lateral malleolus. |
+| `PERONEUS_BREVIS` | Behind the distal fibula, then behind the lateral malleolus. |
+| `FLEXOR_HALLUCIS_LONGUS` | Back of the fibula's lower two thirds to behind the ankle: the lowest belly of the calf. |
+| `FLEXOR_DIGITORUM_LONGUS` | Back of the tibia to behind the medial malleolus. |
+| `EXTENSOR_HALLUCIS_LONGUS` | Front of the fibula's middle half to the front of the ankle. |
 | `ACHILLES_TENDON` | Distal calf to the heel analog. |
 | `PATELLAR_TENDON` | Patella to the tibial tuberosity. |
 

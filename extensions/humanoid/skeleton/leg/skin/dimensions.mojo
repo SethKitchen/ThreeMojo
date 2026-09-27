@@ -60,6 +60,9 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     ADDUCTOR_MAGNUS,
     BICEPS_FEMORIS,
     EXTENSOR_DIGITORUM_LONGUS,
+    EXTENSOR_HALLUCIS_LONGUS,
+    FLEXOR_DIGITORUM_LONGUS,
+    FLEXOR_HALLUCIS_LONGUS,
     GASTROCNEMIUS,
     GLUTEUS_MAXIMUS,
     GLUTEUS_MEDIUS,
@@ -169,6 +172,9 @@ struct SkinField(Copyable, DistanceField, Movable):
     var extensor_digitorum_longus: MuscleField
     var peroneus_longus: MuscleField
     var peroneus_brevis: MuscleField
+    var flexor_hallucis_longus: MuscleField
+    var flexor_digitorum_longus: MuscleField
+    var extensor_hallucis_longus: MuscleField
     var achilles_tendon: MuscleField
     var patellar_tendon: MuscleField
     var femoral_artery: VesselField
@@ -282,6 +288,15 @@ struct SkinField(Copyable, DistanceField, Movable):
         )
         self.peroneus_longus = MuscleField(dimensions, PERONEUS_LONGUS)
         self.peroneus_brevis = MuscleField(dimensions, PERONEUS_BREVIS)
+        self.flexor_hallucis_longus = MuscleField(
+            dimensions, FLEXOR_HALLUCIS_LONGUS
+        )
+        self.flexor_digitorum_longus = MuscleField(
+            dimensions, FLEXOR_DIGITORUM_LONGUS
+        )
+        self.extensor_hallucis_longus = MuscleField(
+            dimensions, EXTENSOR_HALLUCIS_LONGUS
+        )
         self.achilles_tendon = MuscleField(dimensions, ACHILLES_TENDON)
         self.patellar_tendon = MuscleField(dimensions, PATELLAR_TENDON)
         self.femoral_artery = VesselField(dimensions, FEMORAL_ARTERY)
@@ -370,6 +385,9 @@ struct SkinField(Copyable, DistanceField, Movable):
         _append_muscle(points, self.extensor_digitorum_longus)
         _append_muscle(points, self.peroneus_longus)
         _append_muscle(points, self.peroneus_brevis)
+        _append_muscle(points, self.flexor_hallucis_longus)
+        _append_muscle(points, self.flexor_digitorum_longus)
+        _append_muscle(points, self.extensor_hallucis_longus)
         _append_muscle(points, self.achilles_tendon)
         _append_muscle(points, self.patellar_tendon)
         _append_tube(points, self.femoral_artery.chain)

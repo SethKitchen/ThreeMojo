@@ -82,7 +82,7 @@ struct MusclePart(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named muscle part."""
         if self.value < 0:
             return False
-        return self.value <= TIBIALIS_POSTERIOR.value
+        return self.value <= EXTENSOR_HALLUCIS_LONGUS.value
 
 
 comptime GLUTEUS_MAXIMUS = MusclePart(0)
@@ -110,6 +110,11 @@ comptime PATELLAR_TENDON = MusclePart(21)
 comptime VASTUS_INTERMEDIUS = MusclePart(22)
 comptime ADDUCTOR_MAGNUS = MusclePart(23)
 comptime TIBIALIS_POSTERIOR = MusclePart(24)
+# The deep posterior compartment's two long toe flexors, and the great
+# toe's long extensor in front.
+comptime FLEXOR_HALLUCIS_LONGUS = MusclePart(25)
+comptime FLEXOR_DIGITORUM_LONGUS = MusclePart(26)
+comptime EXTENSOR_HALLUCIS_LONGUS = MusclePart(27)
 
 
 # Room for six shifts of every named part.
@@ -390,6 +395,12 @@ def _raw_chain(dimensions: MuscleDimensions, part: MusclePart) -> MuscleChain:
         chain = _per_long(dimensions, S, scale)
     elif part == PERONEUS_BREVIS:
         chain = _per_brev(dimensions, S, scale)
+    elif part == FLEXOR_HALLUCIS_LONGUS:
+        chain = _fhl(dimensions, S, scale)
+    elif part == FLEXOR_DIGITORUM_LONGUS:
+        chain = _fdl(dimensions, S, scale)
+    elif part == EXTENSOR_HALLUCIS_LONGUS:
+        chain = _ehl(dimensions, S, scale)
     elif part == ACHILLES_TENDON:
         chain = _achilles(dimensions, S, scale)
     elif part == PATELLAR_TENDON:
@@ -606,6 +617,12 @@ def muscle_part_label(part: MusclePart) -> String:
         return "extensor digitorum longus"
     if part == PERONEUS_LONGUS:
         return "peroneus longus"
+    if part == FLEXOR_HALLUCIS_LONGUS:
+        return "flexor hallucis longus"
+    if part == FLEXOR_DIGITORUM_LONGUS:
+        return "flexor digitorum longus"
+    if part == EXTENSOR_HALLUCIS_LONGUS:
+        return "extensor hallucis longus"
     if part == PERONEUS_BREVIS:
         return "peroneus brevis"
     if part == ACHILLES_TENDON:
@@ -666,6 +683,9 @@ def named_muscle_parts() -> List[MusclePart]:
     parts.append(EXTENSOR_DIGITORUM_LONGUS)
     parts.append(PERONEUS_LONGUS)
     parts.append(PERONEUS_BREVIS)
+    parts.append(FLEXOR_HALLUCIS_LONGUS)
+    parts.append(FLEXOR_DIGITORUM_LONGUS)
+    parts.append(EXTENSOR_HALLUCIS_LONGUS)
     parts.append(ACHILLES_TENDON)
     parts.append(PATELLAR_TENDON)
     return parts^
@@ -1323,14 +1343,18 @@ def _edl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _per_long(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    """Return the peroneus longus, on the fibula's lateral surface.
+
+    Its tendon passes behind the lateral malleolus.
+    """
     var rb = _r(S, scale, 0.0111)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
         d.fib_head,
-        d.lat_mal,
-        Vector3(lat * 0.013 * S, 0, 0.004 * S),
+        d.lat_mal + Vector3(0, 0.006 * S, -0.008 * S),
+        Vector3(lat * 0.007 * S, 0, -0.002 * S),
         0.55 * rb,
         rb,
         0.72,
@@ -1338,6 +1362,11 @@ def _per_long(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    """Return the peroneus brevis, behind the fibula's lower half.
+
+    Its tendon passes behind the lateral malleolus, in front of the
+    longus's.
+    """
     var rb = _r(S, scale, 0.0116)
     var origin = _at(d.fibula_mid, d.lat_mal, 0.22)
     var lat = Float32(1)
@@ -1345,11 +1374,76 @@ def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
         lat = Float32(-1)
     return _fusiform(
         origin,
-        d.lat_mal,
-        Vector3(lat * 0.010 * S, 0, 0.002 * S),
+        d.lat_mal + Vector3(0, 0.008 * S, -0.006 * S),
+        Vector3(lat * 0.004 * S, 0, -0.004 * S),
         0.58 * rb,
         rb,
         0.70,
+    )
+
+
+def _fhl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    """Return the flexor hallucis longus: the lowest belly of the calf.
+
+    It rises from the back of the fibula's lower two thirds, deep to the
+    soleus, and its fibers run almost to the ankle, where its tendon
+    passes behind the talus toward the great toe.
+    """
+    var rb = _r(S, scale, 0.0137)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    var origin = _at(d.fib_head, d.lat_mal, 0.30) + Vector3(
+        -lat * 0.004 * S, 0, -0.012 * S
+    )
+    var insertion = d.plafond + Vector3(-lat * 0.004 * S, 0.012 * S, -0.020 * S)
+    return _fusiform(
+        origin, insertion, Vector3(0, 0, -0.006 * S), 0.60 * rb, rb, 0.70
+    )
+
+
+def _fdl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    """Return the flexor digitorum longus, on the back of the tibia.
+
+    It rises from the tibia's posterior surface, medial to the tibialis
+    posterior, and its tendon passes behind the medial malleolus.
+    """
+    var rb = _r(S, scale, 0.0101)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    var top = _at(d.tib_med, d.tib_lat, 0.5)
+    var origin = _at(top, d.tibia_mid, 0.85) + Vector3(
+        -lat * 0.008 * S, 0, -0.016 * S
+    )
+    var insertion = d.med_mal + Vector3(lat * 0.002 * S, 0.016 * S, -0.012 * S)
+    return _fusiform(
+        origin,
+        insertion,
+        Vector3(-lat * 0.002 * S, 0, -0.004 * S),
+        0.55 * rb,
+        rb,
+        0.75,
+    )
+
+
+def _ehl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    """Return the extensor hallucis longus, in front of the fibula.
+
+    It rises from the fibula's middle half between the tibialis anterior
+    and the extensor digitorum longus, and its tendon crosses the front
+    of the ankle toward the great toe.
+    """
+    var rb = _r(S, scale, 0.0078)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    var origin = _at(d.fib_head, d.lat_mal, 0.40) + Vector3(
+        -lat * 0.010 * S, 0, 0.012 * S
+    )
+    var insertion = d.plafond + Vector3(-lat * 0.002 * S, 0.012 * S, 0.020 * S)
+    return _fusiform(
+        origin, insertion, Vector3(0, 0, 0.004 * S), 0.55 * rb, rb, 0.75
     )
 
 
@@ -1361,10 +1455,12 @@ def _achilles(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     height where it leaves the leg, and on the upper back of the
     calcaneal tuberosity.
     """
-    var width = _r(S, Float32(1), 0.007)
-    var depth = Float32(0.48) * width
+    # A tendon about a centimeter and a half wide and six millimeters
+    # thick, five centimeters behind the ankle's center.
+    var width = _r(S, Float32(1), 0.0045)
+    var depth = Float32(0.72) * width
     var origin = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
-    var low = Vector3(d.heel.x, d.plafond.y + 0.04 * S, d.heel.z - 0.007 * S)
+    var low = Vector3(d.heel.x, d.plafond.y + 0.04 * S, d.heel.z - 0.003 * S)
     var insertion = d.heel + Vector3(0, 0.004 * S, -0.008 * S)
     return MuscleChain(
         origin,

@@ -333,9 +333,9 @@ def _tendon(dimensions: FootMuscleDimensions, part: FootMuscle) -> TubeSet:
         # calcaneal tuberosity.
         return one_tube(
             _line(
-                Vector3(0, 0.04 * S, foot.heel.z - 0.007 * S),
+                Vector3(0, 0.04 * S, foot.heel.z - 0.003 * S),
                 foot.heel + Vector3(0, 0.004 * S, Float32(-0.008) * S),
-                0.0036 * S,
+                0.0028 * S,
             )
         )
     if part == TIBIALIS_ANTERIOR_TENDON:

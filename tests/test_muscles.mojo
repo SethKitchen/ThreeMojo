@@ -150,7 +150,7 @@ def test_spec_defaults_to_untoned() raises:
 
 def test_muscle_parts_are_named() raises:
     var parts = named_muscle_parts()
-    assert_equal(len(parts), 25)
+    assert_equal(len(parts), 28)
     var index = 0
     while index < len(parts):
         assert_true(parts[index].is_valid())
@@ -158,14 +158,14 @@ def test_muscle_parts_are_named() raises:
         assert_true(label.byte_length() > 0)
         index += 1
     assert_false(MusclePart(-1).is_valid())
-    assert_false(MusclePart(25).is_valid())
+    assert_false(MusclePart(28).is_valid())
     assert_equal(muscle_part_label(MusclePart(99)), "muscle")
     assert_true(is_tendon(ILIOTIBIAL_TRACT))
     assert_true(is_tendon(ACHILLES_TENDON))
     assert_true(is_tendon(PATELLAR_TENDON))
     assert_false(is_tendon(RECTUS_FEMORIS))
     with assert_raises():
-        _ = is_tendon(MusclePart(25))
+        _ = is_tendon(MusclePart(28))
 
 
 def test_muscle_and_tendon_tissue() raises:
@@ -252,11 +252,11 @@ def test_muscle_mesh_has_positions_normals_and_uvs() raises:
 def test_muscle_field_refuses_a_bad_part() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
-        _ = MuscleField(dims, MusclePart(25))
+        _ = MuscleField(dims, MusclePart(28))
     with assert_raises():
-        _ = muscle_from_dimensions(dims, MusclePart(25), 8)
+        _ = muscle_from_dimensions(dims, MusclePart(28), 8)
     with assert_raises():
-        _ = muscle_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(25))
+        _ = muscle_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(28))
     with assert_raises():
         _ = muscle_from_dimensions(dims, RECTUS_FEMORIS, 7)
     with assert_raises():
@@ -296,11 +296,11 @@ def test_muscle_mass_refuses_a_bad_part_or_tissue() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
         _ = muscle_mass(
-            HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(25), RIGHT
+            HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(28), RIGHT
         )
     with assert_raises():
         _ = muscle_mass_from_dimensions(
-            dims, MusclePart(25), muscle_tissue(), Length(20.0, MILLIMETER)
+            dims, MusclePart(28), muscle_tissue(), Length(20.0, MILLIMETER)
         )
     var bad = muscle_tissue()
     bad.kind = SoftTissueKind(12)
@@ -330,7 +330,7 @@ def test_add_leg_can_draw_only_muscles() raises:
         MUSCLES,
         8,
     )
-    assert_equal(len(scene.meshes), 25)
+    assert_equal(len(scene.meshes), 28)
 
 
 def test_look_materials() raises:

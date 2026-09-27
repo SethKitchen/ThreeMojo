@@ -54,11 +54,11 @@ A six-foot untoned male at a 5 mm step:
 
 | Segment | Mass | Center of mass | Radii of gyration, across and along |
 |---|---|---|---|
-| Thigh | 10.0 kg | 46% of its length from the hip | 29% and 14% of its length |
-| Shank | 5.6 kg | 45% from the knee | 29% and 11% |
+| Thigh | 9.9 kg | 45% of its length from the hip | 29% and 14% of its length |
+| Shank | 5.5 kg | 45% from the knee | 29% and 10% |
 | Foot | 1.5 kg | 42% from the heel | 24% and 12% |
 
-De Leva reports 41%, 45% and 44% for the three centers, and radii of 33% and 15%, 25% and 10%, and 26% and 12%. The centers and the radii agree within a few points. The shank is heavy against the thigh: 0.56 of it, where de Leva reports 0.31. The calf and the ankle are still fuller than a typical man's.
+De Leva reports 41%, 45% and 44% for the three centers, and radii of 33% and 15%, 25% and 10%, and 26% and 12%. The centers and the radii agree within a few points. The shank is heavy against the thigh: 0.55 of it, where de Leva reports 0.31. The calf and the ankle are still fuller than a typical man's.
 
 ## Limits
 
