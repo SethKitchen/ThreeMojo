@@ -11288,7 +11288,8 @@ def test_both_backends_read_a_triangles_facing_alike() raises:
             lighting,
             programs=store,
         )
-        assert_equal(count_mismatches(cpu, gpu, tolerance=0), 0)
+        # The facing is exact; the phong shading of it rounds.
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
