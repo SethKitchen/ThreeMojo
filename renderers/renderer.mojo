@@ -3827,25 +3827,45 @@ def _has_transmissive_back(material: Material) -> Bool:
     return material.transmits() and material.side == DOUBLE_SIDE
 
 
-def _transmits(frame: Frame) -> Bool:
-    """Return True if any triangle of a prepared frame transmits.
+def _reads_scene(assets: Assets, nodes: NodeProgramId) raises -> Bool:
+    """Return True if a node program reads the opaque scene behind its
+    surface, so it is drawn after that scene is captured, as a
+    transmissive surface is. `_checked_nodes` has found the program."""
+    return nodes != NO_NODES and assets.programs.get(nodes).reads_scene
+
+
+def _looks_behind(frame: Frame, triangle: Int) raises -> Bool:
+    """Return True if a triangle of a prepared frame transmits, or its
+    node program reads the scene behind it."""
+    ref first = frame.corners[triangle * 3]
+    return first.transmission > 0 or (
+        first.nodes != NO_NODES
+        and frame.programs.get(first.nodes).reads_scene
+    )
+
+
+def _transmits(frame: Frame) raises -> Bool:
+    """Return True if any triangle of a prepared frame transmits, or reads
+    the scene behind it through its node program.
 
     Every triangle `prepare_frame` returns is one of its draws, so the
     list is asked directly.
     """
     for triangle in range(len(frame.corners) // 3):
-        if frame.corners[triangle * 3].transmission > 0:
+        if _looks_behind(frame, triangle):
             return True
     return False
 
 
-def _is_see_through(frame: Frame, draw: Draw) -> Bool:
+def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
     """Return True if a draw of a prepared frame transmits or blends:
     three.js leaves both its `transmissive` and its `transparent` lists
-    out of the transmission pass."""
+    out of the transmission pass. A draw that reads the scene behind is
+    left out as a transmissive one is."""
     if draw.kind == DRAW_TRIANGLES:
-        ref first = frame.corners[draw.first * 3]
-        return first.transmission > 0 or first.blend.mixes()
+        return _looks_behind(frame, draw.first) or frame.corners[
+            draw.first * 3
+        ].blend.mixes()
     if draw.kind == DRAW_SEGMENTS:
         return frame.segments[draw.first * 2].blend.mixes()
     return frame.points[draw.first].blend.mixes()
@@ -5367,7 +5387,7 @@ struct Renderer(Movable):
                 draws[slot].blends,
                 draws[slot].order,
                 draws[slot].source(),
-                material.transmits(),
+                material.transmits() or _reads_scene(assets, material.nodes),
             )
 
         # A light's view of the casters keeps the standard depth, which
