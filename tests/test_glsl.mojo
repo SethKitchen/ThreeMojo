@@ -13,6 +13,7 @@ its message, which names the shader and the line.
 
 from materials.glsl import (
     _Type,
+    MAX_WHILE_COUNT,
     _TokenKind,
     compile_raw_shader_material,
     compile_shader_material,
@@ -1787,7 +1788,7 @@ def test_the_statements_build_the_graph() raises:
     )
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
-    refused_statement("while (true) {}", "while is outside the subset")
+    refused_statement("while (1.0) {}", "a while loop needs a bool, not a float")
     refused_statement("break;", "break needs a loop or a switch to be in")
     refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
@@ -3042,6 +3043,47 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
         "a transform's columns are outside the subset",
         "void main() { int i = 0; vec4 c = modelMatrix[i]; " + place + " }",
     )
+
+
+def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
+    # Five times through, then the condition leaves.
+    var counted = "float s = 0.0; int i = 0;\nwhile (i < 5) { s += 1.0; i++; }\n"
+    assert_equal(number("s", "", counted), 5)
+    # A continue skips to the condition, and a break leaves: 1 + 3 + 4.
+    var jumps = (
+        "float s = 0.0; int i = 0;\nwhile (true) {\n    i++;\n"
+        "    if (i == 2) continue;\n    if (i > 4) break;\n"
+        "    s += float(i);\n}\n"
+    )
+    assert_equal(number("s", "", jumps), 8)
+    # A loop that would run longer stops at the cap.
+    var endless = "float s = 0.0;\nwhile (true) s += 1.0;\n"
+    assert_equal(number("s", "", endless), Float32(MAX_WHILE_COUNT))
+    # A do loop runs once before it asks.
+    var once = "float s = 0.0;\ndo { s += 1.0; } while (false);\n"
+    assert_equal(number("s", "", once), 1)
+    var thrice = "float s = 0.0; int i = 0;\ndo { s += 1.0; i++; } while (i < 3);\n"
+    assert_equal(number("s", "", thrice), 3)
+    # Its continue still reaches the condition: i runs to five, and the
+    # last three times add one each.
+    var skipping = (
+        "float s = 0.0; int i = 0;\ndo {\n    i++;\n"
+        "    if (i < 3) { continue; }\n    s += 1.0;\n} while (i < 5);\n"
+    )
+    assert_equal(number("s", "", skipping), 3)
+    # And nested, each loop keeps its own count.
+    var nested = (
+        "float s = 0.0; int i = 0;\nwhile (i < 3) {\n    int j = 0;\n"
+        "    do { s += 1.0; j++; } while (j < 2);\n    i++;\n}\n"
+    )
+    assert_equal(number("s", "", nested), 6)
+    refused_statement(
+        "do s = 1.0; while (false);", "a do loop's body is a block in braces"
+    )
+    refused_statement(
+        "do { } for (;;);", "a do loop ends with while (condition);"
+    )
+    refused_statement("do { } while (2);", "a do loop needs a bool, not an int")
 
 
 def test_break_continue_and_an_early_return_are_read() raises:

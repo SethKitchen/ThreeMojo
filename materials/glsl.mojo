@@ -115,7 +115,10 @@ comptime _REFUSED_FUNCTIONS = (
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
-comptime _REFUSED_STATEMENTS = " while do "
+# The most times a `while` or a `do` loop runs. The bytecode has no jumps,
+# so such a loop is unrolled this many times, and a false condition leaves
+# it; a loop that would run longer stops here.
+comptime MAX_WHILE_COUNT = 64
 # The built-ins that compare two vectors one component at a time.
 comptime _COMPARISONS = (
     " lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual "
@@ -2571,6 +2574,10 @@ struct _Compiler(Movable):
             self.branch()
         elif self.is_word("for"):
             self.loop()
+        elif self.is_word("while"):
+            self.while_loop()
+        elif self.is_word("do"):
+            self.do_loop()
         elif self.is_word("discard"):
             if self.stage == _VERTEX:
                 raise self.error("only a fragment shader can discard")
@@ -2597,8 +2604,6 @@ struct _Compiler(Movable):
             raise self.error("case and default belong in a switch")
         elif self.is_word("struct"):
             raise self.error("a struct is declared outside every function")
-        elif _listed(self.peek(), _REFUSED_STATEMENTS):
-            raise self.error(self.peek() + " is outside the subset")
         elif self.starts_declaration():
             self.local_declaration()
         else:
@@ -3008,6 +3013,104 @@ struct _Compiler(Movable):
         self.depth -= 1
         self.close()
         self.graph.End()
+
+    def open_loop(mut self) raises -> NodeRef:
+        """Open a `while` or a `do` loop: a `Loop` of `MAX_WHILE_COUNT`
+        times, with its own scope, which `break` and `continue` reach.
+
+        Returns:
+            The loop's index: zero, then one, and so on.
+
+        Raises:
+            Error: Never: the count is in range.
+        """
+        var index = self.graph.Loop(MAX_WHILE_COUNT)
+        self.open()
+        self.depth += 1
+        self.loops += 1
+        self.breakables.append(_A_LOOP)
+        return index
+
+    def close_loop(mut self) raises:
+        """Close what `open_loop` opened, and unroll it.
+
+        Raises:
+            Error: Never: `open_loop` opened it.
+        """
+        _ = self.breakables.pop()
+        self.loops -= 1
+        self.depth -= 1
+        self.close()
+        self.graph.End()
+
+    def leave_unless(mut self, condition: NodeRef) raises:
+        """Leave the innermost loop where `condition` is false.
+
+        Raises:
+            Error: Never: a loop is open.
+        """
+        self.graph.If(self.graph.logical_not(condition))
+        self.graph.Break()
+        self.graph.End()
+
+    def while_loop(mut self) raises:
+        """Parse `while (c) s` as a loop of `MAX_WHILE_COUNT` times that a
+        false `c` leaves at the top of each time through.
+
+        Raises:
+            Error: If the condition is not a `bool`, or the body is outside
+                the subset.
+        """
+        self.at += 1
+        self.expect("(")
+        _ = self.open_loop()
+        var condition = self.condition("a while loop")
+        self.expect(")")
+        self.leave_unless(condition)
+        self.statement()
+        self.close_loop()
+
+    def do_loop(mut self) raises:
+        """Parse `do { ... } while (c);` as a loop of `MAX_WHILE_COUNT`
+        times. From the second time through, a false `c` leaves at the top,
+        where the time before would have asked it at its end: so a
+        `continue` still reaches the condition.
+
+        Raises:
+            Error: If the body is not a block, the loop does not end with
+                `while (c);`, the condition is not a `bool`, or the body is
+                outside the subset.
+        """
+        self.at += 1
+        if not self.is_mark("{"):
+            raise self.error("a do loop's body is a block in braces")
+        var body = self.at
+        # Past the block to the condition. The braces balance: `function`
+        # counted them.
+        self.at += 1
+        var nesting = 1
+        while nesting > 0:
+            if self.is_mark("{"):
+                nesting += 1
+            elif self.is_mark("}"):
+                nesting -= 1
+            self.at += 1
+        if not self.is_word("while"):
+            raise self.error("a do loop ends with while (condition);")
+        self.at += 1
+        self.expect("(")
+        var index = self.open_loop()
+        self.graph.If(self.graph.greater_than(index, self.graph.float(0)))
+        var condition = self.condition("a do loop")
+        self.expect(")")
+        var after = self.at
+        self.leave_unless(condition)
+        self.graph.End()
+        self.at = body
+        self.statement()
+        self.close_loop()
+        self.at = after
+        self.expect(";")
 
     def loop_step(mut self, name: String, type: _Type) raises -> Float64:
         """Parse a `for` loop's step: `i++`, `++i`, `i--`, `--i`, `i += c`
