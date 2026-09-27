@@ -1361,7 +1361,7 @@ def every_read(mut assets: Assets) raises -> NodeProgramId:
     )
     var extra = graph.add(
         graph.add(graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)),
-        graph.varying(place),
+        graph.add(graph.varying(place), graph.varying(graph.uv())),
     )
     var zero = graph.uniform("zero", Float32(0))
     var rgb = graph.add(
