@@ -1874,7 +1874,7 @@ struct _Loader(Movable):
                         self.cube(read.cube_uuids[index], False, assets).value
                     )
             read.program.list_maps()
-            built.nodes = assets.programs.add(read.program^)
+            built.nodes = assets.programs.add(read.program.copy())
         return built^
 
     def flags(self, item: Int, mut material: Material) raises:
