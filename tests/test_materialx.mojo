@@ -992,7 +992,7 @@ comptime CORNERS = """<materialx fileprefix="/tmp/threemojo_mtlx_">
     <add name="a6" type="color3"><input name="in1" type="color3" nodename="a5" /><input name="in2" type="color3" nodename="v4" /></add>
     <add name="a7" type="color3"><input name="in1" type="color3" nodename="a6" /><input name="in2" type="color3" nodename="sf" output="outy" /></add>
     <add name="a8" type="color3"><input name="in1" type="color3" nodename="a7" /><input name="in2" type="color3" nodename="mid" output="outx" /></add>
-    <add name="a9" type="color3"><input name="in1" type="color3" nodename="a8" /><input name="in2" type="vector2" nodename="v2" /></add>
+    <add name="a9" type="color3"><input name="in1" type="color3" nodename="a8" /><input name="in2" type="color3" nodename="v2" /></add>
     <output name="out" type="color3" nodename="a9" />
   </nodegraph>
 </materialx>
@@ -1072,7 +1072,7 @@ def test_values_and_components_that_are_not_read_are_refused() raises:
     refused(
         graph
         + '<constant name="n" type="color3"><input name="value"'
-        ' type="string" value="x" /></constant>'
+        ' type="string" value="1" /></constant>'
         + tail,
         "a value of type string that is not read",
     )
