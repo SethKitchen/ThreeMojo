@@ -2205,9 +2205,10 @@ struct _Compiler(Movable):
         var node = self.node(value)
         var variable = NodeVar(self.symbols[target.symbol].variable)
         if target.components != "":
+            var held_type = self.symbols[target.symbol].value.type
             node = self.merged(
                 self.graph.get(variable),
-                self.symbols[target.symbol].value.type,
+                held_type,
                 target.components,
                 node,
                 value.type,
@@ -2275,9 +2276,10 @@ struct _Compiler(Movable):
             var held = self.graph.get(variable)
             var written = node
             if target.components != "":
+                var held_type = self.symbols[first + index].value.type
                 written = self.merged(
                     held,
-                    self.symbols[first + index].value.type,
+                    held_type,
                     target.components,
                     node,
                     value.type,
