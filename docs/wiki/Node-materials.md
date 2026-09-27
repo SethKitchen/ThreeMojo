@@ -431,6 +431,14 @@ graph.set_output(COLOR_NODE, graph.swizzle(stripes, "xyx"))
 var card = assets.materials.add(shader_material(assets.programs.add(graph.compile())))
 ```
 
+## In a file
+
+`object_to_json` writes a node material's program in the material's `nodes` field, and `read_object_json` reads it back into `assets.programs`. three.js's loaders read the other fields of the material and ignore this one.
+
+three.js writes each node of the graph with its type and its inputs. This port writes the compiled program instead: its floats, its uniforms, its custom attributes, and where it keeps the id of each texture and cube that it reads. Each texture and cube goes to the file's `textures` or `images` list, and the program names it by its uuid. So the loader gives the program the ids that the textures get in its own store. A texture uniform that names no texture is written as `null`.
+
+The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
+
 ## How it runs
 
 `compile` lays out each output as a list of instructions. A node is one instruction in each context it runs in. The contexts are the fragment, the pixel beside it for a derivative, and a corner for a varying. Each instruction writes one of `MAX_REGISTERS` registers of four floats. The compiler gives a register back when the last reader of its value has run.
@@ -510,4 +518,3 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 - Compute nodes, storage buffers and `instancedArray`.
 - Other outputs: `lightsNode`, `receivedShadowNode` and `castShadowNode`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
-- Reading and writing node materials in files.
