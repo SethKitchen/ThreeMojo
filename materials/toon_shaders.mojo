@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's toon shaders, `examples/jsm/shaders/ToonShader.js`: four
-`ShaderMaterial`s, compiled by the GLSL subset from their own source.
+"""A port of three.js's toon shaders, `examples/jsm/shaders/ToonShader.js`:
+four `ShaderMaterial`s, compiled by the GLSL subset from their own source.
 
 `ToonShader1` shades in two tones and rims the edge the camera sees past.
 `ToonShader2` darkens by bands of light. `ToonShaderHatching` draws lines

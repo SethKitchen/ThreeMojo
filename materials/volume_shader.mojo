@@ -3,9 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `VolumeRenderShader1`, `examples/jsm/shaders/VolumeShader.js`:
-a `ShaderMaterial` that marches a ray through a 3D texture of intensities
-and colors it through a colormap, compiled by the GLSL subset.
+"""A port of three.js's `VolumeRenderShader1`,
+`examples/jsm/shaders/VolumeShader.js`: a `ShaderMaterial` that marches a ray
+through a 3D texture of intensities and colors it through a colormap, compiled
+by the GLSL subset.
 
 Draw it on the back faces of a box that spans the volume, as three.js's
 `webgl2_materials_texture3d` example does: a `BoxGeometry` of the volume's

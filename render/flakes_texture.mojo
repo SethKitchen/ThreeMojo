@@ -3,8 +3,9 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `FlakesTexture`, `examples/jsm/textures/FlakesTexture.js`: a
-normal map of metal flakes, for the clear coat of a car's paint.
+"""A port of three.js's `FlakesTexture`,
+`examples/jsm/textures/FlakesTexture.js`: a normal map of metal flakes, for the
+clear coat of a car's paint.
 
 three.js paints 4000 discs on a canvas that is the flat normal,
 `rgb(127, 127, 255)`. Each disc is three to six pixels across in radius,
