@@ -11461,6 +11461,58 @@ def test_both_backends_read_a_custom_attribute_alike() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_read_a_cube_in_a_graph_alike() raises:
+    # The kernel keeps a cube read's first row in the texture table where
+    # the host keeps its id; both read the same face in the same place.
+    if skipped_for_lack_of_a_gpu("both backends read a cube alike"):
+        return
+    var textures = TextureStore()
+    var cubes = CubeTextureStore()
+    _ = cubes.add(a_gpu_cube())
+    var sky = cubes.add(a_gpu_cube())
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var direction = graph.join(
+        [
+            graph.sub(graph.swizzle(uv, "x"), graph.float(0.5)),
+            graph.sub(graph.swizzle(uv, "y"), graph.float(0.5)),
+            graph.float(0.3),
+        ]
+    )
+    var read = graph.texture_cube(graph.cube_uniform("sky", sky), direction)
+    graph.set_output(NODES_COLOR, graph.swizzle(read, "rgb"))
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        1,
+        cubes=cubes,
+        programs=store,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        cubes=cubes,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a

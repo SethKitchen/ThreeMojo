@@ -82,6 +82,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
+from render.cube_texture_store import CubeTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, isnan, sin, sqrt
 from std.testing import (
@@ -440,6 +441,64 @@ def test_a_custom_attribute_is_read_at_each_corner() raises:
     )
     with assert_raises(contains="A position node runs once per vertex"):
         _ = moved.compile()
+
+
+def test_a_cube_is_read_in_a_direction() raises:
+    var graph = NodeGraph()
+    var sky = graph.cube_uniform("sky", CubeTextureId(2))
+    var ground = graph.cube_uniform("ground")
+    var up = graph.texture_cube(sky, graph.vec3(0, 1, 0))
+    var again = graph.texture_cube(sky, graph.vec3(1, 0, 0))
+    var down = graph.texture_cube(ground, graph.vec3(0, -1, 0))
+    graph.set_output(
+        COLOR_NODE,
+        graph.swizzle(graph.add(up, graph.add(again, down)), "rgb"),
+    )
+    var program = graph.compile()
+    # One cube, listed once however often it is read, and one unset.
+    assert_equal(len(program.cubes), 2)
+    assert_equal(program.cubes[0].value, 2)
+    assert_equal(program.cubes[1].value, -1)
+    program.set_cube("ground", CubeTextureId(5))
+    assert_equal(program.cubes[1].value, 5)
+    # A source with no cubes reads white.
+    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
+    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3)
+    with assert_raises(contains="A cube uniform needs a cube"):
+        program.set_cube("sky", CubeTextureId(-1))
+    var bad = NodeGraph()
+    with assert_raises(contains="A cube uniform names no cube there can be"):
+        _ = bad.cube_uniform("x", CubeTextureId(-3))
+    var sky2 = bad.cube_uniform("sky")
+    with assert_raises(contains="A cube read reads a cube texture, not a vec2"):
+        _ = bad.texture_cube(bad.uv(), bad.vec3(1, 0, 0))
+    with assert_raises(contains="A cube is read in a vec3 direction, not a vec2"):
+        _ = bad.texture_cube(sky2, bad.uv())
+    # Only a fragment reads a cube.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.swizzle(
+            moved.texture_cube(moved.cube_uniform("c"), moved.vec3(1, 0, 0)),
+            "xyz",
+        ),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_cube(
+                    varied.cube_uniform("c"), varied.vec3(1, 0, 0)
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
 
 
 def test_a_texture_reads_where_its_coordinate_says() raises:

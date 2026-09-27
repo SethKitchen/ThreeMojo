@@ -87,7 +87,9 @@ from render.rasterizer import (
 )
 from render.srgb import LINEAR
 from render.target import RenderTarget
-from render.texture import BILINEAR, IGNORED, NEAREST, REPEAT, Texture
+from render.texture import BILINEAR, CLAMP, IGNORED, NEAREST, REPEAT, Texture
+from render.cube_texture import CubeTexture
+from render.cube_texture_store import CubeTextureId
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import sin, sqrt
@@ -853,6 +855,53 @@ def test_a_custom_attribute_of_the_geometry_colors_the_mesh() raises:
     assert_equal(Int(seen.r), 137)
     assert_equal(Int(seen.g), 188)
     assert_equal(Int(seen.b), 255)
+
+
+def a_cube() raises -> CubeTexture:
+    """Return a cube of six flat faces, linear: red +x, green -x, blue
+    +y, yellow -y, cyan +z, magenta -z."""
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        var pixels = List[UInt8]()
+        for _ in range(4):
+            pixels.append(color.r)
+            pixels.append(color.g)
+            pixels.append(color.b)
+            pixels.append(255)
+        faces.append(Texture(2, 2, pixels^, CLAMP, NEAREST, LINEAR, False))
+    return CubeTexture(faces^)
+
+
+def test_a_node_program_reads_a_cube_in_a_direction() raises:
+    # The cube uniform looks along +z, the cyan face.
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_cube())
+    var graph = NodeGraph()
+    var read = graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    graph.set_output(COLOR_NODE, graph.swizzle(read, "rgb"))
+    var id = assets.programs.add(graph.compile())
+    var scene = a_scene(assets, shader_material(id))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    # Unset, the cube is refused before a pixel is drawn.
+    with assert_raises(contains="reads a cube uniform that names no cube"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_cube("sky", sky)
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 0)
+    assert_equal(Int(seen.g), 255)
+    assert_equal(Int(seen.b), 255)
+    # A cube that is not in the store is refused.
+    assets.programs.get(id).set_cube("sky", CubeTextureId(7))
+    with assert_raises(contains="A node program reads a cube that is not there"):
+        _ = renderer.render(scene, assets, a_camera())
 
 
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:
