@@ -14,6 +14,7 @@ from materials.nodes import (
     EMISSIVE_NODE,
     METALNESS_NODE,
     NORMAL_NODE,
+    NO_NODES,
     OPACITY_NODE,
     ROUGHNESS_NODE,
     NodeInputs,
@@ -548,13 +549,9 @@ def test_every_surface_input_is_read() raises:
     assert_almost_equal(bent[1], 1)
     assert_almost_equal(bent[2], -1)
     assert_almost_equal(run_nodes(source, EMISSIVE_NODE, at_uv(0, 0))[0], 0.5)
-    # A glTF surface keeps three.js's gray and nothing else.
-    var gray = assets.materials.get(read.ids[1])
-    ref plain = assets.programs.get(gray.nodes)
-    assert_almost_equal(
-        run_nodes(ProgramSource(Pointer(to=plain)), COLOR_NODE, at_uv(0, 0))[0],
-        0.8,
-    )
+    # A glTF surface is left as it is, three.js's `gltf_pbr`, with no
+    # program.
+    assert_true(assets.materials.get(read.ids[1]).nodes == NO_NODES)
 
 
 def refused(text: String, why: String) raises:

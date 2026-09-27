@@ -906,6 +906,7 @@ def read_materialx(
     var reader = _Reader(parse_xml(text), base, assets.textures.count())
     var names = List[String]()
     var programs = List[NodeGraph]()
+    var shaded = List[Bool]()
     var materials = List[Material]()
     var root = reader.document.root()
     var children = reader.document.children(root)
@@ -915,6 +916,7 @@ def read_materialx(
             continue
         reader.begin()
         var material = Material(Color(255, 255, 255), kind=PHYSICAL)
+        var graphed = False
         var inputs = reader.document.children(entry)
         for at in range(len(inputs)):
             var shader_name = reader.attr(inputs[at], "nodename")
@@ -924,10 +926,12 @@ def read_materialx(
             var kind = reader.tag(shader)
             if kind == "standard_surface":
                 _set_surface(reader, shader, material)
+                graphed = True
             elif kind != "gltf_pbr":
                 raise Error("MaterialX: the surface " + kind + " is not read")
         names.append(reader.attr(entry, "name"))
         programs.append(reader.graph.copy())
+        shaded.append(graphed)
         materials.append(material^)
     if len(names) == 0:
         # No surface: each node graph's `out` is the color of an unlit
@@ -943,6 +947,7 @@ def read_materialx(
             reader.graph.set_output(COLOR_NODE, reader.cast(reader.node(output), 3))
             names.append(reader.attr(entry, "name"))
             programs.append(reader.graph.copy())
+            shaded.append(True)
             materials.append(Material(Color(255, 255, 255), kind=BASIC))
     # Every image the graphs read, in the order they were given ids.
     for index in range(len(reader.pending)):
@@ -950,7 +955,9 @@ def read_materialx(
     var ids = List[MaterialId]()
     for index in range(len(materials)):
         var material = materials[index].copy()
-        material.nodes = assets.programs.add(programs[index].compile())
+        # A glTF surface, which three.js leaves as it is, runs no program.
+        if shaded[index]:
+            material.nodes = assets.programs.add(programs[index].compile())
         ids.append(assets.materials.add(material))
     return MaterialXMaterials(names^, ids^)
 
