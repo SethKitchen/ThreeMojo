@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `ProgressiveLightMap`: the meshes packed into one map, their
+"""Tests for three.js's `ProgressiveLightMap`: the meshes packed into one map, their
 light drawn into it in texture space and mixed frame by frame, the blur
 of the padding, and the renderer's texture-space draw itself."""
 
