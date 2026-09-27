@@ -110,22 +110,22 @@ def mtlx_numbers(text: String) raises -> List[Float32]:
     Raises:
         Error: If a part is not a number.
     """
-    var out = List[Float32]()
+    var found = List[Float32]()
     var word = String("")
     var bytes = text.as_bytes()
     for index in range(len(bytes) + 1):
         var byte = 32 if index == len(bytes) else Int(bytes[index])
         if byte == 44 or byte == 124 or byte == 32 or byte == 9 or byte == 10:
             if word == "true":
-                out.append(1)
+                found.append(1)
             elif word == "false":
-                out.append(0)
+                found.append(0)
             elif word != "":
-                out.append(Float32(atof(word)))
+                found.append(Float32(atof(word)))
             word = ""
         else:
             word += chr(byte)
-    return out^
+    return found^
 
 
 struct _Reader(Movable):
@@ -242,6 +242,24 @@ struct _Reader(Movable):
         """Return an input's node, or a constant when it is absent."""
         var found = self.input(element, name)
         return found if found.value >= 0 else self.graph.float(default)
+
+    def input_value(
+        self, element: Int, name: String, default: Float32
+    ) raises -> Float32:
+        """Return an input's value, which must be a value and not a graph,
+        or a default when it is absent."""
+        var child = self.child_named(element, name)
+        if child < 0:
+            return default
+        if not self.has(child, "value"):
+            raise Error(
+                "MaterialX: the input "
+                + name
+                + " of "
+                + self.tag(element)
+                + " must be a value"
+            )
+        return mtlx_numbers(self.attr(child, "value"))[0]
 
     def needed(mut self, element: Int, name: String) raises -> NodeRef:
         """Return an input's node, which the element must have."""
@@ -393,7 +411,11 @@ struct _Reader(Movable):
         # << Math >>
         if tag == "add" or tag == "subtract" or tag == "multiply" or tag == "divide" or tag == "modulo" or tag == "power" or tag == "atan2" or tag == "min" or tag == "max" or tag == "dotproduct" or tag == "crossproduct" or tag == "distance" or tag == "safepower":
             var a = self.needed(element, "in1")
-            var b = self.input_or(element, "in2", 0 if tag == "add" or tag == "subtract" else 1)
+            var b = self.input_or(
+                element,
+                "in2",
+                Float32(0) if tag == "add" or tag == "subtract" else Float32(1),
+            )
             if tag == "add":
                 return self.graph.add(a, b)
             if tag == "subtract":
