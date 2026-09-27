@@ -11800,6 +11800,105 @@ def test_both_backends_run_a_graph_on_points_alike() raises:
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_run_a_graph_on_lines_alike() raises:
+    # A texture read along each segment, the coordinate's step across a
+    # pixel, a custom attribute, a dashed mask, an opacity, the fog and an
+    # output that reads the pixel's place, two pixels wide.
+    if skipped_for_lack_of_a_gpu("both backends run a graph on lines"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32, 4, Color(240, 200, 120), Color(30, 60, 120), REPEAT, BILINEAR
+        )
+    )
+    var graph = NodeGraph()
+    var u = graph.swizzle(graph.uv(), "x")
+    var read = graph.texture(
+        graph.texture_uniform("map", board),
+        graph.join([u, graph.float(0.3)]),
+    )
+    graph.set_output(
+        NODES_COLOR,
+        graph.mul(
+            graph.swizzle(read, "rgb"),
+            graph.add(
+                graph.attribute("tint", NODES_VEC3),
+                graph.join([u, graph.mul(graph.dfdx(u), graph.float(8)), u]),
+            ),
+        ),
+    )
+    graph.set_output(NODES_OPACITY, graph.float(0.8))
+    graph.set_output(
+        NODES_MASK,
+        graph.less_than(
+            graph.fract(graph.mul(u, graph.float(5))), graph.float(0.7)
+        ),
+    )
+    graph.set_output(
+        NODES_OUTPUT,
+        graph.add(
+            graph.lit(),
+            graph.mul(
+                graph.swizzle(graph.frag_coord(), "xyz"), graph.float(0.005)
+            ),
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var segments = List[RasterVertex]()
+    segments.extend(a_line(3.5, 4.5, 44.5, 9.5, 0.4, Color(255, 255, 255)))
+    segments.extend(
+        a_line(6.5, 30.5, 12.5, 3.5, 0.5, Color(255, 255, 255), BLEND)
+    )
+    segments.extend(a_line(40.5, 32.5, 20.5, 18.5, 0.6, Color(255, 255, 255)))
+    for index in range(len(segments)):
+        segments[index].nodes = id
+        segments[index].u = Float32(index % 2)
+        segments[index].view_depth = 1.5 + Float32(index) * 0.2
+        segments[index].custom = SIMD[DType.float32, 8](
+            0.1 * Float32(index), 0.4, 0.9 - 0.1 * Float32(index), 0, 0, 0, 0, 0
+        )
+    var view = FogView(
+        linear_fog(Color(20, 30, 60), Length(1.0, METER), Length(3.0, METER))
+    )
+    var draws: List[Draw] = [Draw(DRAW_SEGMENTS, 0, len(segments) // 2)]
+    for mode in [SHADE_TEXTURE, SHADE_LIT, SHADE_UV]:
+        var target = RenderTarget(48, 36, BACKGROUND)
+        rasterize_frame(
+            List[RasterVertex](),
+            segments,
+            draws,
+            target,
+            mode,
+            textures,
+            Lighting.uniform(),
+            1,
+            view,
+            line_width=2,
+            programs=store,
+        )
+        var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+        var device = GpuRenderer(48, 36)
+        device.set_textures(textures)
+        device.draw(
+            List[RasterVertex](),
+            BACKGROUND,
+            mode,
+            Lighting.uniform(),
+            view,
+            lines=segments,
+            draws=draws,
+            line_width=2,
+            programs=store,
+        )
+        var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+        assert_true(drawn > 60, "the lines barely drew anything")
+        assert_equal(
+            count_mismatches(cpu, device.read_back(), tolerance=1), 0
+        )
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
