@@ -12339,6 +12339,8 @@ def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
         programs=frame.programs,
     )
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_the_toon_shaders_alike() raises:
     # three.js's four toon shaders on a sphere under one light: the rim,
     # the bands, the hatching and the dots, from the same GLSL.
