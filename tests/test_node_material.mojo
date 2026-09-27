@@ -947,8 +947,9 @@ def test_the_renderer_refuses_a_program_that_is_not_there() raises:
 
 
 def test_a_sprite_runs_its_node_material() raises:
-    # The square's coordinates, as a mesh's reach its graph: the middle of
-    # a sprite facing the camera is at (0.5, 0.5).
+    # The square's coordinates, as a mesh's reach its graph. The sprite is
+    # 4.8 pixels wide, and the middle pixel's center is half a pixel right
+    # of the sprite's and half a pixel below it: (0.6, 0.4).
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(
@@ -960,8 +961,8 @@ def test_a_sprite_runs_its_node_material() raises:
     scene.add_sprite(Sprite(assets.materials.add(shader_material(id)), at))
     scene.update()
     var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
-    assert_equal(Int(seen.r), 188)
-    assert_equal(Int(seen.g), 188)
+    assert_equal(Int(seen.r), 204)
+    assert_equal(Int(seen.g), 170)
     assert_equal(Int(seen.b), 255)
     # A position node moves a mesh's vertices, which a sprite has none of.
     var lifted_graph = lifted(True)
