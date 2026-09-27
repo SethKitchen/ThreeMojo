@@ -42,8 +42,13 @@ from materials.material import (
     shader_material,
     sprite_material,
 )
+from render.transmission import TransmissionTarget
+from math.matrix4 import Matrix4
 from materials.nodes import (
     AO_NODE,
+    BACKDROP_ALPHA_NODE,
+    BACKDROP_NODE,
+    FRAGMENT_NODE,
     COLOR_NODE,
     DEPTH_NODE,
     EMISSIVE_NODE,
@@ -1060,6 +1065,125 @@ def test_a_node_program_reads_a_3d_and_an_array_texture() raises:
         _ = renderer.render(scene, assets, a_camera())
 
 
+def test_a_backdrop_and_a_fragment_node_replace_the_shading() raises:
+    # An unlit gray surface: the backdrop mixed a quarter in, then whole.
+    var graph = NodeGraph()
+    graph.set_output(BACKDROP_NODE, graph.vec3(0, 0, 1))
+    graph.set_output(BACKDROP_ALPHA_NODE, graph.float(0.25))
+    var mixed = draw(big_triangle(NodeProgramId(0), BASIC), one_program(graph^))
+    assert_color(mixed.color_at(2, 2), 0.375, 0.375, 0.625)
+    var whole = NodeGraph()
+    whole.set_output(BACKDROP_NODE, whole.vec3(0, 0, 1))
+    var replaced = draw(
+        big_triangle(NodeProgramId(0), BASIC), one_program(whole^)
+    )
+    assert_color(replaced.color_at(2, 2), 0, 0, 1)
+    # A fragment node's color whatever the material says: no alpha test
+    # cuts it, and no output node runs.
+    var own = NodeGraph()
+    own.set_output(FRAGMENT_NODE, own.vec4(0.2, 0.4, 0.6, 1))
+    own.set_output(OPACITY_NODE, own.float(0.1))
+    own.set_output(OUTPUT_NODE, own.vec3(1, 1, 1))
+    var corners = big_triangle(NodeProgramId(0))
+    for index in range(len(corners)):
+        corners[index].alpha_test = 0.5
+    var fragment = draw(corners, one_program(own^))
+    assert_color(fragment.color_at(2, 2), 0.2, 0.4, 0.6)
+
+
+def a_gradient_behind() raises -> TransmissionTarget:
+    """Return the opaque scene behind as a gradient: red across, green
+    down the rows, and blue one half."""
+    var drawn = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    for y in range(SIZE):
+        for x in range(SIZE):
+            drawn.write(
+                x,
+                y,
+                FloatColor(Float32(x) / SIZE, Float32(y) / SIZE, 0.5, 1.0),
+                False,
+            )
+    return TransmissionTarget(drawn, Matrix4())
+
+
+def test_a_node_program_reads_the_scene_behind_it() raises:
+    # Read at the fragment's own place, the scene behind shows through
+    # pixel for pixel.
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE,
+        graph.swizzle(graph.viewport_texture(graph.screen_uv()), "rgb"),
+    )
+    var programs = one_program(graph^)
+    var corners = big_triangle(NodeProgramId(0), BASIC)
+    var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        transmission=a_gradient_behind(),
+        programs=programs,
+    )
+    for place in [(2, 3), (5, 1), (0, 7)]:
+        var x = place[0]
+        var y = place[1]
+        assert_color(
+            target.color_at(x, y), Float32(x) / SIZE, Float32(y) / SIZE, 0.5
+        )
+    # With no scene behind it, the texture view refuses it; the lit view
+    # reads white.
+    with assert_raises(contains="reads the scene behind it needs the opaque"):
+        _ = draw(corners, programs, SHADE_TEXTURE)
+    assert_color(draw(corners, programs).color_at(2, 2), 1, 1, 1)
+
+
+def test_the_renderer_draws_the_scene_behind_first() raises:
+    # A green plane behind a node material that shows what is behind it
+    # at half its green: the renderer captures the green first, without
+    # the plane in front.
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE,
+        graph.mul(
+            graph.swizzle(graph.viewport_texture(graph.screen_uv()), "rgb"),
+            graph.vec3(1, 0.5, 1),
+        ),
+    )
+    var id = assets.programs.add(graph.compile())
+    var sheet = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER), 2, 2)
+    )
+    var wall = assets.geometries.add(
+        plane(Length(8.0, METER), Length(8.0, METER), 2, 2)
+    )
+    var scene = Scene()
+    var front = scene.add(Object3D())
+    var back_node = Object3D()
+    back_node.set_position(0, 0, -1)
+    var back = scene.add(back_node^)
+    scene.add_mesh(
+        Mesh(
+            wall,
+            assets.materials.add(Material(Color(0, 255, 0), kind=BASIC)),
+            back,
+        )
+    )
+    scene.add_mesh(
+        Mesh(sheet, assets.materials.add(shader_material(id)), front)
+    )
+    scene.update()
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 0)
+    assert_equal(Int(seen.g), 188)
+    assert_equal(Int(seen.b), 0)
+
+
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:
     var assets = Assets()
     var graph = NodeGraph()
@@ -1325,7 +1449,7 @@ def test_points_run_a_node_material() raises:
 
 def every_read(mut assets: Assets) raises -> NodeProgramId:
     """Return a program that reads every kind of texture, the fragment's
-    place and a varying point coordinate, times a zero uniform,
+    place, the screen and a varying point coordinate, times a zero uniform,
     plus white: what a point or a line shows is white, and every read ran.
     """
     from render.framebuffer import Framebuffer
@@ -1365,7 +1489,7 @@ def every_read(mut assets: Assets) raises -> NodeProgramId:
         sum, graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
     )
     var extra = graph.add(
-        graph.add(graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)),
+        graph.add(graph.texture_size(named, graph.float(0)), graph.screen_uv()),
         graph.add(graph.varying(place), graph.varying(graph.uv())),
     )
     var zero = graph.uniform("zero", Float32(0))

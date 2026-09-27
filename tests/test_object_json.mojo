@@ -718,6 +718,199 @@ def test_the_fog_switch_and_a_distance_material_round_trip() raises:
     assert_false(_material('"type":"MeshDepthMaterial","fog":true').fog)
 
 
+def test_a_node_material_round_trips_with_its_textures() raises:
+    """A node material's program is written in its `nodes` field, and each
+    texture and cube it reads by the uuid of its entry: read back, the
+    program is the same, reading the ids the loader gave them."""
+    from materials.nodes import COLOR_NODE, NODE_FLOAT, NodeGraph
+    from materials.material import shader_material
+    from render.cube_texture import CubeTexture
+
+    var assets = Assets()
+    _ = assets.textures.add(_texture())
+    var map = assets.textures.add(_texture())
+    var faces = List[Texture]()
+    for _ in range(6):
+        faces.append(_texture(CLAMP))
+    var sky = assets.cube_textures.add(CubeTexture(faces^))
+    var graph = NodeGraph()
+    var read = graph.texture(graph.texture_uniform("map", map), graph.uv())
+    var unset = graph.texture(graph.texture_uniform("other"), graph.uv())
+    var bounce = graph.texture_cube(
+        graph.cube_uniform("sky", sky), graph.vec3(0, 0, 1)
+    )
+    var tint = graph.uniform("tint", Vector3(0.5, 0.25, 1))
+    var heat = graph.attribute("heat", NODE_FLOAT)
+    graph.set_output(
+        COLOR_NODE,
+        graph.mul(
+            graph.add(
+                graph.swizzle(graph.add(read, graph.add(unset, bounce)), "rgb"),
+                tint,
+            ),
+            heat,
+        ),
+    )
+    var id = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(_triangle()),
+            assets.materials.add(shader_material(id)),
+            node,
+        )
+    )
+    var text = object_to_json(scene, assets)
+    assert_true(text.find('"nodes":{') >= 0)
+    var again = Scene()
+    var loaded = Assets()
+    _ = read_object_json(text, again, loaded)
+    var nodes = loaded.materials.get(MaterialId(0)).nodes
+    assert_true(nodes.value >= 0)
+    ref original = assets.programs.get(id)
+    ref copy = loaded.programs.get(nodes)
+    assert_equal(len(copy.code), len(original.code))
+    assert_equal(len(copy.uniform_names), len(original.uniform_names))
+    for index in range(len(original.uniform_names)):
+        assert_equal(copy.uniform_names[index], original.uniform_names[index])
+        assert_equal(
+            copy.uniform_offsets[index], original.uniform_offsets[index]
+        )
+    assert_equal(copy.attribute_names[0], "heat")
+    assert_false(copy.reads_scene)
+    # The texture and the cube are the loader's own; the unset uniform
+    # still names none.
+    assert_equal(len(copy.textures), 2)
+    assert_equal(len(copy.cubes), 1)
+    assert_equal(copy.cubes[0].value, 0)
+    var named = 0
+    for index in range(len(copy.textures)):
+        if copy.textures[index].value >= 0:
+            named += 1
+            _ = loaded.textures.get(copy.textures[index]).width
+    assert_equal(named, 1)
+    for index in range(len(original.code)):
+        var slot = False
+        for at in range(len(original.texture_offsets)):
+            slot = slot or original.texture_offsets[at] == index
+        for at in range(len(original.cube_offsets)):
+            slot = slot or original.cube_offsets[at] == index
+        if not slot:
+            assert_equal(copy.code[index], original.code[index])
+    # A malformed program is refused.
+    with assert_raises(contains="a node program's offset is outside it"):
+        var broken = text.replace(
+            '"name":"map","offset":', '"name":"map","offset":9999'
+        )
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(broken, nowhere, nothing)
+    with assert_raises(contains="a node uniform's type is none there is"):
+        var at = 0
+        for index in range(len(original.uniform_names)):
+            if original.uniform_names[index] == "tint":
+                at = original.uniform_offsets[index]
+        var field = '"name":"tint","offset":' + String(at) + ',"type":'
+        var strange = text.replace(field + "3}", field + "7}")
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(strange, nowhere, nothing)
+    # A program the writer cannot write whole is refused.
+    from exporters.json_writer import JsonWriter
+    from materials.node_json import write_node_program
+
+    var writer = JsonWriter()
+    with assert_raises(contains="textures do not match it"):
+        write_node_program(writer, original, List[String](), List[String]())
+    var deep = NodeGraph()
+    deep.set_output(
+        COLOR_NODE,
+        deep.swizzle(
+            deep.texture_3d(deep.volume_uniform("cloud"), deep.vec3(0, 0, 0)),
+            "rgb",
+        ),
+    )
+    with assert_raises(contains="a 3D or an array texture is not written"):
+        write_node_program(
+            writer, deep.compile(), List[String](), List[String]()
+        )
+
+
+def test_a_bare_node_program_round_trips() raises:
+    """A program that reads no uniform, texture or attribute, beside an
+    unset cube, is written and read whole; the refusals are asked."""
+    from exporters.json_writer import JsonWriter
+    from materials.material import shader_material
+    from materials.node_json import write_node_program
+    from materials.nodes import COLOR_NODE, NodeGraph
+
+    var assets = Assets()
+    var scene = Scene()
+    var bare = NodeGraph()
+    bare.set_output(COLOR_NODE, bare.vec3(0.25, 0.5, 1))
+    var plain = assets.programs.add(bare.compile())
+    var cubed = NodeGraph()
+    cubed.set_output(
+        COLOR_NODE,
+        cubed.swizzle(
+            cubed.texture_cube(cubed.cube_uniform("sky"), cubed.vec3(0, 0, 1)),
+            "rgb",
+        ),
+    )
+    var unset = assets.programs.add(cubed.compile())
+    var geometry = assets.geometries.add(_triangle())
+    for id in [plain, unset]:
+        scene.add_mesh(
+            Mesh(
+                geometry,
+                assets.materials.add(shader_material(id)),
+                scene.add(Object3D()),
+            )
+        )
+    var text = object_to_json(scene, assets)
+    var again = Scene()
+    var loaded = Assets()
+    _ = read_object_json(text, again, loaded)
+    ref copy = loaded.programs.get(loaded.materials.get(MaterialId(0)).nodes)
+    assert_equal(len(copy.uniform_names), 0)
+    assert_equal(len(copy.textures), 0)
+    ref still = loaded.programs.get(loaded.materials.get(MaterialId(1)).nodes)
+    assert_equal(len(still.cube_offsets), 1)
+    assert_true(still.code[still.cube_offsets[0]] < 0)
+    # Refused: an array texture, a cube list of the wrong length, an
+    # offset before the program, and code shorter than a header.
+    var writer = JsonWriter()
+    var layered = NodeGraph()
+    layered.set_output(
+        COLOR_NODE,
+        layered.swizzle(
+            layered.texture_array(
+                layered.array_uniform("layers"), layered.vec3(0, 0, 0)
+            ),
+            "rgb",
+        ),
+    )
+    with assert_raises(contains="a 3D or an array texture is not written"):
+        write_node_program(
+            writer, layered.compile(), List[String](), List[String]()
+        )
+    with assert_raises(contains="textures do not match it"):
+        write_node_program(
+            writer, cubed.compile(), List[String](), List[String]()
+        )
+    var before = text.replace('"cubes":[{"offset":', '"cubes":[{"offset":-')
+    with assert_raises(contains="a node program's offset is outside it"):
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(before, nowhere, nothing)
+    var short = text.replace('"nodes":{"code":[', '"nodes":{"code":[],"x":[')
+    with assert_raises(contains="code is too short"):
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(short, nowhere, nothing)
+
+
 def test_several_things_on_a_node_become_parts() raises:
     """A node that carries two things, or a light or a camera on other
     layers, writes each thing as a child at the identity."""
