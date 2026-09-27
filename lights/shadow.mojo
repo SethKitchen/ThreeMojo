@@ -1542,6 +1542,18 @@ struct SpotLightMap(Copyable, Movable):
         self.frame = frame
         self.normal_bias = normal_bias
 
+    def __init__(out self, *, copy: Self):
+        """Copy another map, its picture included.
+
+        Args:
+            copy: The map to copy.
+        """
+        self.light = copy.light
+        self.texture = copy.texture
+        self.image = Texture(copy=copy.image)
+        self.frame = copy.frame
+        self.normal_bias = copy.normal_bias
+
     def tint(self, position: Vector3, normal: Vector3) -> Vector3:
         """Return what the light's color is multiplied by at a surface:
         the picture's color where the surface lands on it, and one outside
