@@ -3839,8 +3839,7 @@ def _looks_behind(frame: Frame, triangle: Int) raises -> Bool:
     node program reads the scene behind it."""
     ref first = frame.corners[triangle * 3]
     return first.transmission > 0 or (
-        first.nodes != NO_NODES
-        and frame.programs.get(first.nodes).reads_scene
+        first.nodes != NO_NODES and frame.programs.get(first.nodes).reads_scene
     )
 
 
@@ -3863,9 +3862,10 @@ def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
     out of the transmission pass. A draw that reads the scene behind is
     left out as a transmissive one is."""
     if draw.kind == DRAW_TRIANGLES:
-        return _looks_behind(frame, draw.first) or frame.corners[
-            draw.first * 3
-        ].blend.mixes()
+        return (
+            _looks_behind(frame, draw.first)
+            or frame.corners[draw.first * 3].blend.mixes()
+        )
     if draw.kind == DRAW_SEGMENTS:
         return frame.segments[draw.first * 2].blend.mixes()
     return frame.points[draw.first].blend.mixes()

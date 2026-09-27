@@ -8178,9 +8178,7 @@ struct GpuRenderer(Movable):
             if run.kind != DRAW_TRIANGLES:
                 continue
             for triangle in range(run.first, run.first + run.count):
-                check_transmission(
-                    corners[triangle * 3], mode, ready, programs
-                )
+                check_transmission(corners[triangle * 3], mode, ready, programs)
         # Every node program a triangle names, and every texture it reads,
         # asked here for the reason a texture id is: the kernel reads the
         # buffers at whatever offset the state hands it. The uv view runs

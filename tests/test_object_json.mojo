@@ -800,7 +800,9 @@ def test_a_node_material_round_trips_with_its_textures() raises:
             assert_equal(copy.code[index], original.code[index])
     # A malformed program is refused.
     with assert_raises(contains="a node program's offset is outside it"):
-        var broken = text.replace('"name":"map","offset":', '"name":"map","offset":9999')
+        var broken = text.replace(
+            '"name":"map","offset":', '"name":"map","offset":9999'
+        )
         var nowhere = Scene()
         var nothing = Assets()
         _ = read_object_json(broken, nowhere, nothing)

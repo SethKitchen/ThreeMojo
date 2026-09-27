@@ -114,7 +114,9 @@ struct WoodParams(Copyable, Movable):
 def _hex(value: Int) -> Color:
     """Return a color from a `0xRRGGBB` number."""
     return Color(
-        UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)
+        UInt8((value >> 16) & 0xFF),
+        UInt8((value >> 8) & 0xFF),
+        UInt8(value & 0xFF),
     )
 
 
@@ -142,24 +144,210 @@ def wood_preset(genus: WoodGenus, finish: WoodFinish) raises -> WoodParams:
     # splotchScale, splotchIntensity, cellScale, cellSize, and the two
     # colors, per genus in `WoodGenuses` order.
     var table: List[List[Float32]] = [
-        [1.11, 0.32, 0.24, 0.059, 2, 0.006, 32.8, 34, 0.03, 0.03, 4.4, 0.3, 0.2, 0.541, 910, 0.1],
-        [1.07, 0.42, 0.34, 0.016, 10.3, 0.028, 12.7, 32, 0.08, 0.03, 5.5, 0.98, 1.84, 0.97, 710, 0.31],
-        [1.23, 0.21, 0.21, 0.034, 2.44, 0.01, 14.3, 34, 0.82, 0.16, 1.4, 0.7, 0.2, 0.541, 800, 0.28],
-        [1.23, 0.21, 0.18, 0.041, 2.44, 0.006, 23.2, 24, 0.1, 0.07, 5, 0.35, 0.51, 3.32, 1480, 0.07],
-        [1.43, 0.33, 0.18, 0.04, 4.3, 0.004, 33.6, 37, 0.07, 0.03, 3.8, 0.3, 1.92, 0.71, 830, 0.04],
-        [1.4, 0.38, 0.25, 0.067, 2.5, 0.005, 33.6, 35, 0.1, 0.07, 4.6, 0.61, 0.46, 1.49, 800, 0.03],
-        [1.21, 0.24, 0.25, 0.044, 2.54, 0.01, 14.5, 34, 0.92, 0.03, 5.6, 1.01, 0.28, 3.48, 800, 0.25],
-        [1.33, 0.11, 0.33, 0.024, 2.48, 0.01, 15.3, 36, 0.02, 0.04, 6.5, 0.09, 1.27, 1.24, 1530, 0.15],
-        [1.11, 0.39, 0.12, 0.061, 1.9, 0.006, 4.8, 25, 0.01, 0.07, 6.7, 0.1, 0.61, 2.54, 630, 0.19],
-        [1.25, 0.26, 0.29, 0.044, 2.54, 0.01, 15.3, 38, 0.01, 0.33, 1.2, 0.07, 0.77, 1.39, 1400, 0.23],
+        [
+            1.11,
+            0.32,
+            0.24,
+            0.059,
+            2,
+            0.006,
+            32.8,
+            34,
+            0.03,
+            0.03,
+            4.4,
+            0.3,
+            0.2,
+            0.541,
+            910,
+            0.1,
+        ],
+        [
+            1.07,
+            0.42,
+            0.34,
+            0.016,
+            10.3,
+            0.028,
+            12.7,
+            32,
+            0.08,
+            0.03,
+            5.5,
+            0.98,
+            1.84,
+            0.97,
+            710,
+            0.31,
+        ],
+        [
+            1.23,
+            0.21,
+            0.21,
+            0.034,
+            2.44,
+            0.01,
+            14.3,
+            34,
+            0.82,
+            0.16,
+            1.4,
+            0.7,
+            0.2,
+            0.541,
+            800,
+            0.28,
+        ],
+        [
+            1.23,
+            0.21,
+            0.18,
+            0.041,
+            2.44,
+            0.006,
+            23.2,
+            24,
+            0.1,
+            0.07,
+            5,
+            0.35,
+            0.51,
+            3.32,
+            1480,
+            0.07,
+        ],
+        [
+            1.43,
+            0.33,
+            0.18,
+            0.04,
+            4.3,
+            0.004,
+            33.6,
+            37,
+            0.07,
+            0.03,
+            3.8,
+            0.3,
+            1.92,
+            0.71,
+            830,
+            0.04,
+        ],
+        [
+            1.4,
+            0.38,
+            0.25,
+            0.067,
+            2.5,
+            0.005,
+            33.6,
+            35,
+            0.1,
+            0.07,
+            4.6,
+            0.61,
+            0.46,
+            1.49,
+            800,
+            0.03,
+        ],
+        [
+            1.21,
+            0.24,
+            0.25,
+            0.044,
+            2.54,
+            0.01,
+            14.5,
+            34,
+            0.92,
+            0.03,
+            5.6,
+            1.01,
+            0.28,
+            3.48,
+            800,
+            0.25,
+        ],
+        [
+            1.33,
+            0.11,
+            0.33,
+            0.024,
+            2.48,
+            0.01,
+            15.3,
+            36,
+            0.02,
+            0.04,
+            6.5,
+            0.09,
+            1.27,
+            1.24,
+            1530,
+            0.15,
+        ],
+        [
+            1.11,
+            0.39,
+            0.12,
+            0.061,
+            1.9,
+            0.006,
+            4.8,
+            25,
+            0.01,
+            0.07,
+            6.7,
+            0.1,
+            0.61,
+            2.54,
+            630,
+            0.19,
+        ],
+        [
+            1.25,
+            0.26,
+            0.29,
+            0.044,
+            2.54,
+            0.01,
+            15.3,
+            38,
+            0.01,
+            0.33,
+            1.2,
+            0.07,
+            0.77,
+            1.39,
+            1400,
+            0.23,
+        ],
     ]
     var darks: List[Int] = [
-        0x0C0504, 0x311E13, 0x8B4C21, 0xC58355, 0x716347,
-        0xB08969, 0xAF613B, 0x913F27, 0x9A5B49, 0x501D12,
+        0x0C0504,
+        0x311E13,
+        0x8B4C21,
+        0xC58355,
+        0x716347,
+        0xB08969,
+        0xAF613B,
+        0x913F27,
+        0x9A5B49,
+        0x501D12,
     ]
     var lights: List[Int] = [
-        0x926C50, 0x523424, 0xC57E43, 0xD19D61, 0x998966,
-        0xBC9D7D, 0xE0A27A, 0xB45837, 0xAE745E, 0x6D3722,
+        0x926C50,
+        0x523424,
+        0xC57E43,
+        0xD19D61,
+        0x998966,
+        0xBC9D7D,
+        0xE0A27A,
+        0xB45837,
+        0xAE745E,
+        0x6D3722,
     ]
     ref row = table[genus.value]
     # The clear coat of each finish, and how much it darkens.
@@ -220,9 +408,7 @@ def _map_range(
 def _hash3d(mut g: NodeGraph, p: NodeRef) raises -> NodeRef:
     """Return three.js's `hash3d`: three numbers from zero to one."""
     var p3 = g.fract(g.mul(p, g.vec3(0.1031, 0.1030, 0.0973)))
-    p3 = g.add(
-        p3, g.dot(p3, g.add(g.swizzle(p3, "yzx"), g.float(33.33)))
-    )
+    p3 = g.add(p3, g.dot(p3, g.add(g.swizzle(p3, "yzx"), g.float(33.33))))
     return g.fract(
         g.mul(
             g.add(g.swizzle(p3, "xxy"), g.swizzle(p3, "yzz")),
@@ -247,9 +433,7 @@ def _voronoi3d(
         for j in range(-1, 2):  # pragma: no branch
             for i in range(-1, 2):  # pragma: no branch
                 var b = g.vec3(Float32(i), Float32(j), Float32(k))
-                var offset = g.mul(
-                    _hash3d(g, g.add(p, b)), g.float(randomness)
-                )
+                var offset = g.mul(_hash3d(g, g.add(p, b)), g.float(randomness))
                 var d = g.length(g.add(g.sub(b, f), offset))
                 var weight = g.exp(g.div(g.negate(g.mul(d, d)), spread))
                 sums = g.add(sums, g.join([g.mul(d, weight), weight]))
@@ -289,7 +473,10 @@ def _space_warp(
     the trunk and pushed out along its own direction by noise."""
     var combined = g.mul(g.join([xy_scale, xy_scale, z_scale]), p)
     var noise = g.mul(
-        g.sub(g.mx_noise_vec3(g.mul(combined, g.float(1.6 * 1.5)), 0.5, 0.5), g.float(0.5)),
+        g.sub(
+            g.mx_noise_vec3(g.mul(combined, g.float(1.6 * 1.5)), 0.5, 0.5),
+            g.float(0.5),
+        ),
         strength,
     )
     var flat = g.mul(p, g.vec3(1, 1, 0))
@@ -479,9 +666,7 @@ def wood_program(params: WoodParams) raises -> NodeProgram:
         cell_scale,
         g.div(
             cell_size,
-            g.max(
-                g.mul(g.length(g.position_view()), g.float(10)), g.float(1)
-            ),
+            g.max(g.mul(g.length(g.position_view()), g.float(10)), g.float(1)),
         ),
     )
     var base = g.mix(dark, light, rings)

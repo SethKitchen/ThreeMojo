@@ -9795,9 +9795,7 @@ def test_both_backends_read_the_scene_behind_in_a_graph_alike() raises:
     var backdrop_id = store.add(mixed.compile())
     var own = NodeGraph()
     var own_place = own.screen_uv()
-    var own_behind = own.viewport_texture(
-        own.swizzle(own_place, "yx")
-    )
+    var own_behind = own.viewport_texture(own.swizzle(own_place, "yx"))
     own.set_output(
         FRAGMENT_NODE,
         own.join(
@@ -9876,9 +9874,7 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
             material = Material(
                 Color(200, 180, 160),
                 kind=PHYSICAL,
-                nodes=assets.programs.add(
-                    mesh_post_processing_program(target)
-                ),
+                nodes=assets.programs.add(mesh_post_processing_program(target)),
             )
         var scene = Scene()
         var node = scene.add(Object3D())
@@ -9894,9 +9890,7 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         var lamp = Object3D()
         lamp.set_position(0.3, 0.4, 2)
         var lamp_node = scene.add(lamp^)
-        scene.add_light(
-            directional_light(Color(255, 255, 255), lamp_node, 2.0)
-        )
+        scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.0))
         scene.add_light(ambient_light(Color(255, 255, 255), 0.8))
         scene.update()
         var camera = PerspectiveCamera(
@@ -9923,9 +9917,7 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
             programs=frame.programs,
         )
         assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 500)
-        assert_equal(
-            count_mismatches(cpu, device.read_back(), tolerance=1), 0
-        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:

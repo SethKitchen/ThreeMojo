@@ -4140,9 +4140,7 @@ def rasterize_shaded(
                     var backdrop = run_nodes(nodes, BACKDROP_NODE, given)
                     var share = Float32(1)
                     if has_output(nodes, BACKDROP_ALPHA_NODE):
-                        share = run_nodes(nodes, BACKDROP_ALPHA_NODE, given)[
-                            0
-                        ]
+                        share = run_nodes(nodes, BACKDROP_ALPHA_NODE, given)[0]
                     shaded = FloatColor(
                         shaded.r + (backdrop[0] - shaded.r) * share,
                         shaded.g + (backdrop[1] - shaded.g) * share,
