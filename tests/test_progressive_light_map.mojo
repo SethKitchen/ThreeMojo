@@ -241,13 +241,17 @@ def test_the_padding_takes_the_color_beside_it() raises:
     light_map.add_objects_to_light_map(scene, assets, [0])
     var renderer = Renderer(8, 8)
     light_map.update(renderer, scene, assets, a_camera(), 1)
-    # The plane covers the rows from 2.5 to 29.5. Row 30 is padding:
-    # blurred from the row above it, it is lit.
+    # The plane covers the pixels of rows 2 to 28. Row 29 is padding:
+    # blurred, it takes three eighths of the three lit pixels above it.
+    var lit = texel(assets, light_map.maps[1], 16, 28)
+    assert_equal(texel(assets, light_map.maps[1], 16, 29), 0)
     light_map.update(renderer, scene, assets, a_camera(), 1)
-    assert_true(texel(assets, light_map.maps[0], 16, SIZE - 2) > 0.01)
+    assert_almost_equal(
+        texel(assets, light_map.maps[0], 16, 29), lit * 3 / 8, rtol=1e-4
+    )
     # Unblurred, it is black.
     light_map.update(renderer, scene, assets, a_camera(), 1, False)
-    assert_equal(texel(assets, light_map.maps[1], 16, SIZE - 2), 0)
+    assert_equal(texel(assets, light_map.maps[1], 16, 29), 0)
     assert_true(texel(assets, light_map.maps[1], 16, 24) > 0.05)
 
 
