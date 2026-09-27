@@ -7699,7 +7699,9 @@ def test_both_backends_take_a_graphs_roughness_and_metalness_alike() raises:
     graph.set_output(METALNESS_NODE, graph.swizzle(uv, "y"))
     var store = NodeProgramStore()
     var id = store.add(graph.compile())
-    var corners = with_nodes(physical_pair(PHYSICAL, 0.5, 0.5, 1.0, 0.3), id.value)
+    var corners = with_nodes(
+        physical_pair(PHYSICAL, 0.5, 0.5, 1.0, 0.3), id.value
+    )
     var lighting = phong_lighting()
     for mode in [SHADE_LIT, SHADE_TEXTURE]:
         var target = RenderTarget(36, 30, BACKGROUND)
@@ -9967,7 +9969,11 @@ def test_both_backends_draw_a_materialx_surface_alike() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(
-        Mesh(assets.geometries.add(sphere(Length(0.8, METER), 18, 12)), read.ids[0], node)
+        Mesh(
+            assets.geometries.add(sphere(Length(0.8, METER), 18, 12)),
+            read.ids[0],
+            node,
+        )
     )
     var lamp = Object3D()
     lamp.set_position(0.3, 0.8, 2)

@@ -206,27 +206,35 @@ def test_what_is_not_ported_is_refused() raises:
     var assets = Assets()
     with assert_raises(contains="the node normalmap is not read"):
         _ = read_materialx(
-            '<materialx><nodegraph name="G"><normalmap name="n"'
-            ' type="vector3" /><output name="out" type="color3"'
-            ' nodename="n" /></nodegraph></materialx>',
+            (
+                '<materialx><nodegraph name="G"><normalmap name="n"'
+                ' type="vector3" /><output name="out" type="color3"'
+                ' nodename="n" /></nodegraph></materialx>'
+            ),
             assets,
         )
     with assert_raises(contains="a graph that drives sheen is not ported"):
         _ = read_materialx(
-            '<materialx><nodegraph name="G"><constant name="c" type="float">'
-            '<input name="value" type="float" value="1" /></constant>'
-            '<output name="o" type="float" nodename="c" /></nodegraph>'
-            '<standard_surface name="S" type="surfaceshader">'
-            '<input name="sheen" type="float" nodegraph="G" output="o" />'
-            '</standard_surface><surfacematerial name="M" type="material">'
-            '<input name="surfaceshader" type="surfaceshader" nodename="S" />'
-            "</surfacematerial></materialx>",
+            (
+                '<materialx><nodegraph name="G"><constant name="c"'
+                ' type="float"><input name="value" type="float" value="1"'
+                ' /></constant><output name="o" type="float" nodename="c"'
+                ' /></nodegraph><standard_surface name="S"'
+                ' type="surfaceshader"><input name="sheen" type="float"'
+                ' nodegraph="G" output="o"'
+                ' /></standard_surface><surfacematerial name="M"'
+                ' type="material"><input name="surfaceshader"'
+                ' type="surfaceshader" nodename="S"'
+                " /></surfacematerial></materialx>"
+            ),
             assets,
         )
     with assert_raises(contains="nothing is named G/missing"):
         _ = read_materialx(
-            '<materialx><nodegraph name="G"><output name="out"'
-            ' type="color3" nodename="missing" /></nodegraph></materialx>',
+            (
+                '<materialx><nodegraph name="G"><output name="out"'
+                ' type="color3" nodename="missing" /></nodegraph></materialx>'
+            ),
             assets,
         )
 
@@ -235,147 +243,186 @@ def test_every_node_of_the_library() raises:
     # Each node alone in a graph, its inputs values, read at the made-up
     # fragment: coordinates (0.25, 0.5), position (1, 2, 3), normal +z.
     var elements: List[String] = [
-        'add',
-        'subtract',
-        'multiply',
-        'divide',
-        'modulo',
-        'power',
-        'atan2',
-        'min',
-        'max',
-        'dotproduct',
-        'crossproduct',
-        'distance',
-        'safepower',
-        'absval',
-        'sign',
-        'floor',
-        'ceil',
-        'round',
-        'sin',
-        'cos',
-        'tan',
-        'asin',
-        'acos',
-        'sqrt',
-        'ln',
-        'exp',
-        'normalize',
-        'magnitude',
-        'length',
-        'clamp',
-        'invert',
-        'reflect',
-        'refract',
-        'remap',
-        'smoothstep',
-        'luminance',
-        'saturate',
-        'contrast',
-        'mix',
-        'combine2',
-        'combine4',
-        'extract',
-        'ifgreatereq',
-        'ifequal',
-        'ramptb',
-        'splitlr',
-        'splittb',
-        'ramp4',
-        'noise2d',
-        'noise3d',
-        'fractal3d',
-        'place2d',
-        'rotate2d',
-        'rotate3d',
-        'position',
-        'normal',
-        'texcoord',
-        'geomcolor',
-        'time',
-        'constant',
-        'convert',
-        'dot',
+        "add",
+        "subtract",
+        "multiply",
+        "divide",
+        "modulo",
+        "power",
+        "atan2",
+        "min",
+        "max",
+        "dotproduct",
+        "crossproduct",
+        "distance",
+        "safepower",
+        "absval",
+        "sign",
+        "floor",
+        "ceil",
+        "round",
+        "sin",
+        "cos",
+        "tan",
+        "asin",
+        "acos",
+        "sqrt",
+        "ln",
+        "exp",
+        "normalize",
+        "magnitude",
+        "length",
+        "clamp",
+        "invert",
+        "reflect",
+        "refract",
+        "remap",
+        "smoothstep",
+        "luminance",
+        "saturate",
+        "contrast",
+        "mix",
+        "combine2",
+        "combine4",
+        "extract",
+        "ifgreatereq",
+        "ifequal",
+        "ramptb",
+        "splitlr",
+        "splittb",
+        "ramp4",
+        "noise2d",
+        "noise3d",
+        "fractal3d",
+        "place2d",
+        "rotate2d",
+        "rotate3d",
+        "position",
+        "normal",
+        "texcoord",
+        "geomcolor",
+        "time",
+        "constant",
+        "convert",
+        "dot",
     ]
     var types: List[String] = [
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'vector3',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'vector3',
-        'float',
-        'float',
-        'float',
-        'float',
-        'vector3',
-        'vector3',
-        'float',
-        'float',
-        'color3',
-        'color3',
-        'float',
-        'float',
-        'vector2',
-        'color4',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'float',
-        'vector3',
-        'float',
-        'vector2',
-        'vector2',
-        'vector3',
-        'vector3',
-        'vector3',
-        'vector2',
-        'color3',
-        'float',
-        'float',
-        'color3',
-        'float',
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "vector3",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "vector3",
+        "float",
+        "float",
+        "float",
+        "float",
+        "vector3",
+        "vector3",
+        "float",
+        "float",
+        "color3",
+        "color3",
+        "float",
+        "float",
+        "vector2",
+        "color4",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "float",
+        "vector3",
+        "float",
+        "vector2",
+        "vector2",
+        "vector3",
+        "vector3",
+        "vector3",
+        "vector2",
+        "color3",
+        "float",
+        "float",
+        "color3",
+        "float",
     ]
     var bodies: List[String] = [
-        '<input name="in1" type="float" value="0.25" /><input name="in2" type="float" value="0.5" />',
-        '<input name="in1" type="float" value="1" /><input name="in2" type="float" value="0.25" />',
-        '<input name="in1" type="float" value="0.5" /><input name="in2" type="float" value="0.5" />',
-        '<input name="in1" type="float" value="1" /><input name="in2" type="float" value="4" />',
-        '<input name="in1" type="float" value="5" /><input name="in2" type="float" value="3" />',
-        '<input name="in1" type="float" value="2" /><input name="in2" type="float" value="3" />',
-        '<input name="in1" type="float" value="1" /><input name="in2" type="float" value="1" />',
-        '<input name="in1" type="float" value="0.3" /><input name="in2" type="float" value="0.7" />',
-        '<input name="in1" type="float" value="0.3" /><input name="in2" type="float" value="0.7" />',
-        '<input name="in1" type="vector3" value="1, 2, 3" /><input name="in2" type="vector3" value="1, 1, 1" />',
-        '<input name="in1" type="vector3" value="1, 0, 0" /><input name="in2" type="vector3" value="0, 1, 0" />',
-        '<input name="in1" type="vector3" value="0, 0, 0" /><input name="in2" type="vector3" value="3, 4, 0" />',
-        '<input name="in1" type="float" value="-2" /><input name="in2" type="float" value="2" />',
+        (
+            '<input name="in1" type="float" value="0.25" /><input name="in2"'
+            ' type="float" value="0.5" />'
+        ),
+        (
+            '<input name="in1" type="float" value="1" /><input name="in2"'
+            ' type="float" value="0.25" />'
+        ),
+        (
+            '<input name="in1" type="float" value="0.5" /><input name="in2"'
+            ' type="float" value="0.5" />'
+        ),
+        (
+            '<input name="in1" type="float" value="1" /><input name="in2"'
+            ' type="float" value="4" />'
+        ),
+        (
+            '<input name="in1" type="float" value="5" /><input name="in2"'
+            ' type="float" value="3" />'
+        ),
+        (
+            '<input name="in1" type="float" value="2" /><input name="in2"'
+            ' type="float" value="3" />'
+        ),
+        (
+            '<input name="in1" type="float" value="1" /><input name="in2"'
+            ' type="float" value="1" />'
+        ),
+        (
+            '<input name="in1" type="float" value="0.3" /><input name="in2"'
+            ' type="float" value="0.7" />'
+        ),
+        (
+            '<input name="in1" type="float" value="0.3" /><input name="in2"'
+            ' type="float" value="0.7" />'
+        ),
+        (
+            '<input name="in1" type="vector3" value="1, 2, 3" /><input'
+            ' name="in2" type="vector3" value="1, 1, 1" />'
+        ),
+        (
+            '<input name="in1" type="vector3" value="1, 0, 0" /><input'
+            ' name="in2" type="vector3" value="0, 1, 0" />'
+        ),
+        (
+            '<input name="in1" type="vector3" value="0, 0, 0" /><input'
+            ' name="in2" type="vector3" value="3, 4, 0" />'
+        ),
+        (
+            '<input name="in1" type="float" value="-2" /><input name="in2"'
+            ' type="float" value="2" />'
+        ),
         '<input name="in" type="float" value="-0.5" />',
         '<input name="in" type="float" value="-3" />',
         '<input name="in" type="float" value="1.7" />',
@@ -394,41 +441,295 @@ def test_every_node_of_the_library() raises:
         '<input name="in" type="vector3" value="3, 4, 0" />',
         '<input name="in" type="float" value="2" />',
         '<input name="in" type="float" value="0.25" />',
-        '<input name="in" type="vector3" value="1, -1, 0" /><input name="normal" type="vector3" value="0, 1, 0" />',
-        '<input name="in" type="vector3" value="0, -1, 0" /><input name="normal" type="vector3" value="0, 1, 0" />',
-        '<input name="in" type="float" value="0.5" /><input name="outlow" type="float" value="2" /><input name="outhigh" type="float" value="4" />',
+        (
+            '<input name="in" type="vector3" value="1, -1, 0" /><input'
+            ' name="normal" type="vector3" value="0, 1, 0" />'
+        ),
+        (
+            '<input name="in" type="vector3" value="0, -1, 0" /><input'
+            ' name="normal" type="vector3" value="0, 1, 0" />'
+        ),
+        (
+            '<input name="in" type="float" value="0.5" /><input name="outlow"'
+            ' type="float" value="2" /><input name="outhigh" type="float"'
+            ' value="4" />'
+        ),
         '<input name="in" type="float" value="0.5" />',
         '<input name="in" type="color3" value="1, 1, 1" />',
-        '<input name="in" type="color3" value="1, 0, 0" /><input name="amount" type="float" value="0" />',
-        '<input name="in" type="float" value="0.75" /><input name="amount" type="float" value="2" />',
-        '<input name="bg" type="float" value="0" /><input name="fg" type="float" value="1" /><input name="mix" type="float" value="0.25" />',
-        '<input name="in1" type="float" value="0.25" /><input name="in2" type="float" value="0.5" />',
-        '<input name="in1" type="float" value="0.25" /><input name="in2" type="float" value="0.5" /><input name="in3" type="float" value="0.75" /><input name="in4" type="float" value="1" />',
-        '<input name="in" type="vector3" value="1, 2, 3" /><input name="index" type="integer" value="2" />',
-        '<input name="value1" type="float" value="1" /><input name="value2" type="float" value="1" /><input name="in1" type="float" value="0.25" /><input name="in2" type="float" value="0.75" />',
-        '<input name="value1" type="float" value="1" /><input name="value2" type="float" value="2" /><input name="in1" type="float" value="0.25" /><input name="in2" type="float" value="0.75" />',
-        '<input name="valuet" type="float" value="0" /><input name="valueb" type="float" value="1" />',
-        '<input name="valuel" type="float" value="0.25" /><input name="valuer" type="float" value="1" />',
-        '<input name="valuet" type="float" value="0.25" /><input name="valueb" type="float" value="1" />',
-        '<input name="valuetl" type="float" value="0" /><input name="valuetr" type="float" value="1" /><input name="valuebl" type="float" value="0" /><input name="valuebr" type="float" value="1" />',
-        '<input name="amplitude" type="float" value="0" /><input name="pivot" type="float" value="0.5" />',
-        '<input name="amplitude" type="float" value="0" /><input name="pivot" type="float" value="0.25" />',
+        (
+            '<input name="in" type="color3" value="1, 0, 0" /><input'
+            ' name="amount" type="float" value="0" />'
+        ),
+        (
+            '<input name="in" type="float" value="0.75" /><input name="amount"'
+            ' type="float" value="2" />'
+        ),
+        (
+            '<input name="bg" type="float" value="0" /><input name="fg"'
+            ' type="float" value="1" /><input name="mix" type="float"'
+            ' value="0.25" />'
+        ),
+        (
+            '<input name="in1" type="float" value="0.25" /><input name="in2"'
+            ' type="float" value="0.5" />'
+        ),
+        (
+            '<input name="in1" type="float" value="0.25" /><input name="in2"'
+            ' type="float" value="0.5" /><input name="in3" type="float"'
+            ' value="0.75" /><input name="in4" type="float" value="1" />'
+        ),
+        (
+            '<input name="in" type="vector3" value="1, 2, 3" /><input'
+            ' name="index" type="integer" value="2" />'
+        ),
+        (
+            '<input name="value1" type="float" value="1" /><input name="value2"'
+            ' type="float" value="1" /><input name="in1" type="float"'
+            ' value="0.25" /><input name="in2" type="float" value="0.75" />'
+        ),
+        (
+            '<input name="value1" type="float" value="1" /><input name="value2"'
+            ' type="float" value="2" /><input name="in1" type="float"'
+            ' value="0.25" /><input name="in2" type="float" value="0.75" />'
+        ),
+        (
+            '<input name="valuet" type="float" value="0" /><input name="valueb"'
+            ' type="float" value="1" />'
+        ),
+        (
+            '<input name="valuel" type="float" value="0.25" /><input'
+            ' name="valuer" type="float" value="1" />'
+        ),
+        (
+            '<input name="valuet" type="float" value="0.25" /><input'
+            ' name="valueb" type="float" value="1" />'
+        ),
+        (
+            '<input name="valuetl" type="float" value="0" /><input'
+            ' name="valuetr" type="float" value="1" /><input name="valuebl"'
+            ' type="float" value="0" /><input name="valuebr" type="float"'
+            ' value="1" />'
+        ),
+        (
+            '<input name="amplitude" type="float" value="0" /><input'
+            ' name="pivot" type="float" value="0.5" />'
+        ),
+        (
+            '<input name="amplitude" type="float" value="0" /><input'
+            ' name="pivot" type="float" value="0.25" />'
+        ),
         '<input name="amplitude" type="float" value="0" />',
-        '',
-        '<input name="in" type="vector2" value="1, 0" /><input name="amount" type="float" value="90" />',
-        '<input name="in" type="vector3" value="1, 0, 0" /><input name="amount" type="float" value="90" /><input name="axis" type="vector3" value="0, 0, 1" />',
-        '',
-        '',
-        '',
-        '',
-        '',
+        "",
+        (
+            '<input name="in" type="vector2" value="1, 0" /><input'
+            ' name="amount" type="float" value="90" />'
+        ),
+        (
+            '<input name="in" type="vector3" value="1, 0, 0" /><input'
+            ' name="amount" type="float" value="90" /><input name="axis"'
+            ' type="vector3" value="0, 0, 1" />'
+        ),
+        "",
+        "",
+        "",
+        "",
+        "",
         '<input name="value" type="float" value="0.5" />',
         '<input name="in" type="float" value="0.5" />',
         '<input name="in" type="float" value="0.5" />',
     ]
-    var reds: List[Float32] = [0.75, 0.75, 0.25, 0.25, 2.0, 8.0, 0.785398, 0.3, 0.7, 6.0, 0.0, 5.0, -4.0, 0.5, -1.0, 1.0, 2.0, 2.0, 0.0, 1.0, 0.0, 1.570796, 0.0, 2.0, 0.0, 1.0, 0.6, 5.0, 5.0, 1.0, 0.75, 1.0, 0.0, 3.0, 0.5, 1.0, 0.2126, 1.0, 0.25, 0.25, 0.25, 3.0, 0.25, 0.75, 0.5, 0.25, 1.0, 0.25, 0.5, 0.25, 0.0, 0.25, 0.0, 0.0, 1.0, 0.0, 0.25, 0.0, 0.0, 0.5, 0.5, 0.5]
-    var greens: List[Float32] = [0.75, 0.75, 0.25, 0.25, 2.0, 8.0, 0.785398, 0.3, 0.7, 6.0, 0.0, 5.0, -4.0, 0.5, -1.0, 1.0, 2.0, 2.0, 0.0, 1.0, 0.0, 1.570796, 0.0, 2.0, 0.0, 1.0, 0.8, 5.0, 5.0, 1.0, 0.75, 1.0, -1.0, 3.0, 0.5, 1.0, 0.2126, 1.0, 0.25, 0.5, 0.5, 3.0, 0.25, 0.75, 0.5, 0.25, 1.0, 0.25, 0.5, 0.25, 0.0, 0.5, -1.0, 1.0, 2.0, 0.0, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5]
-    var blues: List[Float32] = [0.75, 0.75, 0.25, 0.25, 2.0, 8.0, 0.785398, 0.3, 0.7, 6.0, 1.0, 5.0, -4.0, 0.5, -1.0, 1.0, 2.0, 2.0, 0.0, 1.0, 0.0, 1.570796, 0.0, 2.0, 0.0, 1.0, 0.0, 5.0, 5.0, 1.0, 0.75, 0.0, 0.0, 3.0, 0.5, 1.0, 0.2126, 1.0, 0.25, 0.0, 0.75, 3.0, 0.25, 0.75, 0.5, 0.25, 1.0, 0.25, 0.5, 0.25, 0.0, 0.0, 0.0, 0.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]
+    var reds: List[Float32] = [
+        0.75,
+        0.75,
+        0.25,
+        0.25,
+        2.0,
+        8.0,
+        0.785398,
+        0.3,
+        0.7,
+        6.0,
+        0.0,
+        5.0,
+        -4.0,
+        0.5,
+        -1.0,
+        1.0,
+        2.0,
+        2.0,
+        0.0,
+        1.0,
+        0.0,
+        1.570796,
+        0.0,
+        2.0,
+        0.0,
+        1.0,
+        0.6,
+        5.0,
+        5.0,
+        1.0,
+        0.75,
+        1.0,
+        0.0,
+        3.0,
+        0.5,
+        1.0,
+        0.2126,
+        1.0,
+        0.25,
+        0.25,
+        0.25,
+        3.0,
+        0.25,
+        0.75,
+        0.5,
+        0.25,
+        1.0,
+        0.25,
+        0.5,
+        0.25,
+        0.0,
+        0.25,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.25,
+        0.0,
+        0.0,
+        0.5,
+        0.5,
+        0.5,
+    ]
+    var greens: List[Float32] = [
+        0.75,
+        0.75,
+        0.25,
+        0.25,
+        2.0,
+        8.0,
+        0.785398,
+        0.3,
+        0.7,
+        6.0,
+        0.0,
+        5.0,
+        -4.0,
+        0.5,
+        -1.0,
+        1.0,
+        2.0,
+        2.0,
+        0.0,
+        1.0,
+        0.0,
+        1.570796,
+        0.0,
+        2.0,
+        0.0,
+        1.0,
+        0.8,
+        5.0,
+        5.0,
+        1.0,
+        0.75,
+        1.0,
+        -1.0,
+        3.0,
+        0.5,
+        1.0,
+        0.2126,
+        1.0,
+        0.25,
+        0.5,
+        0.5,
+        3.0,
+        0.25,
+        0.75,
+        0.5,
+        0.25,
+        1.0,
+        0.25,
+        0.5,
+        0.25,
+        0.0,
+        0.5,
+        -1.0,
+        1.0,
+        2.0,
+        0.0,
+        0.5,
+        0.0,
+        0.0,
+        0.5,
+        0.5,
+        0.5,
+    ]
+    var blues: List[Float32] = [
+        0.75,
+        0.75,
+        0.25,
+        0.25,
+        2.0,
+        8.0,
+        0.785398,
+        0.3,
+        0.7,
+        6.0,
+        1.0,
+        5.0,
+        -4.0,
+        0.5,
+        -1.0,
+        1.0,
+        2.0,
+        2.0,
+        0.0,
+        1.0,
+        0.0,
+        1.570796,
+        0.0,
+        2.0,
+        0.0,
+        1.0,
+        0.0,
+        5.0,
+        5.0,
+        1.0,
+        0.75,
+        0.0,
+        0.0,
+        3.0,
+        0.5,
+        1.0,
+        0.2126,
+        1.0,
+        0.25,
+        0.0,
+        0.75,
+        3.0,
+        0.25,
+        0.75,
+        0.5,
+        0.25,
+        1.0,
+        0.25,
+        0.5,
+        0.25,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        3.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.5,
+        0.5,
+        0.5,
+    ]
     for index in range(len(elements)):
         var text = (
             '<materialx><nodegraph name="G"><'
@@ -450,13 +751,24 @@ def test_every_node_of_the_library() raises:
         var color = run_nodes(
             ProgramSource(Pointer(to=program)), COLOR_NODE, at_uv(0.25, 0.5)
         )
-        assert_almost_equal(color[0], reds[index], atol=1e-4, msg=elements[index])
-        assert_almost_equal(color[1], greens[index], atol=1e-4, msg=elements[index])
-        assert_almost_equal(color[2], blues[index], atol=1e-4, msg=elements[index])
+        assert_almost_equal(
+            color[0], reds[index], atol=1e-4, msg=elements[index]
+        )
+        assert_almost_equal(
+            color[1], greens[index], atol=1e-4, msg=elements[index]
+        )
+        assert_almost_equal(
+            color[2], blues[index], atol=1e-4, msg=elements[index]
+        )
 
 
 def test_the_noises_are_in_their_ranges() raises:
-    for element in ["cellnoise2d", "cellnoise3d", "worleynoise2d", "worleynoise3d"]:
+    for element in [
+        "cellnoise2d",
+        "cellnoise3d",
+        "worleynoise2d",
+        "worleynoise3d",
+    ]:
         var text = (
             '<materialx><nodegraph name="G"><'
             + element
@@ -543,7 +855,9 @@ def test_every_surface_input_is_read() raises:
     var color = run_nodes(source, COLOR_NODE, at_uv(0.25, 0.5))
     assert_almost_equal(color[0], 0.25)
     assert_almost_equal(color[1], 0.125)
-    assert_almost_equal(run_nodes(source, METALNESS_NODE, at_uv(0.25, 0.5))[0], 0.5)
+    assert_almost_equal(
+        run_nodes(source, METALNESS_NODE, at_uv(0.25, 0.5))[0], 0.5
+    )
     # The normal, as an offset from the surface's own.
     var bent = run_nodes(source, NORMAL_NODE, at_uv(0.25, 0.5))
     assert_almost_equal(bent[1], 1)
@@ -564,9 +878,13 @@ def refused(text: String, why: String) raises:
 def test_what_a_document_cannot_say_is_refused() raises:
     var graph = String('<materialx><nodegraph name="G">')
     var tail = String(
-        '<output name="out" type="color3" nodename="n" /></nodegraph></materialx>'
+        '<output name="out" type="color3" nodename="n"'
+        " /></nodegraph></materialx>"
     )
-    refused(graph + '<add name="n" type="float" />' + tail, "add needs its input in1")
+    refused(
+        graph + '<add name="n" type="float" />' + tail,
+        "add needs its input in1",
+    )
     refused(
         graph
         + '<extract name="n" type="float">'
@@ -604,8 +922,10 @@ def test_what_a_document_cannot_say_is_refused() raises:
     # A graph with no output named out makes no material.
     var assets = Assets()
     var none = read_materialx(
-        '<materialx><nodegraph name="G"><output name="other" type="float"'
-        ' nodename="x" /></nodegraph></materialx>',
+        (
+            '<materialx><nodegraph name="G"><output name="other" type="float"'
+            ' nodename="x" /></nodegraph></materialx>'
+        ),
         assets,
     )
     assert_equal(len(none.names), 0)
@@ -616,10 +936,12 @@ def test_an_image_reads_the_coordinates_by_default() raises:
     Path("/tmp/threemojo_materialx_white.png").write_bytes(encode_png(image))
     var assets = Assets()
     var read = read_materialx(
-        '<materialx><nodegraph name="G"><image name="n" type="color3">'
-        '<input name="file" type="filename" value="threemojo_materialx_white.png" />'
-        '</image><output name="out" type="color3" nodename="n" /></nodegraph>'
-        "</materialx>",
+        (
+            '<materialx><nodegraph name="G"><image name="n"'
+            ' type="color3"><input name="file" type="filename"'
+            ' value="threemojo_materialx_white.png" /></image><output'
+            ' name="out" type="color3" nodename="n" /></nodegraph></materialx>'
+        ),
         assets,
         "/tmp/",
     )

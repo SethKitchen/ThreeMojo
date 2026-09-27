@@ -221,7 +221,10 @@ struct _Reader(Movable):
         """Return True if an element names another, three.js's
         `hasReference`."""
         return (
-            (self.attr(element, "nodegraph") != "" and self.attr(element, "output") != "")
+            (
+                self.attr(element, "nodegraph") != ""
+                and self.attr(element, "output") != ""
+            )
             or self.attr(element, "nodename") != ""
             or self.attr(element, "interfacename") != ""
         )
@@ -301,7 +304,9 @@ struct _Reader(Movable):
             return self.graph.swizzle(node, _prefix(want))
         var parts: List[NodeRef] = [node]
         for index in range(have, want):
-            parts.append(self.graph.float(Float32(1) if index == 3 else Float32(0)))
+            parts.append(
+                self.graph.float(Float32(1) if index == 3 else Float32(0))
+            )
         return self.graph.join(parts)
 
     def constant(mut self, element: Int) raises -> NodeRef:
@@ -332,10 +337,17 @@ struct _Reader(Movable):
         if self.refers(element):
             var wanted = port
             var target: String
-            if self.attr(element, "nodegraph") != "" and self.attr(element, "output") != "":
+            if (
+                self.attr(element, "nodegraph") != ""
+                and self.attr(element, "output") != ""
+            ):
                 # Here `output` names the graph's output, which says its
                 # own port.
-                target = self.attr(element, "nodegraph") + "/" + self.attr(element, "output")
+                target = (
+                    self.attr(element, "nodegraph")
+                    + "/"
+                    + self.attr(element, "output")
+                )
                 wanted = ""
             else:
                 var named = self.attr(element, "nodename")
@@ -380,7 +392,9 @@ struct _Reader(Movable):
             raise Error("MaterialX: an image needs its file")
         return self.graph.texture(self.texture(file), at)
 
-    def library(mut self, element: Int, tag: String, port: String) raises -> NodeRef:
+    def library(
+        mut self, element: Int, tag: String, port: String
+    ) raises -> NodeRef:
         """Return a node of three.js's library, `MtlXLibrary`."""
         # << Geometry >>
         if tag == "position":
@@ -412,7 +426,21 @@ struct _Reader(Movable):
                 self.graph.add(tiled, self._vec2_or(element, "uvoffset", 0)),
             )
         # << Math >>
-        if tag == "add" or tag == "subtract" or tag == "multiply" or tag == "divide" or tag == "modulo" or tag == "power" or tag == "atan2" or tag == "min" or tag == "max" or tag == "dotproduct" or tag == "crossproduct" or tag == "distance" or tag == "safepower":
+        if (
+            tag == "add"
+            or tag == "subtract"
+            or tag == "multiply"
+            or tag == "divide"
+            or tag == "modulo"
+            or tag == "power"
+            or tag == "atan2"
+            or tag == "min"
+            or tag == "max"
+            or tag == "dotproduct"
+            or tag == "crossproduct"
+            or tag == "distance"
+            or tag == "safepower"
+        ):
             var a = self.needed(element, "in1")
             var b = self.input_or(
                 element,
@@ -447,7 +475,24 @@ struct _Reader(Movable):
             return self.graph.mul(
                 self.graph.sign(a), self.graph.pow(self.graph.abs(a), b)
             )
-        if tag == "absval" or tag == "sign" or tag == "floor" or tag == "ceil" or tag == "round" or tag == "sin" or tag == "cos" or tag == "tan" or tag == "asin" or tag == "acos" or tag == "sqrt" or tag == "ln" or tag == "exp" or tag == "normalize" or tag == "magnitude" or tag == "length":
+        if (
+            tag == "absval"
+            or tag == "sign"
+            or tag == "floor"
+            or tag == "ceil"
+            or tag == "round"
+            or tag == "sin"
+            or tag == "cos"
+            or tag == "tan"
+            or tag == "asin"
+            or tag == "acos"
+            or tag == "sqrt"
+            or tag == "ln"
+            or tag == "exp"
+            or tag == "normalize"
+            or tag == "magnitude"
+            or tag == "length"
+        ):
             var x = self.input(element, "in")
             if x.value < 0:
                 x = self.needed(element, "in1")
@@ -545,10 +590,14 @@ struct _Reader(Movable):
             )
         if tag == "combine2" or tag == "combine3" or tag == "combine4":
             var parts = List[NodeRef]()
-            var count = 2 if tag == "combine2" else (3 if tag == "combine3" else 4)
+            var count = 2 if tag == "combine2" else (
+                3 if tag == "combine3" else 4
+            )
             for index in range(count):
                 parts.append(
-                    self.cast(self.input_or(element, "in" + String(index + 1), 0), 1)
+                    self.cast(
+                        self.input_or(element, "in" + String(index + 1), 0), 1
+                    )
                 )
             return self.graph.join(parts)
         if tag == "separate2" or tag == "separate3" or tag == "separate4":
@@ -567,19 +616,26 @@ struct _Reader(Movable):
         if tag == "extract":
             var index = Int(self.input_value(element, "index", 0))
             if index < 0 or index > 3:
-                raise Error("MaterialX: extract reads a component zero to three")
+                raise Error(
+                    "MaterialX: extract reads a component zero to three"
+                )
             return self.graph.swizzle(
                 self.needed(element, "in"),
-                String(String("xyzw")[byte=index : index + 1]),
+                String(String("xyzw")[byte = index : index + 1]),
             )
         if tag == "ifgreater" or tag == "ifgreatereq" or tag == "ifequal":
             var a = self.input_or(element, "value1", 1)
             var b = self.input_or(element, "value2", 0)
-            var test = self.graph.greater_than(a, b) if tag == "ifgreater" else (
-                self.graph.greater_than_equal(a, b) if tag == "ifgreatereq" else self.graph.equal(a, b)
+            var test = self.graph.greater_than(
+                a, b
+            ) if tag == "ifgreater" else (
+                self.graph.greater_than_equal(a, b) if tag
+                == "ifgreatereq" else self.graph.equal(a, b)
             )
             return self.graph.select(
-                test, self.input_or(element, "in1", 0), self.input_or(element, "in2", 0)
+                test,
+                self.input_or(element, "in1", 0),
+                self.input_or(element, "in2", 0),
             )
         # << Procedural >>
         if tag == "ramplr" or tag == "ramptb":
@@ -590,7 +646,9 @@ struct _Reader(Movable):
             return self.graph.mix(
                 self.input_or(element, first, 0),
                 self.input_or(element, second, 0),
-                self.graph.clamp(along, self.graph.float(0), self.graph.float(1)),
+                self.graph.clamp(
+                    along, self.graph.float(0), self.graph.float(1)
+                ),
             )
         if tag == "splitlr" or tag == "splittb":
             var at = self._texcoord(element)
@@ -604,19 +662,35 @@ struct _Reader(Movable):
             )
         if tag == "ramp4":
             var at = self._texcoord(element)
-            var s = self.graph.clamp(self.graph.swizzle(at, "x"), self.graph.float(0), self.graph.float(1))
-            var t = self.graph.clamp(self.graph.swizzle(at, "y"), self.graph.float(0), self.graph.float(1))
+            var s = self.graph.clamp(
+                self.graph.swizzle(at, "x"),
+                self.graph.float(0),
+                self.graph.float(1),
+            )
+            var t = self.graph.clamp(
+                self.graph.swizzle(at, "y"),
+                self.graph.float(0),
+                self.graph.float(1),
+            )
             var top = self.graph.mix(
-                self.input_or(element, "valuetl", 0), self.input_or(element, "valuetr", 0), s
+                self.input_or(element, "valuetl", 0),
+                self.input_or(element, "valuetr", 0),
+                s,
             )
             var bottom = self.graph.mix(
-                self.input_or(element, "valuebl", 0), self.input_or(element, "valuebr", 0), s
+                self.input_or(element, "valuebl", 0),
+                self.input_or(element, "valuebr", 0),
+                s,
             )
             return self.graph.mix(top, bottom, t)
         if tag == "noise2d" or tag == "noise3d":
-            var at = self._point(element, "texcoord" if tag == "noise2d" else "position")
+            var at = self._point(
+                element, "texcoord" if tag == "noise2d" else "position"
+            )
             var width = _width(self.attr(element, "type"))
-            var noise = self.graph.perlin_noise(at) if width == 1 else self.graph.perlin_noise_vec3(at)
+            var noise = self.graph.perlin_noise(
+                at
+            ) if width == 1 else self.graph.perlin_noise_vec3(at)
             return self.graph.add(
                 self.graph.mul(noise, self.input_or(element, "amplitude", 1)),
                 self.input_or(element, "pivot", 0),
@@ -633,12 +707,17 @@ struct _Reader(Movable):
             )
         if tag == "cellnoise2d" or tag == "cellnoise3d":
             return self.graph.cell_noise_float(
-                self._point(element, "texcoord" if tag == "cellnoise2d" else "position")
+                self._point(
+                    element, "texcoord" if tag == "cellnoise2d" else "position"
+                )
             )
         if tag == "worleynoise2d" or tag == "worleynoise3d":
             var width = _width(self.attr(element, "type"))
             return self.graph.worley_noise(
-                self._point(element, "texcoord" if tag == "worleynoise2d" else "position"),
+                self._point(
+                    element,
+                    "texcoord" if tag == "worleynoise2d" else "position",
+                ),
                 self.input_or(element, "jitter", 1),
                 width,
             )
@@ -669,9 +748,14 @@ struct _Reader(Movable):
         var at = self.input(element, name)
         if at.value >= 0:
             return at
-        return self.graph.uv() if name == "texcoord" else self.graph.position_world()
+        return (
+            self.graph.uv() if name
+            == "texcoord" else self.graph.position_world()
+        )
 
-    def _vec2_or(mut self, element: Int, name: String, default: Float32) raises -> NodeRef:
+    def _vec2_or(
+        mut self, element: Int, name: String, default: Float32
+    ) raises -> NodeRef:
         """Return a `vector2` input, or both components a default."""
         var found = self.input(element, name)
         return found if found.value >= 0 else self.graph.vec2(default, default)
@@ -710,7 +794,9 @@ struct _Reader(Movable):
             g.select(g.greater_than_equal(gr, top), from_green, from_blue),
         )
         var hue = g.div(sixth, g.float(6))
-        hue = g.select(g.less_than(hue, g.float(0)), g.add(hue, g.float(1)), hue)
+        hue = g.select(
+            g.less_than(hue, g.float(0)), g.add(hue, g.float(1)), hue
+        )
         hue = g.select(g.greater_than(delta, g.float(0)), hue, g.float(0))
         return g.join([hue, saturation, top])
 
@@ -778,7 +864,9 @@ struct _Reader(Movable):
         )
 
 
-def _set_surface(mut reader: _Reader, shader: Int, mut material: Material) raises:
+def _set_surface(
+    mut reader: _Reader, shader: Int, mut material: Material
+) raises:
     """Give a physical material a `standard_surface`'s inputs, three.js's
     `setStandardSurfaceToGltfPBR`: a value as the material's own number,
     and a graph as a node output."""
@@ -827,7 +915,9 @@ def _set_surface(mut reader: _Reader, shader: Int, mut material: Material) raise
             # output here is an offset from the surface's own.
             reader.graph.set_output(
                 NORMAL_NODE,
-                reader.graph.sub(reader.cast(node, 3), reader.graph.normal_world()),
+                reader.graph.sub(
+                    reader.cast(node, 3), reader.graph.normal_world()
+                ),
             )
         elif not value:
             raise Error(
@@ -856,7 +946,9 @@ def _set_surface(mut reader: _Reader, shader: Int, mut material: Material) raise
             if numbers[0] > 0:
                 material.iridescence = 1
         elif name == "thin_film_ior":
-            material.iridescence_ior = max(Float32(1), min(Float32(2.333), numbers[0]))
+            material.iridescence_ior = max(
+                Float32(1), min(Float32(2.333), numbers[0])
+            )
         elif name == "sheen":
             material.sheen = numbers[0]
         elif name == "sheen_color":
@@ -944,7 +1036,9 @@ def read_materialx(
             if output < 0:
                 continue
             reader.begin()
-            reader.graph.set_output(COLOR_NODE, reader.cast(reader.node(output), 3))
+            reader.graph.set_output(
+                COLOR_NODE, reader.cast(reader.node(output), 3)
+            )
             names.append(reader.attr(entry, "name"))
             programs.append(reader.graph.copy())
             shaded.append(True)
@@ -962,7 +1056,9 @@ def read_materialx(
     return MaterialXMaterials(names^, ids^)
 
 
-def load_materialx(path: String, mut assets: Assets) raises -> MaterialXMaterials:
+def load_materialx(
+    path: String, mut assets: Assets
+) raises -> MaterialXMaterials:
     """Read a `.mtlx` file's materials into the store, its images read from
     beside it: three.js's `MaterialXLoader.load`.
 
@@ -980,5 +1076,5 @@ def load_materialx(path: String, mut assets: Assets) raises -> MaterialXMaterial
     var folder = String("")
     var slash = path.rfind("/")
     if slash >= 0:
-        folder = String(path[byte=0 : slash + 1])
+        folder = String(path[byte = 0 : slash + 1])
     return read_materialx(Path(path).read_text(), assets, folder)
