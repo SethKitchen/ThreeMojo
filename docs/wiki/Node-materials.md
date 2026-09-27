@@ -279,7 +279,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
 - Uniforms: every type above but `void`. An `int` or a `bool` uniform is a float that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
-- Functions: functions with `in` parameters. A call inlines the body. A `return` can come before the end of its function.
+- Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
@@ -306,7 +306,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do`, `switch` and recursion.
 - A `return` before the end of a function that returns a matrix or a transform, or of a vertex shader's `main`.
-- `out` and `inout` parameters, prototypes, overloads, and functions named like GLSL's own.
+- Prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
 - A matrix times a matrix of another size, and an assignment to a local matrix.
