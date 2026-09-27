@@ -406,7 +406,7 @@ def test_a_surface_that_receives_no_shadow_is_lit_in_full() raises:
     )
     var renderer = Renderer(8, 8)
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
-    var under = Vector3(0, 0, 0)
+    var under = Vector3(0.75, 0, 0)
     var up = Vector3(0, 1, 0)
     assert_equal(lighting.shadow_at(0, under, up, False), 1)
     assert_equal(lighting.shadow_through(0, under, up, False).y, 1)
