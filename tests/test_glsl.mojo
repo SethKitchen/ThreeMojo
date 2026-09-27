@@ -699,13 +699,9 @@ def test_a_point_reads_where_it_is_and_sets_its_size() raises:
     refused(
         "void main() { gl_FragColor = vec4(1.0); }",
         "gl_PointSize reads position or normal",
-        "void main() {
-    gl_PointSize = position.x;
-"
+        "void main() {\n    gl_PointSize = position.x;\n"
         + "    gl_Position = projectionMatrix * modelViewMatrix"
-        + " * vec4(position, 1.0);
-}
-",
+        + " * vec4(position, 1.0);\n}\n",
     )
     refused(
         "void main() { gl_FragColor = vec4(gl_PointSize); }",
@@ -714,11 +710,8 @@ def test_a_point_reads_where_it_is_and_sets_its_size() raises:
     refused(
         "void main() { gl_FragColor = vec4(1.0); }",
         "GLSL's gl_PointCoord is outside the subset",
-        "void main() {
-    gl_Position = projectionMatrix * modelViewMatrix"
-        + " * vec4(position.xy + gl_PointCoord, position.z, 1.0);
-}
-",
+        "void main() {\n    gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position.xy + gl_PointCoord, position.z, 1.0);\n}\n",
     )
 
 
