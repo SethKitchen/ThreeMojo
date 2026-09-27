@@ -7925,6 +7925,9 @@ struct Renderer(Movable):
             Lighting.uniform(),
             self.workers,
             points=points,
+            # A node material's mask and depth hold in the light's view
+            # as in the camera's.
+            programs=assets.programs,
         )
         return target^
 
