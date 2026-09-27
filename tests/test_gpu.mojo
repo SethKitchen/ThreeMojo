@@ -11631,13 +11631,6 @@ def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
             SHADE_TEXTURE,
             programs=store,
         )
-    with assert_raises(contains="names no texture; call set_array() first"):
-        renderer.draw(
-            with_nodes(pair.copy(), no_layers.value),
-            BACKGROUND,
-            SHADE_TEXTURE,
-            programs=store,
-        )
     with assert_raises(contains="reads a 3D texture that has not been"):
         renderer.draw(
             with_nodes(pair.copy(), both.value),
@@ -11648,6 +11641,13 @@ def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
     var volumes = Data3DTextureStore()
     _ = volumes.add(Data3DTexture(a_gpu_stack()))
     renderer.set_textures(TextureStore(), volumes=volumes)
+    with assert_raises(contains="names no texture; call set_array() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), no_layers.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
     with assert_raises(contains="reads an array texture that has not been"):
         renderer.draw(
             with_nodes(pair.copy(), both.value),
