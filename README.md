@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 201 features are ported and 2 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 202 features are ported and 1 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -258,11 +258,11 @@ The port is not at parity with three.js yet. 201 features are ported and 2 are o
 
 ### Rendering
 
-- [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 
 <details>
-<summary>Ported: 31</summary>
+<summary>Ported: 32</summary>
 
+- [x] [Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#traa) [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 - [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
 - [x] [GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort](https://github.com/SethKitchen/ThreeMojo/wiki/Progressive-light-map): shader steps over float images, a light map baked in texture space, and batched meshes [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [x] [SVGRenderer and Projector](https://github.com/SethKitchen/ThreeMojo/wiki/SVG-renderer): a scene drawn as SVG paths, faces lit flat, lines and sprites, matching three.js's output [#205](https://github.com/SethKitchen/ThreeMojo/issues/205)
