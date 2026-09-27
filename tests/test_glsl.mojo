@@ -3071,10 +3071,11 @@ def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
         "    if (i < 3) { continue; }\n    s += 1.0;\n} while (i < 5);\n"
     )
     assert_equal(number("s", "", skipping), 3)
-    # And nested, each loop keeps its own count.
+    # A for loop inside keeps its own count. Two while loops, one in the
+    # other, would unroll to MAX_WHILE_COUNT squared times.
     var nested = (
-        "float s = 0.0; int i = 0;\nwhile (i < 3) {\n    int j = 0;\n"
-        "    do { s += 1.0; j++; } while (j < 2);\n    i++;\n}\n"
+        "float s = 0.0; int i = 0;\nwhile (i < 3) {\n"
+        "    for (int j = 0; j < 2; j++) { s += 1.0; }\n    i++;\n}\n"
     )
     assert_equal(number("s", "", nested), 6)
     refused_statement(
