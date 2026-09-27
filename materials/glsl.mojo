@@ -1822,8 +1822,10 @@ struct _Compiler(Movable):
         for index in range(len(fields.names)):  # pragma: no branch
             if fields.names[index] != name:
                 continue
+            # A struct value that names a symbol is a struct variable's:
+            # every struct is declared as one, and `value_of` reads it.
             var owner = value.symbol
-            if owner >= 0 and self.symbols[owner].kind == _STRUCT_VAR:
+            if owner >= 0:
                 return self.value_of(
                     self.field_symbol(owner, value.type, index)
                 )
