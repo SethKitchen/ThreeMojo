@@ -1118,6 +1118,14 @@ struct RasterVertex(ImplicitlyCopyable):
     var scatter_attenuation: Float32
     var scatter_power: Float32
     var scatter_scale: Float32
+    # Where this frame's and the last frame's matrices put the corner in
+    # clip space, as x, y and w: what a velocity attachment reads,
+    # three.js's `clipPositionCurrent` and `clipPositionPrevious`. Set
+    # after construction, by `Renderer.prepare`, for a frame that keeps
+    # velocities; zeros by default, which is no motion. See
+    # `fragment_velocity`.
+    var current: Vector3
+    var previous: Vector3
 
     def __init__(
         out self,
@@ -1294,6 +1302,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.scatter_attenuation = 0.1
         self.scatter_power = 2
         self.scatter_scale = 10
+        self.current = Vector3(0, 0, 0)
+        self.previous = Vector3(0, 0, 0)
 
 
 @fieldwise_init
@@ -1866,6 +1876,57 @@ def _kept_normal(
     if kind == NORMALS:
         return facing
     return view_direction(facing, lighting.up, lighting.back)
+
+
+def _place(
+    a: Vector3, b: Vector3, c: Vector3, shares: SIMD[DType.float32, 4]
+) -> Vector3:
+    """Return three clip positions interpolated as a varying: x, y and w,
+    each by the fragment's weights corrected for perspective."""
+    return Vector3(
+        a.x * shares[0] + b.x * shares[1] + c.x * shares[2],
+        a.y * shares[0] + b.y * shares[1] + c.y * shares[2],
+        a.z * shares[0] + b.z * shares[1] + c.z * shares[2],
+    )
+
+
+def fragment_velocity(
+    current_a: Vector3,
+    current_b: Vector3,
+    current_c: Vector3,
+    previous_a: Vector3,
+    previous_b: Vector3,
+    previous_c: Vector3,
+    shares: SIMD[DType.float32, 4],
+) -> Vector2:
+    """Return how far a fragment moved since the frame before, in
+    normalized device coordinates: three.js's `VelocityNode`.
+
+    Each place is the corners' clip position, interpolated as a varying
+    and divided by its own w: `current` for this frame, `previous` for the
+    last. The velocity is the first less the second. Both rasterizers call
+    this.
+
+    Args:
+        current_a: The first corner's `current`.
+        current_b: The second corner's.
+        current_c: The third corner's.
+        previous_a: The first corner's `previous`.
+        previous_b: The second corner's.
+        previous_c: The third corner's.
+        shares: The fragment's weights, one a corner, corrected for
+            perspective.
+
+    Returns:
+        The velocity, or zero where the corners have no places.
+    """
+    var now = _place(current_a, current_b, current_c, shares)
+    var then = _place(previous_a, previous_b, previous_c, shares)
+    if now.z == 0 or then.z == 0:
+        return Vector2(0, 0)
+    return Vector2(
+        now.x / now.z - then.x / then.z, now.y / now.z - then.y / then.z
+    )
 
 
 def interpolate_alpha(
@@ -3342,6 +3403,9 @@ def rasterize_shaded(
     # a G-buffer's second attachment. Every triangle interpolates its
     # normal then, whatever it is shaded by; see `RenderTarget.write`.
     var keeps_normals = target.has_normals()
+    # Whether the target keeps each opaque fragment's velocity, a pass's
+    # velocity attachment; see `fragment_velocity`.
+    var keeps_velocities = target.has_velocities()
     # Whether a node graph replaces parts of the shading: under every mode
     # but the uv view, which shades nothing. It reads the normal, the
     # position and the coordinates whatever the kind, so it opens all three.
@@ -3452,6 +3516,20 @@ def rasterize_shaded(
                 share_a = wa * a.inv_w * rcp
                 share_b = wb * b.inv_w * rcp
                 share_c = wc * c.inv_w * rcp
+            var moved = Vector2(0, 0)
+            if keeps_velocities:
+                moved = fragment_velocity(
+                    a.current,
+                    b.current,
+                    c.current,
+                    a.previous,
+                    b.previous,
+                    c.previous,
+                    SIMD[DType.float32, 4](share_a, share_b, share_c, 0),
+                )
+            # The metalness and roughness a physical surface settles on,
+            # for a target that keeps them; zero for every other surface.
+            var metal_rough = Vector2(0, 0)
 
             var base = FloatColor(
                 a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
@@ -3931,6 +4009,8 @@ def rasterize_shaded(
                             _kept_normal(
                                 facing, a.kind, lighting, keeps_normals
                             ),
+                            moved,
+                            metal_rough,
                         )
                     continue
                 else:
@@ -4387,6 +4467,10 @@ def rasterize_shaded(
                 var rough = floored_roughness(
                     roughness if roughened else roughness * rough_factor, curve
                 )
+                metal_rough = Vector2(
+                    metalness if metallized else metalness * metal_factor,
+                    rough,
+                )
                 # The coat times its map's red, and its roughness times its
                 # map's green, before the floor, in three.js's order.
                 var coat = clearcoat_of(a.clearcoat, coat_factor)
@@ -4750,6 +4834,8 @@ def rasterize_shaded(
                     shaded,
                     untoned,
                     _kept_normal(facing, a.kind, lighting, keeps_normals),
+                    moved,
+                    metal_rough,
                 )
         row = row + down
 

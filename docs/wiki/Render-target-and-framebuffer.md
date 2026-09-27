@@ -67,7 +67,7 @@ This port differs from three.js in three ways:
 | Member | Meaning |
 |---|---|
 | `RenderTarget(width, height, clear, type=UNSIGNED_BYTE_TARGET, outputs=color_only(), samples=0)` | A target cleared to a color. See [Float render targets](#float-render-targets), [Multiple render targets](#multiple-render-targets) and [Multisampled render targets](#multisampled-render-targets). |
-| `write(x, y, color, data=False, normal=Vector3(0, 0, 0))` | Replace a pixel. The normal attachment keeps `normal`. |
+| `write(x, y, color, data=False, normal=Vector3(0, 0, 0), velocity=Vector2(0, 0))` | Replace a pixel. The normal attachment keeps `normal`, and the velocity attachment keeps `velocity`. |
 | `blend(x, y, color)` | Source-over in premultiplied linear light. |
 | `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
@@ -86,6 +86,7 @@ This port differs from three.js in three ways:
 | `attachment(index) -> FloatImage` | One color attachment, as the target's type stores it. |
 | `attachment_texture(index, wrap=CLAMP, filter=BILINEAR, mipmapped=False) -> Texture` | One color attachment as a float texture. three.js's `textures[index]`. |
 | `has_normals() -> Bool`, `normal_at(x, y) -> Vector3` | Whether the target has a normal attachment, and the normal at a pixel. |
+| `has_velocities() -> Bool`, `velocity_at(x, y) -> Vector2` | Whether the target has a velocity attachment, and the velocity at a pixel. |
 | `downsampled(factor) -> RenderTarget` | Each block of `factor` by `factor` pixels averaged into one, in linear light. |
 | `multisample_buffer() -> RenderTarget` | The buffer a draw takes its samples in. |
 | `resolve_samples(buffer, rect)` | Resolve a sample buffer into the pixels inside `rect`. |
@@ -150,14 +151,16 @@ renderer.render_into(target, scene, assets, camera)
 var normals = target.attachment_texture(1)
 ```
 
-A [shader material](Node-materials) has one `out vec4`, its color, and cannot declare another output. So `TargetOutput` names what a fragment can write. `is_valid` names the two values. A bare integer does not compile.
+A [shader material](Node-materials) has one `out vec4`, its color, and cannot declare another output. So `TargetOutput` names what a fragment can write. `is_valid` names the four values. A bare integer does not compile.
 
 | Output | Attachment holds |
 |---|---|
 | `OUTPUT_COLOR` | The lit color. It must be the first output. |
 | `OUTPUT_NORMAL` | The unit normal of the nearest opaque surface, in view space. It is the normal after any normal map or bump map. |
+| `OUTPUT_VELOCITY` | How far the nearest opaque surface moved on the screen since the frame before. See [Velocity](#velocity). |
+| `OUTPUT_METAL_ROUGH` | The metalness in red and the roughness in green of the nearest opaque surface. See [Metalness and roughness](#metalness-and-roughness). |
 
-`check_target` refuses an empty list and a first output that is not the color. It also refuses an output that is none of the two, and an output that repeats. `color_only()` is the default list.
+`check_target` refuses an empty list and a first output that is not the color. It also refuses an output that is none of the four, and an output that repeats. `color_only()` is the default list.
 
 Every opaque triangle writes its normal where it writes its color. That includes an unlit triangle and the `SHADE_UV` view. A blended triangle keeps no depth, so it leaves the normal alone too. A line or a point has no surface, so it clears the normal. `clear_inside` clears it too. A pixel with no normal holds zero.
 
@@ -171,9 +174,42 @@ On the GPU, `GpuRenderer.read_back_target(type, outputs)` copies the light, the 
 
 This port differs from three.js in three ways:
 
-- Only two outputs exist. three.js lets a shader write anything to any attachment.
+- Only four outputs exist. three.js lets a shader write anything to any attachment.
 - A blend does not touch the normal. WebGL blends every attachment with the same equation. A blended normal means nothing, so the port keeps the normal of the surface that owns the depth.
 - A clear sets the normal to zero. WebGL clears every attachment to the clear color.
+
+### Velocity
+
+A target with the `OUTPUT_VELOCITY` output keeps the velocity of each pixel beside its light. It is three.js's `velocity` node in a pass's `mrt`. The velocity is in normalized device coordinates: the place of the surface now, less its place in the frame before.
+
+```mojo
+var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_VELOCITY]
+var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET, outputs)
+renderer.render_into(target, scene, assets, camera)
+var moved = target.velocity_at(x, y)
+```
+
+A frame drawn into a target with the attachment keeps velocities. The renderer keeps the matrices of the last such frame:
+
+- The camera's view and projection. They move on once for each frame that keeps velocities, as three.js's `VelocityNode` moves them once a frame.
+- The world matrix of each object that the frame drew, by its node.
+
+Each corner of a mesh carries its clip-space place under the last frame's matrices. Both rasterizers interpolate it and divide it at each fragment, and `fragment_velocity` gives the difference. The first frame has not moved, so its velocities are zero. `prepare_frame(scene, assets, camera, keeps_velocity=True)` prepares such a frame for the GPU.
+
+`attachment(index)` holds the velocity in red and green, zero in blue and one in alpha. A byte target clamps a negative velocity to zero, as WebGL does. A resolve and a downsample average the velocities of a block.
+
+The velocity attachment differs from three.js in four ways:
+
+- A line, a point and a sprite leave no velocity. three.js computes one for every object.
+- A skinned or morphed mesh moves by its object's matrix alone. Its vertices carry this frame's shape into the last frame's place.
+- A frame in texture space, a [light map's](Progressive-light-map), keeps no velocity.
+- The renderer keeps one camera's history. three.js keeps one for each camera.
+
+### Metalness and roughness
+
+A target with the `OUTPUT_METAL_ROUGH` output keeps the metalness and the roughness of each pixel's nearest opaque surface. three.js's SSR example writes `vec2( metalness, roughness )` into its `mrt` for its [SSR node](Post-processing#ssr-node). `metal_rough_at(x, y)` reads the two.
+
+The values are the ones that the lighting uses: after the maps and the node graph. The roughness is also after the floor and the geometry roughness. A surface that is not standard or physical keeps zero for both, as a WebGPU variable that nothing sets is zero. Both rasterizers write the attachment the same way. A resolve and a downsample average a block.
 
 ## Multisampled render targets
 

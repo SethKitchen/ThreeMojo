@@ -53,6 +53,12 @@ Candidate fixes on the full instrumented file:
 
 Two earlier hypotheses were wrong, and are recorded so nobody tests them again. `@no_inline` on the probe functions does not help. Passing `StaticString` instead of `String` does not help. Both changes were kept as improvements.
 
+## A second pattern on Mojo 1.1.0
+
+A struct value that is built again in two nested loops, and read after them, also hangs codegen. This was on Mojo 1.1.0 in WSL. `postprocessing/ssr_node.mojo` hit it: its box blur summed its taps into a `FloatColor`. The fix was to sum four `Float32` values and build the color after the loops. A copy of the function with four floats built in 7 seconds. The same function with the `FloatColor` did not build in 200 seconds.
+
+Four nested loops in one function hang codegen too, as `render/target.mojo` notes. Keep at most two loops in a function, and call a function for the inner two.
+
 ## Reproduce it
 
 Two files, identical except for the flag type. Do not add `repro_bool.mojo` to any build target. Time-box it:

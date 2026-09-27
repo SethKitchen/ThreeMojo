@@ -88,6 +88,14 @@ struct ClipVertex(ImplicitlyCopyable):
     var gouraud_indirect: Vector3
     var gouraud_back_direct: Vector3
     var gouraud_back_indirect: Vector3
+    # Where this frame's and the last frame's camera and object matrices put
+    # this corner, as clip-space x, y and w: three.js's
+    # `clipPositionCurrent` and `clipPositionPrevious`, which a velocity
+    # attachment reads. Carried through a cut like every other varying,
+    # since each is linear in the position. Zeros by default; the renderer
+    # sets them.
+    var current: Vector3
+    var previous: Vector3
 
     def __init__(
         out self,
@@ -125,6 +133,8 @@ struct ClipVertex(ImplicitlyCopyable):
         self.gouraud_indirect = Vector3(0, 0, 0)
         self.gouraud_back_direct = Vector3(0, 0, 0)
         self.gouraud_back_indirect = Vector3(0, 0, 0)
+        self.current = Vector3(0, 0, 0)
+        self.previous = Vector3(0, 0, 0)
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -218,6 +228,16 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     )
     mixed.gouraud_back_indirect = _mix_vector(
         a.gouraud_back_indirect, b.gouraud_back_indirect, t
+    )
+    mixed.current = Vector3(
+        _mix(a.current.x, b.current.x, t),
+        _mix(a.current.y, b.current.y, t),
+        _mix(a.current.z, b.current.z, t),
+    )
+    mixed.previous = Vector3(
+        _mix(a.previous.x, b.previous.x, t),
+        _mix(a.previous.y, b.previous.y, t),
+        _mix(a.previous.z, b.previous.z, t),
     )
     return mixed^
 

@@ -83,6 +83,8 @@ from render.target import (
     SampleSource,
     TargetOutput,
     TargetType,
+    block_metal_rough,
+    block_velocity,
     check_samples,
     color_only,
     resolve_block,
@@ -169,6 +171,7 @@ from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.rasterizer import (
+    fragment_velocity,
     check_line_state,
     check_point_state,
     DRAW_POINTS,
@@ -344,6 +347,7 @@ from postprocessing.composer import (
     GLITCH,
     HALFTONE,
     LUT,
+    MOTION_BLUR,
     TEXTURE,
     CUBE_TEXTURE,
     GOD_RAYS,
@@ -375,6 +379,7 @@ from postprocessing.composer import (
     sun_on_screen,
     vignette_pixel,
 )
+from postprocessing.display_nodes import motion_blur_pixel
 from postprocessing.effects import (
     GlitchUniforms,
     HalftoneBlending,
@@ -595,7 +600,12 @@ comptime LANE_GOURAUD_INDIRECT = LANE_GOURAUD_DIRECT + 3
 # distortion, ambient, attenuation, power and scale; see
 # `RasterVertex.scatter_color`.
 comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
-comptime FLOATS_PER_VERTEX = LANE_SCATTER + 8
+# Where this frame and the last had the corner in clip space, three floats
+# each: `RasterVertex.current` and `RasterVertex.previous`, which a
+# velocity attachment reads.
+comptime LANE_CURRENT = LANE_SCATTER + 8
+comptime LANE_PREVIOUS = LANE_CURRENT + 3
+comptime FLOATS_PER_VERTEX = LANE_PREVIOUS + 3
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -776,8 +786,14 @@ comptime PLANE_COLOR = 1
 comptime PLANE_NORMAL = PLANE_COLOR + 4
 # One where the pixel holds data rather than light, zero where light.
 comptime PLANE_DATA = PLANE_NORMAL + 3
+# The velocity of the nearest opaque surface, two floats a pixel, zero
+# where none was written.
+comptime PLANE_VELOCITY = PLANE_DATA + 1
+# The metalness and roughness of the nearest opaque surface, two floats a
+# pixel, zero where none was written.
+comptime PLANE_METAL_ROUGH = PLANE_VELOCITY + 2
 # How many floats a pixel takes across every plane.
-comptime PLANE_FLOATS = PLANE_DATA + 1
+comptime PLANE_FLOATS = PLANE_METAL_ROUGH + 2
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
 # where its shadow map begins in the same buffer, or -1 for none. A
@@ -1100,6 +1116,12 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.scatter_attenuation)
         flat.append(corner.scatter_power)
         flat.append(corner.scatter_scale)
+        flat.append(corner.current.x)
+        flat.append(corner.current.y)
+        flat.append(corner.current.z)
+        flat.append(corner.previous.x)
+        flat.append(corner.previous.y)
+        flat.append(corner.previous.z)
     return flat^
 
 
@@ -4921,6 +4943,12 @@ def rasterize_kernel(
     var kept_x = Float32(0)
     var kept_y = Float32(0)
     var kept_z = Float32(0)
+    # And the velocity it keeps for a velocity attachment, the same way.
+    var moved_x = Float32(0)
+    var moved_y = Float32(0)
+    # And the metalness and roughness, the same way.
+    var kept_metal = Float32(0)
+    var kept_rough = Float32(0)
     # The camera's up and back axes, the view rotation the normal is
     # turned by, read once rather than per fragment.
     var view_up = Vector3(
@@ -5205,6 +5233,10 @@ def rasterize_kernel(
                     kept_x = 0
                     kept_y = 0
                     kept_z = 0
+                    moved_x = 0
+                    moved_y = 0
+                    kept_metal = 0
+                    kept_rough = 0
                 elif state.color_write:
                     var out = blend_fragment(
                         _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
@@ -5449,6 +5481,10 @@ def rasterize_kernel(
                     kept_x = 0
                     kept_y = 0
                     kept_z = 0
+                    moved_x = 0
+                    moved_y = 0
+                    kept_metal = 0
+                    kept_rough = 0
                 elif state.color_write:
                     var out = blend_fragment(
                         _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
@@ -5635,6 +5671,10 @@ def rasterize_kernel(
                 share_a = wa * aw * rcp
                 share_b = wb * bw * rcp
                 share_c = wc * cw * rcp
+            # The metalness and roughness a physical surface settles on,
+            # as `rasterize_shaded` keeps them; zero for every other.
+            var frag_metal = Float32(0)
+            var frag_rough = Float32(0)
 
             # What kind of surface this is, per triangle from the state table:
             # lit, unlit, or showing its normal or its depth as data.
@@ -7219,6 +7259,10 @@ def rasterize_kernel(
                         roughness if roughened else roughness * rough_factor,
                         curve,
                     )
+                    frag_metal = (
+                        metalness if metallized else metalness * metal_factor
+                    )
+                    frag_rough = rough
                     var coat_amount = corners[
                         unsafe_offset=base + LANE_CLEARCOAT
                     ]
@@ -7837,6 +7881,44 @@ def rasterize_kernel(
                 kept_x = turned.x
                 kept_y = turned.y
                 kept_z = turned.z
+                # And its velocity, by the host's function.
+                var moved = fragment_velocity(
+                    Vector3(
+                        corners[unsafe_offset=base + LANE_CURRENT],
+                        corners[unsafe_offset=base + LANE_CURRENT + 1],
+                        corners[unsafe_offset=base + LANE_CURRENT + 2],
+                    ),
+                    Vector3(
+                        corners[unsafe_offset=b_base + LANE_CURRENT],
+                        corners[unsafe_offset=b_base + LANE_CURRENT + 1],
+                        corners[unsafe_offset=b_base + LANE_CURRENT + 2],
+                    ),
+                    Vector3(
+                        corners[unsafe_offset=c_base + LANE_CURRENT],
+                        corners[unsafe_offset=c_base + LANE_CURRENT + 1],
+                        corners[unsafe_offset=c_base + LANE_CURRENT + 2],
+                    ),
+                    Vector3(
+                        corners[unsafe_offset=base + LANE_PREVIOUS],
+                        corners[unsafe_offset=base + LANE_PREVIOUS + 1],
+                        corners[unsafe_offset=base + LANE_PREVIOUS + 2],
+                    ),
+                    Vector3(
+                        corners[unsafe_offset=b_base + LANE_PREVIOUS],
+                        corners[unsafe_offset=b_base + LANE_PREVIOUS + 1],
+                        corners[unsafe_offset=b_base + LANE_PREVIOUS + 2],
+                    ),
+                    Vector3(
+                        corners[unsafe_offset=c_base + LANE_PREVIOUS],
+                        corners[unsafe_offset=c_base + LANE_PREVIOUS + 1],
+                        corners[unsafe_offset=c_base + LANE_PREVIOUS + 2],
+                    ),
+                    SIMD[DType.float32, 4](share_a, share_b, share_c, 0),
+                )
+                moved_x = moved.x
+                moved_y = moved.y
+                kept_metal = frag_metal
+                kept_rough = frag_rough
             elif state.color_write:
                 # The mode's arithmetic, shared with `RenderTarget.blend`.
                 var out = blend_fragment(
@@ -7911,6 +7993,12 @@ def rasterize_kernel(
     if data:
         flag = 1
     depth[unsafe_offset=planes * PLANE_DATA + slot] = flag
+    var velocity_at = planes * PLANE_VELOCITY + slot * 2
+    depth[unsafe_offset=velocity_at] = moved_x
+    depth[unsafe_offset=velocity_at + 1] = moved_y
+    var surface_at = planes * PLANE_METAL_ROUGH + slot * 2
+    depth[unsafe_offset=surface_at] = kept_metal
+    depth[unsafe_offset=surface_at + 1] = kept_rough
 
     var offset = slot * 4
     pixels[unsafe_offset=offset] = UInt8((word >> 24) & 0xFF)
@@ -9268,6 +9356,8 @@ struct GpuRenderer(Movable):
             # lives; see `__deinit__` for why the order matters.
             _ = resolved^
         var keeps = target.has_normals()
+        var moves = target.has_velocities()
+        var surfaces = target.has_metal_roughs()
         var reversed = self.depth_mode == REVERSED_DEPTH
         for slot in range(planes):
             # Infinity where no primitive claimed the depth, which under
@@ -9285,6 +9375,16 @@ struct GpuRenderer(Movable):
                 var normal_at = planes * PLANE_NORMAL + slot * 3
                 target.normals[slot] = Vector3(
                     flat[normal_at], flat[normal_at + 1], flat[normal_at + 2]
+                )
+            if moves:
+                var velocity_at = planes * PLANE_VELOCITY + slot * 2
+                target.velocities[slot] = Vector2(
+                    flat[velocity_at], flat[velocity_at + 1]
+                )
+            if surfaces:
+                var surface_at = planes * PLANE_METAL_ROUGH + slot * 2
+                target.metal_roughs[slot] = Vector2(
+                    flat[surface_at], flat[surface_at + 1]
                 )
         return target^
 
@@ -9573,6 +9673,20 @@ struct _DeviceSamples[origin: Origin[mut=True]](SampleSource):
             self.planes[unsafe_offset=at + 2],
         )
 
+    def velocity_in(self, slot: Int) -> Vector2:
+        """Return one sample's velocity."""
+        var at = self.count * PLANE_VELOCITY + slot * 2
+        return Vector2(
+            self.planes[unsafe_offset=at], self.planes[unsafe_offset=at + 1]
+        )
+
+    def metal_rough_in(self, slot: Int) -> Vector2:
+        """Return one sample's metalness and roughness."""
+        var at = self.count * PLANE_METAL_ROUGH + slot * 2
+        return Vector2(
+            self.planes[unsafe_offset=at], self.planes[unsafe_offset=at + 1]
+        )
+
 
 def resolve_kernel(
     destination: MutPointer[Float32, MutAnyOrigin],
@@ -9614,6 +9728,14 @@ def resolve_kernel(
     if resolved.data:
         flag = 1
     destination[unsafe_offset=planes * PLANE_DATA + slot] = flag
+    var moved = block_velocity(samples, wide, grid, x, y)
+    var velocity_at = planes * PLANE_VELOCITY + slot * 2
+    destination[unsafe_offset=velocity_at] = moved.x
+    destination[unsafe_offset=velocity_at + 1] = moved.y
+    var surface = block_metal_rough(samples, wide, grid, x, y)
+    var surface_at = planes * PLANE_METAL_ROUGH + slot * 2
+    destination[unsafe_offset=surface_at] = surface.x
+    destination[unsafe_offset=surface_at + 1] = surface.y
 
 
 def post_pixel_kernel(
@@ -9835,6 +9957,38 @@ def bokeh_kernel(
     )
     var view = LightView(floats=source, width=w, height=h)
     _store(light, slot, bokeh_pixel(view, x, y, blur))
+    data[unsafe_offset=slot] = 0
+
+
+def motion_blur_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    velocity: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    samples: Int32,
+    amount: Float32,
+):
+    """Blur each pixel along its velocity: `motion_blur_pixel`.
+    `velocity` holds the frame's velocity attachment, two floats a
+    pixel."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var slot = y * w + x
+    var moved = (
+        Vector2(
+            velocity[unsafe_offset=slot * 2],
+            velocity[unsafe_offset=slot * 2 + 1],
+        )
+        * amount
+    )
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, motion_blur_pixel(view, x, y, moved, Int(samples)))
     data[unsafe_offset=slot] = 0
 
 
@@ -10220,7 +10374,8 @@ def runs_on_device(kind: PassKind) -> Bool:
     and a god-rays pass draw their depth on the host and run the rest on
     the device. The pixelated, GTAO and transition passes draw the scene,
     so the host runs them. A shader pass whose program reads a texture in
-    the assets also runs on the host; see `GpuComposer.render`.
+    the assets also runs on the host; see `GpuComposer.render`. A motion
+    blur runs on the device with the velocities the host frame holds.
 
     Args:
         kind: The pass's kind.
@@ -10251,6 +10406,7 @@ def runs_on_device(kind: PassKind) -> Bool:
         or kind == CLEAR
         or kind == TEXTURE
         or kind == LUT
+        or kind == MOTION_BLUR
     )
 
 
@@ -10940,6 +11096,29 @@ struct GpuComposer(Movable):
                 settings.focus.value,
                 settings.aperture,
                 settings.max_blur,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == MOTION_BLUR:
+            # The velocities stay on the host frame, which the render pass
+            # filled; they go to the device for this pass alone. The frame
+            # has them whenever the pass is enabled; see `frame_outputs`.
+            var moved = List[Float32](capacity=count * 2)
+            for slot in range(count):  # pragma: no branch
+                moved.append(frame.velocities[slot].x)
+                moved.append(frame.velocities[slot].y)
+            self._put_floats(moved)
+            self._take_source()
+            ref settings = composer.passes[index].display
+            self.context.enqueue_function[motion_blur_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                Int32(settings.motion_samples),
+                settings.motion_amount,
                 grid_dim=grid,
                 block_dim=(TILE, TILE),
             )
