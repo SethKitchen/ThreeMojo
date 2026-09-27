@@ -31,11 +31,12 @@ struct Athleticism(Equatable, ImplicitlyCopyable, Writable):
 
 # Smaller adult muscle bellies. Authored radius scale 0.80.
 comptime UNTONED = Athleticism(0)
-# Hypertrophied adult muscle bellies. Authored radius scale 1.25.
+# Trained adult muscle bellies: about half again the volume of untoned.
+# Authored radius scale 1.00.
 comptime TONED = Athleticism(1)
 
 comptime UNTONED_RADIUS = Float32(0.80)
-comptime TONED_RADIUS = Float32(1.25)
+comptime TONED_RADIUS = Float32(1.00)
 
 
 def radius_scale(athleticism: Athleticism) raises -> Float32:
@@ -45,7 +46,7 @@ def radius_scale(athleticism: Athleticism) raises -> Float32:
         athleticism: `UNTONED` or `TONED`.
 
     Returns:
-        `0.80` for untoned muscle, `1.25` for toned muscle.
+        `0.80` for untoned muscle, `1.00` for toned muscle.
 
     Raises:
         Error: If `athleticism` is not named.

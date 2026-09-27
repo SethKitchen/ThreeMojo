@@ -715,7 +715,7 @@ def _strap(
 
 
 def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.028)
+    var rb = _r(S, scale, 0.0429)
     var origin = _at(d.iliac, d.ischial, 0.45) + Vector3(
         0, 0.002 * S, -0.010 * S
     )
@@ -746,23 +746,27 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.016)
+    """Return the fan from the outer ilium to the greater trochanter.
+
+    It spreads from under the iliac crest, so it is broad and flat.
+    """
+    var rb = _r(S, scale, 0.036)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.iliac, d.gt, 0.38)
+    var origin = _at(d.iliac, d.gt, 0.10)
     return _fusiform(
         origin,
         d.gt,
-        Vector3(lat * 0.008 * S, 0, 0.004 * S),
+        Vector3(lat * 0.010 * S, 0, 0.004 * S),
         0.80 * rb,
         rb,
-        0.68,
+        0.45,
     )
 
 
 def _tfl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.012)
+    var rb = _r(S, scale, 0.0133)
     var insertion = _at(d.gt, d.gerdy, 0.18)
     return _fusiform(
         d.asis, insertion, Vector3(0, 0, 0.010 * S), 0.58 * rb, rb, 0.70
@@ -784,12 +788,12 @@ def _it_band(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _sartorius(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0085)
+    var rb = _r(S, scale, 0.0105)
     return _strap(d.asis, d.pes, Vector3(0, 0, 0.025 * S), rb, 0.55)
 
 
 def _rectus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.021)
+    var rb = _r(S, scale, 0.0159)
     var insertion = d.patella + Vector3(0, 0.012 * S, 0.002 * S)
     return _fusiform(
         d.aiis, insertion, Vector3(0, 0, 0.026 * S), 0.55 * rb, rb, 0.78
@@ -797,7 +801,7 @@ def _rectus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.028)
+    var rb = _r(S, scale, 0.0237)
     var origin = _at(d.gt, d.femur_mid, 0.18)
     var lat = Float32(1)
     if d.side == LEFT:
@@ -814,7 +818,7 @@ def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _vastus_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.022)
+    var rb = _r(S, scale, 0.0225)
     var origin = _at(d.lt, d.med_condyle, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:
@@ -834,7 +838,7 @@ def _vastus_intermedius(
     d: MuscleDimensions, S: Float32, scale: Float32
 ) -> MuscleChain:
     """Return the deep quadriceps belly that packs around the femur."""
-    var rb = _r(S, scale, 0.027)
+    var rb = _r(S, scale, 0.0200)
     var origin = _at(d.aiis, d.femur_mid, 0.30)
     var insertion = d.patella + Vector3(0, 0.012 * S, 0.001 * S)
     return _fusiform(
@@ -848,14 +852,14 @@ def _vastus_intermedius(
 
 
 def _pectineus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.012)
+    var rb = _r(S, scale, 0.0142)
     return _fusiform(
         d.pubis, d.lt, Vector3(0, 0, 0.008 * S), 0.62 * rb, rb, 0.72
     )
 
 
 def _adductor(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.021)
+    var rb = _r(S, scale, 0.0198)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -874,7 +878,7 @@ def _adductor_magnus(
     d: MuscleDimensions, S: Float32, scale: Float32
 ) -> MuscleChain:
     """Return the broad deep adductor that closes the medial thigh."""
-    var rb = _r(S, scale, 0.029)
+    var rb = _r(S, scale, 0.0236)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -891,7 +895,7 @@ def _adductor_magnus(
 
 
 def _gracilis(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.008)
+    var rb = _r(S, scale, 0.0096)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -905,7 +909,7 @@ def _gracilis(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _biceps(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.019)
+    var rb = _r(S, scale, 0.0162)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -920,7 +924,7 @@ def _biceps(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _semitend(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.015)
+    var rb = _r(S, scale, 0.0133)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -935,7 +939,7 @@ def _semitend(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _semimemb(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.017)
+    var rb = _r(S, scale, 0.0159)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -980,16 +984,23 @@ def _gastroc(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _soleus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.016)
-    var origin = _at(d.fib_head, d.tibia_mid, 0.40) + Vector3(0, 0, -0.016 * S)
-    var insertion = _at(d.med_condyle, d.heel, 0.56) + Vector3(0, 0, -0.028 * S)
+    """Return the broad flat belly under the gastrocnemius.
+
+    It rises from the soleal line and the fibular head and runs down to
+    join the calcaneal tendon a hand's breadth above the heel.
+    """
+    var rb = _r(S, scale, 0.0322)
+    var origin = _at(d.fib_head, d.tibia_mid, 0.22) + Vector3(0, 0, -0.016 * S)
+    var insertion = Vector3(
+        d.heel.x, d.plafond.y + 0.07 * S, d.heel.z - 0.004 * S
+    )
     return _fusiform(
-        origin, insertion, Vector3(0, 0, -0.020 * S), 0.58 * rb, rb, 0.84
+        origin, insertion, Vector3(0, 0, -0.014 * S), 0.58 * rb, rb, 0.55
     )
 
 
 def _tib_ant(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.011)
+    var rb = _r(S, scale, 0.0136)
     var origin = d.tib_lat + Vector3(0, -0.035 * S, 0.014 * S)
     var insertion = d.med_mal + Vector3(0, 0.010 * S, 0.016 * S)
     return _fusiform(
@@ -999,7 +1010,7 @@ def _tib_ant(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _tib_post(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     """Return the deep posterior belly between the tibia and fibula."""
-    var rb = _r(S, scale, 0.012)
+    var rb = _r(S, scale, 0.0106)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1018,7 +1029,7 @@ def _tib_post(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _edl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.009)
+    var rb = _r(S, scale, 0.0107)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1030,7 +1041,7 @@ def _edl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _per_long(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.010)
+    var rb = _r(S, scale, 0.0111)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1045,7 +1056,7 @@ def _per_long(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 
 def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.008)
+    var rb = _r(S, scale, 0.0116)
     var origin = _at(d.fibula_mid, d.lat_mal, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:

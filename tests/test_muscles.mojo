@@ -112,7 +112,7 @@ def test_athleticism_is_valid() raises:
     assert_false(Athleticism(2).is_valid())
     assert_false(Athleticism(-1).is_valid())
     assert_almost_equal(radius_scale(UNTONED), Float32(0.80), atol=TOLERANCE)
-    assert_almost_equal(radius_scale(TONED), Float32(1.25), atol=TOLERANCE)
+    assert_almost_equal(radius_scale(TONED), Float32(1.00), atol=TOLERANCE)
     with assert_raises():
         _ = radius_scale(Athleticism(9))
 

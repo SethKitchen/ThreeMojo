@@ -31,7 +31,40 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 `Athleticism` is `UNTONED` or `TONED`. A bare integer is a compile error.
 
-The templates scale belly radius. They do not change bone length. Untoned muscle uses scale 0.80. Toned muscle uses scale 1.25. Those scales are authored. They are not a cited CSA regression.
+The templates scale belly radius. They do not change bone length. Untoned muscle uses scale 0.80. Toned muscle uses scale 1.00, so it carries about half again the volume. Studies of trained and untrained adults report gaps of about that size.
+
+The scales are authored. They are not a cited regression.
+
+## Volume
+
+Untoned muscle is calibrated toward typical adult muscle volumes measured by MRI, such as those of Handsfield et al. (2014), scaled to height. The table gives the sampled volume of a six-foot untoned male at a 4 mm step. Treat each value as approximate. People differ by a quarter or more.
+
+| Muscle | Volume (cm³) |
+|---|---|
+| Gluteus maximus | 832 |
+| Gluteus medius | 289 |
+| Tensor fasciae latae | 79 |
+| Sartorius | 180 |
+| Rectus femoris | 321 |
+| Vastus lateralis | 617 |
+| Vastus medialis | 441 |
+| Vastus intermedius | 445 |
+| Pectineus | 75 |
+| Adductor longus | 188 |
+| Adductor magnus | 602 |
+| Gracilis | 119 |
+| Biceps femoris | 318 |
+| Semitendinosus | 230 |
+| Semimembranosus | 292 |
+| Gastrocnemius | 466 |
+| Soleus | 499 |
+| Tibialis anterior | 159 |
+| Tibialis posterior | 109 |
+| Extensor digitorum longus | 103 |
+| Peroneus longus | 126 |
+| Peroneus brevis | 61 |
+
+The gluteus medius is below the reported mean. It is a thin fan, and a fuller belly would bulge. The soleus runs down to the calcaneal tendon a hand's breadth above the heel.
 
 ## Named parts
 
