@@ -6108,14 +6108,14 @@ def _point_rows(points: List[RasterVertex]) -> List[Int]:
 def _lit_by(
     named: Int,
     lighting: Pointer[Lighting, ImmutAnyOrigin],
-    lightings: UnsafePointer[Lighting, ImmutAnyOrigin],
+    lightings: Pointer[Lighting, ImmutAnyOrigin],
 ) -> Pointer[Lighting, ImmutAnyOrigin]:
     """Return the lighting a triangle names: the frame's own for zero, and
     the `named - 1`th of `lightings` otherwise. `rasterize_frame` has
     checked the number."""
     if named == 0:
         return lighting
-    return Pointer(to=lightings[named - 1]).unsafe_origin_cast[
+    return Pointer(to=lightings[unsafe_offset=named - 1]).unsafe_origin_cast[
         ImmutAnyOrigin
     ]()
 
@@ -6133,7 +6133,7 @@ async def _frame_band(
     mode: ShadeMode,
     textures: Pointer[TextureStore, ImmutAnyOrigin],
     lighting: Pointer[Lighting, ImmutAnyOrigin],
-    lightings: UnsafePointer[Lighting, ImmutAnyOrigin],
+    lightings: Pointer[Lighting, ImmutAnyOrigin],
     errors: MutPointer[String, MutAnyOrigin],
     band: Int,
     first_row: Int,
