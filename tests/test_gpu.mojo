@@ -9954,6 +9954,55 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_draw_a_materialx_surface_alike() raises:
+    # A MaterialX standard surface, its color and roughness from a graph,
+    # on a lit sphere: the node outputs the loader sets, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends draw a materialx surface"):
+        return
+    from loaders.materialx import read_materialx
+    from test_materialx import SURFACE
+
+    var assets = Assets()
+    var read = read_materialx(SURFACE, assets)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(assets.geometries.add(sphere(Length(0.8, METER), 18, 12)), read.ids[0], node)
+    )
+    var lamp = Object3D()
+    lamp.set_position(0.3, 0.8, 2)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.0))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 2.6), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    var capture = renderer.transmission_target(scene, assets, camera)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        transmission=capture,
+        programs=frame.programs,
+    )
+    assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 300)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
