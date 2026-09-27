@@ -23,6 +23,7 @@ from materials.material import (
 )
 from materials.nodes import (
     COLOR_NODE,
+    MASK_NODE,
     NO_NODES,
     RECEIVED_SHADOW_NODE,
     NodeGraph,
@@ -267,6 +268,22 @@ def test_a_shadow_can_be_turned_red() raises:
                 if now.r > was.r:
                     redder += 1
         assert_true(redder > 20, "no shadow turned red")
+
+
+def test_a_caster_masked_away_casts_no_shadow() raises:
+    # The light's view runs the caster's graph as the camera's does: where
+    # its mask throws the block away, no shadow is cast.
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(MASK_NODE, graph.float(0))
+    var hidden = Material(Color(200, 200, 200))
+    hidden.nodes = assets.programs.add(graph.compile())
+    var scene = a_shadowed_scene(assets, Material(Color(200, 200, 200)), hidden)
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var masked = renderer.render(scene, assets, a_camera())
+    scene.meshes[1].cast_shadow = False
+    var uncast = renderer.render(scene, assets, a_camera())
+    assert_equal(differences(masked, uncast), 0)
 
 
 def main() raises:
