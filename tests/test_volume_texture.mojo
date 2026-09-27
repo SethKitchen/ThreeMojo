@@ -287,7 +287,22 @@ def test_a_texel_is_fetched_by_its_row_either_way_up() raises:
     # Rows from the bottom where the texture flips, from the top where it
     # does not.
     var pixels: List[UInt8] = [
-        10, 0, 0, 255, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255
+        10,
+        0,
+        0,
+        255,
+        20,
+        0,
+        0,
+        255,
+        30,
+        0,
+        0,
+        255,
+        40,
+        0,
+        0,
+        255,
     ]
     var image = Texture(2, 2, pixels^, CLAMP, NEAREST, LINEAR, False)
     var flipped = image.fetch(0, 0, 0)

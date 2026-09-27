@@ -3104,11 +3104,14 @@ def test_the_corners_of_the_subset() raises:
     var shape = String("struct S { float a; };\n")
     refused_statement("bvec4 b = bvec4(true); if (b) {}", "not a bvec4")
     refused(
-        shape + "void main() { S s = S(1.0); if (s) {} gl_FragColor = vec4(1.0); }",
+        shape
+        + "void main() { S s = S(1.0); if (s) {} gl_FragColor = vec4(1.0); }",
         "an if needs a bool, not a struct",
     )
     assert_equal(
-        number("x", "", "float a[1] = float[1](2.0); int k = 0; float x = a[k];"),
+        number(
+            "x", "", "float a[1] = float[1](2.0); int k = 0; float x = a[k];"
+        ),
         2,
     )
     assert_equal(
@@ -3134,9 +3137,7 @@ def test_the_corners_of_the_subset() raises:
     assert_equal(
         number("b + a[1]", "", "float a[2] = float[2](1.0, 2.0), b = 3.0;"), 5
     )
-    assert_equal(
-        number("q.a", shape, "S p = S(1.0), q = S(2.0);"), 2
-    )
+    assert_equal(number("q.a", shape, "S p = S(1.0), q = S(2.0);"), 2)
     assert_equal(
         number("m[0][0] + n[1][1]", "", "mat3 m = mat3(1.0), n = mat3(2.0);"), 3
     )

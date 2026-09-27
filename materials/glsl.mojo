@@ -4791,10 +4791,6 @@ def _kind_name(kind: Int) -> String:
         return "a for loop's index"
     if kind == _MATRIX_LOCAL:
         return "a local matrix, which is given its value once"
-    if kind == _ARRAY:
-        return "an array"
-    if kind == _STRUCT_VAR:
-        return "a struct"
     return "a built-in transform"
 
 
