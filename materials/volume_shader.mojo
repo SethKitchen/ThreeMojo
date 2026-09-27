@@ -189,9 +189,11 @@ void main() {
     if (nsteps < 1) discard;
     vec3 step = ((position - front) / u_size) / float(nsteps);
     vec3 start_loc = front / u_size;
-    vec4 color = u_renderstyle == 0
-        ? cast_mip(start_loc, step, nsteps)
-        : cast_iso(start_loc, step, nsteps, view_ray);
+#if VOLUME_STYLE == 0
+    vec4 color = cast_mip(start_loc, step, nsteps);
+#else
+    vec4 color = cast_iso(start_loc, step, nsteps, view_ray);
+#endif
     if (color.a < 0.05) discard;
     gl_FragColor = color;
 }
