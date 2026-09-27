@@ -350,7 +350,7 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error("A spot shadow's focus must be a positive number")
 
 
-struct ShadowMap(Movable):
+struct ShadowMap(Copyable, Movable):
     """One light's view of the scene's depth, ready to compare against.
 
     Built by `Renderer.shadow_maps` once per frame per light that casts,
@@ -1488,7 +1488,7 @@ def inside_spot_map(place: Vector3) -> Bool:
     )
 
 
-struct SpotLightMap(Movable):
+struct SpotLightMap(Copyable, Movable):
     """The picture a spot light projects, three.js's `SpotLight.map`, and
     the transform that takes a world position onto it.
 
