@@ -115,7 +115,14 @@ from core.buffer_geometry import (
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
-from lights.light import DIRECTIONAL, POINT, SPOT, Light
+from lights.light import (
+    ALL_LIGHTS,
+    DIRECTIONAL,
+    POINT,
+    SPOT,
+    Light,
+    LightMask,
+)
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
@@ -2105,6 +2112,38 @@ def _clip_of(matrix: Matrix4, point: Vector3) -> Vector3:
     )
 
 
+def light_masks(assets: Assets) raises -> List[LightMask]:
+    """Return the light masks the materials name, three.js's `lightsNode`,
+    each once, in the order of the first material to name it. A material
+    lit by every light names none.
+
+    Args:
+        assets: The materials.
+
+    Returns:
+        The masks. A triangle of the `i`th is lit by the frame's lighting
+        `i + 1`; see `RasterVertex.lights`.
+
+    Raises:
+        Error: Never: every id asked is in the store.
+    """
+    var masks = List[LightMask]()
+    for index in range(assets.materials.count()):
+        var mask = assets.materials.get(MaterialId(index)).lights
+        if mask != ALL_LIGHTS and mask not in masks:
+            masks.append(mask)
+    return masks^
+
+
+def _mask_place(masks: List[LightMask], mask: LightMask) -> Int:
+    """Return which of the frame's lightings a material's mask names: zero
+    for every light, and one past its place in `masks` otherwise."""
+    for index in range(len(masks)):
+        if masks[index] == mask:
+            return index + 1
+    return 0
+
+
 def _to_raster(
     vertex: ClipVertex,
     to_screen: Matrix4,
@@ -2507,6 +2546,9 @@ struct _Paint(ImplicitlyCopyable):
     # The frames the environment and the normal map are read in; see
     # `_frames_of`.
     var frames: TextureFrames
+    # Which of the frame's lightings lights the draw; see
+    # `RasterVertex.lights`.
+    var lights: Int
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -2532,6 +2574,7 @@ struct _Paint(ImplicitlyCopyable):
             shown=self.shown,
         )
         corner.frames = self.frames
+        corner.lights = self.lights
         corner.custom = vertex.custom
         corner.gouraud_direct = vertex.gouraud_direct
         corner.gouraud_indirect = vertex.gouraud_indirect
@@ -3329,6 +3372,7 @@ def _emit_sprite(
         _draw_offset(material, casters_only),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -3731,6 +3775,7 @@ def _emit_wide_line(
         _draw_offset(material, False),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var no_planes = List[Plane]()
     for segment in range(segments):
@@ -4972,6 +5017,9 @@ struct Renderer(Movable):
         # space; see `uv_space_meshes`. A light's view is drawn by a
         # renderer of its own, which draws the casters as they stand.
         var in_uv_space = len(self.uv_space_meshes) > 0
+        # The light masks the materials name, each a lighting of its own;
+        # see `light_masks`.
+        var masks = light_masks(assets)
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -5501,6 +5549,7 @@ struct Renderer(Movable):
                 _draw_offset(material, casters_only),
                 _shown_of(material),
                 _frames_of(scene, material, world),
+                _mask_place(masks, material.lights),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -7167,6 +7216,9 @@ struct Renderer(Movable):
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
         var lighting = self._lighting(scene, assets, camera)
+        # And the lights of each material that names its own, three.js's
+        # `lightsNode`.
+        var lightings = self._lightings(scene, assets, camera, lighting)
         # The shadow maps are drawn, so their casters are known.
         ref state = self._state[]
         for index in range(len(state.shadow_items)):
@@ -7243,10 +7295,52 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
+
+    def _lightings[
+        C: Camera
+    ](
+        self, scene: Scene, assets: Assets, camera: C, lighting: Lighting
+    ) raises -> List[Lighting]:
+        """Return the lights each light mask the materials name resolves
+        to, in `light_masks` order: `lighting` narrowed to the mask's
+        lights, with the same shadow maps and spot light maps.
+
+        Args:
+            scene: The scene.
+            assets: The materials, whose masks are read.
+            camera: The camera the frame is drawn through.
+            lighting: The frame's own lighting, every light the camera
+                sees.
+
+        Returns:
+            One lighting a mask.
+
+        Raises:
+            Error: Everything `Lighting` raises.
+        """
+        var masks = light_masks(assets)
+        var lightings = List[Lighting]()
+        for index in range(len(masks)):
+            lightings.append(
+                Lighting(
+                    scene,
+                    visible=camera.visible_layers(),
+                    eye=camera_position(scene, camera),
+                    toward_eye=toward_camera(scene, camera),
+                    up=camera_up(scene, camera),
+                    shadows=lighting.shadows.copy(),
+                    ltc=self.ltc_tables(),
+                    spot_maps=lighting.spot_maps.copy(),
+                    back=camera_back(scene, camera),
+                    chosen=masks[index],
+                )
+            )
+        return lightings^
 
     def _lighting[
         C: Camera
@@ -7373,6 +7467,7 @@ struct Renderer(Movable):
         """
         if self.shading != SHADE_TEXTURE or not _transmits(frame):
             return TransmissionTarget()
+        var lightings = self._lightings(scene, assets, camera, lighting)
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -7405,6 +7500,7 @@ struct Renderer(Movable):
             programs=frame.programs,
             volumes=assets.data_3d_textures,
             arrays=assets.data_array_textures,
+            lightings=lightings,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -7437,6 +7533,7 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         return TransmissionTarget(drawn, view)
 

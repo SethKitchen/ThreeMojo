@@ -1126,6 +1126,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # `fragment_velocity`.
     var current: Vector3
     var previous: Vector3
+    # Which of the frame's lightings lights the triangle, read from the
+    # first corner: zero for the frame's own, every light the camera sees,
+    # and one past that for each `LightMask` a material names, in
+    # `Renderer.light_masks` order. See `rasterize_frame`'s `lightings`.
+    var lights: Int
 
     def __init__(
         out self,
@@ -1304,6 +1309,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.scatter_scale = 10
         self.current = Vector3(0, 0, 0)
         self.previous = Vector3(0, 0, 0)
+        self.lights = 0
 
 
 @fieldwise_init
@@ -6099,6 +6105,21 @@ def _point_rows(points: List[RasterVertex]) -> List[Int]:
     return rows^
 
 
+def _lit_by(
+    named: Int,
+    lighting: Pointer[Lighting, ImmutAnyOrigin],
+    lightings: UnsafePointer[Lighting, ImmutAnyOrigin],
+) -> Pointer[Lighting, ImmutAnyOrigin]:
+    """Return the lighting a triangle names: the frame's own for zero, and
+    the `named - 1`th of `lightings` otherwise. `rasterize_frame` has
+    checked the number."""
+    if named == 0:
+        return lighting
+    return Pointer(to=lightings[named - 1]).unsafe_origin_cast[
+        ImmutAnyOrigin
+    ]()
+
+
 async def _frame_band(
     corners: Pointer[RasterVertex, ImmutAnyOrigin],
     triangle_rows: MutPointer[Int, MutAnyOrigin],
@@ -6112,6 +6133,7 @@ async def _frame_band(
     mode: ShadeMode,
     textures: Pointer[TextureStore, ImmutAnyOrigin],
     lighting: Pointer[Lighting, ImmutAnyOrigin],
+    lightings: UnsafePointer[Lighting, ImmutAnyOrigin],
     errors: MutPointer[String, MutAnyOrigin],
     band: Int,
     first_row: Int,
@@ -6164,7 +6186,11 @@ async def _frame_band(
                         target[],
                         mode,
                         textures[],
-                        lighting[],
+                        _lit_by(
+                            corners[unsafe_offset=triangle * 3].lights,
+                            lighting,
+                            lightings,
+                        )[],
                         first_row,
                         last_row,
                         fog,
@@ -6263,6 +6289,7 @@ def rasterize_frame(
     programs: NodeProgramStore = NodeProgramStore(),
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    lightings: List[Lighting] = List[Lighting](),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -6317,6 +6344,10 @@ def rasterize_frame(
             `rasterize_shaded`.
         volumes: Where the node programs' 3D textures live.
         arrays: Where the node programs' array textures live.
+        lightings: The lights each `LightMask` the frame's materials name
+            resolves to, in `Renderer.light_masks` order: a triangle whose
+            `lights` is `i` above zero is lit by `lightings[i - 1]`, and
+            one whose `lights` is zero by `lighting`.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -6363,6 +6394,9 @@ def rasterize_frame(
             volumes,
             arrays,
         )
+        var named = corners[triangle * 3].lights
+        if named < 0 or named > len(lightings):
+            raise Error("A triangle names a lighting the frame does not have")
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
         check_program_maps(
@@ -6406,7 +6440,15 @@ def rasterize_frame(
                         target,
                         mode,
                         textures,
-                        lighting,
+                        _lit_by(
+                            corners[triangle * 3].lights,
+                            Pointer(to=lighting).unsafe_origin_cast[
+                                ImmutAnyOrigin
+                            ](),
+                            lightings.unsafe_ptr().unsafe_origin_cast[
+                                ImmutAnyOrigin
+                            ](),
+                        )[],
                         fog=fog,
                         cubes=cubes,
                         transmission=transmission,
@@ -6469,6 +6511,7 @@ def rasterize_frame(
                 mode,
                 Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+                lightings.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 band,
                 band * target.height // bands,

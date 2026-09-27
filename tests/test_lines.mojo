@@ -523,6 +523,7 @@ def one_band(
     """
     var errors = List[String](length=bands, fill=String(""))
     var no_rows = List[Int]()
+    var no_lightings = List[Lighting]()
     var group = TaskGroup()
     group.create_task(
         _frame_band(
@@ -538,6 +539,7 @@ def one_band(
             SHADE_LIT,
             Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
             Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+            no_lightings.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             band,
             band * target.height // bands,
@@ -554,6 +556,7 @@ def one_band(
     # The task reads these through pointers the compiler cannot see.
     _ = len(no_rows)
     _ = len(segment_rows)
+    _ = len(no_lightings)
     return errors^
 
 

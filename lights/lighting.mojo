@@ -57,7 +57,9 @@ from lights.light import (
     POINT,
     RECT_AREA,
     SPOT,
+    ALL_LIGHTS,
     Light,
+    LightMask,
 )
 from lights.ltc import LtcTables, ltc_lookup, ltc_uv, rect_area_light
 from math.smoothstep import smoothstep
@@ -1231,6 +1233,7 @@ struct Lighting(Movable):
         var ltc: LtcTables = LtcTables(),
         var spot_maps: List[SpotLightMap] = List[SpotLightMap](),
         back: Vector3 = Vector3(0, 0, 1),
+        chosen: LightMask = ALL_LIGHTS,
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -1274,6 +1277,9 @@ struct Lighting(Movable):
                 attachment reads it, with `up`, to turn a normal into view
                 space. `Renderer.render_into` passes `camera_back`. World
                 +z, the default, is an unturned camera. Normalized here.
+            chosen: Which of the scene's lights to take, by their places:
+                a material's `lights`, three.js's `lightsNode`. Every
+                light, the default.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -1368,6 +1374,10 @@ struct Lighting(Movable):
             if not light.layers.test(visible):
                 continue
             if not scene.light_shown(light):
+                continue
+            # A material that names its lights is lit by those alone,
+            # three.js's `lightsNode`.
+            if not chosen.includes(index):
                 continue
             if light.kind == AMBIENT:
                 var fill = light.radiance()
