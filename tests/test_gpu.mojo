@@ -11117,6 +11117,134 @@ def test_both_backends_run_the_node_library_alike() raises:
             assert_true(count_mismatches(gpu, plain) > 50)
 
 
+from materials.nodes import Fn as NodeFn, NODE_FLOAT as NODES_FLOAT, NodeRef
+
+
+def stops_at_a_square(
+    mut graph: NodeGraph, args: List[NodeRef]
+) raises -> NodeRef:
+    """Return the first whole number whose square passes `args[0]`, or
+    eight: a `Return` inside a loop."""
+    var i = graph.Loop(8)
+    graph.If(graph.greater_than(graph.mul(i, i), args[0]))
+    graph.Return(i)
+    graph.End()
+    graph.End()
+    return graph.float(8)
+
+
+def the_node_control_flow() raises -> NodeGraph:
+    """Return a graph of `Break`, `Continue`, `Return` and the matrix
+    functions, each driven by where the fragment is."""
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var u = graph.swizzle(uv, "x")
+    var v = graph.swizzle(uv, "y")
+    var scaled = graph.mul(u, graph.float(10))
+    # Odd steps skipped, and the loop left once past the scaled u.
+    var sum = graph.Var(graph.float(0))
+    var index = graph.Loop(10)
+    graph.If(graph.greater_than(index, scaled))
+    graph.Break()
+    graph.End()
+    graph.If(
+        graph.greater_than(graph.mod(index, graph.float(2)), graph.float(0.5))
+    )
+    graph.Continue()
+    graph.End()
+    graph.assign(sum, graph.add(graph.get(sum), index))
+    graph.End()
+    var search = NodeFn("stops", [NODES_FLOAT], NODES_FLOAT, stops_at_a_square)
+    var found = graph.call(search, [graph.mul(v, graph.float(40))])
+    # A matrix of the coordinates, its inverse, transpose and determinant.
+    var m = graph.mat3(
+        graph.join([graph.add(u, graph.float(1)), v, graph.float(0)]),
+        graph.join([graph.float(0), graph.add(v, graph.float(1)), u]),
+        graph.vec3(0.2, 0, 1),
+    )
+    var solved = graph.mul(graph.inverse(m), graph.vec3(1, 1, 1))
+    var turned = graph.mul(graph.transpose(m), graph.vec3(0.5, 0.25, 1))
+    # The noises and the bits, each at a point the fragment moves.
+    var cells = graph.mul(uv, graph.float(6))
+    var noise = graph.add(
+        graph.swizzle(graph.perlin_noise_vec3(cells), "x"),
+        graph.add(
+            graph.swizzle(graph.worley_noise(cells, graph.float(0.8), 2), "y"),
+            graph.cell_noise_float(graph.join([cells, u])),
+        ),
+    )
+    var bits = graph.bit_xor(
+        graph.integer(graph.mul(u, graph.float(16))),
+        graph.shift_left(
+            graph.unsigned(graph.mul(v, graph.float(4))), graph.float(2)
+        ),
+    )
+    var color = graph.join(
+        [
+            graph.saturate(graph.mul(graph.get(sum), graph.float(0.05))),
+            graph.saturate(graph.mul(found, graph.float(0.125))),
+            graph.saturate(
+                graph.add(
+                    graph.mul(graph.determinant(m), graph.float(0.2)),
+                    graph.mul(
+                        graph.add(
+                            graph.swizzle(graph.add(solved, turned), "z"),
+                            graph.add(
+                                noise, graph.mul(bits, graph.float(0.02))
+                            ),
+                        ),
+                        graph.float(0.2),
+                    ),
+                )
+            ),
+        ]
+    )
+    graph.set_output(NODES_COLOR, color)
+    return graph^
+
+
+def test_both_backends_run_node_control_flow_and_matrices_alike() raises:
+    # Break, Continue and Return are flags and selects, and the matrix
+    # functions are vector operations: the kernel's interpreter must give
+    # the host's pixels.
+    if skipped_for_lack_of_a_gpu("both backends run node control flow alike"):
+        return
+    var textures = TextureStore()
+    var store = NodeProgramStore()
+    var id = store.add(the_node_control_flow().compile())
+    var lighting = phong_lighting()
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, mode, textures, lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            mode,
+            textures,
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        var plain = render_triangles(
+            with_nodes(corners.copy(), -1),
+            36,
+            30,
+            BACKGROUND,
+            mode,
+            textures,
+            lighting,
+        )
+        assert_true(count_mismatches(gpu, plain) > 50)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a

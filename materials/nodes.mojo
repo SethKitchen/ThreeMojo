@@ -88,6 +88,7 @@ from math.vector4 import Vector4
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import ceil, cos, exp, exp2, floor, log2, max, min, pow, sin, sqrt
+from std.memory import bitcast
 from units.si import Duration, SECOND
 
 # How many values one output can hold alive at once: one register each, four
@@ -193,7 +194,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_FRAG_COORD.value
+            and self.value <= NODE_WORLEY.value
         )
 
 
@@ -301,6 +302,29 @@ comptime NODE_VIEW_MATRIX = NodeKind(81)
 # center in pixels from the bottom left, its depth from zero to one, and
 # one. See `NodeSource.frag_coord`.
 comptime NODE_FRAG_COORD = NodeKind(82)
+# A matrix the graph builds from its columns: a `mat3`'s three, or a
+# `mat4`'s first two and a `NODE_MATRIX_TAIL` of its last two. `mul`
+# expands one into vector operations, so no instruction reads it.
+comptime NODE_MATRIX_COLUMNS = NodeKind(83)
+comptime NODE_MATRIX_TAIL = NodeKind(84)
+# The bit operations of whole numbers, which a value holds as floats: each
+# component truncated toward zero to a 32-bit integer, operated on, and
+# held as a float again.
+comptime NODE_BIT_AND = NodeKind(85)
+comptime NODE_BIT_OR = NodeKind(86)
+comptime NODE_BIT_XOR = NodeKind(87)
+comptime NODE_BIT_NOT = NodeKind(88)
+comptime NODE_SHIFT_LEFT = NodeKind(89)
+comptime NODE_SHIFT_RIGHT = NodeKind(90)
+# A whole number as TSL's `uint` holds it: truncated toward zero, and a
+# negative one wrapped up by 2 ** 32.
+comptime NODE_UNSIGNED = NodeKind(91)
+# MaterialX's noises: Perlin of three components, cell noise of one and of
+# three, and Worley noise of the one, two or three nearest points.
+comptime NODE_NOISE_VEC3 = NodeKind(92)
+comptime NODE_CELL_NOISE = NodeKind(93)
+comptime NODE_CELL_NOISE_VEC3 = NodeKind(94)
+comptime NODE_WORLEY = NodeKind(95)
 
 
 @fieldwise_init
@@ -435,6 +459,24 @@ struct NodeProgramId(Equatable, ImplicitlyCopyable, Writable):
 comptime NO_NODES = NodeProgramId(-1)
 
 
+def _letter_of(lane: Int) -> String:
+    """Return the swizzle letter of a lane."""
+    if lane == 0:
+        return "x"
+    if lane == 1:
+        return "y"
+    return "z" if lane == 2 else "w"
+
+
+def _without(row: Int) -> String:
+    """Return the swizzle of a `vec4`'s three lanes other than `row`."""
+    if row == 0:
+        return "yzw"
+    if row == 1:
+        return "xzw"
+    return "xyw" if row == 2 else "xyz"
+
+
 def _lane_of(letter: UInt8) -> Int:
     """Return the component a swizzle letter names, or -1 for none."""
     if letter == UInt8(ord("x")) or letter == UInt8(ord("r")):
@@ -498,6 +540,24 @@ struct _Block(Copyable, Movable):
     var step: Float32
     var body: Int
     var phis: List[Int]
+    # A loop's two hidden variables: `live`, which a `Break` clears, and
+    # `skip`, which a `Continue` sets for the rest of the time through.
+    # `stopped` is set once either has been called in the body, and from
+    # then on each assignment in the loop is kept only where both allow.
+    var live: Int
+    var skip: Int
+    var stopped: Bool
+
+
+@fieldwise_init
+struct _Return(Copyable, Movable):
+    """One `Fn` call being built: its hidden variables `returned` and
+    `result`, and how many blocks were open when it began."""
+
+    var returned: Int
+    var result: Int
+    var depth: Int
+    var used: Bool
 
 
 comptime NodeBody = def(mut NodeGraph, List[NodeRef]) raises thin -> NodeRef
@@ -583,9 +643,27 @@ struct Fn(Copyable, Movable):
                     + graph.type_of(args[index]).name()
                 )
         var depth = len(graph._blocks)
+        var returned = graph.Var(graph.float(0))
+        var result = graph.Var(
+            graph._match(graph.float(0), self.output, "hold")
+        )
+        graph._returns.append(
+            _Return(returned.value, result.value, depth, False)
+        )
         var answer = self.body(graph, args)
+        var frame = graph._returns.pop()
+        graph._retired[frame.returned] = True
+        graph._retired[frame.result] = True
         if len(graph._blocks) != depth:
             raise Error("The Fn " + self.name + " leaves an If or a Loop open")
+        if frame.used and graph.type_of(answer) == self.output:
+            # A `Return` gives its value where it ran; the body's answer is
+            # the value everywhere else.
+            answer = graph.select(
+                graph.get(NodeVar(frame.returned)),
+                graph.get(NodeVar(frame.result)),
+                answer,
+            )
         if graph.type_of(answer) != self.output:
             raise Error(
                 "The Fn "
@@ -626,6 +704,11 @@ struct NodeGraph(Copyable, Movable):
     var _var_types: List[ValueType]
     var _blocks: List[_Block]
     var _discards: List[Int]
+    # Each `Fn` call being built, innermost last.
+    var _returns: List[_Return]
+    # Per variable, whether it is a closed loop's or call's hidden flag,
+    # which no later loop needs to carry.
+    var _retired: List[Bool]
 
     def __init__(out self):
         """Create an empty graph with no outputs."""
@@ -640,6 +723,8 @@ struct NodeGraph(Copyable, Movable):
         self._var_types = List[ValueType]()
         self._blocks = List[_Block]()
         self._discards = List[Int]()
+        self._returns = List[_Return]()
+        self._retired = List[Bool]()
 
     def count(self) -> Int:
         """Return how many nodes the graph holds.
@@ -1255,6 +1340,237 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._binary(NODE_SUB, a, b, "subtract")
 
+    def _columns(mut self, m: NodeRef) raises -> List[NodeRef]:
+        """Return a matrix's columns: the ones it was built of, or a
+        uniform's or the view's, each the matrix times a unit vector."""
+        var size = 3 if self._types[m.value] == NODE_MAT3 else 4
+        var out = List[NodeRef]()
+        if self._kinds[m.value] == NODE_MATRIX_COLUMNS:
+            out.append(NodeRef(self._inputs[m.value * 3]))
+            out.append(NodeRef(self._inputs[m.value * 3 + 1]))
+            var rest = self._inputs[m.value * 3 + 2]
+            if size == 3:
+                out.append(NodeRef(rest))
+            else:
+                out.append(NodeRef(self._inputs[rest * 3]))
+                out.append(NodeRef(self._inputs[rest * 3 + 1]))
+            return out^
+        for index in range(size):  # pragma: no branch
+            out.append(
+                self._add(
+                    NODE_MATRIX_VECTOR,
+                    ValueType(size),
+                    self._unit(size, index).value,
+                    m.value,
+                )
+            )
+        return out^
+
+    def _unit(mut self, size: Int, index: Int) -> NodeRef:
+        """Return the unit vector of `size` components along `index`."""
+        var lanes = Lanes(0)
+        lanes[index] = 1
+        return self._add(NODE_CONSTANT, ValueType(size), value=lanes)
+
+    def _from_columns(mut self, columns: List[NodeRef]) raises -> NodeRef:
+        """Return the matrix of three `vec3` or four `vec4` columns."""
+        var size = len(columns)
+        var type = NODE_MAT3 if size == 3 else NODE_MAT4
+        for index in range(size):  # pragma: no branch
+            self._check(columns[index])
+            if self._types[columns[index].value] != ValueType(size):
+                raise Error(
+                    "A "
+                    + type.name()
+                    + " is made of "
+                    + ValueType(size).name()
+                    + " columns, not a "
+                    + self._types[columns[index].value].name()
+                )
+        var rest = columns[2].value
+        if size == 4:
+            rest = self._add(
+                NODE_MATRIX_TAIL, type, columns[2].value, columns[3].value
+            ).value
+        return self._add(
+            NODE_MATRIX_COLUMNS, type, columns[0].value, columns[1].value, rest
+        )
+
+    def _rows(mut self, m: NodeRef) raises -> List[NodeRef]:
+        """Return a matrix's rows: each a join of one component of every
+        column."""
+        var columns = self._columns(m)
+        var rows = List[NodeRef]()
+        for row in range(len(columns)):  # pragma: no branch
+            var parts = List[NodeRef]()
+            for index in range(len(columns)):  # pragma: no branch
+                parts.append(self.swizzle(columns[index], _letter_of(row)))
+            rows.append(self.join(parts))
+        return rows^
+
+    def _square(self, m: NodeRef, verb: String) raises:
+        """Refuse a node that is not a `mat3` or a `mat4`.
+
+        Raises:
+            Error: If `m` is not a matrix of this graph.
+        """
+        self._check(m)
+        if not self._matrix_of(m):
+            raise Error(
+                "A node graph can "
+                + verb
+                + " a mat3 or a mat4, not a "
+                + self._types[m.value].name()
+            )
+
+    def mat3(mut self, c0: NodeRef, c1: NodeRef, c2: NodeRef) raises -> NodeRef:
+        """Return the `mat3` of three columns, TSL's `mat3(a, b, c)`.
+
+        Args:
+            c0: The first column, a `vec3`.
+            c1: The second.
+            c2: The third.
+
+        Returns:
+            The matrix, which `mul`, `transpose`, `inverse`,
+            `determinant` and `column` read.
+
+        Raises:
+            Error: If a column is not a `vec3` of this graph.
+        """
+        return self._from_columns([c0, c1, c2])
+
+    def mat4(
+        mut self, c0: NodeRef, c1: NodeRef, c2: NodeRef, c3: NodeRef
+    ) raises -> NodeRef:
+        """Return the `mat4` of four columns, TSL's `mat4(a, b, c, d)`.
+
+        Args:
+            c0: The first column, a `vec4`.
+            c1: The second.
+            c2: The third.
+            c3: The fourth.
+
+        Returns:
+            The matrix, which `mul`, `transpose`, `inverse`,
+            `determinant` and `column` read.
+
+        Raises:
+            Error: If a column is not a `vec4` of this graph.
+        """
+        return self._from_columns([c0, c1, c2, c3])
+
+    def column(mut self, m: NodeRef, index: Int) raises -> NodeRef:
+        """Return one column of a matrix, GLSL's `m[index]`.
+
+        Args:
+            m: A `mat3` or a `mat4`.
+            index: Which column, from zero.
+
+        Returns:
+            The column, a `vec3` or a `vec4`.
+
+        Raises:
+            Error: If `m` is not a matrix of this graph, or the matrix has
+                no such column.
+        """
+        self._square(m, "take a column of")
+        var columns = self._columns(m)
+        if index < 0 or index >= len(columns):
+            raise Error(
+                "A "
+                + self._types[m.value].name()
+                + " has no column "
+                + String(index)
+            )
+        return columns[index]
+
+    def transpose(mut self, m: NodeRef) raises -> NodeRef:
+        """Return a matrix's transpose, TSL's `transpose`.
+
+        Args:
+            m: A `mat3` or a `mat4`.
+
+        Returns:
+            The matrix whose columns are `m`'s rows.
+
+        Raises:
+            Error: If `m` is not a matrix of this graph.
+        """
+        self._square(m, "transpose")
+        return self._from_columns(self._rows(m))
+
+    def _det3(mut self, a: NodeRef, b: NodeRef, c: NodeRef) raises -> NodeRef:
+        """Return the determinant of three `vec3` columns."""
+        return self.dot(a, self.cross(b, c))
+
+    def _cross4(mut self, columns: List[NodeRef], skip: Int) raises -> NodeRef:
+        """Return a `vec4` at right angles to every column but `skip`: each
+        component the determinant of the other three with that component's
+        row left out, signed in turn."""
+        var others = List[NodeRef]()
+        for index in range(4):  # pragma: no branch
+            if index != skip:
+                others.append(columns[index])
+        var parts = List[NodeRef]()
+        for row in range(4):  # pragma: no branch
+            var keep = _without(row)
+            var d = self._det3(
+                self.swizzle(others[0], keep),
+                self.swizzle(others[1], keep),
+                self.swizzle(others[2], keep),
+            )
+            parts.append(d if row % 2 == 0 else self.negate(d))
+        return self.join(parts)
+
+    def determinant(mut self, m: NodeRef) raises -> NodeRef:
+        """Return a matrix's determinant, TSL's `determinant`.
+
+        Args:
+            m: A `mat3` or a `mat4`.
+
+        Returns:
+            The determinant, a `float`.
+
+        Raises:
+            Error: If `m` is not a matrix of this graph.
+        """
+        self._square(m, "take the determinant of")
+        var columns = self._columns(m)
+        if len(columns) == 3:
+            return self._det3(columns[0], columns[1], columns[2])
+        return self.dot(columns[0], self._cross4(columns, 0))
+
+    def inverse(mut self, m: NodeRef) raises -> NodeRef:
+        """Return a matrix's inverse, TSL's `inverse`. Each row of the
+        inverse is at right angles to every column of `m` but one, and
+        scaled so its dot with that one is one. A singular matrix gives
+        what the divisions by zero give.
+
+        Args:
+            m: A `mat3` or a `mat4`.
+
+        Returns:
+            The inverse, of `m`'s type.
+
+        Raises:
+            Error: If `m` is not a matrix of this graph.
+        """
+        self._square(m, "invert")
+        var columns = self._columns(m)
+        var size = len(columns)
+        var rows = List[NodeRef]()
+        for index in range(size):  # pragma: no branch
+            var normal: NodeRef
+            if size == 3:
+                normal = self.cross(
+                    columns[(index + 1) % 3], columns[(index + 2) % 3]
+                )
+            else:
+                normal = self._cross4(columns, index)
+            rows.append(self.div(normal, self.dot(columns[index], normal)))
+        return self.transpose(self._from_columns(rows))
+
     def _matrix_of(self, node: NodeRef) -> Bool:
         """Return True if a node is a `mat3` or a `mat4`."""
         var type = self._types[node.value]
@@ -1279,6 +1595,20 @@ struct NodeGraph(Copyable, Movable):
         """
         self._check(a)
         self._check(b)
+        if self._matrix_of(a) and self._matrix_of(b):
+            if self._types[a.value] != self._types[b.value]:
+                raise Error(
+                    "A node graph cannot multiply a "
+                    + self._types[a.value].name()
+                    + " and a "
+                    + self._types[b.value].name()
+                )
+            # Each column of the product is `a` times a column of `b`.
+            var columns = self._columns(b)
+            var product = List[NodeRef]()
+            for index in range(len(columns)):  # pragma: no branch
+                product.append(self.mul(a, columns[index]))
+            return self._from_columns(product)
         if self._matrix_of(a) or self._matrix_of(b):
             var on_left = self._matrix_of(a)
             var matrix = a if on_left else b
@@ -1291,6 +1621,25 @@ struct NodeGraph(Copyable, Movable):
                     + " and a "
                     + self._types[b.value].name()
                 )
+            if self._kinds[matrix.value] == NODE_MATRIX_COLUMNS:
+                var columns = self._columns(matrix)
+                if not on_left:
+                    # A vector times a matrix: its dot with each column.
+                    var dots = List[NodeRef]()
+                    for index in range(size):  # pragma: no branch
+                        dots.append(self.dot(vector, columns[index]))
+                    return self.join(dots)
+                # A matrix times a vector: its columns, weighted.
+                var sum = self.mul(columns[0], self.swizzle(vector, "x"))
+                for index in range(1, size):  # pragma: no branch
+                    sum = self.add(
+                        sum,
+                        self.mul(
+                            columns[index],
+                            self.swizzle(vector, _letter_of(index)),
+                        ),
+                    )
+                return sum
             return self._add(
                 NODE_MATRIX_VECTOR if on_left else NODE_VECTOR_MATRIX,
                 ValueType(size),
@@ -2067,6 +2416,135 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._unary(NODE_TRUNC, a)
 
+    def integer(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each component as a whole number, truncated toward zero,
+        TSL's `int`. A value here is a float, so an integer is one that
+        holds a whole number.
+
+        Args:
+            a: A `float` or a vector.
+
+        Returns:
+            The node, of `a`'s type.
+
+        Raises:
+            Error: If `a` is not a `float` or a vector of this graph.
+        """
+        return self._unary(NODE_TRUNC, a)
+
+    def unsigned(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each component as TSL's `uint` holds it: truncated toward
+        zero, with a negative one wrapped up by 2 ** 32.
+
+        Args:
+            a: A `float` or a vector.
+
+        Returns:
+            The node, of `a`'s type.
+
+        Raises:
+            Error: If `a` is not a `float` or a vector of this graph.
+        """
+        return self._unary(NODE_UNSIGNED, a)
+
+    def bit_and(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
+        """Return the bits both hold, per component, TSL's `bitAnd`.
+
+        Args:
+            a: The first operand, a `float` or a vector of whole numbers.
+            b: The second, of `a`'s type, or either a `float`.
+
+        Returns:
+            The node, of the wider type.
+
+        Raises:
+            Error: If either is not a node of this graph, or they are
+                vectors of two sizes.
+        """
+        return self._binary(NODE_BIT_AND, a, b, "take the bits of")
+
+    def bit_or(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
+        """Return the bits either holds, per component, TSL's `bitOr`.
+
+        Args:
+            a: The first operand, a `float` or a vector of whole numbers.
+            b: The second, of `a`'s type, or either a `float`.
+
+        Returns:
+            The node, of the wider type.
+
+        Raises:
+            Error: If either is not a node of this graph, or they are
+                vectors of two sizes.
+        """
+        return self._binary(NODE_BIT_OR, a, b, "take the bits of")
+
+    def bit_xor(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
+        """Return the bits one of the two holds, per component, TSL's
+        `bitXor`.
+
+        Args:
+            a: The first operand, a `float` or a vector of whole numbers.
+            b: The second, of `a`'s type, or either a `float`.
+
+        Returns:
+            The node, of the wider type.
+
+        Raises:
+            Error: If either is not a node of this graph, or they are
+                vectors of two sizes.
+        """
+        return self._binary(NODE_BIT_XOR, a, b, "take the bits of")
+
+    def bit_not(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each component's bits flipped, TSL's `bitNot`: minus the
+        number less one.
+
+        Args:
+            a: A `float` or a vector of whole numbers.
+
+        Returns:
+            The node, of `a`'s type.
+
+        Raises:
+            Error: If `a` is not a `float` or a vector of this graph.
+        """
+        return self._unary(NODE_BIT_NOT, a)
+
+    def shift_left(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
+        """Return `a`'s bits moved up by `b`, per component, TSL's
+        `shiftLeft`. A shift reads the low five bits of `b`, as a GPU does.
+
+        Args:
+            a: The value, a `float` or a vector of whole numbers.
+            b: How far, of `a`'s type, or either a `float`.
+
+        Returns:
+            The node, of the wider type.
+
+        Raises:
+            Error: If either is not a node of this graph, or they are
+                vectors of two sizes.
+        """
+        return self._binary(NODE_SHIFT_LEFT, a, b, "shift")
+
+    def shift_right(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
+        """Return `a`'s bits moved down by `b`, per component, keeping the
+        sign, TSL's `shiftRight` of an `int`.
+
+        Args:
+            a: The value, a `float` or a vector of whole numbers.
+            b: How far, of `a`'s type, or either a `float`.
+
+        Returns:
+            The node, of the wider type.
+
+        Raises:
+            Error: If either is not a node of this graph, or they are
+                vectors of two sizes.
+        """
+        return self._binary(NODE_SHIFT_RIGHT, a, b, "shift")
+
     def exp(mut self, a: NodeRef) raises -> NodeRef:
         """Return e raised to each component, TSL's `exp`.
 
@@ -2470,6 +2948,187 @@ struct NodeGraph(Copyable, Movable):
             self.mul(noise, self.float(amplitude)), self.float(pivot)
         )
 
+    def _noise_point(
+        self, p: NodeRef, low: Int, high: Int, what: String
+    ) raises -> ValueType:
+        """Refuse a point of fewer than `low` or more than `high` lanes.
+
+        Raises:
+            Error: If `p` is not such a value of this graph.
+        """
+        self._check(p)
+        var type = self._types[p.value]
+        if not type.is_vector() or type.value < low or type.value > high:
+            raise Error(
+                what
+                + " reads a "
+                + ValueType(low).name()
+                + " to a "
+                + ValueType(high).name()
+                + ", not a "
+                + type.name()
+            )
+        return type
+
+    def perlin_noise_vec3(mut self, p: NodeRef) raises -> NodeRef:
+        """Return MaterialX's Perlin noise of three components at a point,
+        three.js's `mx_perlin_noise_vec3`.
+
+        Args:
+            p: The point, a `vec2` or a `vec3`.
+
+        Returns:
+            The node, a `vec3`.
+
+        Raises:
+            Error: If `p` is not a `vec2` or a `vec3` of this graph.
+        """
+        var type = self._noise_point(p, 2, 3, "Perlin noise")
+        return self._add(
+            NODE_NOISE_VEC3,
+            NODE_VEC3,
+            p.value,
+            value=Lanes(Float32(type.value)),
+        )
+
+    def cell_noise_float(mut self, p: NodeRef) raises -> NodeRef:
+        """Return MaterialX's cell noise at a point, three.js's
+        `mx_cell_noise_float`: one value from zero to one for each cell of
+        whole numbers.
+
+        Args:
+            p: The point, a `float` to a `vec4`.
+
+        Returns:
+            The node, a `float`.
+
+        Raises:
+            Error: If `p` is not a `float` or a vector of this graph.
+        """
+        var type = self._noise_point(p, 1, 4, "Cell noise")
+        return self._add(
+            NODE_CELL_NOISE,
+            NODE_FLOAT,
+            p.value,
+            value=Lanes(Float32(type.value)),
+        )
+
+    def cell_noise_vec3(mut self, p: NodeRef) raises -> NodeRef:
+        """Return MaterialX's cell noise of three components at a point,
+        three.js's `mx_cell_noise_vec3`.
+
+        Args:
+            p: The point, a `float` to a `vec4`.
+
+        Returns:
+            The node, a `vec3`.
+
+        Raises:
+            Error: If `p` is not a `float` or a vector of this graph.
+        """
+        var type = self._noise_point(p, 1, 4, "Cell noise")
+        return self._add(
+            NODE_CELL_NOISE_VEC3,
+            NODE_VEC3,
+            p.value,
+            value=Lanes(Float32(type.value)),
+        )
+
+    def worley_noise(
+        mut self, p: NodeRef, jitter: NodeRef, width: Int
+    ) raises -> NodeRef:
+        """Return MaterialX's Worley noise at a point, three.js's
+        `mx_worley_noise_float`, `_vec2` and `_vec3`: the squared distances
+        to the nearest one, two or three points that jitter each cell.
+
+        Args:
+            p: The point, a `vec2` or a `vec3`.
+            jitter: How far a cell's point moves from its center, a
+                `float` from zero to one.
+            width: One, two or three distances, nearest first.
+
+        Returns:
+            The node, a `float`, a `vec2` or a `vec3`.
+
+        Raises:
+            Error: If `p` is not a `vec2` or a `vec3`, `jitter` is not a
+                `float` of this graph, or `width` is not one to three.
+        """
+        var type = self._noise_point(p, 2, 3, "Worley noise")
+        self._check(jitter)
+        if self._types[jitter.value] != NODE_FLOAT:
+            raise Error(
+                "Worley noise's jitter is a float, not a "
+                + self._types[jitter.value].name()
+            )
+        if width < 1 or width > 3:
+            raise Error(
+                "Worley noise gives one to three distances, not "
+                + String(width)
+            )
+        return self._add(
+            NODE_WORLEY,
+            ValueType(width),
+            p.value,
+            jitter.value,
+            value=Lanes(Float32(type.value + 4 * width)),
+        )
+
+    def mx_noise_vec3(
+        mut self, texcoord: NodeRef, amplitude: Float32 = 1, pivot: Float32 = 0
+    ) raises -> NodeRef:
+        """Return Perlin noise of three components scaled and moved,
+        three.js's `mx_noise_vec3(texcoord, amplitude, pivot)`.
+
+        Args:
+            texcoord: The point, a `vec2` or a `vec3`.
+            amplitude: What the noise is multiplied by.
+            pivot: What is added after.
+
+        Returns:
+            The node, a `vec3`.
+
+        Raises:
+            Error: If `texcoord` is not a `vec2` or a `vec3` of this graph.
+        """
+        var noise = self.perlin_noise_vec3(texcoord)
+        return self.add(
+            self.mul(noise, self.float(amplitude)), self.float(pivot)
+        )
+
+    def mx_noise_vec4(
+        mut self, texcoord: NodeRef, amplitude: Float32 = 1, pivot: Float32 = 0
+    ) raises -> NodeRef:
+        """Return four components of noise scaled and moved, three.js's
+        `mx_noise_vec4`: Perlin noise of three components, and Perlin
+        noise of one at the point moved by (19, 73).
+
+        Args:
+            texcoord: The point, a `vec2` or a `vec3`. A `vec3` is moved by
+                (19, 73, 0).
+            amplitude: What the noise is multiplied by.
+            pivot: What is added after.
+
+        Returns:
+            The node, a `vec4`.
+
+        Raises:
+            Error: If `texcoord` is not a `vec2` or a `vec3` of this graph.
+        """
+        var type = self._noise_point(texcoord, 2, 3, "Perlin noise")
+        var moved = self.vec2(19, 73) if type == NODE_VEC2 else self.vec3(
+            19, 73, 0
+        )
+        var noise = self.join(
+            [
+                self.perlin_noise_vec3(texcoord),
+                self.perlin_noise(self.add(texcoord, moved)),
+            ]
+        )
+        return self.add(
+            self.mul(noise, self.float(amplitude)), self.float(pivot)
+        )
+
     def mx_fractal_noise_float(
         mut self,
         position: NodeRef,
@@ -2534,6 +3193,7 @@ struct NodeGraph(Copyable, Movable):
         self._vector(value, "hold")
         self._versions.append(value.value)
         self._var_types.append(self._types[value.value])
+        self._retired.append(False)
         return NodeVar(len(self._versions) - 1)
 
     def _check_var(self, v: NodeVar) raises:
@@ -2576,7 +3236,124 @@ struct NodeGraph(Copyable, Movable):
         self._check(value)
         var type = self._var_types[v.value]
         var node = self._match(value, type, "assign")
+        var gate = self._gate()
+        if gate.value >= 0:
+            node = self.select(gate, node, NodeRef(self._versions[v.value]))
         self._versions[v.value] = node.value
+
+    def _gate(mut self) raises -> NodeRef:
+        """Return where an assignment here takes effect after a `Break`, a
+        `Continue` or a `Return`, or -1 when none has been called."""
+        var gate = NodeRef(-1)
+        for index in range(len(self._blocks)):
+            if self._blocks[index].kind != _BLOCK_LOOP:
+                continue
+            if not self._blocks[index].stopped:
+                continue
+            var here = NodeRef(self._versions[self._blocks[index].live])
+            var skip = self._versions[self._blocks[index].skip]
+            if not self._is_zero(skip):
+                here = self.logical_and(here, self.logical_not(NodeRef(skip)))
+            gate = here if gate.value < 0 else self.logical_and(gate, here)
+        for index in range(len(self._returns)):
+            if not self._returns[index].used:
+                continue
+            var going = self.logical_not(
+                NodeRef(self._versions[self._returns[index].returned])
+            )
+            gate = going if gate.value < 0 else self.logical_and(gate, going)
+        return gate
+
+    def _is_zero(self, node: Int) -> Bool:
+        """Return True if a node is the constant zero."""
+        return (
+            self._kinds[node] == NODE_CONSTANT and self._values[node * 4] == 0
+        )
+
+    def _innermost_loop(self, what: String) raises -> Int:
+        """Return the innermost open loop's block.
+
+        Raises:
+            Error: If no loop is open.
+        """
+        for index in range(len(self._blocks) - 1, -1, -1):
+            if self._blocks[index].kind == _BLOCK_LOOP:
+                return index
+        raise Error("A " + what + " needs a Loop to be in")
+
+    def Break(mut self) raises:
+        """Leave the innermost loop where the open branches run, TSL's
+        `Break`. Nothing more in the loop takes effect there: the rest of
+        this time through, and every later time.
+
+        Raises:
+            Error: If no loop is open.
+        """
+        var index = self._innermost_loop("Break")
+        var gate = self._gate()
+        var live = self._blocks[index].live
+        var off = self.float(0)
+        if gate.value >= 0:
+            off = self.select(gate, off, NodeRef(self._versions[live]))
+        self._versions[live] = off.value
+        self._blocks[index].stopped = True
+
+    def Continue(mut self) raises:
+        """Skip the rest of this time through the innermost loop where the
+        open branches run, TSL's `Continue`.
+
+        Raises:
+            Error: If no loop is open.
+        """
+        var index = self._innermost_loop("Continue")
+        var gate = self._gate()
+        var skip = self._blocks[index].skip
+        var on = self.float(1)
+        if gate.value >= 0:
+            on = self.select(gate, on, NodeRef(self._versions[skip]))
+        self._versions[skip] = on.value
+        self._blocks[index].stopped = True
+
+    def Return(mut self, value: NodeRef) raises:
+        """Return a value from the `Fn` being built where the open branches
+        run, TSL's `Return`. Nothing more in the function takes effect there,
+        and the loops it is in stop.
+
+        Args:
+            value: What the function returns, of its output type or a
+                `float` for a vector.
+
+        Raises:
+            Error: If no `Fn` is being built, or the value's type is another.
+        """
+        if len(self._returns) == 0:
+            raise Error("A Return needs a Fn to be in")
+        self._check(value)
+        var frame = self._returns[len(self._returns) - 1].copy()
+        var type = self._var_types[frame.result]
+        var node = self._match(value, type, "return")
+        var gate = self._gate()
+        var returned = self.float(1)
+        var off = self.float(0)
+        if gate.value >= 0:
+            node = self.select(
+                gate, node, NodeRef(self._versions[frame.result])
+            )
+            returned = self.select(
+                gate, returned, NodeRef(self._versions[frame.returned])
+            )
+        self._versions[frame.result] = node.value
+        self._versions[frame.returned] = returned.value
+        for index in range(frame.depth, len(self._blocks)):
+            if self._blocks[index].kind != _BLOCK_LOOP:
+                continue
+            var live = self._blocks[index].live
+            var stop = off
+            if gate.value >= 0:
+                stop = self.select(gate, off, NodeRef(self._versions[live]))
+            self._versions[live] = stop.value
+            self._blocks[index].stopped = True
+        self._returns[len(self._returns) - 1].used = True
 
     def _condition(self, condition: NodeRef) raises:
         """Refuse a condition that is not a `float`.
@@ -2615,6 +3392,9 @@ struct NodeGraph(Copyable, Movable):
                 0,
                 -1,
                 List[Int](),
+                -1,
+                -1,
+                False,
             )
         )
 
@@ -2681,13 +3461,20 @@ struct NodeGraph(Copyable, Movable):
                 + String(count)
             )
         var entry = self._versions.copy()
+        var live = self.Var(self.float(1))
+        var skip = self.Var(self.float(0))
         var index = self.float(start)
         var phis = List[Int]()
-        for v in range(len(self._versions)):
+        for v in range(len(self._versions)):  # pragma: no branch
+            if self._retired[v]:
+                phis.append(-1)
+                continue
             var type = self._var_types[v]
             var phi = self._add(NODE_COPY, type, self._versions[v])
             phis.append(phi.value)
             self._versions[v] = phi.value
+        # Each time through starts not skipping.
+        self._versions[skip.value] = self.float(0).value
         self._blocks.append(
             _Block(
                 _BLOCK_LOOP,
@@ -2701,6 +3488,9 @@ struct NodeGraph(Copyable, Movable):
                 step,
                 index.value,
                 phis^,
+                live.value,
+                skip.value,
+                False,
             )
         )
         return index
@@ -2731,7 +3521,30 @@ struct NodeGraph(Copyable, Movable):
         after the first, each copy reading the variables the last one left.
         """
         var block = self._blocks.pop()
+        self._retired[block.live] = True
+        self._retired[block.skip] = True
         var first = block.body
+        if block.stopped and block.count > 0:
+            # A time through that starts after a `Break` changes nothing: each
+            # variable keeps what the time before left it, and a discard in
+            # the body throws nothing away.
+            var started = NodeRef(block.phis[block.live])
+            for v in range(len(block.phis)):  # pragma: no branch
+                if v == block.skip or self._versions[v] == block.phis[v]:
+                    continue
+                if block.phis[v] < 0:
+                    continue
+                self._versions[v] = self.select(
+                    started,
+                    NodeRef(self._versions[v]),
+                    NodeRef(block.phis[v]),
+                ).value
+            for index in range(len(self._discards)):
+                if self._discards[index] >= first:
+                    self._discards[index] = self.logical_or(
+                        NodeRef(self._discards[index]),
+                        self.logical_not(started),
+                    ).value
         var past = self.count()
         var copies = block.count - 1
         if copies > 0 and past + (past - first) * copies > MAX_GRAPH_NODES:
@@ -2759,9 +3572,10 @@ struct NodeGraph(Copyable, Movable):
             moved[0] = self.float(
                 block.start + Float32(time) * block.step
             ).value
-            for v in range(len(block.phis)):
-                moved[block.phis[v] - first] = previous[v]
-            for node in range(first + 1, past):
+            for v in range(len(block.phis)):  # pragma: no branch
+                if block.phis[v] >= 0:
+                    moved[block.phis[v] - first] = previous[v]
+            for node in range(first + 1, past):  # pragma: no branch
                 if moved[node - first] >= 0:
                     continue
                 var inputs = List[Int]()
@@ -2800,12 +3614,12 @@ struct NodeGraph(Copyable, Movable):
                     if self._discards[index] == node:
                         self._discards.append(copy.value)
                         break
-            for v in range(len(previous)):
+            for v in range(len(previous)):  # pragma: no branch
                 var at = ended[v]
                 previous[v] = (
                     moved[at - first] if at >= first and at < past else at
                 )
-        for v in range(len(previous)):
+        for v in range(len(previous)):  # pragma: no branch
             self._versions[v] = previous[v]
 
     def End(mut self) raises:
@@ -2847,7 +3661,11 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If a node the path reads is not in this graph.
         """
-        var keep = self.logical_not(self._path())
+        var path = self._path()
+        var gate = self._gate()
+        if gate.value >= 0:
+            path = self.logical_and(path, gate)
+        var keep = self.logical_not(path)
         self._discards.append(keep.value)
 
     def call(mut self, function: Fn, args: List[NodeRef]) raises -> NodeRef:
@@ -2943,6 +3761,34 @@ struct NodeGraph(Copyable, Movable):
         self._outputs[output.value] = node.value
 
     # --- compiling ----------------------------------------------------------
+
+    def _needs(self) -> List[Int]:
+        """Return each node's Ershov number: how many registers its value
+        takes to compute when the input that needs most goes first, as if
+        no value were shared."""
+        var need = List[Int](length=self.count(), fill=1)
+        for node in range(self.count()):  # pragma: no branch
+            var a = 0
+            var b = 0
+            var c = 0
+            for slot in range(3):  # pragma: no branch
+                var input = self._inputs[node * 3 + slot]
+                # An input is made before its reader.
+                if input < 0:
+                    continue
+                var n = need[input]
+                if n > a:
+                    c = b
+                    b = a
+                    a = n
+                elif n > b:
+                    c = b
+                    b = n
+                else:
+                    # Only a third input gets here, and `c` is still zero.
+                    c = n
+            need[node] = max(max(a, b + 1), max(c + 2, 1))
+        return need^
 
     def _order(self, root: Int) raises -> List[Int]:
         """Return every node `root` reads, each once, inputs first, ending
@@ -3075,8 +3921,26 @@ struct NodeGraph(Copyable, Movable):
                     or not work._types[node].is_valid()
                 ):
                     raise Error("A node holds a kind or a type there is not")
+                if (
+                    work._kinds[node] == NODE_MATRIX_COLUMNS
+                    or work._kinds[node] == NODE_MATRIX_TAIL
+                ):
+                    raise Error(
+                        "A matrix a node graph builds is only multiplied,"
+                        " not read by an instruction"
+                    )
                 work._check_stage(NodeOutput(output), work._kinds[node])
-            var layout = _lay_out(work, order, root, zero, pool)
+            var layout: _Layout
+            try:
+                layout = _lay_out(work, order, root, zero, pool, _SLOT_ORDER)
+            except:
+                # Too many values at once in slot order: the neediest input
+                # first, then the oldest. The same nodes, so the same pooled
+                # values.
+                try:
+                    layout = _lay_out(work, order, root, zero, pool, _NEEDIEST)
+                except:
+                    layout = _lay_out(work, order, root, zero, pool, _OLDEST)
             total += len(layout.ops)
             layouts.append(layout^)
         if total == 0:
@@ -3259,8 +4123,19 @@ def _canonical(
     return at * NODE_CONTEXT_COUNT + seat
 
 
+# The orders `_lay_out` can visit a node's inputs in.
+comptime _SLOT_ORDER = 0
+comptime _NEEDIEST = 1
+comptime _OLDEST = 2
+
+
 def _lay_out(
-    graph: NodeGraph, order: List[Int], root: Int, zero: Int, mut pool: _Pool
+    graph: NodeGraph,
+    order: List[Int],
+    root: Int,
+    zero: Int,
+    mut pool: _Pool,
+    mode: Int,
 ) raises -> _Layout:
     """Return one output's instructions, each node in each context it is
     needed in once, inputs first, with registers given back as soon as the
@@ -3280,6 +4155,7 @@ def _lay_out(
     # Each instruction's operand instructions, or -1.
     var reads = List[Int]()
     var start = _canonical(graph, root, AT_FRAGMENT.value, varies, bent, zero)
+    var need = graph._needs() if mode == _NEEDIEST else List[Int]()
     var stack: List[Int] = [start, 0]
     while len(stack) > 0:
         var key = stack[len(stack) - 2]
@@ -3293,10 +4169,11 @@ def _lay_out(
         var children = _children(graph, node, context, varies, bent, zero)
         if phase == 0:
             stack[len(stack) - 1] = 1
-            # Always three: a child is -1 where the node has none.
-            for index in range(len(children) - 1, -1, -1):  # pragma: no branch
-                if children[index] >= 0 and made[children[index]] < 0:
-                    stack.append(children[index])
+            # Pushed last, visited first.
+            var visit = _visit(children, mode, need)
+            for index in range(len(visit) - 1, -1, -1):
+                if made[visit[index]] < 0:
+                    stack.append(visit[index])
                     stack.append(0)
             continue
         _ = stack.pop()
@@ -3311,6 +4188,32 @@ def _lay_out(
         )
     _allocate(reads, layout)
     return layout^
+
+
+def _visit(children: List[Int], mode: Int, need: List[Int]) -> List[Int]:
+    """Return a node's inputs in the order to lay them out.
+
+    Which goes first decides how many values wait while another is
+    computed. Slot order suits most graphs. A chain of selects, such as
+    `Break` and `Return` leave, can need the input that needs the most
+    registers first, or the oldest first.
+    """
+    var out = List[Int]()
+    # Always three: a child is -1 where the node has none.
+    for index in range(3):  # pragma: no branch
+        var child = children[index]
+        if child < 0:
+            continue
+        var at = len(out)
+        if mode == _NEEDIEST:
+            var n = need[child // NODE_CONTEXT_COUNT]
+            while at > 0 and need[out[at - 1] // NODE_CONTEXT_COUNT] < n:
+                at -= 1
+        elif mode == _OLDEST:
+            while at > 0 and out[at - 1] > child:
+                at -= 1
+        out.insert(at, child)
+    return out^
 
 
 def _children(
@@ -4236,6 +5139,142 @@ def _bjfinal(var a: UInt32, var b: UInt32, var c: UInt32) -> UInt32:
     return c
 
 
+def _bjmix(mut a: UInt32, mut b: UInt32, mut c: UInt32):
+    """Mix three words, Bob Jenkins's `mix`, MaterialX's `mx_bjmix`."""
+    a -= c
+    a ^= _rotl32(c, 4)
+    c += b
+    b -= a
+    b ^= _rotl32(a, 6)
+    a += c
+    c -= b
+    c ^= _rotl32(b, 8)
+    b += a
+    a -= c
+    a ^= _rotl32(c, 16)
+    c += b
+    b -= a
+    b ^= _rotl32(a, 19)
+    a += c
+    c -= b
+    c ^= _rotl32(b, 4)
+    b += a
+
+
+def _hash_of(p: SIMD[DType.int32, 8], count: Int) -> UInt32:
+    """Return MaterialX's `mx_hash_int` of one to five whole numbers."""
+    var seed = UInt32(0xDEADBEEF) + (UInt32(count) << 2) + 13
+    if count == 1:
+        return _bjfinal(seed + UInt32(p[0]), seed, seed)
+    var a = seed + UInt32(p[0])
+    var b = seed + UInt32(p[1])
+    var c = seed + UInt32(p[2]) if count >= 3 else seed
+    if count <= 3:
+        return _bjfinal(a, b, c)
+    _bjmix(a, b, c)
+    a += UInt32(p[3])
+    if count == 5:
+        b += UInt32(p[4])
+    return _bjfinal(a, b, c)
+
+
+def _to_01(bits: UInt32) -> Float32:
+    """Return a hash as a float from zero to one, MaterialX's
+    `mx_bits_to_01`."""
+    return Float32(bits) / Float32(4294967295.0)
+
+
+def _cells(p: Lanes, count: Int) -> SIMD[DType.int32, 8]:
+    """Return the whole numbers below each of a point's lanes, and room
+    for one more."""
+    var out = SIMD[DType.int32, 8](0)
+    for lane in range(count):  # pragma: no branch
+        out[lane] = Int32(floor(p[lane]))
+    return out
+
+
+def cell_noise(p: Lanes, count: Int) -> Float32:
+    """Return MaterialX's cell noise at a point, three.js's
+    `mx_cell_noise_float`: one value from zero to one for each cell of
+    whole numbers.
+
+    Args:
+        p: The point, in its first one to four lanes.
+        count: How many lanes the point has.
+
+    Returns:
+        The noise.
+    """
+    return _to_01(_hash_of(_cells(p, count), count))
+
+
+def cell_noise_vec3(p: Lanes, count: Int) -> Lanes:
+    """Return MaterialX's cell noise of three components at a point,
+    three.js's `mx_cell_noise_vec3`: the cell's whole numbers hashed with
+    zero, one and two.
+
+    Args:
+        p: The point, in its first one to four lanes.
+        count: How many lanes the point has.
+
+    Returns:
+        The noise, each component from zero to one.
+    """
+    var cells = _cells(p, count)
+    var out = Lanes(0)
+    for k in range(3):  # pragma: no branch
+        cells[count] = Int32(k)
+        out[k] = _to_01(_hash_of(cells, count + 1))
+    return out
+
+
+def worley_noise(p: Lanes, count: Int, jitter: Float32, width: Int) -> Lanes:
+    """Return MaterialX's Worley noise at a point, three.js's
+    `mx_worley_noise_float`, `_vec2` and `_vec3` with the metric that
+    `MaterialXNodes` gives them: the squared distances to the nearest one,
+    two or three of the points that jitter each neighboring cell.
+
+    Args:
+        p: The point, in its first two or three lanes.
+        count: Two or three, how many lanes the point has.
+        jitter: How far a cell's point moves from its center, from zero to
+            one.
+        width: How many distances, nearest first.
+
+    Returns:
+        The distances, a million where fewer are near.
+    """
+    var cells = _cells(p, count)
+    var local = Lanes(0)
+    for lane in range(count):  # pragma: no branch
+        local[lane] = p[lane] - Float32(cells[lane])
+    var best = Lanes(1e6, 1e6, 1e6, 0)
+    var depth = 3 if count == 3 else 1
+    for dx in range(-1, 2):  # pragma: no branch
+        for dy in range(-1, 2):  # pragma: no branch
+            for dz in range(depth):  # pragma: no branch
+                var offset = Lanes(Float32(dx), Float32(dy), Float32(dz - 1), 0)
+                var at = Lanes(0)
+                for lane in range(count):  # pragma: no branch
+                    at[lane] = offset[lane] + Float32(cells[lane])
+                var tmp = cell_noise_vec3(at, count)
+                var dist = Float32(0)
+                for lane in range(count):  # pragma: no branch
+                    var moved = (tmp[lane] - 0.5) * jitter + 0.5
+                    var d = (offset[lane] + moved) - local[lane]
+                    dist = dist + d * d
+                if dist < best[0]:
+                    best[2] = best[1]
+                    best[1] = best[0]
+                    best[0] = dist
+                elif width > 1 and dist < best[1]:
+                    best[2] = best[1]
+                    best[1] = dist
+                elif width > 2 and dist < best[2]:
+                    best[2] = dist
+    return best
+
+
 def _hash(x: Int32, y: Int32, z: Int32, count: Int) -> UInt32:
     """Return MaterialX's `mx_hash_int` of two or three whole numbers."""
     var seed = UInt32(0xDEADBEEF) + (UInt32(count) << 2) + 13
@@ -4271,6 +5310,35 @@ def perlin_noise(p: Lanes, count: Int) -> Float32:
     Returns:
         The noise, from about minus one to one.
     """
+    return _perlin(p, count, -1)
+
+
+def perlin_noise_vec3(p: Lanes, count: Int) -> Lanes:
+    """Return MaterialX's Perlin noise of three components at a point,
+    three.js's `mx_perlin_noise_vec3`: each component graded by one byte
+    of each corner's hash.
+
+    Args:
+        p: The point, in its first two or three lanes.
+        count: Two or three, how many lanes the point has.
+
+    Returns:
+        The noise, each component from about minus one to one.
+    """
+    return Lanes(
+        _perlin(p, count, 0), _perlin(p, count, 1), _perlin(p, count, 2), 0
+    )
+
+
+def _pick(byte: Int, hash: UInt32) -> UInt32:
+    """Return a hash, or one byte of it, MaterialX's `mx_hash_vec3`."""
+    if byte < 0:
+        return hash
+    return (hash >> UInt32(8 * byte)) & 0xFF
+
+
+def _perlin(p: Lanes, count: Int, byte: Int) -> Float32:
+    """Return Perlin noise graded by each corner's hash, or one byte of it."""
     var fx = floor(p[0])
     var fy = floor(p[1])
     var X = Int32(fx)
@@ -4283,11 +5351,15 @@ def perlin_noise(p: Lanes, count: Int) -> Float32:
     var t1 = 1.0 - v
     if count == 2:
         var flat = t1 * (
-            _gradient(_hash(X, Y, 0, 2), x, y, 0, 2) * s1
-            + _gradient(_hash(X + 1, Y, 0, 2), x - 1.0, y, 0, 2) * u
+            _gradient(_pick(byte, _hash(X, Y, 0, 2)), x, y, 0, 2) * s1
+            + _gradient(_pick(byte, _hash(X + 1, Y, 0, 2)), x - 1.0, y, 0, 2)
+            * u
         ) + v * (
-            _gradient(_hash(X, Y + 1, 0, 2), x, y - 1.0, 0, 2) * s1
-            + _gradient(_hash(X + 1, Y + 1, 0, 2), x - 1.0, y - 1.0, 0, 2) * u
+            _gradient(_pick(byte, _hash(X, Y + 1, 0, 2)), x, y - 1.0, 0, 2) * s1
+            + _gradient(
+                _pick(byte, _hash(X + 1, Y + 1, 0, 2)), x - 1.0, y - 1.0, 0, 2
+            )
+            * u
         )
         return 0.6616 * flat
     var fz = floor(p[2])
@@ -4295,18 +5367,33 @@ def perlin_noise(p: Lanes, count: Int) -> Float32:
     var z = p[2] - fz
     var w = _fade(z)
     var near = t1 * (
-        _gradient(_hash(X, Y, Z, 3), x, y, z, 3) * s1
-        + _gradient(_hash(X + 1, Y, Z, 3), x - 1.0, y, z, 3) * u
+        _gradient(_pick(byte, _hash(X, Y, Z, 3)), x, y, z, 3) * s1
+        + _gradient(_pick(byte, _hash(X + 1, Y, Z, 3)), x - 1.0, y, z, 3) * u
     ) + v * (
-        _gradient(_hash(X, Y + 1, Z, 3), x, y - 1.0, z, 3) * s1
-        + _gradient(_hash(X + 1, Y + 1, Z, 3), x - 1.0, y - 1.0, z, 3) * u
+        _gradient(_pick(byte, _hash(X, Y + 1, Z, 3)), x, y - 1.0, z, 3) * s1
+        + _gradient(
+            _pick(byte, _hash(X + 1, Y + 1, Z, 3)), x - 1.0, y - 1.0, z, 3
+        )
+        * u
     )
     var far = t1 * (
-        _gradient(_hash(X, Y, Z + 1, 3), x, y, z - 1.0, 3) * s1
-        + _gradient(_hash(X + 1, Y, Z + 1, 3), x - 1.0, y, z - 1.0, 3) * u
+        _gradient(_pick(byte, _hash(X, Y, Z + 1, 3)), x, y, z - 1.0, 3) * s1
+        + _gradient(
+            _pick(byte, _hash(X + 1, Y, Z + 1, 3)), x - 1.0, y, z - 1.0, 3
+        )
+        * u
     ) + v * (
-        _gradient(_hash(X, Y + 1, Z + 1, 3), x, y - 1.0, z - 1.0, 3) * s1
-        + _gradient(_hash(X + 1, Y + 1, Z + 1, 3), x - 1.0, y - 1.0, z - 1.0, 3)
+        _gradient(
+            _pick(byte, _hash(X, Y + 1, Z + 1, 3)), x, y - 1.0, z - 1.0, 3
+        )
+        * s1
+        + _gradient(
+            _pick(byte, _hash(X + 1, Y + 1, Z + 1, 3)),
+            x - 1.0,
+            y - 1.0,
+            z - 1.0,
+            3,
+        )
         * u
     )
     return 0.9820 * ((1.0 - w) * near + w * far)
@@ -4351,6 +5438,44 @@ def _per_lane(op: Int, x: Lanes, y: Lanes) -> Lanes:
         else:
             out[lane] = _round(a)
     return out
+
+
+comptime Whole = SIMD[DType.int32, 4]
+
+
+def _whole(x: Lanes) -> Whole:
+    """Return each component truncated toward zero to a 32-bit integer.
+    A value past the range is held at its end, and NaN is zero, so no
+    conversion is undefined on either backend."""
+    # NaN by its bits: every exponent bit set, and a mantissa. A float
+    # compared with itself cannot be trusted to say so.
+    var bits = bitcast[DType.uint32, 4](x)
+    var nan = (bits & 0x7F800000).eq(0x7F800000) & (bits & 0x007FFFFF).ne(0)
+    var held = nan.select(Lanes(0), x)
+    held = min(max(held, Lanes(-2147483648.0)), Lanes(2147483520.0))
+    return held.cast[DType.int32]()
+
+
+def _bits(op: Int, x: Lanes, y: Lanes) -> Lanes:
+    """Return a bit operation's result, held as floats."""
+    var a = _whole(x)
+    var b = _whole(y)
+    if op == NODE_BIT_AND.value:
+        return (a & b).cast[DType.float32]()
+    if op == NODE_BIT_OR.value:
+        return (a | b).cast[DType.float32]()
+    if op == NODE_BIT_XOR.value:
+        return (a ^ b).cast[DType.float32]()
+    if op == NODE_BIT_NOT.value:
+        return (~a).cast[DType.float32]()
+    var by = b & Whole(31)
+    if op == NODE_SHIFT_LEFT.value:
+        return (a << by).cast[DType.float32]()
+    if op == NODE_SHIFT_RIGHT.value:
+        return (a >> by).cast[DType.float32]()
+    # Unsigned: a negative number wrapped up by 2 ** 32.
+    var whole = a.cast[DType.float32]()
+    return whole.lt(0).select(whole + Lanes(4294967296.0), whole)
 
 
 def _operation[
@@ -4453,6 +5578,8 @@ def _operation[
         return max(x, y)
     if op == NODE_MOD.value:
         return x - y * floor(x / y)
+    if op >= NODE_BIT_AND.value and op <= NODE_UNSIGNED.value:
+        return _bits(op, x, y)
     if op == NODE_DISTANCE.value:
         var apart = x - y
         return Lanes(sqrt(_dot(apart, apart, width)))
@@ -4498,6 +5625,14 @@ def _operation[
         return _matrix(source, x, width, op == NODE_VECTOR_MATRIX.value)
     if op == NODE_NOISE.value:
         return Lanes(perlin_noise(x, width))
+    if op == NODE_NOISE_VEC3.value:
+        return perlin_noise_vec3(x, width)
+    if op == NODE_CELL_NOISE.value:
+        return Lanes(cell_noise(x, width))
+    if op == NODE_CELL_NOISE_VEC3.value:
+        return cell_noise_vec3(x, width)
+    if op == NODE_WORLEY.value:
+        return worley_noise(x, width % 4, y[0], width // 4)
     # `NODE_INTERPOLATE`, the one operation left: `compile` writes nothing
     # else.
     var s = source.shares(NodeContext(width))
