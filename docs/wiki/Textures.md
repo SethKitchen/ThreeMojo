@@ -373,6 +373,16 @@ A standard or physical surface reads a PMREM. `prefilter_environments(scene, ass
 
 Each reader refuses a file that three.js reads wrongly. three.js reads every EXR color channel with the type of the last one. This reader reads each channel as its own type. three.js reads past the end of a block, a Huffman table or a file. It also leaves the rows of a short RGBE file black. Both readers here refuse each of these.
 
+## Flakes
+
+`flakes_texture(width, height, seed)` in `render.flakes_texture` is three.js's `FlakesTexture`: a normal map of small discs, each with a random normal. Use it as a car paint's normal map, as three.js's `webgl_materials_car` example does. The texture holds data, not color, and it repeats.
+
+```mojo
+var flakes = assets.textures.add(flakes_texture(512, 512, seed=7))
+```
+
+The places, the sizes and the normals come from `seed`, so the same seed makes the same texture on every platform. three.js draws on a canvas with `Math.random`, so its flakes are different at each run.
+
 ## Anisotropy
 
 A surface seen at a glancing angle covers a footprint that is long one way and short the other. A mip level is square. The level the long axis wants blurs the short axis, and the level the short axis wants sparkles along the long one. `anisotropy`, three.js's `Texture.anisotropy`, is how many samples a fragment can take along the long axis instead, each read at the level the short axis wants.
