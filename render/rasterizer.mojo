@@ -98,6 +98,8 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
     AO_NODE,
+    BACKDROP_ALPHA_NODE,
+    BACKDROP_NODE,
     AT_RIGHT,
     AT_UP,
     COLOR_NODE,
@@ -105,6 +107,7 @@ from materials.nodes import (
     CORNER_B,
     DEPTH_NODE,
     EMISSIVE_NODE,
+    FRAGMENT_NODE,
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
@@ -2335,8 +2338,14 @@ def _has_volume(a: RasterVertex) -> Bool:
     )
 
 
-def check_transmission(a: RasterVertex, mode: ShadeMode, ready: Bool) raises:
-    """Refuse a transmissive triangle with no opaque scene to look through.
+def check_transmission(
+    a: RasterVertex,
+    mode: ShadeMode,
+    ready: Bool,
+    programs: NodeProgramStore = NodeProgramStore(),
+) raises:
+    """Refuse a transmissive triangle, or one whose node program reads the
+    scene behind it, with no opaque scene to look through.
 
     A triangle transmits under `SHADE_TEXTURE` alone, since what it shows
     is read from a texture, the opaque scene drawn first. Shared by both
@@ -2347,15 +2356,25 @@ def check_transmission(a: RasterVertex, mode: ShadeMode, ready: Bool) raises:
         mode: What a fragment's color is taken from.
         ready: Whether a `TransmissionTarget` holding the opaque scene was
             given.
+        programs: Where the triangle's node program lives.
 
     Raises:
-        Error: If the triangle transmits under this mode and no target was
-            given.
+        Error: If the triangle transmits under this mode, or its program
+            reads the scene behind it, and no target was given; or its
+            program is not in the store.
     """
-    if a.transmission > 0 and mode == SHADE_TEXTURE and not ready:
+    if mode != SHADE_TEXTURE or ready:
+        return
+    if a.transmission > 0:
         raise Error(
             "A transmissive triangle needs the opaque scene behind it: pass"
             " a TransmissionTarget, as Renderer.render_into builds one"
+        )
+    if a.nodes != NO_NODES and programs.get(a.nodes).reads_scene:
+        raise Error(
+            "A node program that reads the scene behind it needs the opaque"
+            " scene: pass a TransmissionTarget, as Renderer.render_into"
+            " builds one"
         )
 
 
@@ -3183,7 +3202,7 @@ def rasterize_shaded(
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
     check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
-    check_transmission(a, mode, transmission.is_ready())
+    check_transmission(a, mode, transmission.is_ready(), programs)
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -3293,6 +3312,8 @@ def rasterize_shaded(
         Pointer(to=c).unsafe_origin_cast[ImmutAnyOrigin](),
         coverage,
         target.height,
+        target.width,
+        Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
     )
     var textured = mode == SHADE_TEXTURE
     # Whether the graph can throw a fragment away, as an alpha test can:
@@ -3300,6 +3321,11 @@ def rasterize_shaded(
     # itself, before the tests read it.
     var masked = noded and has_output(nodes, MASK_NODE)
     var deep = noded and has_output(nodes, DEPTH_NODE)
+    # A fragment node replaces the material's shading, so the alpha test
+    # and the alpha hash, which read the material's alpha, do not run.
+    var fragmented = noded and has_output(nodes, FRAGMENT_NODE)
+    tested = tested and not fragmented
+    hashed = hashed and not fragmented
     var reversed = a.state.depth_mode == REVERSED_DEPTH
     # Where each map is sampled: its own channel and matrix, three.js's
     # `vMapUv`, `vNormalMapUv` and the rest. The corners carry the two raw
@@ -4107,6 +4133,22 @@ def rasterize_shaded(
                     glow = FloatColor(
                         given_off[0], given_off[1], given_off[2], 1.0
                     )
+                # The backdrop in place of the diffuse light, mixed by its
+                # alpha where that is set: three.js's `backdropNode`. The
+                # specular light and the glow are added to it after.
+                if has_output(nodes, BACKDROP_NODE):
+                    var backdrop = run_nodes(nodes, BACKDROP_NODE, given)
+                    var share = Float32(1)
+                    if has_output(nodes, BACKDROP_ALPHA_NODE):
+                        share = run_nodes(nodes, BACKDROP_ALPHA_NODE, given)[
+                            0
+                        ]
+                    shaded = FloatColor(
+                        shaded.r + (backdrop[0] - shaded.r) * share,
+                        shaded.g + (backdrop[1] - shaded.g) * share,
+                        shaded.b + (backdrop[2] - shaded.b) * share,
+                        shaded.a,
+                    )
                 # Thrown away where the mask is zero, three.js's `maskNode`
                 # and every `Discard`: before the alpha test, as three.js
                 # discards it in `setupDiffuseColor`.
@@ -4489,7 +4531,23 @@ def rasterize_shaded(
             # own, interpolated like the color: a small number, where a
             # world coordinate a million meters out rounds it away. The
             # kernel interpolates the same lane and mixes with the same
-            # function.
+            # function. A fragment node's color is veiled in place of the
+            # material's, as three.js's `setupOutput` veils it.
+            if fragmented:
+                var own = run_nodes(
+                    nodes,
+                    FRAGMENT_NODE,
+                    NodeInputs(
+                        u,
+                        v,
+                        spot,
+                        facing,
+                        Vector3(base.r, base.g, base.b),
+                        Vector3(0, 0, 0),
+                        textured,
+                    ),
+                )
+                shaded = FloatColor(own[0], own[1], own[2], own[3])
             if fogged:
                 var depth = (
                     a.view_depth * share_a
@@ -4499,8 +4557,9 @@ def rasterize_shaded(
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
             # The node graph's output last, reading the finished light,
             # fog and all, as three.js's `outputNode` reads `output`.
-            # Alpha is coverage and stays what the fragment said.
-            if noded and has_output(nodes, OUTPUT_NODE):
+            # Alpha is coverage and stays what the fragment said. A fragment
+            # node runs no output node, as three.js runs none.
+            if noded and not fragmented and has_output(nodes, OUTPUT_NODE):
                 var finished = run_nodes(
                     nodes,
                     OUTPUT_NODE,
@@ -4579,9 +4638,12 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
     var x: Int
     var y: Int
     # The target's height, and the fragment's depth in normalized device
-    # space, for `frag_coord`.
+    # space, for `frag_coord`; its width, for `screen_uv`.
     var height: Int
     var depth: Float32
+    var width: Int
+    # The opaque scene behind, for `viewport_texture`.
+    var transmission: Pointer[TransmissionTarget, Self.origin]
 
     def __init__(
         out self,
@@ -4596,9 +4658,11 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         c: Pointer[RasterVertex, Self.origin],
         coverage: _Coverage,
         height: Int,
+        width: Int,
+        transmission: Pointer[TransmissionTarget, Self.origin],
     ):
-        """Borrow a program and a triangle on a target `height` pixels
-        high, at the pixel (0, 0)."""
+        """Borrow a program and a triangle on a target `width` by `height`
+        pixels, at the pixel (0, 0), and the opaque scene behind it."""
         self.programs = programs
         self.program = program
         self.textures = textures
@@ -4613,6 +4677,8 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         self.y = 0
         self.height = height
         self.depth = 0
+        self.width = width
+        self.transmission = transmission
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -4695,6 +4761,18 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.depth * 0.5 + 0.5,
             1,
         )
+
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
+        )
+
+    def behind(self, u: Float32, v: Float32) -> FloatColor:
+        """Return the opaque scene behind at a place on the target: the
+        transmission target's full-size level, bilinear."""
+        ref image = self.transmission[].image
+        return image._sample_at(u, v, 0, image.filter_at(0))
 
     def seen_from_behind(self) -> Bool:
         """Return whether the triangle is seen from its back."""
@@ -6072,7 +6150,7 @@ def rasterize_frame(
         if draw.kind != DRAW_TRIANGLES:
             continue
         for triangle in range(draw.first, draw.first + draw.count):
-            check_transmission(corners[triangle * 3], mode, ready)
+            check_transmission(corners[triangle * 3], mode, ready, programs)
 
     var bands = min(workers, target.height)
     if bands == 1:

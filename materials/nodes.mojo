@@ -15,7 +15,7 @@ reads it out of a device buffer, through the `NodeSource` trait, so the two
 backends run the same arithmetic in the same order. `materials.glsl`
 compiles GLSL source to the same graphs.
 
-A graph sets up to ten outputs, each three.js's property of the same name:
+A graph sets up to thirteen outputs, each three.js's property of the same name:
 
 - `COLOR_NODE`, a `vec3`: the surface's diffuse color, three.js's
   `colorNode`. It replaces the material's color, its vertex colors and its
@@ -44,6 +44,12 @@ A graph sets up to ten outputs, each three.js's property of the same name:
 - `SIZE_NODE`, a `float`: three.js's `sizeNode` and GLSL's `gl_PointSize`,
   a point's width in pixels. It runs on the host, once per point, and
   replaces the material's size and its attenuation. Only a point reads it.
+- `BACKDROP_NODE`, a `vec3`: three.js's `backdropNode`. It replaces the
+  diffuse light, mixed by `BACKDROP_ALPHA_NODE`, a `float`, where that is
+  set. The specular light and the glow are added after it.
+- `FRAGMENT_NODE`, a `vec4`: three.js's `fragmentNode`, the fragment's
+  color and alpha in place of all the material's own shading. The fog
+  veils it; the alpha test and the output node do not run.
 
 A graph refuses a type error as it is built: a `vec3` added to a `vec2`, a
 `float` output given a `vec3`, a swizzle of a component the value lacks. A
@@ -122,11 +128,11 @@ comptime INSTRUCTION_C = 3
 comptime INSTRUCTION_IMMEDIATE = 4
 comptime INSTRUCTION_DEST = 5
 comptime INSTRUCTION_FLOATS = 6
-# How a program begins: where each of the ten outputs starts and how many
+# How a program begins: where each of the thirteen outputs starts and how many
 # instructions it holds, then the frame's time in seconds, then the view
 # matrix, sixteen floats, column-major. The renderer writes the last two
 # every frame, as three.js updates its `time` and `cameraViewMatrix` nodes.
-comptime NODE_OUTPUT_COUNT = 10
+comptime NODE_OUTPUT_COUNT = 13
 comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
@@ -216,7 +222,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_POINT_COORD.value
+            and self.value <= NODE_VIEWPORT_TEXTURE.value
         )
 
 
@@ -381,6 +387,12 @@ comptime NODE_TEXTURE_ARRAY = NodeKind(103)
 # across from the left and down from the top. A leaf numbered after the
 # operations; see `point_coord`.
 comptime NODE_POINT_COORD = NodeKind(104)
+# Where the fragment is on the target, zero to one from the bottom left,
+# three.js's `screenUV`; and the opaque scene behind the surface read at a
+# place on the target, three.js's `viewportSharedTexture`. Leaves numbered
+# after the operations; see `screen_uv` and `viewport_texture`.
+comptime NODE_SCREEN_UV = NodeKind(105)
+comptime NODE_VIEWPORT_TEXTURE = NodeKind(106)
 
 
 @fieldwise_init
@@ -391,7 +403,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the ten outputs there are.
+        """Return True if this is one of the thirteen outputs there are.
 
         Returns:
             Whether the value names an output.
@@ -403,7 +415,8 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
 
         Returns:
             `NODE_FLOAT` for the opacity, the mask, the ambient occlusion,
-            the depth and the size, and `NODE_VEC3` for the rest.
+            the depth, the size and the backdrop's alpha, `NODE_VEC4` for
+            the fragment, and `NODE_VEC3` for the rest.
         """
         return NODE_FLOAT if (
             self == OPACITY_NODE
@@ -411,7 +424,8 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
             or self == AO_NODE
             or self == DEPTH_NODE
             or self == SIZE_NODE
-        ) else NODE_VEC3
+            or self == BACKDROP_ALPHA_NODE
+        ) else (NODE_VEC4 if self == FRAGMENT_NODE else NODE_VEC3)
 
 
 comptime COLOR_NODE = NodeOutput(0)
@@ -424,6 +438,9 @@ comptime MASK_NODE = NodeOutput(6)
 comptime AO_NODE = NodeOutput(7)
 comptime DEPTH_NODE = NodeOutput(8)
 comptime SIZE_NODE = NodeOutput(9)
+comptime BACKDROP_NODE = NodeOutput(10)
+comptime BACKDROP_ALPHA_NODE = NodeOutput(11)
+comptime FRAGMENT_NODE = NodeOutput(12)
 
 
 @fieldwise_init
@@ -578,6 +595,7 @@ def _is_attribute(kind: NodeKind) -> Bool:
         or kind == NODE_FRONT_FACING
         or kind == NODE_ATTRIBUTE
         or kind == NODE_POINT_COORD
+        or kind == NODE_SCREEN_UV
     )
 
 
@@ -814,16 +832,16 @@ struct NodeGraph(Copyable, Movable):
         """Return the node that feeds an output, or `NodeRef(-1)` for none.
 
         Args:
-            output: One of the ten outputs.
+            output: One of the thirteen outputs.
 
         Returns:
             The node's ref.
 
         Raises:
-            Error: If the output is none of the ten.
+            Error: If the output is none of the thirteen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the ten")
+            raise Error("A node output that is none of the thirteen")
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -1377,6 +1395,41 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_POINT_COORD, NODE_VEC2)
+
+    def screen_uv(mut self) -> NodeRef:
+        """Return where the fragment is on the target, a `vec2`, three.js's
+        `screenUV`: zero to one across from the left edge and up from the
+        bottom one, at the pixel's center. Only a fragment reads it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_SCREEN_UV, NODE_VEC2)
+
+    def viewport_texture(mut self, at: NodeRef) raises -> NodeRef:
+        """Return the opaque scene behind the surface at a place on the
+        target, a linear `vec4` with straight alpha: three.js's
+        `viewportSharedTexture(uv)`. Read it at `screen_uv` to see what is
+        behind the fragment. The renderer draws the opaque scene first for
+        a program that reads it, as it does for a transmissive surface. A
+        triangle reads it; a point and a line read opaque white.
+
+        Args:
+            at: Where to read it, a `vec2`, as `screen_uv` gives it.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If the node is not of this graph or not a `vec2`.
+        """
+        self._check(at)
+        if self._types[at.value] != NODE_VEC2:
+            raise Error(
+                "The scene behind is read at a vec2, not a "
+                + self._types[at.value].name()
+            )
+        return self._add(NODE_VIEWPORT_TEXTURE, NODE_VEC4, at.value)
 
     def front_facing(mut self) -> NodeRef:
         """Return one where the fragment's triangle is seen from its front
@@ -4264,17 +4317,17 @@ struct NodeGraph(Copyable, Movable):
         does.
 
         Args:
-            output: Which output: one of the ten.
+            output: Which output: one of the thirteen.
             node: The node, of the type the output takes: a `float` for the
                 opacity, the mask, the ambient occlusion and the depth, and
                 a `vec3` for the rest.
 
         Raises:
-            Error: If the output is none of the ten, the node is not in
+            Error: If the output is none of the thirteen, the node is not in
                 this graph, or its type is not the output's.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the ten")
+            raise Error("A node output that is none of the thirteen")
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -4373,6 +4426,7 @@ struct NodeGraph(Copyable, Movable):
                 or kind == NODE_TEXTURE_CUBE
                 or kind == NODE_TEXTURE_3D
                 or kind == NODE_TEXTURE_ARRAY
+                or kind == NODE_VIEWPORT_TEXTURE
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -4392,10 +4446,12 @@ struct NodeGraph(Copyable, Movable):
             or kind == NODE_TEXTURE_CUBE
             or kind == NODE_TEXTURE_3D
             or kind == NODE_TEXTURE_ARRAY
+            or kind == NODE_VIEWPORT_TEXTURE
             or kind == NODE_DFDX
             or kind == NODE_DFDY
             or kind == NODE_FRAG_COORD
             or kind == NODE_POINT_COORD
+            or kind == NODE_SCREEN_UV
             or kind == NODE_FRONT_FACING
         ):
             raise Error(
@@ -4513,6 +4569,8 @@ struct NodeGraph(Copyable, Movable):
                     immediate += Float32((base + pooled) * layout.scale[index])
                 program.code.append(immediate)
                 program.code.append(Float32(layout.dest[index]))
+                if layout.ops[index] == NODE_VIEWPORT_TEXTURE.value:
+                    program.reads_scene = True
                 at += INSTRUCTION_FLOATS
         program.code.extend(pool.values.copy())
         for index in range(len(pool.names)):
@@ -4833,6 +4891,7 @@ def _children(
         or kind == NODE_TEXTURE_CUBE
         or kind == NODE_TEXTURE_3D
         or kind == NODE_TEXTURE_ARRAY
+        or kind == NODE_VIEWPORT_TEXTURE
         or kind == NODE_DFDX
         or kind == NODE_DFDY
     ):
@@ -5014,6 +5073,9 @@ struct NodeProgram(Copyable, Movable):
     var attribute_names: List[String]
     var attribute_offsets: List[Int]
     var attribute_widths: List[Int]
+    # Whether a node reads the opaque scene behind the surface, so the
+    # renderer draws that scene first; see `NodeGraph.viewport_texture`.
+    var reads_scene: Bool
 
     def __init__(out self):
         """Create a program with no outputs, at time zero under an identity
@@ -5037,6 +5099,7 @@ struct NodeProgram(Copyable, Movable):
         self.attribute_names = List[String]()
         self.attribute_offsets = List[Int]()
         self.attribute_widths = List[Int]()
+        self.reads_scene = False
 
     def _list_textures(mut self):
         """List every texture the texture nodes read now, each once."""
@@ -5051,16 +5114,16 @@ struct NodeProgram(Copyable, Movable):
         """Return True if the program sets an output.
 
         Args:
-            output: One of the ten outputs.
+            output: One of the thirteen outputs.
 
         Returns:
             Whether a graph node feeds it.
 
         Raises:
-            Error: If the output is none of the ten.
+            Error: If the output is none of the thirteen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the ten")
+            raise Error("A node output that is none of the thirteen")
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:
@@ -5541,6 +5604,31 @@ trait NodeSource:
             The four numbers. A source with no pixel gives zeros and one.
         """
         ...
+
+    def screen_size(self) -> Lanes:
+        """Return the target's width and height in pixels, which
+        `screen_uv` divides `frag_coord` by.
+
+        Returns:
+            The two numbers, then zeros. A source with no target gives
+            ones.
+        """
+        return Lanes(1, 1, 0, 0)
+
+    def behind(self, u: Float32, v: Float32) -> FloatColor:
+        """Return the opaque scene behind the surface at a place on the
+        target, three.js's `viewportSharedTexture`: its full-size level,
+        filtered.
+
+        Args:
+            u: Across, from zero at the left edge.
+            v: Up, from zero at the bottom edge.
+
+        Returns:
+            The linear color, straight alpha. A source with no scene
+            behind reads opaque white.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
 
     def point_coord(self, context: NodeContext) -> Lanes:
         """Return where a fragment is in its point, GLSL's `gl_PointCoord`:
@@ -6026,6 +6114,15 @@ def _leaf[
         return source.frag_coord(NodeContext(context))
     if op == NODE_POINT_COORD.value:
         return source.point_coord(NodeContext(context))
+    if op == NODE_SCREEN_UV.value:
+        var place = source.frag_coord(NodeContext(context))
+        var size = source.screen_size()
+        return Lanes(place[0] / size[0], place[1] / size[1], 0, 0)
+    if op == NODE_VIEWPORT_TEXTURE.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var behind = source.behind(x[0], x[1])
+        return Lanes(behind.r, behind.g, behind.b, behind.a)
     if op == NODE_ATTRIBUTE.value:
         # Interpolated from the corners even at the fragment, whose own
         # attributes carry no custom floats.
@@ -6632,7 +6729,7 @@ def has_output[S: NodeSource](source: S, output: NodeOutput) -> Bool:
 
     Args:
         source: The program.
-        output: One of the ten outputs; the caller names it by its constant.
+        output: One of the thirteen outputs; the caller names it by its constant.
 
     Returns:
         Whether any instruction computes it.
@@ -6656,7 +6753,7 @@ def run_nodes[
     Args:
         source: The program, where its textures are sampled, and its
             triangle.
-        output: One of the ten outputs, one `has_output` answers True for;
+        output: One of the thirteen outputs, one `has_output` answers True for;
             the caller names it by its constant.
         inputs: The fragment's or the vertex's attributes.
 
@@ -6684,6 +6781,8 @@ def run_nodes[
             op < NODE_ADD.value
             or op == NODE_FRAG_COORD.value
             or op == NODE_POINT_COORD.value
+            or op == NODE_SCREEN_UV.value
+            or op == NODE_VIEWPORT_TEXTURE.value
             or op == NODE_FRONT_FACING.value
             or op == NODE_TEXTURE_LEVEL.value
             or op == NODE_TEXEL_FETCH.value
