@@ -123,6 +123,8 @@ The rotation is an `Angle`. A bare float is a compile error.
 
 A sprite is unlit, as three.js's is. `Renderer.prepare` refuses a lit kind. A wireframe is refused too: a sprite is a picture, and its edges say nothing. Its map's own transform is applied as a mesh's is.
 
+A sprite runs a [node material](Node-materials) on its square, as three.js's `SpriteNodeMaterial` does. The graph reads the square's coordinates as `uv()`. A position node is refused, because a sprite has no vertices of its own to move.
+
 With `size_attenuation` off, the sprite keeps its size on the image as the node recedes. The scale is multiplied by the camera-space depth, which the perspective divide then divides out. A unit sprite then has the size on the image it would have one meter from the camera, whatever its distance. Under an orthographic camera the flag changes nothing.
 
 ### How a sprite is drawn

@@ -32,22 +32,30 @@ those: `(modelMatrix * vec4(position, 1.0)).xyz`, `normalMatrix * normal`,
 
 **The fragment shader.** `gl_FragColor`, `pc_fragColor` or the one `out
 vec4` is the color and the opacity. `gl_FragDepth` is the depth node.
-`discard` throws the fragment away.
+`discard` throws the fragment away. `gl_FragCoord` is where the fragment
+is, and `gl_FrontFacing` is true on every face that three.js's WebGL
+renderer calls front: under `BACK_SIDE`, every face drawn.
 
 **The subset.** The types `void`, `bool`, `int`, `float`, `vec2` to
-`vec4`, and `mat3`, `mat4` and `sampler2D` uniforms. Uniforms, varyings,
-`const` globals, functions with `in` parameters, `if` and `else`, `for`
-with a constant count, the operators but the bit ones, `?:`, swizzles,
-constant indexes, constructors, object-like `#define`s, and the built-in
-functions GLSL has for floats and vectors. An `int` is a whole number held
-in a float. GLSL ES has no conversion between `int` and `float`, and
-neither has this. Whatever is outside the subset is refused with the
-shader, the line and the reason.
+`vec4`, `mat2` to `mat4`, and `sampler2D` uniforms. Uniforms, varyings,
+`const` globals, functions with `in`, `out` and `inout` parameters, `if`
+and `else`, `for` with a constant count, the operators but the bit ones,
+`?:`, swizzles, indexes, arrays of one dimension, structs, constructors,
+object-like `#define`s, and the built-in functions GLSL has for floats and
+vectors. An `int` is a whole number held in a float. GLSL ES has no
+conversion between `int` and `float`, and neither has this. Whatever is
+outside the subset is refused with the shader, the line and the reason.
 """
 
+from render.cube_texture_store import NO_CUBE_TEXTURE
+from render.volume_texture_store import (
+    NO_DATA_3D_TEXTURE,
+    NO_DATA_ARRAY_TEXTURE,
+)
 from materials.nodes import (
     COLOR_NODE,
     DEPTH_NODE,
+    MAX_ATTRIBUTE_FLOATS,
     MAX_LOOP_COUNT,
     NODE_FLOAT,
     OPACITY_NODE,
@@ -75,33 +83,44 @@ comptime _KEYWORDS = (
     " attribute const uniform varying layout centroid flat smooth break"
     " continue do for while switch case default if else in out inout true"
     " false invariant discard return struct precision highp mediump lowp"
-    " void float int bool vec2 vec3 vec4 mat3 mat4 sampler2D "
+    " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D ivec2"
+    " ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube sampler3D sampler2DArray "
 )
+# The most elements an array holds: each is a variable, and an index picked
+# where the shader runs reads every one.
+comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
-    " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2 mat2x2"
-    " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
-    " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
-    " usampler2D struct "
+    " uint uvec2 uvec3 uvec4 mat2x2"
+    " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4"
+    " sampler2DShadow samplerCubeShadow isampler2D"
+    " usampler2D "
 )
 comptime _BUILTINS = (
     " radians degrees sin cos tan asin acos atan pow exp log exp2 log2 sqrt"
     " inversesqrt abs sign floor ceil trunc round roundEven fract mod min max"
     " clamp mix step smoothstep length distance dot cross normalize"
-    " faceforward reflect refract dFdx dFdy fwidth texture texture2D "
+    " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
+    " transpose determinant inverse textureLod lessThan lessThanEqual"
+    " greaterThan greaterThanEqual equal notEqual any all not texelFetch"
+    " textureSize textureProj texture2DProj textureCube "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
     " floatBitsToUint intBitsToFloat uintBitsToFloat packSnorm2x16"
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
-    " unpackHalf2x16 matrixCompMult outerProduct transpose determinant"
-    " inverse lessThan lessThanEqual greaterThan greaterThanEqual equal"
-    " notEqual any all not textureSize textureLod textureOffset texelFetch"
-    " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
-    " texture2DProj textureCube "
+    " unpackHalf2x16 matrixCompMult outerProduct"
+    " textureOffset"
+    " texelFetchOffset textureProjLod textureGrad texture2DLod "
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
-comptime _REFUSED_STATEMENTS = " while do switch break continue case default "
+comptime _REFUSED_STATEMENTS = " while do "
+# The built-ins that compare two vectors one component at a time.
+comptime _COMPARISONS = (
+    " lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual "
+)
+# What a `break` leaves when it is a loop's; see `_Compiler.breakables`.
+comptime _A_LOOP = -2
 comptime _BIT_MARKS = " | & ^ << >> ~ "
 
 
@@ -208,9 +227,17 @@ def _is_hex_start(text: String) -> Bool:
     return text.startswith("0x") or text.startswith("0X")
 
 
+# What an open `#if` is doing: taking its lines, waiting for a branch
+# that holds, or done, having taken one or being inside a branch not taken.
+comptime _TAKING = 0
+comptime _WAITING = 1
+comptime _DONE = 2
+
+
 struct _Lexer(Movable):
     """Turns one shader's text into tokens, running its object-like
-    `#define`s and refusing every other preprocessor directive."""
+    `#define`s, its `#undef`s and its `#if`s, and refusing every other
+    preprocessor directive."""
 
     var stage: String
     var raw: Bool
@@ -218,6 +245,10 @@ struct _Lexer(Movable):
     var names: List[String]
     var bodies: List[List[_Token]]
     var tokens: List[_Token]
+    # Each open `#if`, innermost last: `_TAKING`, `_WAITING` or `_DONE`,
+    # and whether its `#else` has come.
+    var conditions: List[Int]
+    var elsed: List[Bool]
 
     def __init__(out self, stage: String, raw: Bool):
         """Start a lexer for one shader."""
@@ -229,6 +260,15 @@ struct _Lexer(Movable):
         self.names = List[String]()
         self.bodies = List[List[_Token]]()
         self.tokens = List[_Token]()
+        self.conditions = List[Int]()
+        self.elsed = List[Bool]()
+
+    def active(self) -> Bool:
+        """Return True if every open `#if` is taking its lines."""
+        for index in range(len(self.conditions)):
+            if self.conditions[index] != _TAKING:
+                return False
+        return True
 
     def error(self, line: Int, why: String) -> Error:
         """Return the error that refuses the shader at a line: the caller
@@ -268,7 +308,7 @@ struct _Lexer(Movable):
                     raise self.error(line, "a comment is never closed")
                 line += String(text[byte=at:close]).count("\n")
                 at = close + 2
-            elif c == UInt8(ord("#")):
+            elif c == UInt8(ord("#")) and (starts_line or self.active()):
                 if not starts_line:
                     raise self.error(line, "a # must begin its line")
                 var end = text.find("\n", at)
@@ -278,9 +318,15 @@ struct _Lexer(Movable):
                     String(text[byte = at + 1 : end]), line, len(out)
                 )
                 at = end
-            else:
+            elif self.active():
                 starts_line = False
                 at = self.token(text, at, line, out)
+            else:
+                # A line an `#if` does not take is skipped, counted.
+                starts_line = False
+                at += 1
+        if len(self.conditions) > 0:
+            raise self.error(line, "an #if is never closed with #endif")
         out.append(_Token(_END, "", 0, line))
         self.tokens = out^
 
@@ -401,6 +447,21 @@ struct _Lexer(Movable):
         if len(words) == 0:
             return
         var name = String(words[0])
+        if _listed(name, " if ifdef ifndef elif else endif "):
+            self.conditional(name, text, line)
+            return
+        if not self.active():
+            return
+        if name == "undef":
+            if len(words) != 2:
+                raise self.error(line, "an #undef names one macro")
+            var gone = String(words[1])
+            for index in range(len(self.names)):
+                if self.names[index] == gone:
+                    _ = self.names.pop(index)
+                    _ = self.bodies.pop(index)
+                    return
+            return
         if name == "version":
             var joined = String("")
             # Never empty: a directive has its name.
@@ -422,6 +483,207 @@ struct _Lexer(Movable):
         raise self.error(
             line, "the directive #" + name + " is outside the subset"
         )
+
+    def conditional(mut self, name: String, text: String, line: Int) raises:
+        """Run `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` or `#endif`.
+
+        Raises:
+            Error: If an `#elif`, an `#else` or an `#endif` has no `#if`, an
+                `#elif` or an `#else` follows an `#else`, a name is missing,
+                or a condition is outside the subset.
+        """
+        var rest = String(text[byte = text.find(name) + name.byte_length() :])
+        if name == "if" or name == "ifdef" or name == "ifndef":
+            if not self.active():
+                self.conditions.append(_DONE)
+                self.elsed.append(False)
+                return
+            var holds: Bool
+            if name == "if":
+                holds = self.condition(rest, line)
+            else:
+                var words = rest.split()
+                if len(words) != 1:
+                    raise self.error(line, "an #" + name + " names one macro")
+                holds = self.defined(String(words[0])) == (name == "ifdef")
+            self.conditions.append(_TAKING if holds else _WAITING)
+            self.elsed.append(False)
+            return
+        if len(self.conditions) == 0:
+            raise self.error(line, "an #" + name + " has no #if")
+        var top = len(self.conditions) - 1
+        if name == "endif":
+            _ = self.conditions.pop()
+            _ = self.elsed.pop()
+            return
+        if self.elsed[top]:
+            raise self.error(line, "an #" + name + " follows the #else")
+        var state = self.conditions[top]
+        if name == "else":
+            self.elsed[top] = True
+            self.conditions[top] = _TAKING if state == _WAITING else _DONE
+            return
+        # `#elif`: taken where no branch before it was and it holds.
+        if state == _WAITING and self.condition(rest, line):
+            self.conditions[top] = _TAKING
+        elif state == _TAKING:
+            self.conditions[top] = _DONE
+
+    def defined(self, name: String) -> Bool:
+        """Return True if a macro is defined."""
+        for index in range(len(self.names)):
+            if self.names[index] == name:
+                return True
+        return False
+
+    def condition(self, text: String, line: Int) raises -> Bool:
+        """Return whether an `#if`'s condition holds: whole numbers, macros
+        that are one whole number, `defined`, `!`, `&&`, `||`, the six
+        comparisons and parentheses. A name that is not a macro is zero, as
+        the C preprocessor has it.
+
+        Raises:
+            Error: If the condition is empty, is outside the subset, or
+                reads a macro that is not one whole number.
+        """
+        var parts = self.pieces(text, line)
+        if len(parts) == 0:
+            raise self.error(line, "an #if needs a condition")
+        var at = 0
+        var value = self.either(parts, at, line)
+        if at != len(parts):
+            raise self.error(
+                line, "the #if condition goes on past " + parts[at - 1]
+            )
+        return value != 0
+
+    def pieces(self, text: String, line: Int) raises -> List[String]:
+        """Split an `#if` condition into names, numbers and marks.
+
+        Raises:
+            Error: If a character is outside a condition.
+        """
+        var parts = List[String]()
+        var bytes = text.as_bytes()
+        var at = 0
+        while at < len(bytes):
+            var c = bytes[at]
+            if _is_space(c):
+                at += 1
+                continue
+            if c == UInt8(ord("/")) and _clipped(text, at, at + 2) == "//":
+                break
+            var end = at + 1
+            if _is_word_byte(c):
+                while end < len(bytes) and _is_word_byte(bytes[end]):
+                    end += 1
+            elif _listed(_clipped(text, at, at + 2), " && || == != <= >= "):
+                end = at + 2
+            elif not (String(text[byte = at : at + 1]) in String("()!<>")):
+                raise self.error(
+                    line,
+                    "the character "
+                    + String(text[byte = at : at + 1])
+                    + " is outside an #if condition",
+                )
+            parts.append(String(text[byte=at:end]))
+            at = end
+        return parts^
+
+    def either(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
+        """Evaluate `a || b` and what binds tighter."""
+        var value = self.both(parts, at, line)
+        while at < len(parts) and parts[at] == "||":
+            at += 1
+            var right = self.both(parts, at, line)
+            value = 1 if value != 0 or right != 0 else 0
+        return value
+
+    def both(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
+        """Evaluate `a && b` and what binds tighter."""
+        var value = self.compared(parts, at, line)
+        while at < len(parts) and parts[at] == "&&":
+            at += 1
+            var right = self.compared(parts, at, line)
+            value = 1 if value != 0 and right != 0 else 0
+        return value
+
+    def compared(
+        self, parts: List[String], mut at: Int, line: Int
+    ) raises -> Int:
+        """Evaluate one comparison of two terms, or a term."""
+        var value = self.term(parts, at, line)
+        if at >= len(parts) or not _listed(parts[at], " == != < > <= >= "):
+            return value
+        var mark = parts[at]
+        at += 1
+        var right = self.term(parts, at, line)
+        var holds: Bool
+        if mark == "==":
+            holds = value == right
+        elif mark == "!=":
+            holds = value != right
+        elif mark == "<":
+            holds = value < right
+        elif mark == ">":
+            holds = value > right
+        elif mark == "<=":
+            holds = value <= right
+        else:
+            holds = value >= right
+        return 1 if holds else 0
+
+    def term(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
+        """Evaluate `!a`, `(a)`, `defined(NAME)`, a whole number or a
+        name."""
+        if at >= len(parts):
+            raise self.error(line, "an #if condition ends too soon")
+        var part = parts[at]
+        at += 1
+        if part == "!":
+            return 1 if self.term(parts, at, line) == 0 else 0
+        if part == "(":
+            var inner = self.either(parts, at, line)
+            if at >= len(parts) or parts[at] != ")":
+                raise self.error(line, "an #if condition leaves a ( open")
+            at += 1
+            return inner
+        if part == "defined":
+            var wrapped = at < len(parts) and parts[at] == "("
+            if wrapped:
+                at += 1
+            if at >= len(parts) or not _is_letter(parts[at].as_bytes()[0]):
+                raise self.error(line, "defined names a macro")
+            var holds = self.defined(parts[at])
+            at += 1
+            if wrapped:
+                if at >= len(parts) or parts[at] != ")":
+                    raise self.error(line, "an #if condition leaves a ( open")
+                at += 1
+            return 1 if holds else 0
+        if _is_digit(part.as_bytes()[0]):
+            # A part has at least one byte.
+            for index in range(part.byte_length()):  # pragma: no branch
+                if not _is_digit(part.as_bytes()[index]):
+                    raise self.error(
+                        line, "an #if condition counts in whole numbers"
+                    )
+            return atol(part)
+        if not _is_letter(part.as_bytes()[0]):
+            raise self.error(line, "an #if condition cannot hold " + part)
+        for index in range(len(self.names)):
+            if self.names[index] == part:
+                ref body = self.bodies[index]
+                if len(body) != 1 or body[0].kind != _INT:
+                    raise self.error(
+                        line,
+                        "the macro "
+                        + part
+                        + " is not one whole number, as an #if reads it",
+                    )
+                return Int(body[0].number)
+        # A name that is not a macro is zero.
+        return 0
 
     def version_line(mut self, version: String, line: Int, before: Int) raises:
         """Take `#version 300 es` or `#version 100` as a raw shader's first
@@ -497,18 +759,27 @@ struct _Lexer(Movable):
 @fieldwise_init
 struct _Type(Equatable, ImplicitlyCopyable, Writable):
     """A GLSL type of the subset: `void`, `bool`, `int`, `float`, `vec2` to
-    `vec4`, `mat3`, `mat4` or `sampler2D`. A float's or a vector's value is
-    its width, as `ValueType` counts it."""
+    `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3`, `mat4`
+    or `sampler2D`. A float's or a vector's value is its width, as
+    `ValueType` counts it; an `ivec`'s is 16 more, and a `bvec`'s 20 more.
+    A `mat2` is held as a `vec4` of its two columns, so it is four wide."""
 
     var value: Int
 
+    def is_struct(self) -> Bool:
+        """Return True for a struct the shader declares."""
+        return self.value >= _STRUCT_BASE
+
     def is_valid(self) -> Bool:
-        """Return True if this is one of the ten types."""
+        """Return True if this is one of the nineteen types."""
         return (
             (self.value >= 0 and self.value <= 6)
+            or (self.value >= 18 and self.value <= 20)
+            or (self.value >= 22 and self.value <= 24)
+            or self.value == 8
             or self.value == 9
             or self.value == 16
-            or self.value == 32
+            or (self.value >= 32 and self.value <= 35)
         )
 
     def name(self) -> String:
@@ -521,18 +792,62 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "int"
         if self.value == 6:
             return "bool"
+        if self.value == 8:
+            return "mat2"
+        if self.value >= 18 and self.value <= 20:
+            return "ivec" + String(self.value - 16)
+        if self.value >= 22 and self.value <= 24:
+            return "bvec" + String(self.value - 20)
         if self.value == 9:
             return "mat3"
         if self.value == 16:
             return "mat4"
         if self.value == 32:
             return "sampler2D"
+        if self.value == 33:
+            return "samplerCube"
+        if self.value == 34:
+            return "sampler3D"
+        if self.value == 35:
+            return "sampler2DArray"
+        if self.value >= _STRUCT_BASE:
+            return "struct"
         return "vec" + String(self.value)
 
     def width(self) -> Int:
         """Return how many components a value of this type has: one for a
-        `bool` or an `int`."""
+        `bool` or an `int`, and four for a `mat2`."""
+        if self.value == 8:
+            return 4
+        if self.value >= 18 and self.value <= 20:
+            return self.value - 16
+        # `bvec2` to `bvec4`, as one unsigned comparison.
+        if UInt(self.value - 22) < 3:
+            return self.value - 20
         return 1 if self.is_scalar() else self.value
+
+    def is_int(self) -> Bool:
+        """Return True for `int` and `ivec2` to `ivec4`."""
+        return self.value == 5 or (self.value >= 18 and self.value <= 20)
+
+    def is_bool(self) -> Bool:
+        """Return True for `bool` and `bvec2` to `bvec4`."""
+        return self.value == 6 or (self.value >= 22 and self.value <= 24)
+
+    def is_any_vector(self) -> Bool:
+        """Return True for a vector of floats, ints or bools."""
+        return self.is_vector() or (
+            (self.is_int() or self.is_bool()) and not self.is_scalar()
+        )
+
+    def resized(self, width: Int) -> _Type:
+        """Return the type of this one's kind of component, `width` wide: a
+        scalar for one."""
+        if self.is_int():
+            return _TINT if width == 1 else _Type(16 + width)
+        if self.is_bool():
+            return _BOOL if width == 1 else _Type(20 + width)
+        return _Type(width)
 
     def is_scalar(self) -> Bool:
         """Return True for `float`, `int` and `bool`."""
@@ -550,14 +865,23 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         """Return True for `mat3` and `mat4`."""
         return self.value == 9 or self.value == 16
 
+    def is_sampler(self) -> Bool:
+        """Return True for `sampler2D`, `samplerCube`, `sampler3D` and
+        `sampler2DArray`."""
+        return self.value >= 32 and self.value <= 35
+
     def is_number(self) -> Bool:
-        """Return True for `int`, `float` and the vectors."""
-        return self.is_float() or self.value == 5
+        """Return True for `int`, `float` and their vectors."""
+        return self.is_float() or self.is_int()
 
     def holds(self) -> Bool:
         """Return True for what a local variable can hold: a `bool`, an
-        `int`, a `float` or a vector."""
-        return self.value >= 1 and self.value <= 6
+        `int`, a `float`, a vector of them or a `mat2`."""
+        return (
+            (self.value >= 1 and self.value <= 6)
+            or self.value == 8
+            or self.is_any_vector()
+        )
 
 
 comptime _VOID = _Type(0)
@@ -567,10 +891,32 @@ comptime _VEC3 = _Type(3)
 comptime _VEC4 = _Type(4)
 comptime _TINT = _Type(5)
 comptime _BOOL = _Type(6)
+comptime _MAT2 = _Type(8)
+comptime _IVEC2 = _Type(18)
+comptime _IVEC3 = _Type(19)
+comptime _IVEC4 = _Type(20)
+comptime _BVEC2 = _Type(22)
+comptime _BVEC3 = _Type(23)
+comptime _BVEC4 = _Type(24)
 comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
+comptime _SAMPLER_CUBE = _Type(33)
+comptime _SAMPLER_3D = _Type(34)
+comptime _SAMPLER_ARRAY = _Type(35)
 comptime _NO_TYPE = _Type(-1)
+# A struct's type is this plus its place in the shader's list.
+comptime _STRUCT_BASE = 64
+
+
+@fieldwise_init
+struct _Struct(Copyable, Movable):
+    """A struct the shader declares: its name, and its fields' names and
+    types."""
+
+    var name: String
+    var names: List[String]
+    var types: List[_Type]
 
 
 def _type_named(name: String) -> _Type:
@@ -589,12 +935,32 @@ def _type_named(name: String) -> _Type:
         return _TINT
     if name == "bool":
         return _BOOL
+    if name == "mat2":
+        return _MAT2
+    if name == "ivec2":
+        return _IVEC2
+    if name == "ivec3":
+        return _IVEC3
+    if name == "ivec4":
+        return _IVEC4
+    if name == "bvec2":
+        return _BVEC2
+    if name == "bvec3":
+        return _BVEC3
+    if name == "bvec4":
+        return _BVEC4
     if name == "mat3":
         return _MAT3
     if name == "mat4":
         return _MAT4
     if name == "sampler2D":
         return _SAMPLER
+    if name == "samplerCube":
+        return _SAMPLER_CUBE
+    if name == "sampler3D":
+        return _SAMPLER_3D
+    if name == "sampler2DArray":
+        return _SAMPLER_ARRAY
     return _NO_TYPE
 
 
@@ -619,11 +985,20 @@ comptime _VIEW = _MATRIX + _WORLD_SPACE * 4 + _VIEW_SPACE
 comptime _MODEL_VIEW = _MATRIX + _LOCAL_SPACE * 4 + _VIEW_SPACE
 comptime _PROJECTION = _MATRIX + _VIEW_SPACE * 4 + _CLIP_SPACE
 comptime _CLIP = _POINT + _CLIP_SPACE
+# A struct's value: its `point` is where its fields are in the compiler's
+# bundles, and it has no node.
+comptime _BUNDLE = 7
+# `modelMatrix[i]`, its `.xyz`, and the `mat3` of the first three: the
+# model's turn and stretch, which carries the normal into the world as
+# `modelMatrix * vec4(normal, 0.0)` does. The point holds the column.
+comptime _MODEL_COLUMN = 30
+comptime _MODEL_COLUMN3 = 31
+comptime _MODEL_ROTATION = 32
 
 
 def _is_matrix_tag(tag: Int) -> Bool:
     """Return True for a built-in matrix, or a product of them."""
-    return tag >= _MATRIX
+    return tag >= _MATRIX and tag < _MATRIX + 16
 
 
 def _is_point_tag(tag: Int) -> Bool:
@@ -676,6 +1051,15 @@ comptime _OUTPUT = 5
 comptime _INDEX = 6
 comptime _TRANSFORM = 7
 comptime _POSITION = 8
+# A local matrix, given its value once: a register holds no matrix, so the
+# name stands for the matrix its initializer built.
+comptime _MATRIX_LOCAL = 9
+# An array: its value's type is the element's, its variable is its length,
+# and its elements are the symbols just before it, named `a[0]` and on.
+comptime _ARRAY = 10
+# A struct variable: its fields are the symbols just before it, named
+# `s.a` and on, a struct field's own fields before it.
+comptime _STRUCT_VAR = 11
 
 
 @fieldwise_init
@@ -690,6 +1074,13 @@ struct _Symbol(Copyable, Movable):
     var written: Bool
 
 
+# How a parameter passes its value: into the function, back out of it, or
+# both.
+comptime _IN = 0
+comptime _OUT = 1
+comptime _INOUT = 2
+
+
 @fieldwise_init
 struct _Function(Copyable, Movable):
     """A function of the shader: its signature and where its body is."""
@@ -698,6 +1089,8 @@ struct _Function(Copyable, Movable):
     var result: _Type
     var types: List[_Type]
     var names: List[String]
+    # Each parameter's `_IN`, `_OUT` or `_INOUT`.
+    var modes: List[Int]
     # The body's opening and closing braces.
     var first: Int
     var last: Int
@@ -848,6 +1241,12 @@ struct _Compiler(Movable):
     var returned: List[_Value]
     # How many branches and loops the parse is inside, in this function.
     var depth: Int
+    # How many loops the function being built is inside, for `break` and
+    # `continue`: a loop around a call is its caller's, not its own.
+    var loops: Int
+    # What a `break` leaves, innermost last: False for a loop, and for a
+    # switch the variable a `continue` in it sets, or -1 outside a loop.
+    var breakables: List[Int]
     # The uniforms both shaders declare, and the varyings.
     var uniforms: List[_Symbol]
     var varyings: List[_Varying]
@@ -858,11 +1257,28 @@ struct _Compiler(Movable):
     # world or the view, which must be the same.
     var drawn: Int
     var seen: List[Int]
+    # The shader's structs, and the fields of each struct value.
+    var structs: List[_Struct]
+    var bundles: List[List[_Value]]
+    # How many floats the custom attributes hold so far.
+    var attribute_floats: Int
+    # Whether the fragment shader is ShaderToy's, which reads `iTime` and
+    # the other inputs ShaderToy gives.
+    var toy: Bool
+    # three.js's `material.defines`, each `NAME` or `NAME tokens`.
+    var defines: List[String]
 
-    def __init__(out self, raw: Bool):
+    def __init__(
+        out self,
+        raw: Bool,
+        toy: Bool = False,
+        defines: List[String] = List[String](),
+    ):
         """Start a compiler with an empty graph."""
         self.graph = NodeGraph()
         self.raw = raw
+        self.toy = toy
+        self.defines = defines.copy()
         self.stage = _VERTEX
         self.version = 0
         self.tokens = List[_Token]()
@@ -873,12 +1289,17 @@ struct _Compiler(Movable):
         self.calling = List[Int]()
         self.returned = List[_Value]()
         self.depth = 0
+        self.loops = 0
+        self.breakables = List[Int]()
         self.uniforms = List[_Symbol]()
         self.varyings = List[_Varying]()
         self.position = -1
         self.normal = -1
         self.drawn = -1
         self.seen = List[Int]()
+        self.structs = List[_Struct]()
+        self.bundles = List[List[_Value]]()
+        self.attribute_floats = 0
 
     # --- tokens -------------------------------------------------------------
 
@@ -993,12 +1414,13 @@ struct _Compiler(Movable):
     # --- values -------------------------------------------------------------
 
     def zero(mut self, type: _Type) -> Int:
-        """Return a node of zeros of a type."""
-        if type == _VEC2:
+        """Return a node of zeros of a type, as wide as it."""
+        var width = type.width()
+        if width == 2:
             return self.graph.vec2(0, 0).value
-        if type == _VEC3:
+        if width == 3:
             return self.graph.vec3(0, 0, 0).value
-        if type == _VEC4:
+        if width == 4:
             return self.graph.vec4(0, 0, 0, 0).value
         return self.graph.float(0).value
 
@@ -1014,6 +1436,12 @@ struct _Compiler(Movable):
         Raises:
             Error: If the value is such a transform.
         """
+        if value.type.is_struct():
+            raise self.error(
+                "a "
+                + self.type_name(value.type)
+                + " is read a field at a time here"
+            )
         if value.node < 0:
             raise self.error(
                 "this port knows modelMatrix, modelViewMatrix, normalMatrix"
@@ -1052,6 +1480,9 @@ struct _Compiler(Movable):
         var lexer = _Lexer(
             "vertex" if stage == _VERTEX else "fragment", self.raw
         )
+        # three.js's `material.defines`, in place before the first line.
+        for index in range(len(self.defines)):
+            lexer.define("define " + self.defines[index], 0)
         lexer.run(text)
         self.version = lexer.version
         self.tokens = lexer.tokens.copy()
@@ -1059,6 +1490,7 @@ struct _Compiler(Movable):
         self.symbols = List[_Symbol]()
         self.scopes = List[Int]()
         self.functions = List[_Function]()
+        self.structs = List[_Struct]()
         self.open()
         self.declare_outputs()
         if not self.raw:
@@ -1129,6 +1561,13 @@ struct _Compiler(Movable):
                 _ATTRIBUTE,
                 _plain(_VEC4, self.graph.frag_coord().value),
             )
+            self.builtin(
+                "gl_FrontFacing",
+                _ATTRIBUTE,
+                _plain(_BOOL, self.graph.gl_front_facing().value),
+            )
+            if self.toy:
+                self.declare_toy()
             return
         self.builtin("modelMatrix", _TRANSFORM, _tagged(_MAT4, -1, _MODEL, -1))
         self.builtin(
@@ -1143,6 +1582,26 @@ struct _Compiler(Movable):
         # Four names, always.
         for name in ["position", "normal", "uv", "color"]:  # pragma: no branch
             self.builtin(name, _ATTRIBUTE, self.attribute(name))
+
+    def declare_toy(mut self) raises:
+        """Declare what ShaderToy gives a shader: `iTime` is the renderer's
+        time, and the rest are uniforms the caller sets."""
+        self.builtin("iTime", _UNIFORM, _plain(_FLOAT, self.graph.time().value))
+        self.uniform(_VEC3, "iResolution")
+        self.uniform(_FLOAT, "iTimeDelta")
+        self.uniform(_FLOAT, "iFrameRate")
+        self.uniform(_TINT, "iFrame")
+        self.uniform(_VEC4, "iMouse")
+        self.uniform(_VEC4, "iDate")
+        self.uniform(_FLOAT, "iSampleRate")
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_SAMPLER, "iChannel" + String(channel))
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_VEC3, "iChannelResolution[" + String(channel) + "]")
+        self.declare_array("iChannelResolution", _VEC3, 4)
+        for channel in range(4):  # pragma: no branch
+            self.uniform(_FLOAT, "iChannelTime[" + String(channel) + "]")
+        self.declare_array("iChannelTime", _FLOAT, 4)
 
     def view_matrix(mut self) -> _Value:
         """Return `viewMatrix`: the frame's view, a real `mat4`."""
@@ -1190,9 +1649,262 @@ struct _Compiler(Movable):
         if _listed(word, _REFUSED_TYPES):
             raise self.error("the type " + word + " is outside the subset")
         if not type.is_valid():
+            type = self.struct_named(word)
+        if not type.is_valid() and not type.is_struct():
             raise self.error("expected a type before " + self.describe())
         self.at += 1
         return type
+
+    def struct_named(self, name: String) -> _Type:
+        """Return the struct a name names, or `_NO_TYPE`."""
+        for index in range(len(self.structs)):
+            if self.structs[index].name == name:
+                return _Type(_STRUCT_BASE + index)
+        return _NO_TYPE
+
+    def type_name(self, type: _Type) -> String:
+        """Return a type's name, a struct's as the shader declares it."""
+        if type.is_struct():
+            return self.structs[type.value - _STRUCT_BASE].name
+        return type.name()
+
+    def struct_declaration(mut self) raises:
+        """Parse `struct S { T a; U b, c; };` at the top of a shader.
+
+        Raises:
+            Error: If the name is taken, a field is of a type outside the
+                subset or an array, or variables are declared with it.
+        """
+        self.at += 1
+        var name = self.name()
+        if _listed(name, _KEYWORDS):
+            raise self.error("the name " + name + " is a keyword")
+        if self.struct_named(name).is_struct():
+            raise self.error("the struct " + name + " is declared twice")
+        self.expect("{")
+        var names = List[String]()
+        var types = List[_Type]()
+        while not self.is_mark("}"):
+            if self.at_end():
+                raise self.error("a struct is never closed")
+            _ = self.qualifiers()
+            var type = self.type()
+            if not type.holds() and not type.is_struct():
+                raise self.error(
+                    "a field of type " + type.name() + " is outside the subset"
+                )
+            while True:
+                var field = self.name()
+                if self.is_mark("["):
+                    raise self.error(
+                        "an array in a struct is outside the subset"
+                    )
+                for index in range(len(names)):
+                    if names[index] == field:
+                        raise self.error(
+                            "the field " + field + " is declared twice"
+                        )
+                names.append(field)
+                types.append(type)
+                if not self.is_mark(","):
+                    break
+                self.at += 1
+            self.expect(";")
+        self.at += 1
+        if len(names) == 0:
+            raise self.error("a struct needs a field")
+        if not self.is_mark(";"):
+            raise self.error("declare a struct's variables apart from it")
+        self.at += 1
+        self.structs.append(_Struct(name, names^, types^))
+
+    def span(self, type: _Type) -> Int:
+        """Return how many symbols a variable of a type takes: one, or a
+        struct's own and its fields'."""
+        if not type.is_struct():
+            return 1
+        var total = 1
+        ref fields = self.structs[type.value - _STRUCT_BASE]
+        # A struct has at least one field.
+        for index in range(len(fields.types)):  # pragma: no branch
+            total += self.span(fields.types[index])
+        return total
+
+    def field_symbol(self, owner: Int, type: _Type, field: Int) -> Int:
+        """Return the symbol of a struct variable's field."""
+        ref fields = self.structs[type.value - _STRUCT_BASE]
+        var at = owner - (self.span(type) - 1)
+        for index in range(field):
+            at += self.span(fields.types[index])
+        return at + self.span(fields.types[field]) - 1
+
+    def bundle(mut self, type: _Type, var fields: List[_Value]) -> _Value:
+        """Return a struct value of its fields' values: constant where all
+        are, and local where any is."""
+        var value = _Value(
+            type, -1, True, False, 0, _BUNDLE, len(self.bundles), False, -1, ""
+        )
+        # A struct has at least one field.
+        for index in range(len(fields)):  # pragma: no branch
+            value.constant = value.constant and fields[index].constant
+            value.local = value.local or fields[index].local
+        self.bundles.append(fields^)
+        return value^
+
+    def declare_value(
+        mut self, name: String, type: _Type, kind: Int, given: _Value
+    ) raises:
+        """Declare a variable, a const or a uniform of a type with a value,
+        or with zeros where `given` has none: a struct as a symbol for each
+        field, then its own.
+
+        Raises:
+            Error: If a name is taken, or a uniform's type clashes with the
+                other shader's.
+        """
+        if type.is_struct():
+            var fields = self.structs[type.value - _STRUCT_BASE].copy()
+            for index in range(len(fields.names)):  # pragma: no branch
+                var part = _plain(fields.types[index], -1)
+                if given.tag == _BUNDLE:
+                    part = self.bundles[given.point][index].copy()
+                self.declare_value(
+                    name + "." + fields.names[index],
+                    fields.types[index],
+                    kind,
+                    part,
+                )
+            self.declare(
+                _Symbol(name, _STRUCT_VAR, _plain(type, -1), -1, False)
+            )
+            return
+        if kind == _UNIFORM:
+            self.uniform(type, name)
+            return
+        var value = given.copy()
+        if value.node < 0:
+            value.node = self.zero(type)
+        var variable = -1
+        if kind == _LOCAL:
+            variable = self.graph.Var(self.node(value)).value
+            value.known = False
+            value.constant = False
+        value.symbol = -1
+        value.components = ""
+        value.tag = _PLAIN
+        self.declare(_Symbol(name, kind, value^, variable, False))
+
+    def struct_value(mut self, index: Int) raises -> _Value:
+        """Return a struct variable's value, which can be assigned."""
+        var type = self.symbols[index].value.type
+        var count = len(self.structs[type.value - _STRUCT_BASE].names)
+        var fields = List[_Value]()
+        for field in range(count):  # pragma: no branch
+            fields.append(self.value_of(self.field_symbol(index, type, field)))
+        var value = self.bundle(type, fields^)
+        value.symbol = index
+        return value^
+
+    def value_of(mut self, index: Int) raises -> _Value:
+        """Return the value a symbol holds here, a struct's or another."""
+        if self.symbols[index].kind == _STRUCT_VAR:
+            return self.struct_value(index)
+        return self.read_symbol(index)
+
+    def field(mut self, value: _Value, name: String) raises -> _Value:
+        """Return a struct's field: a variable's can be assigned.
+
+        Raises:
+            Error: If the struct has no such field.
+        """
+        var fields = self.structs[value.type.value - _STRUCT_BASE].copy()
+        # A struct has at least one field.
+        for index in range(len(fields.names)):  # pragma: no branch
+            if fields.names[index] != name:
+                continue
+            # A struct value that names a symbol is a struct variable's:
+            # every struct is declared as one, and `value_of` reads it.
+            var owner = value.symbol
+            if owner >= 0:
+                return self.value_of(
+                    self.field_symbol(owner, value.type, index)
+                )
+            var part = self.bundles[value.point][index].copy()
+            part.symbol = -1
+            part.components = ""
+            return part^
+        raise self.error("a " + fields.name + " has no field " + name)
+
+    def choose(
+        mut self, condition: NodeRef, yes: _Value, no: _Value
+    ) raises -> _Value:
+        """Return `yes` where a condition holds and `no` elsewhere, a
+        struct's field by field."""
+        if not yes.type.is_struct():
+            var node = self.graph.select(
+                condition, self.node(yes), self.node(no)
+            )
+            return self.derived(yes.type, node, yes, no)
+        var fields = List[_Value]()
+        for index in range(len(self.bundles[yes.point])):  # pragma: no branch
+            var a = self.bundles[yes.point][index].copy()
+            var b = self.bundles[no.point][index].copy()
+            fields.append(self.choose(condition, a, b))
+        return self.bundle(yes.type, fields^)
+
+    def pick_value(
+        mut self, values: List[_Value], index: NodeRef
+    ) raises -> _Value:
+        """Return the value an index picks where the shader runs, the first
+        where it picks none, a struct's field by field."""
+        var picked = values[0].copy()
+        for at in range(1, len(values)):
+            picked = self.choose(
+                self.graph.equal(index, self.graph.float(Float32(at))),
+                values[at],
+                picked,
+            )
+        return picked^
+
+    def construct_struct(
+        mut self, type: _Type, args: List[_Value]
+    ) raises -> _Value:
+        """Return a struct constructor's value: one argument for each
+        field, of its type.
+
+        Raises:
+            Error: If the arguments are too few, too many or mistyped.
+        """
+        var fields = self.structs[type.value - _STRUCT_BASE].copy()
+        if len(args) != len(fields.names):
+            raise self.error(
+                "a "
+                + fields.name
+                + " is made of "
+                + String(len(fields.names))
+                + " values, not "
+                + String(len(args))
+            )
+        var parts = List[_Value]()
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type != fields.types[index]:
+                raise self.error(
+                    "a "
+                    + fields.name
+                    + "'s "
+                    + fields.names[index]
+                    + " is a "
+                    + self.type_name(fields.types[index])
+                    + ", not a "
+                    + self.type_name(args[index].type)
+                )
+            if not args[index].type.is_struct():
+                _ = self.node(args[index])
+            var part = args[index].copy()
+            part.symbol = -1
+            part.components = ""
+            parts.append(part^)
+        return self.bundle(type, parts^)
 
     def global_declaration(mut self) raises:
         """Parse one declaration at the top of a shader.
@@ -1202,6 +1914,9 @@ struct _Compiler(Movable):
         """
         if self.is_mark(";"):
             self.at += 1
+            return
+        if self.is_word("struct"):
+            self.struct_declaration()
             return
         if self.is_word("precision"):
             self.at += 1
@@ -1238,9 +1953,17 @@ struct _Compiler(Movable):
                 raise self.error("a function has no storage qualifier")
             self.function(type, name)
             return
+        if self.is_mark("[") and (storage == "uniform" or constant):
+            self.global_array(storage == "uniform", type, name)
+            self.expect(";")
+            return
         if self.is_mark("["):
-            raise self.error("arrays are outside the subset")
-        if storage == "uniform":
+            raise self.error(
+                "only a uniform, a const or a local variable can be an array"
+            )
+        if type.is_struct():
+            self.global_struct(storage, constant, type, name)
+        elif storage == "uniform":
             self.uniform(type, name)
         elif storage != "":
             self.storage(storage, type, name)
@@ -1255,15 +1978,26 @@ struct _Compiler(Movable):
 
     def uniform(mut self, type: _Type, name: String) raises:
         """Declare a uniform: the one the other shader declared, or a new
-        one, zero until the caller sets it.
+        one, zero until the caller sets it. An `int` or a `bool` uniform is
+        a float that the caller sets: an `int` drops the fraction toward
+        zero, and a `bool` is true where it is not zero, as WebGL's
+        `uniform1i` does.
 
         Raises:
             Error: If the type is not one a uniform takes, or the other
                 shader gave the name another type.
         """
-        if not type.is_float() and not type.is_matrix() and type != _SAMPLER:
+        if not type.holds() and not type.is_matrix() and not type.is_sampler():
             raise self.error(
                 "a uniform of type " + type.name() + " is outside the subset"
+            )
+        if (
+            (type == _SAMPLER_3D or type == _SAMPLER_ARRAY)
+            and self.raw
+            and self.version != 300
+        ):
+            raise self.error(
+                "a " + type.name() + " is not in this shader's GLSL version"
             )
         if self.transform(type, name):
             return
@@ -1282,6 +2016,12 @@ struct _Compiler(Movable):
         var node: NodeRef
         if type == _SAMPLER:
             node = self.graph.texture_uniform(name, NO_TEXTURE)
+        elif type == _SAMPLER_CUBE:
+            node = self.graph.cube_uniform(name, NO_CUBE_TEXTURE)
+        elif type == _SAMPLER_3D:
+            node = self.graph.volume_uniform(name, NO_DATA_3D_TEXTURE)
+        elif type == _SAMPLER_ARRAY:
+            node = self.graph.array_uniform(name, NO_DATA_ARRAY_TEXTURE)
         elif type == _MAT3:
             var zero = Matrix3()
             zero.elements[0] = 0
@@ -1293,14 +2033,21 @@ struct _Compiler(Movable):
             for index in range(0, 16, 5):  # pragma: no branch
                 zero.elements[index] = 0
             node = self.graph.uniform(name, zero)
-        elif type == _VEC2:
-            node = self.graph.uniform(name, Vector2(0, 0))
-        elif type == _VEC3:
-            node = self.graph.uniform(name, Vector3(0, 0, 0))
-        elif type == _VEC4:
-            node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
         else:
-            node = self.graph.uniform(name, Float32(0))
+            var width = type.width()
+            if width == 2:
+                node = self.graph.uniform(name, Vector2(0, 0))
+            elif width == 3:
+                node = self.graph.uniform(name, Vector3(0, 0, 0))
+            elif width == 4:
+                # A mat2 is set as a Vector4 of its two columns.
+                node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
+            else:
+                node = self.graph.uniform(name, Float32(0))
+            if type.is_int():
+                node = self.graph.trunc(node)
+            elif type.is_bool():
+                node = self.graph.not_equal(node, self.graph.float(0))
         var symbol = _Symbol(
             name, _UNIFORM, _plain(type, node.value), -1, False
         )
@@ -1428,26 +2175,168 @@ struct _Compiler(Movable):
         )
 
     def declare_attribute(mut self, type: _Type, name: String) raises:
-        """Declare one of the attributes three.js gives a raw shader.
+        """Declare one of the attributes three.js gives a raw shader, or a
+        custom attribute of the geometry's.
 
         Raises:
-            Error: If the shader is not raw, the name is not one this port
-                has, or the type is not its type.
+            Error: If a ShaderMaterial declares one of three.js's own, a
+                built-in's type is not its type, or a custom one is not a
+                float or a vector or would hold too many floats.
         """
+        if not _listed(name, " position normal uv color "):
+            if not type.is_float():
+                raise self.error(
+                    "an attribute of type "
+                    + type.name()
+                    + " is outside the subset"
+                )
+            self.attribute_floats += type.width()
+            if self.attribute_floats > MAX_ATTRIBUTE_FLOATS:
+                raise self.error(
+                    "the custom attributes hold at most "
+                    + String(MAX_ATTRIBUTE_FLOATS)
+                    + " floats"
+                )
+            var node = self.graph.attribute(name, ValueType(type.width()))
+            self.declare(
+                _Symbol(name, _ATTRIBUTE, _plain(type, node.value), -1, False)
+            )
+            return
         if not self.raw:
             raise self.error(
                 "three.js declares a ShaderMaterial's attributes itself"
-            )
-        if not _listed(name, " position normal uv color "):
-            raise self.error(
-                "the attribute "
-                + name
-                + " is not one this port has: position, normal, uv, color"
             )
         var wanted = _VEC2 if name == "uv" else _VEC3
         if type != wanted:
             raise self.error("the attribute " + name + " is a " + wanted.name())
         self.declare(_Symbol(name, _ATTRIBUTE, self.attribute(name), -1, False))
+
+    def array_size(mut self, open: Bool) raises -> Int:
+        """Parse `[n]` after an array's name, or `[]` where an initializer
+        gives the size, returned as zero.
+
+        Raises:
+            Error: If the size is not a positive constant int, or is left
+                out where it must be given.
+        """
+        self.expect("[")
+        if self.is_mark("]") and open:
+            self.at += 1
+            return 0
+        var size = self.additive()
+        self.expect("]")
+        if size.type != _TINT or not size.known or size.number < 1:
+            raise self.error("an array's size is a positive constant int")
+        if size.number > Float64(MAX_ARRAY_SIZE):
+            raise self.error(
+                "an array holds at most " + String(MAX_ARRAY_SIZE) + " elements"
+            )
+        return Int(size.number)
+
+    def array_values(mut self, type: _Type, size: Int) raises -> List[_Value]:
+        """Parse an array's initializer, `T[n](a, b, ...)` or `T[](...)`.
+
+        Raises:
+            Error: If the constructor is of another type or size.
+        """
+        var named = self.type_name(type)
+        if self.peek() != named:
+            raise self.error(
+                "an array of " + named + " is given by " + named + "[](...)"
+            )
+        self.at += 1
+        var given = self.array_size(True)
+        var values = self.arguments()
+        var wanted = size if size > 0 else len(values)
+        if given > 0 and given != len(values):
+            raise self.error(
+                "an array constructor of "
+                + String(given)
+                + " elements lists "
+                + String(len(values))
+            )
+        if len(values) != wanted:
+            raise self.error(
+                "the array needs "
+                + String(wanted)
+                + " elements, not "
+                + String(len(values))
+            )
+        for index in range(len(values)):  # pragma: no branch
+            if values[index].type != type:
+                raise self.error(
+                    "cannot put a "
+                    + self.type_name(values[index].type)
+                    + " in an array of "
+                    + named
+                )
+        return values^
+
+    def global_array(mut self, uniform: Bool, type: _Type, name: String) raises:
+        """Declare a uniform array, each element a uniform named `a[i]` as
+        three.js names it, or a `const` array of constant values.
+
+        Raises:
+            Error: If the size or an element is outside the subset.
+        """
+        var size = self.array_size(not uniform)
+        if uniform:
+            for index in range(size):  # pragma: no branch
+                self.declare_value(
+                    name + "[" + String(index) + "]",
+                    type,
+                    _UNIFORM,
+                    _plain(type, -1),
+                )
+            self.declare_array(name, type, size)
+            return
+        if not self.is_mark("="):
+            raise self.error("a const needs a value")
+        self.at += 1
+        var values = self.array_values(type, size)
+        for index in range(len(values)):  # pragma: no branch
+            if not values[index].constant:
+                raise self.error(
+                    "a const's value must be a constant expression"
+                )
+            self.declare_value(
+                name + "[" + String(index) + "]", type, _CONST, values[index]
+            )
+        self.declare_array(name, type, len(values))
+
+    def global_struct(
+        mut self, storage: String, constant: Bool, type: _Type, name: String
+    ) raises:
+        """Declare a uniform struct, each field a uniform named `s.a` as
+        three.js names it, or a `const` struct of a constant value.
+
+        Raises:
+            Error: If it is a varying or an attribute, or a const's value is
+                not constant.
+        """
+        if storage == "uniform":
+            self.declare_value(name, type, _UNIFORM, _plain(type, -1))
+            return
+        if storage != "" or not constant:
+            raise self.error(
+                "a "
+                + self.type_name(type)
+                + " is a uniform, a const or a local variable"
+            )
+        self.expect("=")
+        var value = self.expression()
+        if value.type != type or not value.constant:
+            raise self.error(
+                "a const "
+                + self.type_name(type)
+                + "'s value must be a constant "
+                + self.type_name(type)
+            )
+        self.declare_value(name, type, _CONST, value)
+
+    def declare_array(mut self, name: String, type: _Type, size: Int) raises:
+        """Declare an array's name after its elements."""
+        self.declare(_Symbol(name, _ARRAY, _plain(type, -1), size, False))
 
     def constant(mut self, type: _Type, name: String) raises:
         """Declare a `const` global from its constant value.
@@ -1490,21 +2379,24 @@ struct _Compiler(Movable):
         self.at += 1
         var types = List[_Type]()
         var names = List[String]()
+        var modes = List[Int]()
         if self.is_word("void") and self.peek(1) == ")":
             self.at += 1
         while not self.is_mark(")"):
             if len(types) > 0:
                 self.expect(",")
             _ = self.qualifiers()
-            if self.is_word("out") or self.is_word("inout"):
-                raise self.error(
-                    "out and inout parameters are outside the subset"
-                )
-            if self.is_word("in"):
+            var mode = _IN
+            if self.is_word("out"):
+                mode = _OUT
+            elif self.is_word("inout"):
+                mode = _INOUT
+            if self.is_word("in") or mode != _IN:
                 self.at += 1
+            modes.append(mode)
             _ = self.qualifiers()
             var type = self.type()
-            if not type.holds():
+            if not type.holds() and not type.is_struct():
                 raise self.error(
                     "a parameter of type "
                     + type.name()
@@ -1531,7 +2423,7 @@ struct _Compiler(Movable):
                     break
             self.at += 1
         self.functions.append(
-            _Function(name, result, types^, names^, first, self.at)
+            _Function(name, result, types^, names^, modes^, first, self.at)
         )
         self.at += 1
 
@@ -1548,6 +2440,8 @@ struct _Compiler(Movable):
                 raise self.error("a function cannot call itself")
         var back = self.at
         var depth = self.depth
+        var loops = self.loops
+        var breakables = self.breakables.copy()
         # A function sees the built-ins, the globals and its own names, not
         # its caller's.
         var globals_end = self.scopes[2] if len(self.scopes) > 2 else len(
@@ -1565,30 +2459,77 @@ struct _Compiler(Movable):
         self.returned.append(_plain(_VOID, -1))
         var called = self.functions[function].copy()
         for index in range(len(args)):
-            var variable = self.graph.Var(NodeRef(args[index].node)).value
-            var value = _plain(args[index].type, args[index].node)
+            if args[index].type.is_struct():
+                var given = args[index].copy()
+                if called.modes[index] == _OUT:
+                    given = _plain(given.type, -1)
+                self.declare_value(
+                    called.names[index], given.type, _LOCAL, given
+                )
+                continue
+            var start = args[index].node
+            if called.modes[index] == _OUT:
+                # An out parameter starts at zeros, not at its argument.
+                start = self.zero(args[index].type)
+            var variable = self.graph.Var(NodeRef(start)).value
+            var value = _plain(args[index].type, start)
             value.local = args[index].local
             self.declare(
                 _Symbol(called.names[index], _LOCAL, value^, variable, False)
             )
         self.at = called.first + 1
         self.depth = 0
+        self.loops = 0
+        self.breakables = List[Int]()
+        # A call is a frame of the graph's, for an early return, unless it
+        # returns a matrix, which no register holds.
+        var framed = (
+            not called.result.is_matrix() and not called.result.is_struct()
+        )
+        if framed:
+            var frame = called.result if called.result != _VOID else _FLOAT
+            self.graph.open_call(ValueType(frame.width()))
         while self.at < called.last:
             self.statement()
         _ = self.calling.pop()
         var result = self.returned.pop()
         if called.result == _VOID:
+            _ = self.graph.close_call(self.graph.float(0))
             result = _plain(_VOID, -1)
         elif result.type == _VOID:
             raise self.error(
                 "the function " + called.name + " ends with no return"
             )
+        elif framed and result.node >= 0:
+            # An early `return` gives its value where it ran.
+            var answer = self.graph.close_call(NodeRef(result.node))
+            result.node = answer.value
+        elif framed:
+            # A transform known only as a step: an early return of one is
+            # refused, so there is nothing to choose between.
+            _ = self.graph.close_call(self.graph.float(0))
+        # What each out and inout parameter holds at the end.
+        var given = List[_Value]()
+        for index in range(len(args)):
+            if called.modes[index] != _IN:
+                given.append(self.read(called.names[index]))
         self.close()
         for index in range(len(hidden)):
             self.symbols.append(hidden[index].copy())
         self.scopes = scopes^
         self.depth = depth
+        self.loops = loops
+        self.breakables = breakables^
         self.at = back
+        # Given back to the arguments, where the call runs.
+        var next = 0
+        for index in range(len(args)):
+            if called.modes[index] != _IN:
+                var value = given[next].copy()
+                value.symbol = -1
+                value.components = ""
+                self.assign(args[index], value)
+                next += 1
         return result^
 
     # --- statements ---------------------------------------------------------
@@ -1621,12 +2562,149 @@ struct _Compiler(Movable):
             self.graph.Discard()
         elif self.is_word("return"):
             self.return_statement()
+        elif self.is_word("break"):
+            if len(self.breakables) == 0:
+                raise self.error("break needs a loop or a switch to be in")
+            self.at += 1
+            self.expect(";")
+            self.graph.Break()
+        elif self.is_word("continue"):
+            if self.loops == 0:
+                raise self.error("continue needs a loop to be in")
+            self.at += 1
+            self.expect(";")
+            self.continue_here()
+        elif self.is_word("switch"):
+            self.switch_statement()
+        elif self.is_word("case") or self.is_word("default"):
+            raise self.error("case and default belong in a switch")
+        elif self.is_word("struct"):
+            raise self.error("a struct is declared outside every function")
         elif _listed(self.peek(), _REFUSED_STATEMENTS):
             raise self.error(self.peek() + " is outside the subset")
         elif self.starts_declaration():
             self.local_declaration()
         else:
             self.expression_statement()
+
+    def continue_here(mut self) raises:
+        """Build a `continue`: the loop's own, or, in a switch, a flag the
+        switch's end continues by, after a break out of the switch."""
+        var innermost = self.breakables[len(self.breakables) - 1]
+        if innermost == _A_LOOP:
+            self.graph.Continue()
+            return
+        self.graph.assign(NodeVar(innermost), self.graph.float(1))
+        self.graph.Break()
+
+    def switch_statement(mut self) raises:
+        """Parse `switch (i) { case 1: ... default: ... }` as a loop of one
+        time through, which a `break` leaves: each statement runs where a
+        case before it matched, so a case falls through to the next.
+
+        Raises:
+            Error: If the selector is not an int, a label is not a constant
+                int or is listed twice, or a statement is before every label
+                or declares a variable.
+        """
+        self.at += 1
+        self.expect("(")
+        var selector = self.expression()
+        self.expect(")")
+        if selector.type != _TINT:
+            raise self.error(
+                "a switch chooses by an int, not a " + selector.type.name()
+            )
+        var chosen = self.node(selector)
+        self.expect("{")
+        var body = self.at
+        # The labels, read ahead, so the default knows whether any matches.
+        # The braces balance: `function` counted them.
+        var labels = List[Float64]()
+        var defaults = 0
+        var nesting = 0
+        while nesting > 0 or not self.is_mark("}"):
+            if self.is_mark("{"):
+                nesting += 1
+            elif self.is_mark("}"):
+                nesting -= 1
+            elif nesting == 0 and self.is_word("case"):
+                self.at += 1
+                var label = self.additive()
+                if label.type != _TINT or not label.known:
+                    raise self.error("a case label is a constant int")
+                for index in range(len(labels)):
+                    if labels[index] == label.number:
+                        raise self.error(
+                            "the case "
+                            + String(Int(label.number))
+                            + " is listed twice"
+                        )
+                labels.append(label.number)
+                continue
+            elif nesting == 0 and self.is_word("default"):
+                defaults += 1
+                if defaults > 1:
+                    raise self.error("a switch has one default")
+            self.at += 1
+        self.at = body
+        var matched = self.graph.float(0)
+        for index in range(len(labels)):
+            matched = self.graph.logical_or(
+                matched,
+                self.graph.equal(
+                    chosen, self.graph.float(Float32(labels[index]))
+                ),
+            )
+        # A continue in the switch breaks out of it and sets this.
+        var continued = -1
+        if self.loops > 0:
+            continued = self.graph.Var(self.graph.float(0)).value
+        var entered = self.graph.Var(self.graph.float(0))
+        _ = self.graph.Loop(1)
+        self.open()
+        self.depth += 1
+        self.breakables.append(continued)
+        var labeled = False
+        while not self.is_mark("}"):
+            var hit: NodeRef
+            if self.is_word("case"):
+                self.at += 1
+                var label = self.additive()
+                self.expect(":")
+                hit = self.graph.equal(
+                    chosen, self.graph.float(Float32(label.number))
+                )
+            elif self.is_word("default"):
+                self.at += 1
+                self.expect(":")
+                hit = self.graph.logical_not(matched)
+            else:
+                if not labeled:
+                    raise self.error(
+                        "a switch's statements follow a case or a default"
+                    )
+                if self.starts_declaration():
+                    raise self.error(
+                        "declare a variable before the switch, or in a block"
+                    )
+                self.graph.If(self.graph.get(entered))
+                self.statement()
+                self.graph.End()
+                continue
+            labeled = True
+            self.graph.assign(
+                entered, self.graph.logical_or(self.graph.get(entered), hit)
+            )
+        self.at += 1
+        _ = self.breakables.pop()
+        self.depth -= 1
+        self.close()
+        self.graph.End()
+        if continued >= 0:
+            self.graph.If(self.graph.get(NodeVar(continued)))
+            self.continue_here()
+            self.graph.End()
 
     def starts_declaration(self) -> Bool:
         """Return True if the current token begins a local declaration: a
@@ -1636,8 +2714,10 @@ struct _Compiler(Movable):
         var word = self.peek()
         if word == "const" or _is_precision(word):
             return True
-        var typed = _type_named(word).is_valid() or _listed(
-            word, _REFUSED_TYPES
+        var typed = (
+            _type_named(word).is_valid()
+            or _listed(word, _REFUSED_TYPES)
+            or self.struct_named(word).is_struct()
         )
         return typed and self.peek(1) != "("
 
@@ -1649,6 +2729,12 @@ struct _Compiler(Movable):
         """
         var constant = self.qualifiers()
         var type = self.type()
+        if type.is_matrix():
+            self.matrix_declaration(type)
+            return
+        if type.is_struct():
+            self.struct_locals(type, constant)
+            return
         if not type.holds():
             raise self.error(
                 "a local variable of type "
@@ -1658,7 +2744,11 @@ struct _Compiler(Movable):
         while True:
             var name = self.name()
             if self.is_mark("["):
-                raise self.error("arrays are outside the subset")
+                self.local_array(type, name, constant)
+                if not self.is_mark(","):
+                    break
+                self.at += 1
+                continue
             var value = _plain(type, -1)
             if self.is_mark("="):
                 self.at += 1
@@ -1696,6 +2786,107 @@ struct _Compiler(Movable):
                     False,
                 )
             )
+            if not self.is_mark(","):
+                break
+            self.at += 1
+        self.expect(";")
+
+    def struct_locals(mut self, type: _Type, constant: Bool) raises:
+        """Parse `S a = e, b[2];`, each field of each name a variable.
+
+        Raises:
+            Error: If a value is of another type, or a const's is missing or
+                not constant.
+        """
+        while True:
+            var name = self.name()
+            if self.is_mark("["):
+                self.local_array(type, name, constant)
+            else:
+                var value = _plain(type, -1)
+                if self.is_mark("="):
+                    self.at += 1
+                    value = self.expression()
+                    if value.type != type:
+                        raise self.error(
+                            "cannot give a "
+                            + self.type_name(type)
+                            + " a "
+                            + self.type_name(value.type)
+                        )
+                    if constant and not value.constant:
+                        raise self.error(
+                            "a const's value must be a constant expression"
+                        )
+                elif constant:
+                    raise self.error("a const needs a value")
+                self.declare_value(
+                    name, type, _CONST if constant else _LOCAL, value
+                )
+            if not self.is_mark(","):
+                break
+            self.at += 1
+        self.expect(";")
+
+    def local_array(mut self, type: _Type, name: String, constant: Bool) raises:
+        """Parse a local array, `T a[n]` of zeros or `T a[n] = T[n](...)`,
+        each element a variable.
+
+        Raises:
+            Error: If the size or an element is outside the subset.
+        """
+        var size = self.array_size(True)
+        var values = List[_Value]()
+        if self.is_mark("="):
+            self.at += 1
+            values = self.array_values(type, size)
+        elif constant:
+            raise self.error("a const needs a value")
+        elif size == 0:
+            raise self.error("an array needs its size or its elements")
+        else:
+            for _ in range(size):  # pragma: no branch
+                values.append(_plain(type, -1))
+        for index in range(len(values)):  # pragma: no branch
+            if constant and not values[index].constant:
+                raise self.error(
+                    "a const's value must be a constant expression"
+                )
+            self.declare_value(
+                name + "[" + String(index) + "]",
+                type,
+                _CONST if constant else _LOCAL,
+                values[index],
+            )
+        self.declare_array(name, type, len(values))
+
+    def matrix_declaration(mut self, type: _Type) raises:
+        """Parse `mat3 a = e, b = f;`: each name stands for the matrix its
+        initializer builds, and cannot be given another.
+
+        Raises:
+            Error: If a name has no initializer, or its value is another
+                type.
+        """
+        while True:
+            var name = self.name()
+            if self.is_mark("["):
+                raise self.error("arrays are outside the subset")
+            if not self.is_mark("="):
+                raise self.error(
+                    "a local "
+                    + type.name()
+                    + " needs its value where it is declared"
+                )
+            self.at += 1
+            var value = self.expression()
+            if value.type != type:
+                raise self.error(
+                    "cannot give a " + type.name() + " a " + value.type.name()
+                )
+            value.symbol = -1
+            value.components = ""
+            self.declare(_Symbol(name, _MATRIX_LOCAL, value^, -1, False))
             if not self.is_mark(","):
                 break
             self.at += 1
@@ -1792,7 +2983,11 @@ struct _Compiler(Movable):
         self.open()
         self.declare(_Symbol(name, _INDEX, _plain(type, node.value), -1, False))
         self.depth += 1
+        self.loops += 1
+        self.breakables.append(_A_LOOP)
         self.statement()
+        _ = self.breakables.pop()
+        self.loops -= 1
         self.depth -= 1
         self.close()
         self.graph.End()
@@ -1844,16 +3039,29 @@ struct _Compiler(Movable):
                 "the function "
                 + called.name
                 + " returns a "
-                + called.result.name()
+                + self.type_name(called.result)
                 + ", not a "
-                + value.type.name()
+                + self.type_name(value.type)
             )
         self.expect(";")
         if self.at != called.last or self.depth != 0:
-            self.at -= 1
-            raise self.error(
-                "a return must be the last statement of its function"
+            # An early return: nothing after it takes effect where it runs.
+            if (
+                called.result.is_matrix()
+                or (called.name == "main" and self.stage == _VERTEX)
+                or (called.result != _VOID and value.tag != _PLAIN)
+            ):
+                self.at -= 1
+                raise self.error(
+                    "a function that returns a matrix, a struct or a"
+                    " transform, and a vertex shader's main, cannot return"
+                    " early"
+                )
+            self.graph.Return(
+                NodeRef(value.node) if called.result
+                != _VOID else self.graph.float(0)
             )
+            return
         value.symbol = -1
         value.components = ""
         if called.result == _VOID:
@@ -1913,6 +3121,12 @@ struct _Compiler(Movable):
         if target.symbol < 0:
             raise self.error("that cannot be assigned")
         var kind = self.symbols[target.symbol].kind
+        if kind == _STRUCT_VAR:
+            self.assign_struct(target, value)
+            return
+        if kind == _ARRAY:
+            self.assign_element(target, value)
+            return
         if kind == _POSITION:
             self.draw(target, value)
             return
@@ -1942,23 +3156,14 @@ struct _Compiler(Movable):
         var node = self.node(value)
         var variable = NodeVar(self.symbols[target.symbol].variable)
         if target.components != "":
-            # The components not written keep what the variable held.
-            var held = self.graph.get(variable)
-            var parts = List[NodeRef]()
-            for lane in range(
-                self.symbols[target.symbol].value.type.width()
-            ):  # pragma: no branch
-                var letter = _letter("xyzw", lane)
-                var found = target.components.find(letter)
-                if found < 0:
-                    parts.append(self.graph.swizzle(held, letter))
-                elif value.type.is_scalar():
-                    parts.append(node)
-                else:
-                    parts.append(
-                        self.graph.swizzle(node, _letter("xyzw", found))
-                    )
-            node = self.graph.join(parts)
+            var held_type = self.symbols[target.symbol].value.type
+            node = self.merged(
+                self.graph.get(variable),
+                held_type,
+                target.components,
+                node,
+                value.type,
+            )
         self.graph.assign(variable, node)
         ref changed = self.symbols[target.symbol]
         changed.written = True
@@ -1967,6 +3172,111 @@ struct _Compiler(Movable):
         # branch, where it cannot be one of two values.
         changed.value.tag = value.tag if whole else _PLAIN
         changed.value.point = value.point
+
+    def merged(
+        mut self,
+        held: NodeRef,
+        type: _Type,
+        components: String,
+        node: NodeRef,
+        given: _Type,
+    ) raises -> NodeRef:
+        """Return a variable's value with some components written: the
+        components not written keep what it held."""
+        var parts = List[NodeRef]()
+        for lane in range(type.width()):  # pragma: no branch
+            var letter = _letter("xyzw", lane)
+            var found = components.find(letter)
+            if found < 0:
+                parts.append(self.graph.swizzle(held, letter))
+            elif given.is_scalar():
+                parts.append(node)
+            else:
+                parts.append(self.graph.swizzle(node, _letter("xyzw", found)))
+        return self.graph.join(parts)
+
+    def assign_struct(mut self, target: _Value, value: _Value) raises:
+        """Make a struct variable hold a struct's value, field by field.
+
+        Raises:
+            Error: If the types differ, or a field cannot be assigned.
+        """
+        if value.type != target.type:
+            raise self.error(
+                "cannot assign a "
+                + self.type_name(value.type)
+                + " to a "
+                + self.type_name(target.type)
+            )
+        var count = len(self.structs[target.type.value - _STRUCT_BASE].names)
+        for index in range(count):  # pragma: no branch
+            var into = self.value_of(
+                self.field_symbol(target.symbol, target.type, index)
+            )
+            var part = self.bundles[value.point][index].copy()
+            self.assign(into, part)
+
+    def assign_element(mut self, target: _Value, value: _Value) raises:
+        """Write the element of an array that an index picks where the
+        shader runs: each element takes the value where the index is its
+        own, and keeps what it held elsewhere.
+
+        Raises:
+            Error: If the array's elements cannot be assigned, or the types
+                differ.
+        """
+        var size = self.symbols[target.symbol].variable
+        var first = target.symbol - size
+        var kind = self.symbols[first].kind
+        if kind != _LOCAL:
+            raise self.error(
+                "cannot assign "
+                + self.symbols[target.symbol].name
+                + ": it is an array of which each element is "
+                + _kind_name(kind)
+            )
+        if value.type != target.type:
+            raise self.error(
+                "cannot assign a "
+                + value.type.name()
+                + " to a "
+                + target.type.name()
+            )
+        var node = self.node(value)
+        for index in range(size):  # pragma: no branch
+            var variable = NodeVar(self.symbols[first + index].variable)
+            var held = self.graph.get(variable)
+            var written = node
+            if target.components != "":
+                var held_type = self.symbols[first + index].value.type
+                written = self.merged(
+                    held,
+                    held_type,
+                    target.components,
+                    node,
+                    value.type,
+                )
+            var here = self.graph.equal(
+                NodeRef(target.point), self.graph.float(Float32(index))
+            )
+            self.graph.assign(variable, self.graph.select(here, written, held))
+            ref changed = self.symbols[first + index]
+            changed.written = True
+            changed.value.local = changed.value.local or value.local
+
+    def pick(mut self, values: List[NodeRef], index: NodeRef) raises -> NodeRef:
+        """Return the value an index picks where the shader runs, the first
+        where it picks none."""
+        var picked = values[0]
+        # A vector's lanes, its halves and a matrix's columns: at least
+        # two, so the loop runs.
+        for at in range(1, len(values)):  # pragma: no branch
+            picked = self.graph.select(
+                self.graph.equal(index, self.graph.float(Float32(at))),
+                values[at],
+                picked,
+            )
+        return picked
 
     def draw(mut self, target: _Value, value: _Value) raises:
         """Take `gl_Position`: `projectionMatrix * modelViewMatrix * vec4(p,
@@ -2016,10 +3326,7 @@ struct _Compiler(Movable):
                 + " and a "
                 + no.type.name()
             )
-        var node = self.graph.select(
-            NodeRef(condition.node), self.node(yes), self.node(no)
-        )
-        var value = self.derived(yes.type, node, yes, no)
+        var value = self.choose(NodeRef(condition.node), yes, no)
         value.constant = value.constant and condition.constant
         value.local = value.local or condition.local
         return value^
@@ -2176,19 +3483,25 @@ struct _Compiler(Movable):
         Raises:
             Error: If the operands' types do not meet.
         """
-        var transforms = _is_matrix_tag(left.tag) or left.tag == _NORMAL_MATRIX
+        var transforms = (
+            _is_matrix_tag(left.tag)
+            or left.tag == _NORMAL_MATRIX
+            or left.tag == _MODEL_ROTATION
+        )
         if mark == "*" and (transforms or right.tag == _VIEW):
             return self.transformed(left, right)
         var a = left.type
         var b = right.type
-        if mark == "%" and (a != _TINT or b != _TINT):
+        if mark == "%" and (not a.is_int() or not b.is_int()):
             raise self.error("% takes two ints: write mod() for floats")
+        if a == _MAT2 or b == _MAT2:
+            return self.mat2_arithmetic(mark, left, right)
         if a.is_matrix() or b.is_matrix():
             return self.matrix_product(mark, left, right)
         var numeric = (a.is_float() and b.is_float()) or (
-            a == _TINT and b == _TINT
+            a.is_int() and b.is_int()
         )
-        var sizes = a == b or a == _FLOAT or b == _FLOAT
+        var sizes = a == b or a.is_scalar() or b.is_scalar()
         if not numeric or not sizes:
             raise self.error(
                 "cannot use "
@@ -2210,7 +3523,7 @@ struct _Compiler(Movable):
             node = self.graph.mul(x, y)
         elif mark == "/":
             node = self.graph.div(x, y)
-            if type == _TINT:
+            if type.is_int():
                 node = self.graph.trunc(node)
         else:
             var quotient = self.graph.trunc(self.graph.div(x, y))
@@ -2220,6 +3533,72 @@ struct _Compiler(Movable):
             value.known = True
             value.number = _fold(mark, left.number, right.number, type == _TINT)
         return value^
+
+    def mat2_arithmetic(
+        mut self, mark: String, left: _Value, right: _Value
+    ) raises -> _Value:
+        """Return an operation on a `mat2`, which a `vec4` of its columns
+        holds: a product with a `mat2` or a `vec2`, or `+`, `-`, `*` and
+        `/` of each component with a `mat2` or a `float`.
+
+        Raises:
+            Error: If the other operand is none of those.
+        """
+        var a = left.type
+        var b = right.type
+        var x = self.node(left)
+        var y = self.node(right)
+        if mark == "*" and a == _MAT2 and b == _MAT2:
+            var both = self.graph.join(
+                [
+                    self.mat2_times(x, self.graph.swizzle(y, "xy")),
+                    self.mat2_times(x, self.graph.swizzle(y, "zw")),
+                ]
+            )
+            return self.derived(_MAT2, both, left, right)
+        if mark == "*" and a == _MAT2 and b == _VEC2:
+            return self.derived(_VEC2, self.mat2_times(x, y), left, right)
+        # The other operand is the `mat2`.
+        if mark == "*" and a == _VEC2:
+            var row = self.graph.join(
+                [
+                    self.graph.dot(x, self.graph.swizzle(y, "xy")),
+                    self.graph.dot(x, self.graph.swizzle(y, "zw")),
+                ]
+            )
+            return self.derived(_VEC2, row, left, right)
+        var other = b if a == _MAT2 else a
+        if other != _MAT2 and other != _FLOAT:
+            raise self.error(
+                "cannot use "
+                + mark
+                + " on a "
+                + a.name()
+                + " and a "
+                + b.name()
+            )
+        var node: NodeRef
+        if mark == "+":
+            node = self.graph.add(x, y)
+        elif mark == "-":
+            node = self.graph.sub(x, y)
+        elif mark == "*":
+            node = self.graph.mul(x, y)
+        else:
+            node = self.graph.div(x, y)
+        return self.derived(_MAT2, node, left, right)
+
+    def mat2_times(mut self, m: NodeRef, v: NodeRef) raises -> NodeRef:
+        """Return a `mat2` times a `vec2`: each column times its component,
+        summed."""
+        return self.graph.add(
+            self.graph.mul(
+                self.graph.swizzle(m, "xy"), self.graph.swizzle(v, "x")
+            ),
+            self.graph.mul(
+                self.graph.swizzle(m, "zw"), self.graph.swizzle(v, "y")
+            ),
+        )
 
     def matrix_product(
         mut self, mark: String, left: _Value, right: _Value
@@ -2232,7 +3611,7 @@ struct _Compiler(Movable):
         """
         var a = left.type
         var b = right.type
-        if mark != "*" or (a.is_matrix() and b.is_matrix()):
+        if mark != "*" or (a.is_matrix() and b.is_matrix() and a != b):
             raise self.error(
                 "cannot use "
                 + mark
@@ -2241,6 +3620,9 @@ struct _Compiler(Movable):
                 + " and a "
                 + b.name()
             )
+        if a.is_matrix() and b.is_matrix():
+            var both = self.graph.mul(self.node(left), self.node(right))
+            return self.derived(a, both, left, right)
         var matrix = a if a.is_matrix() else b
         var vector = b if a.is_matrix() else a
         var wanted = _VEC3 if matrix == _MAT3 else _VEC4
@@ -2283,6 +3665,10 @@ struct _Compiler(Movable):
         var of_normal = self.normal >= 0 and right.node == self.normal
         if matrix == _NORMAL_MATRIX and of_normal:
             return _plain(_VEC3, self.graph.normal_view().value)
+        if matrix == _MODEL_ROTATION and of_normal:
+            # The normal in the world, as `modelMatrix * vec4(normal,
+            # 0.0)` is read.
+            return _plain(_VEC3, self.graph.normal_world().value)
         var of_direction = self.normal >= 0 and right.point == self.normal
         if matrix == _MODEL and carried == _DIRECTION and of_direction:
             var world = self.graph.normal_world()
@@ -2292,7 +3678,8 @@ struct _Compiler(Movable):
             "this port knows the transforms only as projectionMatrix *"
             " modelViewMatrix * vec4(p, 1.0) and the same through"
             " viewMatrix * modelMatrix, modelMatrix * vec4(position, 1.0),"
-            " normalMatrix * normal and modelMatrix * vec4(normal, 0.0)"
+            " normalMatrix * normal, modelMatrix * vec4(normal, 0.0) and"
+            " mat3(modelMatrix) * normal"
         )
 
     def moved(mut self, space: Int, point: Int) raises -> _Value:
@@ -2335,7 +3722,7 @@ struct _Compiler(Movable):
             return self.derived(
                 _BOOL, self.graph.logical_not(NodeRef(value.node)), value, value
             )
-        if not value.type.is_number():
+        if not value.type.is_number() and value.type != _MAT2:
             raise self.error(
                 "cannot use " + mark + " on a " + value.type.name()
             )
@@ -2360,17 +3747,61 @@ struct _Compiler(Movable):
         while True:
             if self.is_mark("."):
                 self.at += 1
-                value = self.swizzle(value, self.name())
+                if value.type.is_struct():
+                    value = self.field(value, self.name())
+                else:
+                    value = self.swizzle(value, self.name())
             elif self.is_mark("["):
                 self.at += 1
                 var index = self.expression()
                 self.expect("]")
-                if not value.type.is_vector():
-                    raise self.error(
-                        "only a vector can be indexed in this subset"
+                if value.type.is_matrix():
+                    value = self.column(value, index)
+                    continue
+                if value.type == _MAT2 and not index.known:
+                    var halves = List[NodeRef]()
+                    for half in ["xy", "zw"]:  # pragma: no branch
+                        halves.append(
+                            self.graph.swizzle(self.node(value), half)
+                        )
+                    self.check_column(value.type, 2, index)
+                    value = self.derived(
+                        _VEC2, self.pick(halves, self.node(index)), value, index
                     )
-                if index.type != _TINT or not index.known:
-                    raise self.error("a vector is indexed by a constant int")
+                    continue
+                if value.type == _MAT2:
+                    # A column is two components of the vec4, and can be
+                    # assigned as they can.
+                    self.check_column(value.type, 2, index)
+                    var columns = value.copy()
+                    columns.type = _VEC4
+                    value = self.swizzle(
+                        columns, "xy" if index.number == 0 else "zw"
+                    )
+                    continue
+                if not value.type.is_any_vector():
+                    raise self.error(
+                        "only a vector or a matrix can be indexed in this"
+                        " subset"
+                    )
+                if index.type != _TINT:
+                    raise self.error("a vector is indexed by an int")
+                if not index.known:
+                    # Picked where the shader runs, and not assigned.
+                    var lanes = List[NodeRef]()
+                    for lane in range(value.type.width()):  # pragma: no branch
+                        lanes.append(
+                            self.graph.swizzle(
+                                self.node(value), _letter("xyzw", lane)
+                            )
+                        )
+                    value = self.derived(
+                        value.type.resized(1),
+                        self.pick(lanes, self.node(index)),
+                        value,
+                        index,
+                    )
+                    continue
                 if index.number < 0 or index.number >= Float64(
                     value.type.width()
                 ):
@@ -2380,6 +3811,48 @@ struct _Compiler(Movable):
                 value = self.swizzle(value, _letter("xyzw", Int(index.number)))
             else:
                 return value^
+
+    def column(mut self, value: _Value, index: _Value) raises -> _Value:
+        """Return a matrix's column, `m[i]`.
+
+        Raises:
+            Error: If the matrix is one of three.js's transforms, or the
+                index is not a constant int in range.
+        """
+        if value.tag == _MODEL and index.type == _TINT and index.known:
+            # Known only as a step: `.xyz` of the first three makes the
+            # model's turn and stretch.
+            self.check_column(value.type, 4, index)
+            return _tagged(_VEC4, -1, _MODEL_COLUMN, Int(index.number))
+        if value.tag != _PLAIN:
+            raise self.error("a transform's columns are outside the subset")
+        var size = 3 if value.type == _MAT3 else 4
+        self.check_column(value.type, size, index)
+        var matrix = NodeRef(self.node(value).value)
+        var node: NodeRef
+        if index.known:
+            node = self.graph.column(matrix, Int(index.number))
+        else:
+            var columns = List[NodeRef]()
+            for c in range(size):  # pragma: no branch
+                columns.append(self.graph.column(matrix, c))
+            node = self.pick(columns, self.node(index))
+        var out = _plain(_VEC3 if size == 3 else _VEC4, node.value)
+        out.constant = value.constant
+        out.local = value.local
+        return out^
+
+    def check_column(mut self, type: _Type, size: Int, index: _Value) raises:
+        """Refuse a matrix index that is not an int, or a constant one not
+        below `size`.
+
+        Raises:
+            Error: If the index is not an int, or is outside the matrix.
+        """
+        if index.type != _TINT:
+            raise self.error("a matrix is indexed by an int")
+        if index.known and (index.number < 0 or index.number >= Float64(size)):
+            raise self.error("the index is outside the " + type.name())
 
     def swizzle(mut self, value: _Value, letters: String) raises -> _Value:
         """Return a vector's components picked by letters of one of the sets
@@ -2391,7 +3864,15 @@ struct _Compiler(Movable):
         """
         if value.symbol >= 0 and self.symbols[value.symbol].kind == _POSITION:
             raise self.error("gl_Position is written whole")
-        if not value.type.is_vector():
+        if value.tag == _MODEL_COLUMN:
+            if letters != "xyz":
+                raise self.error(
+                    "a column of modelMatrix is read as its .xyz, to make"
+                    " mat3(modelMatrix[0].xyz, modelMatrix[1].xyz,"
+                    " modelMatrix[2].xyz)"
+                )
+            return _tagged(_VEC3, -1, _MODEL_COLUMN3, value.point)
+        if not value.type.is_any_vector():
             raise self.error("only a vector has components to pick")
         if letters.byte_length() > 4:
             raise self.error("a swizzle picks one to four components")
@@ -2410,7 +3891,7 @@ struct _Compiler(Movable):
             picked += _letter("xyzw", place % 4)
         var node = self.graph.swizzle(self.node(value), picked)
         var result = self.derived(
-            _Type(picked.byte_length()), node, value, value
+            value.type.resized(picked.byte_length()), node, value, value
         )
         if value.symbol < 0:
             return result^
@@ -2425,6 +3906,8 @@ struct _Compiler(Movable):
             through += letter
         result.symbol = value.symbol
         result.components = through
+        # The index of an array's element picked where the shader runs.
+        result.point = value.point
         return result^
 
     def primary(mut self) raises -> _Value:
@@ -2471,6 +3954,57 @@ struct _Compiler(Movable):
             if name.startswith("gl_"):
                 raise self.error("GLSL's " + name + " is outside the subset")
             raise self.error("the name " + name + " is not declared")
+        if self.symbols[index].kind == _ARRAY:
+            return self.element(index)
+        return self.value_of(index)
+
+    def element(mut self, array: Int) raises -> _Value:
+        """Parse `a[i]` or `a.length()` after an array's name: the element
+        a constant index names, or the one an index picks where the shader
+        runs, which can be assigned as a whole or by components.
+
+        Raises:
+            Error: If the array is read whole, or the index is outside it or
+                not an int.
+        """
+        var size = self.symbols[array].variable
+        var type = self.symbols[array].value.type
+        var span = self.span(type)
+        # Element i's own symbol, after its fields.
+        var first = array - size * span + span - 1
+        if self.is_mark(".") and self.peek(1) == "length":
+            self.at += 2
+            self.expect("(")
+            self.expect(")")
+            return self.literal(_TINT, Float64(size))
+        if not self.is_mark("["):
+            raise self.error("an array is read one element at a time")
+        self.at += 1
+        var index = self.expression()
+        self.expect("]")
+        if index.type != _TINT:
+            raise self.error("an array is indexed by an int")
+        if index.known:
+            if index.number < 0 or index.number >= Float64(size):
+                raise self.error("the index is outside the array")
+            return self.value_of(first + Int(index.number) * span)
+        if type.is_sampler():
+            raise self.error("an array of samplers is indexed by a constant")
+        var values = List[_Value]()
+        for at in range(size):  # pragma: no branch
+            values.append(self.value_of(first + at * span))
+        var value = self.pick_value(values, self.node(index))
+        value.constant = value.constant and index.constant
+        value.local = value.local or index.local
+        if type.is_struct():
+            # A struct picked where the shader runs is read, not written.
+            return value^
+        value.symbol = array
+        value.point = index.node
+        return value^
+
+    def read_symbol(mut self, index: Int) raises -> _Value:
+        """Return the value a symbol holds here."""
         ref symbol = self.symbols[index]
         var value = symbol.value.copy()
         var held = symbol.kind == _LOCAL or symbol.kind == _OUTPUT
@@ -2511,6 +4045,9 @@ struct _Compiler(Movable):
         var type = _type_named(name)
         if type.is_valid():
             return self.construct(type, self.arguments())
+        var named = self.struct_named(name)
+        if named.is_struct():
+            return self.construct_struct(named, self.arguments())
         if _listed(name, _BUILTINS):
             return self.builtin_call(name, self.arguments())
         for index in range(len(self.functions)):
@@ -2546,7 +4083,16 @@ struct _Compiler(Movable):
                     + " as argument "
                     + String(arg + 1)
                 )
-            _ = self.node(args[arg])
+            if called.modes[arg] != _IN and args[arg].symbol < 0:
+                raise self.error(
+                    "argument "
+                    + String(arg + 1)
+                    + " of "
+                    + called.name
+                    + " is given back: it must be a variable"
+                )
+            if not args[arg].type.is_struct():
+                _ = self.node(args[arg])
         var result = self.inline(index, args)
         for arg in range(len(args)):
             result.local = result.local or args[arg].local
@@ -2560,13 +4106,25 @@ struct _Compiler(Movable):
             Error: If the type cannot be constructed, or the arguments are
                 too few or too many.
         """
-        if not type.holds():
-            raise self.error(
-                "a " + type.name() + " constructor is outside the subset"
-            )
         if len(args) == 0:
             raise self.error(
                 "a " + type.name() + " constructor needs arguments"
+            )
+        if type.is_matrix():
+            return self.construct_matrix(type, args)
+        var alone = len(args) == 1 and (
+            args[0].type.is_matrix() or args[0].type.is_scalar()
+        )
+        if type == _MAT2 and alone:
+            return self.mat2_of(args[0])
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type == _MAT2 and len(args) > 1:
+                raise self.error(
+                    "a " + type.name() + " is made of one matrix alone"
+                )
+        if not type.holds():
+            raise self.error(
+                "a " + type.name() + " constructor is outside the subset"
             )
         var value = _plain(type, -1)
         value.constant = True
@@ -2594,7 +4152,12 @@ struct _Compiler(Movable):
                     "a " + type.name() + " constructor has too many arguments"
                 )
             var part = NodeRef(args[index].node)
-            var size = args[index].type.width()
+            var given = args[index].type
+            if type.is_int() and not given.is_int() and not given.is_bool():
+                part = self.graph.trunc(part)
+            elif type.is_bool() and not given.is_bool():
+                part = self.graph.not_equal(part, self.graph.float(0))
+            var size = given.width()
             if filled + size > width:
                 size = width - filled
                 part = self.graph.swizzle(part, String("xyzw"[byte=0:size]))
@@ -2626,6 +4189,177 @@ struct _Compiler(Movable):
             value.tag = _DIRECTION
             value.point = args[0].node
         return value^
+
+    def mat2_of(mut self, arg: _Value) raises -> _Value:
+        """Return `mat2(s)`, `s` down the diagonal, or `mat2(m)`, the upper
+        left of a `mat3` or a `mat4`.
+
+        Raises:
+            Error: If the matrix is one of three.js's transforms.
+        """
+        if arg.tag != _PLAIN:
+            raise self.error("cannot make a mat2 of a " + arg.type.name())
+        var node = self.node(arg)
+        var value = _plain(_MAT2, -1)
+        value.constant = arg.constant
+        value.local = arg.local
+        if arg.type.is_scalar():
+            var zero = self.graph.float(0)
+            value.node = self.graph.join([node, zero, zero, node]).value
+            return value^
+        value.node = self.graph.join(
+            [
+                self.graph.swizzle(self.graph.column(node, 0), "xy"),
+                self.graph.swizzle(self.graph.column(node, 1), "xy"),
+            ]
+        ).value
+        return value^
+
+    def construct_matrix(
+        mut self, type: _Type, args: List[_Value]
+    ) raises -> _Value:
+        """Return a matrix constructor's value: from a matrix, its upper
+        left or padded with the identity; from one scalar, that many times
+        the identity; or from columns of scalars and vectors in order.
+
+        Raises:
+            Error: If the arguments give too few or too many components, or
+                an argument is a transform or a sampler.
+        """
+        var size = 3 if type == _MAT3 else 4
+        if type == _MAT3 and self.model_rotation(args):
+            return _tagged(_MAT3, -1, _MODEL_ROTATION, -1)
+        var value = _plain(type, -1)
+        value.constant = True
+        for index in range(len(args)):  # pragma: no branch
+            value.constant = value.constant and args[index].constant
+            value.local = value.local or args[index].local
+            if args[index].tag != _PLAIN or not (
+                args[index].type.holds() or args[index].type.is_matrix()
+            ):
+                raise self.error(
+                    "cannot make a "
+                    + type.name()
+                    + " of a "
+                    + args[index].type.name()
+                )
+        var columns = List[NodeRef]()
+        if len(args) == 1 and args[0].type.is_matrix():
+            var from_size = 3 if args[0].type == _MAT3 else 4
+            var matrix = NodeRef(self.node(args[0]).value)
+            for c in range(size):  # pragma: no branch
+                if c < from_size:
+                    var column = self.graph.column(matrix, c)
+                    if size == 3 and from_size == 4:
+                        column = self.graph.swizzle(column, "xyz")
+                    elif size == 4 and from_size == 3:
+                        column = self.graph.join([column, self.graph.float(0)])
+                    columns.append(column)
+                else:
+                    # A mat3 padded to a mat4 takes the identity's last column.
+                    columns.append(self.graph.vec4(0, 0, 0, 1))
+            value.node = self._matrix_of(columns).value
+            return value^
+        if len(args) == 1 and args[0].type == _MAT2:
+            # A mat2 in the upper left of the identity.
+            var held = NodeRef(self.node(args[0]).value)
+            var pad = self.graph.float(0)
+            for c in range(size):  # pragma: no branch
+                var lanes = List[NodeRef]()
+                if c < 2:
+                    lanes.append(
+                        self.graph.swizzle(held, "xy" if c == 0 else "zw")
+                    )
+                    lanes.append(pad)
+                    if size == 4:
+                        lanes.append(pad)
+                else:
+                    for r in range(size):  # pragma: no branch
+                        lanes.append(
+                            self.graph.float(Float32(1 if r == c else 0))
+                        )
+                columns.append(self.graph.join(lanes))
+            value.node = self._matrix_of(columns).value
+            return value^
+        var parts = List[NodeRef]()
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type.is_matrix() or args[index].type == _MAT2:
+                raise self.error(
+                    "a " + type.name() + " is made of one matrix alone"
+                )
+            var node = NodeRef(self.node(args[index]).value)
+            var width = args[index].type.width()
+            if width == 1:
+                parts.append(node)
+            else:
+                for lane in range(width):  # pragma: no branch
+                    parts.append(
+                        self.graph.swizzle(node, _letter("xyzw", lane))
+                    )
+        if len(parts) == 1:
+            # One scalar down the diagonal.
+            for c in range(size):  # pragma: no branch
+                var lanes = List[NodeRef]()
+                for r in range(size):  # pragma: no branch
+                    lanes.append(parts[0] if r == c else self.graph.float(0))
+                columns.append(self.graph.join(lanes))
+            value.node = self._matrix_of(columns).value
+            return value^
+        if len(parts) != size * size:
+            raise self.error(
+                "a "
+                + type.name()
+                + " constructor needs "
+                + String(size * size)
+                + " components, not "
+                + String(len(parts))
+            )
+        for c in range(size):  # pragma: no branch
+            var lanes = List[NodeRef]()
+            for r in range(size):  # pragma: no branch
+                lanes.append(parts[c * size + r])
+            columns.append(self.graph.join(lanes))
+        value.node = self._matrix_of(columns).value
+        return value^
+
+    def mat2_function(mut self, name: String, m: NodeRef) raises -> NodeRef:
+        """Return `transpose`, `determinant` or `inverse` of a `mat2`, a
+        `vec4` of its columns."""
+        if name == "transpose":
+            return self.graph.swizzle(m, "xzyw")
+        var det = self.graph.sub(
+            self.graph.mul(
+                self.graph.swizzle(m, "x"), self.graph.swizzle(m, "w")
+            ),
+            self.graph.mul(
+                self.graph.swizzle(m, "z"), self.graph.swizzle(m, "y")
+            ),
+        )
+        if name == "determinant":
+            return det
+        var adjugate = self.graph.mul(
+            self.graph.swizzle(m, "wyzx"), self.graph.vec4(1, -1, -1, 1)
+        )
+        return self.graph.div(adjugate, det)
+
+    def model_rotation(self, args: List[_Value]) -> Bool:
+        """Return True for `mat3(modelMatrix)` and `mat3(modelMatrix[0].xyz,
+        modelMatrix[1].xyz, modelMatrix[2].xyz)`: the model's turn and
+        stretch."""
+        if len(args) == 1:
+            return args[0].tag == _MODEL
+        if len(args) != 3:
+            return False
+        for index in range(3):  # pragma: no branch
+            if args[index].tag != _MODEL_COLUMN3 or args[index].point != index:
+                return False
+        return True
+
+    def _matrix_of(mut self, columns: List[NodeRef]) raises -> NodeRef:
+        """Return the matrix of three or four columns."""
+        if len(columns) == 3:
+            return self.graph.mat3(columns[0], columns[1], columns[2])
+        return self.graph.mat4(columns[0], columns[1], columns[2], columns[3])
 
     def convert(
         mut self, type: _Type, args: List[_Value], var value: _Value
@@ -2672,13 +4406,167 @@ struct _Compiler(Movable):
             nodes.append(self.node(args[index]))
             value.constant = value.constant and args[index].constant
             value.local = value.local or args[index].local
-        if name == "texture" or name == "texture2D":
+        if _listed(
+            name,
+            (
+                " texture texture2D textureLod textureProj texture2DProj"
+                " textureCube "
+            ),
+        ):
             return self.texture(name, args, nodes, value^)
+        if name == "texelFetch" or name == "textureSize":
+            return self.texel(name, args, nodes, value^)
+        if _listed(name, " transpose determinant inverse "):
+            if (
+                len(args) != 1
+                or not (args[0].type.is_matrix() or args[0].type == _MAT2)
+                or args[0].tag != _PLAIN
+            ):
+                raise self.error(name + "() takes one mat2, mat3 or mat4")
+            value.type = _FLOAT if name == "determinant" else args[0].type
+            if args[0].type == _MAT2:
+                value.node = self.mat2_function(name, nodes[0]).value
+                return value^
+            if name == "transpose":
+                value.node = self.graph.transpose(nodes[0]).value
+            elif name == "inverse":
+                value.node = self.graph.inverse(nodes[0]).value
+            else:
+                value.node = self.graph.determinant(nodes[0]).value
+            return value^
+        if _listed(name, _COMPARISONS + " any all not "):
+            return self.compare(name, args, nodes, value^)
+        if name == "mix" and len(args) == 3 and args[2].type.is_bool():
+            var width = args[2].type.width()
+            if (
+                args[0].type != args[1].type
+                or args[0].type.resized(width) != args[0].type
+            ):
+                raise self.error(
+                    "mix() of a bool takes two values of one type, as wide as"
+                    " the bool"
+                )
+            # Where the bool is true, the second; elsewhere, the first.
+            value.type = args[0].type
+            value.node = self.graph.select(nodes[2], nodes[1], nodes[0]).value
+            return value^
         if _derivative(name) and self.stage == _VERTEX:
             raise self.error(name + "() is a fragment shader's")
         var type = self.signature(name, args)
         value.type = _FLOAT if _listed(name, " length distance dot ") else type
         value.node = self.apply(name, nodes).value
+        return value^
+
+    def compare(
+        mut self,
+        name: String,
+        args: List[_Value],
+        nodes: List[NodeRef],
+        var value: _Value,
+    ) raises -> _Value:
+        """Return `lessThan` and the other comparisons of two vectors, one
+        bool each, or `any`, `all` or `not` of a `bvec`.
+
+        Raises:
+            Error: If the arguments are not two vectors of one type, or one
+                `bvec`.
+        """
+        if not _listed(name, _COMPARISONS):
+            if (
+                len(args) != 1
+                or not args[0].type.is_bool()
+                or args[0].type.is_scalar()
+            ):
+                raise self.error(name + "() takes one bvec")
+            var x = nodes[0]
+            if name == "not":
+                value.type = args[0].type
+                value.node = self.graph.logical_not(x).value
+                return value^
+            var all = name == "all"
+            var folded = self.graph.swizzle(x, "x")
+            for lane in range(1, args[0].type.width()):  # pragma: no branch
+                var next = self.graph.swizzle(x, _letter("xyzw", lane))
+                folded = self.graph.logical_and(
+                    folded, next
+                ) if all else self.graph.logical_or(folded, next)
+            value.type = _BOOL
+            value.node = folded.value
+            return value^
+        var ordered = not _listed(name, " equal notEqual ")
+        var a = args[0].type if len(args) > 0 else _VOID
+        var fits = (
+            len(args) == 2
+            and args[1].type == a
+            and a.is_any_vector()
+            and (not ordered or not a.is_bool())
+        )
+        if not fits:
+            raise self.error(
+                name
+                + "() takes two vectors of one type"
+                + (" of numbers" if ordered else "")
+            )
+        var x = nodes[0]
+        var y = nodes[1]
+        var node: NodeRef
+        if name == "lessThan":
+            node = self.graph.less_than(x, y)
+        elif name == "lessThanEqual":
+            node = self.graph.less_than_equal(x, y)
+        elif name == "greaterThan":
+            node = self.graph.greater_than(x, y)
+        elif name == "greaterThanEqual":
+            node = self.graph.greater_than_equal(x, y)
+        elif name == "equal":
+            node = self.graph.equal(x, y)
+        else:
+            node = self.graph.not_equal(x, y)
+        value.type = _BOOL.resized(a.width())
+        value.node = node.value
+        return value^
+
+    def texel(
+        mut self,
+        name: String,
+        args: List[_Value],
+        nodes: List[NodeRef],
+        var value: _Value,
+    ) raises -> _Value:
+        """Return `texelFetch(s, ivec2, int)`, a texel by its column and row,
+        or `textureSize(s, int)`, a level's size, of GLSL ES 3.0.
+
+        Raises:
+            Error: If the shader is GLSL ES 1.0 or a vertex shader, or the
+                arguments are others.
+        """
+        if self.raw and self.version != 300:
+            raise self.error(name + "() is not in this shader's GLSL version")
+        if self.stage == _VERTEX:
+            raise self.error("a vertex shader reads no texture in this port")
+        var fetch = name == "texelFetch"
+        var count = 3 if fetch else 2
+        var fits = (
+            len(args) == count
+            and args[0].type == _SAMPLER
+            and args[count - 1].type == _TINT
+            and (not fetch or args[1].type == _IVEC2)
+        )
+        if not fits:
+            raise self.error(
+                name
+                + "() takes a sampler2D"
+                + (", an ivec2 and an int" if fetch else " and an int")
+            )
+        value.constant = False
+        if fetch:
+            value.type = _VEC4
+            value.node = self.graph.texture_load(
+                nodes[0], nodes[1], nodes[2]
+            ).value
+        else:
+            value.type = _IVEC2
+            value.node = self.graph.texture_size(nodes[0], nodes[1]).value
         return value^
 
     def texture(
@@ -2688,22 +4576,78 @@ struct _Compiler(Movable):
         nodes: List[NodeRef],
         var value: _Value,
     ) raises -> _Value:
-        """Return `texture(s, uv)` or `texture2D(s, uv)`.
+        """Return `texture(s, uv)` or `texture2D(s, uv)`, or `textureLod(s,
+        uv, level)` at a mip level.
 
         Raises:
             Error: If the spelling is not the shader's version's, the shader
                 is a vertex shader, or the arguments are others.
         """
-        var modern = name == "texture"
+        var level = name == "textureLod"
+        var projective = name == "textureProj" or name == "texture2DProj"
+        var modern = (
+            name != "texture2D"
+            and name != "texture2DProj"
+            and name != "textureCube"
+        )
         if self.raw and modern != (self.version == 300):
             raise self.error(name + "() is not in this shader's GLSL version")
         if self.stage == _VERTEX:
             raise self.error("a vertex shader reads no texture in this port")
-        if len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2:
+        var cube = len(args) > 0 and args[0].type == _SAMPLER_CUBE
+        var volume = len(args) > 0 and args[0].type == _SAMPLER_3D
+        var layered = len(args) > 0 and args[0].type == _SAMPLER_ARRAY
+        if name == "textureCube" or (name == "texture" and cube):
+            if len(args) != 2 or not cube or args[1].type != _VEC3:
+                raise self.error(name + "() takes a samplerCube and a vec3")
+            value.node = self.graph.texture_cube(nodes[0], nodes[1]).value
+        elif name == "texture" and (volume or layered):
+            if len(args) != 2 or args[1].type != _VEC3:
+                raise self.error(
+                    name + "() takes a " + args[0].type.name() + " and a vec3"
+                )
+            if volume:
+                value.node = self.graph.texture_3d(nodes[0], nodes[1]).value
+            else:
+                value.node = self.graph.texture_array(nodes[0], nodes[1]).value
+        elif projective:
+            if (
+                len(args) != 2
+                or args[0].type != _SAMPLER
+                or (args[1].type != _VEC3 and args[1].type != _VEC4)
+            ):
+                raise self.error(
+                    name + "() takes a sampler2D and a vec3 or a vec4"
+                )
+            # Divided through by its last component, then read as
+            # `texture` reads.
+            var last = "z" if args[1].type == _VEC3 else "w"
+            var uv = self.graph.div(
+                self.graph.swizzle(nodes[1], "xy"),
+                self.graph.swizzle(nodes[1], last),
+            )
+            value.node = self.graph.texture(nodes[0], uv).value
+        elif level:
+            if (
+                len(args) != 3
+                or args[0].type != _SAMPLER
+                or args[1].type != _VEC2
+                or args[2].type != _FLOAT
+            ):
+                raise self.error(
+                    name + "() takes a sampler2D, a vec2 and a float"
+                )
+            value.node = self.graph.texture_level(
+                nodes[0], nodes[1], nodes[2]
+            ).value
+        elif (
+            len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2
+        ):
             raise self.error(name + "() takes a sampler2D and a vec2")
+        else:
+            value.node = self.graph.texture(nodes[0], nodes[1]).value
         value.type = _VEC4
         value.constant = False
-        value.node = self.graph.texture(nodes[0], nodes[1]).value
         return value^
 
     def apply(mut self, name: String, nodes: List[NodeRef]) raises -> NodeRef:
@@ -2814,13 +4758,13 @@ struct _Compiler(Movable):
             for index in range(len(args)):  # pragma: no branch
                 var letter = _letter(letters, index)
                 var type = args[index].type
-                var number = type.is_float() or (ints and type == _TINT)
+                var number = type.is_float() or (ints and type.is_int())
                 if letter == "3":
                     generic = _VEC3
                     fits = fits and type == _VEC3
                 elif letter == "F":
                     # The scalar of the generic type: an int beside ints.
-                    var scalar = _TINT if generic == _TINT else _FLOAT
+                    var scalar = _TINT if generic.is_int() else _FLOAT
                     fits = fits and type == scalar
                 else:
                     fits = (
@@ -2849,18 +4793,24 @@ def _kind_name(kind: Int) -> String:
         return "a varying the vertex shader wrote"
     if kind == _INDEX:
         return "a for loop's index"
+    if kind == _MATRIX_LOCAL:
+        return "a local matrix, which is given its value once"
     return "a built-in transform"
 
 
 def _compile(
-    vertex_shader: String, fragment_shader: String, raw: Bool
+    vertex_shader: String,
+    fragment_shader: String,
+    raw: Bool,
+    toy: Bool = False,
+    defines: List[String] = List[String](),
 ) raises -> NodeGraph:
     """Return the graph two shaders build.
 
     Raises:
         Error: If either shader is outside the subset.
     """
-    var compiler = _Compiler(raw)
+    var compiler = _Compiler(raw, toy, defines)
     compiler.shader(vertex_shader, _VERTEX)
     if compiler.drawn < 0:
         raise Error("GLSL vertex shader: main never writes gl_Position")
@@ -2933,7 +4883,9 @@ def shader_graph(
 
 
 def compile_shader_material(
-    vertex_shader: String, fragment_shader: String
+    vertex_shader: String,
+    fragment_shader: String,
+    defines: List[String] = List[String](),
 ) raises -> NodeProgram:
     """Return the node program three.js's `ShaderMaterial` draws with two
     GLSL shaders. Give its id to `shader_material`.
@@ -2948,6 +4900,9 @@ def compile_shader_material(
     Args:
         vertex_shader: The vertex shader's GLSL.
         fragment_shader: The fragment shader's GLSL.
+        defines: The `material.defines` of three.js, each `NAME` or `NAME
+            tokens`, as a `#define` in both shaders before their first
+            line.
 
     Returns:
         The program. Its uniforms are the shaders' uniforms, zero until the
@@ -2955,9 +4910,54 @@ def compile_shader_material(
 
     Raises:
         Error: If either shader is outside the subset, naming the shader,
-            the line and the reason, or the graph does not compile.
+            the line and the reason, a define has no name or arguments, or
+            the graph does not compile.
     """
-    return _compile(vertex_shader, fragment_shader, False).compile()
+    return _compile(
+        vertex_shader, fragment_shader, False, defines=defines
+    ).compile()
+
+
+# The vertex shader and the `main` a ShaderToy shader is drawn with: its
+# `mainImage` fills the surface, at the pixel it is at.
+comptime _TOY_VERTEX = """void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+"""
+comptime _TOY_MAIN = """
+void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+"""
+
+
+def compile_shader_toy(source: String) raises -> NodeProgram:
+    """Return the node program of a ShaderToy shader, as three.js's
+    `ShaderToyDecoder` makes one: its `mainImage(out vec4 fragColor, in
+    vec2 fragCoord)` colors each pixel of the surface, at the pixel's
+    center from the bottom left. Give its id to `shader_material`.
+
+    `iTime` is the renderer's time. `iResolution`, `iTimeDelta`,
+    `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`,
+    `iChannelResolution[i]` and `iChannelTime[i]` are uniforms the caller
+    sets with `set_uniform`, and `iChannel0` to `iChannel3` are textures it
+    sets with `set_texture`.
+
+    Args:
+        source: The shader's GLSL, with `mainImage` and no `main`.
+
+    Returns:
+        The program.
+
+    Raises:
+        Error: If the shader has no `mainImage`, or is outside the subset,
+            naming the line and the reason.
+    """
+    if "mainImage" not in source:
+        raise Error(
+            "GLSL fragment shader: a ShaderToy shader defines mainImage"
+        )
+    return _compile(_TOY_VERTEX, source + _TOY_MAIN, False, True).compile()
 
 
 def compile_raw_shader_material(

@@ -65,6 +65,10 @@ from render.cube_texture_store import (
     CubeTextureId,
     CubeTextureStore,
 )
+from render.volume_texture_store import (
+    Data3DTextureStore,
+    DataArrayTextureStore,
+)
 from render.target import RenderTarget
 from render.fragment_flags import alpha_covers, dither, hashed_threshold
 from render.raster_state import (
@@ -1075,6 +1079,16 @@ struct RasterVertex(ImplicitlyCopyable):
     # The frames the environment and the normal map are read in. Set after
     # construction, by `Renderer.prepare`; the defaults are three.js's.
     var frames: TextureFrames
+    # Whether the triangle is seen from its back, and whether its material
+    # is `BACK_SIDE`, for a node program's facing. Per-triangle, read from
+    # the first corner. Set after construction, by `Renderer.prepare`; the
+    # default is a front seen from the front.
+    var seen_from_behind: Bool
+    var flip_sided: Bool
+    # The custom attributes a node program reads, `MAX_ATTRIBUTE_FLOATS`
+    # floats. Set after construction, by `Renderer.prepare`; zeros by
+    # default.
+    var custom: SIMD[DType.float32, 8]
 
     def __init__(
         out self,
@@ -1237,6 +1251,9 @@ struct RasterVertex(ImplicitlyCopyable):
         self.layers = layers
         self.nodes = nodes
         self.frames = TextureFrames()
+        self.seen_from_behind = False
+        self.flip_sided = False
+        self.custom = SIMD[DType.float32, 8](0)
 
 
 @fieldwise_init
@@ -2638,6 +2655,8 @@ def check_triangle_maps(
     textures: TextureStore,
     cubes: CubeTextureStore = CubeTextureStore(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Refuse a triangle whose maps are not stored the way its shader reads
     them, under the mode that would read them.
@@ -2661,6 +2680,8 @@ def check_triangle_maps(
             texture.
         programs: Where the node program lives. Every mode but the uv view
             runs it, and only `SHADE_TEXTURE` opens the textures it reads.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If a map the mode would open is not in the store; an
@@ -2803,6 +2824,27 @@ def check_triangle_maps(
                         " no texture; call set_texture() first"
                     )
                 _ = textures.get(program.textures[index]).width
+            for index in range(len(program.cubes)):
+                if program.cubes[index].value < 0:
+                    raise Error(
+                        "A node program reads a cube uniform that names no"
+                        " cube; call set_cube() first"
+                    )
+                _ = cubes.get(program.cubes[index]).size
+            for index in range(len(program.volumes)):
+                if program.volumes[index].value < 0:
+                    raise Error(
+                        "A node program reads a 3D texture uniform that names"
+                        " no texture; call set_volume() first"
+                    )
+                _ = volumes.get(program.volumes[index]).image.width
+            for index in range(len(program.arrays)):
+                if program.arrays[index].value < 0:
+                    raise Error(
+                        "A node program reads an array texture uniform that"
+                        " names no texture; call set_array() first"
+                    )
+                _ = arrays.get(program.arrays[index]).image.width
 
 
 def check_channel(image: Texture) raises:
@@ -3006,6 +3048,8 @@ def rasterize_shaded(
     cubes: CubeTextureStore = CubeTextureStore(),
     transmission: TransmissionTarget = TransmissionTarget(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -3081,6 +3125,8 @@ def rasterize_shaded(
             color, opacity and emissive nodes once the maps have had their
             say, and its output node after the fog. See
             `materials.nodes`.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -3104,7 +3150,7 @@ def rasterize_shaded(
     fog.validate()
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
-    check_triangle_maps(a, mode, textures, cubes, programs)
+    check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
     check_transmission(a, mode, transmission.is_ready())
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
@@ -3207,6 +3253,9 @@ def rasterize_shaded(
         Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
         a.nodes.value,
         Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=volumes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=a).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=c).unsafe_origin_cast[ImmutAnyOrigin](),
@@ -4488,6 +4537,9 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
     var textures: Pointer[TextureStore, Self.origin]
+    var cubes: Pointer[CubeTextureStore, Self.origin]
+    var volumes: Pointer[Data3DTextureStore, Self.origin]
+    var arrays: Pointer[DataArrayTextureStore, Self.origin]
     var a: Pointer[RasterVertex, Self.origin]
     var b: Pointer[RasterVertex, Self.origin]
     var c: Pointer[RasterVertex, Self.origin]
@@ -4504,6 +4556,9 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         programs: Pointer[NodeProgramStore, Self.origin],
         program: Int,
         textures: Pointer[TextureStore, Self.origin],
+        cubes: Pointer[CubeTextureStore, Self.origin],
+        volumes: Pointer[Data3DTextureStore, Self.origin],
+        arrays: Pointer[DataArrayTextureStore, Self.origin],
         a: Pointer[RasterVertex, Self.origin],
         b: Pointer[RasterVertex, Self.origin],
         c: Pointer[RasterVertex, Self.origin],
@@ -4515,6 +4570,9 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         self.programs = programs
         self.program = program
         self.textures = textures
+        self.cubes = cubes
+        self.volumes = volumes
+        self.arrays = arrays
         self.a = a
         self.b = b
         self.c = c
@@ -4542,6 +4600,33 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.x,
             self.y,
         )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level, through the
+        texture's two filters, as `Texture.sample_level` reads it."""
+        return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, `CubeTexture.sample`."""
+        return self.cubes[].textures[slot].sample(direction)
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read, `Data3DTexture.sample`."""
+        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read, `DataArrayTexture.sample`."""
+        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, `Texture.fetch`."""
+        return self.textures[].textures[slot].fetch(x, y, level)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, `Texture.fetch_size`."""
+        return self.textures[].textures[slot].fetch_size(level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each corner's perspective-correct weight at this pixel,
@@ -4579,6 +4664,14 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             1,
         )
 
+    def seen_from_behind(self) -> Bool:
+        """Return whether the triangle is seen from its back."""
+        return self.a[].seen_from_behind
+
+    def flip_sided(self) -> Bool:
+        """Return whether the triangle's material is `BACK_SIDE`."""
+        return self.a[].flip_sided
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's coordinates, world position, normal and
         color."""
@@ -4593,6 +4686,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             Vector3(at.color.r, at.color.g, at.color.b),
             Vector3(0, 0, 0),
             False,
+            at.custom,
         )
 
 
@@ -5264,6 +5358,8 @@ async def _frame_band(
     cubes: Pointer[CubeTextureStore, ImmutAnyOrigin],
     transmission: Pointer[TransmissionTarget, ImmutAnyOrigin],
     programs: Pointer[NodeProgramStore, ImmutAnyOrigin],
+    volumes: Pointer[Data3DTextureStore, ImmutAnyOrigin],
+    arrays: Pointer[DataArrayTextureStore, ImmutAnyOrigin],
     line_width: Int = 1,
 ):
     """Draw a frame into one horizontal band of the target.
@@ -5313,6 +5409,8 @@ async def _frame_band(
                         cubes[],
                         transmission[],
                         programs[],
+                        volumes[],
+                        arrays[],
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -5391,6 +5489,8 @@ def rasterize_frame(
     line_width: Int = 1,
     transmission: TransmissionTarget = TransmissionTarget(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -5443,6 +5543,8 @@ def rasterize_frame(
             see `render.transmission`.
         programs: Where the node materials' programs live; see
             `rasterize_shaded`.
+        volumes: Where the node programs' 3D textures live.
+        arrays: Where the node programs' array textures live.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -5481,7 +5583,13 @@ def rasterize_frame(
         # this a bad map on a triangle above the image was refused on one
         # worker and drawn around on four.
         check_triangle_maps(
-            corners[triangle * 3], mode, textures, cubes, programs
+            corners[triangle * 3],
+            mode,
+            textures,
+            cubes,
+            programs,
+            volumes,
+            arrays,
         )
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
@@ -5520,6 +5628,8 @@ def rasterize_frame(
                         cubes=cubes,
                         transmission=transmission,
                         programs=programs,
+                        volumes=volumes,
+                        arrays=arrays,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -5570,6 +5680,8 @@ def rasterize_frame(
                 Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=volumes).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
                 line_width,
             )
         )
@@ -5594,6 +5706,8 @@ def rasterize_all(
     cubes: CubeTextureStore = CubeTextureStore(),
     transmission: TransmissionTarget = TransmissionTarget(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
@@ -5613,6 +5727,8 @@ def rasterize_all(
         transmission: The opaque scene the transmissive triangles show
             through themselves, or an empty target when none transmits.
         programs: Where the node materials' programs live.
+        volumes: Where the node programs' 3D textures live.
+        arrays: Where the node programs' array textures live.
 
     Raises:
         Error: Everything `rasterize_frame` raises of the triangles: a
@@ -5636,6 +5752,8 @@ def rasterize_all(
         cubes=cubes,
         transmission=transmission,
         programs=programs,
+        volumes=volumes,
+        arrays=arrays,
     )
 
 

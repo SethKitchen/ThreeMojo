@@ -438,6 +438,48 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         """
         return FloatColor(1, 1, 1, 1)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return opaque white: a curve reads no texture.
+
+        Args:
+            slot: The texture's id.
+            u: Across.
+            v: Up.
+            level: The mip level.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1, 1, 1, 1)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return opaque white: a curve reads no texture.
+
+        Args:
+            slot: The texture's id.
+            x: The column.
+            y: The row.
+            level: The mip level.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1, 1, 1, 1)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return zeros: a curve reads no texture.
+
+        Args:
+            slot: The texture's id.
+            level: The mip level.
+
+        Returns:
+            Zeros.
+        """
+        return SIMD[DType.float32, 4](0)
+
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return no weights: a curve has no triangle.
 

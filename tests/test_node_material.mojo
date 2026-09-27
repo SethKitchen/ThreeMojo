@@ -34,6 +34,8 @@ from materials.material import (
     STANDARD,
     TOON,
     BACK_SIDE,
+    DOUBLE_SIDE,
+    FRONT_SIDE,
     Material,
     Side,
     points_material,
@@ -46,6 +48,9 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     MASK_NODE,
+    NODE_FLOAT,
+    NODE_VEC3,
+    NODE_VEC4,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
@@ -82,7 +87,11 @@ from render.rasterizer import (
 )
 from render.srgb import LINEAR
 from render.target import RenderTarget
-from render.texture import IGNORED, NEAREST, REPEAT, Texture
+from render.texture import BILINEAR, CLAMP, IGNORED, NEAREST, REPEAT, Texture
+from render.cube_texture import CubeTexture
+from render.cube_texture_store import CubeTextureId
+from render.volume_texture import Data3DTexture, DataArrayTexture, VolumeImage
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import sin, sqrt
@@ -372,6 +381,113 @@ def test_a_texture_node_reads_where_the_graph_says() raises:
     # A mode that opens no texture reads white.
     var white = draw(big_triangle(NodeProgramId(0), BASIC), programs, SHADE_LIT)
     assert_color(white.color_at(2, 2), 1, 1, 1)
+
+
+def test_a_texture_node_reads_at_the_level_the_graph_says() raises:
+    # Blue and red crossed: the full-size image reads blue at the bottom
+    # left, and the one-texel level below it is their mean.
+    var textures = TextureStore()
+    var map = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(255),
+                0,
+                0,
+                255,
+                0,
+                0,
+                255,
+                255,
+                0,
+                0,
+                255,
+                255,
+                255,
+                0,
+                0,
+                255,
+            ],
+            REPEAT,
+            BILINEAR,
+            LINEAR,
+        )
+    )
+    var reds: List[Float32] = [0, 0.5]
+    var blues: List[Float32] = [1, 0.5]
+    for level in range(2):
+        var graph = NodeGraph()
+        var read = graph.texture_level(
+            map, graph.vec2(0.25, 0.25), graph.float(Float32(level))
+        )
+        graph.set_output(COLOR_NODE, graph.swizzle(read, "rgb"))
+        var shown = draw(
+            big_triangle(NodeProgramId(0), BASIC),
+            one_program(graph^),
+            SHADE_TEXTURE,
+            textures,
+        ).color_at(2, 2)
+        assert_almost_equal(shown.r, reds[level], atol=0.01)
+        assert_almost_equal(shown.b, blues[level], atol=0.01)
+
+
+def test_a_texel_is_read_by_its_column_and_row() raises:
+    # The crossed texture again: row zero, counted as v counts, is the
+    # bottom row, blue then red.
+    var textures = TextureStore()
+    var map = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(255),
+                0,
+                0,
+                255,
+                0,
+                0,
+                255,
+                255,
+                0,
+                0,
+                255,
+                255,
+                255,
+                0,
+                0,
+                255,
+            ],
+            REPEAT,
+            BILINEAR,
+            LINEAR,
+        )
+    )
+    var graph = NodeGraph()
+    var named = graph.texture_uniform("map", map)
+    var left = graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
+    var right = graph.texture_load(named, graph.vec2(1, 0), graph.float(0))
+    var size = graph.texture_size(named, graph.float(1))
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                graph.swizzle(right, "r"),
+                graph.swizzle(size, "x"),
+                graph.swizzle(left, "b"),
+            ]
+        ),
+    )
+    var shown = draw(
+        big_triangle(NodeProgramId(0), BASIC),
+        one_program(graph^),
+        SHADE_TEXTURE,
+        textures,
+    ).color_at(2, 2)
+    assert_color(shown, 1, 1, 1)
+    var blank = Texture()
+    assert_equal(blank.fetch(0, 0, 0).g, 1)
+    assert_equal(blank.fetch_size(0)[0], 0)
 
 
 def test_bands_run_the_graph_as_one_thread_does() raises:
@@ -668,6 +784,188 @@ def test_a_fragment_knows_its_pixel_and_its_neighbors() raises:
     assert_equal(seen.b, 0)
 
 
+def test_a_fragment_knows_which_way_its_triangle_faces() raises:
+    # TSL's frontFacing and faceDirection, and GLSL's gl_FrontFacing, which
+    # three.js's WebGL renderer turns round under BACK_SIDE.
+    var graph = NodeGraph()
+    var direction = graph.add(
+        graph.mul(graph.face_direction(), graph.float(0.5)), graph.float(0.5)
+    )
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.front_facing(), graph.gl_front_facing(), direction]),
+    )
+    var sides = [FRONT_SIDE, DOUBLE_SIDE, DOUBLE_SIDE, BACK_SIDE]
+    var heights = [Float32(4), Float32(4), Float32(-4), Float32(-4)]
+    var greens = [255, 255, 0, 255]
+    for index in range(4):
+        var assets = Assets()
+        var id = assets.programs.add(graph.compile())
+        var scene = a_scene(assets, shader_material(id, side=sides[index]))
+        var camera = a_camera()
+        camera.place(Vector3(0, 0, heights[index]), Vector3(0, 0, 0))
+        var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, camera))
+        var front = 255 if heights[index] > 0 else 0
+        assert_equal(Int(seen.r), front)
+        assert_equal(Int(seen.g), greens[index])
+        assert_equal(Int(seen.b), front)
+
+
+def test_a_custom_attribute_of_the_geometry_colors_the_mesh() raises:
+    # The same tint at every vertex; a pair read as a vec3 takes zero for
+    # its missing float, and an attribute the geometry lacks all zeros and
+    # one, as WebGL fills them.
+    var graph = NodeGraph()
+    var tint = graph.attribute("tint", NODE_FLOAT)
+    var pair = graph.attribute("pair", NODE_VEC3)
+    var missing = graph.attribute("missing", NODE_VEC4)
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                tint,
+                graph.add(graph.swizzle(pair, "y"), graph.swizzle(pair, "z")),
+                graph.add(
+                    graph.swizzle(missing, "w"), graph.swizzle(missing, "x")
+                ),
+            ]
+        ),
+    )
+    var assets = Assets()
+    var id = assets.programs.add(graph.compile())
+    var geometry = plane(Length(2.0, METER), Length(2.0, METER), 2, 2)
+    var count = geometry.attribute_view(String(POSITION)).count()
+    var tints = List[Float32]()
+    var pairs = List[Float32]()
+    for _ in range(count):
+        tints.append(0.25)
+        pairs.append(0.1)
+        pairs.append(0.5)
+    geometry.set_attribute("tint", BufferAttribute(tints^, 1))
+    geometry.set_attribute("pair", BufferAttribute(pairs^, 2))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(geometry^),
+            assets.materials.add(shader_material(id)),
+            node,
+        )
+    )
+    scene.update()
+    var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 137)
+    assert_equal(Int(seen.g), 188)
+    assert_equal(Int(seen.b), 255)
+
+
+def a_cube() raises -> CubeTexture:
+    """Return a cube of six flat faces, linear: red +x, green -x, blue
+    +y, yellow -y, cyan +z, magenta -z."""
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        var pixels = List[UInt8]()
+        for _ in range(4):
+            pixels.append(color.r)
+            pixels.append(color.g)
+            pixels.append(color.b)
+            pixels.append(255)
+        faces.append(Texture(2, 2, pixels^, CLAMP, NEAREST, LINEAR, False))
+    return CubeTexture(faces^)
+
+
+def test_a_node_program_reads_a_cube_in_a_direction() raises:
+    # The cube uniform looks along +z, the cyan face.
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_cube())
+    var graph = NodeGraph()
+    var read = graph.texture_cube(
+        graph.cube_uniform("sky"), graph.vec3(0, 0, 1)
+    )
+    graph.set_output(COLOR_NODE, graph.swizzle(read, "rgb"))
+    var id = assets.programs.add(graph.compile())
+    var scene = a_scene(assets, shader_material(id))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    # Unset, the cube is refused before a pixel is drawn.
+    with assert_raises(contains="reads a cube uniform that names no cube"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_cube("sky", sky)
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 0)
+    assert_equal(Int(seen.g), 255)
+    assert_equal(Int(seen.b), 255)
+    # A cube that is not in the store is refused.
+    assets.programs.get(id).set_cube("sky", CubeTextureId(7))
+    with assert_raises(
+        contains="A node program reads a cube that is not there"
+    ):
+        _ = renderer.render(scene, assets, a_camera())
+
+
+def a_stack(first: Color, second: Color) raises -> VolumeImage:
+    """Return two texels a side and two deep: `first` in the front layer
+    and `second` in the back one."""
+    var pixels = List[UInt8]()
+    for color in [first, second]:
+        for _ in range(4):
+            pixels.append(color.r)
+            pixels.append(color.g)
+            pixels.append(color.b)
+            pixels.append(255)
+    return VolumeImage.of_bytes(2, 2, 2, pixels)
+
+
+def test_a_node_program_reads_a_3d_and_an_array_texture() raises:
+    # The 3D texture's back layer is green and the array's front layer
+    # blue, so the sum is cyan.
+    var assets = Assets()
+    var cloud = assets.data_3d_textures.add(
+        Data3DTexture(a_stack(Color(255, 0, 0), Color(0, 255, 0)))
+    )
+    var layers = assets.data_array_textures.add(
+        DataArrayTexture(a_stack(Color(0, 0, 255), Color(255, 255, 0)))
+    )
+    var graph = NodeGraph()
+    var deep = graph.texture_3d(
+        graph.volume_uniform("cloud"), graph.vec3(0.5, 0.5, 0.75)
+    )
+    var layered = graph.texture_array(
+        graph.array_uniform("layers"), graph.vec3(0.5, 0.5, 0)
+    )
+    graph.set_output(COLOR_NODE, graph.swizzle(graph.add(deep, layered), "rgb"))
+    var id = assets.programs.add(graph.compile())
+    var scene = a_scene(assets, shader_material(id))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    # Unset, each is refused before a pixel is drawn.
+    with assert_raises(contains="names no texture; call set_volume() first"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_volume("cloud", cloud)
+    with assert_raises(contains="names no texture; call set_array() first"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_array("layers", layers)
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 0)
+    assert_equal(Int(seen.g), 255)
+    assert_equal(Int(seen.b), 255)
+    # One that is not in the store is refused.
+    assets.programs.get(id).set_volume("cloud", Data3DTextureId(7))
+    with assert_raises(contains="reads a 3D texture that is not there"):
+        _ = renderer.render(scene, assets, a_camera())
+    assets.programs.get(id).set_volume("cloud", cloud)
+    assets.programs.get(id).set_array("layers", DataArrayTextureId(7))
+    with assert_raises(contains="reads an array texture that is not there"):
+        _ = renderer.render(scene, assets, a_camera())
+
+
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:
     var assets = Assets()
     var graph = NodeGraph()
@@ -759,7 +1057,36 @@ def test_the_renderer_refuses_a_program_that_is_not_there() raises:
     _ = Renderer(SIZE, SIZE).render(scene, assets, a_camera())
 
 
-def test_lines_points_sprites_and_wide_lines_refuse_a_node_material() raises:
+def test_a_sprite_runs_its_node_material() raises:
+    # The square's coordinates, as a mesh's reach its graph. The sprite is
+    # 4.8 pixels wide, and the middle pixel's center is half a pixel right
+    # of the sprite's and half a pixel below it: (0.6, 0.4).
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(COLOR_NODE, graph.join([graph.uv(), graph.float(1)]))
+    var id = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_sprite(Sprite(assets.materials.add(shader_material(id)), at))
+    scene.update()
+    var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 204)
+    assert_equal(Int(seen.g), 169)
+    assert_equal(Int(seen.b), 255)
+    # A position node moves a mesh's vertices, which a sprite has none of.
+    var lifted_graph = lifted(True)
+    var moved = assets.programs.add(lifted_graph.compile())
+    var moving = Scene()
+    at = moving.add(Object3D())
+    moving.add_sprite(Sprite(assets.materials.add(shader_material(moved)), at))
+    moving.update()
+    with assert_raises(
+        contains="A sprite's node material has no position node"
+    ):
+        _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
+
+
+def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
@@ -786,12 +1113,6 @@ def test_lines_points_sprites_and_wide_lines_refuse_a_node_material() raises:
     points.update()
     with assert_raises(contains="A point runs no node graph"):
         _ = renderer.render(points, assets, camera)
-    var sprites = Scene()
-    at = sprites.add(Object3D())
-    sprites.add_sprite(Sprite(noded, at))
-    sprites.update()
-    with assert_raises(contains="A sprite runs no node graph"):
-        _ = renderer.render(sprites, assets, camera)
     var wide = Scene()
     at = wide.add(Object3D())
     var sticks = assets.geometries.add(

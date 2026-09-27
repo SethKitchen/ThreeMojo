@@ -28,6 +28,10 @@ from render.linerule import (
 from lights.lighting import Lighting
 from materials.nodes import NodeProgramStore
 from render.cube_texture_store import CubeTextureStore
+from render.volume_texture_store import (
+    Data3DTextureStore,
+    DataArrayTextureStore,
+)
 from render.rasterizer import (
     DRAW_SEGMENTS,
     Draw,
@@ -510,6 +514,8 @@ def one_band(
     cubes: CubeTextureStore = CubeTextureStore(),
     transmission: TransmissionTarget = TransmissionTarget(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises -> List[String]:
     """Run one band of a frame of segments on its own, as a task, with none
     of `rasterize_frame`'s checks first, and return every band's error slot.
@@ -539,6 +545,8 @@ def one_band(
             Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
             Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
             Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=volumes).unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
         )
     )
     group.wait()

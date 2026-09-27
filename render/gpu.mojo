@@ -294,6 +294,8 @@ from render.texture import (
     Wrap,
     anisotropic_footprint,
     blend_texels,
+    fetch_level,
+    fetch_row,
     float_from_bytes,
     float_texel,
     level_filter,
@@ -396,7 +398,18 @@ from postprocessing.shaders import (
     god_rays_step,
 )
 from render.target import RenderTarget
-from render.volume_texture import DecodedVolume, decoded_texels
+from render.volume_texture import (
+    DecodedVolume,
+    VolumeTexels,
+    decoded_layers,
+    decoded_texels,
+    filter_array,
+    filter_volume,
+)
+from render.volume_texture_store import (
+    Data3DTextureStore,
+    DataArrayTextureStore,
+)
 from render.computation import (
     ComputeNodes,
     GPUComputationRenderer,
@@ -557,7 +570,9 @@ comptime LANE_OBJECT_NORMAL = LANE_REFRACTION_RATIO + 1
 # The constant color the constant blend factors read, three.js's
 # `blendColor` and `blendAlpha`: `RasterState.blend_constant`, four floats.
 comptime LANE_BLEND_CONSTANT = LANE_OBJECT_NORMAL + 9
-comptime FLOATS_PER_VERTEX = LANE_BLEND_CONSTANT + 4
+# The custom attributes a node program reads: `RasterVertex.custom`.
+comptime LANE_CUSTOM = LANE_BLEND_CONSTANT + 4
+comptime FLOATS_PER_VERTEX = LANE_CUSTOM + 8
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -660,7 +675,10 @@ comptime STATE_CLEARCOAT_ROUGHNESS_MAP = STATE_NODES + 4
 comptime STATE_CLEARCOAT_NORMAL_MAP = STATE_NODES + 5
 # The triangle's normal map type's value; see `TextureFrames`.
 comptime STATE_NORMAL_MAP_TYPE = STATE_CLEARCOAT_NORMAL_MAP + 1
-comptime STATE_PER_TRIANGLE = STATE_NORMAL_MAP_TYPE + 1
+# The triangle's facing: one if it is seen from its back, plus two if its
+# material is `BACK_SIDE`; see `RasterVertex.seen_from_behind`.
+comptime STATE_FACING = STATE_NORMAL_MAP_TYPE + 1
+comptime STATE_PER_TRIANGLE = STATE_FACING + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -780,6 +798,10 @@ comptime TABLE_COLUMNS = TABLE_PLACEMENT + 7
 # floats. The panorama's row carries the cube's own mapping, so the kernel
 # reads there whether the cube is a panorama and whether it refracts.
 comptime CUBE_ROWS = FACE_COUNT + 2
+# How many floats begin a decoded 3D or array texture's block in the fog
+# buffer: its width, height, depth, three wrap modes and filter, and one
+# spare; see `volume_blocks`.
+comptime VOLUME_HEADER = 8
 comptime CUBE_PANORAMA = FACE_COUNT + 1
 
 
@@ -1030,6 +1052,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.state.blend_green)
         flat.append(corner.state.blend_blue)
         flat.append(corner.state.blend_alpha)
+        for lane in range(8):
+            flat.append(corner.custom[lane])
     return flat^
 
 
@@ -1656,6 +1680,20 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
         """Return opaque white: a curve reads no texture."""
         return FloatColor(1, 1, 1, 1)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return opaque white: a curve reads no texture."""
+        return FloatColor(1, 1, 1, 1)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return opaque white: a curve reads no texture."""
+        return FloatColor(1, 1, 1, 1)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return zeros: a curve reads no texture."""
+        return SIMD[DType.float32, 4](0)
+
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return no weights: a curve has no triangle."""
         return SIMD[DType.float32, 4](0)
@@ -1699,19 +1737,152 @@ def program_starts(programs: NodeProgramStore) -> List[Int]:
     return starts^
 
 
-def flatten_programs(programs: NodeProgramStore) -> List[Float32]:
+def volume_blocks(
+    volumes: Data3DTextureStore, arrays: DataArrayTextureStore
+) -> Tuple[List[Float32], List[Int], List[Int]]:
+    """Return every 3D and array texture decoded, each a block of
+    `VOLUME_HEADER` floats -- width, height, depth, the three wrap modes
+    and the filter -- and then its texels, four floats each; and where each
+    3D and each array texture's block starts.
+
+    Args:
+        volumes: The 3D textures.
+        arrays: The array textures.
+
+    Returns:
+        The floats, the 3D textures' starts and the array textures'.
+    """
+    var floats = List[Float32]()
+    var volume_starts = List[Int]()
+    var array_starts = List[Int]()
+    for index in range(volumes.count()):
+        ref volume = volumes.textures[index]
+        volume_starts.append(len(floats))
+        _append_block(
+            floats,
+            volume.image.width,
+            volume.image.height,
+            volume.image.depth,
+            volume.wrap_s.value,
+            volume.wrap_t.value,
+            volume.wrap_r.value,
+            volume.filter.value,
+            decoded_texels(volume),
+        )
+    for index in range(arrays.count()):
+        ref array = arrays.textures[index]
+        array_starts.append(len(floats))
+        _append_block(
+            floats,
+            array.image.width,
+            array.image.height,
+            array.image.depth,
+            array.wrap_s.value,
+            array.wrap_t.value,
+            0,
+            array.filter.value,
+            decoded_layers(array),
+        )
+    return (floats^, volume_starts^, array_starts^)
+
+
+def _append_block(
+    mut floats: List[Float32],
+    width: Int,
+    height: Int,
+    depth: Int,
+    wrap_s: Int,
+    wrap_t: Int,
+    wrap_r: Int,
+    filter: Int,
+    texels: List[FloatColor],
+):
+    """Append one decoded texture's header and texels."""
+    floats.append(Float32(width))
+    floats.append(Float32(height))
+    floats.append(Float32(depth))
+    floats.append(Float32(wrap_s))
+    floats.append(Float32(wrap_t))
+    floats.append(Float32(wrap_r))
+    floats.append(Float32(filter))
+    floats.append(0)
+    for index in range(len(texels)):
+        floats.append(texels[index].r)
+        floats.append(texels[index].g)
+        floats.append(texels[index].b)
+        floats.append(texels[index].a)
+
+
+@fieldwise_init
+struct _FogTexels[origin: Origin[mut=True]](ImplicitlyCopyable, VolumeTexels):
+    """A decoded 3D or array texture's texels where the fog buffer holds
+    them, as `filter_volume` and `filter_array` read texels."""
+
+    var fog: MutPointer[Float32, Self.origin]
+    var start: Int
+    var width: Int
+    var height: Int
+
+    def texel_at(self, x: Int, y: Int, z: Int) -> FloatColor:
+        """Return texel `(x, y, z)`, all three inside."""
+        var at = self.start + ((z * self.height + y) * self.width + x) * 4
+        return FloatColor(
+            self.fog[unsafe_offset=at],
+            self.fog[unsafe_offset=at + 1],
+            self.fog[unsafe_offset=at + 2],
+            self.fog[unsafe_offset=at + 3],
+        )
+
+
+def flatten_programs(
+    programs: NodeProgramStore,
+    cube_base: Int = 0,
+    blocks_base: Int = 0,
+    volume_starts: List[Int] = List[Int](),
+    array_starts: List[Int] = List[Int](),
+) -> List[Float32]:
     """Return every node program's floats end to end, as they follow the
     fog in the fog buffer.
 
     Args:
         programs: The store to flatten.
+        cube_base: The texture table's row of the first cube's first face:
+            how many flat textures were uploaded before the cubes.
+        blocks_base: Where the decoded 3D and array textures start in the
+            fog buffer, after every program.
+        volume_starts: Where each 3D texture's block starts, from
+            `blocks_base`; see `volume_blocks`.
+        array_starts: Where each array texture's block starts, the same.
 
     Returns:
         The floats, in id order.
     """
     var flat = List[Float32]()
     for index in range(programs.count()):
-        flat.extend(programs.programs[index].code.copy())
+        var start = len(flat)
+        ref program = programs.programs[index]
+        flat.extend(program.code.copy())
+        # A cube read keeps its cube's first row in the texture table on
+        # the device, where the host keeps its id, and a 3D or an array
+        # texture read where its block starts in the fog buffer.
+        for at in range(len(program.cube_offsets)):
+            var cube = Int(program.code[program.cube_offsets[at]])
+            if cube >= 0:
+                flat[start + program.cube_offsets[at]] = Float32(
+                    cube_base + cube * CUBE_ROWS
+                )
+        for at in range(len(program.volume_offsets)):
+            var volume = Int(program.code[program.volume_offsets[at]])
+            if volume >= 0 and volume < len(volume_starts):
+                flat[start + program.volume_offsets[at]] = Float32(
+                    blocks_base + volume_starts[volume]
+                )
+        for at in range(len(program.array_offsets)):
+            var array = Int(program.code[program.array_offsets[at]])
+            if array >= 0 and array < len(array_starts):
+                flat[start + program.array_offsets[at]] = Float32(
+                    blocks_base + array_starts[array]
+                )
     return flat^
 
 
@@ -2996,8 +3167,8 @@ def triangle_state(
         iridescence, film thickness and anisotropy map ids, then where its
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
-        ids, then the normal map type's value, per triangle, from its
-        first corner.
+        ids, then the normal map type's value, then its facing, per
+        triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -3045,6 +3216,12 @@ def triangle_state(
         state.append(Int32(layers.clearcoat_roughness_map.value))
         state.append(Int32(layers.clearcoat_normal_map.value))
         state.append(Int32(corners[triangle * 3].frames.normal_map_type.value))
+        state.append(
+            Int32(
+                (1 if corners[triangle * 3].seen_from_behind else 0)
+                + (2 if corners[triangle * 3].flip_sided else 0)
+            )
+        )
     return state^
 
 
@@ -3551,6 +3728,8 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     # The target's height, and the fragment's depth, for `frag_coord`.
     var height: Int
     var depth: Float32
+    # The triangle's facing, as `STATE_FACING` holds it.
+    var facing: Int
 
     def __init__(
         out self,
@@ -3573,10 +3752,12 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         py: Int,
         height: Int,
         depth: Float32,
+        facing: Int,
     ):
         """Read the program that starts `start` floats into `fog`, at the
         sample (`px`, `py`) of a target `height` pixels high, at the depth
-        `depth` in normalized device space."""
+        `depth` in normalized device space, on a triangle whose facing is
+        `facing`, as `STATE_FACING` holds it."""
         self.fog = fog
         self.start = start
         self.texels = texels
@@ -3596,6 +3777,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         self.py = py
         self.height = height
         self.depth = depth
+        self.facing = facing
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -3623,6 +3805,100 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             self.py,
             u,
             v,
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level, as
+        `rasterizer._HostNodes.sample_level` reads it."""
+        return _sample_level(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            level,
+        )
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read, as `Data3DTexture.sample` reads it:
+        `slot` is where its block starts in the fog buffer."""
+        var fog = self.fog
+        var width = Int(fog[unsafe_offset=slot])
+        var height = Int(fog[unsafe_offset=slot + 1])
+        return filter_volume(
+            _FogTexels(fog, slot + VOLUME_HEADER, width, height),
+            width,
+            height,
+            Int(fog[unsafe_offset=slot + 2]),
+            Wrap(Int(fog[unsafe_offset=slot + 3])),
+            Wrap(Int(fog[unsafe_offset=slot + 4])),
+            Wrap(Int(fog[unsafe_offset=slot + 5])),
+            Filter(Int(fog[unsafe_offset=slot + 6])),
+            at.x,
+            at.y,
+            at.z,
+        )
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read, as `DataArrayTexture.sample` reads
+        it: `slot` is where its block starts in the fog buffer."""
+        var fog = self.fog
+        var width = Int(fog[unsafe_offset=slot])
+        var height = Int(fog[unsafe_offset=slot + 1])
+        return filter_array(
+            _FogTexels(fog, slot + VOLUME_HEADER, width, height),
+            width,
+            height,
+            Int(fog[unsafe_offset=slot + 2]),
+            Wrap(Int(fog[unsafe_offset=slot + 3])),
+            Wrap(Int(fog[unsafe_offset=slot + 4])),
+            Filter(Int(fog[unsafe_offset=slot + 6])),
+            at.x,
+            at.y,
+            at.z,
+        )
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, as `CubeTexture.sample` reads
+        it: `slot` is the cube's first row in the texture table."""
+        return _sample_cube(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            direction,
+        )
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, as `Texture.fetch` reads
+        it."""
+        var image = _describe(
+            self.table.unsafe_origin_cast[MutAnyOrigin](), slot
+        )
+        var at = fetch_level(level, image.levels)
+        return _fetch(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            image,
+            x,
+            fetch_row(y, _extent(image.height, at), image.flip_y),
+            at,
+        )
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, as `Texture.fetch_size` gives
+        it."""
+        var image = _describe(
+            self.table.unsafe_origin_cast[MutAnyOrigin](), slot
+        )
+        var at = fetch_level(level, image.levels)
+        return SIMD[DType.float32, 4](
+            Float32(_extent(image.width, at)),
+            Float32(_extent(image.height, at)),
+            0,
+            0,
         )
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
@@ -3673,6 +3949,14 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             1,
         )
 
+    def seen_from_behind(self) -> Bool:
+        """Return whether the triangle is seen from its back."""
+        return self.facing & 1 != 0
+
+    def flip_sided(self) -> Bool:
+        """Return whether the triangle's material is `BACK_SIDE`."""
+        return self.facing & 2 != 0
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's coordinates, world position, normal and
         color, from its lanes."""
@@ -3703,6 +3987,16 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             ),
             Vector3(0, 0, 0),
             False,
+            SIMD[DType.float32, 8](
+                self.corners[unsafe_offset=at + LANE_CUSTOM],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 1],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 2],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 3],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 4],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 5],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 6],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 7],
+            ),
         )
 
 
@@ -4428,6 +4722,11 @@ def rasterize_kernel(
                 py,
                 Int(height),
                 z,
+                Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_FACING
+                    ]
+                ),
             )
             # Whether the graph can throw the fragment away, and its depth
             # in place of the plane's, as `rasterize_shaded` asks both.
@@ -6685,6 +6984,13 @@ struct GpuRenderer(Movable):
     # textures, six rows each. A triangle's env map id is checked against
     # it before the launch, as its texture id is against `uploaded`.
     var uploaded_cubes: Int
+    # Every 3D and array texture a node program can read, decoded, each a
+    # block of `VOLUME_HEADER` floats and then its texels, laid out after
+    # the programs in the fog buffer; where each block starts in them; and
+    # how many of each the last upload holds.
+    var volume_floats: List[Float32]
+    var volume_starts: List[Int]
+    var array_starts: List[Int]
     # A scene's image background, one pixel per pixel of the target, read
     # by the kernel where its alpha is full; see `Renderer.backdrop`.
     # Rewritten by every draw that has one, and cleared to transparent by
@@ -6815,6 +7121,9 @@ struct GpuRenderer(Movable):
         # legal reference is NO_TEXTURE.
         self.uploaded = 0
         self.uploaded_cubes = 0
+        self.volume_floats = List[Float32]()
+        self.volume_starts = List[Int]()
+        self.array_starts = List[Int]()
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
@@ -6915,7 +7224,19 @@ struct GpuRenderer(Movable):
             Error: If the device buffer cannot be made or written.
         """
         var flat = flatten_fog(fog, curve_start, output)
-        flat.extend(flatten_programs(programs))
+        var blocks_base = len(flat)
+        for index in range(programs.count()):
+            blocks_base += len(programs.programs[index].code)
+        flat.extend(
+            flatten_programs(
+                programs,
+                self.uploaded,
+                blocks_base,
+                self.volume_starts,
+                self.array_starts,
+            )
+        )
+        flat.extend(self.volume_floats.copy())
         if len(flat) > self.fog_room:
             # A draw still in flight may be reading the old buffer; see
             # `set_textures`, which waits for the same reason.
@@ -7159,6 +7480,39 @@ struct GpuRenderer(Movable):
                         raise Error(
                             "A node program reads a texture that has not"
                             " been uploaded; call set_textures() first"
+                        )
+                for slot in range(len(program.volumes)):
+                    if program.volumes[slot].value < 0:
+                        raise Error(
+                            "A node program reads a 3D texture uniform that"
+                            " names no texture; call set_volume() first"
+                        )
+                    if program.volumes[slot].value >= len(self.volume_starts):
+                        raise Error(
+                            "A node program reads a 3D texture that has not"
+                            " been uploaded; call set_textures() first"
+                        )
+                for slot in range(len(program.arrays)):
+                    if program.arrays[slot].value < 0:
+                        raise Error(
+                            "A node program reads an array texture uniform"
+                            " that names no texture; call set_array() first"
+                        )
+                    if program.arrays[slot].value >= len(self.array_starts):
+                        raise Error(
+                            "A node program reads an array texture that has"
+                            " not been uploaded; call set_textures() first"
+                        )
+                for slot in range(len(program.cubes)):
+                    if program.cubes[slot].value < 0:
+                        raise Error(
+                            "A node program reads a cube uniform that names"
+                            " no cube; call set_cube() first"
+                        )
+                    if program.cubes[slot].value >= self.uploaded_cubes:
+                        raise Error(
+                            "A node program reads a cube that has not been"
+                            " uploaded; call set_textures() first"
                         )
 
         # Every texture reference is checked here because it cannot be checked
@@ -7621,6 +7975,8 @@ struct GpuRenderer(Movable):
         mut self,
         textures: TextureStore,
         cubes: CubeTextureStore = CubeTextureStore(),
+        volumes: Data3DTextureStore = Data3DTextureStore(),
+        arrays: DataArrayTextureStore = DataArrayTextureStore(),
     ) raises:
         """Upload every texture in `textures` and every cube texture in
         `cubes`, replacing any previous set.
@@ -7644,6 +8000,9 @@ struct GpuRenderer(Movable):
                 no mesh can be textured.
             cubes: The cube textures to upload after it, six faces each.
                 An empty one is allowed and means no mesh can reflect.
+            volumes: The 3D textures a node program can read, decoded and
+                laid out after the programs.
+            arrays: The array textures a node program can read, the same.
 
         Raises:
             Error: If a texture holds a wrap, filter or color space that is
@@ -7679,6 +8038,10 @@ struct GpuRenderer(Movable):
         self.table = table^
         self.uploaded = textures.count()
         self.uploaded_cubes = cubes.count()
+        var blocks = volume_blocks(volumes, arrays)
+        self.volume_floats = blocks[0].copy()
+        self.volume_starts = blocks[1].copy()
+        self.array_starts = blocks[2].copy()
         # Every one of these describes the upload that has just
         # replaced the last, so every one of them is replaced. `heights`
         # was appended to instead, which left a second upload validating
@@ -7958,6 +8321,8 @@ def render_triangles(
     backdrop: Optional[Framebuffer] = None,
     transmission: TransmissionTarget = TransmissionTarget(),
     programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises -> Framebuffer:
     """Draw prepared triangles, lines and points on the GPU and read the
     image back.
@@ -7991,6 +8356,8 @@ def render_triangles(
         transmission: The opaque scene the transmissive triangles show
             through themselves; see `GpuRenderer.draw`.
         programs: The node materials' programs; see `GpuRenderer.draw`.
+        volumes: The 3D textures the programs read.
+        arrays: The array textures the programs read.
 
     Returns:
         The rendered image.
@@ -8001,7 +8368,7 @@ def render_triangles(
             not a multiple of two.
     """
     var renderer = GpuRenderer(width, height)
-    renderer.set_textures(textures, cubes)
+    renderer.set_textures(textures, cubes, volumes, arrays)
     renderer.draw(
         corners,
         background,

@@ -854,7 +854,7 @@ def array_layer(layer: Float32, depth: Int) -> Int:
     return Int(rounded)
 
 
-struct DataArrayTexture(Movable):
+struct DataArrayTexture(Movable, VolumeTexels):
     """A stack of images sampled by two coordinates and a layer: three.js's
     `DataArrayTexture`, as a GLSL `sampler2DArray` reads it.
 
@@ -943,14 +943,19 @@ struct DataArrayTexture(Movable):
         """
         return self.image._fetch(x, y, layer, self.color_space)
 
-    def _wrapped(self, x: Int, y: Int, layer: Int) -> FloatColor:
-        """Return a texel of one layer by index, wrapped across and up."""
-        return self.image._texel(
-            wrap_index(x, self.image.width, self.wrap_s),
-            wrap_index(y, self.image.height, self.wrap_t),
-            layer,
-            self.color_space,
-        )
+    def texel_at(self, x: Int, y: Int, z: Int) -> FloatColor:
+        """Return texel `(x, y)` of layer `z` as it samples, all three
+        inside.
+
+        Args:
+            x: Column.
+            y: Row, up from the first.
+            z: Layer.
+
+        Returns:
+            The color.
+        """
+        return self.image._texel(x, y, z, self.color_space)
 
     def sample(self, u: Float32, v: Float32, layer: Float32) -> FloatColor:
         """Return the color at a coordinate in one layer: GLSL's `texture`
@@ -968,26 +973,103 @@ struct DataArrayTexture(Movable):
         Returns:
             The color, straight.
         """
-        var slice = array_layer(layer, self.image.depth)
-        var wide = Float32(self.image.width)
-        var tall = Float32(self.image.height)
-        if self.filter == NEAREST:
-            return self._wrapped(
-                Int(floor(u * wide)), Int(floor(v * tall)), slice
-            )
-        var across = u * wide - 0.5
-        var up = v * tall - 0.5
-        var x = Int(floor(across))
-        var y = Int(floor(up))
-        var fx = across - Float32(x)
-        return mix_straight_texels(
-            mix_straight_texels(
-                self._wrapped(x, y, slice), self._wrapped(x + 1, y, slice), fx
-            ),
-            mix_straight_texels(
-                self._wrapped(x, y + 1, slice),
-                self._wrapped(x + 1, y + 1, slice),
-                fx,
-            ),
-            up - Float32(y),
+        return filter_array(
+            self,
+            self.image.width,
+            self.image.height,
+            self.image.depth,
+            self.wrap_s,
+            self.wrap_t,
+            self.filter,
+            u,
+            v,
+            layer,
         )
+
+
+def filter_array[
+    T: VolumeTexels
+](
+    texels: T,
+    width: Int,
+    height: Int,
+    depth: Int,
+    wrap_s: Wrap,
+    wrap_t: Wrap,
+    filter: Filter,
+    u: Float32,
+    v: Float32,
+    layer: Float32,
+) -> FloatColor:
+    """Return the color at a coordinate in one layer: GLSL's `texture` on a
+    `sampler2DArray`, on the host and on the device alike.
+
+    The layer is `array_layer` of the third coordinate. Within it,
+    `NEAREST` takes the texel the coordinate lands in and `BILINEAR`
+    blends the four around it. Two layers are never blended.
+
+    Args:
+        texels: Where the texels are read from.
+        width: Texels across.
+        height: Texels up.
+        depth: How many layers.
+        wrap_s: How a column outside the image is resolved.
+        wrap_t: How a row outside the image is resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        u: Across, zero at the first column's edge.
+        v: Up, zero at the first row's edge.
+        layer: Which layer, rounded to the nearest and held inside.
+
+    Returns:
+        The color, straight.
+    """
+    var slice = array_layer(layer, depth)
+    var wide = Float32(width)
+    var tall = Float32(height)
+    if filter == NEAREST:
+        return texels.texel_at(
+            wrap_index(Int(floor(u * wide)), width, wrap_s),
+            wrap_index(Int(floor(v * tall)), height, wrap_t),
+            slice,
+        )
+    var across = u * wide - 0.5
+    var up = v * tall - 0.5
+    var x = Int(floor(across))
+    var y = Int(floor(up))
+    var fx = across - Float32(x)
+    var x0 = wrap_index(x, width, wrap_s)
+    var x1 = wrap_index(x + 1, width, wrap_s)
+    var y0 = wrap_index(y, height, wrap_t)
+    var y1 = wrap_index(y + 1, height, wrap_t)
+    return mix_straight_texels(
+        mix_straight_texels(
+            texels.texel_at(x0, y0, slice), texels.texel_at(x1, y0, slice), fx
+        ),
+        mix_straight_texels(
+            texels.texel_at(x0, y1, slice), texels.texel_at(x1, y1, slice), fx
+        ),
+        up - Float32(y),
+    )
+
+
+def decoded_layers(array: DataArrayTexture) -> List[FloatColor]:
+    """Return every texel of an array texture as it samples, `x` fastest,
+    then `y`, then the layer: what the GPU backend uploads for a node
+    program's `sampler2DArray`.
+
+    Args:
+        array: The texture.
+
+    Returns:
+        The texels, `width` times `height` times `depth` of them.
+    """
+    var image = VolumeImage(copy=array.image)
+    var texels = List[FloatColor](
+        capacity=image.width * image.height * image.depth
+    )
+    # Never empty: an image has a texel on each side.
+    for z in range(image.depth):  # pragma: no branch
+        for y in range(image.height):  # pragma: no branch
+            for x in range(image.width):  # pragma: no branch
+                texels.append(array.texel_at(x, y, z))
+    return texels^

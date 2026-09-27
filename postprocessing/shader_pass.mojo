@@ -265,6 +265,74 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             )
         return FloatColor(1, 1, 1, 1)
 
+    def _view(self, slot: Int) -> LightView:
+        """Return the input image for `INPUT_SLOT` and the saved one for
+        any other slot, as a view made here: see the fields for why one
+        is not kept."""
+        if slot == INPUT_SLOT:
+            return LightView(
+                pixels=self.input_floats,
+                width=self.input_width,
+                height=self.input_height,
+            )
+        return LightView(
+            pixels=self.saved_floats,
+            width=self.saved_width,
+            height=self.saved_height,
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the input or the saved image at a coordinate: an image of
+        one level reads it at every level.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            u: Across.
+            v: Up.
+            level: The mip level, not read.
+
+        Returns:
+            The straight color; opaque white for a texture in the assets.
+        """
+        return self.sample(slot, u, v)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a pixel of the input or the saved image by its column and
+        row from the bottom, held inside the image.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            x: The column.
+            y: The row, from the bottom.
+            level: The mip level, not read: an image has one.
+
+        Returns:
+            The straight color; opaque white for a texture in the assets.
+        """
+        if slot != INPUT_SLOT and slot != SAVED_SLOT:
+            return FloatColor(1, 1, 1, 1)
+        var view = self._view(slot)
+        var column = max(0, min(x, view.width - 1))
+        var row = max(0, min(y, view.height - 1))
+        return view.at(column, view.height - 1 - row).unpremultiplied()
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return the input's or the saved image's size.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            level: The mip level, not read: an image has one.
+
+        Returns:
+            The width and the height; zeros for a texture in the assets.
+        """
+        if slot != INPUT_SLOT and slot != SAVED_SLOT:
+            return Lanes(0)
+        var view = self._view(slot)
+        return Lanes(Float32(view.width), Float32(view.height), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the three corners' weights at the pixel, the pixel to its
         right or the pixel above it: one minus u minus v, u and v.
@@ -376,6 +444,55 @@ struct HostScreenNodes[origin: Origin[mut=False]](NodeSource):
         if slot < 0:
             return self.screen.sample(slot, u, v)
         return self.textures[].textures[slot].sample(u, v)
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return an image or a texture at a coordinate and a mip level.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            u: Across.
+            v: Up.
+            level: The mip level, fractional.
+
+        Returns:
+            The straight color.
+        """
+        if slot < 0:
+            return self.screen.sample_level(slot, u, v, level)
+        return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return an image's pixel or a texture's texel by its column and
+        row.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            x: The column.
+            y: The row, from the bottom.
+            level: The mip level.
+
+        Returns:
+            The straight color.
+        """
+        if slot < 0:
+            return self.screen.fetch(slot, x, y, level)
+        return self.textures[].textures[slot].fetch(x, y, level)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return an image's or a texture level's size.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            level: The mip level.
+
+        Returns:
+            The width and the height.
+        """
+        if slot < 0:
+            return self.screen.size(slot, level)
+        return self.textures[].textures[slot].fetch_size(level)
 
     def shares(self, context: NodeContext) -> Lanes:
         """Return the screen quad's weights; see `ScreenNodes.shares`.

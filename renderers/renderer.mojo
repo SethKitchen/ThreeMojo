@@ -637,6 +637,54 @@ def _moves_a_map(assets: Assets, material: Material) raises -> Bool:
     return False
 
 
+def _customs(
+    assets: Assets,
+    material: Material,
+    geometry: BufferGeometry,
+    count: Int,
+) raises -> List[SIMD[DType.float32, 8]]:
+    """Return every vertex's custom attributes, as the material's node
+    program lays them out: each attribute the geometry has, its missing
+    components from zeros and one, and one the geometry lacks all zeros and
+    one, as WebGL fills an attribute.
+
+    Args:
+        assets: Where the program is.
+        material: The mesh's material.
+        geometry: The geometry, for the attributes.
+        count: How many vertices the geometry has.
+
+    Returns:
+        One set of `MAX_ATTRIBUTE_FLOATS` floats per vertex.
+
+    Raises:
+        Error: If an attribute holds fewer than `count` vertices.
+    """
+    var customs = List[SIMD[DType.float32, 8]](
+        length=count, fill=SIMD[DType.float32, 8](0)
+    )
+    if material.nodes == NO_NODES:
+        return customs^
+    ref program = assets.programs.get(material.nodes)
+    for index in range(len(program.attribute_names)):
+        var name = program.attribute_names[index]
+        var first = program.attribute_offsets[index]
+        var width = program.attribute_widths[index]
+        var size = 0
+        if geometry.has_attribute(name):
+            size = geometry.attribute_view(name).item_size
+        # A drawn geometry has vertices.
+        for vertex in range(count):  # pragma: no branch
+            for lane in range(width):  # pragma: no branch
+                var value = Float32(1) if lane == 3 else Float32(0)
+                if lane < size:
+                    value = geometry.attribute_view(name).component(
+                        vertex, lane
+                    )
+                customs[vertex][first + lane] = value
+    return customs^
+
+
 def _coordinates(
     geometry: BufferGeometry, name: String, count: Int
 ) raises -> Tuple[List[Float32], List[Float32]]:
@@ -2320,6 +2368,7 @@ struct _Paint(ImplicitlyCopyable):
             shown=self.shown,
         )
         corner.frames = self.frames
+        corner.custom = vertex.custom
         return corner^
 
     def emit(
@@ -2382,6 +2431,9 @@ struct _Paint(ImplicitlyCopyable):
             one = _turned_around(one)
             two = _turned_around(two)
             three = _turned_around(three)
+        # What a node program's facing reads, from the first corner.
+        one.seen_from_behind = away
+        one.flip_sided = self.side == BACK_SIDE
         corners.append(one)
         corners.append(two)
         corners.append(three)
@@ -2681,6 +2733,17 @@ def _checked_nodes(
     for index in range(len(program.textures)):
         if program.textures[index].value >= assets.textures.count():
             raise Error("A node program reads a texture that is not there")
+    for index in range(len(program.cubes)):
+        if program.cubes[index].value >= assets.cube_textures.count():
+            raise Error("A node program reads a cube that is not there")
+    for index in range(len(program.volumes)):
+        if program.volumes[index].value >= assets.data_3d_textures.count():
+            raise Error("A node program reads a 3D texture that is not there")
+    for index in range(len(program.arrays)):
+        if program.arrays[index].value >= assets.data_array_textures.count():
+            raise Error(
+                "A node program reads an array texture that is not there"
+            )
     return nodes
 
 
@@ -2936,7 +2999,16 @@ def _emit_sprite(
             "A sprite material must be BASIC: a sprite is a picture facing"
             " the camera, and no light reaches it"
         )
-    _refuse_nodes(material, "A sprite")
+    # A node material shades the square as it shades a mesh, three.js's
+    # `SpriteNodeMaterial`; a position node moves a mesh's own vertices,
+    # which a sprite has none of.
+    if _moves(assets, material):
+        raise Error(
+            "A sprite's node material has no position node: a sprite has no"
+            " vertices of its own to move"
+        )
+    var physics = _Physics()
+    physics.nodes = _checked_nodes(assets, material.nodes)
     if material.wireframe:
         raise Error(
             "A sprite cannot be a wireframe: it is a picture, and its"
@@ -3019,7 +3091,7 @@ def _emit_sprite(
         NO_CUBE_TEXTURE,
         1,
         MULTIPLY_OPERATION,
-        _Physics(),
+        physics,
         False,
         # three.js's `sprite` shader hashes its alpha, and neither dithers
         # nor premultiplies.
@@ -5004,6 +5076,8 @@ struct Renderer(Movable):
             var second_set = _coordinates(geometry, second_name, vertex_count)
             ref vertex_u1 = second_set[0]
             ref vertex_v1 = second_set[1]
+            # The custom attributes a node material reads, raw.
+            var customs = _customs(assets, material, geometry, vertex_count)
 
             # World-space normals are their own pass so the normal array can
             # be borrowed only when there is one, and the normal matrix built
@@ -5257,6 +5331,9 @@ struct Renderer(Movable):
                     u1=vertex_u1[third],
                     v1=vertex_v1[third],
                 )
+                corner_a.custom = customs[first]
+                corner_b.custom = customs[second]
+                corner_c.custom = customs[third]
                 # A triangle wholly between the two planes is what the
                 # clipper would hand back untouched, so it is not sent
                 # through: the clipper builds four lists for every triangle
@@ -6675,6 +6752,8 @@ struct Renderer(Movable):
             self.render_scale,
             seen,
             frame.programs,
+            assets.data_3d_textures,
+            assets.data_array_textures,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
@@ -6835,6 +6914,8 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
             programs=frame.programs,
+            volumes=assets.data_3d_textures,
+            arrays=assets.data_array_textures,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -6865,6 +6946,8 @@ struct Renderer(Movable):
             self.render_scale,
             seen,
             frame.programs,
+            assets.data_3d_textures,
+            assets.data_array_textures,
         )
         return TransmissionTarget(drawn, view)
 

@@ -86,6 +86,13 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import Color, FloatColor
+from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
+from render.volume_texture_store import (
+    NO_DATA_3D_TEXTURE,
+    NO_DATA_ARRAY_TEXTURE,
+    Data3DTextureId,
+    DataArrayTextureId,
+)
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import ceil, cos, exp, exp2, floor, log2, max, min, pow, sin, sqrt
 from std.memory import bitcast
@@ -127,22 +134,24 @@ comptime Lanes = SIMD[DType.float32, 4]
 @fieldwise_init
 struct ValueType(Equatable, ImplicitlyCopyable, Writable):
     """What a node's value is, as a type rather than a bare int: a `float`,
-    a vector of two, three or four, a `mat3` or a `mat4`, or a texture.
-    `value` is the component count, and 32 for a texture."""
+    a vector of two, three or four, a `mat3` or a `mat4`, a texture, a
+    cube texture, a 3D texture or an array texture. `value` is the
+    component count, 32 for a texture, 33 for a cube texture, 34 for a 3D
+    texture and 35 for an array texture."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven types there are.
+        """Return True if this is one of the ten types there are.
 
         Returns:
-            Whether the value is one to four, 9, 16 or 32.
+            Whether the value is one to four, 9, 16, or 32 to 35.
         """
         return (
             (self.value >= 1 and self.value <= 4)
             or self.value == 9
             or self.value == 16
-            or self.value == 32
+            or (self.value >= 32 and self.value <= 35)
         )
 
     def is_vector(self) -> Bool:
@@ -157,7 +166,8 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
         """Return the type's TSL name, for an error message.
 
         Returns:
-            `float`, `vec2` to `vec4`, `mat3`, `mat4` or `texture`.
+            `float`, `vec2` to `vec4`, `mat3`, `mat4`, `texture`,
+            `cubeTexture`, `texture3D` or `textureArray`.
         """
         if self.value == 1:
             return "float"
@@ -167,6 +177,12 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
             return "mat4"
         if self.value == 32:
             return "texture"
+        if self.value == 33:
+            return "cubeTexture"
+        if self.value == 34:
+            return "texture3D"
+        if self.value == 35:
+            return "textureArray"
         return "vec" + String(self.value)
 
 
@@ -177,6 +193,9 @@ comptime NODE_VEC4 = ValueType(4)
 comptime NODE_MAT3 = ValueType(9)
 comptime NODE_MAT4 = ValueType(16)
 comptime NODE_SAMPLER = ValueType(32)
+comptime NODE_SAMPLER_CUBE = ValueType(33)
+comptime NODE_SAMPLER_3D = ValueType(34)
+comptime NODE_SAMPLER_ARRAY = ValueType(35)
 
 
 @fieldwise_init
@@ -194,7 +213,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_WORLEY.value
+            and self.value <= NODE_TEXTURE_ARRAY.value
         )
 
 
@@ -325,6 +344,36 @@ comptime NODE_NOISE_VEC3 = NodeKind(92)
 comptime NODE_CELL_NOISE = NodeKind(93)
 comptime NODE_CELL_NOISE_VEC3 = NodeKind(94)
 comptime NODE_WORLEY = NodeKind(95)
+# Which way the fragment's triangle faces, one or zero. Its immediate picks
+# the rule: zero for TSL's `frontFacing`, false where the triangle is seen
+# from its back; one for GLSL's `gl_FrontFacing` in three.js's WebGL
+# renderer, which turns a `BACK_SIDE` material's front face round. See
+# `NodeSource.seen_from_behind`.
+comptime NODE_FRONT_FACING = NodeKind(96)
+# A texture read at a mip level its third input gives, GLSL's
+# `textureLod`: `NODE_TEXTURE` with no footprint. See
+# `NodeSource.sample_level`.
+comptime NODE_TEXTURE_LEVEL = NodeKind(97)
+# A texel by its column and row, and a texture level's size: GLSL's
+# `texelFetch` and `textureSize`, TSL's `textureLoad` and `textureSize`.
+# See `NodeSource.fetch` and `NodeSource.size`.
+comptime NODE_TEXEL_FETCH = NodeKind(98)
+comptime NODE_TEXTURE_SIZE = NodeKind(99)
+# A custom attribute of the geometry, three.js's `attribute(name)`: its
+# immediate is its first float among a corner's custom floats, plus eight
+# times its width. See `NodeGraph.attribute`.
+comptime NODE_ATTRIBUTE = NodeKind(100)
+# How many floats a corner carries for the custom attributes, all of them.
+comptime MAX_ATTRIBUTE_FLOATS = 8
+# A cube texture read in a direction, three.js's `cubeTexture(map, dir)`
+# and GLSL's `textureCube`. See `NodeSource.sample_cube`.
+comptime NODE_TEXTURE_CUBE = NodeKind(101)
+# A 3D texture read at a `vec3`, three.js's `texture3D(map, uvw)` and
+# GLSL's `sampler3D`, and an array texture read at a coordinate and a
+# layer, GLSL's `sampler2DArray`. See `NodeSource.sample_3d` and
+# `NodeSource.sample_array`.
+comptime NODE_TEXTURE_3D = NodeKind(102)
+comptime NODE_TEXTURE_ARRAY = NodeKind(103)
 
 
 @fieldwise_init
@@ -498,6 +547,14 @@ def _note_texture(mut textures: List[TextureId], map: TextureId):
     textures.append(map)
 
 
+def _note_place(mut places: List[Int], place: Int):
+    """Append a place to a list, once."""
+    for index in range(len(places)):
+        if places[index] == place:
+            return
+    places.append(place)
+
+
 def _pool_size(type: ValueType) -> Int:
     """Return how many floats a constant or a uniform of a type holds."""
     return 9 if type == NODE_MAT3 else (16 if type == NODE_MAT4 else 4)
@@ -509,6 +566,8 @@ def _is_attribute(kind: NodeKind) -> Bool:
         (kind.value >= NODE_UV.value and kind.value <= NODE_VERTEX_COLOR.value)
         or kind == NODE_LIT
         or kind == NODE_FRAG_COORD
+        or kind == NODE_FRONT_FACING
+        or kind == NODE_ATTRIBUTE
     )
 
 
@@ -643,27 +702,11 @@ struct Fn(Copyable, Movable):
                     + graph.type_of(args[index]).name()
                 )
         var depth = len(graph._blocks)
-        var returned = graph.Var(graph.float(0))
-        var result = graph.Var(
-            graph._match(graph.float(0), self.output, "hold")
-        )
-        graph._returns.append(
-            _Return(returned.value, result.value, depth, False)
-        )
+        graph.open_call(self.output)
         var answer = self.body(graph, args)
-        var frame = graph._returns.pop()
-        graph._retired[frame.returned] = True
-        graph._retired[frame.result] = True
         if len(graph._blocks) != depth:
             raise Error("The Fn " + self.name + " leaves an If or a Loop open")
-        if frame.used and graph.type_of(answer) == self.output:
-            # A `Return` gives its value where it ran; the body's answer is
-            # the value everywhere else.
-            answer = graph.select(
-                graph.get(NodeVar(frame.returned)),
-                graph.get(NodeVar(frame.result)),
-                answer,
-            )
+        answer = graph.close_call(answer)
         if graph.type_of(answer) != self.output:
             raise Error(
                 "The Fn "
@@ -709,6 +752,11 @@ struct NodeGraph(Copyable, Movable):
     # Per variable, whether it is a closed loop's or call's hidden flag,
     # which no later loop needs to carry.
     var _retired: List[Bool]
+    # Each custom attribute: its name, its first float among a corner's
+    # custom floats, and its width.
+    var _attribute_names: List[String]
+    var _attribute_offsets: List[Int]
+    var _attribute_widths: List[Int]
 
     def __init__(out self):
         """Create an empty graph with no outputs."""
@@ -725,6 +773,9 @@ struct NodeGraph(Copyable, Movable):
         self._discards = List[Int]()
         self._returns = List[_Return]()
         self._retired = List[Bool]()
+        self._attribute_names = List[String]()
+        self._attribute_offsets = List[Int]()
+        self._attribute_widths = List[Int]()
 
     def count(self) -> Int:
         """Return how many nodes the graph holds.
@@ -1038,6 +1089,188 @@ struct NodeGraph(Copyable, Movable):
             name, NODE_SAMPLER, Lanes(Float32(map.value), 0, 0, 0)
         )
 
+    def cube_uniform(
+        mut self, name: String, map: CubeTextureId = NO_CUBE_TEXTURE
+    ) raises -> NodeRef:
+        """Return a named cube texture the caller can change between frames,
+        three.js's `cubeTexture(map)` whose `value` is set later. Read it
+        with `texture_cube`, and change it with `NodeProgram.set_cube`.
+
+        Args:
+            name: A name no other uniform of this graph has.
+            map: Its first cube, or `NO_CUBE_TEXTURE` for one set later.
+
+        Returns:
+            The node, of type `cubeTexture`.
+
+        Raises:
+            Error: If the name is empty or already taken, or `map` is a
+                negative other than `NO_CUBE_TEXTURE`.
+        """
+        if map.value < 0 and map != NO_CUBE_TEXTURE:
+            raise Error("A cube uniform names no cube there can be")
+        return self._uniform(
+            name, NODE_SAMPLER_CUBE, Lanes(Float32(map.value), 0, 0, 0)
+        )
+
+    def texture_cube(
+        mut self, sampler: NodeRef, direction: NodeRef
+    ) raises -> NodeRef:
+        """Return a cube texture uniform read in a direction, a linear
+        `vec4` with straight alpha: three.js's `cubeTexture(map, dir)` and
+        GLSL's `textureCube`. The face the direction points at, read where
+        it points. A mode that opens no textures reads opaque white.
+
+        Args:
+            sampler: A node of type `cubeTexture`, from `cube_uniform`.
+            direction: Which way to look, a `vec3` of any length.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a cube
+                texture, or `direction` is not a `vec3`.
+        """
+        self._check(sampler)
+        self._check(direction)
+        if self._types[sampler.value] != NODE_SAMPLER_CUBE:
+            raise Error(
+                "A cube read reads a cube texture, not a "
+                + self._types[sampler.value].name()
+            )
+        if self._types[direction.value] != NODE_VEC3:
+            raise Error(
+                "A cube is read in a vec3 direction, not a "
+                + self._types[direction.value].name()
+            )
+        return self._add(
+            NODE_TEXTURE_CUBE, NODE_VEC4, direction.value, sampler.value
+        )
+
+    def volume_uniform(
+        mut self, name: String, map: Data3DTextureId = NO_DATA_3D_TEXTURE
+    ) raises -> NodeRef:
+        """Return a named 3D texture the caller can change between frames.
+        Read it with `texture_3d`, and change it with
+        `NodeProgram.set_volume`.
+
+        Args:
+            name: A name no other uniform of this graph has.
+            map: Its first 3D texture, or `NO_DATA_3D_TEXTURE`.
+
+        Returns:
+            The node, of type `texture3D`.
+
+        Raises:
+            Error: If the name is empty or already taken, or `map` is a
+                negative other than `NO_DATA_3D_TEXTURE`.
+        """
+        if map.value < 0 and map != NO_DATA_3D_TEXTURE:
+            raise Error("A 3D texture uniform names no texture there can be")
+        return self._uniform(
+            name, NODE_SAMPLER_3D, Lanes(Float32(map.value), 0, 0, 0)
+        )
+
+    def array_uniform(
+        mut self,
+        name: String,
+        map: DataArrayTextureId = NO_DATA_ARRAY_TEXTURE,
+    ) raises -> NodeRef:
+        """Return a named array texture the caller can change between
+        frames. Read it with `texture_array`, and change it with
+        `NodeProgram.set_array`.
+
+        Args:
+            name: A name no other uniform of this graph has.
+            map: Its first array texture, or `NO_DATA_ARRAY_TEXTURE`.
+
+        Returns:
+            The node, of type `textureArray`.
+
+        Raises:
+            Error: If the name is empty or already taken, or `map` is a
+                negative other than `NO_DATA_ARRAY_TEXTURE`.
+        """
+        if map.value < 0 and map != NO_DATA_ARRAY_TEXTURE:
+            raise Error(
+                "An array texture uniform names no texture there can be"
+            )
+        return self._uniform(
+            name, NODE_SAMPLER_ARRAY, Lanes(Float32(map.value), 0, 0, 0)
+        )
+
+    def texture_3d(mut self, sampler: NodeRef, at: NodeRef) raises -> NodeRef:
+        """Return a 3D texture uniform read at a `vec3` from zero to one on
+        each axis, a linear `vec4` with straight alpha: three.js's
+        `texture3D(map, uvw)` and GLSL's `texture` of a `sampler3D`.
+
+        Args:
+            sampler: A node of type `texture3D`, from `volume_uniform`.
+            at: Where to read it, a `vec3`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a 3D
+                texture, or `at` is not a `vec3`.
+        """
+        return self._sampled(sampler, at, NODE_SAMPLER_3D, NODE_TEXTURE_3D)
+
+    def texture_array(
+        mut self, sampler: NodeRef, at: NodeRef
+    ) raises -> NodeRef:
+        """Return an array texture uniform read at a coordinate and a layer,
+        a `vec3` of `u`, `v` and the layer, a linear `vec4` with straight
+        alpha: GLSL's `texture` of a `sampler2DArray`. The layer is rounded
+        to the nearest and held inside the stack.
+
+        Args:
+            sampler: A node of type `textureArray`, from `array_uniform`.
+            at: Where to read it, a `vec3`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not an
+                array texture, or `at` is not a `vec3`.
+        """
+        return self._sampled(
+            sampler, at, NODE_SAMPLER_ARRAY, NODE_TEXTURE_ARRAY
+        )
+
+    def _sampled(
+        mut self,
+        sampler: NodeRef,
+        at: NodeRef,
+        type: ValueType,
+        kind: NodeKind,
+    ) raises -> NodeRef:
+        """Return a read of a 3D or an array texture at a `vec3`.
+
+        Raises:
+            Error: If a node is not of this graph, or the types are others.
+        """
+        self._check(sampler)
+        self._check(at)
+        if self._types[sampler.value] != type:
+            raise Error(
+                "This read reads a "
+                + type.name()
+                + ", not a "
+                + self._types[sampler.value].name()
+            )
+        if self._types[at.value] != NODE_VEC3:
+            raise Error(
+                "A "
+                + type.name()
+                + " is read at a vec3, not a "
+                + self._types[at.value].name()
+            )
+        return self._add(kind, NODE_VEC4, at.value, sampler.value)
+
     # --- attributes ---------------------------------------------------------
 
     def uv(mut self) -> NodeRef:
@@ -1123,6 +1356,109 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_FRAG_COORD, NODE_VEC4)
+
+    def front_facing(mut self) -> NodeRef:
+        """Return one where the fragment's triangle is seen from its front
+        and zero where it is seen from its back, a `float`, TSL's
+        `frontFacing`. Only a fragment reads it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_FRONT_FACING, NODE_FLOAT)
+
+    def face_direction(mut self) raises -> NodeRef:
+        """Return one where the fragment's triangle is seen from its front
+        and minus one where it is seen from its back, TSL's
+        `faceDirection`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: Never: the operands are floats.
+        """
+        return self.sub(
+            self.mul(self.front_facing(), self.float(2)), self.float(1)
+        )
+
+    def gl_front_facing(mut self) -> NodeRef:
+        """Return GLSL's `gl_FrontFacing` as three.js's WebGL renderer
+        gives it, one or zero: as `front_facing`, except that a
+        `BACK_SIDE` material turns the front face round, so it is one on
+        every face such a material draws.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_FRONT_FACING, NODE_FLOAT, value=Lanes(1))
+
+    def attribute(mut self, name: String, type: ValueType) raises -> NodeRef:
+        """Return a custom attribute of the geometry, three.js's
+        `attribute(name)`: each corner's value of it, interpolated at the
+        fragment. A geometry without it gives zeros and one, as WebGL gives
+        an attribute that is not set.
+
+        Args:
+            name: The geometry attribute's name.
+            type: A `float`, `vec2`, `vec3` or `vec4`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If the name is a built-in attribute's, the type is not a
+                float or a vector, the name was declared with another type,
+                or the attributes would hold more than `MAX_ATTRIBUTE_FLOATS`
+                floats.
+        """
+        if (
+            name == "position"
+            or name == "normal"
+            or name == "uv"
+            or name == "uv1"
+            or name == "color"
+        ):
+            raise Error(
+                name + " is a built-in attribute: read it with its own node"
+            )
+        if type.value < 1 or type.value > 4:
+            raise Error(
+                "An attribute is a float or a vector, not a " + type.name()
+            )
+        var used = 0
+        for index in range(len(self._attribute_names)):
+            if self._attribute_names[index] == name:
+                if self._attribute_widths[index] != type.value:
+                    raise Error(
+                        "The attribute "
+                        + name
+                        + " is a "
+                        + ValueType(self._attribute_widths[index]).name()
+                        + ", not a "
+                        + type.name()
+                    )
+                return self._add_attribute(index)
+            used += self._attribute_widths[index]
+        if used + type.value > MAX_ATTRIBUTE_FLOATS:
+            raise Error(
+                "A graph's attributes hold at most "
+                + String(MAX_ATTRIBUTE_FLOATS)
+                + " floats"
+            )
+        self._attribute_names.append(name)
+        self._attribute_offsets.append(used)
+        self._attribute_widths.append(type.value)
+        return self._add_attribute(len(self._attribute_names) - 1)
+
+    def _add_attribute(mut self, index: Int) -> NodeRef:
+        """Return a node that reads one of the graph's attributes."""
+        var width = self._attribute_widths[index]
+        return self._add(
+            NODE_ATTRIBUTE,
+            ValueType(width),
+            value=Lanes(Float32(self._attribute_offsets[index] + 8 * width)),
+        )
 
     def time(mut self) -> NodeRef:
         """Return the frame's time in seconds, a `float`, three.js's `time`.
@@ -1212,6 +1548,123 @@ struct NodeGraph(Copyable, Movable):
                 + self._types[uv.value].name()
             )
         return self._add(NODE_TEXTURE, NODE_VEC4, uv.value, sampler.value)
+
+    def texture_level(
+        mut self, map: TextureId, uv: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture read at a coordinate and a mip level, a linear
+        `vec4` with straight alpha: three.js's `texture(map, uv).level(n)`.
+        Level zero is the full-size image, and a texture with one level
+        reads it at every level.
+
+        Args:
+            map: The texture. It must be in the store the renderer draws
+                with.
+            uv: Where to read it, a `vec2`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `map` is `NO_TEXTURE` or negative, `uv` is not a
+                `vec2`, or `level` is not a `float` of this graph.
+        """
+        return self._at_level(self.texture(map, uv), level)
+
+    def texture_level(
+        mut self, sampler: NodeRef, uv: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture uniform read at a coordinate and a mip level,
+        GLSL's `textureLod`.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            uv: Where to read it, a `vec2`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, `uv` is not a `vec2`, or `level` is not a `float`.
+        """
+        return self._at_level(self.texture(sampler, uv), level)
+
+    def texture_load(
+        mut self, sampler: NodeRef, at: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return the texel of a texture uniform at a column and a row, a
+        linear `vec4` with straight alpha: TSL's `textureLoad`, GLSL's
+        `texelFetch`. A coordinate outside the image wraps, and a level
+        outside the chain is held inside it.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            at: The column and the row, a `vec2` of whole numbers.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, `at` is not a `vec2`, or `level` is not a `float`.
+        """
+        var texel = self._at_level(self.texture(sampler, at), level)
+        self._kinds[texel.value] = NODE_TEXEL_FETCH
+        return texel
+
+    def texture_size(
+        mut self, sampler: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture uniform's width and height at a level, a
+        `vec2`: TSL's `textureSize`, GLSL's `textureSize`.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, or `level` is not a `float`.
+        """
+        self._check(sampler)
+        self._check(level)
+        if self._types[sampler.value] != NODE_SAMPLER:
+            raise Error(
+                "A texture's size is a texture's, not a "
+                + self._types[sampler.value].name()
+            )
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+        return self._add(
+            NODE_TEXTURE_SIZE, NODE_VEC2, level.value, sampler.value
+        )
+
+    def _at_level(mut self, texel: NodeRef, level: NodeRef) raises -> NodeRef:
+        """Turn a texture node just added, which nothing reads yet, into
+        one read at a level.
+
+        Raises:
+            Error: If `level` is not a `float` of this graph.
+        """
+        self._check(level)
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+        self._kinds[texel.value] = NODE_TEXTURE_LEVEL
+        self._inputs[texel.value * 3 + 2] = level.value
+        return texel
 
     def lit(mut self) -> NodeRef:
         """Return the color the material's own lighting made of the surface,
@@ -3270,6 +3723,58 @@ struct NodeGraph(Copyable, Movable):
             self._kinds[node] == NODE_CONSTANT and self._values[node * 4] == 0
         )
 
+    def open_call(mut self, output: ValueType) raises:
+        """Begin building a function's body, so that `Return` has a call to
+        return from: what `Fn.call` does, for a caller that inlines its own
+        bodies.
+
+        Args:
+            output: The type the function returns: a `float` or a vector.
+
+        Raises:
+            Error: If the type is not a `float` or a vector.
+        """
+        if not output.is_vector():
+            raise Error("A call returns a float or a vector")
+        var returned = self.Var(self.float(0))
+        var result = self.Var(self._match(self.float(0), output, "hold"))
+        self._returns.append(
+            _Return(returned.value, result.value, len(self._blocks), False)
+        )
+
+    def close_call(mut self, answer: NodeRef) raises -> NodeRef:
+        """End the innermost call `open_call` began, and return its answer:
+        what a `Return` gave where one ran, and `answer` everywhere else.
+
+        Args:
+            answer: What the body gives at its end.
+
+        Returns:
+            The call's answer.
+
+        Raises:
+            Error: If no call is open, or `answer` is not a node of the
+                call's type when a `Return` ran.
+        """
+        if len(self._returns) == 0:
+            raise Error("A close_call needs an open_call")
+        var frame = self._returns.pop()
+        self._retired[frame.returned] = True
+        self._retired[frame.result] = True
+        self._check(answer)
+        if (
+            not frame.used
+            or self.type_of(answer) != self._var_types[frame.result]
+        ):
+            return answer
+        # A `Return` gives its value where it ran; the body's answer is the
+        # value everywhere else.
+        return self.select(
+            self.get(NodeVar(frame.returned)),
+            self.get(NodeVar(frame.result)),
+            answer,
+        )
+
     def _innermost_loop(self, what: String) raises -> Int:
         """Return the innermost open loop's block.
 
@@ -3841,6 +4346,12 @@ struct NodeGraph(Copyable, Movable):
             var fragment = (
                 (_is_attribute(kind) and not local)
                 or kind == NODE_TEXTURE
+                or kind == NODE_TEXTURE_LEVEL
+                or kind == NODE_TEXEL_FETCH
+                or kind == NODE_TEXTURE_SIZE
+                or kind == NODE_TEXTURE_CUBE
+                or kind == NODE_TEXTURE_3D
+                or kind == NODE_TEXTURE_ARRAY
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -3972,6 +4483,16 @@ struct NodeGraph(Copyable, Movable):
         for index in range(len(pool.textures)):
             program.texture_offsets.append(base + pool.textures[index])
         program._list_textures()
+        for index in range(len(pool.cubes)):
+            program.cube_offsets.append(base + pool.cubes[index])
+        for index in range(len(pool.volumes)):
+            program.volume_offsets.append(base + pool.volumes[index])
+        for index in range(len(pool.arrays)):
+            program.array_offsets.append(base + pool.arrays[index])
+        program._list_cubes()
+        program.attribute_names = self._attribute_names.copy()
+        program.attribute_offsets = self._attribute_offsets.copy()
+        program.attribute_widths = self._attribute_widths.copy()
         return program^
 
 
@@ -3988,6 +4509,11 @@ struct _Pool(Movable):
     var types: List[ValueType]
     # Where each texture an instruction reads keeps its id.
     var textures: List[Int]
+    # Where each cube a cube read reads keeps its id, and each 3D and
+    # array texture.
+    var cubes: List[Int]
+    var volumes: List[Int]
+    var arrays: List[Int]
 
     def __init__(out self, graph: NodeGraph):
         """Lay out every uniform of a graph."""
@@ -3997,6 +4523,9 @@ struct _Pool(Movable):
         self.offsets = List[Int]()
         self.types = List[ValueType]()
         self.textures = List[Int]()
+        self.cubes = List[Int]()
+        self.volumes = List[Int]()
+        self.arrays = List[Int]()
         # Never empty: `compile` adds the zero a derivative can need.
         for node in range(graph.count()):  # pragma: no branch
             if graph._kinds[node] == NODE_UNIFORM:
@@ -4036,6 +4565,24 @@ struct _Pool(Movable):
             if self.textures[index] == place:
                 return place
         self.textures.append(place)
+        return place
+
+    def cube(mut self, graph: NodeGraph, node: Int) -> Int:
+        """Return where a cube read's cube id is: its uniform's place."""
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        _note_place(self.cubes, place)
+        return place
+
+    def volume(mut self, graph: NodeGraph, node: Int) -> Int:
+        """Return where a 3D texture read's texture id is."""
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        _note_place(self.volumes, place)
+        return place
+
+    def array(mut self, graph: NodeGraph, node: Int) -> Int:
+        """Return where an array texture read's texture id is."""
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        _note_place(self.arrays, place)
         return place
 
 
@@ -4240,7 +4787,15 @@ def _children(
             " the fragment has it"
         )
     if corner and (
-        kind == NODE_TEXTURE or kind == NODE_DFDX or kind == NODE_DFDY
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
+        or kind == NODE_TEXTURE_CUBE
+        or kind == NODE_TEXTURE_3D
+        or kind == NODE_TEXTURE_ARRAY
+        or kind == NODE_DFDX
+        or kind == NODE_DFDY
     ):
         raise Error(
             "A varying runs once per corner: it reads no texture and no"
@@ -4290,8 +4845,22 @@ def _emit(
     if kind == NODE_CONSTANT or kind == NODE_UNIFORM:
         pooled = pool.place(graph, node)
         immediate = 0
-    elif kind == NODE_TEXTURE:
+    elif (
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
+    ):
         pooled = pool.texture(graph, node)
+        immediate = 0
+    elif kind == NODE_TEXTURE_CUBE:
+        pooled = pool.cube(graph, node)
+        immediate = 0
+    elif kind == NODE_TEXTURE_3D:
+        pooled = pool.volume(graph, node)
+        immediate = 0
+    elif kind == NODE_TEXTURE_ARRAY:
+        pooled = pool.array(graph, node)
         immediate = 0
     elif kind == NODE_VARYING:
         op = NODE_INTERPOLATE.value
@@ -4391,6 +4960,21 @@ struct NodeProgram(Copyable, Movable):
     # them before a fragment asks, and where each id is in `code`.
     var textures: List[TextureId]
     var texture_offsets: List[Int]
+    # Every cube the cube reads read, each once, and where each read keeps
+    # its cube's id; see `set_cube`.
+    var cubes: List[CubeTextureId]
+    var cube_offsets: List[Int]
+    # The same of the 3D and array textures; see `set_volume` and
+    # `set_array`.
+    var volumes: List[Data3DTextureId]
+    var volume_offsets: List[Int]
+    var arrays: List[DataArrayTextureId]
+    var array_offsets: List[Int]
+    # The custom attributes the renderer gives each corner: name, first
+    # float and width, as `NodeGraph.attribute` laid them out.
+    var attribute_names: List[String]
+    var attribute_offsets: List[Int]
+    var attribute_widths: List[Int]
 
     def __init__(out self):
         """Create a program with no outputs, at time zero under an identity
@@ -4405,6 +4989,15 @@ struct NodeProgram(Copyable, Movable):
         self.uniform_types = List[ValueType]()
         self.textures = List[TextureId]()
         self.texture_offsets = List[Int]()
+        self.cubes = List[CubeTextureId]()
+        self.cube_offsets = List[Int]()
+        self.volumes = List[Data3DTextureId]()
+        self.volume_offsets = List[Int]()
+        self.arrays = List[DataArrayTextureId]()
+        self.array_offsets = List[Int]()
+        self.attribute_names = List[String]()
+        self.attribute_offsets = List[Int]()
+        self.attribute_widths = List[Int]()
 
     def _list_textures(mut self):
         """List every texture the texture nodes read now, each once."""
@@ -4550,6 +5143,89 @@ struct NodeProgram(Copyable, Movable):
         for index in range(16):  # pragma: no branch
             self.code[at + index] = value.elements[index]
 
+    def _list_cubes(mut self):
+        """List every cube, 3D texture and array texture the reads read
+        now, each once."""
+        var cubes = self._ids(self.cube_offsets)
+        self.cubes = List[CubeTextureId]()
+        for index in range(len(cubes)):
+            self.cubes.append(CubeTextureId(cubes[index]))
+        var volumes = self._ids(self.volume_offsets)
+        self.volumes = List[Data3DTextureId]()
+        for index in range(len(volumes)):
+            self.volumes.append(Data3DTextureId(volumes[index]))
+        var arrays = self._ids(self.array_offsets)
+        self.arrays = List[DataArrayTextureId]()
+        for index in range(len(arrays)):
+            self.arrays.append(DataArrayTextureId(arrays[index]))
+
+    def _ids(self, offsets: List[Int]) -> List[Int]:
+        """Return the ids kept at some offsets, each once."""
+        var ids = List[Int]()
+        for index in range(len(offsets)):
+            var id = Int(self.code[offsets[index]])
+            var seen = False
+            for other in range(len(ids)):
+                if ids[other] == id:
+                    seen = True
+            if not seen:
+                ids.append(id)
+        return ids^
+
+    def set_volume(mut self, name: String, map: Data3DTextureId) raises:
+        """Change a 3D texture uniform, and list what the program reads
+        again.
+
+        Args:
+            name: The uniform's name.
+            map: The 3D texture. It must be in the store the renderer
+                draws with.
+
+        Raises:
+            Error: If `map` is negative, no uniform has that name, or it is
+                not a 3D texture.
+        """
+        if map.value < 0:
+            raise Error("A 3D texture uniform needs a texture")
+        self.code[self._find(name, NODE_SAMPLER_3D)] = Float32(map.value)
+        self._list_cubes()
+
+    def set_array(mut self, name: String, map: DataArrayTextureId) raises:
+        """Change an array texture uniform, and list what the program reads
+        again.
+
+        Args:
+            name: The uniform's name.
+            map: The array texture. It must be in the store the renderer
+                draws with.
+
+        Raises:
+            Error: If `map` is negative, no uniform has that name, or it is
+                not an array texture.
+        """
+        if map.value < 0:
+            raise Error("An array texture uniform needs a texture")
+        self.code[self._find(name, NODE_SAMPLER_ARRAY)] = Float32(map.value)
+        self._list_cubes()
+
+    def set_cube(mut self, name: String, map: CubeTextureId) raises:
+        """Change a cube texture uniform, and list the cubes the program
+        reads again.
+
+        Args:
+            name: The uniform's name.
+            map: The cube. It must be in the store the renderer draws with.
+
+        Raises:
+            Error: If `map` is negative, no uniform has that name, or it is
+                not a cube texture.
+        """
+        if map.value < 0:
+            raise Error("A cube uniform needs a cube")
+        var at = self._find(name, NODE_SAMPLER_CUBE)
+        self.code[at] = Float32(map.value)
+        self._list_cubes()
+
     def set_texture(mut self, name: String, map: TextureId) raises:
         """Change a texture uniform, as three.js's `textureNode.value =`
         does, and list the textures the program reads again.
@@ -4669,7 +5345,6 @@ struct NodeProgramStore(Copyable, Movable):
 # --- the interpreter ----------------------------------------------------------
 
 
-@fieldwise_init
 struct NodeInputs(ImplicitlyCopyable):
     """What a fragment, a vertex or a corner hands a program: its attributes
     and, for an output node, the lit color."""
@@ -4688,6 +5363,40 @@ struct NodeInputs(ImplicitlyCopyable):
     # Whether texture nodes read their textures: only under the mode that
     # opens them. Otherwise they read opaque white.
     var textured: Bool
+    # A corner's custom attributes, `MAX_ATTRIBUTE_FLOATS` floats.
+    var custom: SIMD[DType.float32, 8]
+
+    def __init__(
+        out self,
+        u: Float32,
+        v: Float32,
+        position: Vector3,
+        normal: Vector3,
+        color: Vector3,
+        lit: Vector3,
+        textured: Bool,
+        custom: SIMD[DType.float32, 8] = SIMD[DType.float32, 8](0),
+    ):
+        """Gather a fragment's, a vertex's or a corner's attributes.
+
+        Args:
+            u: The texture coordinate across.
+            v: The texture coordinate up.
+            position: The position.
+            normal: The unit normal.
+            color: The interpolated corner color, linear.
+            lit: What the standard lighting made of the fragment.
+            textured: Whether texture nodes read their textures.
+            custom: The custom attributes' floats; zeros by default.
+        """
+        self.u = u
+        self.v = v
+        self.position = position
+        self.normal = normal
+        self.color = color
+        self.lit = lit
+        self.textured = textured
+        self.custom = custom
 
 
 trait NodeSource:
@@ -4721,6 +5430,50 @@ trait NodeSource:
         """
         ...
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at a coordinate and a mip level, GLSL's
+        `textureLod`.
+
+        Args:
+            slot: The texture's id.
+            u: Across.
+            v: Up.
+            level: The mip level, fractional.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        ...
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, GLSL's `texelFetch`.
+
+        Args:
+            slot: The texture's id.
+            x: The column.
+            y: The row, counted as `v` counts.
+            level: The mip level.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        ...
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a texture level's width and height, GLSL's
+        `textureSize`.
+
+        Args:
+            slot: The texture's id.
+            level: The mip level.
+
+        Returns:
+            The width and the height, then zeros.
+        """
+        ...
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the perspective-correct weight of each corner at the
         fragment, the pixel to its right, or the pixel above it: what
@@ -4749,6 +5502,68 @@ trait NodeSource:
             The four numbers. A source with no pixel gives zeros and one.
         """
         ...
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube texture read in a direction, GLSL's
+        `textureCube`. A source with no cubes reads opaque white.
+
+        Args:
+            slot: The cube, as the source keeps it: its id on the host,
+                and its first row in the texture table on the device.
+            direction: Which way to look.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read at a coordinate, GLSL's `texture` of a
+        `sampler3D`. A source with no 3D textures reads opaque white.
+
+        Args:
+            slot: The texture, as the source keeps it: its id on the host,
+                and where its block starts on the device.
+            at: Where to read it, zero to one on each axis.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read at a coordinate and a layer,
+        GLSL's `texture` of a `sampler2DArray`. A source with no array
+        textures reads opaque white.
+
+        Args:
+            slot: The texture, as the source keeps it.
+            at: `u`, `v` and the layer.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def seen_from_behind(self) -> Bool:
+        """Return whether the fragment's triangle is seen from its back,
+        where TSL's `frontFacing` is false. A source with no triangle is
+        seen from its front.
+
+        Returns:
+            Whether the triangle faces away.
+        """
+        return False
+
+    def flip_sided(self) -> Bool:
+        """Return whether the fragment's triangle has a `BACK_SIDE`
+        material, which three.js's WebGL renderer draws with the front face
+        turned round. A source with no triangle has none.
+
+        Returns:
+            Whether the material is `BACK_SIDE`.
+        """
+        return False
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one corner's attributes, as the triangle carries them.
@@ -4832,6 +5647,48 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
         """
         return FloatColor(1.0, 1.0, 1.0, 1.0)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return opaque white: there is no surface to read a texture on.
+
+        Args:
+            slot: The texture's id, not read.
+            u: Across, not read.
+            v: Up, not read.
+            level: The mip level, not read.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return opaque white: there is no surface to read a texture on.
+
+        Args:
+            slot: The texture's id, not read.
+            x: The column, not read.
+            y: The row, not read.
+            level: The mip level, not read.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return zeros: there is no texture here.
+
+        Args:
+            slot: The texture's id, not read.
+            level: The mip level, not read.
+
+        Returns:
+            Zeros.
+        """
+        return Lanes(0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return all the weight on the first corner: there is no triangle.
 
@@ -4897,7 +5754,14 @@ def node_attributes[
     if context.is_corner():
         var at = source.corner(context)
         return NodeInputs(
-            at.u, at.v, at.position, _unit(at.normal), at.color, none, textured
+            at.u,
+            at.v,
+            at.position,
+            _unit(at.normal),
+            at.color,
+            none,
+            textured,
+            at.custom,
         )
     var s = source.shares(context)
     var a = source.corner(CORNER_A)
@@ -4925,6 +5789,7 @@ def node_attributes[
         ),
         none,
         textured,
+        a.custom * s[0] + b.custom * s[1] + c.custom * s[2],
     )
 
 
@@ -5030,11 +5895,13 @@ def _leaf[
     source: S,
     op: Int,
     x: Lanes,
+    z: Lanes,
     immediate: Float32,
     context: Int,
     inputs: NodeInputs,
 ) -> Lanes:
-    """Return what a node that computes nothing from other nodes holds."""
+    """Return what a node that computes nothing from other nodes holds, or
+    a texture read, whose coordinate is `x` and whose level is `z`."""
     if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
         var at = Int(immediate)
         return Lanes(
@@ -5052,10 +5919,60 @@ def _leaf[
             return Lanes(1)
         var texel = source.sample(Int(source.word(Int(immediate))), x[0], x[1])
         return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_LEVEL.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.sample_level(
+            Int(source.word(Int(immediate))), x[0], x[1], z[0]
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXEL_FETCH.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.fetch(
+            Int(source.word(Int(immediate))), Int(x[0]), Int(x[1]), Int(z[0])
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_3D.value or op == NODE_TEXTURE_ARRAY.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var slot = Int(source.word(Int(immediate)))
+        var at = Vector3(x[0], x[1], x[2])
+        var texel = source.sample_3d(
+            slot, at
+        ) if op == NODE_TEXTURE_3D.value else source.sample_array(slot, at)
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_CUBE.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.sample_cube(
+            Int(source.word(Int(immediate))), Vector3(x[0], x[1], x[2])
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_SIZE.value:
+        return source.size(Int(source.word(Int(immediate))), Int(x[0]))
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
+    if op == NODE_ATTRIBUTE.value:
+        # Interpolated from the corners even at the fragment, whose own
+        # attributes carry no custom floats.
+        var at = AT_HERE if context == AT_FRAGMENT.value else NodeContext(
+            context
+        )
+        var custom = node_attributes(source, at, inputs.textured).custom
+        var first = Int(immediate) % 8
+        var out = Lanes(0)
+        for lane in range(Int(immediate) // 8):  # pragma: no branch
+            out[lane] = custom[first + lane]
+        return out
+    if op == NODE_FRONT_FACING.value:
+        var behind = source.seen_from_behind()
+        if immediate != 0:
+            # WebGL's front face turns round under `BACK_SIDE`.
+            behind = behind != source.flip_sided()
+        return Lanes(0 if behind else 1)
     # An attribute, of the fragment or of the context the node runs in.
     var given = inputs
     if context != AT_FRAGMENT.value:
@@ -5690,9 +6607,23 @@ def run_nodes[
         var z = registers[third]
         var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
         written = Int(source.word(at + INSTRUCTION_DEST))
-        # The leaves, and `gl_FragCoord`, a leaf numbered after them.
-        if op < NODE_ADD.value or op == NODE_FRAG_COORD.value:
-            registers[written] = _leaf(source, op, x, immediate, third, inputs)
+        # The leaves, and `gl_FragCoord`, the facing and a texture read at
+        # a level, leaves numbered after them.
+        if (
+            op < NODE_ADD.value
+            or op == NODE_FRAG_COORD.value
+            or op == NODE_FRONT_FACING.value
+            or op == NODE_TEXTURE_LEVEL.value
+            or op == NODE_TEXEL_FETCH.value
+            or op == NODE_TEXTURE_SIZE.value
+            or op == NODE_ATTRIBUTE.value
+            or op == NODE_TEXTURE_CUBE.value
+            or op == NODE_TEXTURE_3D.value
+            or op == NODE_TEXTURE_ARRAY.value
+        ):
+            registers[written] = _leaf(
+                source, op, x, z, immediate, third, inputs
+            )
         else:
             registers[written] = _operation(source, op, x, y, z, immediate)
     return registers[written]

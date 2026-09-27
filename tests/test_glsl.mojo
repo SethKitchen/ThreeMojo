@@ -16,9 +16,11 @@ from materials.glsl import (
     _TokenKind,
     compile_raw_shader_material,
     compile_shader_material,
+    compile_shader_toy,
     shader_graph,
 )
 from materials.nodes import (
+    AT_FRAGMENT,
     AT_RIGHT,
     AT_UP,
     COLOR_NODE,
@@ -42,8 +44,11 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import FloatColor
+from render.cube_texture_store import CubeTextureId
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, sin, sqrt
+from units.si import Duration, SECOND
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -87,6 +92,32 @@ struct Corners(NodeSource):
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 0.5)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return the direction and the slot as a color."""
+        return FloatColor(direction.x, direction.y, direction.z, Float32(slot))
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return the coordinate and the slot plus ten as a color."""
+        return FloatColor(at.x, at.y, at.z, Float32(slot + 10))
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return the coordinate and the slot plus twenty as a color."""
+        return FloatColor(at.x, at.y, at.z, Float32(slot + 20))
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""
         if context == AT_RIGHT:
@@ -105,6 +136,17 @@ struct Corners(NodeSource):
         return Lanes(10.5, 20.5, 0.75, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
+        """Return the made-up corners, each with custom floats of its own:
+        one to eight at the first, ten times those at the second, and a
+        hundred times at the third."""
+        var at = self._plain_corner(context)
+        var scale = Float32(1) if context == CORNER_A else (
+            Float32(10) if context == CORNER_B else Float32(100)
+        )
+        at.custom = SIMD[DType.float32, 8](1, 2, 3, 4, 5, 6, 7, 8) * scale
+        return at
+
+    def _plain_corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners."""
         var none = Vector3(0, 0, 0)
         if context == CORNER_A:
@@ -149,19 +191,26 @@ def paint(
     return run(compile_shader_material(vertex, fragment))
 
 
-def value(expression: String, before: String = "") raises -> Lanes:
-    """Return a `vec3` expression's value in a fragment shader's `main`."""
+def value(
+    expression: String, before: String = "", before_main: String = ""
+) raises -> Lanes:
+    """Return a `vec3` expression's value in a fragment shader's `main`,
+    after `before` outside it and `before_main` inside it."""
     return paint(
         before
-        + "\nvoid main() {\n    gl_FragColor = vec4("
+        + "\nvoid main() {\n"
+        + before_main
+        + "    gl_FragColor = vec4("
         + expression
         + ", 1.0);\n}\n"
     )
 
 
-def number(expression: String, before: String = "") raises -> Float32:
+def number(
+    expression: String, before: String = "", before_main: String = ""
+) raises -> Float32:
     """Return a `float` expression's value in a fragment shader's `main`."""
-    return value("vec3(" + expression + ")", before)[0]
+    return value("vec3(" + expression + ")", before, before_main)[0]
 
 
 def refused(
@@ -263,6 +312,182 @@ def test_a_fragment_reads_where_it_is() raises:
     assert_equal(here[1], 20.5)
     assert_equal(here[2], 0.75)
     assert_equal(value("vec3(gl_FragCoord.w)")[0], 1)
+    # textureLod reads at the level it is given.
+    var level = value(
+        "textureLod(map, vec2(0.25, 0.5), 1.5).xyz", "uniform sampler2D map;"
+    )
+    assert_lanes(level, 0.25, 0.5, 1.5)
+    refused(
+        "uniform sampler2D map;\n"
+        + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
+        "textureLod() takes a sampler2D, a vec2 and a float",
+    )
+    # A cube is read in a direction, by either spelling.
+    var cubed = compile_shader_material(
+        VERTEX,
+        "uniform samplerCube sky;\n"
+        + "uniform samplerCube skies[2];\n"
+        + "void main() {\n"
+        + "    vec4 a = textureCube(sky, vec3(0.5, 1.0, 2.0));\n"
+        + "    vec4 b = texture(skies[1], vec3(1.0));\n"
+        + "    gl_FragColor = vec4(a.xyz, a.w + b.w);\n"
+        + "}\n",
+    )
+    cubed.set_cube("sky", CubeTextureId(4))
+    cubed.set_cube("skies[1]", CubeTextureId(2))
+    assert_lanes(run(cubed), 0.5, 1, 2)
+    assert_equal(run(cubed, OPACITY_NODE)[0], 6)
+    assert_equal(len(cubed.cubes), 2)
+    var cube_end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        "uniform samplerCube sky;\nvoid main() {\n"
+        + "vec4 c = textureCube(sky, vec2(1.0));"
+        + cube_end,
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() {\n"
+        + "vec4 c = textureCube(map, vec3(1.0));"
+        + cube_end,
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform samplerCube sky;\nvoid main() {\n"
+        + "samplerCube s = sky;"
+        + cube_end,
+        "a local variable of type samplerCube is outside",
+    )
+    refused(
+        "uniform samplerCube skies[2];\nvoid main() {\n"
+        + "int k = 0; vec4 c = texture(skies[k], vec3(1.0));"
+        + cube_end,
+        "an array of samplers is indexed by a constant",
+    )
+    # A 3D texture and an array texture are read at a vec3, in GLSL ES
+    # 3.0 only.
+    var stacked = compile_shader_material(
+        VERTEX,
+        "uniform sampler3D cloud;\n"
+        + "uniform sampler2DArray layers;\n"
+        + "void main() {\n"
+        + "    vec4 a = texture(cloud, vec3(0.25, 0.5, 0.75));\n"
+        + "    vec4 b = texture(layers, vec3(1.0, 2.0, 3.0));\n"
+        + "    gl_FragColor = vec4(a.xyz, a.w + b.w);\n"
+        + "}\n",
+    )
+    stacked.set_volume("cloud", Data3DTextureId(2))
+    stacked.set_array("layers", DataArrayTextureId(1))
+    assert_lanes(run(stacked), 0.25, 0.5, 0.75)
+    assert_equal(run(stacked, OPACITY_NODE)[0], 33)
+    assert_equal(len(stacked.volumes), 1)
+    assert_equal(len(stacked.arrays), 1)
+    refused(
+        "uniform sampler3D cloud;\nvoid main() {\n"
+        + "vec4 c = texture(cloud, vec2(1.0));"
+        + cube_end,
+        "texture() takes a sampler3D and a vec3",
+    )
+    refused(
+        "uniform sampler2DArray layers;\nvoid main() {\n"
+        + "vec4 c = texture2D(layers, vec2(1.0));"
+        + cube_end,
+        "texture2D() takes a sampler2D and a vec2",
+    )
+    refused(
+        "#version 100\nprecision mediump float;\n"
+        + "uniform sampler3D cloud;\nvoid main() {\n"
+        + cube_end,
+        "a sampler3D is not in this shader's GLSL version",
+        "#version 100\nattribute vec3 position;\n"
+        + "uniform mat4 projectionMatrix;\nuniform mat4 modelViewMatrix;\n"
+        + "void main() { gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
+        True,
+    )
+    # textureProj divides through by the last component. The made-up
+    # source gives the coordinate and the slot, none here.
+    assert_lanes(
+        value(
+            "texture2DProj(map, vec4(0.5, 1.0, 0.0, 2.0)).xyz",
+            "uniform sampler2D map;",
+        ),
+        0.25,
+        0.5,
+        -1,
+    )
+    assert_lanes(
+        value(
+            "textureProj(map, vec3(1.0, 0.5, 2.0)).xyz",
+            "uniform sampler2D map;",
+        ),
+        0.5,
+        0.25,
+        -1,
+    )
+    refused(
+        "uniform sampler2D map;\n"
+        + "void main() { gl_FragColor = textureProj(map, vec2(0.5)); }",
+        "textureProj() takes a sampler2D and a vec3 or a vec4",
+    )
+    # texelFetch and textureSize read by whole numbers.
+    assert_lanes(
+        value("texelFetch(map, ivec2(3, 5), 1).xyz", "uniform sampler2D map;"),
+        3,
+        5,
+        1,
+    )
+    assert_lanes(
+        value("vec3(vec2(textureSize(map, 1)), 0.0)", "uniform sampler2D map;"),
+        32,
+        16,
+        0,
+    )
+    var sampled = "uniform sampler2D map;\nvoid main() {\n"
+    var fragment_end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        sampled + "vec4 t = texelFetch(map, ivec2(1));" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(vec4(1.0), ivec2(1), 0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(map, ivec2(1), 0.0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(map, vec2(1.0), 0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "ivec2 s = textureSize(map, 0.0);" + fragment_end,
+        "textureSize() takes a sampler2D and an int",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "a vertex shader reads no texture in this port",
+        "uniform sampler2D map;\n"
+        + "void main() { ivec2 s = textureSize(map, 0);"
+        + " gl_Position = vec4(0.0); }\n",
+    )
+    refused(
+        "precision mediump float;\nuniform sampler2D map;\n"
+        + "void main() { gl_FragColor = texelFetch(map, ivec2(0), 0); }",
+        "texelFetch() is not in this shader's GLSL version",
+        "attribute vec3 position;\nuniform mat4 projectionMatrix;\n"
+        + "uniform mat4 modelViewMatrix;\n"
+        + "void main() { gl_Position = projectionMatrix * modelViewMatrix *"
+        + " vec4(position, 1.0); }",
+        raw=True,
+    )
+    # The made-up triangle is seen from its front.
+    assert_equal(number("gl_FrontFacing ? 1.0 : 0.0"), 1)
+    refused(
+        WHITE,
+        "gl_FrontFacing is outside the subset",
+        "void main() { gl_Position = vec4(gl_FrontFacing ? 1.0 : 0.0); }",
+    )
     # One pixel to the next, as the neighbors are.
     var step = value(
         "vec3(dFdx(gl_FragCoord.x), dFdy(gl_FragCoord.y), dFdx(gl_FragCoord.y))"
@@ -304,6 +529,93 @@ def test_a_define_stands_for_its_tokens() raises:
     refused("#define X 0xAb", "the shader has no main")
 
 
+def test_an_if_takes_the_lines_of_the_branch_that_holds() raises:
+    # Each branch of each kind, nested, and names that are not macros.
+    var shader = (
+        "#define LEVEL 2\n"
+        + "#define ON\n"
+        + "#ifdef ON\n"
+        + "    #define A 1.0\n"
+        + "#else\n"
+        + "    #define A 9.0\n"
+        + "#endif\n"
+        + "#ifndef ON\n"
+        + "    #define B 9.0\n"
+        + "#elif LEVEL > 1 && defined(ON)\n"
+        + "    #define B 2.0\n"
+        + "#else\n"
+        + "    #define B 8.0\n"
+        + "#endif\n"
+        + "#if (LEVEL == 3 || !defined ON) && MISSING == 0\n"
+        + "    #define C 9.0\n"
+        + "#elif LEVEL <= 2 && LEVEL >= 2 && LEVEL != 5 && LEVEL < 3\n"
+        + "    #if 0\n"
+        + "        #define C 7.0\n"
+        + "    #elif 1\n"
+        + "        #define C 3.0\n"
+        + "    #endif\n"
+        + "#elif 1\n"
+        + "    #define C 6.0\n"
+        + "#endif\n"
+        + "#undef LEVEL\n"
+        + "#if defined(LEVEL)\n"
+        + "    this line is never lexed: @ #\n"
+        + "#else\n"
+        + "    #define D 4.0 // a comment\n"
+        + "#endif\n"
+        + "#if 0\n"
+        + "    #ifdef ON\n"
+        + "        #define D 5.0\n"
+        + "    #else\n"
+        + "    #endif\n"
+        + "#endif\n"
+        + "#undef NEVER\n"
+    )
+    assert_lanes(value("vec3(A, B, C)", shader), 1, 2, 3)
+    assert_equal(number("D", shader), 4)
+    var ends = "\nvoid main() { gl_FragColor = vec4(1.0); }"
+    refused("#if 1\n" + ends, "an #if is never closed with #endif")
+    refused("#endif" + ends, "an #endif has no #if")
+    refused("#else" + ends, "an #else has no #if")
+    refused("#if 1\n#else\n#else\n#endif" + ends, "an #else follows the #else")
+    refused(
+        "#if 1\n#else\n#elif 1\n#endif" + ends, "an #elif follows the #else"
+    )
+    refused("#ifdef\n#endif" + ends, "an #ifdef names one macro")
+    refused("#ifndef A B\n#endif" + ends, "an #ifndef names one macro")
+    refused("#undef\n" + ends, "an #undef names one macro")
+    refused("#if\n#endif" + ends, "an #if needs a condition")
+    refused("#if 1 1\n#endif" + ends, "the #if condition goes on past 1")
+    refused("#if 1 +\n#endif" + ends, "the character + is outside an #if")
+    refused("#if (1\n#endif" + ends, "an #if condition leaves a ( open")
+    refused("#if defined(ON\n#endif" + ends, "an #if condition leaves a ( open")
+    refused("#if defined 1\n#endif" + ends, "defined names a macro")
+    refused("#if 1 ==\n#endif" + ends, "an #if condition ends too soon")
+    refused("#if 1x\n#endif" + ends, "an #if condition counts in whole numbers")
+    refused(
+        "#define F 1.5\n#if F\n#endif" + ends,
+        "the macro F is not one whole number, as an #if reads it",
+    )
+    refused("#if ) \n#endif" + ends, "an #if condition cannot hold )")
+
+
+def test_the_materials_defines_come_before_both_shaders() raises:
+    # three.js's `material.defines`: a name alone, and a name with tokens,
+    # which an #if reads; the author's lines keep their numbers.
+    var program = compile_shader_material(
+        VERTEX,
+        "#ifdef TINTED\n"
+        + "void main() { gl_FragColor = vec4(vec3(float(COUNT)), 1.0); }\n"
+        + "#endif\n",
+        ["TINTED", "COUNT 3"],
+    )
+    assert_lanes(run(program), 3, 3, 3)
+    with assert_raises(
+        contains="vertex shader, line 0: a #define needs a name"
+    ):
+        _ = compile_shader_material(VERTEX, WHITE, [" "])
+
+
 def test_every_other_directive_is_refused() raises:
     refused(
         "#include <common>\nvoid main() {}",
@@ -312,7 +624,10 @@ def test_every_other_directive_is_refused() raises:
             " are not made of chunks"
         ),
     )
-    refused("#ifdef USE_MAP\n#endif\nvoid main() {}", "#ifdef is outside")
+    refused(
+        "#extension GL_OES_foo : enable\nvoid main() {}",
+        "#extension is outside",
+    )
     refused(
         "#version 300 es\nvoid main() {}", "writes a ShaderMaterial's #version"
     )
@@ -482,8 +797,8 @@ def test_a_raw_shader_keeps_to_its_version_and_its_built_ins() raises:
     )
     refused(
         fragment,
-        "the attribute tangent is not one this port has",
-        modern + "in vec4 tangent;\nvoid main() {}",
+        "an attribute of type mat3 is outside the subset",
+        modern + "in mat3 frame;\nvoid main() {}",
         True,
     )
     refused(
@@ -852,6 +1167,31 @@ def test_a_varying_carries_what_a_corner_keeps() raises:
 # --- uniforms -----------------------------------------------------------------
 
 
+def test_int_and_bool_uniforms_are_floats_the_caller_sets() raises:
+    var program = compile_shader_material(
+        VERTEX,
+        """
+        uniform int count;
+        uniform bool on;
+        void main() {
+            float total = 0.0;
+            for (int i = 0; i < 4; i++) {
+                if (i < count) { total += 1.0; }
+            }
+            gl_FragColor = vec4(total, on ? 1.0 : 0.0, float(count), 1.0);
+        }
+        """,
+    )
+    assert_lanes(run(program), 0, 0, 0)
+    # WebGL's uniform1i drops the fraction; a bool is true where not zero.
+    program.set_uniform("count", Float32(2.75))
+    program.set_uniform("on", Float32(-3))
+    assert_lanes(run(program), 2, 1, 2)
+    program.set_uniform("count", Float32(-1.5))
+    program.set_uniform("on", Float32(0))
+    assert_lanes(run(program), 0, 0, -1)
+
+
 def test_uniforms_are_shared_and_set_by_name() raises:
     var program = compile_shader_material(
         "uniform float scale;\n" + VERTEX,
@@ -884,11 +1224,15 @@ def test_uniforms_are_shared_and_set_by_name() raises:
         "the uniform scale is a float in the other shader",
         "uniform float scale;\n" + VERTEX,
     )
-    refused("uniform int count;\n" + WHITE, "a uniform of type int is outside")
-    refused("uniform bool on;\n" + WHITE, "a uniform of type bool is outside")
-    refused("uniform float many[4];\n" + WHITE, "arrays are outside the subset")
+    refused("uniform void none;\n" + WHITE, "a uniform of type void is outside")
     refused(
-        "uniform samplerCube sky;\n" + WHITE, "the type samplerCube is outside"
+        "varying float many[4];\n" + WHITE,
+        "only a uniform, a const or a local variable can be an array",
+        "varying float many[4];\n" + VERTEX,
+    )
+    refused(
+        "uniform sampler2DShadow sky;\n" + WHITE,
+        "the type sampler2DShadow is outside",
     )
     refused(
         "uniform mat4 modelMatrix;\n" + WHITE,
@@ -1044,15 +1388,10 @@ def test_a_swizzle_or_an_index_picks_components() raises:
     )
     refused_statement(
         "float f = 1.0; float g = f[0];",
-        "only a vector can be indexed in this subset",
+        "only a vector or a matrix can be indexed in this subset",
     )
     refused_statement(
-        "vec2 v = vec2(1.0); int i = 0; float g = v[i];",
-        "a vector is indexed by a constant int",
-    )
-    refused_statement(
-        "vec2 v = vec2(1.0); float g = v[1.0];",
-        "a vector is indexed by a constant int",
+        "vec2 v = vec2(1.0); float g = v[1.0];", "a vector is indexed by an int"
     )
     refused_statement(
         "vec2 v = vec2(1.0); float g = v[2];", "the index is outside the vec2"
@@ -1060,9 +1399,10 @@ def test_a_swizzle_or_an_index_picks_components() raises:
     refused_statement(
         "vec2 v = vec2(1.0); float g = v[-1];", "the index is outside the vec2"
     )
+    # A component picked where the shader runs is read, not written.
     refused_statement(
         "vec2 v = vec2(1.0); v[0 == 0 ? 0 : 1] = 1.0;",
-        "a vector is indexed by a constant int",
+        "that cannot be assigned",
     )
 
 
@@ -1097,18 +1437,16 @@ def test_a_constructor_converts_or_lays_components_end_to_end() raises:
         "float f = float(1.0, 2.0);", "a float constructor takes one argument"
     )
     refused_statement(
-        "mat3 m = mat3(1.0);", "a local variable of type mat3 is outside"
+        "mat3 m;", "a local mat3 needs its value where it is declared"
     )
     refused_statement(
-        "vec3 v = mat3(1.0) * vec3(1.0);",
-        "a mat3 constructor is outside the subset",
+        "mat3 m = mat3(1.0); m = mat3(2.0);",
+        "cannot assign m: it is a local matrix",
     )
     refused_statement(
-        "ivec2 v = ivec2(1);", "the type ivec2 is outside the subset"
+        "uvec2 v = uvec2(1);", "the type uvec2 is outside the subset"
     )
-    refused_statement(
-        "vec2 v = ivec2(1);", "the type ivec2 is outside the subset"
-    )
+    refused_statement("vec2 v = ivec2(1);", "cannot give a vec2 a ivec2")
     refused_statement(
         "vec3 v = vec3(viewMatrix);", "cannot make a vec3 of a mat4"
     )
@@ -1264,8 +1602,8 @@ def test_a_built_in_takes_only_its_signatures() raises:
         "float x = sinh(1.0);", "GLSL's sinh() is outside the subset"
     )
     refused_statement(
-        "float x = lessThan(1.0, 2.0);",
-        "GLSL's lessThan() is outside the subset",
+        "float x = packHalf2x16(vec2(1.0));",
+        "GLSL's packHalf2x16() is outside the subset",
     )
     refused_statement(
         "float x = shade(1.0);", "the function shade is not declared"
@@ -1377,7 +1715,7 @@ def test_the_statements_build_the_graph() raises:
         "float u = 1.0; const float k = u;",
         "a const's value must be a constant expression",
     )
-    refused_statement("float a[2];", "arrays are outside the subset")
+    refused_statement("float a[];", "an array needs its size or its elements")
     refused_statement(
         "void v;", "a local variable of type void is outside the subset"
     )
@@ -1398,7 +1736,8 @@ def test_the_statements_build_the_graph() raises:
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
     refused_statement("while (true) {}", "while is outside the subset")
-    refused_statement("break;", "break is outside the subset")
+    refused_statement("break;", "break needs a loop or a switch to be in")
+    refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
     refused("void main() { float a = 1.0;", "a function's body is never closed")
     refused_statement("float x = 1.0 float y;", "expected ; before 'float'")
@@ -1536,17 +1875,7 @@ def test_a_function_is_inlined_at_each_call() raises:
         ),
         "a function cannot call itself",
     )
-    refused(
-        (
-            "float f(float x) { if (x > 1.0) { return 1.0; } return 0.0;"
-            " }\nvoid main() { f(1.0); }"
-        ),
-        "a return must be the last statement of its function",
-    )
-    refused(
-        "float f() { return 1.0; float y = 1.0; }\nvoid main() { f(); }",
-        "a return must be the last statement of its function",
-    )
+
     refused(
         "float f() { }\nvoid main() { f(); }",
         "the function f ends with no return",
@@ -1567,12 +1896,9 @@ def test_a_function_is_inlined_at_each_call() raises:
         "float f(float x);\nvoid main() {}", "prototypes are outside the subset"
     )
     refused(
-        "float f(out float x) { return 1.0; }\nvoid main() {}",
-        "out and inout parameters are outside",
-    )
-    refused(
-        "float f(inout float x) { return 1.0; }\nvoid main() {}",
-        "out and inout parameters are outside",
+        "void f(out float x) { x = 1.0; }\n"
+        + "void main() { f(2.0); gl_FragColor = vec4(1.0); }",
+        "argument 1 of f is given back: it must be a variable",
     )
     refused(
         "float f(sampler2D s) { return 1.0; }\nvoid main() {}",
@@ -1669,12 +1995,9 @@ def test_the_declarations_at_the_top_of_a_shader() raises:
     refused(
         "const float g = 1;\nvoid main() {}", "cannot give a const float a int"
     )
-    refused(
-        "const float g[2];\nvoid main() {}", "arrays are outside the subset"
-    )
-    refused(
-        "struct S { float x; };\nvoid main() {}",
-        "the type struct is outside the subset",
+    refused("const float g[2];\nvoid main() {}", "a const needs a value")
+    refused_statement(
+        "struct T { float x; };", "a struct is declared outside every function"
     )
     refused("layout(location = 0 out vec4 c;", "a layout is never closed")
     refused("uniform float;\nvoid main() {}", "expected a name before ';'")
@@ -1731,7 +2054,7 @@ def test_the_corners_of_the_grammar() raises:
     )
     refused(
         "float f() { if (true) return 1.0; }\nvoid main() { f(); }",
-        "a return must be the last statement of its function",
+        "the function f ends with no return",
     )
     refused(
         "const float x = foo(1.0);\nvoid main() {}",
@@ -1753,7 +2076,7 @@ def test_the_corners_of_the_grammar() raises:
     refused(
         WHITE,
         "three.js declares a ShaderMaterial's attributes itself",
-        "in vec3 extra;\n" + VERTEX,
+        "attribute vec3 position;\n" + VERTEX,
     )
     refused(
         WHITE,
@@ -1808,12 +2131,1138 @@ def test_a_matrix_uniform_multiplies_a_vector() raises:
     )
     refused(
         uniform + "void main() { vec3 v = m * m; }",
-        "cannot use * on a mat3 and a mat3",
+        "cannot give a vec3 a mat3",
     )
     refused(
         uniform + "void main() { vec4 v = m * vec4(1.0); }",
         "cannot multiply a mat3 and a vec4",
     )
+
+
+def test_matrices_are_built_indexed_and_inverted() raises:
+    # Columns, a scalar's diagonal, sixteen scalars, and a mat4's upper
+    # left.
+    var built = (
+        "mat3 a = mat3(vec3(2.0, 0.0, 0.0), vec3(1.0, 3.0, 0.0), vec3(0.0, 0.0,"
+        " 4.0));\n"
+    )
+    assert_lanes(value("a * vec3(1.0)", "", before_main=built), 3, 3, 4)
+    assert_lanes(value("vec3(1.0) * a", "", before_main=built), 2, 4, 4)
+    assert_lanes(value("a[1]", "", before_main=built), 1, 3, 0)
+    assert_equal(number("determinant(a)", "", before_main=built), 24)
+    assert_lanes(
+        value("transpose(a) * vec3(1.0)", "", before_main=built), 2, 4, 4
+    )
+    var back = value(
+        "a * (inverse(a) * vec3(1.0, 2.0, 3.0))", "", before_main=built
+    )
+    for lane in range(3):
+        assert_almost_equal(back[lane], Float32(lane + 1), atol=1e-5)
+    assert_lanes(value("mat3(2.0) * vec3(1.0, 2.0, 3.0)"), 2, 4, 6)
+    assert_lanes(
+        value("(a * mat3(2.0)) * vec3(1.0)", "", before_main=built), 6, 6, 8
+    )
+    var sixteen = (
+        "mat4 f = mat4(1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0,"
+        " 0.0, 0.0, 3.0, 0.0, 1.0, 1.0, 1.0, 1.0);\n"
+    )
+    assert_lanes(value("(f * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4)
+    assert_lanes(value("mat3(f) * vec3(1.0)", "", before_main=sixteen), 1, 2, 3)
+    assert_lanes(
+        value("(mat4(a) * vec4(1.0)).xyw", "", before_main=built), 3, 3, 1
+    )
+    assert_lanes(
+        value("(mat4(f) * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0, 2.0);",
+        "a mat3 constructor needs 9 components, not 2",
+    )
+    refused_statement(
+        "mat3 m = mat3(mat3(1.0), 1.0);", "a mat3 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0); vec3 c = m[3];", "the index is outside the mat3"
+    )
+    refused_statement(
+        "mat3 m = mat3(1.0); vec3 c = m[1.0];", "a matrix is indexed by an int"
+    )
+    refused_statement(
+        "vec3 v = transpose(vec3(1.0));",
+        "transpose() takes one mat2, mat3 or mat4",
+    )
+    refused_statement(
+        "mat4 m = mat4(viewMatrix);", "cannot make a mat4 of a mat4"
+    )
+    refused_statement(
+        "vec4 c = viewMatrix[0];", "a transform's columns are outside"
+    )
+
+
+def test_a_mat2_is_a_vec4_of_its_columns() raises:
+    # A quarter turn: its columns are (0, 1) and (-1, 0).
+    var r = "mat2 r = mat2(0.0, 1.0, -1.0, 0.0);\n"
+    assert_lanes(
+        value("vec3(r * vec2(1.0, 2.0), 0.0)", "", before_main=r), -2, 1, 0
+    )
+    assert_lanes(
+        value("vec3(vec2(1.0, 2.0) * r, 0.0)", "", before_main=r), 2, -1, 0
+    )
+    # Two quarter turns are a half turn.
+    assert_lanes(
+        value("vec3((r * r)[0], (r * r)[1].y)", "", before_main=r), -1, 0, -1
+    )
+    assert_lanes(
+        value("vec3(determinant(r), transpose(r)[0])", "", before_main=r),
+        1,
+        0,
+        -1,
+    )
+    assert_lanes(
+        value("vec3(inverse(mat2(2.0))[0], inverse(mat2(2.0))[1].y)"),
+        0.5,
+        0,
+        0.5,
+    )
+    # Each component, with a mat2 or a float.
+    assert_lanes(
+        value("vec3((r + mat2(1.0))[0], (r * 2.0)[1].x)", "", before_main=r),
+        1,
+        1,
+        -2,
+    )
+    assert_lanes(
+        value("vec3((-r)[0], (r / 2.0 - r)[0].y)", "", before_main=r),
+        0,
+        -1,
+        -0.5,
+    )
+    assert_lanes(
+        value("vec3((2.0 * r)[0], float(r == mat2(r)))", "", before_main=r),
+        0,
+        2,
+        1,
+    )
+    # A column, and a component of one, is assigned through the vec4.
+    var w = "mat2 w = mat2(1.0); w[1] = vec2(3.0, 4.0); w[0].y = 5.0;\n"
+    assert_lanes(value("vec3(w[0], w[1].y)", "", before_main=w), 1, 5, 4)
+    # Into a mat3 and a mat4 and back, and a vector of its components.
+    var sizes = r + "mat3 big = mat3(r); mat4 huge = mat4(r);\n"
+    assert_lanes(
+        value("big * vec3(1.0, 2.0, 3.0)", "", before_main=sizes), -2, 1, 3
+    )
+    assert_lanes(
+        value("(huge * vec4(1.0, 2.0, 3.0, 4.0)).xyw", "", before_main=sizes),
+        -2,
+        1,
+        4,
+    )
+    assert_lanes(
+        value(
+            "vec3(mat2(huge) * vec2(1.0, 2.0), mat2(big)[1].x)",
+            "",
+            before_main=sizes,
+        ),
+        -2,
+        1,
+        -1,
+    )
+    assert_lanes(value("vec4(r).yzw", "", before_main=r), 1, -1, 0)
+    # A mat2 uniform is set as a Vector4 of its columns.
+    var program = compile_shader_material(
+        VERTEX,
+        "uniform mat2 turn;\n"
+        + "void main() { gl_FragColor = vec4(turn * vec2(1.0, 2.0), 0.0,"
+        " 1.0); }\n",
+    )
+    program.set_uniform("turn", Vector4(0, 1, -1, 0))
+    assert_lanes(run(program), -2, 1, 0)
+    refused_statement(
+        "mat2 m = mat2(1.0); vec3 v = m * vec3(1.0);",
+        "cannot use * on a mat2 and a vec3",
+    )
+    refused_statement(
+        "mat2 m = mat2(mat2(1.0), 1.0);", "a mat2 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat3 m = mat3(mat2(1.0), 1.0);", "a mat3 is made of one matrix alone"
+    )
+    refused_statement(
+        "mat2 m = mat2(1.0); vec2 c = m[2];", "the index is outside the mat2"
+    )
+    refused_statement(
+        "mat2 m = mat2(viewMatrix);", "cannot make a mat2 of a mat4"
+    )
+    refused_statement(
+        "float x = mat2(1.0).x;", "only a vector has components to pick"
+    )
+    refused_statement("mat2 m = !mat2(1.0);", "! takes a bool, not a mat2")
+
+
+def test_arrays_hold_elements_that_an_index_picks() raises:
+    # Written and read by constant indexes and by a loop's.
+    var sums = (
+        "float a[4];\n"
+        + "for (int i = 0; i < 4; i++) { a[i] = float(i) * 2.0; }\n"
+        + "a[1] += 1.0;\n"
+        + "float total = 0.0;\n"
+        + "for (int i = 0; i < a.length(); i++) { total += a[i]; }\n"
+    )
+    assert_lanes(
+        value("vec3(total, a[1], a[3])", "", before_main=sums), 13, 3, 6
+    )
+    # Vectors, their components written through a loop's index.
+    var points = (
+        "vec2 p[2] = vec2[2](vec2(1.0, 2.0), vec2(3.0, 4.0));\n"
+        + "for (int i = 0; i < 2; i++) { p[i].y = 0.5; }\n"
+        + "int k = 1;\n"
+    )
+    assert_lanes(value("vec3(p[0], p[k].x)", "", before_main=points), 1, 0.5, 3)
+    # A vector's component and a matrix's column, picked where it runs.
+    assert_lanes(
+        value(
+            "vec3(vec3(1.0, 2.0, 3.0)[k], mat3(2.0)[k].y, mat2(3.0)[k].y)",
+            "",
+            before_main="int k = 1;\n",
+        ),
+        2,
+        2,
+        3,
+    )
+    # An index outside reads the first element, and writes none.
+    assert_lanes(
+        value(
+            "vec3(b[far], b[0], b[1])",
+            "",
+            before_main=(
+                "float b[2] = float[](5.0, 6.0); int far = 7; b[far] = 9.0;\n"
+            ),
+        ),
+        5,
+        5,
+        6,
+    )
+    # Const arrays, global and local, and an array of mat2.
+    assert_lanes(
+        value(
+            "vec3(w[1] * float(n[1]), m[1][1].y, m[0][0].x)",
+            "const float w[3] = float[3](0.25, 0.5, 0.25);\n",
+            "const int n[2] = int[](3, 4); mat2 m[2]; m[1] = mat2(2.0);\n",
+        ),
+        2,
+        2,
+        0,
+    )
+    # A uniform array's elements are uniforms named as three.js names them.
+    var program = compile_shader_material(
+        "uniform vec3 tints[2];\n" + VERTEX,
+        "uniform vec3 tints[2];\n"
+        + "uniform float scales[2];\n"
+        + "uniform sampler2D maps[2];\n"
+        + "void main() {\n"
+        + "    vec4 texel = texture2D(maps[1], vec2(0.5));\n"
+        + "    gl_FragColor = vec4(tints[1] * scales[0], 1.0);\n"
+        + "}\n",
+    )
+    program.set_uniform("tints[1]", Vector3(1, 2, 3))
+    program.set_uniform("scales[0]", Float32(2))
+    assert_lanes(run(program), 2, 4, 6)
+    refused_statement(
+        "float a[2]; float b = a;", "an array is read one element at a time"
+    )
+    refused_statement(
+        "float a[2]; float b = a[2];", "the index is outside the array"
+    )
+    refused_statement(
+        "float a[2]; float b = a[1.0];", "an array is indexed by an int"
+    )
+    refused_statement(
+        "float a[0];", "an array's size is a positive constant int"
+    )
+    refused_statement("float a[300];", "an array holds at most 256 elements")
+    refused_statement(
+        "float a[2] = float[3](1.0, 2.0, 3.0);",
+        "the array needs 2 elements, not 3",
+    )
+    refused_statement(
+        "float a[2] = float[](1.0, 2.0, 3.0);",
+        "the array needs 2 elements, not 3",
+    )
+    refused_statement(
+        "float a[2] = vec2[2](vec2(1.0), vec2(2.0));",
+        "an array of float is given by float[](...)",
+    )
+    refused_statement(
+        "float a[1] = float[1](1);", "cannot put a int in an array of float"
+    )
+    refused_statement("const float a[1];", "a const needs a value")
+    refused_statement(
+        "float u = 1.0; const float a[1] = float[1](u);",
+        "a const's value must be a constant expression",
+    )
+    refused(
+        "uniform float u;\nconst float g[1] = float[1](u);\n" + WHITE,
+        "a const's value must be a constant expression",
+    )
+    refused(
+        "uniform float s[2];\n"
+        + "void main() { s[0] = 1.0; gl_FragColor = vec4(1.0); }\n",
+        "cannot assign s[0]: it is a uniform",
+    )
+    refused(
+        "uniform float s[2];\n"
+        + "void main() { int k = 0; s[k] = 1.0; gl_FragColor = vec4(1.0); }\n",
+        "cannot assign s: it is an array of which each element is a uniform",
+    )
+    refused_statement(
+        "float a[2]; int k = 0; a[k] = vec2(1.0);",
+        "cannot assign a vec2 to a float",
+    )
+    refused(
+        "uniform sampler2D maps[2];\n"
+        + "void main() { int k = 0; gl_FragColor = texture2D(maps[k],"
+        " vec2(0.5)); }\n",
+        "an array of samplers is indexed by a constant",
+    )
+
+
+def test_out_and_inout_parameters_give_their_values_back() raises:
+    # ShaderToy's mainImage, called as its decoder calls it.
+    var toy = paint(
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        + "    fragColor = vec4(fragCoord / 100.0, 0.5, 1.0);\n"
+        + "}\n"
+        + "void main() { mainImage(gl_FragColor, gl_FragCoord.xy); }\n"
+    )
+    assert_lanes(toy, 0.105, 0.205, 0.5)
+    var before = (
+        "void twice(inout float x, out vec2 halves, float step) {\n"
+        + "    if (x > 3.0) { halves = vec2(x); return; }\n"
+        + "    x = x * 2.0 + step;\n"
+        + "    halves = vec2(x) * 0.5;\n"
+        + "}\n"
+    )
+    var body = (
+        "float a = 1.0; vec3 v = vec3(9.0);\n"
+        + "twice(a, v.xz, 1.0);\n"
+        + "float b = 5.0; vec2 kept = vec2(0.0);\n"
+        + "if (a > 2.0) { twice(b, kept, 0.0); }\n"
+    )
+    # a is 3, v gets halves of 1.5, b stays 5 past the early return.
+    assert_lanes(value("vec3(a, v.x, v.y)", before, body), 3, 1.5, 9)
+    assert_lanes(value("vec3(v.z, b, kept.x)", before, body), 1.5, 5, 5)
+    # An array's element picked where it runs takes the value back.
+    assert_lanes(
+        value(
+            "vec3(w[0], w[1], 0.0)",
+            "void one(out float x) { x = 1.0; }\n",
+            "float w[2]; int k = 1; one(w[k]);\n",
+        ),
+        0,
+        1,
+        0,
+    )
+
+
+comptime LIGHT = "struct Light { vec3 color; float power; };\n"
+
+
+def test_structs_are_their_fields() raises:
+    var before = (
+        LIGHT
+        + "struct Lamp { Light light; vec2 place; };\n"
+        + "Light brighter(Light l, float by) { l.power *= by; return l; }\n"
+        + "void dim(inout Lamp lamp) { lamp.light.power = 0.5; }\n"
+    )
+    var body = (
+        "Light a = Light(vec3(1.0, 0.5, 0.25), 2.0);\n"
+        + "Light b = brighter(a, 3.0);\n"
+        + "Lamp lamp = Lamp(a, vec2(1.0, 2.0));\n"
+        + "dim(lamp);\n"
+        + "Light c; c = b; c.color.g = 0.0;\n"
+    )
+    assert_lanes(
+        value("vec3(b.power, lamp.light.power, lamp.place.y)", before, body),
+        6,
+        0.5,
+        2,
+    )
+    assert_lanes(value("c.color", before, body), 1, 0, 0.25)
+    # ?: chooses field by field, and an index picks a struct where it runs.
+    var pairs = (
+        "Light pair[2] = Light[2](Light(vec3(1.0), 1.0), Light(vec3(2.0),"
+        " 2.0));\n"
+        + "int k = 1;\n"
+        + "Light chosen = k > 0 ? pair[1] : pair[0];\n"
+        + "pair[0].power = 5.0;\n"
+        + "Light zeros[1];\n"
+    )
+    assert_lanes(
+        value(
+            "vec3(chosen.power, pair[k].power, pair[0].power + zeros[0].power)",
+            LIGHT,
+            pairs,
+        ),
+        2,
+        2,
+        5,
+    )
+    # A const struct, and its field read through parentheses.
+    assert_lanes(
+        value(
+            "vec3((K).power, K.color.y, 0.0)",
+            LIGHT + "const Light K = Light(vec3(1.0, 3.0, 1.0), 4.0);\n",
+            "const Light L = Light(vec3(0.0), 1.0);\n",
+        ),
+        4,
+        3,
+        0,
+    )
+    # A uniform struct's fields are uniforms named as three.js names them.
+    var program = compile_shader_material(
+        VERTEX,
+        LIGHT
+        + "uniform Light light;\n"
+        + "uniform Light lights[2];\n"
+        + "void main() {\n"
+        + "    gl_FragColor = vec4(light.color * light.power + lights[1].color,"
+        " 1.0);\n"
+        + "}\n",
+    )
+    program.set_uniform("light.color", Vector3(1, 2, 3))
+    program.set_uniform("light.power", Float32(2))
+    program.set_uniform("lights[1].color", Vector3(1, 1, 1))
+    assert_lanes(run(program), 3, 5, 7)
+    refused(LIGHT + LIGHT + WHITE, "the struct Light is declared twice")
+    refused(
+        "struct float { float x; };\n" + WHITE, "the name float is a keyword"
+    )
+    refused(
+        "struct S { float x; } s;\n" + WHITE,
+        "declare a struct's variables apart from it",
+    )
+    refused("struct S { };\n" + WHITE, "a struct needs a field")
+    refused(
+        "struct S { float x, x; };\n" + WHITE, "the field x is declared twice"
+    )
+    refused(
+        "struct S { float x[2]; };\n" + WHITE,
+        "an array in a struct is outside the subset",
+    )
+    refused(
+        "struct S { sampler2D s; };\n" + WHITE,
+        "a field of type sampler2D is outside the subset",
+    )
+    refused("struct S { float x;", "a struct is never closed")
+    var main = "void main() {\n"
+    var end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        LIGHT + main + "Light l; float p = l.size;" + end,
+        "a Light has no field size",
+    )
+    refused(
+        LIGHT + main + "Light l = Light(vec3(1.0));" + end,
+        "a Light is made of 2 values, not 1",
+    )
+    refused(
+        LIGHT + main + "Light l = Light(vec3(1.0), 1);" + end,
+        "a Light's power is a float, not a int",
+    )
+    refused(
+        LIGHT + main + "Light l; float p = length(l);" + end,
+        "a Light is read a field at a time here",
+    )
+    refused(
+        LIGHT + "uniform Light u;\n" + main + "u.power = 1.0;" + end,
+        "cannot assign u.power: it is a uniform",
+    )
+    refused(
+        LIGHT
+        + "struct Dark { float power; };\n"
+        + main
+        + "Light l; Dark d; l = d;"
+        + end,
+        "cannot assign a Dark to a Light",
+    )
+    refused(
+        LIGHT
+        + "struct Dark { float power; };\n"
+        + main
+        + "Light l = Dark(1.0);"
+        + end,
+        "cannot give a Light a Dark",
+    )
+    refused(LIGHT + main + "const Light l;" + end, "a const needs a value")
+    refused(
+        LIGHT
+        + main
+        + "float u = 1.0; const Light l = Light(vec3(u), 1.0);"
+        + end,
+        "a const's value must be a constant expression",
+    )
+    refused(
+        LIGHT + "varying Light l;\n" + WHITE,
+        "a Light is a uniform, a const or a local variable",
+    )
+    refused(
+        LIGHT
+        + "uniform float u;\nconst Light l = Light(vec3(u), 1.0);\n"
+        + WHITE,
+        "a const Light's value must be a constant Light",
+    )
+    refused(
+        LIGHT
+        + "Light f() { if (true) { return Light(vec3(1.0), 1.0); }"
+        + " return Light(vec3(0.0), 0.0); }\n"
+        + main
+        + "Light l = f();"
+        + end,
+        "returns a matrix, a struct or a transform",
+    )
+    refused(
+        LIGHT + main + "Light p[2]; int k = 0; p[k].power = 1.0;" + end,
+        "that cannot be assigned",
+    )
+    refused(
+        LIGHT + "float f() { return 1.0; }\n" + main + "Light l = f();" + end,
+        "cannot give a Light a float",
+    )
+
+
+def test_a_switch_falls_through_to_its_break() raises:
+    var pick = (
+        "float pick(int k) {\n"
+        + "    float r = 0.0;\n"
+        + "    switch (k) {\n"
+        + "    case 0: r = 10.0; break;\n"
+        + "    case 1:\n"
+        + "    case 2: r += 1.0;\n"
+        + "    default: r += 2.0; break;\n"
+        + "    case 5: { float t = 7.0; r = t; }\n"
+        + "    }\n"
+        + "    return r;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(pick(0), pick(1), pick(3))", pick), 10, 3, 2)
+    assert_lanes(
+        value("vec3(pick(5), pick(k), 0.0)", pick, "int k = 2;\n"), 7, 3, 0
+    )
+    # In a loop, a continue continues the loop and a break leaves the
+    # switch.
+    var body = (
+        "float s = 0.0;\n"
+        + "for (int i = 0; i < 6; i++) {\n"
+        + "    switch (i) {\n"
+        + "    case 1: continue;\n"
+        + "    case 4: break;\n"
+        + "    default: s += float(i);\n"
+        + "    }\n"
+        + "    s += 10.0;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(s)", "", body), 60, 60, 60)
+    # A switch in a switch passes the continue out.
+    var nested = (
+        "float s = 0.0;\n"
+        + "for (int i = 0; i < 6; i++) {\n"
+        + "    switch (i) {\n"
+        + "    case 5: switch (i) { default: continue; }\n"
+        + "    default: s += float(i);\n"
+        + "    }\n"
+        + "    s += 10.0;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(s)", "", nested), 60, 60, 60)
+    refused_statement(
+        "switch (1.0) { default: break; }",
+        "a switch chooses by an int, not a float",
+    )
+    refused_statement(
+        "switch (1) { case 1: case 1: break; }", "the case 1 is listed twice"
+    )
+    refused_statement(
+        "switch (1) { default: default: break; }", "a switch has one default"
+    )
+    refused_statement(
+        "int u = 1; switch (1) { case u: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement(
+        "switch (1) { break; }",
+        "a switch's statements follow a case or a default",
+    )
+    refused_statement(
+        "switch (1) { case 1: float x = 1.0; }",
+        "declare a variable before the switch, or in a block",
+    )
+    refused_statement("case 1: ;", "case and default belong in a switch")
+
+
+def test_int_and_bool_vectors_hold_whole_numbers_and_truths() raises:
+    # A constructor drops each float's fraction, and a bvec is true where
+    # a number is not zero.
+    var made = (
+        "ivec2 i = ivec2(vec2(2.7, -1.5));\n"
+        + "ivec3 j = ivec3(i, 7) / 2;\n"
+        + "bvec2 b = bvec2(vec2(0.0, 3.0));\n"
+        + "int k = 1;\n"
+    )
+    assert_lanes(value("vec3(i, float(j.z))", "", made), 2, -1, 3)
+    assert_lanes(value("vec3(j.xy, float(b.y))", "", made), 1, 0, 1)
+    assert_lanes(
+        value(
+            "vec3(i * 3 + ivec2(1), float((ivec4(7, 5, 1, 2) % 3).y))",
+            "",
+            made,
+        ),
+        7,
+        -2,
+        2,
+    )
+    # The comparisons, one bool each, and any, all and not.
+    assert_lanes(
+        value(
+            "vec3(float(any(lessThan(vec2(1.0, 5.0), vec2(2.0)))),"
+            + " float(all(greaterThanEqual(i, ivec2(-1)))),"
+            + " float(not(equal(b, bvec2(true))).x))",
+            "",
+            made,
+        ),
+        1,
+        1,
+        1,
+    )
+    assert_lanes(
+        value(
+            "vec3(float(notEqual(i, ivec2(2)).x),"
+            + " float(lessThanEqual(vec3(1.0), vec3(0.0)).z),"
+            + " float(greaterThan(ivec2(3), i).y))",
+            "",
+            made,
+        ),
+        0,
+        0,
+        1,
+    )
+    assert_lanes(
+        value("vec3(float(any(bvec3(false))), float(all(b)), 0.0)", "", made),
+        0,
+        0,
+        0,
+    )
+    assert_lanes(
+        value("mix(vec3(1.0), vec3(2.0), bvec3(true, false, true))"), 2, 1, 2
+    )
+    assert_lanes(
+        value("vec3(float(i.y), float(i[k]), float(b[k]))", "", made), -1, -1, 1
+    )
+    assert_lanes(
+        value("vec3(vec2(abs(ivec2(-2, 3))), float(max(i.x, 5)))", "", made),
+        2,
+        3,
+        5,
+    )
+    var program = compile_shader_material(
+        VERTEX,
+        "uniform ivec2 cells;\n"
+        + "uniform bvec3 flags;\n"
+        + "void main() { gl_FragColor = vec4(vec2(cells), float(flags.z),"
+        " 1.0); }\n",
+    )
+    program.set_uniform("cells", Vector2(2.5, -3.5))
+    program.set_uniform("flags", Vector3(0, 0, 2))
+    assert_lanes(run(program), 2, -3, 1)
+    refused_statement(
+        "bvec2 b = bvec2(true); bvec2 c = b + b;",
+        "cannot use + on a bvec2 and a bvec2",
+    )
+    refused_statement(
+        "ivec2 i = ivec2(1); vec2 v = i + vec2(1.0);",
+        "cannot use + on a ivec2 and a vec2",
+    )
+    refused_statement("bool x = any();", "any() takes one bvec")
+    refused_statement("bool x = any(vec2(1.0));", "any() takes one bvec")
+    refused_statement("bool x = any(true);", "any() takes one bvec")
+    refused_statement(
+        "bvec2 x = lessThan();",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = lessThan(vec2(1.0), ivec2(1));",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bool x = lessThan(1.0, 2.0);",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = lessThan(bvec2(true), bvec2(false));",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = equal(vec2(1.0), vec3(1.0));",
+        "equal() takes two vectors of one type",
+    )
+    refused_statement(
+        "vec2 x = mix(vec2(1.0), vec3(1.0), bvec2(true));",
+        "mix() of a bool takes two values of one type, as wide as the bool",
+    )
+    refused_statement(
+        "vec3 x = mix(vec3(1.0), vec3(1.0), bvec2(true));",
+        "mix() of a bool takes two values of one type, as wide as the bool",
+    )
+
+
+def test_a_custom_attribute_reaches_the_fragment_through_a_varying() raises:
+    var program = compile_shader_material(
+        "attribute float size;\n"
+        + "attribute vec2 offset;\n"
+        + "varying vec3 seen;\n"
+        + "void main() {\n"
+        + "    seen = vec3(size, offset);\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix *"
+        " vec4(position, 1.0);\n"
+        + "}\n",
+        "varying vec3 seen;\nvoid main() { gl_FragColor = vec4(seen, 1.0); }\n",
+    )
+    assert_equal(len(program.attribute_names), 2)
+    # Corners gives each float k + 1 at the first corner, ten times that at
+    # the second and a hundred times at the third.
+    var s = Corners(program).shares(AT_FRAGMENT)
+    var mean = s[0] + 10 * s[1] + 100 * s[2]
+    var got = run(program)
+    assert_almost_equal(got[0], mean, atol=1e-3)
+    assert_almost_equal(got[1], 2 * mean, atol=1e-3)
+    assert_almost_equal(got[2], 3 * mean, atol=1e-3)
+    refused(
+        WHITE,
+        "the custom attributes hold at most 8 floats",
+        "attribute vec4 a;\nattribute vec4 b;\nattribute float c;\n" + VERTEX,
+    )
+    refused(
+        WHITE,
+        "an attribute of type int is outside the subset",
+        "attribute int count;\n" + VERTEX,
+    )
+
+
+def test_a_shader_toy_shader_draws_its_main_image() raises:
+    # ShaderToy's own template, at the made-up pixel (10.5, 20.5).
+    var toy = compile_shader_toy(
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        + "    vec2 uv = fragCoord / iResolution.xy;\n"
+        + "    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));\n"
+        + "    fragColor = vec4(col, 1.0);\n"
+        + "}\n"
+    )
+    toy.set_uniform("iResolution", Vector3(100, 200, 1))
+    toy.set_frame(Duration(1.5, SECOND), Matrix4())
+    var got = run(toy)
+    assert_almost_equal(got[0], 0.5 + 0.5 * cos(Float32(1.605)), atol=1e-5)
+    assert_almost_equal(got[1], 0.5 + 0.5 * cos(Float32(3.6025)), atol=1e-5)
+    assert_almost_equal(got[2], 0.5 + 0.5 * cos(Float32(5.605)), atol=1e-5)
+    # The channels and the rest are uniforms and textures the caller sets.
+    var reads = compile_shader_toy(
+        "void mainImage(out vec4 c, in vec2 p) {\n"
+        + "    c = texture(iChannel1, p / iChannelResolution[1].xy);\n"
+        + "    c.w = float(iFrame) + iMouse.x + iChannelTime[2] + iTimeDelta\n"
+        + "        + iFrameRate + iDate.w + iSampleRate;\n"
+        + "}\n"
+    )
+    reads.set_texture("iChannel1", TextureId(7))
+    reads.set_uniform("iChannelResolution[1]", Vector3(100, 200, 1))
+    reads.set_uniform("iFrame", Float32(3))
+    reads.set_uniform("iMouse", Vector4(0.25, 0, 0, 0))
+    reads.set_uniform("iChannelTime[2]", Float32(0.5))
+    var read = run(reads)
+    assert_lanes(read, 0.105, 0.1025, 7)
+    with assert_raises(contains="a ShaderToy shader defines mainImage"):
+        _ = compile_shader_toy("void main() {}")
+    # The author's line numbers hold.
+    with assert_raises(contains="line 2: GLSL's sinh() is outside the subset"):
+        _ = compile_shader_toy(
+            "void mainImage(out vec4 c, in vec2 p) {\n"
+            + "    c = vec4(sinh(1.0));\n"
+            + "}\n"
+        )
+    with assert_raises(contains="cannot assign iTime: it is a uniform"):
+        _ = compile_shader_toy(
+            "void mainImage(out vec4 c, in vec2 p) { iTime = 1.0; }"
+        )
+
+
+# three.js's ToonShader1, as it is written.
+comptime TOON_VERTEX = """
+varying vec3 vNormal;
+varying vec3 vRefract;
+void main() {
+    vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+    vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+    vec3 worldNormal = normalize ( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );
+    vNormal = normalize( normalMatrix * normal );
+    vec3 I = worldPosition.xyz - cameraPosition;
+    vRefract = refract( normalize( I ), worldNormal, 1.02 );
+    gl_Position = projectionMatrix * mvPosition;
+}
+"""
+comptime TOON_FRAGMENT = """
+uniform vec3 uBaseColor;
+uniform vec3 uDirLightPos;
+uniform vec3 uDirLightColor;
+uniform vec3 uAmbientLightColor;
+varying vec3 vNormal;
+varying vec3 vRefract;
+void main() {
+    float directionalLightWeighting = max( dot( normalize( vNormal ), uDirLightPos ), 0.0);
+    vec3 lightWeighting = uAmbientLightColor + uDirLightColor * directionalLightWeighting;
+    float intensity = smoothstep( - 0.5, 1.0, pow( length(lightWeighting), 20.0 ) );
+    intensity += length(lightWeighting) * 0.2;
+    float cameraWeighting = dot( normalize( vNormal ), vRefract );
+    intensity += pow( 1.0 - length( cameraWeighting ), 6.0 );
+    intensity = intensity * 0.2 + 0.3;
+    if ( intensity < 0.50 ) {
+        gl_FragColor = vec4( 2.0 * intensity * uBaseColor, 1.0 );
+    } else {
+        gl_FragColor = vec4( 1.0 - 2.0 * ( 1.0 - intensity ) * ( 1.0 - uBaseColor ), 1.0 );
+    }
+}
+"""
+
+
+def test_the_models_turn_carries_the_normal_into_the_world() raises:
+    # mat3(modelMatrix) and its first three columns read as
+    # modelMatrix * vec4(normal, 0.0) is read.
+    var same = paint(
+        "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
+        + "void main() { gl_FragColor = vec4(a - c, 1.0) + vec4(b - c,"
+        " 0.0); }\n",
+        "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
+        + "void main() {\n"
+        + "    a = mat3(modelMatrix) * normal;\n"
+        + "    mat3 turn = mat3(modelMatrix[0].xyz, modelMatrix[1].xyz,"
+        + " modelMatrix[2].xyz);\n"
+        + "    b = turn * normal;\n"
+        + "    c = (modelMatrix * vec4(normal, 0.0)).xyz;\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix *"
+        " vec4(position, 1.0);\n"
+        + "}\n",
+    )
+    assert_lanes(same, 0, 0, 0)
+    # three.js's ToonShader1 compiles as it is written.
+    var toon = compile_shader_material(TOON_VERTEX, TOON_FRAGMENT)
+    toon.set_uniform("uBaseColor", Vector3(1, 1, 1))
+    toon.set_uniform("uDirLightColor", Vector3(0.9, 0.9, 0.9))
+    toon.set_uniform("uDirLightPos", Vector3(0, 0, 1))
+    var shaded = run(toon)
+    assert_true(shaded[0] >= 0 and shaded[0] <= 1)
+    var place = (
+        "gl_Position = projectionMatrix * modelViewMatrix * vec4(position,"
+        " 1.0);"
+    )
+    refused(
+        WHITE,
+        "a column of modelMatrix is read as its .xyz",
+        "void main() { vec2 c = modelMatrix[0].xy; " + place + " }",
+    )
+    refused(
+        WHITE,
+        "cannot make a mat3 of a vec3",
+        "void main() { mat3 t = mat3(modelMatrix[1].xyz, modelMatrix[0].xyz,"
+        + " modelMatrix[2].xyz); "
+        + place
+        + " }",
+    )
+    refused(
+        WHITE,
+        "cannot make a mat3 of a vec3",
+        "void main() { mat3 t = mat3(modelMatrix[0].xyz, vec3(1.0),"
+        + " modelMatrix[2].xyz); "
+        + place
+        + " }",
+    )
+    refused(
+        WHITE,
+        "and mat3(modelMatrix) * normal",
+        "void main() { vec3 p = mat3(modelMatrix) * position; " + place + " }",
+    )
+    refused(
+        WHITE,
+        "a transform's columns are outside the subset",
+        "void main() { int i = 0; vec4 c = modelMatrix[i]; " + place + " }",
+    )
+
+
+def test_break_continue_and_an_early_return_are_read() raises:
+    # Odd numbers skipped, and the loop left past seven: 0 + 2 + 4 + 6.
+    var loop = (
+        "float sum = 0.0;\n"
+        "for (int i = 0; i < 10; i++) {\n"
+        "    if (i > 7) break;\n"
+        "    if (mod(float(i), 2.0) > 0.5) { continue; }\n"
+        "    sum += float(i);\n"
+        "}\n"
+    )
+    assert_equal(
+        paint(
+            "void main() {\n"
+            + loop
+            + "    gl_FragColor = vec4(sum / 12.0);\n}\n"
+        )[0],
+        1,
+    )
+    # A function that returns early, from a branch and from a loop.
+    var early = (
+        "float capped(float x) { if (x > 1.0) { return 1.0; } return x * 0.5;"
+        " }\nfloat first(float limit) {\n    for (int i = 0; i < 8; i++) {\n   "
+        "     if (float(i * i) > limit) { return float(i); }\n    }\n    return"
+        " -1.0;\n}\nvoid nothing() { return; }\n"
+    )
+    assert_equal(number("capped(3.0)", early), 1)
+    assert_equal(number("capped(0.5)", early), 0.25)
+    assert_equal(number("first(10.0) / 4.0", early), 1)
+    assert_equal(number("first(100.0)", early), -1)
+    # A statement after a return takes no effect.
+    assert_equal(
+        number(
+            "late()",
+            "float late() { float y = 2.0; return y; y = 3.0; return y; }",
+        ),
+        2,
+    )
+    # A fragment shader's main that returns early keeps what it wrote.
+    assert_lanes(
+        paint(
+            early
+            + "void main() {\n"
+            + "    gl_FragColor = vec4(1.0);\n"
+            + "    if (true) { gl_FragColor = vec4(0.5); nothing(); return; }\n"
+            + "    gl_FragColor = vec4(0.0);\n"
+            + "}\n"
+        ),
+        0.5,
+        0.5,
+        0.5,
+    )
+    # A loop around a call is not the call's to break.
+    refused(
+        (
+            "void stop() { break; }\nvoid main() {\n"
+            "    for (int i = 0; i < 2; i++) { stop(); }\n"
+            "    gl_FragColor = vec4(1.0);\n}\n"
+        ),
+        "break needs a loop or a switch to be in",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "a vertex shader's main, cannot return early",
+        vertex=String(VERTEX).replace(
+            "void main() {", "void main() {\n    if (true) { return; }"
+        ),
+    )
+    refused(
+        (
+            "uniform mat3 m;\n"
+            "mat3 pick() { if (true) { return m; } return m; }\n"
+            "void main() { gl_FragColor = vec4(pick() * vec3(1.0), 1.0); }\n"
+        ),
+        "a function that returns a matrix",
+    )
+    # A transform known only as a step cannot return early either.
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "returns a matrix, a struct or a transform",
+        vertex=(
+            "vec4 place() {\n"
+            + "    if (true) { return modelViewMatrix * vec4(position,"
+            " 1.0); }\n"
+            + "    return modelViewMatrix * vec4(position, 1.0);\n"
+            + "}\n"
+            + "void main() { gl_Position = projectionMatrix * place(); }\n"
+        ),
+    )
+
+
+def test_the_corners_of_the_subset() raises:
+    # The preprocessor: an #undef of nothing, #elif after a branch taken
+    # and after none, a comment, and the conditions it refuses.
+    var white = String("\nvoid main() { gl_FragColor = vec4(1.0); }\n")
+    assert_lanes(paint("#undef NOPE" + white), 1, 1, 1)
+    assert_lanes(paint("#if 0\n#elif 0\n#elif 1\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if 1\n#elif 1\n#elif 0\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if 1 // a note\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if NOPE\n#else\n#endif" + white), 1, 1, 1)
+    refused("#if (1 2)\n#endif" + white, "an #if condition leaves a ( open")
+    refused("#if 4 / 2\n#endif" + white, "the character / is outside an #if")
+    refused("#if defined\n#endif" + white, "defined names a macro")
+    refused(
+        "#if defined(A 2)\n#endif" + white, "an #if condition leaves a ( open"
+    )
+    refused(
+        "#define TWO 1 2\n#if TWO\n#endif" + white,
+        "the macro TWO is not one whole number",
+    )
+    # Types and values.
+    var shape = String("struct S { float a; };\n")
+    refused_statement("bvec4 b = bvec4(true); if (b) {}", "not a bvec4")
+    refused(
+        shape
+        + "void main() { S s = S(1.0); if (s) {} gl_FragColor = vec4(1.0); }",
+        "an if needs a bool, not a struct",
+    )
+    assert_equal(
+        number(
+            "x", "", "float a[1] = float[1](2.0); int k = 0; float x = a[k];"
+        ),
+        2,
+    )
+    assert_equal(
+        number(
+            "x",
+            shape,
+            "S a[1] = S[1](S(3.0)); int k = 0; float x = a[k].a;",
+        ),
+        3,
+    )
+    assert_equal(number("c.a", shape + "const S c = S(0.5);"), 0.5)
+    assert_equal(
+        number("f(S(0.25))", shape + "float f(S s) { return s.a; }"), 0.25
+    )
+    assert_equal(
+        number(
+            "t.a",
+            shape + "void f(out S s) { s = S(2.0); }",
+            "S t; f(t);",
+        ),
+        2,
+    )
+    assert_equal(
+        number("b + a[1]", "", "float a[2] = float[2](1.0, 2.0), b = 3.0;"), 5
+    )
+    assert_equal(number("q.a", shape, "S p = S(1.0), q = S(2.0);"), 2)
+    assert_equal(
+        number("m[0][0] + n[1][1]", "", "mat3 m = mat3(1.0), n = mat3(2.0);"), 3
+    )
+    assert_equal(number("float(int(true))"), 1)
+    assert_equal(number("float(ivec2(true).y)"), 1)
+    # An index the shader picks at run time, into one element.
+    assert_equal(
+        number(
+            "x", "uniform int k;", "float a[1] = float[1](2.0); float x = a[k];"
+        ),
+        2,
+    )
+    refused(
+        "uniform sampler2DArray t;\nvoid main() { float x = t;"
+        + " gl_FragColor = vec4(1.0); }",
+        "a sampler2DArray",
+    )
+    refused(
+        "uniform sampler2D t;\nvoid main() { mat3 m = mat3(t);"
+        + " gl_FragColor = vec4(1.0); }",
+        "cannot make a mat3 of a sampler2D",
+    )
+    refused(
+        white,
+        "cannot make a mat4 of a mat4",
+        "void main() { mat4 m = mat4(modelMatrix);"
+        + " gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
+    )
+    assert_equal(
+        number(
+            "a[0][0] + b[1][1]",
+            "",
+            "mat3 a = mat3(mat3(1.0)); mat2 b = mat2(mat3(2.0));",
+        ),
+        3,
+    )
+    refused("uniform float u[];" + white, "expected a value before ']'")
+    refused_statement(
+        "float a[2.0];", "an array's size is a positive constant int"
+    )
+    refused_statement(
+        "int n = 2; float a[n];", "an array's size is a positive constant int"
+    )
+    refused_statement(
+        "float a[2] = float[3](1.0, 2.0);",
+        "an array constructor of 3 elements lists 2",
+    )
+    refused(shape + "S g;" + white, "a S is a uniform, a const or a local")
+    refused(
+        shape + "const S c = 1.0;" + white,
+        "a const S's value must be a constant S",
+    )
+    refused_statement("default: ;", "case and default belong in a switch")
+    refused_statement(
+        "int i = 0; switch (i) { case 1.0: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement(
+        "int i = 0; int j = 1; switch (i) { case j: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement("mat3 m[2];", "arrays are outside the subset")
+    refused_statement("mat3 m = mat4(1.0);", "cannot give a mat3 a mat4")
+    refused_statement(
+        "mat3 a = mat3(1.0); mat4 b = mat4(1.0); mat3 c = a * b;",
+        "cannot use * on a mat3 and a mat4",
+    )
+    refused(
+        white,
+        "a transform's columns are outside the subset",
+        "void main() { vec4 c = modelMatrix[1.0];"
+        + " gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
+    )
+    refused_statement(
+        "float a[2] = float[2](1.0, 2.0); float x = a.x;",
+        "an array is read one element at a time",
+    )
+    refused_statement(
+        "float a[2] = float[2](1.0, 2.0); float x = a[-1];",
+        "the index is outside the array",
+    )
+    refused_statement(
+        "float x = float(uint(1));", "the type uint is outside the subset"
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() { vec4 c = sampler2D(1.0);"
+        + " gl_FragColor = c; }",
+        "a sampler2D constructor is outside the subset",
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() { vec4 c = vec4(map);"
+        + " gl_FragColor = c; }",
+        "cannot make a vec4 of a sampler2D",
+    )
+    refused_statement(
+        "vec3 a = mix(vec3(1.0), vec3(0.0));",
+        "no signature of mix() takes (vec3, vec3)",
+    )
+    refused(
+        "uniform samplerCube sky;\nvoid main() { vec4 c = textureCube(sky);"
+        + " gl_FragColor = c; }",
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform sampler3D cloud;\nvoid main() { vec4 c = texture(cloud);"
+        + " gl_FragColor = c; }",
+        "texture() takes a sampler3D and a vec3",
+    )
+    refused_statement(
+        "const float a[2] = float[2](1.0, 2.0); a[0] = 1.0;",
+        "cannot assign a[0]: it is a const",
+    )
+    # A raw GLSL ES 3.0 shader fetches a texel.
+    var modern = compile_raw_shader_material(
+        "#version 300 es\nin vec3 position;\nuniform mat4 projectionMatrix;"
+        + "\nuniform mat4 modelViewMatrix;\nvoid main() { gl_Position ="
+        + " projectionMatrix * modelViewMatrix * vec4(position, 1.0); }\n",
+        "#version 300 es\nprecision highp float;\nuniform sampler2D map;"
+        + "\nout vec4 c;\nvoid main() { c = texelFetch(map, ivec2(0, 0),"
+        + " 0); }\n",
+    )
+    assert_equal(len(modern.textures), 1)
 
 
 def main() raises:

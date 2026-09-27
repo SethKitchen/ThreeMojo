@@ -414,8 +414,19 @@ from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram, NodeProgramId
 from render.computation import GPUComputationRenderer
 from render.gpu import GpuComposer, GpuComputation, runs_on_device
-from render.volume_texture import Data3DTexture, VolumeImage
-from render.volume_texture_store import Data3DTextureId
+from render.volume_texture import (
+    Data3DTexture,
+    DataArrayTexture,
+    VolumeImage,
+)
+from render.volume_texture_store import (
+    Data3DTextureId,
+    Data3DTextureStore,
+    DataArrayTextureId,
+    DataArrayTextureStore,
+    NO_DATA_3D_TEXTURE,
+    NO_DATA_ARRAY_TEXTURE,
+)
 
 
 def light_the(mut scene: Scene) raises:
@@ -11243,6 +11254,426 @@ def test_both_backends_run_node_control_flow_and_matrices_alike() raises:
             lighting,
         )
         assert_true(count_mismatches(gpu, plain) > 50)
+
+
+def test_both_backends_read_a_triangles_facing_alike() raises:
+    # TSL's frontFacing and GLSL's gl_FrontFacing ride in the triangle's
+    # state: the kernel must read them as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read the facing alike"):
+        return
+    var graph = NodeGraph()
+    graph.set_output(
+        NODES_COLOR,
+        graph.join(
+            [
+                graph.front_facing(),
+                graph.gl_front_facing(),
+                graph.mul(graph.face_direction(), graph.float(-1)),
+            ]
+        ),
+    )
+    var textures = TextureStore()
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var lighting = phong_lighting()
+    for flip in [False, True]:
+        var corners = with_nodes(
+            phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+        )
+        # The first triangle is seen from behind, the second from the front.
+        corners[0].seen_from_behind = True
+        corners[0].flip_sided = flip
+        corners[3].flip_sided = flip
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, SHADE_LIT, textures, lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_LIT,
+            textures,
+            lighting,
+            programs=store,
+        )
+        # The facing is exact; the phong shading of it rounds.
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_read_a_texture_at_a_level_alike() raises:
+    # textureLod: the graph gives the level, not the footprint, and both
+    # backends read it through the host's plan of levels.
+    if skipped_for_lack_of_a_gpu("both backends read a texture level alike"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var level = graph.mul(graph.swizzle(uv, "x"), graph.float(1.5))
+    graph.set_output(
+        NODES_COLOR,
+        graph.swizzle(graph.texture_level(board, uv, level), "rgb"),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 0, 1, 4, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 24, 1, 0, 0, board))
+    corners = with_nodes(corners^, id.value)
+    var lighting = phong_lighting()
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        24,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The left edge reads the full-size board, whose colors the footprint's
+    # level would have blended away.
+    var extreme = 0
+    for y in range(24):
+        var shown = cpu.get_pixel(0, y)
+        if shown.r > 150 or shown.b > 150:
+            extreme += 1
+    assert_true(extreme > 0)
+
+
+def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
+    # texelFetch and textureSize: whole numbers name the texel, wrapped,
+    # at a level held inside the chain.
+    if skipped_for_lack_of_a_gpu("both backends fetch a texel alike"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var graph = NodeGraph()
+    var named = graph.texture_uniform("board", board)
+    var cells = graph.floor(graph.mul(graph.uv(), graph.float(20)))
+    var level = graph.floor(
+        graph.mul(graph.swizzle(graph.uv(), "y"), graph.float(8))
+    )
+    var texel = graph.texture_load(named, cells, level)
+    var size = graph.texture_size(named, level)
+    graph.set_output(
+        NODES_COLOR,
+        graph.join(
+            [
+                graph.swizzle(texel, "r"),
+                graph.swizzle(texel, "b"),
+                graph.div(graph.swizzle(size, "x"), graph.float(64)),
+            ]
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 0, 1, 4, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 24, 1, 0, 0, board))
+    corners = with_nodes(corners^, id.value)
+    var lighting = phong_lighting()
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        24,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+from materials.nodes import NODE_VEC3 as NODES_VEC3
+
+
+def test_both_backends_read_a_custom_attribute_alike() raises:
+    # Each corner carries its own custom floats, which the kernel packs in
+    # its lanes and interpolates as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read an attribute alike"):
+        return
+    var graph = NodeGraph()
+    var tint = graph.attribute("tint", NODES_VEC3)
+    var glow = graph.attribute("glow", NODES_FLOAT)
+    graph.set_output(
+        NODES_COLOR, graph.add(tint, graph.join([glow, glow, glow]))
+    )
+    var textures = TextureStore()
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var lighting = phong_lighting()
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    for index in range(len(corners)):
+        var k = Float32(index)
+        corners[index].custom = SIMD[DType.float32, 8](
+            0.1 * k, 0.9 - 0.1 * k, 0.05 * k, 0.02 * k, 0, 0, 0, 0
+        )
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_read_a_cube_in_a_graph_alike() raises:
+    # The kernel keeps a cube read's first row in the texture table where
+    # the host keeps its id; both read the same face in the same place.
+    if skipped_for_lack_of_a_gpu("both backends read a cube alike"):
+        return
+    var textures = TextureStore()
+    var cubes = CubeTextureStore()
+    _ = cubes.add(a_gpu_cube())
+    var sky = cubes.add(a_gpu_cube())
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var direction = graph.join(
+        [
+            graph.sub(graph.swizzle(uv, "x"), graph.float(0.5)),
+            graph.sub(graph.swizzle(uv, "y"), graph.float(0.5)),
+            graph.float(0.3),
+        ]
+    )
+    var read = graph.texture_cube(graph.cube_uniform("sky", sky), direction)
+    graph.set_output(NODES_COLOR, graph.swizzle(read, "rgb"))
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        1,
+        cubes=cubes,
+        programs=store,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        cubes=cubes,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def a_gpu_stack() raises -> VolumeImage:
+    """Return four texels a side and three deep, each its own color."""
+    var texels = List[UInt8]()
+    for z in range(3):
+        for y in range(4):
+            for x in range(4):
+                texels.append(UInt8(40 + 60 * x))
+                texels.append(UInt8(30 + 50 * y))
+                texels.append(UInt8(60 + 80 * z))
+                texels.append(255)
+    return VolumeImage.of_bytes(4, 4, 3, texels^)
+
+
+def a_stack_program(
+    cloud: Data3DTextureId, layers: DataArrayTextureId
+) raises -> NodeProgram:
+    """Return a program that reads a 3D texture and an array texture at
+    the surface's coordinate and multiplies the two."""
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var u = graph.swizzle(uv, "x")
+    var v = graph.swizzle(uv, "y")
+    var deep = graph.texture_3d(
+        graph.volume_uniform("cloud", cloud),
+        graph.join([u, v, graph.float(0.4)]),
+    )
+    var layered = graph.texture_array(
+        graph.array_uniform("layers", layers),
+        graph.join([v, u, graph.float(1.2)]),
+    )
+    graph.set_output(
+        NODES_COLOR, graph.swizzle(graph.mul(deep, layered), "rgb")
+    )
+    return graph.compile()
+
+
+def test_both_backends_read_a_3d_and_an_array_texture_alike() raises:
+    # The kernel reads each texture's decoded block after the programs in
+    # the fog buffer, through the same filters the host reads.
+    if skipped_for_lack_of_a_gpu("both backends read stacked textures alike"):
+        return
+    var textures = TextureStore()
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    var cloud = volumes.add(Data3DTexture(a_gpu_stack(), filter=BILINEAR))
+    var arrays = DataArrayTextureStore()
+    var layers = arrays.add(
+        DataArrayTexture(a_gpu_stack(), wrap=REPEAT, filter=BILINEAR)
+    )
+    var store = NodeProgramStore()
+    var id = store.add(a_stack_program(cloud, layers))
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        1,
+        programs=store,
+        volumes=volumes,
+        arrays=arrays,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+        volumes=volumes,
+        arrays=arrays,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses a stacked texture"):
+        return
+    var store = NodeProgramStore()
+    var no_cloud = store.add(
+        a_stack_program(NO_DATA_3D_TEXTURE, DataArrayTextureId(0))
+    )
+    var no_layers = store.add(
+        a_stack_program(Data3DTextureId(0), NO_DATA_ARRAY_TEXTURE)
+    )
+    var both = store.add(
+        a_stack_program(Data3DTextureId(0), DataArrayTextureId(0))
+    )
+    var graph = NodeGraph()
+    var read = graph.texture_cube(
+        graph.cube_uniform("sky"), graph.vec3(0, 0, 1)
+    )
+    graph.set_output(NODES_COLOR, graph.swizzle(read, "rgb"))
+    var sky = store.add(graph.compile())
+    var pair = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    var renderer = GpuRenderer(36, 30)
+    with assert_raises(contains="names no texture; call set_volume() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), no_cloud.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="reads a 3D texture that has not been"):
+        renderer.draw(
+            with_nodes(pair.copy(), both.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    renderer.set_textures(TextureStore(), volumes=volumes)
+    with assert_raises(contains="names no texture; call set_array() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), no_layers.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="reads an array texture that has not been"):
+        renderer.draw(
+            with_nodes(pair.copy(), both.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    with assert_raises(contains="names no cube; call set_cube() first"):
+        renderer.draw(
+            with_nodes(pair.copy(), sky.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    store.get(sky).set_cube("sky", CubeTextureId(0))
+    with assert_raises(contains="reads a cube that has not been uploaded"):
+        renderer.draw(
+            with_nodes(pair.copy(), sky.value),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
 
 
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:

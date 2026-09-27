@@ -63,7 +63,29 @@ program.set_texture("map", texture)
 var card = assets.materials.add(shader_material(assets.programs.add(program^)))
 ```
 
+Pass three.js's `material.defines` as `defines`, a list of `NAME` or `NAME value`. Each is a `#define` in both shaders before their first line, so an error still names the author's line.
+
 The compiler lexes, parses and type checks the source, and builds the graph as it parses. `shader_graph(vertex, fragment)` returns the graph before it is compiled. `compile_raw_shader_material` reads the shaders as three.js's `RawShaderMaterial` does. See [GLSL source](#glsl-source) for the subset.
+
+### Draw a ShaderToy shader
+
+`compile_shader_toy(source)` compiles a ShaderToy shader, as three.js's `ShaderToyDecoder` does. Its `mainImage` colors each pixel of the surface.
+
+```mojo
+var toy = compile_shader_toy(
+    """
+    void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+        vec2 uv = fragCoord / iResolution.xy;
+        vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
+        fragColor = vec4(col, 1.0);
+    }
+    """
+)
+toy.set_uniform("iResolution", Vector3(800, 600, 1))
+var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
+```
+
+`fragCoord` is the pixel's center, in pixels from the bottom left. `iTime` is `Renderer.time`. Set the other inputs yourself: `iResolution`, `iTimeDelta`, `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`, `iChannelResolution[i]` and `iChannelTime[i]` with `set_uniform`. Set `iChannel0` to `iChannel3` with `set_texture`. The source must fit the [subset](#the-subset), and an error names the line of the source.
 
 ## Outputs
 
@@ -106,7 +128,21 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `camera_position()` | `vec3` | `cameraPosition` | The camera's position in world space, from the frame's view. |
 | `camera_view_matrix()` | `mat4` | `cameraViewMatrix` | The frame's world-to-camera matrix. |
 | `time()` | `float` | `time` | `Renderer.time`, in seconds. |
+| `attribute(name, type)` | as named | `attribute(name)` | A custom attribute of the geometry, a `float` or a vector, interpolated at the fragment. See [Custom attributes](#custom-attributes). |
+| `front_facing()` | `float` | `frontFacing` | One where the triangle is seen from its front, and zero where it is seen from its back. A fragment only. |
+| `face_direction()` | `float` | `faceDirection` | One where the triangle is seen from its front, and minus one where it is seen from its back. A fragment only. |
+| `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
+| `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
+| `cube_uniform(name, map)` | `cubeTexture` | `cubeTexture(map)` | A named cube texture the caller can change with `set_cube`. |
+| `texture_cube(sampler, direction)` | `vec4` | `cubeTexture(map, dir)` | A cube texture read in a `vec3` direction of any length, linear, with straight alpha. The face the direction points at is read where it points. |
+| `volume_uniform(name, map)` | `texture3D` | `texture3D(map)` | A named 3D texture from `Assets.data_3d_textures`. The caller can change it with `set_volume`. |
+| `texture_3d(sampler, at)` | `vec4` | `texture3D(map, uvw)` | A 3D texture read at a `vec3` from zero to one on each axis, linear, with straight alpha. The texture's own wrap modes and filter apply. |
+| `array_uniform(name, map)` | `textureArray` | GLSL's `sampler2DArray` | A named array texture from `Assets.data_array_textures`. The caller can change it with `set_array`. |
+| `texture_array(sampler, at)` | `vec4` | GLSL's `texture` of a `sampler2DArray` | An array texture read at a `vec3` of `u`, `v` and the layer. The layer is rounded to the nearest and held inside the stack. Two layers are never blended. |
+| `texture_level(map, uv, level)` | `vec4` | `texture(map, uv).level(n)` | As `texture`, at the mip level that a `float` gives. Level zero is the full-size image. A texture with one level reads it at every level. |
+| `texture_load(map, at, level)` | `vec4` | `textureLoad(map, at, level)` | The texel of a texture uniform at a column and a row, counted as `uv` counts. A coordinate outside the image wraps, and a level outside the chain is held inside it. |
+| `texture_size(map, level)` | `vec2` | `textureSize(map, level)` | A texture uniform's width and height at a level, held inside the chain. |
 | `lit()` | `vec3` | `output` | The color that the material's own shading made. An output node only. |
 
 ### Math
@@ -255,6 +291,7 @@ A varying that the vertex shader writes becomes a `varying` node. A corner keeps
 | `(modelViewMatrix * vec4(position, 1.0)).xyz` | `position_view()` |
 | `normalMatrix * normal` | `normal_view()`, made unit length |
 | `modelMatrix * vec4(normal, 0.0)` | `normal_world()` with a zero `w` |
+| `mat3(modelMatrix) * normal`, and the same through `mat3(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz)` | `normal_world()` |
 | `viewMatrix * v`, `cameraPosition` | `camera_view_matrix()`, `camera_position()` |
 
 The world and view positions are of the point that `gl_Position` draws.
@@ -263,39 +300,73 @@ The world and view positions are of the point that `gl_Position` draws.
 
 `gl_FragColor`, `pc_fragColor` or the one `out vec4` is the color and the opacity. `gl_FragDepth` is the depth node. `discard` throws the fragment away. `gl_FragCoord` is where the fragment is: the pixel's center in pixels from the bottom left, its depth from zero to one, and one for `w`. three.js's `w` is one over the clip-space `w`.
 
+`gl_FrontFacing` is `gl_front_facing()`. It is true on every face that a `BACK_SIDE` material draws. See [Facing](#facing).
+
+### Facing
+
+TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` material. three.js's WebGL renderer turns the front face round for such a material, so `gl_FrontFacing` is true on the faces that it draws. TSL's `frontFacing` is false on those faces, because they are seen from their back. For `FRONT_SIDE` and `DOUBLE_SIDE`, the two agree. A mirrored mesh keeps the same rule, as [Side](Materials#side) states.
+
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, and `mat3`, `mat4` and `sampler2D` uniforms.
+- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`. Uniforms can also be `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`. `sampler3D` and `sampler2DArray` are GLSL ES 3.0 only.
+- Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
-- Functions: functions with `in` parameters. A call inlines the body. A `return` is the last statement of its function.
-- Statements: local variables, `if` and `else`, blocks, `discard`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
+- Attributes: `position`, `normal`, `uv` and `color`, and custom attributes of a `float` or a vector. See [Custom attributes](#custom-attributes).
+- Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
+- Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
-- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, constant indexes, and constructors of scalars and vectors.
+- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
+- Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
+- Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
+- Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
-- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture` and `texture2D`.
-- The preprocessor: `#version` in a raw shader, and object-like `#define`.
+- Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
+- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch`, `textureSize` and `textureCube`. `texture` of a `samplerCube` reads it in a direction, as `textureCube` does. `texture` of a `sampler3D` or a `sampler2DArray` reads it at a `vec3`.
+- The preprocessor: `#version` in a raw shader, object-like `#define`, `#undef`, and `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` and `#endif`.
+- An `#if` condition: whole numbers, macros that are one whole number, `defined`, `!`, `&&`, `||`, the six comparisons and parentheses. A name that is not a macro is zero, as in the C preprocessor.
 
-An `int` is a whole number that a float holds. An `int` division drops the fraction toward zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
+A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
+
+An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
+
+An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
 ### What the GLSL compiler refuses
 
-- A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
+- A `#include`, `#pragma`, `#extension`, `#error`, `#line`, and a `#define` with arguments. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint`, `ivec`, `uvec`, `bvec`, `mat2`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
-- Uniforms of type `int` or `bool`, global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
-- Custom attributes: only `position`, `normal`, `uv` and `color`.
-- `while`, `do`, `switch`, `break`, `continue`, a `return` before the end of its function, and recursion.
-- `out` and `inout` parameters, prototypes, overloads, and functions named like GLSL's own.
+- The types `uint` and `uvec`, the non-square matrices, and the samplers other than `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`.
+- Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes, parameters or fields, and an array read whole.
+- A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
+- A struct's field written through an index that is not constant.
+- Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
+- A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
+- `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
+- `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
+- A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
+- A declaration directly in a `switch`, outside a block.
+- A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
+- Prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
-- A matrix times a matrix, a matrix constructor, and a matrix or a sampler in a local variable.
+- A matrix times a matrix of another size, and an assignment to a local matrix.
+- A sampler in a local variable, and a sampler array's index that is not a constant.
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
+- A column of one of these or of `viewMatrix`, and a matrix constructor that reads one, but for the forms of `mat3(modelMatrix)` above.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
-- `gl_FrontFacing`, `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord`.
-- The built-ins outside the list above, for example `sinh`, `isnan`, `transpose`, `inverse`, `lessThan`, `textureLod` and `texelFetch`.
+- `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
+- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `textureGrad` and `textureOffset`.
 - A vector compared with `<`, and a scalar swizzled.
+
+### Custom attributes
+
+A custom attribute is a geometry attribute that a program reads by its name. A graph declares one with `attribute(name, type)`, and a vertex shader with `attribute` or `in`. Each corner carries 8 floats for the custom attributes, so all of them together can hold at most 8 floats.
+
+The renderer reads each attribute from the geometry for each vertex. A missing component is zero, and a missing fourth component is one. A geometry without the attribute gives zeros and one. WebGL fills a missing attribute in the same way.
+
+A custom attribute is carried through a cut at the near plane, as the other attributes are. A position node cannot read one: the host moves each vertex before the corners are made.
 
 ### Why no chunks
 
@@ -367,7 +438,8 @@ A fragment that the mask can throw away claims no depth until it survives, as a 
 
 - A `NORMALS`, `DEPTH`, `DISTANCE` or `SHADOW` material refuses a node program. These kinds show data or a shadow, not a surface's color.
 - A wireframe refuses a node program. A line has no surface.
-- A line, a wide line, a point and a sprite refuse a node material.
+- A line, a wide line and a point refuse a node material.
+- A sprite runs a node material on its square, as three.js's `SpriteNodeMaterial` does. It refuses a position node, because a sprite has no vertices of its own to move.
 - A program id that is not in `assets.programs` is refused when the mesh is drawn. A program that reads a texture that is not in `assets.textures` is refused too, and so is a texture uniform that names no texture.
 - The uv view (`SHADE_UV`) runs no program. `SHADE_LIT` runs it, and a texture node reads opaque white there.
 

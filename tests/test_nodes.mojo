@@ -23,7 +23,6 @@ from materials.nodes import (
     CORNER_C,
     DEPTH_NODE,
     EMISSIVE_NODE,
-    Fn,
     INSTRUCTION_FLOATS,
     MASK_NODE,
     MAX_GRAPH_NODES,
@@ -36,6 +35,7 @@ from materials.nodes import (
     NODE_MAT4,
     NODE_OUTPUT_COUNT,
     NODE_SAMPLER,
+    NODE_SAMPLER_CUBE,
     NODE_SWIZZLE,
     NODE_VEC2,
     NODE_VEC3,
@@ -47,6 +47,7 @@ from materials.nodes import (
     POSITION_NODE,
     PROGRAM_HEADER,
     PROGRAM_TIME,
+    Fn,
     NodeContext,
     NodeGraph,
     NodeInputs,
@@ -60,19 +61,19 @@ from materials.nodes import (
     NodeVar,
     ProgramSource,
     ValueType,
+    cell_noise,
+    cell_noise_vec3,
     has_output,
     here_inputs,
+    moved_position,
     node_attributes,
     node_depth,
     offset_normal,
-    moved_position,
-    cell_noise,
-    cell_noise_vec3,
     perlin_noise,
     perlin_noise_vec3,
-    worley_noise,
     perspective_shares,
     run_nodes,
+    worley_noise,
 )
 from math.matrix3 import Matrix3
 from math.vector4 import Vector4
@@ -81,6 +82,8 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
+from render.cube_texture_store import CubeTextureId
+from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, isnan, sin, sqrt
 from std.testing import (
@@ -153,7 +156,9 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_MAT3.is_valid())
     assert_true(NODE_MAT4.is_valid())
     assert_true(NODE_SAMPLER.is_valid())
-    assert_false(ValueType(33).is_valid())
+    assert_true(NODE_SAMPLER_CUBE.is_valid())
+    assert_equal(NODE_SAMPLER_CUBE.name(), "cubeTexture")
+    assert_false(ValueType(36).is_valid())
     assert_false(NODE_MAT4.is_vector())
     assert_false(ValueType(0).is_vector())
     assert_equal(NODE_FLOAT.name(), "float")
@@ -172,8 +177,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(96).is_valid())
-    assert_true(NodeKind(95).is_valid())
+    assert_false(NodeKind(104).is_valid())
+    assert_true(NodeKind(103).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -282,6 +287,20 @@ struct Checker(NodeSource):
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 0.5)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the weights `Corners` gives."""
         return Corners().shares(context)
@@ -293,6 +312,270 @@ struct Checker(NodeSource):
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the corners `Corners` gives."""
         return Corners().corner(context)
+
+
+def test_a_texture_reads_at_the_level_the_graph_gives() raises:
+    var graph = NodeGraph()
+    var level = graph.add(graph.float(1), graph.float(0.5))
+    var read = graph.texture_level(TextureId(3), graph.uv(), level)
+    var named = graph.texture_level(
+        graph.texture_uniform("map", TextureId(4)), graph.uv(), level
+    )
+    graph.set_output(
+        COLOR_NODE,
+        graph.add(graph.swizzle(read, "rgb"), graph.swizzle(named, "rgb")),
+    )
+    graph.set_output(OPACITY_NODE, graph.swizzle(read, "a"))
+    var program = graph.compile()
+    assert_equal(len(program.textures), 2)
+    var source = Checker(program)
+    # The checker gives the coordinate and the level as the color.
+    assert_equal(run_nodes(source, COLOR_NODE, inputs(True))[2], 3)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(True))[0], 0.25)
+    # A mode that opens no textures reads white.
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(False))[0], 1)
+    # The host's source for a program alone reads white.
+    var alone = ProgramSource(Pointer(to=program))
+    assert_equal(alone.sample_level(3, 0.5, 0.5, 1).g, 1)
+    var bad = NodeGraph()
+    with assert_raises(contains="A texture's level is a float, not a vec2"):
+        _ = bad.texture_level(TextureId(0), bad.uv(), bad.uv())
+    # Only a fragment reads a texture, at a level or not.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.swizzle(
+            moved.texture_level(TextureId(0), moved.uv(), moved.float(0)), "xyz"
+        ),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_level(
+                    TextureId(0), varied.uv(), varied.float(0)
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
+
+
+def test_a_texel_and_a_size_are_read_by_whole_numbers() raises:
+    var graph = NodeGraph()
+    var map = graph.texture_uniform("map", TextureId(2))
+    var texel = graph.texture_load(map, graph.vec2(3, 5), graph.float(1))
+    var size = graph.texture_size(map, graph.float(1))
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.swizzle(texel, "xy"), graph.swizzle(size, "x")]),
+    )
+    graph.set_output(OPACITY_NODE, graph.swizzle(texel, "a"))
+    var program = graph.compile()
+    var source = Checker(program)
+    # The checker gives the column, the row and the level as the color.
+    assert_lanes(run_nodes(source, COLOR_NODE, inputs(True)), 3, 5, 32)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(True))[0], 0.75)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(False))[0], 1)
+    var alone = ProgramSource(Pointer(to=program))
+    assert_equal(alone.fetch(0, 1, 2, 0).r, 1)
+    assert_equal(alone.size(0, 0)[0], 0)
+    var bad = NodeGraph()
+    with assert_raises(contains="A texture's size is a texture's, not a vec2"):
+        _ = bad.texture_size(bad.uv(), bad.float(0))
+    var named = bad.texture_uniform("map", TextureId(0))
+    with assert_raises(contains="A texture's level is a float, not a vec2"):
+        _ = bad.texture_size(named, bad.uv())
+
+
+def test_a_custom_attribute_is_read_at_each_corner() raises:
+    var graph = NodeGraph()
+    var size = graph.attribute("size", NODE_FLOAT)
+    var offset = graph.attribute("offset", NODE_VEC3)
+    var again = graph.attribute("size", NODE_FLOAT)
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.add(size, again), graph.swizzle(offset, "xy")]),
+    )
+    graph.set_output(
+        EMISSIVE_NODE,
+        graph.varying(graph.join([size, graph.swizzle(offset, "yz")])),
+    )
+    var program = graph.compile()
+    assert_equal(len(program.attribute_names), 2)
+    assert_equal(program.attribute_names[1], "offset")
+    assert_equal(program.attribute_offsets[1], 1)
+    assert_equal(program.attribute_widths[1], 3)
+    # Corners gives each float k + 1 at the first corner, ten times that at
+    # the second and a hundred times at the third.
+    var s = Corners().shares(AT_HERE)
+    var mean = s[0] + 10 * s[1] + 100 * s[2]
+    var here = run_nodes(Corners(program), COLOR_NODE, inputs())
+    assert_almost_equal(here[0], 2 * mean, atol=1e-4)
+    assert_almost_equal(here[1], 2 * mean, atol=1e-4)
+    assert_almost_equal(here[2], 3 * mean, atol=1e-4)
+    var carried = run_nodes(Corners(program), EMISSIVE_NODE, inputs())
+    assert_almost_equal(carried[2], 4 * mean, atol=1e-4)
+    var bad = NodeGraph()
+    with assert_raises(contains="uv is a built-in attribute"):
+        _ = bad.attribute("uv", NODE_VEC2)
+    with assert_raises(
+        contains="An attribute is a float or a vector, not a mat3"
+    ):
+        _ = bad.attribute("frame", NODE_MAT3)
+    _ = bad.attribute("size", NODE_FLOAT)
+    with assert_raises(contains="The attribute size is a float, not a vec2"):
+        _ = bad.attribute("size", NODE_VEC2)
+    _ = bad.attribute("a", NODE_VEC4)
+    with assert_raises(contains="A graph's attributes hold at most 8 floats"):
+        _ = bad.attribute("b", NODE_VEC4)
+    # A position node runs on the host, where no corner carries them.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.add(moved.position_local(), moved.attribute("lift", NODE_VEC3)),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
+
+
+def test_a_3d_and_an_array_texture_are_read_at_a_vec3() raises:
+    var graph = NodeGraph()
+    var cloud = graph.volume_uniform("cloud", Data3DTextureId(3))
+    var stack = graph.array_uniform("stack")
+    var middle = graph.vec3(0.5, 0.5, 0.5)
+    var a = graph.texture_3d(cloud, middle)
+    var b = graph.texture_3d(cloud, graph.vec3(0, 0, 0))
+    var c = graph.texture_array(stack, middle)
+    graph.set_output(
+        COLOR_NODE, graph.swizzle(graph.add(a, graph.add(b, c)), "rgb")
+    )
+    var program = graph.compile()
+    # Each texture is listed once however often it is read.
+    assert_equal(len(program.volumes), 1)
+    assert_equal(program.volumes[0].value, 3)
+    assert_equal(len(program.arrays), 1)
+    assert_equal(program.arrays[0].value, -1)
+    program.set_array("stack", DataArrayTextureId(4))
+    assert_equal(program.arrays[0].value, 4)
+    var named = NodeGraph()
+    _ = named.array_uniform("given", DataArrayTextureId(2))
+    program.set_volume("cloud", Data3DTextureId(1))
+    assert_equal(program.volumes[0].value, 1)
+    # A source with neither reads white.
+    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
+    # Untextured, each read is opaque white without asking the source.
+    assert_lanes(
+        run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3
+    )
+    with assert_raises(contains="A 3D texture uniform needs a texture"):
+        program.set_volume("cloud", Data3DTextureId(-1))
+    with assert_raises(contains="An array texture uniform needs a texture"):
+        program.set_array("stack", DataArrayTextureId(-1))
+    with assert_raises(contains="The uniform stack is a textureArray"):
+        program.set_volume("stack", Data3DTextureId(0))
+    var bad = NodeGraph()
+    with assert_raises(contains="A 3D texture uniform names no texture"):
+        _ = bad.volume_uniform("x", Data3DTextureId(-3))
+    with assert_raises(contains="An array texture uniform names no texture"):
+        _ = bad.array_uniform("y", DataArrayTextureId(-3))
+    var layers = bad.array_uniform("layers")
+    with assert_raises(contains="This read reads a texture3D, not a vec2"):
+        _ = bad.texture_3d(bad.uv(), bad.vec3(0, 0, 0))
+    with assert_raises(contains="A textureArray is read at a vec3, not a vec2"):
+        _ = bad.texture_array(layers, bad.uv())
+    # Only a fragment reads one.
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_3d(
+                    varied.volume_uniform("c"), varied.normal_world()
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
+
+
+def test_a_call_needs_a_type_and_an_open_call() raises:
+    var graph = NodeGraph()
+    with assert_raises(contains="A call returns a float or a vector"):
+        graph.open_call(NODE_MAT3)
+    with assert_raises(contains="A close_call needs an open_call"):
+        _ = graph.close_call(graph.float(0))
+    with assert_raises(contains="An attribute is a float or a vector"):
+        _ = graph.attribute("heat", ValueType(0))
+
+
+def test_a_cube_is_read_in_a_direction() raises:
+    var graph = NodeGraph()
+    var sky = graph.cube_uniform("sky", CubeTextureId(2))
+    var ground = graph.cube_uniform("ground")
+    var up = graph.texture_cube(sky, graph.vec3(0, 1, 0))
+    var again = graph.texture_cube(sky, graph.vec3(1, 0, 0))
+    var down = graph.texture_cube(ground, graph.vec3(0, -1, 0))
+    graph.set_output(
+        COLOR_NODE,
+        graph.swizzle(graph.add(up, graph.add(again, down)), "rgb"),
+    )
+    var program = graph.compile()
+    # One cube, listed once however often it is read, and one unset.
+    assert_equal(len(program.cubes), 2)
+    assert_equal(program.cubes[0].value, 2)
+    assert_equal(program.cubes[1].value, -1)
+    program.set_cube("ground", CubeTextureId(5))
+    assert_equal(program.cubes[1].value, 5)
+    # A source with no cubes reads white.
+    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
+    assert_lanes(
+        run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3
+    )
+    with assert_raises(contains="A cube uniform needs a cube"):
+        program.set_cube("sky", CubeTextureId(-1))
+    var bad = NodeGraph()
+    with assert_raises(contains="A cube uniform names no cube there can be"):
+        _ = bad.cube_uniform("x", CubeTextureId(-3))
+    var sky2 = bad.cube_uniform("sky")
+    with assert_raises(contains="A cube read reads a cube texture, not a vec2"):
+        _ = bad.texture_cube(bad.uv(), bad.vec3(1, 0, 0))
+    with assert_raises(
+        contains="A cube is read in a vec3 direction, not a vec2"
+    ):
+        _ = bad.texture_cube(sky2, bad.uv())
+    # Only a fragment reads a cube.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.swizzle(
+            moved.texture_cube(moved.cube_uniform("c"), moved.vec3(1, 0, 0)),
+            "xyz",
+        ),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_cube(
+                    varied.cube_uniform("c"), varied.normal_world()
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
 
 
 def test_a_texture_reads_where_its_coordinate_says() raises:
@@ -699,7 +982,7 @@ def test_compiling_refuses_an_edited_graph() raises:
     with assert_raises(contains="names a node the graph does not hold"):
         _ = nowhere.compile()
     var strange = graph.copy()
-    strange._kinds[a.value] = NodeKind(99)
+    strange._kinds[a.value] = NodeKind(104)
     with assert_raises(contains="a kind or a type there is not"):
         _ = strange.compile()
     var shapeless = graph.copy()
@@ -861,6 +1144,20 @@ struct Corners(NodeSource):
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 1.0)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""
         if context == AT_RIGHT:
@@ -879,6 +1176,17 @@ struct Corners(NodeSource):
         return Lanes(10.5, 20.5, 0.75, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
+        """Return the made-up corners, each with custom floats of its own:
+        one to eight at the first, ten times those at the second, and a
+        hundred times at the third."""
+        var at = self._plain_corner(context)
+        var scale = Float32(1) if context == CORNER_A else (
+            Float32(10) if context == CORNER_B else Float32(100)
+        )
+        at.custom = SIMD[DType.float32, 8](1, 2, 3, 4, 5, 6, 7, 8) * scale
+        return at
+
+    def _plain_corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners: normals two long, to see them made
         unit."""
         if context == CORNER_A:

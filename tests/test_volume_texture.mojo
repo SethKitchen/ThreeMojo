@@ -19,6 +19,7 @@ from render.texture import (
     UNSIGNED_BYTE_TYPE,
     Filter,
     TexelType,
+    Texture,
     Wrap,
 )
 from render.volume_texture import (
@@ -27,6 +28,7 @@ from render.volume_texture import (
     DataArrayTexture,
     VolumeImage,
     array_layer,
+    decoded_layers,
     mix_straight_texels,
 )
 from render.volume_texture_store import (
@@ -271,6 +273,42 @@ def test_a_layer_rounds_to_the_nearest_and_stays_inside() raises:
     assert_equal(array_layer(0.5, 3), 1)
     assert_equal(array_layer(1.6, 3), 2)
     assert_equal(array_layer(9, 3), 2)
+
+
+def test_an_array_textures_layers_decode_in_order() raises:
+    # `x` fastest, then `y`, then the layer: red is the index.
+    var layers = decoded_layers(DataArrayTexture(cube_of_floats()))
+    assert_equal(len(layers), 8)
+    for index in range(8):
+        assert_equal(layers[index].r, Float32(index))
+
+
+def test_a_texel_is_fetched_by_its_row_either_way_up() raises:
+    # Rows from the bottom where the texture flips, from the top where it
+    # does not.
+    var pixels: List[UInt8] = [
+        10,
+        0,
+        0,
+        255,
+        20,
+        0,
+        0,
+        255,
+        30,
+        0,
+        0,
+        255,
+        40,
+        0,
+        0,
+        255,
+    ]
+    var image = Texture(2, 2, pixels^, CLAMP, NEAREST, LINEAR, False)
+    var flipped = image.fetch(0, 0, 0)
+    image.flip_y = False
+    var upright = image.fetch(0, 0, 0)
+    assert_true(flipped.r != upright.r)
 
 
 def test_an_array_texture_samples_one_layer_at_a_time() raises:
