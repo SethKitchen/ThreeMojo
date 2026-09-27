@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `WoodNodeMaterial`, `examples/jsm/materials/WoodNodeMaterial.js`:
+"""The procedural wood of three.js's `WoodNodeMaterial`, from
+`examples/jsm/materials/WoodNodeMaterial.js`:
 a physical material whose color is procedural wood, built as a node graph.
 
 The graph is three.js's, function by function: rings of warped distance
