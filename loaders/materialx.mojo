@@ -252,16 +252,16 @@ struct _Reader(Movable):
             )
         return found
 
-    def node(mut self, element: Int, out: String = "") raises -> NodeRef:
+    def node(mut self, element: Int, port: String = "") raises -> NodeRef:
         """Return the node an element makes, three.js's `getNode(out)`,
         each once, cast to its type."""
-        var key = String(element) + ":" + out
+        var key = String(element) + ":" + port
         if key in self.made:
             return NodeRef(self.made[key])
-        var built = self.make(element, out)
+        var built = self.make(element, port)
         var type = self.attr(element, "type")
         var tag = self.tag(element)
-        var split = tag.startswith("separate") and out.startswith("out")
+        var split = tag.startswith("separate") and port.startswith("out")
         if _width(type) > 0 and not split:
             built = self.cast(built, _width(type))
         self.made[key] = built.value
@@ -283,7 +283,7 @@ struct _Reader(Movable):
             return self.graph.swizzle(node, _prefix(want))
         var parts: List[NodeRef] = [node]
         for index in range(have, want):
-            parts.append(self.graph.float(1 if index == 3 else 0))
+            parts.append(self.graph.float(Float32(1) if index == 3 else Float32(0)))
         return self.graph.join(parts)
 
     def constant(mut self, element: Int) raises -> NodeRef:
@@ -303,7 +303,7 @@ struct _Reader(Movable):
             return self.graph.vec3(values[0], values[1], values[2])
         return self.graph.vec4(values[0], values[1], values[2], values[3])
 
-    def make(mut self, element: Int, out: String) raises -> NodeRef:
+    def make(mut self, element: Int, port: String) raises -> NodeRef:
         """Make an element's node, three.js's `getNode` before its cast."""
         var tag = self.tag(element)
         var name = self.attr(element, "name")
@@ -312,7 +312,7 @@ struct _Reader(Movable):
         if tag == "input" and valued and type != "filename":
             return self.constant(element)
         if self.refers(element):
-            var port = out
+            var wanted = port
             var target: String
             if self.attr(element, "nodegraph") != "" and self.attr(element, "output") != "":
                 target = self.attr(element, "nodegraph") + "/" + self.attr(element, "output")
@@ -322,14 +322,14 @@ struct _Reader(Movable):
                     named = self.attr(element, "interfacename")
                 var within = self.graph_path(element)
                 target = within + "/" + named if within != "" else named
-                if tag == "output" and port == "":
-                    port = self.attr(element, "output")
+                if tag == "output" and wanted == "":
+                    wanted = self.attr(element, "output")
             if target not in self.paths:
                 raise Error("MaterialX: nothing is named " + target)
-            return self.node(self.paths[target], port)
+            return self.node(self.paths[target], wanted)
         if tag == "input" and name == "texcoord" and type == "vector2":
             return self.graph.uv()
-        return self.library(element, tag, out)
+        return self.library(element, tag, port)
 
     def texture(mut self, file: Int) raises -> TextureId:
         """Return the texture a `file` input names, read once: repeating,
@@ -359,7 +359,7 @@ struct _Reader(Movable):
             raise Error("MaterialX: an image needs its file")
         return self.graph.texture(self.texture(file), at)
 
-    def library(mut self, element: Int, tag: String, out: String) raises -> NodeRef:
+    def library(mut self, element: Int, tag: String, port: String) raises -> NodeRef:
         """Return a node of three.js's library, `MtlXLibrary`."""
         # << Geometry >>
         if tag == "position":
@@ -528,7 +528,7 @@ struct _Reader(Movable):
             return self.graph.join(parts)
         if tag == "separate2" or tag == "separate3" or tag == "separate4":
             var whole = self.needed(element, "in")
-            var which = out if out != "" else "outx"
+            var which = port if port != "" else "outx"
             var component = String(which[byte=3:4])
             if component == "r":
                 component = "x"
@@ -921,7 +921,7 @@ def read_materialx(
             materials.append(Material(Color(255, 255, 255), kind=BASIC))
     # Every image the graphs read, in the order they were given ids.
     for index in range(len(reader.pending)):
-        _ = assets.textures.add(reader.pending[index].copy())
+        _ = assets.textures.add(Texture(copy=reader.pending[index]))
     var ids = List[MaterialId]()
     for index in range(len(materials)):
         var material = materials[index].copy()
