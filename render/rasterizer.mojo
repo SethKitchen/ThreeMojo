@@ -5305,13 +5305,13 @@ def rasterize_point(
     # The node program, as `rasterize_shaded` runs a triangle's.
     var noded = point.nodes != NO_NODES and mode != SHADE_UV
     var nodes = _HostPointNodes(
-        Pointer(to=programs),
+        Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
         max(point.nodes.value, 0),
-        Pointer(to=textures),
-        Pointer(to=cubes),
-        Pointer(to=volumes),
-        Pointer(to=arrays),
-        Pointer(to=point),
+        Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=volumes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=point).unsafe_origin_cast[ImmutAnyOrigin](),
         target.height,
     )
     var masked = noded and has_output(nodes, MASK_NODE)
