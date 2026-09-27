@@ -11,6 +11,8 @@ make test-gpu-host  # the MAX backend's layout suites, with no GPU
 
 The full list of targets is in [Commands](Commands).
 
+The suites run together, one process for each core. The format check formats every file in one process. The compile-fail cases compile together the same way.
+
 ## Run one test suite
 
 Mojo needs the repository root on its import path. `-I .` does that.

@@ -7,7 +7,7 @@ This is original work with no three.js lineage.
 ## How it works
 
 1. `build_cli.mojo` rewrites every covered module into `coverage/build/`, with a probe before each statement and around each decision. It writes a manifest of everything the probes can report.
-2. The coverage tool and the suites are copied into `coverage/build/` as well, and the suites run from there. Each probe writes one record to `stderr`. `stdout` is unchanged.
+2. The coverage tool and the suites are copied into `coverage/build/`, and the suites run from there. A probe writes a line the first time that line runs. It writes a decision the first time each vector of conditions appears. `stdout` is unchanged. The recipe links `coverage/state.c`, because Mojo has no mutable globals. `mojo run` ignores a linker flag, so the recipe builds each suite and then runs that binary.
 3. `report_cli.mojo` groups the records, matches them to the manifest, and prints the table. It exits with an error when anything is uncovered.
 
 `make coverage` runs all three. See [How to measure coverage](How-to-measure-coverage).
@@ -26,7 +26,10 @@ The copies of the tool itself are never instrumented. Measuring the tool with th
 |---|---|
 | `scanner.mojo` | Find statements, decisions and loop headers in a source file. |
 | `instrument.mojo` | Emit the probes. Split `and` and `or` conditions. |
-| `runtime.mojo` | The probe functions the instrumented code calls. |
+| `runtime.mojo` | The record prefixes, and printers that write every call. |
+| `fast.mojo` | The probe functions the instrumented code calls. |
+| `dedup.mojo` | The seen-set those probes consult. |
+| `state.c` | The mutable buffer `fast.mojo` keeps the seen-set in. |
 | `mcdc.mojo` | Reconstruct decision vectors from the ordered record stream. |
 | `report.mojo` | Build the report and decide whether it is complete. |
 | `build_cli.mojo`, `report_cli.mojo` | The two commands the Makefile runs. |
@@ -51,11 +54,13 @@ MC/DC is the masking variant. Short-circuit evaluation makes unique-cause MC/DC 
 
 ## Limits
 
-Two threads reporting one decision at once would interleave their records. The renderer therefore defaults to one worker, and the coverage run uses it.
+The seen-set is not locked. Two threads that report one decision at once can drop a vector. They can also interleave a record. The renderer therefore defaults to one worker, and the coverage run uses it.
 
-### The capture grows with every statement run
+### A repeated statement writes one record
 
-Each statement that runs writes one record, so the capture grows with the work a suite does. A PMREM blur reads its source about half a million times, and each read ran about 150 statements. That made `test_pmrem` write 14 GB and run for six and a half minutes.
+A probe writes a line once, and a decision once for each distinct vector. A statement in a loop no longer writes a record on every pass. A decision that takes a new combination of conditions still writes that vector.
+
+Before this, the capture grew with every statement that ran. A PMREM blur read its source about half a million times, and each read ran about 150 statements. That made `test_pmrem` write 14 GB and run for six and a half minutes. See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run) for those sizes.
 
 Keep the innermost helpers short for this reason:
 

@@ -6,7 +6,7 @@
 make coverage
 ```
 
-The run takes about five seconds on a fast machine.
+Each suite compiles the instrumented library, and that compile is most of the time. The suites run together, one process for each core. The run needs a C compiler named `cc`.
 
 ## Read the report
 
@@ -53,10 +53,16 @@ The coverage tool does not measure itself.
 
 ## Run a suite under instrumentation by hand
 
-When a suite fails only under instrumentation, run it against the instrumented copies:
+When a suite fails only under instrumentation, run its copy in the build tree. A suite beside the real library imports that library, and the probes never run.
+
+`mojo run` ignores a linker flag. Build the suite, then run the binary.
 
 ```bash
-.venv/bin/mojo run -I coverage/build -I . tests/test_renderer.mojo
+cc -c -O2 -o coverage/build/state.o coverage/state.c
+.venv/bin/mojo build -I coverage/build \
+  -Xlinker "$(pwd)/coverage/build/state.o" \
+  -o /tmp/suite coverage/build/tests/test_renderer.mojo
+/tmp/suite
 ```
 
 See [Coverage tool](Coverage-tool) for how the instrumentation works.

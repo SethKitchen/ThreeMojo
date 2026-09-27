@@ -39,7 +39,7 @@ def test_import_is_added_once_above_the_first_definition() raises:
     )
     var count = 0
     for line in result.text.splitlines():
-        if String(line).startswith("from coverage.runtime"):
+        if String(line).startswith("from coverage.fast"):
             count += 1
     assert_equal(count, 1)
     assert_equal(String(result.text.splitlines()[0]).startswith("from"), True)
@@ -51,7 +51,7 @@ def test_import_is_placed_below_a_module_docstring() raises:
     var result = instrument(source, String("m"))
     var lines = result.text.splitlines()
     assert_equal(String(lines[0]), String('"""Doc."""'))
-    assert_true(String(lines[2]).startswith("from coverage.runtime"))
+    assert_true(String(lines[2]).startswith("from coverage.fast"))
 
 
 def test_import_is_placed_below_a_multi_line_docstring() raises:
@@ -61,7 +61,7 @@ def test_import_is_placed_below_a_multi_line_docstring() raises:
     var result = instrument(source, String("m"))
     var lines = result.text.splitlines()
     # The `def` inside the docstring must not attract the import.
-    assert_true(String(lines[4]).startswith("from coverage.runtime"))
+    assert_true(String(lines[4]).startswith("from coverage.fast"))
     assert_equal(String(lines[5]), String("def f():"))
 
 
@@ -76,7 +76,7 @@ def test_existing_imports_are_preserved_above_the_probe_import() raises:
     var result = instrument(source, String("m"))
     var lines = result.text.splitlines()
     assert_equal(String(lines[0]), String("from std.math import sqrt"))
-    assert_true(String(lines[2]).startswith("from coverage.runtime"))
+    assert_true(String(lines[2]).startswith("from coverage.fast"))
 
 
 def test_original_lines_are_preserved_verbatim() raises:

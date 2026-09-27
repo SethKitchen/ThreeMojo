@@ -167,7 +167,7 @@ COV_BUDGET := $(shell n=$(words $(COVERAGE_TESTS)); \
 CACHE_DIR := .cache
 HASHER    := $(shell command -v shasum > /dev/null 2>&1 \
                && echo "shasum -a 256" || echo "sha256sum")
-INPUTS    := $(SOURCES) $(COMPILE_FAIL) Makefile
+INPUTS    := $(SOURCES) $(COMPILE_FAIL) Makefile coverage/state.c
 # The compiler is an input too. Hashing only the sources meant that upgrading
 # Mojo left every success stamp eligible for reuse, so `make check` could pass
 # without having compiled a line against the new toolchain. Costs one process
@@ -360,20 +360,30 @@ $(LINT_GPU_STAMP):
 	@$(call stamp,lint-gpu)
 
 # mojo format has no --check flag, so format a scratch copy and diff it.
+# One process formats the whole tree. A process per file spends most of its
+# time starting Mojo.
 fmt-check: $(FMT_STAMP)
 $(FMT_STAMP):
+ifeq ($(strip $(FORMATTED)),)
+	@echo "No files to format."
+else
 	@fail=0; tmp=$$(mktemp -d); \
 	for f in $(FORMATTED); do \
-	  cp "$$f" "$$tmp/candidate.mojo"; \
-	  $(call run,$(MOJO) format -q "$$tmp/candidate.mojo"); \
-	  if [ $$rc -ne 0 ]; then fail=1; continue; fi; \
-	  if ! diff -q "$$f" "$$tmp/candidate.mojo" > /dev/null; then \
+	  mkdir -p "$$tmp/$$(dirname $$f)"; \
+	  cp "$$f" "$$tmp/$$f"; \
+	done; \
+	out=$$($(MOJO) format -q "$$tmp" 2>&1); rc=$$?; \
+	printf '%s\n' "$$out" | sed '/Crashpad/d'; \
+	if [ $$rc -ne 0 ]; then rm -rf "$$tmp"; exit 1; fi; \
+	for f in $(FORMATTED); do \
+	  if ! diff -q "$$f" "$$tmp/$$f" > /dev/null; then \
 	    echo "needs formatting: $$f"; fail=1; \
 	  fi; \
 	done; \
 	rm -rf "$$tmp"; \
 	if [ $$fail -ne 0 ]; then echo "Run 'make fmt'."; exit 1; fi; \
 	echo "All files formatted."
+endif
 	@$(call stamp,fmt)
 
 # Instrument the library, run the suite against the instrumented copies, then
@@ -410,7 +420,11 @@ else
 	@# above. These copies are never instrumented, so measuring the tool
 	@# with itself is still not attempted.
 	@mkdir -p $(COV_DIR)/coverage
-	@cp coverage/*.mojo $(COV_DIR)/coverage/
+	@cp coverage/*.mojo coverage/state.c $(COV_DIR)/coverage/
+	@command -v cc >/dev/null 2>&1 || { \
+	  echo "coverage needs a C compiler (cc) to build coverage/state.c"; \
+	  exit 1; }
+	@cc -c -O2 -o $(COV_DIR)/state.o coverage/state.c
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
@@ -420,12 +434,20 @@ else
 	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
-	             $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo" \
+	             bin=$(COV_DIR)/hits/$$name.bin; \
+	             $(MOJO) build -I $(COV_DIR) \
+	               -Xlinker $(CURDIR)/$(COV_DIR)/state.o \
+	               -o "$$bin" "$(COV_DIR)/tests/$$name.mojo" \
+	               > $(COV_DIR)/hits/$$name.build 2>&1 \
+	             || { echo "$$name failed to build under instrumentation:"; \
+	                  tail -n 40 $(COV_DIR)/hits/$$name.build; exit 1; }; \
+	             "$$bin" \
 	               2> $(COV_DIR)/hits/$$name.txt > $(COV_DIR)/hits/$$name.out \
 	             || { echo "$$name failed under instrumentation:"; \
 	                  tail -n 30 $(COV_DIR)/hits/$$name.out; \
 	                  grep -v "^COV" $(COV_DIR)/hits/$$name.txt | tail -n 30; \
-	                  exit 1; }' _ {} \
+	                  exit 1; }; \
+	             rm -f "$$bin"' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
@@ -452,14 +474,17 @@ endif
 # fails if any of them ever starts compiling.
 compile-fail: $(NEG_STAMP)
 $(NEG_STAMP):
-	@fail=0; \
-	for f in $(COMPILE_FAIL_RUN); do \
-	  if $(MOJO) build $(MOJOFLAGS) -o /dev/null "$$f" > /dev/null 2>&1; then \
-	    echo "compiled but should not have: $$f"; fail=1; \
-	  fi; \
-	done; \
-	if [ $$fail -ne 0 ]; then exit 1; fi; \
-	echo "All $(words $(COMPILE_FAIL_RUN)) unit errors rejected."
+ifeq ($(strip $(COMPILE_FAIL_RUN)),)
+	@echo "No compile-fail cases to check."
+else
+	@printf '%s\n' $(COMPILE_FAIL_RUN) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'if $(MOJO) build $(MOJOFLAGS) -o /dev/null "$$1" > /dev/null 2>&1; then \
+	               echo "compiled but should not have: $$1"; exit 1; \
+	             fi' _ {} \
+	  || exit 1
+	@echo "All $(words $(COMPILE_FAIL_RUN)) unit errors rejected."
+endif
 	@$(call stamp,compile-fail)
 
 # --- documentation ----------------------------------------------------------

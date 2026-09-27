@@ -3,12 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Probe functions compiled into instrumented copies of the sources.
+"""Record prefixes, and printers that write a record on every call.
 
-Mojo has no global variables, so a probe cannot accumulate counts in memory.
-Instead each probe writes one record to stderr and the report tool dedupes
-them afterwards. stderr is used so that a program's real stdout — a PPM image,
-say — stays byte-for-byte unchanged while instrumented.
+Instrumented code calls `coverage.fast` instead. Those probes write a line
+the first time it runs, and a decision the first time each vector of
+conditions appears. Mojo has no mutable globals, so that memory lives in
+`coverage/state.c`.
+
+The functions here still write every call. The report accepts either
+stream. stderr is used so that a program's real stdout — a PPM image, say —
+stays byte-for-byte unchanged while instrumented.
 
 Neither probe may raise, or it could not be called from the many non-raising
 functions in the codebase.

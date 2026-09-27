@@ -5667,6 +5667,7 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
     neither reads a texture or a derivative. Every corner is one vertex."""
 
     var program: Pointer[NodeProgram, Self.origin]
+    var code: Pointer[Float32, Self.origin]
     var vertex: NodeInputs
 
     def __init__(out self, program: Pointer[NodeProgram, Self.origin]):
@@ -5678,6 +5679,12 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
         """
         var none = Vector3(0, 0, 0)
         self.program = program
+        self.code = (
+            program[]
+            .code.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[Self.origin]()
+        )
         self.vertex = NodeInputs(0, 0, none, none, none, none, False)
 
     def __init__(
@@ -5691,8 +5698,15 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
             vertex: The vertex every corner is.
         """
         self.program = program
+        self.code = (
+            program[]
+            .code.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[Self.origin]()
+        )
         self.vertex = vertex
 
+    @always_inline
     def word(self, at: Int) -> Float32:
         """Return one float of the program.
 
@@ -5702,7 +5716,7 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
         Returns:
             The float.
         """
-        return self.program[].code[at]
+        return self.code.unsafe_offset(at)[]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return opaque white: there is no surface to read a texture on.
@@ -6471,8 +6485,22 @@ def _operation[
 ](
     source: S, op: Int, x: Lanes, y: Lanes, z: Lanes, immediate: Float32
 ) -> Lanes:
-    """Return what a math node computes from its inputs' registers."""
+    """Return what a math node computes from its inputs' registers.
+
+    Add through normalize are the common path, so they stay first. A later
+    operation skips that run of checks. The result is the same either way.
+    """
     var width = Int(immediate)
+    if op <= NODE_NORMALIZE.value:
+        return _op_common(op, x, y, z, width)
+    if op <= NODE_SATURATE.value:
+        return _op_mid(source, op, x, y, z, width)
+    return _op_late(source, op, x, y, z, width)
+
+
+def _op_common(op: Int, x: Lanes, y: Lanes, z: Lanes, width: Int) -> Lanes:
+    """Return an add, subtract, multiply, divide, mix, clamp, dot or normalize.
+    """
     if op == NODE_ADD.value:
         return x + y
     if op == NODE_SUB.value:
@@ -6487,8 +6515,13 @@ def _operation[
         return min(max(x, y), z)
     if op == NODE_DOT.value:
         return Lanes(_dot(x, y, width))
-    if op == NODE_NORMALIZE.value:
-        return _normalized(x, width)
+    return _normalized(x, width)
+
+
+def _op_mid[
+    S: NodeSource
+](source: S, op: Int, x: Lanes, y: Lanes, z: Lanes, width: Int) -> Lanes:
+    """Return a sine through a saturate, and rounding."""
     if op == NODE_SIN.value:
         return sin(x)
     if op == NODE_COS.value:
@@ -6550,6 +6583,16 @@ def _operation[
         return 1 - x
     if op == NODE_SATURATE.value:
         return min(max(x, 0), 1)
+    if _lane_by_lane(op):
+        return _per_lane(op, x, y)
+    var missed = source.shares(NodeContext(width))
+    return x * missed[0] + y * missed[1] + z * missed[2]
+
+
+def _op_late[
+    S: NodeSource
+](source: S, op: Int, x: Lanes, y: Lanes, z: Lanes, width: Int) -> Lanes:
+    """Return a tangent through the remaining operations, or an interpolate."""
     if op == NODE_TAN.value:
         return sin(x) / cos(x)
     if _lane_by_lane(op):

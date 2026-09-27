@@ -4568,6 +4568,9 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's floats. A load here skips the store's bounds checks,
+    # which `word` does once per instruction word.
+    var code: Pointer[Float32, Self.origin]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -4601,6 +4604,19 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         high, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        # A primitive with no node program still builds this view. Its
+        # `word` is not called, so the stand-in pointer is never loaded.
+        # Indexing the store here would be out of range.
+        if program < 0 or program >= len(programs[].programs):
+            self.code = programs.unsafe_bitcast[Float32]()
+        else:
+            self.code = (
+                programs[]
+                .programs[program]
+                .code.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Self.origin]()
+            )
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -4614,9 +4630,10 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         self.height = height
         self.depth = 0
 
+    @always_inline
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code.unsafe_offset(at)[]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) for this fragment, as
@@ -4728,6 +4745,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    var code: Pointer[Float32, Self.origin]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -4755,6 +4773,19 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        # A primitive with no node program still builds this view. Its
+        # `word` is not called, so the stand-in pointer is never loaded.
+        # Indexing the store here would be out of range.
+        if program < 0 or program >= len(programs[].programs):
+            self.code = programs.unsafe_bitcast[Float32]()
+        else:
+            self.code = (
+                programs[]
+                .programs[program]
+                .code.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Self.origin]()
+            )
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -4765,9 +4796,10 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         self.height = height
         self.depth = 0
 
+    @always_inline
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code.unsafe_offset(at)[]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) at the level the point's size
@@ -4876,6 +4908,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    var code: Pointer[Float32, Self.origin]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -4905,6 +4938,19 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         high, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        # A primitive with no node program still builds this view. Its
+        # `word` is not called, so the stand-in pointer is never loaded.
+        # Indexing the store here would be out of range.
+        if program < 0 or program >= len(programs[].programs):
+            self.code = programs.unsafe_bitcast[Float32]()
+        else:
+            self.code = (
+                programs[]
+                .programs[program]
+                .code.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[Self.origin]()
+            )
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -4916,9 +4962,10 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         self.height = height
         self.depth = 0
 
+    @always_inline
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code.unsafe_offset(at)[]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) from its full-size level: a line

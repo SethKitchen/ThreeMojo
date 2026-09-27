@@ -14,7 +14,7 @@ and only ever lives under `coverage/build/`.
 from coverage.scanner import Scanner, indent_of
 
 comptime PROBE_IMPORT = (
-    "from coverage.runtime import hit as _cov_hit, branch as _cov_branch"
+    "from coverage.fast import hit as _cov_hit, branch as _cov_branch"
 )
 
 # Decisions whose condition is wrapped so both outcomes become observable.

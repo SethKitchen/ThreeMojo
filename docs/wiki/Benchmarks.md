@@ -349,11 +349,15 @@ Read a frames column against the ThreeMojo `run` column minus the Mojo baseline.
 
 Mojo 1.0.0 compiles the probe, `triangle`, `spin`, `cube` and `edges`. It refuses the other examples.
 
+## Shader programs
+
+The interpreter checks an operation's range before the later operations. A host program also keeps a pointer to its floats. On a 4-core Linux container, the daylight example went from 3.951 seconds to 1.831 seconds, median of three runs. The published tables above were not remeasured on that machine.
+
 ## PMREM and the coverage run
 
 The heaviest suites now write a quarter to a half of the coverage records they wrote before issue #157. Every image is the same to the bit.
 
-A coverage run writes one record for each statement that runs. So the cost of a suite under coverage follows the statements in its innermost loops, not its run time. `test_pmrem` takes a fifth of a second without coverage, but it wrote 14 GB under coverage. See [Coverage tool](Coverage-tool#the-capture-grows-with-every-statement-run).
+A probe writes a line once, and a decision once for each distinct vector. The table below is from before that change. A suite's capture then grew with every statement it ran. `test_pmrem` takes a fifth of a second without coverage, and it wrote 14 GB under coverage. See [Coverage tool](Coverage-tool#a-repeated-statement-writes-one-record).
 
 | Suite, every CPU module instrumented | Before | After |
 |---|---|---|
