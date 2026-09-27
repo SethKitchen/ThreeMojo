@@ -491,7 +491,7 @@ def test_a_cube_is_read_in_a_direction() raises:
         varied.varying(
             varied.swizzle(
                 varied.texture_cube(
-                    varied.cube_uniform("c"), varied.vec3(1, 0, 0)
+                    varied.cube_uniform("c"), varied.normal_world()
                 ),
                 "xyz",
             )
