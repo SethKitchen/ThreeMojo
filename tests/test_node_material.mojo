@@ -1279,6 +1279,11 @@ def test_points_run_a_node_material() raises:
     # Six pixels across: columns five to ten.
     assert_equal(Int(image.get_pixel(5, SIZE // 2).b), 255)
     assert_equal(Int(image.get_pixel(4, SIZE // 2).b), 0)
+    # A size runs before the point has pixels, so it reads no fragment.
+    var placed = NodeGraph()
+    placed.set_output(SIZE_NODE, placed.swizzle(placed.frag_coord(), "x"))
+    with assert_raises(contains="A size node runs once per point"):
+        _ = placed.compile()
     # A size that is not above zero is refused.
     var flat = NodeGraph()
     flat.set_output(SIZE_NODE, flat.float(0))
