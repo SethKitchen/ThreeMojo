@@ -160,6 +160,8 @@ A line tests the depth of what was drawn before it. An opaque line in front of a
 
 `prepare_lines` returns its list in that order too: opaque lines and wireframes nearest first, then the blended ones furthest first. A wireframe is sorted among the lines by its own depth.
 
+A `Line` runs a [node material](Node-materials#points-and-lines) at each of its pixels, as three.js runs a `ShaderMaterial` on a line. Its two ends are the program's corners. A wide line refuses one.
+
 A line whose node shares no layer with the camera contributes nothing. Nor does one whose bounding sphere lies outside the camera's frustum, unless it opted out with `frustum_culled=False`.
 
 ## Clipping
