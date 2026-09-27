@@ -260,7 +260,7 @@ The port is not at parity with three.js yet. 196 features are ported and 7 are o
 
 - [ ] GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
-- [ ] Output color space and post-processing leftovers [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
+- [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
 
 <details>
 <summary>Ported: 29</summary>
