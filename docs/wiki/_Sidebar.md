@@ -41,6 +41,7 @@
 - [Render target](Render-target-and-framebuffer)
 - [Post-processing](Post-processing)
 - [GPU computation](GPU-computation)
+- [Progressive light map](Progressive-light-map)
 - [SVG renderer](SVG-renderer)
 - [Image files](Image-files)
 - [Model files](Model-files)

@@ -10009,6 +10009,46 @@ def test_both_backends_draw_a_materialx_surface_alike() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_draw_a_light_map_in_texture_space_alike() raises:
+    # Two planes drawn where their uv1 puts them, with the light map's
+    # material mixing their light into a map one update has filled.
+    if skipped_for_lack_of_a_gpu("both backends draw a light map alike"):
+        return
+    from renderers.progressive_light_map import ProgressiveLightMap
+    from test_progressive_light_map import a_camera, two_planes
+
+    var assets = Assets()
+    var scene = Scene()
+    two_planes(assets, scene)
+    var light_map = ProgressiveLightMap(assets, 48)
+    light_map.add_objects_to_light_map(scene, assets, [0, 1])
+    var renderer = Renderer(48, 48)
+    renderer.set_background(BACKGROUND)
+    light_map.update(renderer, scene, assets, a_camera(), 2)
+    ref program = assets.programs.get(light_map.program)
+    program.set_texture("previousShadowMap", light_map.maps[1])
+    for index in range(2):
+        scene.meshes[index].material = light_map.uv_material
+    renderer.uv_space_meshes = light_map.meshes.copy()
+    var camera = a_camera()
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 48)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_true(48 * 48 - count_background(cpu, BACKGROUND) > 1000)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
