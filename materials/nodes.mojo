@@ -1287,7 +1287,7 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._at_level(self.texture(sampler, uv), level)
 
-    def _at_level(mut self, read: NodeRef, level: NodeRef) raises -> NodeRef:
+    def _at_level(mut self, texel: NodeRef, level: NodeRef) raises -> NodeRef:
         """Turn a texture node just added, which nothing reads yet, into
         one read at a level.
 
@@ -1300,9 +1300,9 @@ struct NodeGraph(Copyable, Movable):
                 "A texture's level is a float, not a "
                 + self._types[level.value].name()
             )
-        self._kinds[read.value] = NODE_TEXTURE_LEVEL
-        self._inputs[read.value * 3 + 2] = level.value
-        return read
+        self._kinds[texel.value] = NODE_TEXTURE_LEVEL
+        self._inputs[texel.value * 3 + 2] = level.value
+        return texel
 
     def lit(mut self) -> NodeRef:
         """Return the color the material's own lighting made of the surface,
