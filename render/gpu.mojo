@@ -1724,12 +1724,17 @@ def _cube_through(
     var distance = toward.length()
     if not inside_point_shadow(distance, near, far):
         return Vector3(1, 1, 1)
-    var texel = block + colors + cube_texel(
-        Vector3(
-            toward.x / distance, toward.y / distance, toward.z / distance
-        ),
-        Int(lights[unsafe_offset=block]),
-    ) * 4
+    var texel = (
+        block
+        + colors
+        + cube_texel(
+            Vector3(
+                toward.x / distance, toward.y / distance, toward.z / distance
+            ),
+            Int(lights[unsafe_offset=block]),
+        )
+        * 4
+    )
     return transmitted_shadow(
         _unweakened_cube_at(lights, block, position, normal),
         SIMD[DType.float32, 4](
