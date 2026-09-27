@@ -1102,6 +1102,16 @@ def test_values_and_components_that_are_not_read_are_refused() raises:
             + tail,
             assets,
         )
+    # A texcoord of another type than a vector2 is not the coordinates.
+    with assert_raises():
+        _ = read_materialx(
+            graph
+            + '<image name="n" type="color3"><input name="file"'
+            ' type="filename" value="px.png" /><input name="texcoord"'
+            ' type="vector3" /></image>'
+            + tail,
+            assets,
+        )
 
 
 def main() raises:
