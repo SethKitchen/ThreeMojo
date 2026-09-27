@@ -222,9 +222,17 @@ def _is_hex_start(text: String) -> Bool:
     return text.startswith("0x") or text.startswith("0X")
 
 
+# What an open `#if` is doing: taking its lines, waiting for a branch
+# that holds, or done, having taken one or being inside a branch not taken.
+comptime _TAKING = 0
+comptime _WAITING = 1
+comptime _DONE = 2
+
+
 struct _Lexer(Movable):
     """Turns one shader's text into tokens, running its object-like
-    `#define`s and refusing every other preprocessor directive."""
+    `#define`s, its `#undef`s and its `#if`s, and refusing every other
+    preprocessor directive."""
 
     var stage: String
     var raw: Bool
@@ -232,6 +240,10 @@ struct _Lexer(Movable):
     var names: List[String]
     var bodies: List[List[_Token]]
     var tokens: List[_Token]
+    # Each open `#if`, innermost last: `_TAKING`, `_WAITING` or `_DONE`,
+    # and whether its `#else` has come.
+    var conditions: List[Int]
+    var elsed: List[Bool]
 
     def __init__(out self, stage: String, raw: Bool):
         """Start a lexer for one shader."""
@@ -243,6 +255,15 @@ struct _Lexer(Movable):
         self.names = List[String]()
         self.bodies = List[List[_Token]]()
         self.tokens = List[_Token]()
+        self.conditions = List[Int]()
+        self.elsed = List[Bool]()
+
+    def active(self) -> Bool:
+        """Return True if every open `#if` is taking its lines."""
+        for index in range(len(self.conditions)):
+            if self.conditions[index] != _TAKING:
+                return False
+        return True
 
     def error(self, line: Int, why: String) -> Error:
         """Return the error that refuses the shader at a line: the caller
@@ -292,9 +313,15 @@ struct _Lexer(Movable):
                     String(text[byte = at + 1 : end]), line, len(out)
                 )
                 at = end
-            else:
+            elif self.active():
                 starts_line = False
                 at = self.token(text, at, line, out)
+            else:
+                # A line an `#if` does not take is skipped, counted.
+                starts_line = False
+                at += 1
+        if len(self.conditions) > 0:
+            raise self.error(line, "an #if is never closed with #endif")
         out.append(_Token(_END, "", 0, line))
         self.tokens = out^
 
@@ -415,6 +442,21 @@ struct _Lexer(Movable):
         if len(words) == 0:
             return
         var name = String(words[0])
+        if _listed(name, " if ifdef ifndef elif else endif "):
+            self.conditional(name, text, line)
+            return
+        if not self.active():
+            return
+        if name == "undef":
+            if len(words) != 2:
+                raise self.error(line, "an #undef names one macro")
+            var gone = String(words[1])
+            for index in range(len(self.names)):
+                if self.names[index] == gone:
+                    _ = self.names.pop(index)
+                    _ = self.bodies.pop(index)
+                    return
+            return
         if name == "version":
             var joined = String("")
             # Never empty: a directive has its name.
@@ -436,6 +478,208 @@ struct _Lexer(Movable):
         raise self.error(
             line, "the directive #" + name + " is outside the subset"
         )
+
+    def conditional(mut self, name: String, text: String, line: Int) raises:
+        """Run `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` or `#endif`.
+
+        Raises:
+            Error: If an `#elif`, an `#else` or an `#endif` has no `#if`, an
+                `#elif` or an `#else` follows an `#else`, a name is missing,
+                or a condition is outside the subset.
+        """
+        var rest = String(text[byte = text.find(name) + name.byte_length() :])
+        if name == "if" or name == "ifdef" or name == "ifndef":
+            if not self.active():
+                self.conditions.append(_DONE)
+                self.elsed.append(False)
+                return
+            var holds: Bool
+            if name == "if":
+                holds = self.condition(rest, line)
+            else:
+                var words = rest.split()
+                if len(words) != 1:
+                    raise self.error(line, "an #" + name + " names one macro")
+                holds = self.defined(String(words[0])) == (name == "ifdef")
+            self.conditions.append(_TAKING if holds else _WAITING)
+            self.elsed.append(False)
+            return
+        if len(self.conditions) == 0:
+            raise self.error(line, "an #" + name + " has no #if")
+        var top = len(self.conditions) - 1
+        if name == "endif":
+            _ = self.conditions.pop()
+            _ = self.elsed.pop()
+            return
+        if self.elsed[top]:
+            raise self.error(line, "an #" + name + " follows the #else")
+        var state = self.conditions[top]
+        if name == "else":
+            self.elsed[top] = True
+            self.conditions[top] = _TAKING if state == _WAITING else _DONE
+            return
+        # `#elif`: taken where no branch before it was and it holds.
+        if state == _WAITING and self.condition(rest, line):
+            self.conditions[top] = _TAKING
+        elif state == _TAKING:
+            self.conditions[top] = _DONE
+
+    def defined(self, name: String) -> Bool:
+        """Return True if a macro is defined."""
+        for index in range(len(self.names)):
+            if self.names[index] == name:
+                return True
+        return False
+
+    def condition(self, text: String, line: Int) raises -> Bool:
+        """Return whether an `#if`'s condition holds: whole numbers, macros
+        that are one whole number, `defined`, `!`, `&&`, `||`, the six
+        comparisons and parentheses. A name that is not a macro is zero, as
+        the C preprocessor has it.
+
+        Raises:
+            Error: If the condition is empty, is outside the subset, or
+                reads a macro that is not one whole number.
+        """
+        var parts = self.pieces(text, line)
+        if len(parts) == 0:
+            raise self.error(line, "an #if needs a condition")
+        var at = 0
+        var value = self.either(parts, at, line)
+        if at != len(parts):
+            raise self.error(
+                line, "the #if condition goes on past " + parts[at - 1]
+            )
+        return value != 0
+
+    def pieces(self, text: String, line: Int) raises -> List[String]:
+        """Split an `#if` condition into names, numbers and marks.
+
+        Raises:
+            Error: If a character is outside a condition.
+        """
+        var parts = List[String]()
+        var bytes = text.as_bytes()
+        var at = 0
+        while at < len(bytes):
+            var c = bytes[at]
+            if _is_space(c):
+                at += 1
+                continue
+            if c == UInt8(ord("/")) and _clipped(text, at, at + 2) == "//":
+                break
+            var end = at + 1
+            if _is_word_byte(c):
+                while end < len(bytes) and _is_word_byte(bytes[end]):
+                    end += 1
+            elif _listed(_clipped(text, at, at + 2), " && || == != <= >= "):
+                end = at + 2
+            elif not (String(text[byte = at : at + 1]) in String("()!<>")):
+                raise self.error(
+                    line,
+                    "the character "
+                    + String(text[byte = at : at + 1])
+                    + " is outside an #if condition",
+                )
+            parts.append(String(text[byte=at:end]))
+            at = end
+        return parts^
+
+    def either(
+        self, parts: List[String], mut at: Int, line: Int
+    ) raises -> Int:
+        """Evaluate `a || b` and what binds tighter."""
+        var value = self.both(parts, at, line)
+        while at < len(parts) and parts[at] == "||":
+            at += 1
+            var right = self.both(parts, at, line)
+            value = 1 if value != 0 or right != 0 else 0
+        return value
+
+    def both(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
+        """Evaluate `a && b` and what binds tighter."""
+        var value = self.compared(parts, at, line)
+        while at < len(parts) and parts[at] == "&&":
+            at += 1
+            var right = self.compared(parts, at, line)
+            value = 1 if value != 0 and right != 0 else 0
+        return value
+
+    def compared(
+        self, parts: List[String], mut at: Int, line: Int
+    ) raises -> Int:
+        """Evaluate one comparison of two terms, or a term."""
+        var value = self.term(parts, at, line)
+        if at >= len(parts) or not _listed(parts[at], " == != < > <= >= "):
+            return value
+        var mark = parts[at]
+        at += 1
+        var right = self.term(parts, at, line)
+        var holds: Bool
+        if mark == "==":
+            holds = value == right
+        elif mark == "!=":
+            holds = value != right
+        elif mark == "<":
+            holds = value < right
+        elif mark == ">":
+            holds = value > right
+        elif mark == "<=":
+            holds = value <= right
+        else:
+            holds = value >= right
+        return 1 if holds else 0
+
+    def term(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
+        """Evaluate `!a`, `(a)`, `defined(NAME)`, a whole number or a
+        name."""
+        if at >= len(parts):
+            raise self.error(line, "an #if condition ends too soon")
+        var part = parts[at]
+        at += 1
+        if part == "!":
+            return 1 if self.term(parts, at, line) == 0 else 0
+        if part == "(":
+            var inner = self.either(parts, at, line)
+            if at >= len(parts) or parts[at] != ")":
+                raise self.error(line, "an #if condition leaves a ( open")
+            at += 1
+            return inner
+        if part == "defined":
+            var wrapped = at < len(parts) and parts[at] == "("
+            if wrapped:
+                at += 1
+            if at >= len(parts) or not _is_letter(parts[at].as_bytes()[0]):
+                raise self.error(line, "defined names a macro")
+            var holds = self.defined(parts[at])
+            at += 1
+            if wrapped:
+                if at >= len(parts) or parts[at] != ")":
+                    raise self.error(line, "an #if condition leaves a ( open")
+                at += 1
+            return 1 if holds else 0
+        if _is_digit(part.as_bytes()[0]):
+            for index in range(part.byte_length()):
+                if not _is_digit(part.as_bytes()[index]):
+                    raise self.error(
+                        line, "an #if condition counts in whole numbers"
+                    )
+            return atol(part)
+        if not _is_letter(part.as_bytes()[0]):
+            raise self.error(line, "an #if condition cannot hold " + part)
+        for index in range(len(self.names)):
+            if self.names[index] == part:
+                ref body = self.bodies[index]
+                if len(body) != 1 or body[0].kind != _INT:
+                    raise self.error(
+                        line,
+                        "the macro "
+                        + part
+                        + " is not one whole number, as an #if reads it",
+                    )
+                return Int(body[0].number)
+        # A name that is not a macro is zero.
+        return 0
 
     def version_line(mut self, version: String, line: Int, before: Int) raises:
         """Take `#version 300 es` or `#version 100` as a raw shader's first

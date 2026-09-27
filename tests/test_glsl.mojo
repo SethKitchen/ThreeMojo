@@ -432,6 +432,74 @@ def test_a_define_stands_for_its_tokens() raises:
     refused("#define X 0xAb", "the shader has no main")
 
 
+def test_an_if_takes_the_lines_of_the_branch_that_holds() raises:
+    # Each branch of each kind, nested, and names that are not macros.
+    var shader = (
+        "#define LEVEL 2\n"
+        + "#define ON\n"
+        + "#ifdef ON\n"
+        + "    #define A 1.0\n"
+        + "#else\n"
+        + "    #define A 9.0\n"
+        + "#endif\n"
+        + "#ifndef ON\n"
+        + "    #define B 9.0\n"
+        + "#elif LEVEL > 1 && defined(ON)\n"
+        + "    #define B 2.0\n"
+        + "#else\n"
+        + "    #define B 8.0\n"
+        + "#endif\n"
+        + "#if (LEVEL == 3 || !defined ON) && MISSING == 0\n"
+        + "    #define C 9.0\n"
+        + "#elif LEVEL <= 2 && LEVEL >= 2 && LEVEL != 5 && LEVEL < 3\n"
+        + "    #if 0\n"
+        + "        #define C 7.0\n"
+        + "    #elif 1\n"
+        + "        #define C 3.0\n"
+        + "    #endif\n"
+        + "#elif 1\n"
+        + "    #define C 6.0\n"
+        + "#endif\n"
+        + "#undef LEVEL\n"
+        + "#if defined(LEVEL)\n"
+        + "    this line is never lexed: @ #\n"
+        + "#else\n"
+        + "    #define D 4.0 // a comment\n"
+        + "#endif\n"
+        + "#if 0\n"
+        + "    #ifdef ON\n"
+        + "        #define D 5.0\n"
+        + "    #else\n"
+        + "    #endif\n"
+        + "#endif\n"
+        + "#undef NEVER\n"
+    )
+    assert_lanes(value("vec3(A, B, C)", shader), 1, 2, 3)
+    assert_equal(number("D", shader), 4)
+    var ends = "\nvoid main() { gl_FragColor = vec4(1.0); }"
+    refused("#if 1\n" + ends, "an #if is never closed with #endif")
+    refused("#endif" + ends, "an #endif has no #if")
+    refused("#else" + ends, "an #else has no #if")
+    refused("#if 1\n#else\n#else\n#endif" + ends, "an #else follows the #else")
+    refused("#if 1\n#else\n#elif 1\n#endif" + ends, "an #elif follows the #else")
+    refused("#ifdef\n#endif" + ends, "an #ifdef names one macro")
+    refused("#ifndef A B\n#endif" + ends, "an #ifndef names one macro")
+    refused("#undef\n" + ends, "an #undef names one macro")
+    refused("#if\n#endif" + ends, "an #if needs a condition")
+    refused("#if 1 1\n#endif" + ends, "the #if condition goes on past 1")
+    refused("#if 1 +\n#endif" + ends, "the character + is outside an #if")
+    refused("#if (1\n#endif" + ends, "an #if condition leaves a ( open")
+    refused("#if defined(ON\n#endif" + ends, "an #if condition leaves a ( open")
+    refused("#if defined 1\n#endif" + ends, "defined names a macro")
+    refused("#if 1 ==\n#endif" + ends, "an #if condition ends too soon")
+    refused("#if 1x\n#endif" + ends, "an #if condition counts in whole numbers")
+    refused(
+        "#define F 1.5\n#if F\n#endif" + ends,
+        "the macro F is not one whole number, as an #if reads it",
+    )
+    refused("#if ) \n#endif" + ends, "an #if condition cannot hold )")
+
+
 def test_every_other_directive_is_refused() raises:
     refused(
         "#include <common>\nvoid main() {}",
@@ -440,7 +508,7 @@ def test_every_other_directive_is_refused() raises:
             " are not made of chunks"
         ),
     )
-    refused("#ifdef USE_MAP\n#endif\nvoid main() {}", "#ifdef is outside")
+    refused("#extension GL_OES_foo : enable\nvoid main() {}", "#extension is outside")
     refused(
         "#version 300 es\nvoid main() {}", "writes a ShaderMaterial's #version"
     )
