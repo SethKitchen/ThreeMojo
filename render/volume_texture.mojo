@@ -1067,8 +1067,9 @@ def decoded_layers(array: DataArrayTexture) -> List[FloatColor]:
     var texels = List[FloatColor](
         capacity=image.width * image.height * image.depth
     )
-    for z in range(image.depth):
-        for y in range(image.height):
-            for x in range(image.width):
+    # Never empty: an image has a texel on each side.
+    for z in range(image.depth):  # pragma: no branch
+        for y in range(image.height):  # pragma: no branch
+            for x in range(image.width):  # pragma: no branch
                 texels.append(array.texel_at(x, y, z))
     return texels^
