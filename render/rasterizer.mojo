@@ -165,6 +165,7 @@ from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
     first_covered,
+    gl_point_coord,
     last_covered,
     mip_level_of,
 )
