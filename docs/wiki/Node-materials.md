@@ -311,7 +311,8 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
 - A struct's field written through an index that is not constant.
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
-- A custom attribute of `int`, `bool` or a matrix, custom attributes of more than 8 floats in all, and `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`.
+- A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
+- `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
 - `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
 - A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
 - A declaration directly in a `switch`, outside a block.
