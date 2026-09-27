@@ -116,11 +116,11 @@ A Gouraud surface is a Lambert surface that is lit at its corners, as three.js's
 var clay = assets.materials.add(Material(Color(200, 120, 90), kind=GOURAUD))
 ```
 
-Each corner holds the direct light of the point, spot and directional lights, and the indirect light of the ambient light, the probes and the hemisphere lights. Each corner also holds the light of its far side, which a `DOUBLE_SIDE` or a `BACK_SIDE` surface shows from behind. The shadows darken the direct light per fragment, by the product of every casting light's shadow: three.js's `getShadowMask`. A spot light's map does not reach a corner, as it does not reach three.js's.
+Each corner holds the direct light of the point, spot and directional lights. It also holds the indirect light of the ambient light, the probes and the hemisphere lights. Each corner also holds the light of its far side, which a `DOUBLE_SIDE` or a `BACK_SIDE` surface shows from behind. The shadows darken the direct light per fragment, by the product of every casting light's shadow: three.js's `getShadowMask`. A spot light's map does not reach a corner, as it does not reach three.js's.
 
-A flat face under a directional light looks the same lit at its corners or at each fragment. A point light near a large face shows the difference: the light between the corners is flat, where a Lambert surface is brightest under the bulb.
+A flat face under a directional light looks the same lit at its corners or at each fragment. A point light near a large face shows the difference. The light between the corners is flat, and a Lambert surface is brightest under the bulb.
 
-A Gouraud surface takes a map, an alpha map, an emissive map, a specular map, an environment map, an ambient occlusion map and a light map. It refuses a normal map, a bump map and a displacement map, which three.js's material does not have.
+A Gouraud surface takes a map, an alpha map, an emissive map and a specular map. It takes an environment map, an ambient occlusion map and a light map too. It refuses a normal map, a bump map and a displacement map, which three.js's material does not have.
 
 ## Phong
 
