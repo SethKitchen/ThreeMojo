@@ -89,7 +89,7 @@ var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
 
 ## Outputs
 
-A graph sets one to thirteen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
+A graph sets one to fifteen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
 
 | Output | Type | three.js | What it replaces |
 |---|---|---|---|
@@ -105,6 +105,8 @@ A graph sets one to thirteen outputs. Each output replaces one part of the mater
 | `BACKDROP_NODE` | `vec3` | `backdropNode` | The diffuse light, mixed by `BACKDROP_ALPHA_NODE` where that is set. The specular light and the glow are added after it. See [The scene behind](#the-scene-behind). |
 | `BACKDROP_ALPHA_NODE` | `float` | `backdropAlphaNode` | Nothing. It is how much of the backdrop replaces the diffuse light, zero to one. |
 | `FRAGMENT_NODE` | `vec4` | `fragmentNode` | All of the material's shading: the color and the alpha. The fog veils it. The alpha test, the alpha hash and the output node do not run. |
+| `ROUGHNESS_NODE` | `float` | `roughnessNode` | A standard or physical surface's roughness, its map included. |
+| `METALNESS_NODE` | `float` | `metalnessNode` | A standard or physical surface's metalness, its map included. |
 | `SIZE_NODE` | `float` | `sizeNode` | A point's width in pixels: the material's size and its attenuation. Only a point reads it. See [Points and lines](#points-and-lines). |
 
 The alpha of the finished color stays what the fragment had. An output node changes only its color.
@@ -460,6 +462,29 @@ var wall = assets.materials.add(Material(Color(200, 200, 200), kind=PHYSICAL, no
 ```
 
 The program reads the target's texel at `gl_FragCoord.xy * aoPassMapScale`. With an ambient occlusion map, it takes the lower of the two values and applies `aoMapIntensity`, as three.js does. The result is the `AO_NODE`, so the physical shading dims the indirect light with it.
+
+## MaterialX
+
+`loaders.materialx` is three.js's `MaterialXLoader`. It reads a MaterialX document's materials into the store as node materials.
+
+```mojo
+var read = load_materialx("standard_surface_brass_tiled.mtlx", assets)
+var brass = read.ids[0]
+```
+
+- A `surfacematerial` whose shader is a `standard_surface` becomes a `PHYSICAL` material. A document with no surface material makes a `BASIC` material of each `nodegraph`, with its `out` output as the color.
+- An image path is read after the document's folder and the element's `fileprefix`. An image in the `srgb_texture` color space is decoded from sRGB. Each image repeats, as three.js sets it.
+- `read.names[i]` is the name of material `read.ids[i]`.
+
+A surface input that is a value sets the material's own number. An input that a graph drives becomes a node output: the color, the opacity, the roughness, the metalness, the glow or the normal. The loader refuses a graph that drives any other input, because this port has no node output for it.
+
+The library is three.js's: the math, the adjustments, the mix, the channels, the ramps, the splits and the noises. It also has `place2d`, `rotate2d`, `rotate3d`, the geometry nodes, `image` and `tiledimage`. The loader differs from three.js here:
+
+- `position` and `normal` in object space read the world ones. A fragment here has no object space, and for a mesh at the origin the two are the same.
+- `smoothstep`, `splitlr` and `splittb` take their inputs as the MaterialX specification names them. three.js passes them in another order.
+- `emission_color` multiplies `emission`, as the specification says. three.js reads `emissionColor`, which no document names.
+- A `gltf_pbr` surface is left as a plain physical material, as three.js leaves it.
+- `normalmap`, `heighttonormal`, `tangent`, `frame`, the unified noises and the matrix nodes are refused. The program has no tangents, no frame count and no matrices of those types.
 
 ## In a file
 

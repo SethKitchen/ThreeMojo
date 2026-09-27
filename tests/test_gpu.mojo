@@ -7686,6 +7686,42 @@ def test_both_backends_agree_on_a_physical_lobe() raises:
     assert_true(count_mismatches(shiny, flat) > 50, "the lobe changed nothing")
 
 
+def test_both_backends_take_a_graphs_roughness_and_metalness_alike() raises:
+    # The graph's roughness and metalness in place of the material's, from
+    # the coordinates, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends take a graph's roughness"):
+        return
+    from materials.nodes import METALNESS_NODE, ROUGHNESS_NODE
+
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    graph.set_output(ROUGHNESS_NODE, graph.swizzle(uv, "x"))
+    graph.set_output(METALNESS_NODE, graph.swizzle(uv, "y"))
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = with_nodes(
+        physical_pair(PHYSICAL, 0.5, 0.5, 1.0, 0.3), id.value
+    )
+    var lighting = phong_lighting()
+    for mode in [SHADE_LIT, SHADE_TEXTURE]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, mode, TextureStore(), lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            mode,
+            TextureStore(),
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_reflect_a_physical_environment_alike() raises:
     # The split sum, the multiple scattering and the rough reflection read
     # down the cube's chain, on a metal, a dielectric and a coated
@@ -9918,6 +9954,59 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         )
         assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 500)
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_a_materialx_surface_alike() raises:
+    # A MaterialX standard surface, its color and roughness from a graph,
+    # on a lit sphere: the node outputs the loader sets, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends draw a materialx surface"):
+        return
+    from loaders.materialx import read_materialx
+    from test_materialx import SURFACE
+
+    var assets = Assets()
+    var read = read_materialx(SURFACE, assets)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.8, METER), 18, 12)),
+            read.ids[0],
+            node,
+        )
+    )
+    var lamp = Object3D()
+    lamp.set_position(0.3, 0.8, 2)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.0))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 2.6), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    var capture = renderer.transmission_target(scene, assets, camera)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        transmission=capture,
+        programs=frame.programs,
+    )
+    assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 300)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:

@@ -49,6 +49,8 @@ from materials.nodes import (
     BACKDROP_ALPHA_NODE,
     BACKDROP_NODE,
     FRAGMENT_NODE,
+    METALNESS_NODE,
+    ROUGHNESS_NODE,
     COLOR_NODE,
     DEPTH_NODE,
     EMISSIVE_NODE,
@@ -1089,6 +1091,35 @@ def test_a_backdrop_and_a_fragment_node_replace_the_shading() raises:
         corners[index].alpha_test = 0.5
     var fragment = draw(corners, one_program(own^))
     assert_color(fragment.color_at(2, 2), 0.2, 0.4, 0.6)
+
+
+def test_a_roughness_and_a_metalness_node_replace_the_materials() raises:
+    # A physical triangle whose graph says 0.9 rough and 0.7 metal draws as
+    # one whose material says so, whatever its own numbers.
+    var graph = NodeGraph()
+    graph.set_output(ROUGHNESS_NODE, graph.float(0.9))
+    graph.set_output(METALNESS_NODE, graph.float(0.7))
+    var programs = one_program(graph^)
+    var noded = big_triangle(NodeProgramId(0), PHYSICAL)
+    var plain = big_triangle(NO_NODES, PHYSICAL)
+    for index in range(3):
+        noded[index].roughness = 0.1
+        noded[index].metalness = 0
+        plain[index].roughness = 0.9
+        plain[index].metalness = 0.7
+    var lighting = Lighting(ambient=FloatColor(0.6, 0.6, 0.6, 1))
+    var by_graph = draw(noded, programs, lighting=lighting)
+    var by_material = draw(plain, programs, lighting=lighting)
+    for place in [(2, 2), (5, 1), (1, 6)]:
+        var here = by_graph.color_at(place[0], place[1])
+        var there = by_material.color_at(place[0], place[1])
+        assert_color(here, there.r, there.g, there.b, there.a)
+    # And the metal is darker than a dielectric would be.
+    var dielectric = big_triangle(NO_NODES, PHYSICAL)
+    for index in range(3):
+        dielectric[index].roughness = 0.9
+    var bare = draw(dielectric, programs, lighting=lighting)
+    assert_true(bare.color_at(2, 2).r > by_graph.color_at(2, 2).r)
 
 
 def a_gradient_behind() raises -> TransmissionTarget:

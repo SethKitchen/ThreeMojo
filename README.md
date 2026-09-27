@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 199 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 200 features are ported and 3 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -227,7 +227,7 @@ The port is not at parity with three.js yet. 199 features are ported and 4 are o
 
 ### Loaders and exporters
 
-- [ ] TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
+- [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 
 <details>
 <summary>Ported: 21</summary>

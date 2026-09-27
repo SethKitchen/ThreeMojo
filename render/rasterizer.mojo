@@ -109,6 +109,8 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     FRAGMENT_NODE,
+    METALNESS_NODE,
+    ROUGHNESS_NODE,
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
@@ -3878,6 +3880,12 @@ def rasterize_shaded(
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
             var metal_factor = Float32(1)
+            # A node graph's roughness and metalness, in place of the
+            # material's and its maps', where it sets them.
+            var roughness = a.roughness
+            var metalness = a.metalness
+            var roughened = False
+            var metallized = False
             # What the highlight and the reflectivity are scaled by: the
             # specular map's red, or one for none.
             var specular_strength = Float32(1)
@@ -4253,6 +4261,12 @@ def rasterize_shaded(
                     glow = FloatColor(
                         given_off[0], given_off[1], given_off[2], 1.0
                     )
+                if has_output(nodes, ROUGHNESS_NODE):
+                    roughness = run_nodes(nodes, ROUGHNESS_NODE, given)[0]
+                    roughened = True
+                if has_output(nodes, METALNESS_NODE):
+                    metalness = run_nodes(nodes, METALNESS_NODE, given)[0]
+                    metallized = True
                 # The backdrop in place of the diffuse light, mixed by its
                 # alpha where that is set: three.js's `backdropNode`. The
                 # specular light and the glow are added to it after.
@@ -4347,7 +4361,7 @@ def rasterize_shaded(
                 var surface = physical_surface(
                     Vector3(shaded.r, shaded.g, shaded.b),
                     head_on,
-                    a.metalness * metal_factor,
+                    metalness if metallized else metalness * metal_factor,
                     intensity,
                 )
                 # How fast the normal before any map turns across the
@@ -4370,7 +4384,9 @@ def rasterize_shaded(
                         lighting.back,
                     ),
                 )
-                var rough = floored_roughness(a.roughness * rough_factor, curve)
+                var rough = floored_roughness(
+                    roughness if roughened else roughness * rough_factor, curve
+                )
                 # The coat times its map's red, and its roughness times its
                 # map's green, before the floor, in three.js's order.
                 var coat = clearcoat_of(a.clearcoat, coat_factor)

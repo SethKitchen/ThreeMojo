@@ -261,6 +261,8 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     FRAGMENT_NODE,
+    METALNESS_NODE,
+    ROUGHNESS_NODE,
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
@@ -6365,6 +6367,12 @@ def rasterize_kernel(
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
             var metal_factor = Float32(1)
+            # The node graph's roughness and metalness, as the host takes
+            # them.
+            var roughness = corners[unsafe_offset=base + LANE_ROUGHNESS]
+            var metalness = corners[unsafe_offset=base + LANE_METALNESS]
+            var roughened = False
+            var metallized = False
             # What the highlight and the reflectivity are scaled by: the
             # specular map's red, or one for none.
             var specular_strength = Float32(1)
@@ -6998,6 +7006,12 @@ def rasterize_kernel(
                         glow_r = given_off[0]
                         glow_g = given_off[1]
                         glow_b = given_off[2]
+                    if has_output(nodes, ROUGHNESS_NODE):
+                        roughness = run_nodes(nodes, ROUGHNESS_NODE, given)[0]
+                        roughened = True
+                    if has_output(nodes, METALNESS_NODE):
+                        metalness = run_nodes(nodes, METALNESS_NODE, given)[0]
+                        metallized = True
                     # The backdrop in place of the diffuse light, as the
                     # host mixes it.
                     if has_output(nodes, BACKDROP_NODE):
@@ -7141,8 +7155,7 @@ def rasterize_kernel(
                     var surface = physical_surface(
                         Vector3(red, green, blue),
                         head_on,
-                        corners[unsafe_offset=base + LANE_METALNESS]
-                        * metal_factor,
+                        metalness if metallized else metalness * metal_factor,
                         intensity,
                     )
                     # How fast the normal before any map turns across the
@@ -7203,8 +7216,7 @@ def rasterize_kernel(
                         ),
                     )
                     var rough = floored_roughness(
-                        corners[unsafe_offset=base + LANE_ROUGHNESS]
-                        * rough_factor,
+                        roughness if roughened else roughness * rough_factor,
                         curve,
                     )
                     var coat_amount = corners[
