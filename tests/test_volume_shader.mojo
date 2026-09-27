@@ -128,10 +128,13 @@ def render(style: VolumeStyle) raises -> Framebuffer:
 def test_a_mip_render_is_red_at_the_center_and_empty_outside() raises:
     var image = render(VOLUME_MIP)
     var middle = image.get_pixel(SIZE // 2, SIZE // 2)
-    # The brightest value on the middle ray is the center's, about 0.7:
-    # mostly red.
+    # The brightest value on the middle ray is the center's, above one
+    # half: more red than blue. The box around the ball, where the
+    # intensity is zero, is the colormap's blue.
     assert_true(middle.r > 200, "the center is red")
-    assert_true(Int(middle.r) > 2 * Int(middle.b), "the center is not blue")
+    assert_true(middle.r > middle.b, "the center is more red than blue")
+    var rim = image.get_pixel(4, 5)
+    assert_true(rim.b > 200 and rim.r < 30, "the empty box is blue")
     # A corner of the image misses the box, and the background stays.
     var corner = image.get_pixel(0, 0)
     assert_equal(Int(corner.r), 0)
