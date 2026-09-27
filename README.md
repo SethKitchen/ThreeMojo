@@ -134,11 +134,11 @@ The port is not at parity with three.js yet. 202 features are ported and 1 are o
 
 ### Materials
 
-- [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 
 <details>
-<summary>Ported: 32</summary>
+<summary>Ported: 33</summary>
 
+- [x] [Node material leftovers, and the Wood and MeshPostProcessing materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shadows-of-its-own): node control flow, JSON, light masks and shadow nodes [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 - [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): more types, loops, samplers and built-ins, and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shaders-from-threejss-examples) [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
