@@ -151,6 +151,25 @@ def foot_bone_mass_from_dimensions(
     return finish_mass(tally)
 
 
+def foot_bone_field_occupancy(
+    field: FootBoneField, point: Vector3
+) -> BoneOccupancy:
+    """Return what fills `point` in an already-built foot bone field.
+
+    Use this where one field is sampled at many points;
+    `foot_bone_occupancy` builds the field for every call.
+
+    Args:
+        field: The bone's field.
+        point: A point in the foot frame, in meters.
+
+    Returns:
+        `EMPTY` outside, `CORTICAL_FILL` in the shell, or
+        `TRABECULAR_FILL` inside it.
+    """
+    return _occupancy(field, point)
+
+
 def _occupancy(field: FootBoneField, point: Vector3) -> BoneOccupancy:
     """Return what fills `point` in `field`. There is no marrow."""
     var d = field.distance(point)

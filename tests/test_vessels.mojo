@@ -248,7 +248,7 @@ def test_vessel_mass_refuses_a_bad_part_or_tissue() raises:
     with assert_raises():
         _ = vessel_mass_from_dimensions(dims, VesselPart(10), arterial_tissue())
     var bad = arterial_tissue()
-    bad.kind = SoftTissueKind(11)
+    bad.kind = SoftTissueKind(12)
     with assert_raises():
         _ = vessel_mass_from_dimensions(dims, FEMORAL_ARTERY, bad)
 

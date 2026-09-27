@@ -220,7 +220,7 @@ def test_nerve_mass_refuses_a_bad_part_or_tissue() raises:
     with assert_raises():
         _ = nerve_mass_from_dimensions(dims, NervePart(6), nerve_tissue())
     var bad = nerve_tissue()
-    bad.kind = SoftTissueKind(11)
+    bad.kind = SoftTissueKind(12)
     with assert_raises():
         _ = nerve_mass_from_dimensions(dims, SCIATIC_NERVE, bad)
 

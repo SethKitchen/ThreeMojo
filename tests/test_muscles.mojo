@@ -303,7 +303,7 @@ def test_muscle_mass_refuses_a_bad_part_or_tissue() raises:
             dims, MusclePart(25), muscle_tissue(), Length(20.0, MILLIMETER)
         )
     var bad = muscle_tissue()
-    bad.kind = SoftTissueKind(11)
+    bad.kind = SoftTissueKind(12)
     with assert_raises():
         _ = muscle_mass_from_dimensions(
             dims, RECTUS_FEMORIS, bad, Length(20.0, MILLIMETER)

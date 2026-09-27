@@ -383,6 +383,7 @@ Content that is not a three.js port lives under `extensions/`. Each item is test
 - [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): skin fitted to the anatomy under it, one skin over a leg and its foot, and hair
 - [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers, with Phong and physical looks
 - [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot in an arch, with ligaments, muscles and the later layers
+- [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
 
 ### Out of scope

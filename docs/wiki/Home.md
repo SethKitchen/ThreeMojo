@@ -91,6 +91,7 @@ Look something up.
 - [Integument](Integument)
 - [Leg](Leg)
 - [Foot](Foot)
+- [Segment inertia](Segment-inertia)
 
 ## Explanation
 

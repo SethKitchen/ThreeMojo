@@ -119,7 +119,7 @@ def test_soft_kinds_are_valid() raises:
     assert_true(NERVE.is_valid())
     assert_true(SKIN_KIND.is_valid())
     assert_true(HAIR_KIND.is_valid())
-    assert_false(SoftTissueKind(11).is_valid())
+    assert_false(SoftTissueKind(12).is_valid())
     assert_false(SoftTissueKind(-1).is_valid())
     assert_true(SOFT_EMPTY.is_valid())
     assert_true(SOFT_FILL.is_valid())
@@ -180,7 +180,7 @@ def test_filled_density_and_classify() raises:
 
 def test_soft_tissue_validate_refusals() raises:
     var tissue = cartilage_tissue()
-    tissue.kind = SoftTissueKind(11)
+    tissue.kind = SoftTissueKind(12)
     with assert_raises():
         tissue.validate()
     tissue = cartilage_tissue()
@@ -596,7 +596,7 @@ def test_mass_refuses_bad_step_and_tissue() raises:
             MAX_STEP + Length(1.0, MILLIMETER),
         )
     var bad = cartilage_tissue()
-    bad.kind = SoftTissueKind(11)
+    bad.kind = SoftTissueKind(12)
     with assert_raises():
         _ = knee_mass_from_dimensions(
             dims, ARTICULAR_CARTILAGE, bad, Length(5.0, MILLIMETER)

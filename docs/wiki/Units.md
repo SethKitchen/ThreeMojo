@@ -41,6 +41,7 @@ A `Unit` is a factor to the canonical unit and a symbol.
 | Density | `KILOGRAM_PER_CUBIC_METER`, `GRAM_PER_CUBIC_CENTIMETER` |
 | Force | `NEWTON`, `POUND_FORCE` |
 | Pressure | `PASCAL`, `MEGAPASCAL`, `GIGAPASCAL` |
+| Moment of inertia | `KILOGRAM_SQUARE_METER` |
 | Duration | `SECOND`, `MILLISECOND`, `MINUTE`, `HOUR` |
 | Angle | `RADIAN`, `DEGREE`, `TURN` |
 | Velocity | `METER_PER_SECOND` |

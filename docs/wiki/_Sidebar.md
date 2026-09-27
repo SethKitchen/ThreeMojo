@@ -78,6 +78,7 @@
 - [Integument](Integument)
 - [Leg](Leg)
 - [Foot](Foot)
+- [Segment inertia](Segment-inertia)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

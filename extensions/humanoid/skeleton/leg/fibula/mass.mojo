@@ -143,6 +143,23 @@ def fibula_mass_from_dimensions(
     return finish_mass(tally)
 
 
+def fibula_field_occupancy(field: FibulaField, point: Vector3) -> BoneOccupancy:
+    """Return what fills `point` in an already-built fibula field.
+
+    Use this where one field is sampled at many points; `fibula_occupancy`
+    builds the field for every call.
+
+    Args:
+        field: The fibula's field.
+        point: A point in the bone's frame, in meters.
+
+    Returns:
+        `EMPTY` outside, else the cortical shell, trabecular bone or
+        marrow the point falls in.
+    """
+    return _occupancy(field, point)
+
+
 def _occupancy(field: FibulaField, point: Vector3) -> BoneOccupancy:
     """Return what fills `point` in `field`."""
     var d = field.distance(point)

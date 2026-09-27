@@ -1,0 +1,410 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Mass, center of mass and inertia tensor of a thigh, a shank or a foot.
+
+A rigid-body model of a limb needs each segment's inertial properties.
+This file integrates them over the one skin of a limb: every grid cell
+inside the skin takes the density of what fills it.
+
+| Fill | Density |
+|---|---|
+| Dermis, the skin's outer shell | `skin_tissue` |
+| Cortical or trabecular bone | The bone's apparent density |
+| Marrow | `adipose_tissue`: adult yellow marrow is mostly fat |
+| A muscle belly or a tendon | `muscle_tissue` or `tendon_tissue` |
+| Everything else | `adipose_tissue` |
+
+Knee tissues, foot ligaments, vessels, lymphatics and nerves count as
+adipose tissue. Their volume is small, and their densities lie within
+a fifth of it.
+
+The segments follow de Leva (1996): horizontal planes through the hip
+joint's center, the knee's, at the femoral condyles, and the lateral
+malleolus cut the limb into a thigh, a shank and a foot.
+
+    var thigh = segment_inertia(person, THIGH)
+    thigh.mass.to(KILOGRAM)
+
+The results live in the leg frame. The origin is the tibiofemoral joint
+line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
+"""
+
+from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.field import mix_point
+from extensions.humanoid.skeleton.foot.bones.dimensions import (
+    FootBoneField,
+    named_foot_bones,
+)
+from extensions.humanoid.skeleton.foot.bones.mass import (
+    foot_bone_field_occupancy,
+)
+from extensions.humanoid.skeleton.foot.muscles.dimensions import (
+    FootMuscleField,
+    foot_muscle_dimensions,
+    named_foot_muscles,
+)
+from extensions.humanoid.skeleton.foot.muscles.dimensions import (
+    is_tendon as is_foot_tendon,
+)
+from extensions.humanoid.skeleton.leg.assembly import LegAssembly, assemble_leg
+from extensions.humanoid.skeleton.leg.femur.dimensions import FemurField
+from extensions.humanoid.skeleton.leg.femur.mass import femur_field_occupancy
+from extensions.humanoid.skeleton.leg.fibula.dimensions import FibulaField
+from extensions.humanoid.skeleton.leg.fibula.mass import (
+    fibula_field_occupancy,
+)
+from extensions.humanoid.skeleton.leg.muscles.dimensions import (
+    MuscleField,
+    is_tendon,
+    named_muscle_parts,
+)
+from extensions.humanoid.skeleton.leg.patella.dimensions import PatellaField
+from extensions.humanoid.skeleton.leg.patella.mass import (
+    patella_field_occupancy,
+)
+from extensions.humanoid.skeleton.leg.tibia.dimensions import TibiaField
+from extensions.humanoid.skeleton.leg.tibia.mass import tibia_field_occupancy
+from extensions.humanoid.skeleton.limb.skin import LimbSkinField
+from extensions.humanoid.skeleton.occupancy import (
+    CORTICAL_FILL,
+    EMPTY,
+    MARROW,
+    BoneOccupancy,
+    check_mass_step,
+    grid_cells,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    adipose_tissue,
+    muscle_tissue,
+    skin_tissue,
+    tendon_tissue,
+)
+from extensions.humanoid.skeleton.tissue import (
+    cortical_tissue,
+    trabecular_tissue,
+)
+from math.vector3 import Vector3
+from std.math import sqrt
+from units.si import (
+    KILOGRAM,
+    KILOGRAM_SQUARE_METER,
+    Length,
+    METER,
+    MILLIMETER,
+    Mass,
+    MomentOfInertia,
+)
+
+# The grid a segment is sampled on by default: fine enough that a
+# thigh's inertia settles to a fraction of a percent.
+comptime INERTIA_STEP = Length(5.0, MILLIMETER)
+
+
+@fieldwise_init
+struct LimbSegment(Equatable, ImplicitlyCopyable, Writable):
+    """Which segment of a limb `segment_inertia` integrates.
+
+    The type stops a bare integer at compile time. A value that is not a
+    named segment is still constructible, and `segment_inertia` refuses
+    it.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is a named segment."""
+        return self == THIGH or self == SHANK or self == FOOT_SEGMENT
+
+
+# From the hip joint's center to the knee's.
+comptime THIGH = LimbSegment(0)
+# From the knee joint's center to the lateral malleolus.
+comptime SHANK = LimbSegment(1)
+# Below the lateral malleolus.
+comptime FOOT_SEGMENT = LimbSegment(2)
+
+
+@fieldwise_init
+struct SegmentInertia(ImplicitlyCopyable):
+    """The inertial properties of one segment.
+
+    The inertia tensor is about the center of mass, along the leg
+    frame's axes: `xx`, `yy` and `zz` on the diagonal and the products
+    `xy`, `xz` and `yz` off it, with the sign convention of a tensor,
+    so an off-diagonal entry is minus the product of inertia.
+    """
+
+    var mass: Mass
+    # The center of mass in the leg frame, in meters.
+    var center: Vector3
+    var xx: MomentOfInertia
+    var yy: MomentOfInertia
+    var zz: MomentOfInertia
+    var xy: MomentOfInertia
+    var xz: MomentOfInertia
+    var yz: MomentOfInertia
+    # The segment's length, joint center to joint center, or heel to toe.
+    var length: Length
+
+    def gyration(self, moment: MomentOfInertia) -> Length:
+        """Return the radius of gyration of one principal moment.
+
+        Args:
+            moment: `xx`, `yy` or `zz`.
+
+        Returns:
+            The square root of the moment over the mass.
+        """
+        return Length(sqrt(moment.value / self.mass.value), METER)
+
+
+@fieldwise_init
+struct _Box(ImplicitlyCopyable):
+    """The region a segment's cells are drawn from."""
+
+    var low: Vector3
+    var high: Vector3
+
+
+def segment_inertia(
+    spec: HumanoidSpec,
+    segment: LimbSegment,
+    side: BodySide = RIGHT,
+    step: Length = INERTIA_STEP,
+) raises -> SegmentInertia:
+    """Return the mass, center of mass and inertia of one segment.
+
+    Args:
+        spec: Standing height, osteological sex and athleticism.
+        segment: `THIGH`, `SHANK` or `FOOT_SEGMENT`.
+        side: `RIGHT` or `LEFT`. A right limb is the default.
+        step: Grid cell size. 2 mm through 20 mm, 5 mm by default.
+
+    Returns:
+        The segment's inertial properties in the leg frame.
+
+    Raises:
+        Error: If `spec` or `side` is refused, if `segment` is not
+            named, or if `step` is out of range.
+    """
+    if not segment.is_valid():
+        raise Error("A limb segment must be the thigh, the shank or the foot")
+    check_mass_step(step, "limb segment")
+    var pose = assemble_leg(spec, side)
+    var skin = LimbSkinField(spec, side)
+    var ankle = pose.ankle_center()
+    var hip = pose.hip_center()
+    var knee = mix_point(
+        pose.muscles.med_condyle, pose.muscles.lat_condyle, 0.5
+    )
+    var malleolus = pose.fibula_origin + pose.fibula.lateral_malleolus
+    var box = _Box(skin.low, skin.high)
+    var length: Float32
+    if segment == THIGH:
+        box.low.y = knee.y
+        box.high.y = hip.y
+        length = (hip - knee).length()
+    elif segment == SHANK:
+        box.low.y = malleolus.y
+        box.high.y = knee.y
+        length = (knee - malleolus).length()
+    else:
+        box.high.y = malleolus.y
+        var foot = foot_muscle_dimensions(spec, side)
+        length = foot.foot.length.value
+    var femur = FemurField(pose.femur)
+    var tibia = TibiaField(pose.tibia)
+    var fibula = FibulaField(pose.fibula)
+    var patella = PatellaField(pose.patella)
+    var muscles = List[MuscleField]()
+    var tendons = List[Bool]()
+    for part in named_muscle_parts():
+        muscles.append(MuscleField(pose.muscles, part))
+        tendons.append(is_tendon(part))
+    var foot_dims = foot_muscle_dimensions(spec, side)
+    var foot_bones = List[FootBoneField]()
+    for part in named_foot_bones():
+        foot_bones.append(FootBoneField(foot_dims.foot, part))
+    var foot_muscles = List[FootMuscleField]()
+    var foot_tendons = List[Bool]()
+    for part in named_foot_muscles():
+        foot_muscles.append(FootMuscleField(foot_dims, part))
+        foot_tendons.append(is_foot_tendon(part))
+    var dermis = skin.leg.dermis
+    var cortical = cortical_tissue().apparent_density().value
+    var trabecular = trabecular_tissue().apparent_density().value
+    var fat = adipose_tissue().wet_density.value
+    var dermal = skin_tissue().wet_density.value
+    var flesh = muscle_tissue().wet_density.value
+    var cord = tendon_tissue().wet_density.value
+    var s = step.value
+    var nx = grid_cells(box.high.x - box.low.x, s)
+    var ny = grid_cells(box.high.y - box.low.y, s)
+    var nz = grid_cells(box.high.z - box.low.z, s)
+    var cell = Float64(s) * Float64(s) * Float64(s)
+    var mass = Float64(0)
+    var first = SIMD[DType.float64, 4](0)
+    # Second moments: xx, yy, zz, xy, xz, yz.
+    var second = SIMD[DType.float64, 8](0)
+    for iz in range(nz):  # pragma: no branch
+        var z = box.low.z + (Float32(iz) + 0.5) * s
+        for iy in range(ny):  # pragma: no branch
+            var y = box.low.y + (Float32(iy) + 0.5) * s
+            for ix in range(nx):  # pragma: no branch
+                var x = box.low.x + (Float32(ix) + 0.5) * s
+                var p = Vector3(x, y, z)
+                var d = skin.distance(p)
+                if d >= 0:
+                    continue
+                var rho: Float32
+                if d > -dermis:
+                    rho = dermal
+                else:
+                    var fill = _bone_fill(
+                        p,
+                        pose,
+                        femur,
+                        tibia,
+                        fibula,
+                        patella,
+                        foot_bones,
+                        ankle,
+                    )
+                    if fill == CORTICAL_FILL:
+                        rho = cortical
+                    elif fill == EMPTY or fill == MARROW:
+                        rho = _soft_density(
+                            p,
+                            muscles,
+                            tendons,
+                            foot_muscles,
+                            foot_tendons,
+                            ankle,
+                            fat,
+                            flesh,
+                            cord,
+                        )
+                    else:
+                        rho = trabecular
+                var m = Float64(rho) * cell
+                var r = SIMD[DType.float64, 4](
+                    Float64(x), Float64(y), Float64(z), 0
+                )
+                mass += m
+                first += r * m
+                second += (
+                    SIMD[DType.float64, 8](
+                        r[0] * r[0],
+                        r[1] * r[1],
+                        r[2] * r[2],
+                        r[0] * r[1],
+                        r[0] * r[2],
+                        r[1] * r[2],
+                        0,
+                        0,
+                    )
+                    * m
+                )
+    return _inertia(mass, first, second, length)
+
+
+def _inertia(
+    mass: Float64,
+    first: SIMD[DType.float64, 4],
+    second: SIMD[DType.float64, 8],
+    length: Float32,
+) raises -> SegmentInertia:
+    """Return the tensor about the center of mass from raw moments."""
+    if mass <= 0:
+        raise Error("A limb segment holds no tissue")
+    var c = first / mass
+    # Second moments about the center, by the parallel-axis theorem.
+    var sxx = second[0] - mass * c[0] * c[0]
+    var syy = second[1] - mass * c[1] * c[1]
+    var szz = second[2] - mass * c[2] * c[2]
+    var sxy = second[3] - mass * c[0] * c[1]
+    var sxz = second[4] - mass * c[0] * c[2]
+    var syz = second[5] - mass * c[1] * c[2]
+    return SegmentInertia(
+        Mass(Float32(mass), KILOGRAM),
+        Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),
+        MomentOfInertia(Float32(syy + szz), KILOGRAM_SQUARE_METER),
+        MomentOfInertia(Float32(sxx + szz), KILOGRAM_SQUARE_METER),
+        MomentOfInertia(Float32(sxx + syy), KILOGRAM_SQUARE_METER),
+        MomentOfInertia(Float32(-sxy), KILOGRAM_SQUARE_METER),
+        MomentOfInertia(Float32(-sxz), KILOGRAM_SQUARE_METER),
+        MomentOfInertia(Float32(-syz), KILOGRAM_SQUARE_METER),
+        Length(length, METER),
+    )
+
+
+def _bone_fill(
+    p: Vector3,
+    pose: LegAssembly,
+    femur: FemurField,
+    tibia: TibiaField,
+    fibula: FibulaField,
+    patella: PatellaField,
+    foot_bones: List[FootBoneField],
+    ankle: Vector3,
+) -> BoneOccupancy:
+    """Return which bone fill `p` lies in, or `EMPTY`."""
+    var fill = femur_field_occupancy(femur, p - pose.femur_origin)
+    if fill != EMPTY:
+        return fill
+    fill = tibia_field_occupancy(tibia, p - pose.tibia_origin)
+    if fill != EMPTY:
+        return fill
+    fill = fibula_field_occupancy(fibula, p - pose.fibula_origin)
+    if fill != EMPTY:
+        return fill
+    fill = patella_field_occupancy(patella, p - pose.patella_origin)
+    if fill != EMPTY:
+        return fill
+    var local = p - ankle
+    for index in range(len(foot_bones)):
+        fill = foot_bone_field_occupancy(foot_bones[index], local)
+        if fill != EMPTY:
+            return fill
+    return EMPTY
+
+
+def _soft_density(
+    p: Vector3,
+    muscles: List[MuscleField],
+    tendons: List[Bool],
+    foot_muscles: List[FootMuscleField],
+    foot_tendons: List[Bool],
+    ankle: Vector3,
+    fat: Float32,
+    flesh: Float32,
+    cord: Float32,
+) -> Float32:
+    """Return the density of the soft tissue at `p`: a muscle's, a
+    tendon's, or fat's."""
+    for index in range(len(muscles)):
+        if _inside(muscles[index].low, muscles[index].high, p):
+            if muscles[index].distance(p) < 0:
+                return cord if tendons[index] else flesh
+    var local = p - ankle
+    for index in range(len(foot_muscles)):
+        if _inside(foot_muscles[index].low, foot_muscles[index].high, local):
+            if foot_muscles[index].distance(local) < 0:
+                return cord if foot_tendons[index] else flesh
+    return fat
+
+
+def _inside(low: Vector3, high: Vector3, p: Vector3) -> Bool:
+    """Return whether `p` lies in the box from `low` to `high`."""
+    return (
+        p.x >= low.x
+        and p.x <= high.x
+        and p.y >= low.y
+        and p.y <= high.y
+        and p.z >= low.z
+        and p.z <= high.z
+    )

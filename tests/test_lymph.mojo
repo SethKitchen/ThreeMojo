@@ -229,7 +229,7 @@ def test_lymph_mass_refuses_a_bad_part_or_tissue() raises:
     with assert_raises():
         _ = lymph_mass_from_dimensions(dims, LymphPart(4), lymph_tissue())
     var bad = lymph_tissue()
-    bad.kind = SoftTissueKind(11)
+    bad.kind = SoftTissueKind(12)
     with assert_raises():
         _ = lymph_mass_from_dimensions(dims, INGUINAL_NODES, bad)
 

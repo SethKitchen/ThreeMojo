@@ -143,6 +143,23 @@ def tibia_mass_from_dimensions(
     return finish_mass(tally)
 
 
+def tibia_field_occupancy(field: TibiaField, point: Vector3) -> BoneOccupancy:
+    """Return what fills `point` in an already-built tibia field.
+
+    Use this where one field is sampled at many points; `tibia_occupancy`
+    builds the field for every call.
+
+    Args:
+        field: The tibia's field.
+        point: A point in the bone's frame, in meters.
+
+    Returns:
+        `EMPTY` outside, else the cortical shell, trabecular bone or
+        marrow the point falls in.
+    """
+    return _occupancy(field, point)
+
+
 def _occupancy(field: TibiaField, point: Vector3) -> BoneOccupancy:
     """Return what fills `point` in `field`."""
     var d = field.distance(point)

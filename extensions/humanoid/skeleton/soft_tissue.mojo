@@ -101,7 +101,9 @@ struct SoftTissueKind(Equatable, ImplicitlyCopyable, Writable):
             return True
         if self == SKIN:
             return True
-        return self == HAIR
+        if self == HAIR:
+            return True
+        return self == ADIPOSE
 
 
 # Hyaline articular cartilage of the knee.
@@ -126,6 +128,8 @@ comptime NERVE = SoftTissueKind(8)
 comptime SKIN = SoftTissueKind(9)
 # Keratin hair shaft.
 comptime HAIR = SoftTissueKind(10)
+# Subcutaneous and intermuscular fat.
+comptime ADIPOSE = SoftTissueKind(11)
 
 
 @fieldwise_init
@@ -271,6 +275,26 @@ def meniscus_tissue() -> SoftTissue:
         Float32(0.70),
         Pressure(0.20, MEGAPASCAL),
         Float32(0.30),
+    )
+
+
+def adipose_tissue() -> SoftTissue:
+    """Return adult adipose tissue: subcutaneous and intermuscular fat.
+
+    Wet density is 0.92 g/cm^3, a common adult value; lipid alone is
+    about 0.90 and the cells' water brings the tissue up. Water fraction
+    is 0.15. Compressive modulus is 0.002 MPa, a soft named template.
+    Poisson's ratio is 0.49: fat is nearly incompressible.
+
+    Returns:
+        The adipose template.
+    """
+    return SoftTissue(
+        ADIPOSE,
+        Density(0.92, GRAM_PER_CUBIC_CENTIMETER),
+        Float32(0.15),
+        Pressure(0.002, MEGAPASCAL),
+        Float32(0.49),
     )
 
 

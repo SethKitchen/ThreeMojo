@@ -41,6 +41,8 @@ comptime Density = Quantity[-3, 1, 0, 0]
 comptime Force = Quantity[1, 1, -2, 0]
 # Force per area: an elastic modulus is a pressure.
 comptime Pressure = Quantity[-1, 1, -2, 0]
+# Mass times length squared: how a rigid body resists turning.
+comptime MomentOfInertia = Quantity[2, 1, 0, 0]
 
 comptime LengthUnit = Unit[1, 0, 0, 0]
 comptime AreaUnit = Unit[2, 0, 0, 0]
@@ -57,6 +59,7 @@ comptime FrequencyUnit = Unit[0, 0, -1, 0]
 comptime DensityUnit = Unit[-3, 1, 0, 0]
 comptime ForceUnit = Unit[1, 1, -2, 0]
 comptime PressureUnit = Unit[-1, 1, -2, 0]
+comptime MomentOfInertiaUnit = Unit[2, 1, 0, 0]
 
 # --- length -----------------------------------------------------------------
 comptime METER = LengthUnit(1.0, "m")
@@ -105,6 +108,9 @@ comptime POUND_FORCE = ForceUnit(4.4482216152605, "lbf")
 comptime PASCAL = PressureUnit(1.0, "Pa")
 comptime MEGAPASCAL = PressureUnit(1.0e6, "MPa")
 comptime GIGAPASCAL = PressureUnit(1.0e9, "GPa")
+
+# --- moment of inertia --------------------------------------------------------
+comptime KILOGRAM_SQUARE_METER = MomentOfInertiaUnit(1.0, "kg m^2")
 
 # --- time -------------------------------------------------------------------
 comptime SECOND = DurationUnit(1.0, "s")
