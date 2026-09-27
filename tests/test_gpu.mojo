@@ -7686,6 +7686,40 @@ def test_both_backends_agree_on_a_physical_lobe() raises:
     assert_true(count_mismatches(shiny, flat) > 50, "the lobe changed nothing")
 
 
+def test_both_backends_take_a_graphs_roughness_and_metalness_alike() raises:
+    # The graph's roughness and metalness in place of the material's, from
+    # the coordinates, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends take a graph's roughness"):
+        return
+    from materials.nodes import METALNESS_NODE, ROUGHNESS_NODE
+
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    graph.set_output(ROUGHNESS_NODE, graph.swizzle(uv, "x"))
+    graph.set_output(METALNESS_NODE, graph.swizzle(uv, "y"))
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = with_nodes(physical_pair(PHYSICAL, 0.5, 0.5, 1.0, 0.3), id.value)
+    var lighting = phong_lighting()
+    for mode in [SHADE_LIT, SHADE_TEXTURE]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, mode, TextureStore(), lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            mode,
+            TextureStore(),
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_reflect_a_physical_environment_alike() raises:
     # The split sum, the multiple scattering and the rough reflection read
     # down the cube's chain, on a metal, a dielectric and a coated
