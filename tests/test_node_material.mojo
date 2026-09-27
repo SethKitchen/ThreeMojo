@@ -57,11 +57,14 @@ from materials.nodes import (
     OUTPUT_NODE,
     POSITION_NODE,
     PROGRAM_TIME,
+    SIZE_NODE,
     PROGRAM_VIEW,
     NodeGraph,
+    NodeInputs,
     NodeProgram,
     NodeProgramId,
     NodeProgramStore,
+    point_size_of,
 )
 from math.vector3 import Vector3
 from objects.line import Line
@@ -84,7 +87,11 @@ from render.rasterizer import (
     check_triangle_state,
     rasterize_all,
     rasterize_frame,
+    rasterize_line,
+    rasterize_point,
 )
+from render.linerule import covers as line_covers, toward_at
+from math.vector2 import Vector2
 from render.srgb import LINEAR
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, IGNORED, NEAREST, REPEAT, Texture
@@ -549,21 +556,108 @@ def test_a_triangles_corners_must_agree_on_a_program_it_can_run() raises:
         check_triangle_state(data[0], data[1], data[2])
 
 
-def test_a_line_or_a_point_runs_no_graph() raises:
+def test_a_line_runs_a_graph_at_each_pixel() raises:
     var end = RasterVertex(0, 0, 0, 1, FloatColor(1.0, 1.0, 1.0), kind=BASIC)
     var noded = end
     noded.nodes = NodeProgramId(0)
     check_line_state(end, end)
-    with assert_raises(contains="A line runs no node graph"):
+    check_line_state(noded, noded)
+    with assert_raises(contains="ends must agree about the node program"):
         check_line_state(noded, end)
-    with assert_raises(contains="A line runs no node graph"):
-        check_line_state(end, noded)
-    var point = end
-    point.point_size = 2
+    # Left to right, the line's coordinate is red and its step across a
+    # pixel green, the right half is thrown away, and the output halves
+    # what is left.
+    var graph = NodeGraph()
+    var u = graph.swizzle(graph.uv(), "x")
+    graph.set_output(COLOR_NODE, graph.join([u, graph.dfdx(u), graph.float(1)]))
+    graph.set_output(MASK_NODE, graph.less_than(u, graph.float(0.5)))
+    graph.set_output(OUTPUT_NODE, graph.mul(graph.lit(), graph.float(0.5)))
+    var programs = one_program(graph^)
+    var a = noded
+    a.x = 1.5
+    a.y = 4.5
+    var b = a
+    b.x = 13.5
+    b.u = 1
+    var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_line(a, b, target, programs=programs)
+    var first = Vector2(a.x, a.y)
+    var second = Vector2(b.x, b.y)
+    var kept = 0
+    for x in range(SIZE):
+        var toward = toward_at(first, second, 1, 1, x, 4)
+        var step = toward_at(first, second, 1, 1, x + 1, 4) - toward
+        var got = target.color_at(x, 4)
+        if line_covers(first, second, x, 4) and toward < 0.5:
+            assert_color(got, toward * 0.5, step * 0.5, 0.5)
+            kept += 1
+        else:
+            assert_color(got, 0, 0, 0)
+    assert_true(kept > 4)
+    # The uv view runs no program, and a program not there is refused.
+    rasterize_line(a, b, target, mode=SHADE_UV, programs=programs)
+    a.nodes = NodeProgramId(2)
+    b.nodes = NodeProgramId(2)
+    with assert_raises(contains="No node program has that id"):
+        rasterize_line(a, b, target, programs=programs)
+
+
+def test_a_point_runs_a_graph_at_each_pixel() raises:
+    # A point four pixels across at (4, 4): gl_PointCoord's x is red and
+    # its y green, its step across one pixel is blue, and the right half
+    # is thrown away.
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var across = graph.swizzle(place, "x")
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                across,
+                graph.swizzle(place, "y"),
+                graph.mul(graph.dfdx(across), graph.float(4)),
+            ]
+        ),
+    )
+    graph.set_output(MASK_NODE, graph.less_than(across, graph.float(0.5)))
+    graph.set_output(OPACITY_NODE, graph.float(0.5))
+    var programs = one_program(graph^)
+    var point = RasterVertex(4, 4, 0, 1, FloatColor(1.0, 1.0, 1.0), kind=BASIC)
+    point.point_size = 4
     check_point_state(point)
     point.nodes = NodeProgramId(0)
-    with assert_raises(contains="A point runs no node graph"):
-        check_point_state(point)
+    check_point_state(point)
+    var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_point(point, target, SHADE_LIT, TextureStore(), programs=programs)
+    assert_color(target.color_at(2, 2), 0.125, 0.125, 1)
+    assert_color(target.color_at(3, 5), 0.375, 0.875, 1)
+    # Thrown away where the mask is zero, and the opacity is not a blend
+    # the point asked for.
+    assert_color(target.color_at(4, 3), 0, 0, 0)
+    # The output node reads the finished color, fog and all.
+    var tinted = NodeGraph()
+    tinted.set_output(
+        OUTPUT_NODE, tinted.mul(tinted.lit(), tinted.vec3(1, 0.5, 0.25))
+    )
+    tinted.set_output(COLOR_NODE, tinted.swizzle(tinted.frag_coord(), "xyz"))
+    var tints = one_program(tinted^)
+    var tinted_target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_point(
+        point, tinted_target, SHADE_LIT, TextureStore(), programs=tints
+    )
+    assert_color(
+        tinted_target.color_at(2, 2),
+        2.5,
+        (Float32(SIZE) - 2.5) * 0.5,
+        (point.z * 0.5 + 0.5) * 0.25,
+    )
+    # A program that is not there is refused, and the uv view runs none.
+    point.nodes = NodeProgramId(3)
+    with assert_raises(contains="No node program has that id"):
+        rasterize_point(
+            point, target, SHADE_LIT, TextureStore(), programs=programs
+        )
+    rasterize_point(point, target, SHADE_UV, TextureStore(), programs=programs)
 
 
 # --- the mask, the ambient occlusion and the depth ----------------------------
@@ -1086,10 +1180,44 @@ def test_a_sprite_runs_its_node_material() raises:
         _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
 
 
-def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
+def test_wide_lines_refuse_a_node_material() raises:
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
+    var id = assets.programs.add(graph.compile())
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    var camera = a_camera()
+    var renderer = Renderer(SIZE, SIZE)
+    var wide = Scene()
+    var at = wide.add(Object3D())
+    var sticks = assets.geometries.add(
+        line_segments_geometry([Vector3(-1, 0, 0), Vector3(1, 0, 0)])
+    )
+    wide.add_wide_line(LineSegments2(sticks, noded, at))
+    wide.update()
+    with assert_raises(contains="A wide line runs no node graph"):
+        _ = renderer.render(wide, assets, camera)
+
+
+def test_lines_run_a_node_material() raises:
+    # A line across the middle, colored by its coordinate and a custom
+    # attribute. A position node that moves it nowhere keeps it from being
+    # culled by its bound.
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                graph.swizzle(graph.uv(), "x"),
+                graph.attribute("green", NODE_FLOAT),
+                graph.float(1),
+            ]
+        ),
+    )
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
     var id = assets.programs.add(graph.compile())
     var noded = assets.materials.add(
         Material(Color(255, 255, 255), kind=BASIC, nodes=id)
@@ -1098,30 +1226,204 @@ def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
     bare.set_attribute(
         String(POSITION), BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3)
     )
+    bare.set_attribute(String(UV), BufferAttribute([Float32(1), 0, 1, 0], 2))
+    bare.set_attribute("green", BufferAttribute([Float32(0), 0], 1))
     var shape = assets.geometries.add(bare^)
-    var camera = a_camera()
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_line(Line(shape, noded, at))
+    scene.update()
     var renderer = Renderer(SIZE, SIZE)
-    var lines = Scene()
-    var at = lines.add(Object3D())
-    lines.add_line(Line(shape, noded, at))
-    lines.update()
-    with assert_raises(contains="A line runs no node graph"):
-        _ = renderer.render(lines, assets, camera)
-    var points = Scene()
-    at = points.add(Object3D())
-    points.add_points(Points(shape, noded, at))
-    points.update()
-    with assert_raises(contains="A point runs no node graph"):
-        _ = renderer.render(points, assets, camera)
-    var wide = Scene()
-    at = wide.add(Object3D())
-    var sticks = assets.geometries.add(
-        line_segments_geometry([Vector3(-1, 0, 0), Vector3(1, 0, 0)])
+    renderer.set_background(Color(0, 0, 0))
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 255)
+    assert_equal(Int(seen.g), 0)
+    assert_equal(Int(seen.b), 255)
+
+
+def test_points_run_a_node_material() raises:
+    # One point at the origin, six pixels across from its own `size`
+    # attribute, colored from its coordinate. A position node that moves
+    # it nowhere keeps it from being culled by its bound.
+    var assets = Assets()
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [graph.swizzle(uv, "x"), graph.swizzle(uv, "y"), graph.float(1)]
+        ),
     )
-    wide.add_wide_line(LineSegments2(sticks, noded, at))
-    wide.update()
-    with assert_raises(contains="A wide line runs no node graph"):
-        _ = renderer.render(wide, assets, camera)
+    graph.set_output(SIZE_NODE, graph.attribute("size", NODE_FLOAT))
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
+    var id = assets.programs.add(graph.compile())
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    var one = BufferGeometry()
+    one.set_attribute(String(POSITION), BufferAttribute([Float32(0), 0, 0], 3))
+    one.set_attribute(String(UV), BufferAttribute([Float32(1), 0], 2))
+    one.set_attribute("size", BufferAttribute([Float32(6)], 1))
+    var shape = assets.geometries.add(one^)
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_points(Points(shape, noded, at))
+    scene.update()
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, a_camera())
+    var seen = middle(image)
+    assert_equal(Int(seen.r), 255)
+    assert_equal(Int(seen.g), 0)
+    assert_equal(Int(seen.b), 255)
+    # Six pixels across: columns five to ten.
+    assert_equal(Int(image.get_pixel(5, SIZE // 2).b), 255)
+    assert_equal(Int(image.get_pixel(4, SIZE // 2).b), 0)
+    # A size runs before the point has pixels, so it reads no fragment.
+    var placed = NodeGraph()
+    placed.set_output(SIZE_NODE, placed.swizzle(placed.frag_coord(), "x"))
+    with assert_raises(contains="A size node runs once per point"):
+        _ = placed.compile()
+    # A size that is not above zero is refused.
+    var flat = NodeGraph()
+    flat.set_output(SIZE_NODE, flat.float(0))
+    var nothing = assets.programs.add(flat.compile())
+    var unsized = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=nothing)
+    )
+    var bad = Scene()
+    at = bad.add(Object3D())
+    bad.add_points(Points(shape, unsized, at))
+    bad.update()
+    with assert_raises(contains="size node gave a size that is not above"):
+        _ = renderer.render(bad, assets, a_camera())
+    # Nor is an endless one.
+    var endless = NodeGraph()
+    endless.set_output(
+        SIZE_NODE, endless.div(endless.float(1), endless.float(0))
+    )
+    var huge = assets.programs.add(endless.compile())
+    var unbounded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=huge)
+    )
+    var worse = Scene()
+    at = worse.add(Object3D())
+    worse.add_points(Points(shape, unbounded, at))
+    worse.update()
+    with assert_raises(contains="size node gave a size that is not above"):
+        _ = renderer.render(worse, assets, a_camera())
+    # A program with no size node gives no size.
+    var sizeless = NodeGraph()
+    sizeless.set_output(COLOR_NODE, sizeless.vec3(1, 1, 1))
+    var none = Vector3(0, 0, 0)
+    with assert_raises(contains="has no size node"):
+        _ = point_size_of(
+            sizeless.compile(),
+            NodeInputs(0, 0, none, none, none, none, False),
+        )
+
+
+def every_read(mut assets: Assets) raises -> NodeProgramId:
+    """Return a program that reads every kind of texture, the fragment's
+    place and a varying point coordinate, times a zero uniform,
+    plus white: what a point or a line shows is white, and every read ran.
+    """
+    from render.framebuffer import Framebuffer
+    from render.texture import texture_of
+
+    var map = assets.textures.add(
+        texture_of(Framebuffer(2, 2, Color(255, 0, 0)))
+    )
+    var sky = assets.cube_textures.add(a_cube())
+    var cloud = assets.data_3d_textures.add(
+        Data3DTexture(a_stack(Color(255, 0, 0), Color(0, 255, 0)))
+    )
+    var layers = assets.data_array_textures.add(
+        DataArrayTexture(a_stack(Color(0, 0, 255), Color(255, 255, 0)))
+    )
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var named = graph.texture_uniform("map", map)
+    var sum = graph.texture(map, graph.uv())
+    sum = graph.add(sum, graph.texture_level(map, place, graph.float(0)))
+    sum = graph.add(
+        sum, graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    )
+    sum = graph.add(
+        sum,
+        graph.texture_3d(
+            graph.volume_uniform("cloud"), graph.vec3(0.5, 0.5, 0.75)
+        ),
+    )
+    sum = graph.add(
+        sum,
+        graph.texture_array(
+            graph.array_uniform("layers"), graph.vec3(0.5, 0.5, 0)
+        ),
+    )
+    sum = graph.add(
+        sum, graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
+    )
+    var extra = graph.add(
+        graph.add(graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)),
+        graph.add(graph.varying(place), graph.varying(graph.uv())),
+    )
+    var zero = graph.uniform("zero", Float32(0))
+    var rgb = graph.add(
+        graph.swizzle(sum, "rgb"),
+        graph.join([extra, graph.swizzle(graph.frag_coord(), "z")]),
+    )
+    graph.set_output(
+        COLOR_NODE, graph.add(graph.mul(rgb, zero), graph.vec3(1, 1, 1))
+    )
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
+    graph.set_output(SIZE_NODE, graph.float(4))
+    var id = assets.programs.add(graph.compile())
+    assets.programs.get(id).set_cube("sky", sky)
+    assets.programs.get(id).set_volume("cloud", cloud)
+    assets.programs.get(id).set_array("layers", layers)
+    return id
+
+
+def test_points_and_lines_read_every_kind_of_texture() raises:
+    var assets = Assets()
+    var id = every_read(assets)
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    # An opacity alone, with no color: the material's color shows.
+    var faint = NodeGraph()
+    faint.set_output(OPACITY_NODE, faint.float(0.5))
+    faint.set_output(POSITION_NODE, faint.vec3(0, 0, 0))
+    var faded = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            kind=BASIC,
+            nodes=assets.programs.add(faint.compile()),
+        )
+    )
+    var one = BufferGeometry()
+    one.set_attribute(String(POSITION), BufferAttribute([Float32(0), 0, 0], 3))
+    one.set_attribute(String(UV), BufferAttribute([Float32(0.5), 0.5], 2))
+    var dot = assets.geometries.add(one^)
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION), BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3)
+    )
+    bare.set_attribute(String(UV), BufferAttribute([Float32(0), 0, 1, 0], 2))
+    var stroke = assets.geometries.add(bare^)
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    renderer.set_background(Color(0, 0, 0))
+    for material in [noded, faded]:
+        var points = Scene()
+        points.add_points(Points(dot, material, points.add(Object3D())))
+        points.update()
+        assert_true(middle(renderer.render(points, assets, a_camera())).r > 0)
+        var lines = Scene()
+        lines.add_line(Line(stroke, material, lines.add(Object3D())))
+        lines.update()
+        assert_true(middle(renderer.render(lines, assets, a_camera())).r > 0)
 
 
 def main() raises:

@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 197 features are ported and 6 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 198 features are ported and 5 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -136,11 +136,11 @@ The port is not at parity with three.js yet. 197 features are ported and 6 are o
 
 - [ ] Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
 - [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
-- [ ] A wider GLSL subset, and shader materials on points, lines and sprites [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 
 <details>
-<summary>Ported: 30</summary>
+<summary>Ported: 31</summary>
 
+- [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): more types, loops, samplers and built-ins, and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
 - [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)

@@ -197,6 +197,7 @@ from render.gpu import (
     LIGHTS_UP,
     line_state,
     LINE_STATE_FOG,
+    LINE_STATE_NODES,
     LINE_STATE_OPS,
     LINE_STATE_STENCIL,
     NO_SHADOW,
@@ -210,6 +211,7 @@ from render.gpu import (
     POINT_STATE_ALPHA_MAP,
     POINT_STATE_BLEND,
     POINT_STATE_FOG,
+    POINT_STATE_NODES,
     POINT_STATE_OPS,
     POINT_STATE_STENCIL,
     POINT_STATE_TEXTURE,
@@ -1324,12 +1326,28 @@ def test_the_depth_packing_the_range_and_the_fog_switch_cross() raises:
     ends[0].fog = False
     ends[1].fog = False
     var lined = line_state(ends)
-    assert_equal(LINE_STATE_FOG, STATE_PER_LINE - 1)
+    assert_equal(LINE_STATE_FOG, STATE_PER_LINE - 2)
     assert_equal(lined[LINE_STATE_FOG], Int32(0))
+    # Then where its node program starts, as a point's does.
+    assert_equal(LINE_STATE_NODES, STATE_PER_LINE - 1)
+    assert_equal(lined[LINE_STATE_NODES], Int32(-1))
+    ends[0].nodes = NodeProgramId(0)
+    var line_starts: List[Int] = [40]
+    assert_equal(line_state(ends, 1, line_starts)[LINE_STATE_NODES], Int32(40))
     var dot = a_point(4.5, 4.5, 3, 0.5, Color(255, 255, 255))
     var dots = point_state([dot])
-    assert_equal(POINT_STATE_FOG, STATE_PER_POINT - 1)
+    assert_equal(POINT_STATE_FOG, STATE_PER_POINT - 2)
     assert_equal(dots[POINT_STATE_FOG], Int32(1))
+    # Then where its node program starts: -1 for none, and for one past
+    # the starts given, which the draw refuses.
+    assert_equal(POINT_STATE_NODES, STATE_PER_POINT - 1)
+    assert_equal(dots[POINT_STATE_NODES], Int32(-1))
+    var noded = dot
+    noded.nodes = NodeProgramId(1)
+    var starts: List[Int] = [40, 90]
+    assert_equal(point_state([noded], starts)[POINT_STATE_NODES], Int32(90))
+    noded.nodes = NodeProgramId(2)
+    assert_equal(point_state([noded], starts)[POINT_STATE_NODES], Int32(-1))
 
 
 def test_the_layer_lanes_and_columns_ride_last() raises:

@@ -13,6 +13,7 @@ its message, which names the shader and the line.
 
 from materials.glsl import (
     _Type,
+    MAX_WHILE_COUNT,
     _TokenKind,
     compile_raw_shader_material,
     compile_shader_material,
@@ -30,12 +31,14 @@ from materials.nodes import (
     MASK_NODE,
     OPACITY_NODE,
     POSITION_NODE,
+    SIZE_NODE,
     NodeContext,
     NodeInputs,
     NodeProgram,
     NodeSource,
     here_inputs,
     moved_position,
+    point_size_of,
     run_nodes,
 )
 from math.matrix3 import Matrix3
@@ -101,6 +104,11 @@ struct Corners(NodeSource):
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return the direction and the slot as a color."""
         return FloatColor(direction.x, direction.y, direction.z, Float32(slot))
+
+    def point_coord(self, context: NodeContext) -> Lanes:
+        """Return a made-up place in a point, a quarter across and three
+        quarters down."""
+        return Lanes(0.25, 0.75, 0, 0)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return the coordinate and the slot plus ten as a color."""
@@ -657,6 +665,55 @@ void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 """
+
+
+def test_a_point_reads_where_it_is_and_sets_its_size() raises:
+    # gl_PointCoord is where the fragment is in its point.
+    assert_lanes(value("vec3(gl_PointCoord, 0.0)"), 0.25, 0.75, 0)
+    # gl_PointSize runs once per point: here 300 pixels at a distance of
+    # one, times the point's own size attribute.
+    var sized = compile_shader_material(
+        """
+        attribute float scale;
+        void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = scale * 300.0 / -mv.z;
+            gl_Position = projectionMatrix * mv;
+        }
+        """,
+        "void main() { gl_FragColor = vec4(1.0); }",
+    )
+    assert_true(sized.has(SIZE_NODE))
+    var none = Vector3(0, 0, 0)
+    var custom = SIMD[DType.float32, 8](0)
+    custom[0] = 2
+    var size = point_size_of(
+        sized,
+        NodeInputs(0, 0, Vector3(0, 0, -3), none, none, none, False, custom),
+    )
+    assert_almost_equal(size, 200, atol=1e-3)
+    assert_false(
+        compile_shader_material(
+            VERTEX, "void main() { gl_FragColor = vec4(1.0); }"
+        ).has(SIZE_NODE)
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "gl_PointSize reads position or normal",
+        "void main() {\n    gl_PointSize = position.x;\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0);\n}\n",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(gl_PointSize); }",
+        "GLSL's gl_PointSize is outside the subset",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "GLSL's gl_PointCoord is outside the subset",
+        "void main() {\n    gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position.xy + gl_PointCoord, position.z, 1.0);\n}\n",
+    )
 
 
 def test_a_raw_shader_declares_what_it_reads() raises:
@@ -1729,13 +1786,11 @@ def test_the_statements_build_the_graph() raises:
     refused_statement(
         "float gl_Thing = 1.0;", "a name that begins gl_ is GLSL's"
     )
-    refused_statement(
-        "float x = gl_PointCoord.x;",
-        "GLSL's gl_PointCoord is outside the subset",
-    )
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
-    refused_statement("while (true) {}", "while is outside the subset")
+    refused_statement(
+        "while (1.0) {}", "a while loop needs a bool, not a float"
+    )
     refused_statement("break;", "break needs a loop or a switch to be in")
     refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
@@ -2990,6 +3045,52 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
         "a transform's columns are outside the subset",
         "void main() { int i = 0; vec4 c = modelMatrix[i]; " + place + " }",
     )
+
+
+def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
+    # Five times through, then the condition leaves.
+    var counted = (
+        "float s = 0.0; int i = 0;\nwhile (i < 5) { s += 1.0; i++; }\n"
+    )
+    assert_equal(number("s", "", counted), 5)
+    # A continue skips to the condition, and a break leaves: 1 + 3 + 4.
+    var jumps = (
+        "float s = 0.0; int i = 0;\nwhile (true) {\n    i++;\n"
+        "    if (i == 2) continue;\n    if (i > 4) break;\n"
+        "    s += float(i);\n}\n"
+    )
+    assert_equal(number("s", "", jumps), 8)
+    # A loop that would run longer stops at the cap.
+    var endless = "float s = 0.0;\nwhile (true) s += 1.0;\n"
+    assert_equal(number("s", "", endless), Float32(MAX_WHILE_COUNT))
+    # A do loop runs once before it asks.
+    var once = "float s = 0.0;\ndo { s += 1.0; } while (false);\n"
+    assert_equal(number("s", "", once), 1)
+    var thrice = (
+        "float s = 0.0; int i = 0;\ndo { s += 1.0; i++; } while (i < 3);\n"
+    )
+    assert_equal(number("s", "", thrice), 3)
+    # Its continue still reaches the condition: i runs to five, and the
+    # last three times add one each.
+    var skipping = (
+        "float s = 0.0; int i = 0;\ndo {\n    i++;\n"
+        "    if (i < 3) { continue; }\n    s += 1.0;\n} while (i < 5);\n"
+    )
+    assert_equal(number("s", "", skipping), 3)
+    # A for loop inside keeps its own count. Two while loops, one in the
+    # other, would unroll to MAX_WHILE_COUNT squared times.
+    var nested = (
+        "float s = 0.0; int i = 0;\nwhile (i < 3) {\n"
+        "    for (int j = 0; j < 2; j++) { s += 1.0; }\n    i++;\n}\n"
+    )
+    assert_equal(number("s", "", nested), 6)
+    refused_statement(
+        "do s = 1.0; while (false);", "a do loop's body is a block in braces"
+    )
+    refused_statement(
+        "do { } for (;;);", "a do loop ends with while (condition);"
+    )
+    refused_statement("do { } while (2);", "a do loop needs a bool, not an int")
 
 
 def test_break_continue_and_an_early_return_are_read() raises:

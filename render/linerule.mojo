@@ -267,6 +267,45 @@ def covers(a: Vector2, b: Vector2, x: Int, y: Int, width: Int = 1) -> Bool:
     return other >= lowest and other < lowest + width
 
 
+def toward_at(
+    a: Vector2,
+    b: Vector2,
+    a_inv_w: Float32,
+    b_inv_w: Float32,
+    x: Int,
+    y: Int,
+) -> Float32:
+    """Return how far toward `b` the pixel at `x`, `y` is on the segment,
+    perspective-correct: the weight of `b`'s attributes there, as the line
+    passes of both backends interpolate them.
+
+    The share along the major axis is held inside the segment, then
+    weighted by each end's `1 / w` and divided by their sum.
+
+    Args:
+        a: One end, in pixels.
+        b: The other end, in pixels.
+        a_inv_w: `1 / w` at `a`.
+        b_inv_w: `1 / w` at `b`.
+        x: The pixel's column.
+        y: The pixel's row.
+
+    Returns:
+        The weight of `b`, zero to one. Zero where both ends' `1 / w` are
+        zero.
+    """
+    var along = x if major_is_x(a, b) else y
+    var share = share_at(a, b, along)
+    if share < 0:
+        share = 0
+    if share > 1:
+        share = 1
+    var near = a_inv_w * (1 - share)
+    var far = b_inv_w * share
+    var total = near + far
+    return far / total if total != 0 else 0
+
+
 def dash_covers(distance: Float32, dash: Float32, gap: Float32) -> Bool:
     """Return True if a dashed line shows the pixel at `distance` along it.
 

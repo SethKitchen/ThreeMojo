@@ -89,7 +89,7 @@ var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
 
 ## Outputs
 
-A graph sets one to nine outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
+A graph sets one to ten outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
 
 | Output | Type | three.js | What it replaces |
 |---|---|---|---|
@@ -102,6 +102,7 @@ A graph sets one to nine outputs. Each output replaces one part of the material'
 | `MASK_NODE` | `float` | `maskNode` | Nothing. A fragment where it is zero is thrown away, before the alpha test. |
 | `AO_NODE` | `float` | `aoNode` | The ambient occlusion map's value. It dims the indirect light. |
 | `DEPTH_NODE` | `float` | `depthNode` | The fragment's depth: zero at the near plane, one at the far plane. The depth test reads it. |
+| `SIZE_NODE` | `float` | `sizeNode` | A point's width in pixels: the material's size and its attenuation. Only a point reads it. See [Points and lines](#points-and-lines). |
 
 The alpha of the finished color stays what the fragment had. An output node changes only its color.
 
@@ -133,6 +134,7 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `face_direction()` | `float` | `faceDirection` | One where the triangle is seen from its front, and minus one where it is seen from its back. A fragment only. |
 | `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
 | `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
+| `point_coord()` | `vec2` | GLSL's `gl_PointCoord` | Where the pixel is in its point: zero to one across from the left edge and down from the top edge. Zeros on a triangle and a line. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
 | `cube_uniform(name, map)` | `cubeTexture` | `cubeTexture(map)` | A named cube texture the caller can change with `set_cube`. |
 | `texture_cube(sampler, direction)` | `vec4` | `cubeTexture(map, dir)` | A cube texture read in a `vec3` direction of any length, linear, with straight alpha. The face the direction points at is read where it points. |
@@ -302,6 +304,8 @@ The world and view positions are of the point that `gl_Position` draws.
 
 `gl_FrontFacing` is `gl_front_facing()`. It is true on every face that a `BACK_SIDE` material draws. See [Facing](#facing).
 
+`gl_PointCoord` is `point_coord()`, where the pixel is in its point. `gl_PointSize` in the vertex shader is the size node. It can read the world and view position, the coordinates, the color and the custom attributes. It cannot read `position` or `normal`. See [Points and lines](#points-and-lines).
+
 ### Facing
 
 TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` material. three.js's WebGL renderer turns the front face round for such a material, so `gl_FrontFacing` is true on the faces that it draws. TSL's `frontFacing` is false on those faces, because they are seen from their back. For `FRONT_SIDE` and `DOUBLE_SIDE`, the two agree. A mirrored mesh keeps the same rule, as [Side](Materials#side) states.
@@ -315,6 +319,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
+- `while (c)` and `do { ... } while (c);`. The body of a `do` is a block in braces. See [While and do](#while-and-do).
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
 - Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
 - Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
@@ -332,6 +337,14 @@ An index can be a loop's index or another value that is not constant. A chain of
 
 An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
+### While and do
+
+A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that would run longer stops there, and the shader must not depend on more. The bytecode has no jumps, so the compiler unrolls such a loop 64 times. A false condition leaves it, as a `break` does.
+
+- A `while` asks its condition at the top of each time through.
+- A `do` runs its body once. It asks its condition at the top of each later time, so a `continue` in it still reaches the condition.
+- A `while` inside another `while` unrolls 64 times 64. That is past the limit of a graph, so write the inner loop as a `for` with a constant count.
+
 ### What the GLSL compiler refuses
 
 - A `#include`, `#pragma`, `#extension`, `#error`, `#line`, and a `#define` with arguments. A `#version` in a `ShaderMaterial`, as three.js writes its own.
@@ -343,7 +356,8 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
 - `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
-- `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
+- Recursion. A call inlines its function, so a function that calls itself has no end.
+- A `do` whose body is not a block in braces.
 - A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
 - A declaration directly in a `switch`, outside a block.
 - A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
@@ -356,7 +370,8 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - A column of one of these or of `viewMatrix`, and a matrix constructor that reads one, but for the forms of `mat3(modelMatrix)` above.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
-- `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
+- Every `gl_` variable but `gl_Position`, `gl_PointSize`, `gl_FragCoord`, `gl_FrontFacing`, `gl_PointCoord`, the color outputs and `gl_FragDepth`. `gl_FrontFacing` and `gl_PointCoord` in a vertex shader, and `gl_PointSize` in a fragment shader.
+- A `gl_PointSize` that reads `position` or `normal`. A point keeps its world and view position, not its local one.
 - The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `textureGrad` and `textureOffset`.
 - A vector compared with `<`, and a scalar swizzled.
 
@@ -434,11 +449,22 @@ A fragment runs the outputs in this order:
 
 A fragment that the mask can throw away claims no depth until it survives, as a GPU does for a shader that can discard. The position node runs on the host, once per vertex, after the morph targets, the bones and the displacement map. So both rasterizers draw the same moved triangles, and the shadow pass casts them. A mesh with a position node is not culled by the bound of its geometry.
 
+### Points and lines
+
+A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial` or a `PointsNodeMaterial` on them. The material must be `BASIC`. Each pixel runs the color, the opacity and the mask, then the fog and the output node. The lights, the emissive, the normal, the ambient occlusion and the depth nodes do not run, because a point and a line are unlit.
+
+- A point is every corner of its program. Its attributes are the same at each of its pixels. `point_coord()` is where the pixel is in the point, and a derivative of it is one over the point's width.
+- A line's two ends are its first two corners. A pixel weighs them as the line's color is weighed, with the perspective correction.
+- The size node runs on the host, once per point, with the frame's time and view. It replaces the material's size and its attenuation. A size that is not above zero is refused.
+- The position node moves a point or a line's vertices, as it moves a mesh's. It reads zero as the normal.
+- A texture read on a point reads the level that the point's width chooses. On a line it reads the full-size level.
+- A light's view runs no program on a point or a line: it draws their depth alone. The position node still moves them.
+
 ## What a node material refuses
 
 - A `NORMALS`, `DEPTH`, `DISTANCE` or `SHADOW` material refuses a node program. These kinds show data or a shadow, not a surface's color.
 - A wireframe refuses a node program. A line has no surface.
-- A line, a wide line and a point refuse a node material.
+- A wide line refuses a node material. three.js draws it with its own `LineMaterial` shader.
 - A sprite runs a node material on its square, as three.js's `SpriteNodeMaterial` does. It refuses a position node, because a sprite has no vertices of its own to move.
 - A program id that is not in `assets.programs` is refused when the mesh is drawn. A program that reads a texture that is not in `assets.textures` is refused too, and so is a texture uniform that names no texture.
 - The uv view (`SHADE_UV`) runs no program. `SHADE_LIT` runs it, and a texture node reads opaque white there.

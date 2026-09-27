@@ -24,6 +24,7 @@ from render.linerule import (
     other_at,
     share_at,
     span_of,
+    toward_at,
 )
 from lights.lighting import Lighting
 from materials.nodes import NodeProgramStore
@@ -899,6 +900,27 @@ def test_a_segment_no_band_draws_is_still_refused() raises:
         rasterize_lines_all([one, two], target, 4, FogView.none())
     with assert_raises():
         rasterize_lines_all([one, two], target, 1, FogView.none())
+
+
+def test_toward_is_the_perspective_correct_share() raises:
+    # Equal 1/w gives the plain share; a far end with a quarter of the
+    # near end's 1/w weighs a quarter as much; no 1/w at all gives zero.
+    var a = Vector2(0.5, 2.5)
+    var b = Vector2(10.5, 2.5)
+    var plain = toward_at(a, b, 1, 1, 5, 2)
+    assert_almost_equal(plain, share_at(a, b, 5))
+    var weighed = toward_at(a, b, 1, 0.25, 5, 2)
+    var share = share_at(a, b, 5)
+    assert_almost_equal(weighed, 0.25 * share / (1 - share + 0.25 * share))
+    assert_equal(toward_at(a, b, 0, 0, 5, 2), 0)
+    # Held inside the segment: a pixel past either end weighs one end only.
+    assert_equal(toward_at(a, b, 1, 1, 40, 2), 1)
+    assert_equal(toward_at(a, b, 1, 1, -9, 2), 0)
+    # A steep segment is measured along its rows.
+    var steep = toward_at(Vector2(2.5, 0.5), Vector2(3.5, 10.5), 1, 1, 0, 5)
+    assert_almost_equal(
+        steep, share_at(Vector2(2.5, 0.5), Vector2(3.5, 10.5), 5)
+    )
 
 
 def main() raises:

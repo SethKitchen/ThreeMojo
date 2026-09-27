@@ -147,6 +147,7 @@ from render.rasterizer import (
     LayerFactors,
     Draw,
     rasterize_all,
+    rasterize_frame,
     rasterize_lines_all,
     rasterize_points_all,
 )
@@ -11711,6 +11712,191 @@ def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
         )
 
 
+def test_both_backends_run_a_graph_on_points_alike() raises:
+    # A texture read at gl_PointCoord, the coordinate's step across a
+    # pixel, a custom attribute, a round mask, an opacity and an output
+    # that reads the pixel's place: all from the point's own lanes.
+    if skipped_for_lack_of_a_gpu("both backends run a graph on points"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32, 4, Color(240, 200, 120), Color(30, 60, 120), REPEAT, BILINEAR
+        )
+    )
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var across = graph.swizzle(place, "x")
+    var read = graph.texture(graph.texture_uniform("map", board), place)
+    var tinted = graph.mul(
+        graph.swizzle(read, "rgb"),
+        graph.add(
+            graph.attribute("tint", NODES_VEC3),
+            graph.join([across, graph.dfdx(across), graph.float(0.2)]),
+        ),
+    )
+    graph.set_output(NODES_COLOR, tinted)
+    graph.set_output(NODES_OPACITY, graph.float(0.7))
+    graph.set_output(
+        NODES_MASK,
+        graph.less_than(
+            graph.length(graph.sub(place, graph.vec2(0.5, 0.5))),
+            graph.float(0.5),
+        ),
+    )
+    graph.set_output(
+        NODES_OUTPUT,
+        graph.mul(
+            graph.lit(),
+            graph.add(
+                graph.vec3(0.5, 0.5, 0.5),
+                graph.mul(
+                    graph.swizzle(graph.frag_coord(), "xyz"),
+                    graph.float(0.01),
+                ),
+            ),
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var points: List[RasterVertex] = [
+        a_point(8.5, 8.5, 12, 0.5, Color(255, 255, 255)),
+        a_point(24.5, 10.5, 7, 0.4, Color(255, 255, 255), BLEND),
+        a_point(40.5, 20.5, 14, 0.6, Color(255, 255, 255), alpha_test=0.5),
+    ]
+    for index in range(len(points)):
+        points[index].nodes = id
+        points[index].custom = SIMD[DType.float32, 8](
+            0.2 * Float32(index), 0.5, 1 - 0.3 * Float32(index), 0, 0, 0, 0, 0
+        )
+    for mode in [SHADE_TEXTURE, SHADE_LIT, SHADE_UV]:
+        var target = RenderTarget(48, 36, BACKGROUND)
+        rasterize_frame(
+            List[RasterVertex](),
+            List[RasterVertex](),
+            [Draw(DRAW_POINTS, 0, len(points))],
+            target,
+            mode,
+            textures,
+            Lighting.uniform(),
+            1,
+            points=points,
+            programs=store,
+        )
+        var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+        var gpu = render_triangles(
+            List[RasterVertex](),
+            48,
+            36,
+            BACKGROUND,
+            mode,
+            textures,
+            Lighting.uniform(),
+            points=points,
+            programs=store,
+        )
+        var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+        assert_true(drawn > 100, "the points barely drew anything")
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_run_a_graph_on_lines_alike() raises:
+    # A texture read along each segment, the coordinate's step across a
+    # pixel, a custom attribute, a dashed mask, an opacity, the fog and an
+    # output that reads the pixel's place, two pixels wide.
+    if skipped_for_lack_of_a_gpu("both backends run a graph on lines"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32, 4, Color(240, 200, 120), Color(30, 60, 120), REPEAT, BILINEAR
+        )
+    )
+    var graph = NodeGraph()
+    var u = graph.swizzle(graph.uv(), "x")
+    var read = graph.texture(
+        graph.texture_uniform("map", board),
+        graph.join([u, graph.float(0.3)]),
+    )
+    graph.set_output(
+        NODES_COLOR,
+        graph.mul(
+            graph.swizzle(read, "rgb"),
+            graph.add(
+                graph.attribute("tint", NODES_VEC3),
+                graph.join([u, graph.mul(graph.dfdx(u), graph.float(8)), u]),
+            ),
+        ),
+    )
+    graph.set_output(NODES_OPACITY, graph.float(0.8))
+    graph.set_output(
+        NODES_MASK,
+        graph.less_than(
+            graph.fract(graph.mul(u, graph.float(5))), graph.float(0.7)
+        ),
+    )
+    graph.set_output(
+        NODES_OUTPUT,
+        graph.add(
+            graph.lit(),
+            graph.mul(
+                graph.swizzle(graph.frag_coord(), "xyz"), graph.float(0.005)
+            ),
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var segments = List[RasterVertex]()
+    segments.extend(a_line(3.5, 4.5, 44.5, 9.5, 0.4, Color(255, 255, 255)))
+    segments.extend(
+        a_line(6.5, 30.5, 12.5, 3.5, 0.5, Color(255, 255, 255), BLEND)
+    )
+    segments.extend(a_line(40.5, 32.5, 20.5, 18.5, 0.6, Color(255, 255, 255)))
+    for index in range(len(segments)):
+        segments[index].nodes = id
+        segments[index].u = Float32(index % 2)
+        segments[index].view_depth = 1.5 + Float32(index) * 0.2
+        segments[index].custom = SIMD[DType.float32, 8](
+            0.1 * Float32(index), 0.4, 0.9 - 0.1 * Float32(index), 0, 0, 0, 0, 0
+        )
+    var view = FogView(
+        linear_fog(Color(20, 30, 60), Length(1.0, METER), Length(3.0, METER))
+    )
+    var draws: List[Draw] = [Draw(DRAW_SEGMENTS, 0, len(segments) // 2)]
+    for mode in [SHADE_TEXTURE, SHADE_LIT, SHADE_UV]:
+        var target = RenderTarget(48, 36, BACKGROUND)
+        rasterize_frame(
+            List[RasterVertex](),
+            segments,
+            draws,
+            target,
+            mode,
+            textures,
+            Lighting.uniform(),
+            1,
+            view,
+            line_width=2,
+            programs=store,
+        )
+        var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+        var device = GpuRenderer(48, 36)
+        device.set_textures(textures)
+        device.draw(
+            List[RasterVertex](),
+            BACKGROUND,
+            mode,
+            Lighting.uniform(),
+            view,
+            lines=segments,
+            draws=draws,
+            line_width=2,
+            programs=store,
+        )
+        var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+        assert_true(drawn > 60, "the lines barely drew anything")
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
@@ -11773,6 +11959,149 @@ def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     )
     camera.place(Vector3(0.2, 0.4, 3.0), Vector3(0, 0, 0))
     var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_a_glsl_shader_material_on_points_alike() raises:
+    # three.js's usual points shader: each point sized by an attribute and
+    # its distance, round, and shaded across by gl_PointCoord.
+    if skipped_for_lack_of_a_gpu("both backends draw glsl points alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var program = compile_shader_material(
+        """
+        attribute float scale;
+        varying vec3 vColor;
+        void main() {
+            vColor = vec3(scale * 0.1, 0.5, 1.0 - scale * 0.1);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = scale * 12.0 / -mv.z;
+            gl_Position = projectionMatrix * mv;
+        }
+        """,
+        """
+        varying vec3 vColor;
+        void main() {
+            vec2 d = gl_PointCoord - vec2(0.5);
+            if (dot(d, d) > 0.25) discard;
+            gl_FragColor = vec4(vColor * (0.5 + gl_PointCoord.y), 1.0);
+        }
+        """,
+    )
+    var id = assets.programs.add(program^)
+    var cloud = BufferGeometry()
+    var places = List[Float32]()
+    var scales = List[Float32]()
+    for index in range(6):
+        places.append(Float32(index) * 0.4 - 1.0)
+        places.append(Float32(index % 3) * 0.3 - 0.3)
+        places.append(Float32(index % 2) * -0.5)
+        scales.append(Float32(3 + index))
+    cloud.set_attribute(String(POSITION), BufferAttribute(places^, 3))
+    cloud.set_attribute("scale", BufferAttribute(scales^, 1))
+    var shape = assets.geometries.add(cloud^)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_points(
+        Points(shape, assets.materials.add(shader_material(id)), node)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.0, 0.0, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 60, "the points barely drew anything")
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
+    # A line strip colored by a varying from an attribute, dashed by the
+    # fragment shader with its distance along, and tinted by its place.
+    if skipped_for_lack_of_a_gpu("both backends draw a glsl line alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var program = compile_shader_material(
+        """
+        attribute float heat;
+        varying float vHeat;
+        varying vec3 vWorld;
+        void main() {
+            vHeat = heat;
+            vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+        """,
+        """
+        varying float vHeat;
+        varying vec3 vWorld;
+        void main() {
+            if (fract(vWorld.x * 3.0) > 0.8) discard;
+            gl_FragColor = vec4(vHeat, 0.4 + 0.2 * vWorld.y, 1.0 - vHeat, 1.0)
+                + vec4(gl_FragCoord.xy * 0.002, 0.0, 0.0);
+        }
+        """,
+    )
+    var id = assets.programs.add(program^)
+    var strip = BufferGeometry()
+    var places = List[Float32]()
+    var heats = List[Float32]()
+    for index in range(7):
+        places.append(Float32(index) * 0.35 - 1.05)
+        places.append(Float32(index % 2) * 0.6 - 0.3)
+        places.append(Float32(index % 3) * -0.3)
+        heats.append(Float32(index) / 6)
+    strip.set_attribute(String(POSITION), BufferAttribute(places^, 3))
+    strip.set_attribute("heat", BufferAttribute(heats^, 1))
+    var shape = assets.geometries.add(strip^)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_line(Line(shape, assets.materials.add(shader_material(id)), node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.0, 0.0, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 30, "the line barely drew anything")
     var frame = renderer.prepare_frame(scene, assets, camera)
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
