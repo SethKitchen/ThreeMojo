@@ -20,6 +20,7 @@ from materials.nodes import (
     run_nodes,
 )
 from math.vector3 import Vector3
+from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from std.pathlib import Path
 from std.testing import (
@@ -167,7 +168,7 @@ def test_a_graph_with_no_surface_is_an_unlit_material() raises:
 comptime TILED = """<?xml version="1.0"?>
 <materialx version="1.38">
   <tiledimage name="tile" type="color3">
-    <input name="file" type="filename" value="checker.png" colorspace="srgb_texture" />
+    <input name="file" type="filename" value="threemojo_materialx_checker.png" colorspace="srgb_texture" />
     <input name="uvtiling" type="vector2" value="2, 2" />
   </tiledimage>
   <standard_surface name="SR" type="surfaceshader">
@@ -182,13 +183,11 @@ comptime TILED = """<?xml version="1.0"?>
 
 
 def test_an_image_is_read_from_beside_the_document() raises:
-    var pixels: List[UInt8] = [
-        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255
-    ]
-    var folder = "/tmp/threemojo_materialx/"
-    if not Path(folder).exists():
-        Path(folder).mkdir()
-    Path(folder + "checker.png").write_bytes(encode_png(2, 2, pixels))
+    var image = Framebuffer(2, 2, Color(255, 0, 0))
+    image.set_pixel(1, 0, Color(0, 255, 0))
+    image.set_pixel(0, 1, Color(0, 0, 255))
+    var folder = "/tmp/threemojo_materialx_"
+    Path(folder + "checker.png").write_bytes(encode_png(image))
     Path(folder + "tiled.mtlx").write_text(TILED)
     var assets = Assets()
     var read = load_materialx(folder + "tiled.mtlx", assets)
