@@ -32,7 +32,7 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 `SkinField` fits the skin directly to the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
 
-Sixty transverse sections run from just below the tibial plafond to the iliac landmark, about a centimeter and a half apart. Each section slices every structure at its height. A slanted structure is sliced along its length, so its cut is an ellipse or a strip.
+Sixty transverse sections run from just below the tibial plafond to the iliac landmark, about a centimeter and a half apart. Each section slices every structure at its height, at its middle and at either edge of its window. A slanted structure is sliced along its length, so its cut is an ellipse or a strip. A section reads only the structures whose extent along the limb reaches its window.
 
 Each slice outline is closed as a convex hull. Fat fills the gaps between muscles, so the hull is the outline you feel through the skin. `LOFT_RAYS` rays measure the hull's reach in each direction exactly. The polygon of those tangent lines exceeds the hull by less than half a percent.
 

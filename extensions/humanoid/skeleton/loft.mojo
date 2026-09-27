@@ -32,9 +32,9 @@ from std.math import atan2, cos, max, min, pi, sin, sqrt
 # Rays around every section. Thirty-six resolve a calf's two heads and
 # a shin's crest at a few millimeters.
 comptime LOFT_RAYS = 36
-# Sub-slices per section. A lymph node narrower than the section spacing
-# still reaches a slice.
-comptime LOFT_SLICES = 5
+# Sub-slices per section: its middle and either edge of its window. A
+# lymph node narrower than the section spacing still reaches one.
+comptime LOFT_SLICES = 3
 # The loft runs along plus y: a leg, from the ankle to the hip.
 comptime AXIS_Y = 1
 # The loft runs along plus z: a foot, from the heel to the toes.
@@ -163,9 +163,12 @@ def fit_loft(
     # the last solid, behind a heel or beyond a toe, has none.
     var sections = List[List[List[_Ellipse]]]()
     var filled = List[Bool]()
+    var reaches = _reaches(samples, axis)
     var section = 0
     while section < count:
         var at = start + spacing * Float32(section)
+        # Only the stations whose reach meets this section's window.
+        var near = _near(reaches, at - spacing, at + spacing)
         var slices = List[List[_Ellipse]]()
         var any = False
         var sub = 0
@@ -173,7 +176,7 @@ def fit_loft(
             var offset = (
                 Float32(sub) / Float32(LOFT_SLICES - 1) - Float32(0.5)
             ) * spacing
-            var slice = _slice(samples, axis, at + offset)
+            var slice = _slice(samples, near, axis, at + offset)
             if len(slice) > 0:
                 any = True
             slices.append(slice^)
@@ -401,8 +404,44 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
     return gap / norm
 
 
-def _slice(samples: List[LoftSample], axis: Int, at: Float32) -> List[_Ellipse]:
-    """Return every inner solid's outline at axis coordinate `at`.
+def _reaches(
+    samples: List[LoftSample], axis: Int
+) -> List[Tuple[Float32, Float32]]:
+    """Return how far along the axis each station, and the segment it
+    starts, reaches: its lowest and highest coordinate."""
+    var reaches = List[Tuple[Float32, Float32]]()
+    var count = len(samples)
+    for index in range(count):
+        var sample = samples[index]
+        var here = _along(sample.center, axis)
+        var widest = max(max(sample.ml, sample.ap), sample.reach)
+        var low = here - widest
+        var high = here + widest
+        if index + 1 < count and samples[index + 1].joins:
+            var next = samples[index + 1]
+            var there = _along(next.center, axis)
+            var far = max(next.ml, next.ap)
+            low = min(low, there - far)
+            high = max(high, there + far)
+        reaches.append((low, high))
+    return reaches^
+
+
+def _near(
+    reaches: List[Tuple[Float32, Float32]], low: Float32, high: Float32
+) -> List[Int]:
+    """Return the stations whose reach meets the window `low` to `high`."""
+    var near = List[Int]()
+    for index in range(len(reaches)):
+        if reaches[index][1] >= low and reaches[index][0] <= high:
+            near.append(index)
+    return near^
+
+
+def _slice(
+    samples: List[LoftSample], near: List[Int], axis: Int, at: Float32
+) -> List[_Ellipse]:
+    """Return the outline at axis coordinate `at` of the stations `near`.
 
     A joined pair of stations is a tapered segment. The plane cuts it in
     an ellipse when the segment crosses the plane steeply, and in a long
@@ -413,23 +452,15 @@ def _slice(samples: List[LoftSample], axis: Int, at: Float32) -> List[_Ellipse]:
     """
     var out = List[_Ellipse]()
     var count = len(samples)
-    var index = 0
-    while index < count:
+    for k in range(len(near)):
+        var index = near[k]
         var sample = samples[index]
-        var here = _along(sample.center, axis)
         var reach = sample.reach
         if reach <= 0:
             reach = min(sample.ml, sample.ap)
         _add_round(out, sample.center, sample.ml, sample.ap, reach, at, axis)
         if index + 1 < count and samples[index + 1].joins:
-            var next = samples[index + 1]
-            var there = _along(next.center, axis)
-            var widest = max(max(sample.ml, sample.ap), max(next.ml, next.ap))
-            var low = min(here, there) - widest
-            var high = max(here, there) + widest
-            if at > low and at < high:
-                _add_segment(out, sample, next, at, axis)
-        index += 1
+            _add_segment(out, sample, samples[index + 1], at, axis)
     return out^
 
 
@@ -452,6 +483,22 @@ def _add_segment(
         var tb = (at + widest - za) / dz
         t0 = max(Float32(0), min(ta, tb))
         t1 = min(Float32(1), max(ta, tb))
+    # The plane misses the segment's reach altogether.
+    if t1 < t0:
+        return
+    # The segment's own crossing of the plane, where its slice is widest.
+    if abs(dz) > Float32(1.0e-6):
+        var cross = (at - za) / dz
+        if cross >= 0 and cross <= 1:
+            _add_round(
+                out,
+                a.center + (b.center - a.center) * cross,
+                a.ml + (b.ml - a.ml) * cross,
+                a.ap + (b.ap - a.ap) * cross,
+                min(a.ml + (b.ml - a.ml) * cross, a.ap + (b.ap - a.ap) * cross),
+                at,
+                axis,
+            )
     var run = (b.center - a.center).length() * (t1 - t0)
     var finest = max(min(min(a.ml, a.ap), min(b.ml, b.ap)), Float32(1.0e-4))
     var steps = Int(run / (Float32(0.5) * finest)) + 2
@@ -545,23 +592,25 @@ def _extend(
     way, measured from the center. It is exact for every ellipse, so no
     solid can fall between two rays.
     """
-    var ray = 0
-    while ray < LOFT_RAYS:
+    for ray in range(LOFT_RAYS):
         var angle = _ray_angle(ray)
         var ux = cos(angle)
         var uz = sin(angle)
-        var index = 0
-        while index < len(slice):
-            var e = slice[index]
-            var reach = (
-                (e.u - cu) * ux
-                + (e.v - cv) * uz
-                + sqrt(e.a * e.a * ux * ux + e.b * e.b * uz * uz)
+        for index in range(len(slice)):
+            support[ray] = max(
+                support[ray], _support_of(slice[index], cu, cv, ux, uz)
             )
-            if reach > support[ray]:
-                support[ray] = reach
-            index += 1
-        ray += 1
+
+
+def _support_of(
+    e: _Ellipse, cu: Float32, cv: Float32, ux: Float32, uz: Float32
+) -> Float32:
+    """Return how far one ellipse reaches from (cu, cv) along (ux, uz)."""
+    return (
+        (e.u - cu) * ux
+        + (e.v - cv) * uz
+        + sqrt(e.a * e.a * ux * ux + e.b * e.b * uz * uz)
+    )
 
 
 def _polygon_radii(support: List[Float32]) -> List[Float32]:
@@ -570,21 +619,25 @@ def _polygon_radii(support: List[Float32]) -> List[Float32]:
     Each ray's support is a tangent line of the hull. Those lines bound
     a polygon that holds the hull and exceeds it by less than half a
     percent at thirty-six rays. Along one ray the polygon ends at the
-    nearest of the lines within a quarter turn.
+    nearest of the lines within a quarter turn either side.
     """
+    var quarter = LOFT_RAYS // 4
+    var facing = List[Float32]()
+    for turn in range(quarter):
+        facing.append(cos(_ray_angle(turn)))
     var radii = List[Float32](length=LOFT_RAYS, fill=0)
-    var ray = 0
-    while ray < LOFT_RAYS:
-        var nearest = Float32(1.0e9)
-        var line = 0
-        while line < LOFT_RAYS:
-            var turn = _ray_angle(line) - _ray_angle(ray)
-            var facing = cos(turn)
-            if facing > Float32(1.0e-3):
-                nearest = min(nearest, support[line] / facing)
-            line += 1
+    for ray in range(LOFT_RAYS):
+        var nearest = support[ray]
+        for turn in range(1, quarter):
+            nearest = min(
+                nearest,
+                min(
+                    support[(ray + turn) % LOFT_RAYS],
+                    support[(ray - turn + LOFT_RAYS) % LOFT_RAYS],
+                )
+                / facing[turn],
+            )
         radii[ray] = max(nearest, Float32(1.0e-4))
-        ray += 1
     return radii^
 
 
