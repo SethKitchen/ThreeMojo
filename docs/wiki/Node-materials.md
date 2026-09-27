@@ -314,7 +314,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
-- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureLod`, `texelFetch` and `textureSize`.
+- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch` and `textureSize`.
 - The preprocessor: `#version` in a raw shader, and object-like `#define`.
 
 A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
