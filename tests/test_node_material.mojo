@@ -60,9 +60,11 @@ from materials.nodes import (
     SIZE_NODE,
     PROGRAM_VIEW,
     NodeGraph,
+    NodeInputs,
     NodeProgram,
     NodeProgramId,
     NodeProgramStore,
+    point_size_of,
 )
 from math.vector3 import Vector3
 from objects.line import Line
@@ -1290,6 +1292,30 @@ def test_points_run_a_node_material() raises:
     bad.update()
     with assert_raises(contains="size node gave a size that is not above"):
         _ = renderer.render(bad, assets, a_camera())
+    # Nor is an endless one.
+    var endless = NodeGraph()
+    endless.set_output(
+        SIZE_NODE, endless.div(endless.float(1), endless.float(0))
+    )
+    var huge = assets.programs.add(endless.compile())
+    var unbounded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=huge)
+    )
+    var worse = Scene()
+    at = worse.add(Object3D())
+    worse.add_points(Points(shape, unbounded, at))
+    worse.update()
+    with assert_raises(contains="size node gave a size that is not above"):
+        _ = renderer.render(worse, assets, a_camera())
+    # A program with no size node gives no size.
+    var sizeless = NodeGraph()
+    sizeless.set_output(COLOR_NODE, sizeless.vec3(1, 1, 1))
+    var none = Vector3(0, 0, 0)
+    with assert_raises(contains="has no size node"):
+        _ = point_size_of(
+            sizeless.compile(),
+            NodeInputs(0, 0, none, none, none, none, False),
+        )
 
 
 def every_read(mut assets: Assets) raises -> NodeProgramId:
