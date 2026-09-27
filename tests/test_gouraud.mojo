@@ -180,6 +180,7 @@ def test_the_far_side_of_a_gouraud_square_is_lit_from_its_side() raises:
     # square shows its far side lit by the bulb, as a Lambert one does,
     # and a back-sided one is lit on its back whichever way it is seen.
     var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
     for side in [DOUBLE_SIDE, BACK_SIDE]:
         var assets = Assets()
         var gouraud = renderer.render(
