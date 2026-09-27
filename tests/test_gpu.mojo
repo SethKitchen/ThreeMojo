@@ -11878,6 +11878,78 @@ def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_draw_a_glsl_shader_material_on_points_alike() raises:
+    # three.js's usual points shader: each point sized by an attribute and
+    # its distance, round, and shaded across by gl_PointCoord.
+    if skipped_for_lack_of_a_gpu("both backends draw glsl points alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var program = compile_shader_material(
+        """
+        attribute float scale;
+        varying vec3 vColor;
+        void main() {
+            vColor = vec3(scale * 0.1, 0.5, 1.0 - scale * 0.1);
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = scale * 12.0 / -mv.z;
+            gl_Position = projectionMatrix * mv;
+        }
+        """,
+        """
+        varying vec3 vColor;
+        void main() {
+            vec2 d = gl_PointCoord - vec2(0.5);
+            if (dot(d, d) > 0.25) discard;
+            gl_FragColor = vec4(vColor * (0.5 + gl_PointCoord.y), 1.0);
+        }
+        """,
+    )
+    var id = assets.programs.add(program^)
+    var cloud = BufferGeometry()
+    var places = List[Float32]()
+    var scales = List[Float32]()
+    for index in range(6):
+        places.append(Float32(index) * 0.4 - 1.0)
+        places.append(Float32(index % 3) * 0.3 - 0.3)
+        places.append(Float32(index % 2) * -0.5)
+        scales.append(Float32(3 + index))
+    cloud.set_attribute(String(POSITION), BufferAttribute(places^, 3))
+    cloud.set_attribute("scale", BufferAttribute(scales^, 1))
+    var shape = assets.geometries.add(cloud^)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_points(
+        Points(shape, assets.materials.add(shader_material(id)), node)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.0, 0.0, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 60, "the points barely drew anything")
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
     # A texture uniform never set reads nothing the kernel can index.
     if skipped_for_lack_of_a_gpu("the gpu refuses an unset texture uniform"):
