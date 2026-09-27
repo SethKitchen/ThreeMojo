@@ -48,6 +48,7 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     MASK_NODE,
+    NODE_FLOAT,
     NODE_VEC3,
     NODE_VEC4,
     NORMAL_NODE,
@@ -793,20 +794,22 @@ def test_a_fragment_knows_which_way_its_triangle_faces() raises:
 
 
 def test_a_custom_attribute_of_the_geometry_colors_the_mesh() raises:
-    # The same tint at every vertex; a pair read as a vec4 takes zero and
-    # one for its missing floats, and an attribute the geometry lacks all
-    # zeros and one.
+    # The same tint at every vertex; a pair read as a vec3 takes zero for
+    # its missing float, and an attribute the geometry lacks all zeros and
+    # one, as WebGL fills them.
     var graph = NodeGraph()
-    var tint = graph.attribute("tint", NODE_VEC3)
-    var pair = graph.attribute("pair", NODE_VEC4)
+    var tint = graph.attribute("tint", NODE_FLOAT)
+    var pair = graph.attribute("pair", NODE_VEC3)
     var missing = graph.attribute("missing", NODE_VEC4)
     graph.set_output(
         COLOR_NODE,
         graph.join(
             [
-                graph.swizzle(tint, "x"),
+                tint,
                 graph.add(graph.swizzle(pair, "y"), graph.swizzle(pair, "z")),
-                graph.mul(graph.swizzle(pair, "w"), graph.swizzle(missing, "w")),
+                graph.add(
+                    graph.swizzle(missing, "w"), graph.swizzle(missing, "x")
+                ),
             ]
         ),
     )
@@ -818,11 +821,9 @@ def test_a_custom_attribute_of_the_geometry_colors_the_mesh() raises:
     var pairs = List[Float32]()
     for _ in range(count):
         tints.append(0.25)
-        tints.append(0.5)
-        tints.append(0.75)
         pairs.append(0.1)
         pairs.append(0.5)
-    geometry.set_attribute("tint", BufferAttribute(tints^, 3))
+    geometry.set_attribute("tint", BufferAttribute(tints^, 1))
     geometry.set_attribute("pair", BufferAttribute(pairs^, 2))
     var scene = Scene()
     var node = scene.add(Object3D())
