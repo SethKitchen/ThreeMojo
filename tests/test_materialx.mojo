@@ -24,6 +24,7 @@ from materials.nodes import (
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
+from std.os import remove
 from std.pathlib import Path
 from units.si import DEGREE
 from std.testing import (
@@ -948,6 +949,157 @@ def test_an_image_reads_the_coordinates_by_default() raises:
     ref program = assets.programs.get(assets.materials.get(read.ids[0]).nodes)
     assert_equal(len(program.textures), 1)
     assert_equal(assets.textures.count(), 1)
+
+
+comptime CORNERS = """<materialx fileprefix="/tmp/threemojo_mtlx_">
+  <image name="loose" type="color3">
+    <input name="file" type="filename" value="px.png" />
+  </image>
+  <nodegraph name="G">
+    <constant name="i" type="integer"><input name="value" type="integer" value="2" /></constant>
+    <constant name="b" type="boolean"><input name="value" type="boolean" value="true" /></constant>
+    <constant name="v4" type="vector4"><input name="value" type="vector4" value="0.1,0.2,0.3,0.4" /></constant>
+    <constant name="c4" type="color4"><input name="value" type="color4" value="0.5|0.5|0.5|1" /></constant>
+    <convert name="f" type="float"><input name="in" type="vector3" value="0.1, 0.2, 0.3" /></convert>
+    <convert name="v2" type="vector2"><input name="in" type="vector3" value="0.1, 0.2, 0.3" /></convert>
+    <separate3 name="s3" type="multioutput"><input name="in" type="color3" value="0.1,0.2,0.3" /></separate3>
+    <separate4 name="s4" type="multioutput"><input name="in" type="color4" nodename="c4" /></separate4>
+    <separate3 name="sf" type="float"><input name="in" type="vector3" value="1,2,3" /></separate3>
+    <luminance name="lum" type="color3">
+      <input name="in" type="color3" value="1,1,1" />
+      <input name="lumacoeffs" type="color3" value="0.3,0.6,0.1" />
+    </luminance>
+    <image name="im" type="color3">
+      <input name="file" type="filename" value="px.png" />
+      <input name="texcoord" type="vector2" />
+    </image>
+    <tiledimage name="t" type="color3">
+      <input name="file" type="filename" value="px.png" />
+      <input name="texcoord" type="vector2" nodename="v2" />
+    </tiledimage>
+    <combine4 name="all" type="vector4">
+      <input name="in1" type="float" nodename="s3" output="outr" />
+      <input name="in2" type="float" nodename="s3" output="outg" />
+      <input name="in3" type="float" nodename="s3" output="outb" />
+      <input name="in4" type="float" nodename="s4" output="outa" />
+    </combine4>
+    <output name="mid" type="float" nodename="f" />
+    <add name="a1" type="color3"><input name="in1" type="color3" nodename="all" /><input name="in2" type="color3" nodename="im" /></add>
+    <add name="a2" type="color3"><input name="in1" type="color3" nodename="a1" /><input name="in2" type="color3" nodename="t" /></add>
+    <add name="a3" type="color3"><input name="in1" type="color3" nodename="a2" /><input name="in2" type="color3" nodename="lum" /></add>
+    <add name="a4" type="color3"><input name="in1" type="color3" nodename="a3" /><input name="in2" type="color3" nodename="i" /></add>
+    <add name="a5" type="color3"><input name="in1" type="color3" nodename="a4" /><input name="in2" type="color3" nodename="b" /></add>
+    <add name="a6" type="color3"><input name="in1" type="color3" nodename="a5" /><input name="in2" type="color3" nodename="v4" /></add>
+    <add name="a7" type="color3"><input name="in1" type="color3" nodename="a6" /><input name="in2" type="color3" nodename="sf" output="outy" /></add>
+    <add name="a8" type="color3"><input name="in1" type="color3" nodename="a7" /><input name="in2" type="color3" nodename="mid" output="outx" /></add>
+    <add name="a9" type="color3"><input name="in1" type="color3" nodename="a8" /><input name="in2" type="vector2" nodename="v2" /></add>
+    <output name="out" type="color3" nodename="a9" />
+  </nodegraph>
+</materialx>
+"""
+
+
+comptime SURFACES = """<materialx>
+  <standard_surface name="plain" type="surfaceshader">
+    <extra name="ignored" />
+    <input name="coat_color" type="color3" value="1, 0.5, 0.5" />
+    <input name="thin_film_thickness" type="float" value="0" />
+    <input name="subsurface" type="float" value="0.25" />
+  </standard_surface>
+  <standard_surface name="empty" type="surfaceshader" />
+  <surfacematerial name="A" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="plain" />
+  </surfacematerial>
+  <surfacematerial name="B" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="missing" />
+  </surfacematerial>
+  <surfacematerial name="C" type="material" />
+  <surfacematerial name="D" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="empty" />
+  </surfacematerial>
+</materialx>
+"""
+
+
+def test_the_corners_of_the_reader() raises:
+    var numbers = mtlx_numbers("1\t2\n3|4")
+    assert_equal(len(numbers), 4)
+    assert_equal(numbers[3], 4)
+    Path("/tmp/threemojo_mtlx_px.png").write_bytes(
+        encode_png(Framebuffer(1, 1, Color(255, 255, 255)))
+    )
+    var assets = Assets()
+    var read = read_materialx(CORNERS, assets)
+    assert_equal(len(read.ids), 1)
+    # The one image, read once though three nodes name it.
+    assert_equal(assets.textures.count(), 1)
+    var surfaces = Assets()
+    var four = read_materialx(SURFACES, surfaces)
+    assert_equal(len(four.ids), 4)
+    # No base: three.js's gray, times the coat's color.
+    ref program = surfaces.programs.get(surfaces.materials.get(four.ids[0]).nodes)
+    assert_true(program.has(COLOR_NODE))
+    assert_equal(surfaces.materials.get(four.ids[0]).iridescence, 0)
+    # An empty document reads nothing.
+    var none = Assets()
+    assert_equal(len(read_materialx("<materialx></materialx>", none).ids), 0)
+    # A graph beside other elements, with no surface, is read alone.
+    var alone = Assets()
+    var graphs = read_materialx(
+        (
+            '<materialx><constant name="c" type="float"><input name="value"'
+            ' type="float" value="1" /></constant><nodegraph name="G">'
+            '<output name="out" type="color3" nodename="k" /><constant'
+            ' name="k" type="color3"><input name="value" type="color3"'
+            ' value="1,0,0" /></constant></nodegraph></materialx>'
+        ),
+        alone,
+    )
+    assert_equal(len(graphs.ids), 1)
+    # A file beside the working folder is read with no folder before it.
+    Path("threemojo_mtlx_here.mtlx").write_text("<materialx></materialx>")
+    var here = Assets()
+    assert_equal(len(load_materialx("threemojo_mtlx_here.mtlx", here).ids), 0)
+    remove("threemojo_mtlx_here.mtlx")
+
+
+def test_values_and_components_that_are_not_read_are_refused() raises:
+    var graph = String(
+        '<materialx><nodegraph name="G"><output name="out" type="color3"'
+        ' nodename="n" />'
+    )
+    var tail = String("</nodegraph></materialx>")
+    refused(
+        graph
+        + '<constant name="n" type="color3"><input name="value"'
+        ' type="string" value="x" /></constant>'
+        + tail,
+        "a value of type string that is not read",
+    )
+    refused(
+        graph
+        + '<constant name="n" type="color3"><input name="value"'
+        ' type="vector3" value="1,2" /></constant>'
+        + tail,
+        "a value of type vector3 that is not read",
+    )
+    refused(
+        graph
+        + '<extract name="n" type="float"><input name="in" type="vector3"'
+        ' value="1,2,3" /><input name="index" type="integer" value="-1" />'
+        "</extract>"
+        + tail,
+        "extract reads a component zero to three",
+    )
+    var assets = Assets()
+    with assert_raises():
+        _ = read_materialx(
+            graph
+            + '<add name="n" type="color3"><input name="in1" type="filename"'
+            ' value="px.png" /></add>'
+            + tail,
+            assets,
+        )
 
 
 def main() raises:

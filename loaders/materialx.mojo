@@ -113,7 +113,8 @@ def mtlx_numbers(text: String) raises -> List[Float32]:
     var found = List[Float32]()
     var word = String("")
     var bytes = text.as_bytes()
-    for index in range(len(bytes) + 1):
+    # One pass past the end, so the loop runs for the empty text too.
+    for index in range(len(bytes) + 1):  # pragma: no branch
         var byte = 32 if index == len(bytes) else Int(bytes[index])
         if byte == 44 or byte == 124 or byte == 32 or byte == 9 or byte == 10:
             if word == "true":
@@ -293,17 +294,19 @@ struct _Reader(Movable):
         vector cut to fewer components, or padded with zeros and a `w` of
         one, as TSL converts one."""
         var have = self.graph.type_of(node).value
-        if have == want or have > 4:
+        if have == want:
             return node
         if have == 1:
             var parts = List[NodeRef]()
-            for _ in range(want):
+            # A width of one or more, so the loop runs.
+            for _ in range(want):  # pragma: no branch
                 parts.append(node)
             return self.graph.join(parts)
         if want < have:
             return self.graph.swizzle(node, _prefix(want))
         var parts: List[NodeRef] = [node]
-        for index in range(have, want):
+        # Only reached for a wider width, so the loop runs.
+        for index in range(have, want):  # pragma: no branch
             parts.append(
                 self.graph.float(Float32(1) if index == 3 else Float32(0))
             )
@@ -593,7 +596,8 @@ struct _Reader(Movable):
             var count = 2 if tag == "combine2" else (
                 3 if tag == "combine3" else 4
             )
-            for index in range(count):
+            # Two to four parts, so the loop runs.
+            for index in range(count):  # pragma: no branch
                 parts.append(
                     self.cast(
                         self.input_or(element, "in" + String(index + 1), 0), 1
