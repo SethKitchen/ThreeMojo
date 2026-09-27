@@ -44,6 +44,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import FloatColor
+from render.cube_texture_store import CubeTextureId
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, sin, sqrt
 from units.si import Duration, SECOND
@@ -95,6 +96,10 @@ struct Corners(NodeSource):
     ) -> FloatColor:
         """Return the coordinate and the level as a color."""
         return FloatColor(u, v, level, 0.25)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return the direction and the slot as a color."""
+        return FloatColor(direction.x, direction.y, direction.z, Float32(slot))
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return the column, the row and the level as a color."""
@@ -307,6 +312,47 @@ def test_a_fragment_reads_where_it_is() raises:
         "uniform sampler2D map;\n"
         + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
         "textureLod() takes a sampler2D, a vec2 and a float",
+    )
+    # A cube is read in a direction, by either spelling.
+    var cubed = compile_shader_material(
+        VERTEX,
+        "uniform samplerCube sky;\n"
+        + "uniform samplerCube skies[2];\n"
+        + "void main() {\n"
+        + "    vec4 a = textureCube(sky, vec3(0.5, 1.0, 2.0));\n"
+        + "    vec4 b = texture(skies[1], vec3(1.0));\n"
+        + "    gl_FragColor = vec4(a.xyz, a.w + b.w);\n"
+        + "}\n",
+    )
+    cubed.set_cube("sky", CubeTextureId(4))
+    cubed.set_cube("skies[1]", CubeTextureId(2))
+    assert_lanes(run(cubed), 0.5, 1, 2)
+    assert_equal(run(cubed, OPACITY_NODE)[0], 6)
+    assert_equal(len(cubed.cubes), 2)
+    var cube_end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        "uniform samplerCube sky;\nvoid main() {\n"
+        + "vec4 c = textureCube(sky, vec2(1.0));"
+        + cube_end,
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() {\n"
+        + "vec4 c = textureCube(map, vec3(1.0));"
+        + cube_end,
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform samplerCube sky;\nvoid main() {\n"
+        + "samplerCube s = sky;"
+        + cube_end,
+        "a local variable of type samplerCube is outside",
+    )
+    refused(
+        "uniform samplerCube skies[2];\nvoid main() {\n"
+        + "int k = 0; vec4 c = texture(skies[k], vec3(1.0));"
+        + cube_end,
+        "an array of samplers is indexed by a constant",
     )
     # textureProj divides through by the last component. The made-up
     # source gives the coordinate and the slot, none here.
@@ -1129,7 +1175,7 @@ def test_uniforms_are_shared_and_set_by_name() raises:
         "varying float many[4];\n" + VERTEX,
     )
     refused(
-        "uniform samplerCube sky;\n" + WHITE, "the type samplerCube is outside"
+        "uniform sampler3D sky;\n" + WHITE, "the type sampler3D is outside"
     )
     refused(
         "uniform mat4 modelMatrix;\n" + WHITE,

@@ -47,6 +47,7 @@ conversion between `int` and `float`, and neither has this. Whatever is
 outside the subset is refused with the shader, the line and the reason.
 """
 
+from render.cube_texture_store import NO_CUBE_TEXTURE
 from materials.nodes import (
     COLOR_NODE,
     DEPTH_NODE,
@@ -79,14 +80,14 @@ comptime _KEYWORDS = (
     " continue do for while switch case default if else in out inout true"
     " false invariant discard return struct precision highp mediump lowp"
     " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D ivec2"
-    " ivec3 ivec4 bvec2 bvec3 bvec4 "
+    " ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube "
 )
 # The most elements an array holds: each is a variable, and an index picked
 # where the shader runs reads every one.
 comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
     " uint uvec2 uvec3 uvec4 mat2x2"
-    " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
+    " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4"
     " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
     " usampler2D "
 )
@@ -97,7 +98,7 @@ comptime _BUILTINS = (
     " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
     " transpose determinant inverse textureLod lessThan lessThanEqual"
     " greaterThan greaterThanEqual equal notEqual any all not texelFetch"
-    " textureSize textureProj texture2DProj "
+    " textureSize textureProj texture2DProj textureCube "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
@@ -105,7 +106,7 @@ comptime _REFUSED_FUNCTIONS = (
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
     " textureOffset"
-    " texelFetchOffset textureProjLod textureGrad texture2DLod textureCube "
+    " texelFetchOffset textureProjLod textureGrad texture2DLod "
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
@@ -776,6 +777,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             or self.value == 9
             or self.value == 16
             or self.value == 32
+            or self.value == 33
         )
 
     def name(self) -> String:
@@ -800,6 +802,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "mat4"
         if self.value == 32:
             return "sampler2D"
+        if self.value == 33:
+            return "samplerCube"
         if self.value >= _STRUCT_BASE:
             return "struct"
         return "vec" + String(self.value)
@@ -885,6 +889,7 @@ comptime _BVEC4 = _Type(24)
 comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
+comptime _SAMPLER_CUBE = _Type(33)
 comptime _NO_TYPE = _Type(-1)
 # A struct's type is this plus its place in the shader's list.
 comptime _STRUCT_BASE = 64
@@ -936,6 +941,8 @@ def _type_named(name: String) -> _Type:
         return _MAT4
     if name == "sampler2D":
         return _SAMPLER
+    if name == "samplerCube":
+        return _SAMPLER_CUBE
     return _NO_TYPE
 
 
@@ -1957,7 +1964,12 @@ struct _Compiler(Movable):
             Error: If the type is not one a uniform takes, or the other
                 shader gave the name another type.
         """
-        if not type.holds() and not type.is_matrix() and type != _SAMPLER:
+        if (
+            not type.holds()
+            and not type.is_matrix()
+            and type != _SAMPLER
+            and type != _SAMPLER_CUBE
+        ):
             raise self.error(
                 "a uniform of type " + type.name() + " is outside the subset"
             )
@@ -1978,6 +1990,8 @@ struct _Compiler(Movable):
         var node: NodeRef
         if type == _SAMPLER:
             node = self.graph.texture_uniform(name, NO_TEXTURE)
+        elif type == _SAMPLER_CUBE:
+            node = self.graph.cube_uniform(name, NO_CUBE_TEXTURE)
         elif type == _MAT3:
             var zero = Matrix3()
             zero.elements[0] = 0
@@ -3934,7 +3948,7 @@ struct _Compiler(Movable):
             if index.number < 0 or index.number >= Float64(size):
                 raise self.error("the index is outside the array")
             return self.value_of(first + Int(index.number) * span)
-        if type == _SAMPLER:
+        if type == _SAMPLER or type == _SAMPLER_CUBE:
             raise self.error("an array of samplers is indexed by a constant")
         var values = List[_Value]()
         for at in range(size):  # pragma: no branch
@@ -4353,7 +4367,9 @@ struct _Compiler(Movable):
             value.constant = value.constant and args[index].constant
             value.local = value.local or args[index].local
         if _listed(
-            name, " texture texture2D textureLod textureProj texture2DProj "
+            name,
+            " texture texture2D textureLod textureProj texture2DProj"
+            " textureCube ",
         ):
             return self.texture(name, args, nodes, value^)
         if name == "texelFetch" or name == "textureSize":
@@ -4527,12 +4543,21 @@ struct _Compiler(Movable):
         """
         var level = name == "textureLod"
         var projective = name == "textureProj" or name == "texture2DProj"
-        var modern = name != "texture2D" and name != "texture2DProj"
+        var modern = (
+            name != "texture2D"
+            and name != "texture2DProj"
+            and name != "textureCube"
+        )
         if self.raw and modern != (self.version == 300):
             raise self.error(name + "() is not in this shader's GLSL version")
         if self.stage == _VERTEX:
             raise self.error("a vertex shader reads no texture in this port")
-        if projective:
+        var cube = len(args) > 0 and args[0].type == _SAMPLER_CUBE
+        if name == "textureCube" or (name == "texture" and cube):
+            if len(args) != 2 or not cube or args[1].type != _VEC3:
+                raise self.error(name + "() takes a samplerCube and a vec3")
+            value.node = self.graph.texture_cube(nodes[0], nodes[1]).value
+        elif projective:
             if (
                 len(args) != 2
                 or args[0].type != _SAMPLER
