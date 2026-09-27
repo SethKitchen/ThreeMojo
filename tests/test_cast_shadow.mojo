@@ -12,6 +12,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
+from geometries.box import cube
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.lighting import Lighting
@@ -360,41 +361,52 @@ def test_the_nearest_caster_is_the_one_the_light_sees() raises:
 
 
 def test_a_caster_behind_one_already_drawn_is_not_seen() raises:
-    # A see-through pane is drawn after the opaque one above it, and one
-    # whose mask and alpha test keep it still loses the depth test there.
+    # One draw keeps its order: a box's top is drawn before its bottom,
+    # and a point before the next. The one behind, kept by its mask and
+    # its alpha test, loses the depth test to the one drawn before it.
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(MASK_NODE, graph.float(1))
     graph.set_output(
-        CAST_SHADOW_NODE, graph.join([graph.vec3(0, 0, 1), graph.float(1)])
+        CAST_SHADOW_NODE, graph.join([graph.vec3(1, 0, 0), graph.float(1)])
     )
-    var behind = Material(Color(200, 200, 200))
-    behind.nodes = assets.programs.add(graph.compile())
-    behind.alpha_test = 0.1
-    behind.transparent = True
-    var seen = seen_through(
-        assets,
-        panes(
-            assets,
-            [casting(assets, 1, 0), behind^],
-            [Float32(2), Float32(1)],
-        ),
+    var kept = Material(Color(200, 200, 200))
+    kept.nodes = assets.programs.add(graph.compile())
+    kept.alpha_test = 0.1
+    kept.side = DOUBLE_SIDE
+    var scene = Scene()
+    var lift = Object3D()
+    lift.set_position(0, 1, 0)
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(cube(Length(1.0, METER))),
+            assets.materials.add(kept.copy()),
+            scene.add(lift^),
+            cast_shadow=True,
+        )
     )
+    var seen = seen_through(assets, scene^)
     assert_equal(seen[0], 1)
-    assert_equal(seen[2], 0)
-    # And a point, the same way.
-    var dot_behind = a_dot(assets)
-    dot_behind.nodes = assets.programs.add(graph.compile())
-    dot_behind.alpha_test = 0.1
-    dot_behind.transparent = True
-    var drawn = drawn_texels(
-        assets,
-        dots(
-            assets,
-            [red_caster(assets, a_dot(assets)), dot_behind^],
-            [Float32(2), Float32(1)],
-        ),
+    assert_equal(seen[3], 1)
+    # Two points of one draw on the sun's ray, the nearer first.
+    var two = BufferGeometry()
+    two.set_attribute(
+        "position", BufferAttribute([Float32(0), 2, 0.4, 0, 1, 0.2], 3)
     )
+    two.set_attribute("uv", BufferAttribute([Float32(0.5), 0.5, 0.5, 0.5], 2))
+    var dotted = a_dot(assets)
+    dotted.nodes = kept.nodes
+    dotted.alpha_test = 0.1
+    var pair = Scene()
+    pair.add_points(
+        Points(
+            assets.geometries.add(two^),
+            assets.materials.add(dotted^),
+            pair.add(Object3D()),
+            cast_shadow=True,
+        )
+    )
+    var drawn = drawn_texels(assets, pair^)
     assert_equal(len(drawn), 1)
     assert_equal(drawn[0][0], 1)
 
