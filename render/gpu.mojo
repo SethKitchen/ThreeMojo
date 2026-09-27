@@ -720,7 +720,10 @@ comptime STATE_FACING = STATE_NORMAL_MAP_TYPE + 1
 # Which texture's red is a `PHONG` triangle's thickness, or `NO_TEXTURE`
 # for none; see `RasterVertex.scatter_map`.
 comptime STATE_SCATTER_MAP = STATE_FACING + 1
-comptime STATE_PER_TRIANGLE = STATE_SCATTER_MAP + 1
+# Where the triangle's light block starts in the light buffer: zero for
+# the frame's own lights; see `flatten_frame_lights`.
+comptime STATE_LIGHTS = STATE_SCATTER_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_LIGHTS + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -772,7 +775,11 @@ comptime LIGHTS_PROBE = 14
 # The camera's back axis in world space, `Lighting.back`: with its up
 # axis, the view rotation a normal attachment is written in.
 comptime LIGHTS_BACK = LIGHTS_PROBE + SH_COUNT * 3
-comptime LIGHTS_FIRST = LIGHTS_BACK + 3
+# How many directional, point, hemisphere and spot lights the block holds:
+# what a triangle lit by a block of its own reads in place of the kernel's
+# arguments. See `flatten_frame_lights`.
+comptime LIGHTS_COUNTS = LIGHTS_BACK + 3
+comptime LIGHTS_FIRST = LIGHTS_COUNTS + 4
 # How the depth buffer is laid out: one float of depth a pixel, then the
 # attachments a `RenderTarget` holds, each a plane of its own, so the
 # kernel leaves a whole target behind with no argument more. Metal binds
@@ -1208,7 +1215,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     under a parallel projection, three of the camera's own up axis, then
     three of ambient, one of `Lighting.scale`, one of how many rect area
     lights there are, 27 of the light probes' coefficients, three of the
-    camera's back axis, then twelve per
+    camera's back axis, four of how many directional, point, hemisphere
+    and spot lights there are, then twelve per
     directional light -- a unit
     direction, the light it carries, its shadow and its cascade -- then
     nine per point light: where
@@ -1290,6 +1298,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.back.x)
     flat.append(lighting.back.y)
     flat.append(lighting.back.z)
+    flat.append(Float32(lighting.count()))
+    flat.append(Float32(lighting.point_count()))
+    flat.append(Float32(lighting.hemisphere_count()))
+    flat.append(Float32(lighting.spot_count()))
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -3380,6 +3392,7 @@ def triangle_state(
     corners: List[RasterVertex],
     cube_base: Int = 0,
     starts: List[Int] = List[Int](),
+    light_starts: List[Int] = List[Int](),
 ) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
@@ -3400,6 +3413,9 @@ def triangle_state(
         starts: Where each node program starts in the fog buffer, as
             `program_starts` lays them out. A triangle naming a program
             past it, as `GpuRenderer.draw` refuses, gets -1.
+        light_starts: Where each light block starts, as
+            `flatten_frame_lights` lays them out. A triangle whose
+            `lights` is past it gets zero, the frame's own.
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
@@ -3415,7 +3431,8 @@ def triangle_state(
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
         ids, then the normal map type's value, then its facing, then its
-        thickness map's id, per triangle, from its first corner.
+        thickness map's id, then where its light block starts, per
+        triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -3470,7 +3487,37 @@ def triangle_state(
             )
         )
         state.append(Int32(corners[triangle * 3].scatter_map.value))
+        var named = corners[triangle * 3].lights
+        state.append(
+            Int32(light_starts[named]) if named < len(light_starts) else 0
+        )
     return state^
+
+
+def flatten_frame_lights(
+    lighting: Lighting, lightings: List[Lighting]
+) -> Tuple[List[Float32], List[Int]]:
+    """Return a frame's lighting and the lightings its light masks resolve
+    to, one `flatten_lights` block after another, and where each block
+    starts: what `rasterize_frame`'s `lightings` are on the host.
+
+    Each block's own offsets, of its shadow maps and its spot light maps,
+    are from its own start, so a triangle reads its block through the
+    buffer moved to that start.
+
+    Args:
+        lighting: The frame's own lights, the first block.
+        lightings: The lights of each light mask, in order.
+
+    Returns:
+        The buffer, and the start of each block: zero for the first.
+    """
+    var flat = flatten_lights(lighting)
+    var starts: List[Int] = [0]
+    for index in range(len(lightings)):
+        starts.append(len(flat))
+        flat.extend(flatten_lights(lightings[index]))
+    return (flat^, starts^)
 
 
 def _decoded(
@@ -5501,6 +5548,18 @@ def rasterize_kernel(
 
             continue
         for index in range(first, past):
+            # The triangle's light block, and how many of each light it
+            # holds, in place of the frame's: a material with a light mask,
+            # three.js's `lightsNode`. The frame's own block starts at zero.
+            var lights = lights + Int(
+                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIGHTS]
+            )
+            var light_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS])
+            var point_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS + 1])
+            var hemisphere_count = Int32(
+                lights[unsafe_offset=LIGHTS_COUNTS + 2]
+            )
+            var spot_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS + 3])
             var base = index * FLOATS_PER_TRIANGLE
             # Derived rather than written out: every offset past the first corner
             # used to be a literal, and changing the stride meant changing all of
@@ -8299,16 +8358,15 @@ struct GpuRenderer(Movable):
             )
         self.painted = False
 
-    def _upload_lights(mut self, lighting: Lighting) raises:
-        """Put `lighting` on the device.
+    def _upload_lights(mut self, flat: List[Float32]) raises:
+        """Put a frame's light blocks on the device.
 
         Args:
-            lighting: The scene's lights, resolved to world space.
+            flat: The blocks, from `flatten_frame_lights`.
 
         Raises:
             Error: If the device buffer cannot be made or written.
         """
-        var flat = flatten_lights(lighting)
         if len(flat) > self.light_room:
             # A draw still in flight may be reading the old buffer; see
             # `set_textures`, which waits for the same reason.
@@ -8393,6 +8451,7 @@ struct GpuRenderer(Movable):
         programs: NodeProgramStore = NodeProgramStore(),
         custom_tone_mapping: NodeProgramId = NO_NODES,
         output_color_space: ColorSpaceId = SRGB_COLOR_SPACE,
+        lightings: List[Lighting] = List[Lighting](),
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -8463,9 +8522,14 @@ struct GpuRenderer(Movable):
             output_color_space: The space the image is written in,
                 `Renderer.output_color_space`; sRGB by default. See
                 `render.color_spaces.output_encoding`.
+            lightings: The lights of each light mask the frame's
+                materials name, as `rasterize_frame` takes them. Each
+                goes up as a block of its own; see
+                `flatten_frame_lights`.
 
         Raises:
-            Error: If the corner count is not a multiple of three, the
+            Error: If the corner count is not a multiple of three, a
+                triangle names a lighting past `lightings`, the
                 line corner count is not a multiple of two, a segment's
                 ends disagree or its material is lit, a point is refused
                 by `check_point_state` or names a map that is not
@@ -8552,6 +8616,13 @@ struct GpuRenderer(Movable):
                 corners[triangle * 3 + 1],
                 corners[triangle * 3 + 2],
             )
+            var named = corners[triangle * 3].lights
+            if named < 0 or named > len(lightings):
+                raise Error(
+                    "A triangle names a lighting the frame does not have"
+                )
+        # The frame's lights and each light mask's, a block each.
+        var lit = flatten_frame_lights(lighting, lightings)
 
         # The same per-segment check the host makes, from the same
         # function, for the reason the triangles' is made here: the kernel
@@ -8926,7 +8997,10 @@ struct GpuRenderer(Movable):
                     count=len(flat),
                 )
             var state = triangle_state(
-                corners, self.uploaded, program_starts(programs)
+                corners,
+                self.uploaded,
+                program_starts(programs),
+                lit[1],
             )
             with self.maps.map_to_host() as host:
                 unsafe_memcpy(
@@ -9008,7 +9082,7 @@ struct GpuRenderer(Movable):
                 count=len(flat_draws),
             )
 
-        self._upload_lights(lighting)
+        self._upload_lights(lit[0])
         self._upload_fog(fog, programs, curve_start, output)
         # The transmission target, flattened, and room for it made after
         # the backdrop before the backdrop is written: a new buffer holds
