@@ -87,6 +87,19 @@ var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
 
 `fragCoord` is the pixel's center, in pixels from the bottom left. `iTime` is `Renderer.time`. Set the other inputs yourself: `iResolution`, `iTimeDelta`, `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`, `iChannelResolution[i]` and `iChannelTime[i]` with `set_uniform`. Set `iChannel0` to `iChannel3` with `set_texture`. The source must fit the [subset](#the-subset), and an error names the line of the source.
 
+## Lights of its own
+
+A material can be lit by some of the scene's lights alone. This is three.js's `material.lightsNode = lights( [ light1, light2 ] )`. Set the material's `lights` to a `LightMask` from `lights_of`, with the lights' places in `scene.lights`:
+
+```mojo
+var red_only = Material(Color(255, 255, 255))
+red_only.lights = lights_of([0])
+```
+
+`ALL_LIGHTS`, the default, is every light. A mask names the first 64 lights. The mask works on any material, with a node graph or without one.
+
+The renderer resolves the lights of each mask that a material names, as a `Lighting` of its own. The lights keep their shadows. `light_masks(assets)` lists the masks in the order the renderer uses. On the GPU, each mask's lights go up as a block of their own, and each triangle reads its block. `GpuRenderer.draw` takes the lightings as `lightings`.
+
 ## Outputs
 
 A graph sets one to fifteen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
@@ -613,5 +626,5 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 ## What is not ported
 
 - Compute nodes, storage buffers and `instancedArray`.
-- Other outputs: `lightsNode`, `receivedShadowNode` and `castShadowNode`.
+- Other outputs: `receivedShadowNode` and `castShadowNode`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
