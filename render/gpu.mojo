@@ -5551,8 +5551,12 @@ def rasterize_kernel(
             # The triangle's light block, and how many of each light it
             # holds, in place of the frame's: a material with a light mask,
             # three.js's `lightsNode`. The frame's own block starts at zero.
-            var lights = lights + Int(
-                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIGHTS]
+            var lights = lights.unsafe_offset(
+                Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIGHTS
+                    ]
+                )
             )
             var light_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS])
             var point_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS + 1])

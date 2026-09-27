@@ -190,6 +190,7 @@ from render.gpu import (
     LIGHTS_AMBIENT,
     LIGHTS_BACK,
     LIGHTS_EYE,
+    LIGHTS_COUNTS,
     LIGHTS_FIRST,
     LIGHTS_PROBE,
     LIGHTS_RECT_COUNT,
@@ -1204,7 +1205,8 @@ def test_flattening_the_lights_carries_the_probes() raises:
     var lighting = probe_lighting()
     var flat = flatten_lights(lighting)
     assert_equal(LIGHTS_BACK, LIGHTS_PROBE + 27)
-    assert_equal(LIGHTS_FIRST, LIGHTS_BACK + 3)
+    assert_equal(LIGHTS_COUNTS, LIGHTS_BACK + 3)
+    assert_equal(LIGHTS_FIRST, LIGHTS_COUNTS + 4)
     for lane in range(27):
         assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
     # Band zero is the average light, which is not black.
