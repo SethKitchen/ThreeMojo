@@ -66,7 +66,11 @@ from materials.nodes import (
     node_depth,
     offset_normal,
     moved_position,
+    cell_noise,
+    cell_noise_vec3,
     perlin_noise,
+    perlin_noise_vec3,
+    worley_noise,
     perspective_shares,
     run_nodes,
 )
@@ -168,8 +172,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(83).is_valid())
-    assert_true(NodeKind(82).is_valid())
+    assert_false(NodeKind(96).is_valid())
+    assert_true(NodeKind(95).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -640,15 +644,22 @@ def test_compiling_refuses_a_graph_it_cannot_run() raises:
         chain = long.add(chain, long.vec3(1, 1, 1))
     long.set_output(COLOR_NODE, chain)
     assert_lanes(color_of(long), 100, 100, 100)
-    # Thirty-three values each read at the very end are all alive at once.
+    # Thirty-three values summed twice, in two orders: whichever sum is
+    # laid out first, every value waits for the other, in any order the
+    # compiler tries.
     var wide = NodeGraph()
     var terms = List[NodeRef]()
     for index in range(MAX_REGISTERS + 1):
         terms.append(wide.mul(wide.uv(), wide.float(Float32(index))))
-    var sum = terms[len(terms) - 1]
+    var forward = terms[0]
+    for index in range(1, len(terms)):
+        forward = wide.add(forward, terms[index])
+    var backward = terms[len(terms) - 1]
     for index in range(len(terms) - 2, -1, -1):
-        sum = wide.add(terms[index], sum)
-    wide.set_output(COLOR_NODE, wide.swizzle(sum, "xyx"))
+        backward = wide.add(backward, terms[index])
+    wide.set_output(
+        COLOR_NODE, wide.swizzle(wide.mul(forward, backward), "xyx")
+    )
     with assert_raises(contains="more than 32 values alive at once"):
         _ = wide.compile()
     # An output of more instructions than a fragment may run is refused.
@@ -1155,12 +1166,137 @@ def test_a_matrix_multiplies_a_vector_either_side() raises:
         program.set_uniform("place", Matrix3())
     with assert_raises(contains="cannot multiply a mat3 and a vec4"):
         _ = graph.mul(m3, point)
-    with assert_raises(contains="cannot multiply a mat4 and a mat4"):
-        _ = graph.mul(m4, m4)
+    with assert_raises(contains="cannot multiply a mat3 and a mat4"):
+        _ = graph.mul(m3, m4)
     with assert_raises(contains="cannot add a mat3"):
         _ = graph.add(m3, v)
     with assert_raises(contains="cannot compute with a mat4"):
         _ = graph.sin(m4)
+
+
+def test_whole_numbers_and_their_bits() raises:
+    var graph = NodeGraph()
+    assert_lanes(
+        on_corners(graph, graph.integer(graph.vec3(2.7, -2.7, 0.5))), 2, -2, 0
+    )
+    var wrapped = on_corners(graph, graph.unsigned(graph.vec3(3.9, -1, -2.5)))
+    assert_equal(wrapped[0], 3)
+    assert_equal(wrapped[1], Float32(4294967295.0))
+    assert_equal(wrapped[2], Float32(4294967294.0))
+    var a = graph.vec3(12, 10, -1)
+    var b = graph.vec3(10, 6, 255)
+    assert_lanes(on_corners(graph, graph.bit_and(a, b)), 8, 2, 255)
+    assert_lanes(on_corners(graph, graph.bit_or(a, b)), 14, 14, -1)
+    assert_lanes(on_corners(graph, graph.bit_xor(a, b)), 6, 12, -256)
+    assert_lanes(on_corners(graph, graph.bit_not(a)), -13, -11, 0)
+    assert_lanes(
+        on_corners(
+            graph, graph.shift_left(graph.vec3(3, 1, 1), graph.vec3(4, 33, 0))
+        ),
+        48,
+        2,
+        1,
+    )
+    assert_lanes(
+        on_corners(
+            graph, graph.shift_right(graph.vec3(-16, 64, 7), graph.float(2))
+        ),
+        -4,
+        16,
+        1,
+    )
+    # NaN is zero, and a number past 32 bits is held at the end.
+    var nan = graph.div(graph.float(0), graph.float(0))
+    assert_equal(one(graph, graph.bit_or(nan, graph.float(0))), 0)
+    assert_equal(
+        one(graph, graph.bit_or(graph.float(1e10), graph.float(0))),
+        Float32(2147483520),
+    )
+    with assert_raises(contains="cannot take the bits of a vec3 and a vec2"):
+        _ = graph.bit_and(a, graph.vec2(1, 2))
+
+
+def test_a_matrix_is_built_turned_and_inverted() raises:
+    var graph = NodeGraph()
+    var m = graph.mat3(
+        graph.vec3(2, 0, 0), graph.vec3(1, 3, 0), graph.vec3(0, 0, 4)
+    )
+    var ones = graph.vec3(1, 1, 1)
+    # Its columns weighted, and its columns dotted.
+    assert_lanes(on_corners(graph, graph.mul(m, ones)), 3, 3, 4)
+    assert_lanes(on_corners(graph, graph.mul(ones, m)), 2, 4, 4)
+    assert_lanes(on_corners(graph, graph.column(m, 1)), 1, 3, 0)
+    assert_almost_equal(one(graph, graph.determinant(m)), 24)
+    assert_lanes(
+        on_corners(graph, graph.mul(graph.transpose(m), ones)), 2, 4, 4
+    )
+    var v = graph.vec3(1, 2, 3)
+    var back = graph.mul(m, graph.mul(graph.inverse(m), v))
+    var lanes = on_corners(graph, back)
+    for lane in range(3):
+        assert_almost_equal(lanes[lane], Float32(lane + 1), atol=1e-5)
+    # A mat4, triangular: its determinant is its diagonal's product.
+    var four = graph.mat4(
+        graph.vec4(1, 0, 0, 0),
+        graph.vec4(1, 2, 0, 0),
+        graph.vec4(0, 0, 3, 0),
+        graph.vec4(0, 0, 1, 4),
+    )
+    assert_almost_equal(one(graph, graph.determinant(four)), 24, atol=1e-4)
+    var w = graph.vec4(4, 3, 2, 1)
+    # `on_corners` shows a vec4's first three lanes, so the fourth is
+    # read on its own.
+    var undone = graph.mul(four, graph.mul(graph.inverse(four), w))
+    var front = on_corners(graph, undone)
+    for lane in range(3):
+        assert_almost_equal(front[lane], Float32(4 - lane), atol=1e-5)
+    assert_almost_equal(one(graph, graph.swizzle(undone, "w")), 1, atol=1e-5)
+    assert_lanes(
+        on_corners(graph, graph.swizzle(graph.column(four, 3), "zwx")), 1, 4, 0
+    )
+    # A uniform's columns, and a product of a built matrix and a uniform.
+    var identity = graph.uniform("identity", Matrix4())
+    assert_almost_equal(one(graph, graph.determinant(identity)), 1)
+    var product = graph.mul(four, identity)
+    var same = on_corners(graph, graph.swizzle(graph.mul(product, w), "yzw"))
+    var direct = on_corners(graph, graph.swizzle(graph.mul(four, w), "yzw"))
+    for lane in range(3):
+        assert_almost_equal(same[lane], direct[lane])
+    var turned = graph.uniform("turned", Matrix3())
+    assert_lanes(
+        on_corners(graph, graph.mul(graph.inverse(turned), v)), 1, 2, 3
+    )
+
+
+def test_a_matrix_function_refuses_what_it_cannot_do() raises:
+    var graph = NodeGraph()
+    var m3 = graph.mat3(
+        graph.vec3(1, 0, 0), graph.vec3(0, 1, 0), graph.vec3(0, 0, 1)
+    )
+    var m4 = graph.uniform("m4", Matrix4())
+    with assert_raises(contains="cannot multiply a mat3 and a mat4"):
+        _ = graph.mul(m3, m4)
+    with assert_raises(contains="made of vec3 columns, not a vec4"):
+        _ = graph.mat3(
+            graph.vec3(1, 0, 0), graph.vec3(0, 1, 0), graph.vec4(0, 0, 0, 1)
+        )
+    with assert_raises(contains="A mat3 has no column 3"):
+        _ = graph.column(m3, 3)
+    with assert_raises(contains="A mat3 has no column -1"):
+        _ = graph.column(m3, -1)
+    with assert_raises(contains="can transpose a mat3 or a mat4, not a vec3"):
+        _ = graph.transpose(graph.vec3(1, 2, 3))
+    # An edit that makes an instruction read a built matrix is refused.
+    var edited = NodeGraph()
+    var uniform = edited.uniform("m", Matrix3())
+    var moved = edited.mul(uniform, edited.vec3(1, 2, 3))
+    edited.set_output(COLOR_NODE, moved)
+    var built = edited.mat3(
+        edited.vec3(1, 0, 0), edited.vec3(0, 1, 0), edited.vec3(0, 0, 1)
+    )
+    edited.set_input(moved, 1, built)
+    with assert_raises(contains="only multiplied"):
+        _ = edited.compile()
 
 
 def test_the_view_matrix_and_the_camera_come_from_the_frame() raises:
@@ -1345,8 +1481,10 @@ def test_a_loop_runs_its_body_its_count_of_times() raises:
     var empty = NodeGraph()
     _ = empty.Loop(3)
     empty.End()
-    # The index, and its value each time after the first.
-    assert_equal(empty.count(), 3)
+    # The index and its value each time after the first, and the two
+    # flags a Break and a Continue set, each with a copy the body reads
+    # and a Continue's reset.
+    assert_equal(empty.count(), 8)
     with assert_raises(contains="A Loop runs from zero to 1024 times, not -1"):
         _ = graph.Loop(-1)
     with assert_raises(contains="not 1025"):
@@ -1360,6 +1498,201 @@ def test_a_loop_runs_its_body_its_count_of_times() raises:
     grown.End()
     with assert_raises(contains="past 65536 nodes"):
         grown.End()
+
+
+def test_a_break_leaves_the_loop() raises:
+    var graph = NodeGraph()
+    var sum = graph.Var(graph.float(0))
+    var index = graph.Loop(10)
+    graph.If(graph.greater_than(index, graph.float(3.5)))
+    graph.Break()
+    graph.End()
+    graph.assign(sum, graph.add(graph.get(sum), index))
+    graph.End()
+    # 0 + 1 + 2 + 3, and nothing after.
+    assert_almost_equal(one(graph, graph.get(sum)), 6)
+    # A break at the end of the body: what came before it in the same
+    # time through counts, and no later time does.
+    var last = graph.Var(graph.float(0))
+    var i = graph.Loop(5)
+    graph.assign(last, i)
+    graph.If(graph.greater_than(i, graph.float(1.5)))
+    graph.Break()
+    graph.End()
+    graph.End()
+    assert_almost_equal(one(graph, graph.get(last)), 2)
+
+
+def test_a_continue_skips_the_rest_of_one_time_through() raises:
+    var graph = NodeGraph()
+    var odd = graph.Var(graph.float(0))
+    var index = graph.Loop(6)
+    graph.If(
+        graph.less_than(graph.mod(index, graph.float(2)), graph.float(0.5))
+    )
+    graph.Continue()
+    graph.End()
+    graph.assign(odd, graph.add(graph.get(odd), index))
+    graph.End()
+    assert_almost_equal(one(graph, graph.get(odd)), 9)
+
+
+def test_a_break_and_a_continue_meet_in_either_order() raises:
+    # Even numbers below seven: 0 + 2 + 4 + 6, whichever comes first.
+    for breaks_first in [False, True]:
+        var graph = NodeGraph()
+        var sum = graph.Var(graph.float(0))
+        var index = graph.Loop(10)
+        for step in range(2):
+            if (step == 0) == breaks_first:
+                graph.If(graph.greater_than(index, graph.float(6.5)))
+                graph.Break()
+                graph.End()
+            else:
+                graph.If(
+                    graph.greater_than(
+                        graph.mod(index, graph.float(2)), graph.float(0.5)
+                    )
+                )
+                graph.Continue()
+                graph.End()
+        graph.assign(sum, graph.add(graph.get(sum), index))
+        graph.End()
+        assert_almost_equal(one(graph, graph.get(sum)), 12)
+    # A break in a loop of none changes nothing.
+    var none = NodeGraph()
+    var kept = none.Var(none.float(5))
+    _ = none.Loop(0)
+    none.Break()
+    none.assign(kept, none.float(6))
+    none.End()
+    assert_almost_equal(one(none, none.get(kept)), 5)
+
+
+def test_a_break_leaves_only_its_own_loop() raises:
+    var graph = NodeGraph()
+    var count = graph.Var(graph.float(0))
+    var outer = graph.Loop(4)
+    var inner = graph.Loop(4)
+    graph.If(graph.greater_than(inner, outer))
+    graph.Break()
+    graph.End()
+    graph.assign(count, graph.add(graph.get(count), graph.float(1)))
+    graph.End()
+    graph.If(graph.greater_than(outer, graph.float(1.5)))
+    graph.Break()
+    graph.End()
+    graph.End()
+    # Outer 0 counts one, 1 two and 2 three, and then the outer loop stops.
+    assert_almost_equal(one(graph, graph.get(count)), 6)
+
+
+def test_a_discard_after_a_break_throws_nothing_away() raises:
+    var graph = NodeGraph()
+    graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
+    var index = graph.Loop(3)
+    graph.If(graph.greater_than(index, graph.float(0.5)))
+    graph.Discard()
+    graph.End()
+    graph.Break()
+    graph.Discard()
+    graph.End()
+    assert_equal(run_nodes(Corners(graph.compile()), MASK_NODE, inputs())[0], 1)
+    # A discard before the loop is not the loop's to stop.
+    var before = NodeGraph()
+    before.set_output(COLOR_NODE, before.vec3(1, 1, 1))
+    before.Discard()
+    _ = before.Loop(2)
+    before.Break()
+    before.End()
+    assert_equal(
+        run_nodes(Corners(before.compile()), MASK_NODE, inputs())[0], 0
+    )
+
+
+def capped(mut graph: NodeGraph, args: List[NodeRef]) raises -> NodeRef:
+    graph.If(graph.greater_than(args[0], graph.float(1)))
+    graph.Return(graph.float(1))
+    graph.End()
+    return args[0]
+
+
+def first_square_over(
+    mut graph: NodeGraph, args: List[NodeRef]
+) raises -> NodeRef:
+    var i = graph.Loop(8)
+    graph.If(graph.greater_than(graph.mul(i, i), args[0]))
+    graph.Return(i)
+    graph.End()
+    graph.End()
+    return graph.float(-1)
+
+
+def returns_early(mut graph: NodeGraph, args: List[NodeRef]) raises -> NodeRef:
+    var v = graph.Var(args[0])
+    graph.Return(graph.get(v))
+    graph.assign(v, graph.float(99))
+    graph.Return(graph.float(98))
+    return graph.get(v)
+
+
+def returns_twice_in_a_loop(
+    mut graph: NodeGraph, args: List[NodeRef]
+) raises -> NodeRef:
+    """Return the first index past `args[0]` if the first time through
+    finds one, and minus two otherwise: a second `Return` in a loop, where
+    the first one's flag gates it."""
+    var i = graph.Loop(4)
+    graph.If(graph.greater_than(i, args[0]))
+    graph.Return(i)
+    graph.End()
+    graph.Return(graph.float(-2))
+    graph.End()
+    return graph.float(-1)
+
+
+def returns_the_wrong_type(
+    mut graph: NodeGraph, args: List[NodeRef]
+) raises -> NodeRef:
+    graph.Return(args[0])
+    return graph.vec3(1, 2, 3)
+
+
+def test_a_return_gives_the_functions_answer_where_it_runs() raises:
+    var graph = NodeGraph()
+    var cap = Fn("capped", [NODE_FLOAT], NODE_FLOAT, capped)
+    assert_almost_equal(one(graph, graph.call(cap, [graph.float(3)])), 1)
+    assert_almost_equal(one(graph, graph.call(cap, [graph.float(0.5)])), 0.5)
+    var search = Fn("first", [NODE_FLOAT], NODE_FLOAT, first_square_over)
+    assert_almost_equal(one(graph, graph.call(search, [graph.float(10)])), 4)
+    assert_almost_equal(one(graph, graph.call(search, [graph.float(100)])), -1)
+    # A bound only the fragment knows: the Return is gated where it runs.
+    var bound = graph.mul(graph.swizzle(graph.uv(), "x"), graph.float(40))
+    var wanted = Float32(-1)
+    for i in range(8):
+        if Float32(i * i) > one(graph, bound):
+            wanted = Float32(i)
+            break
+    assert_true(wanted > 0)
+    assert_almost_equal(one(graph, graph.call(search, [bound])), wanted)
+    var twice = Fn("twice", [NODE_FLOAT], NODE_FLOAT, returns_twice_in_a_loop)
+    assert_almost_equal(one(graph, graph.call(twice, [graph.float(-1)])), 0)
+    assert_almost_equal(one(graph, graph.call(twice, [graph.float(1.5)])), -2)
+    var early = Fn("early", [NODE_VEC3], NODE_VEC3, returns_early)
+    assert_lanes(
+        on_corners(graph, graph.call(early, [graph.vec3(1, 2, 3)])), 1, 2, 3
+    )
+    var wrong = Fn("wrong", [NODE_FLOAT], NODE_FLOAT, returns_the_wrong_type)
+    with assert_raises(contains="returns a float, not a vec3"):
+        _ = graph.call(wrong, [graph.float(1)])
+    with assert_raises(contains="A Return needs a Fn to be in"):
+        graph.Return(graph.float(1))
+    with assert_raises(contains="A Break needs a Loop to be in"):
+        graph.Break()
+    graph.If(graph.float(1))
+    with assert_raises(contains="A Continue needs a Loop to be in"):
+        graph.Continue()
+    graph.End()
 
 
 def test_a_discard_joins_the_mask() raises:
@@ -1569,6 +1902,130 @@ def test_a_derivative_is_the_difference_to_the_pixel_beside() raises:
         _ = lit.compile()
     with assert_raises(contains="cannot differentiate a mat4"):
         _ = graph.dfdx(graph.camera_view_matrix())
+
+
+def near3(got: Lanes, x: Float64, y: Float64, z: Float64) raises:
+    assert_almost_equal(Float64(got[0]), x, atol=1e-6)
+    assert_almost_equal(Float64(got[1]), y, atol=1e-6)
+    assert_almost_equal(Float64(got[2]), z, atol=1e-6)
+
+
+def test_the_other_materialx_noises_are_three_js_s() raises:
+    # Values from three.js's `mx_noise.js`, transcribed in 32-bit floats
+    # by `assets/noise/mx_noise.py`.
+    near3(
+        perlin_noise_vec3(Lanes(0.3, 0.7, 0, 0), 2),
+        0.04074367880821228,
+        0.6510121822357178,
+        -0.30239030718803406,
+    )
+    near3(
+        perlin_noise_vec3(Lanes(3.1, -2.3, 5.9, 0), 3),
+        0.07585524767637253,
+        -0.061793237924575806,
+        0.1329670399427414,
+    )
+    assert_almost_equal(
+        Float64(cell_noise(Lanes(0.3, 0, 0, 0), 1)), 0.5824258327484131
+    )
+    assert_almost_equal(
+        Float64(cell_noise(Lanes(-1.25, 2.5, 0, 0), 2)), 0.5628882646560669
+    )
+    assert_almost_equal(
+        Float64(cell_noise(Lanes(0.3, 0.7, 0.2, 0), 3)), 0.6110676527023315
+    )
+    assert_almost_equal(
+        Float64(cell_noise(Lanes(3.1, -2.3, 5.9, -0.4), 4)), 0.4390026032924652
+    )
+    near3(
+        cell_noise_vec3(Lanes(0.3, 0, 0, 0), 1),
+        0.8603127598762512,
+        0.842521071434021,
+        0.9748212099075317,
+    )
+    near3(
+        cell_noise_vec3(Lanes(3.1, -2.3, 5.9, -0.4), 4),
+        0.11370349675416946,
+        0.10571760684251785,
+        0.41482704877853394,
+    )
+    near3(
+        worley_noise(Lanes(0.3, 0.7, 0, 0), 2, 1, 3),
+        0.3611402213573456,
+        0.4000799059867859,
+        1.0939582586288452,
+    )
+    # Two distances: a vec2, whose third lane is not its own.
+    var pair = worley_noise(Lanes(0.3, 0.7, 0, 0), 2, 0.5, 2)
+    assert_almost_equal(Float64(pair[0]), 0.19280943274497986, atol=1e-6)
+    assert_almost_equal(Float64(pair[1]), 0.459095299243927, atol=1e-6)
+    near3(
+        worley_noise(Lanes(-1.25, 2.5, 0.6, 0), 3, 0.5, 3),
+        0.09683658182621002,
+        0.5652338266372681,
+        0.6648467183113098,
+    )
+    assert_almost_equal(
+        Float64(worley_noise(Lanes(-1.25, 2.5, 0.6, 0), 3, 1, 1)[0]),
+        0.2914171814918518,
+        atol=1e-6,
+    )
+    # Through the graph.
+    var graph = NodeGraph()
+    var point = graph.vec3(0.3, 0.7, 0.2)
+    near3(
+        on_corners(graph, graph.mx_noise_vec3(point, 2, 1)),
+        2 * 0.2737118899822235 + 1,
+        2 * -0.18833453953266144 + 1,
+        2 * 0.40486136078834534 + 1,
+    )
+    var four = graph.mx_noise_vec4(graph.vec2(0.3, 0.7))
+    near3(
+        on_corners(graph, four),
+        0.04074367880821228,
+        0.6510121822357178,
+        -0.30239030718803406,
+    )
+    var moved = graph.perlin_noise(graph.vec2(19.3, 73.7))
+    assert_almost_equal(one(graph, graph.swizzle(four, "w")), one(graph, moved))
+    var deep = graph.mx_noise_vec4(point)
+    var shifted = graph.perlin_noise(graph.vec3(19.3, 73.7, 0.2))
+    assert_almost_equal(
+        one(graph, graph.swizzle(deep, "w")), one(graph, shifted)
+    )
+    assert_almost_equal(
+        one(graph, graph.cell_noise_float(point)), 0.6110676527023315
+    )
+    near3(
+        on_corners(graph, graph.cell_noise_vec3(graph.float(0.3))),
+        0.8603127598762512,
+        0.842521071434021,
+        0.9748212099075317,
+    )
+    var jitter = graph.float(0.5)
+    var two = on_corners(
+        graph, graph.worley_noise(graph.vec2(0.3, 0.7), jitter, 2)
+    )
+    assert_almost_equal(Float64(two[0]), 0.19280943274497986, atol=1e-6)
+    assert_almost_equal(Float64(two[1]), 0.459095299243927, atol=1e-6)
+    with assert_raises(
+        contains="Perlin noise reads a vec2 to a vec3, not a float"
+    ):
+        _ = graph.perlin_noise_vec3(graph.float(1))
+    with assert_raises(
+        contains="Cell noise reads a float to a vec4, not a mat4"
+    ):
+        _ = graph.cell_noise_float(graph.camera_view_matrix())
+    with assert_raises(
+        contains="Worley noise reads a vec2 to a vec3, not a vec4"
+    ):
+        _ = graph.worley_noise(graph.vec4(1, 2, 3, 4), jitter, 1)
+    with assert_raises(contains="jitter is a float, not a vec2"):
+        _ = graph.worley_noise(graph.vec2(1, 2), graph.vec2(1, 2), 1)
+    with assert_raises(contains="one to three distances, not 4"):
+        _ = graph.worley_noise(graph.vec2(1, 2), jitter, 4)
+    with assert_raises(contains="one to three distances, not 0"):
+        _ = graph.worley_noise(graph.vec2(1, 2), jitter, 0)
 
 
 def test_perlin_noise_is_materialxs() raises:

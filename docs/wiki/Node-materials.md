@@ -126,8 +126,26 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `remap(x, in_low, in_high, out_low, out_high)` | the widest operand | `remap` |
 | `swizzle(a, "zyx")` | as long as the string | `a.zyx` |
 | `join([a, b])` | the sum of the widths | `vec3(a, b)` of nodes |
+| `integer(a)`, `unsigned(a)` | the operand | `int`, `uint` |
+| `bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right` | the wider operand | `bitAnd`, `bitOr`, `bitXor`, `shiftLeft`, `shiftRight` |
+| `bit_not(a)` | the operand | `bitNot` |
+
+A value here is a float, and TSL's `int` and `uint` are floats that hold whole numbers. `integer` truncates toward zero. `unsigned` also wraps a negative number up by 2 ** 32.
+
+A bit operation truncates each component to a 32-bit integer, operates on it, and holds the result as a float again. A shift reads the low five bits of its count, as a GPU does. NaN is zero, and a number past 32 bits is held at the end of the range. A float holds a whole number exactly up to 2 ** 24.
 
 `round` takes a half to the even whole number. `normalize` leaves a zero vector at zero, where GLSL leaves it undefined. A division by zero gives what IEEE 754 gives, as a GPU does. `mul` of a `mat3` or a `mat4` and a vector of its width multiplies the matrix and the vector, on either side.
+
+### Matrices
+
+| Method | Type | three.js |
+|---|---|---|
+| `mat3(c0, c1, c2)`, `mat4(c0, c1, c2, c3)` | `mat3`, `mat4` | same names, of column nodes |
+| `column(m, i)` | `vec3` or `vec4` | `m[i]` in GLSL |
+| `transpose(m)`, `inverse(m)` | the operand | same names |
+| `determinant(m)` | `float` | `determinant` |
+
+`mul` also multiplies two matrices of one size. A register holds four floats, so a matrix is not a value an instruction writes. A matrix that the graph builds is a list of its columns, and `mul` expands it into vector operations. A uniform's columns are the uniform times each unit vector. `inverse` makes each row at right angles to every column but one, and scales it so that its dot with that one is one. A singular matrix gives what the divisions by zero give.
 
 ### Comparisons, logic and selection
 
@@ -146,12 +164,22 @@ Each gives one or zero per component. `select` gives `a` where the condition is 
 | `perlin_noise(p)` | `mx_perlin_noise_float` |
 | `mx_noise_float(texcoord, amplitude, pivot)` | `mx_noise_float` |
 | `mx_fractal_noise_float(position, octaves, lacunarity, diminish, amplitude)` | `mx_fractal_noise_float` |
+| `perlin_noise_vec3(p)` | `mx_perlin_noise_vec3` |
+| `mx_noise_vec3(texcoord, amplitude, pivot)`, `mx_noise_vec4(texcoord, amplitude, pivot)` | `mx_noise_vec3`, `mx_noise_vec4` |
+| `cell_noise_float(p)`, `cell_noise_vec3(p)` | `mx_cell_noise_float`, `mx_cell_noise_vec3` |
+| `worley_noise(p, jitter, width)` | `mx_worley_noise_float`, `_vec2` and `_vec3` for a `width` of 1, 2 and 3 |
 
 The noise is MaterialX's gradient noise, with the same hash and the same order of operations as three.js. The point is a `vec2` or a `vec3`. The fractal noise adds a zero to a `vec2`, as three.js converts it.
 
+- `perlin_noise_vec3` grades each component by one byte of each corner's hash. `mx_noise_vec4` adds the Perlin noise of one component at the point moved by (19, 73). A `vec3` point moves by (19, 73, 0).
+- Cell noise gives one value from zero to one for each cell of whole numbers. The point is a `float` to a `vec4`.
+- Worley noise gives the squared distances to the nearest points that jitter each cell, nearest first. `MaterialXNodes` always asks for this metric, so the others are not ported.
+
+`assets/noise/mx_noise.py` transcribes three.js's functions in 32-bit floats and gives the values the tests check.
+
 ## Control flow
 
-`If`, `ElseIf`, `Else`, `Loop`, `End`, `Var` and `Discard` are TSL's statements. The builder records them in the order you call them.
+`If`, `ElseIf`, `Else`, `Loop`, `End`, `Break`, `Continue`, `Return`, `Var` and `Discard` are TSL's statements. The builder records them in the order you call them.
 
 ```mojo
 var sum = graph.Var(graph.float(0))
@@ -170,8 +198,22 @@ graph.set_output(OPACITY_NODE, graph.get(sum))
 - `Loop(count, start, step)` runs its body `count` times and returns the index, a `float`. `End` closes it.
 - `Discard()` throws the fragment away where the open branches run. Every discard joins the mask.
 - `Fn(name, inputs, output, body)` is TSL's `Fn` with its `setLayout`. `graph.call(fn, args)` checks the arguments and the answer against the layout, and inlines the body.
+- `Break()` leaves the innermost loop where the open branches run. `Continue()` skips the rest of this time through it.
+- `Return(value)` gives the answer of the `Fn` that is being built, where the open branches run. The loops that it is in stop.
+
+```mojo
+def first_square_over(mut graph: NodeGraph, args: List[NodeRef]) raises -> NodeRef:
+    var i = graph.Loop(8)
+    graph.If(graph.greater_than(graph.mul(i, i), args[0]))
+    graph.Return(i)
+    graph.End()
+    graph.End()
+    return graph.float(-1)
+```
 
 The bytecode has no jumps. An `If` computes both branches, and each variable that a branch changes becomes a `select` of the two values. `End` unrolls a loop: it copies the body once for each run after the first. So every output stays a graph with no cycle.
+
+`Break`, `Continue` and `Return` are flags, not jumps. Each loop holds two hidden variables: `live`, which a `Break` clears, and `skip`, which a `Continue` sets until the next time through. A `Fn` call holds `returned` and its answer. After one of these statements, each assignment and each discard takes effect only where the flags allow it. At its `End`, a loop keeps each variable as it was where a time through starts after a `Break`.
 
 ## Varyings and derivatives
 
@@ -302,6 +344,8 @@ var card = assets.materials.add(shader_material(assets.programs.add(graph.compil
 
 `compile` lays out each output as a list of instructions. A node is one instruction in each context it runs in. The contexts are the fragment, the pixel beside it for a derivative, and a corner for a varying. Each instruction writes one of `MAX_REGISTERS` registers of four floats. The compiler gives a register back when the last reader of its value has run.
 
+The compiler lays out each node's inputs in their order. When that needs more than `MAX_REGISTERS` registers, it tries the input that needs the most registers first, and then the oldest input first. A chain of selects, as `Break` and `Return` make, can need either.
+
 The uniforms, and the constants that an instruction reads, follow the instructions, each stored once. A header holds where each output starts, the frame's time and the camera's view matrix. `Renderer.prepare_frame` copies `assets.programs` and writes the time and the view into the copy.
 
 Both rasterizers run the program with one function, `run_nodes`. The CPU reads the program from its list. The GPU kernel reads it from the fog buffer, after the fog's six floats, because the kernel has no free argument. A triangle's state column `STATE_NODES` tells the kernel where its program starts. Each backend gives the corners' attributes, and the weights at a pixel from the triangle's edge functions.
@@ -345,9 +389,6 @@ A fragment that the mask can throw away claims no depth until it survives, as a 
 ## What is not ported
 
 - Compute nodes, storage buffers and `instancedArray`.
-- `Break`, `Continue` and `Return` inside a loop.
-- Integer types and the bit operations, and the matrix functions `transpose`, `determinant` and `inverse`.
-- The Worley and cell noises, `mx_noise_vec3` and `mx_noise_vec4`.
 - Other outputs: `backdropNode`, `lightsNode`, `shadowNode`, `castShadowNode` and `fragmentNode`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
 - Reading and writing node materials in files.
