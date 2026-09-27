@@ -411,6 +411,31 @@ def test_a_caster_behind_one_already_drawn_is_not_seen() raises:
     assert_equal(drawn[0][0], 1)
 
 
+def test_the_shadow_pass_keeps_the_nearest_whatever_comes_after() raises:
+    # Drawn by hand, the near first: the far one, which an alpha test
+    # keeps shading, loses the depth test and leaves the near one's color
+    # and depth, a triangle and a point alike.
+    from render.rasterizer import rasterize_point, rasterize_shaded
+    from render.target import RenderTarget
+    from test_pointrule import dot
+    from test_rasterizer import data_quad
+
+    var target = RenderTarget(8, 8, Color(0, 0, 0, 0))
+    var near = data_quad(BASIC, z=0.25, alpha_test=0.1)
+    var far = data_quad(BASIC, z=0.75, alpha_test=0.1)
+    rasterize_shaded(near[0], near[1], near[2], target, SHADE_SHADOW)
+    var kept = target.depth[4 * 8 + 4]
+    rasterize_shaded(far[0], far[1], far[2], target, SHADE_SHADOW)
+    assert_equal(target.depth[4 * 8 + 4], kept)
+    assert_equal(target.colors[4 * 8 + 4].a, 1)
+    var dotted = RenderTarget(8, 8, Color(0, 0, 0, 0))
+    rasterize_point(dot(4.5, 4.5, z=0.25, alpha_test=0.1), dotted, SHADE_SHADOW)
+    var first = dotted.depth[4 * 8 + 4]
+    rasterize_point(dot(4.5, 4.5, z=0.75, alpha_test=0.1), dotted, SHADE_SHADOW)
+    assert_equal(dotted.depth[4 * 8 + 4], first)
+    assert_equal(dotted.colors[4 * 8 + 4].a, 1)
+
+
 def test_a_surface_that_receives_no_shadow_is_lit_in_full() raises:
     var assets = Assets()
     var scene = a_shadowed_scene(
