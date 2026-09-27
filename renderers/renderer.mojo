@@ -2460,7 +2460,8 @@ struct _Paint(ImplicitlyCopyable):
         var top = Float32(viewport.top(height))
         var wide = Float32(viewport.width)
         var tall = Float32(viewport.height)
-        for vertex in [a, b, c]:
+        # Three corners, so the loop runs.
+        for vertex in [a, b, c]:  # pragma: no branch
             var corner = self.raster(vertex)
             corner.x = left + vertex.u1 * wide
             corner.y = top + (1 - vertex.v1) * tall
