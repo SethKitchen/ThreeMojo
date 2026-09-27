@@ -1538,6 +1538,9 @@ def _draws(
         override: The material that takes the place of every object's,
             `Renderer.drawn_override`: the renderer's or the scene's, or
             none.
+        uv_meshes: `Renderer.uv_space_meshes`: the meshes a light map's
+            frame draws, none culled, and nothing else. Empty for a frame
+            seen through the camera.
 
     Returns:
         The draws the camera makes, in the order to make them. A frame's
@@ -4823,7 +4826,7 @@ struct Renderer(Movable):
             receivers_cast,
             distance_casters,
             self.drawn_override(scene),
-            List[Int]() if casters_only else self.uv_space_meshes.copy(),
+            self.uv_space_meshes.copy(),
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -4833,9 +4836,9 @@ struct Renderer(Movable):
         var gouraud_lights = Lighting.uniform()
         var gouraud_ready = False
         # A light map's frame: the meshes named, in their own texture
-        # space; see `uv_space_meshes`. A light's view draws the casters
-        # as they stand.
-        var in_uv_space = len(self.uv_space_meshes) > 0 and not casters_only
+        # space; see `uv_space_meshes`. A light's view is drawn by a
+        # renderer of its own, which draws the casters as they stand.
+        var in_uv_space = len(self.uv_space_meshes) > 0
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -5644,7 +5647,7 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_lines` raises.
         """
-        if len(self.uv_space_meshes) > 0 and not casters_only:
+        if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)
@@ -6148,7 +6151,7 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_points` raises.
         """
-        if len(self.uv_space_meshes) > 0 and not casters_only:
+        if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)

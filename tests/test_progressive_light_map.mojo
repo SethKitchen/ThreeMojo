@@ -10,7 +10,8 @@ of the padding, and the renderer's texture-space draw itself."""
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import texture_background
-from core.buffer_geometry import UV, UV1
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry, POSITION, UV, UV1
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import box
@@ -143,6 +144,27 @@ def test_the_meshes_are_packed_into_the_map() raises:
         assert_true(scene.meshes[index].cast_shadow)
         assert_true(scene.meshes[index].receive_shadow)
         assert_equal(scene.render_order(scene.meshes[index].node), 1000 + index)
+
+
+def test_no_meshes_and_no_vertices_pack_to_nothing() raises:
+    var assets = Assets()
+    var scene = Scene()
+    two_planes(assets, scene)
+    var light_map = ProgressiveLightMap(assets, SIZE)
+    light_map.add_objects_to_light_map(scene, assets, [])
+    assert_equal(len(light_map.meshes), 0)
+    # A geometry whose uv holds no vertex gets an empty uv1.
+    var empty = BufferGeometry()
+    empty.set_attribute(POSITION, BufferAttribute(List[Float32](), 3))
+    empty.set_attribute(UV, BufferAttribute(List[Float32](), 2))
+    var geometry = assets.geometries.add(empty^)
+    scene.add_mesh(
+        Mesh(geometry, scene.meshes[0].material, scene.meshes[0].node)
+    )
+    light_map.add_objects_to_light_map(scene, assets, [2])
+    assert_equal(
+        assets.geometries.get(geometry).clone_attribute(UV1).count(), 0
+    )
 
 
 def test_a_mesh_the_map_cannot_hold_is_refused() raises:

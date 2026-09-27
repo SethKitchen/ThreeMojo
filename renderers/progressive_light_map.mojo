@@ -138,7 +138,7 @@ struct ProgressiveLightMap(Movable):
             raise Error("A light map's resolution must be positive")
         self.resolution = resolution
         self.maps = List[TextureId]()
-        for index in range(2):
+        for index in range(2):  # pragma: no branch
             self.maps.append(
                 assets.textures.add(
                     _map_texture(
@@ -285,7 +285,8 @@ struct ProgressiveLightMap(Movable):
         view.auto_clear = False
         var materials = List[MaterialId]()
         var groups = List[List[MaterialId]]()
-        for at in self.meshes:
+        # Not empty, as asked above.
+        for at in self.meshes:  # pragma: no branch
             materials.append(scene.meshes[at].material)
             groups.append(scene.meshes[at].materials.copy())
             scene.meshes[at].material = self.uv_material
@@ -293,7 +294,7 @@ struct ProgressiveLightMap(Movable):
         try:
             view.render_into(target, scene, assets, camera)
         finally:
-            for index in range(len(self.meshes)):
+            for index in range(len(self.meshes)):  # pragma: no branch
                 ref mesh = scene.meshes[self.meshes[index]]
                 mesh.material = materials[index]
                 mesh.materials = groups[index].copy()
@@ -362,13 +363,15 @@ def _blur(mut target: RenderTarget, old: Texture):
     blurring plane, whose texel offsets land on the neighbors' centers.
     """
     var size = target.width
-    for y in range(size):
-        for x in range(size):
+    # The map's size is positive, and every pixel has eight neighbors, so
+    # no loop here runs zero times.
+    for y in range(size):  # pragma: no branch
+        for x in range(size):  # pragma: no branch
             var r = Float32(0)
             var g = Float32(0)
             var b = Float32(0)
-            for dy in range(-1, 2):
-                for dx in range(-1, 2):
+            for dy in range(-1, 2):  # pragma: no branch
+                for dx in range(-1, 2):  # pragma: no branch
                     if dx == 0 and dy == 0:
                         continue
                     var at = (
