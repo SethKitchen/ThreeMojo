@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `MaterialXLoader`: standard surfaces with values and graphs,
-unlit node graphs, images, and what is refused."""
+"""Tests for three.js's `MaterialXLoader`: standard surfaces with values
+and graphs, unlit node graphs, images, and what is refused."""
 
 from core.assets import Assets
 from loaders.materialx import load_materialx, mtlx_numbers, read_materialx
