@@ -35,6 +35,10 @@ comptime LOFT_RAYS = 36
 # Sub-slices per section: its middle and either edge of its window. A
 # lymph node narrower than the section spacing still reaches one.
 comptime LOFT_SLICES = 3
+# How far outside a loft's box a point must lie before the distance to
+# the box stands in for the distance to the loft. Wider than any smooth
+# union a skin is blended with, so a blend never sees the box.
+comptime LOFT_SHORTCUT = Float32(0.02)
 # The loft runs along plus y: a leg, from the ankle to the hip.
 comptime AXIS_Y = 1
 # The loft runs along plus z: a foot, from the heel to the toes.
@@ -318,9 +322,10 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
     """Return how far `point` lies outside the loft, in meters.
 
     Negative is inside. Past either end section the loft is cut flat,
-    so the solid ends where the sections end. Outside the loft's padded
-    box the distance to the box stands in: it is smaller than the true
-    distance and has the same sign, and it costs little.
+    so the solid ends where the sections end. More than
+    `LOFT_SHORTCUT` outside the loft's padded box, the distance to the
+    box stands in: it is smaller than the true distance and has the same
+    sign, and it costs little.
 
     Args:
         loft: A loft from `fit_loft`.
@@ -330,7 +335,7 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
         The signed distance, in meters.
     """
     var off_box = _box_gap(loft.low, loft.high, point)
-    if off_box > 0:
+    if off_box > LOFT_SHORTCUT:
         return off_box
     var along = _along(point, loft.axis)
     var last = loft.start + loft.spacing * Float32(loft.count - 1)
