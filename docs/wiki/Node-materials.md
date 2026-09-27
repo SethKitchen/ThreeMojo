@@ -428,7 +428,8 @@ A fragment that the mask can throw away claims no depth until it survives, as a 
 
 - A `NORMALS`, `DEPTH`, `DISTANCE` or `SHADOW` material refuses a node program. These kinds show data or a shadow, not a surface's color.
 - A wireframe refuses a node program. A line has no surface.
-- A line, a wide line, a point and a sprite refuse a node material.
+- A line, a wide line and a point refuse a node material.
+- A sprite runs a node material on its square, as three.js's `SpriteNodeMaterial` does. It refuses a position node, because a sprite has no vertices of its own to move.
 - A program id that is not in `assets.programs` is refused when the mesh is drawn. A program that reads a texture that is not in `assets.textures` is refused too, and so is a texture uniform that names no texture.
 - The uv view (`SHADE_UV`) runs no program. `SHADE_LIT` runs it, and a texture node reads opaque white there.
 
