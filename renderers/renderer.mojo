@@ -4322,6 +4322,11 @@ struct Renderer(Movable):
     # `shadowMap.type`. `PCF_SHADOW_MAP` by default, as there. See
     # `lights.shadow`.
     var shadow_map_type: ShadowMapType
+    # Whether the shadow pass keeps the color a light sees through each
+    # caster, three.js's `shadowMap.transmitted`: opaque black, or the
+    # material's `CAST_SHADOW_NODE`, thinned by its maps' alpha. False by
+    # default, as there. See `lights.shadow.transmitted_shadow`.
+    var shadow_map_transmitted: Bool
     # How a frame's depth is stored and compared: three.js's
     # `logarithmicDepthBuffer` and `reversedDepthBuffer`, as one value.
     # `STANDARD_DEPTH` by default, as there. See `set_depth_mode`.
@@ -4394,6 +4399,7 @@ struct Renderer(Movable):
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
+        self.shadow_map_transmitted = False
         self.depth_mode = STANDARD_DEPTH
         self.time = Duration(0.0, SECOND)
         self.auto_clear = True
@@ -4561,6 +4567,7 @@ struct Renderer(Movable):
         big.clipping_planes = self.clipping_planes.copy()
         big.local_clipping_enabled = self.local_clipping_enabled
         big.shadow_map_type = self.shadow_map_type
+        big.shadow_map_transmitted = self.shadow_map_transmitted
         big.depth_mode = self.depth_mode
         big.time = self.time
         big.auto_clear = self.auto_clear
@@ -7713,6 +7720,7 @@ struct Renderer(Movable):
                     shadow.radius,
                     self.shadow_map_type,
                     shadow.intensity,
+                    self._kept_colors(target),
                 )
             )
         return maps^
@@ -7731,6 +7739,7 @@ struct Renderer(Movable):
         var near = shadow.near.to(METER)
         var far = light.shadow_far().to(METER)
         var depths = List[Float32](capacity=CUBE_FACES * size * size)
+        var colors = List[Float32]()
         for face in range(CUBE_FACES):  # pragma: no branch
             var camera = PerspectiveCamera(
                 Angle(90.0, DEGREE), 1.0, shadow.near, light.shadow_far()
@@ -7758,6 +7767,7 @@ struct Renderer(Movable):
                             far,
                         )
                     )
+            colors.extend(self._kept_colors(target))
         return ShadowMap(
             cube_of=index,
             size=size,
@@ -7770,7 +7780,23 @@ struct Renderer(Movable):
             radius=shadow.radius,
             shadow_type=self.shadow_map_type,
             intensity=shadow.intensity,
+            colors=colors^,
         )
+
+    def _kept_colors(self, target: RenderTarget) -> List[Float32]:
+        """Return what the light saw through each texel of a shadow pass,
+        four floats a texel from the top, or nothing when the renderer
+        keeps no colors; see `shadow_map_transmitted`."""
+        var colors = List[Float32]()
+        if not self.shadow_map_transmitted:
+            return colors^
+        for texel in range(len(target.colors)):  # pragma: no branch
+            ref seen = target.colors[texel]
+            colors.append(seen.r)
+            colors.append(seen.g)
+            colors.append(seen.b)
+            colors.append(seen.a)
+        return colors^
 
     def _projected(
         self, scene: Scene, assets: Assets, visible: Layers
@@ -7863,8 +7889,9 @@ struct Renderer(Movable):
         Every kind three.js's shadow map draws is drawn: the triangles of
         every mesh, skinned, instanced or batched mesh and LOD level, the
         segments of every line and wireframe, and every point, under lit
-        shading with no lights. A point light's view, `distance`, draws a
-        mesh's custom distance material.
+        shading with no lights, or under `SHADE_SHADOW` when the renderer
+        keeps the colors, `shadow_map_transmitted`. A point light's view,
+        `distance`, draws a mesh's custom distance material.
 
         Args:
             scene: The transform hierarchy, updated.
@@ -7921,20 +7948,29 @@ struct Renderer(Movable):
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
             Draw(DRAW_POINTS, 0, len(points)),
         ]
-        var target = RenderTarget(size, size, Color(0, 0, 0))
+        # With the colors kept, a texel nothing is drawn in is clear, alpha
+        # zero, as three.js clears the map to `0x000000, 0`, and each
+        # caster writes what the light sees through it; see `SHADE_SHADOW`.
+        var transmitted = self.shadow_map_transmitted
+        var target = RenderTarget(
+            size, size, Color(0, 0, 0, 0) if transmitted else Color(0, 0, 0)
+        )
         rasterize_frame(
             corners,
             segments,
             draws,
             target,
-            SHADE_LIT,
-            TextureStore(),
+            SHADE_SHADOW if transmitted else SHADE_LIT,
+            assets.textures,
             Lighting.uniform(),
             self.workers,
             points=points,
+            cubes=assets.cube_textures,
             # A node material's mask and depth hold in the light's view
             # as in the camera's.
             programs=assets.programs,
+            volumes=assets.data_3d_textures,
+            arrays=assets.data_array_textures,
         )
         return target^
 
