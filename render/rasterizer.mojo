@@ -159,6 +159,7 @@ from render.linerule import (
     major_is_x,
     share_at,
     span_of,
+    toward_at,
 )
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.pointrule import (
@@ -4868,6 +4869,140 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         )
 
 
+struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
+    """The host's `NodeSource` for a segment: a program in its store, and
+    the segment's two ends, its first two corners. `x` and `y` move with
+    the pixel."""
+
+    var programs: Pointer[NodeProgramStore, Self.origin]
+    var program: Int
+    var textures: Pointer[TextureStore, Self.origin]
+    var cubes: Pointer[CubeTextureStore, Self.origin]
+    var volumes: Pointer[Data3DTextureStore, Self.origin]
+    var arrays: Pointer[DataArrayTextureStore, Self.origin]
+    var a: Pointer[RasterVertex, Self.origin]
+    var b: Pointer[RasterVertex, Self.origin]
+    var x: Int
+    var y: Int
+    # The target's height, and the pixel's depth in normalized device
+    # space, for `frag_coord`.
+    var height: Int
+    var depth: Float32
+
+    def __init__(
+        out self,
+        programs: Pointer[NodeProgramStore, Self.origin],
+        program: Int,
+        textures: Pointer[TextureStore, Self.origin],
+        cubes: Pointer[CubeTextureStore, Self.origin],
+        volumes: Pointer[Data3DTextureStore, Self.origin],
+        arrays: Pointer[DataArrayTextureStore, Self.origin],
+        a: Pointer[RasterVertex, Self.origin],
+        b: Pointer[RasterVertex, Self.origin],
+        height: Int,
+    ):
+        """Borrow a program and a segment on a target `height` pixels
+        high, at the pixel (0, 0)."""
+        self.programs = programs
+        self.program = program
+        self.textures = textures
+        self.cubes = cubes
+        self.volumes = volumes
+        self.arrays = arrays
+        self.a = a
+        self.b = b
+        self.x = 0
+        self.y = 0
+        self.height = height
+        self.depth = 0
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program."""
+        return self.programs[].programs[self.program].code[at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return a texture read at (u, v) from its full-size level: a line
+        has no footprint to choose another."""
+        return _sample_point_map(
+            self.textures[].textures[slot], Vector2(u, v), 0
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level,
+        `Texture.sample_level`."""
+        return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, `CubeTexture.sample`."""
+        return self.cubes[].textures[slot].sample(direction)
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read, `Data3DTexture.sample`."""
+        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read, `DataArrayTexture.sample`."""
+        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, `Texture.fetch`."""
+        return self.textures[].textures[slot].fetch(x, y, level)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, `Texture.fetch_size`."""
+        return self.textures[].textures[slot].fetch_size(level)
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return each end's perspective-correct weight at this pixel, or
+        at the pixel to its right or above it, from `toward_at`."""
+        var toward = toward_at(
+            Vector2(self.a[].x, self.a[].y),
+            Vector2(self.b[].x, self.b[].y),
+            self.a[].inv_w,
+            self.b[].inv_w,
+            self.x + (1 if context == AT_RIGHT else 0),
+            self.y - (1 if context == AT_UP else 0),
+        )
+        return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the pixel is, GLSL's `gl_FragCoord`, as
+        `_HostNodes.frag_coord` gives it.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        return SIMD[DType.float32, 4](
+            Float32(x) + 0.5,
+            Float32(self.height - y) - 0.5,
+            self.depth * 0.5 + 0.5,
+            1,
+        )
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return one end's coordinates, world position, normal, color and
+        custom floats: the first end for the first corner, and the second
+        for the others, which the third's weight of zero leaves out."""
+        ref at = self.a[] if context == CORNER_A else self.b[]
+        return NodeInputs(
+            at.u,
+            at.v,
+            at.world,
+            at.normal,
+            Vector3(at.color.r, at.color.g, at.color.b),
+            Vector3(0, 0, 0),
+            False,
+            at.custom,
+        )
+
+
 # --- lines ------------------------------------------------------------------
 
 
@@ -4897,8 +5032,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             dash or the gap differ between the ends, if either is
             negative or not finite, or if the ends disagree about their
             depth, color or stencil state or it is refused by
-            `RasterState.check`, or if they disagree about the fog, or if
-            either end names a node program.
+            `RasterState.check`, or if they disagree about the fog or the
+            node program.
     """
     if not a.blend.is_valid():
         raise Error("A line needs a blend policy that exists")
@@ -4910,10 +5045,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A line's ends must agree about the material")
     if not a.kind.is_unlit():
         raise Error("A line's material must be unlit")
-    if a.nodes != NO_NODES or b.nodes != NO_NODES:
-        raise Error(
-            "A line runs no node graph: it has no surface for one to shade"
-        )
+    if a.nodes != b.nodes:
+        raise Error("A line's ends must agree about the node program")
     # The first end is checked before the two are compared: a dash that
     # is not a number agrees with nothing, itself included.
     if not isfinite(a.dash_size) or a.dash_size < 0:
@@ -4939,6 +5072,12 @@ def rasterize_line(
     last_row: Int = -1,
     fog: FogView = FogView.none(),
     line_width: Int = 1,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Draw one segment, `line_width` raster pixels wide, into `target`.
 
@@ -4956,6 +5095,10 @@ def rasterize_line(
     tested, as three.js's `discard` does, so a gap claims no depth and
     what is behind it shows through.
 
+    A node program runs at each pixel before the depth is tested: its
+    color, opacity and mask, then its output after the fog. The two ends
+    are its corners, weighted as the color is. Only the uv view runs none.
+
     Args:
         a: One end.
         b: The other.
@@ -4968,12 +5111,37 @@ def rasterize_line(
             renderer's render scale. One, the default, is the one-pixel
             line and the rule this drew before there was a width. See
             `render.linerule`.
+        mode: Only the uv view runs no node program, and only
+            `SHADE_TEXTURE` opens the textures it reads.
+        textures: Where the node program's flat textures live.
+        cubes: Where the node program's cube textures live.
+        programs: Where the segment's node program lives.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If the segment's metadata is refused by `check_line_state`,
-            or the fog view is refused by `FogView.validate`.
+            its program by `check_program_maps`, or the fog view by
+            `FogView.validate`.
     """
     check_line_state(a, b)
+    check_program_maps(
+        a.nodes, mode, textures, cubes, programs, volumes, arrays
+    )
+    var noded = a.nodes != NO_NODES and mode != SHADE_UV
+    var textured = mode == SHADE_TEXTURE
+    var nodes = _HostLineNodes(
+        Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
+        max(a.nodes.value, 0),
+        Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=volumes).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=a).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
+        target.height,
+    )
+    var masked = noded and has_output(nodes, MASK_NODE)
     # The rows this call owns, held inside the image. Clamped here rather
     # than tested per pixel: once the range is known to be inside, a pixel
     # inside the range is inside the image, and the loop below has only its
@@ -5053,9 +5221,10 @@ def rasterize_line(
         # which is a filtering rule and not an interpolation rule; see
         # `render.texture.mix_straight`.
         var color = mix_straight(a.color, b.color, toward)
+        var veil = Float32(0)
         if fogged:
             var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
-            color = fog_mix(color, fog.color, fog.factor_at(depth))
+            veil = fog.factor_at(depth)
         # Everything above this line belongs to the step and not to the
         # pixel: the share, the depth, the dash and the color are the same
         # across the run, because the run is one place on the line drawn
@@ -5074,9 +5243,39 @@ def rasterize_line(
                 continue
             if x < 0 or x >= target.width:
                 continue
+            # The node program's color, opacity and mask, before the
+            # tests, as the kernel's line pass runs them.
+            var shaded = color
+            var none = Vector3(0, 0, 0)
+            var given = NodeInputs(0, 0, none, none, none, none, False)
+            if noded:
+                nodes.x = x
+                nodes.y = y
+                nodes.depth = a.z + (b.z - a.z) * share
+                given = here_inputs(nodes, textured)
+                if has_output(nodes, COLOR_NODE):
+                    var diffuse = run_nodes(nodes, COLOR_NODE, given)
+                    shaded = FloatColor(
+                        diffuse[0], diffuse[1], diffuse[2], shaded.a
+                    )
+                if has_output(nodes, OPACITY_NODE):
+                    shaded.a = run_nodes(nodes, OPACITY_NODE, given)[0]
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
+            if fogged:
+                shaded = fog_mix(shaded, fog.color, veil)
+            # The output last, reading the finished color.
+            if noded and has_output(nodes, OUTPUT_NODE):
+                given.lit = Vector3(shaded.r, shaded.g, shaded.b)
+                var finished = run_nodes(nodes, OUTPUT_NODE, given)
+                shaded = FloatColor(
+                    finished[0], finished[1], finished[2], shaded.a
+                )
             # Not covering this sample, WebGL's alpha to coverage, which
             # comes before the stencil and the depth tests.
-            if a.state.alpha_to_coverage and not alpha_covers(color.a, x, y):
+            if a.state.alpha_to_coverage and not alpha_covers(
+                shaded.a, x, y
+            ):
                 continue
             # The stencil and the depth tests, settled at once: a line
             # has no alpha test to discard it later.
@@ -5093,9 +5292,9 @@ def rasterize_line(
             if not a.state.color_write:
                 continue
             # Dithered, three.js's `dithering_fragment`, at this pixel.
-            var drawn = color
+            var drawn = shaded
             if a.state.dithering:
-                drawn = dither(color, x, y, target.height)
+                drawn = dither(shaded, x, y, target.height)
             if a.blend.mixes():
                 target.blend(
                     x,
@@ -5695,6 +5894,12 @@ async def _frame_band(
                     last_row,
                     fog,
                     line_width,
+                    mode,
+                    textures[],
+                    cubes[],
+                    programs[],
+                    volumes[],
+                    arrays[],
                 )
     except e:
         errors[unsafe_offset=band] = String(e)
@@ -5844,6 +6049,15 @@ def rasterize_frame(
         )
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
+        check_program_maps(
+            segments[segment * 2].nodes,
+            mode,
+            textures,
+            cubes,
+            programs,
+            volumes,
+            arrays,
+        )
     for point in range(len(points)):
         check_point_state(points[point])
         check_point_maps(
@@ -5906,6 +6120,12 @@ def rasterize_frame(
                     target,
                     fog=fog,
                     line_width=line_width,
+                    mode=mode,
+                    textures=textures,
+                    cubes=cubes,
+                    programs=programs,
+                    volumes=volumes,
+                    arrays=arrays,
                 )
         return
 
