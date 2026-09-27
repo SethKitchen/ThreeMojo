@@ -63,6 +63,7 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     tibia_dimensions,
 )
 from math.vector3 import Vector3
+from std.math import sqrt
 from units.si import Length
 
 
@@ -109,6 +110,13 @@ comptime PATELLAR_TENDON = MusclePart(21)
 comptime VASTUS_INTERMEDIUS = MusclePart(22)
 comptime ADDUCTOR_MAGNUS = MusclePart(23)
 comptime TIBIALIS_POSTERIOR = MusclePart(24)
+
+
+# Room for six shifts of every named part.
+comptime BELLY_SLOTS = 256
+# How far two bellies, or a belly and a bone, may press into each other
+# when they pack, as a share of their reach. Muscle is soft.
+comptime PACK_OVERLAP = Float32(0.15)
 
 
 @fieldwise_init
@@ -167,6 +175,11 @@ struct MuscleDimensions(ImplicitlyCopyable):
     var tibia_mid: Vector3
     var fibula_mid: Vector3
     var patella: Vector3
+    # How far each belly station moves when the bellies pack around the
+    # bones: x then z for stations one, two and three, six numbers a
+    # part, at `part.value * 6`. Zero until `muscle_dimensions` packs
+    # them. See `_pack`.
+    var bellies: SIMD[DType.float32, BELLY_SLOTS]
 
     def validate(self) raises:
         """Refuse dimensions that a field, mesh or mass cannot consume.
@@ -250,59 +263,12 @@ struct MuscleField(DistanceField, ImplicitlyCopyable):
         dimensions.validate()
         if not part.is_valid():
             raise Error("A muscle part must be a named muscle, tract or tendon")
-        var S = dimensions.stature.value
-        var scale = dimensions.scale
-        var chain: MuscleChain
-        if part == GLUTEUS_MAXIMUS:
-            chain = _glute_max(dimensions, S, scale)
-        elif part == GLUTEUS_MEDIUS:
-            chain = _glute_med(dimensions, S, scale)
-        elif part == TENSOR_FASCIAE_LATAE:
-            chain = _tfl(dimensions, S, scale)
-        elif part == ILIOTIBIAL_TRACT:
-            chain = _it_band(dimensions, S, scale)
-        elif part == SARTORIUS:
-            chain = _sartorius(dimensions, S, scale)
-        elif part == RECTUS_FEMORIS:
-            chain = _rectus(dimensions, S, scale)
-        elif part == VASTUS_LATERALIS:
-            chain = _vastus_lat(dimensions, S, scale)
-        elif part == VASTUS_MEDIALIS:
-            chain = _vastus_med(dimensions, S, scale)
-        elif part == VASTUS_INTERMEDIUS:
-            chain = _vastus_intermedius(dimensions, S, scale)
-        elif part == PECTINEUS:
-            chain = _pectineus(dimensions, S, scale)
-        elif part == ADDUCTOR_LONGUS:
-            chain = _adductor(dimensions, S, scale)
-        elif part == GRACILIS:
-            chain = _gracilis(dimensions, S, scale)
-        elif part == BICEPS_FEMORIS:
-            chain = _biceps(dimensions, S, scale)
-        elif part == SEMITENDINOSUS:
-            chain = _semitend(dimensions, S, scale)
-        elif part == SEMIMEMBRANOSUS:
-            chain = _semimemb(dimensions, S, scale)
-        elif part == GASTROCNEMIUS:
-            chain = _gastroc(dimensions, S, scale)
-        elif part == SOLEUS:
-            chain = _soleus(dimensions, S, scale)
-        elif part == TIBIALIS_ANTERIOR:
-            chain = _tib_ant(dimensions, S, scale)
-        elif part == TIBIALIS_POSTERIOR:
-            chain = _tib_post(dimensions, S, scale)
-        elif part == EXTENSOR_DIGITORUM_LONGUS:
-            chain = _edl(dimensions, S, scale)
-        elif part == PERONEUS_LONGUS:
-            chain = _per_long(dimensions, S, scale)
-        elif part == PERONEUS_BREVIS:
-            chain = _per_brev(dimensions, S, scale)
-        elif part == ACHILLES_TENDON:
-            chain = _achilles(dimensions, S, scale)
-        elif part == PATELLAR_TENDON:
-            chain = _patellar(dimensions, S, scale)
-        else:
-            chain = _adductor_magnus(dimensions, S, scale)
+        var chain = _raw_chain(dimensions, part)
+        var at = part.value * 6
+        var shifts = dimensions.bellies
+        chain.p1 = chain.p1 + Vector3(shifts[at], 0, shifts[at + 1])
+        chain.p2 = chain.p2 + Vector3(shifts[at + 2], 0, shifts[at + 3])
+        chain.p3 = chain.p3 + Vector3(shifts[at + 4], 0, shifts[at + 5])
         self.p0 = chain.p0
         self.p1 = chain.p1
         self.p2 = chain.p2
@@ -364,6 +330,64 @@ struct MuscleField(DistanceField, ImplicitlyCopyable):
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
+
+
+def _raw_chain(dimensions: MuscleDimensions, part: MusclePart) -> MuscleChain:
+    """Return one part's stations as authored, before the bellies pack."""
+    var S = dimensions.stature.value
+    var scale = dimensions.scale
+    var chain: MuscleChain
+    if part == GLUTEUS_MAXIMUS:
+        chain = _glute_max(dimensions, S, scale)
+    elif part == GLUTEUS_MEDIUS:
+        chain = _glute_med(dimensions, S, scale)
+    elif part == TENSOR_FASCIAE_LATAE:
+        chain = _tfl(dimensions, S, scale)
+    elif part == ILIOTIBIAL_TRACT:
+        chain = _it_band(dimensions, S, scale)
+    elif part == SARTORIUS:
+        chain = _sartorius(dimensions, S, scale)
+    elif part == RECTUS_FEMORIS:
+        chain = _rectus(dimensions, S, scale)
+    elif part == VASTUS_LATERALIS:
+        chain = _vastus_lat(dimensions, S, scale)
+    elif part == VASTUS_MEDIALIS:
+        chain = _vastus_med(dimensions, S, scale)
+    elif part == VASTUS_INTERMEDIUS:
+        chain = _vastus_intermedius(dimensions, S, scale)
+    elif part == PECTINEUS:
+        chain = _pectineus(dimensions, S, scale)
+    elif part == ADDUCTOR_LONGUS:
+        chain = _adductor(dimensions, S, scale)
+    elif part == GRACILIS:
+        chain = _gracilis(dimensions, S, scale)
+    elif part == BICEPS_FEMORIS:
+        chain = _biceps(dimensions, S, scale)
+    elif part == SEMITENDINOSUS:
+        chain = _semitend(dimensions, S, scale)
+    elif part == SEMIMEMBRANOSUS:
+        chain = _semimemb(dimensions, S, scale)
+    elif part == GASTROCNEMIUS:
+        chain = _gastroc(dimensions, S, scale)
+    elif part == SOLEUS:
+        chain = _soleus(dimensions, S, scale)
+    elif part == TIBIALIS_ANTERIOR:
+        chain = _tib_ant(dimensions, S, scale)
+    elif part == TIBIALIS_POSTERIOR:
+        chain = _tib_post(dimensions, S, scale)
+    elif part == EXTENSOR_DIGITORUM_LONGUS:
+        chain = _edl(dimensions, S, scale)
+    elif part == PERONEUS_LONGUS:
+        chain = _per_long(dimensions, S, scale)
+    elif part == PERONEUS_BREVIS:
+        chain = _per_brev(dimensions, S, scale)
+    elif part == ACHILLES_TENDON:
+        chain = _achilles(dimensions, S, scale)
+    elif part == PATELLAR_TENDON:
+        chain = _patellar(dimensions, S, scale)
+    else:
+        chain = _adductor_magnus(dimensions, S, scale)
+    return chain
 
 
 def muscle_dimensions(
@@ -459,7 +483,7 @@ def muscle_dimensions_from_bones(
     var k = 0.0050 * S
     if athleticism == TONED:
         k = 0.0042 * S
-    return MuscleDimensions(
+    var dims = MuscleDimensions(
         femur.stature,
         femur.sex,
         femur.side,
@@ -492,7 +516,10 @@ def muscle_dimensions_from_bones(
         tibia_origin_point,
         fibula_origin_point,
         patella_origin_point,
+        SIMD[DType.float32, BELLY_SLOTS](0),
     )
+    dims.bellies = _pack(dims)
+    return dims
 
 
 def muscle_distance(
@@ -633,6 +660,174 @@ def named_muscle_parts() -> List[MusclePart]:
     parts.append(ACHILLES_TENDON)
     parts.append(PATELLAR_TENDON)
     return parts^
+
+
+@fieldwise_init
+struct _Station(ImplicitlyCopyable):
+    """One belly station while the bellies pack."""
+
+    var slot: Int
+    var center: Vector3
+    var ml: Float32
+    var ap: Float32
+    var reach: Float32
+
+
+def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
+    """Return how far each belly station moves to pack around the bones.
+
+    A dissected leg's muscles fill the space around its bones. Authored
+    bellies do not: each sits where its own offset puts it, and gaps open
+    between them. The nearest stations to the bone go first. Each moves
+    straight toward its bone's axis until it would press into a bone or
+    a station already placed, at a similar height, by more than
+    `PACK_OVERLAP` of their reach. Attachments do not move.
+    """
+    var shifts = SIMD[DType.float32, BELLY_SLOTS](0)
+    var stations = List[_Station]()
+    var parts = named_muscle_parts()
+    for index in range(len(parts)):
+        var part = parts[index]
+        if not _packs(part):
+            continue
+        var chain = _raw_chain(d, part)
+        var at = part.value * 6
+        stations.append(_Station(at, chain.p1, chain.r1, chain.a1, 0))
+        stations.append(_Station(at + 2, chain.p2, chain.r2, chain.a2, 0))
+        stations.append(_Station(at + 4, chain.p3, chain.r3, chain.a3, 0))
+    for index in range(len(stations)):
+        var axis = _axis_at(d, stations[index].center.y)
+        stations[index].reach = _flat(stations[index].center - axis).length()
+    _sort_by_reach(stations)
+    var placed = List[_Station]()
+    for index in range(len(stations)):
+        var station = stations[index]
+        var axis = _axis_at(d, station.center.y)
+        var inward = _flat(axis - station.center)
+        var room = inward.length()
+        var toward = inward * (1 / max(room, Float32(1.0e-6)))
+        var low = Float32(0)
+        var high = room
+        for _ in range(10):
+            var middle = Float32(0.5) * (low + high)
+            if _fits(d, station, station.center + toward * middle, placed):
+                low = middle
+            else:
+                high = middle
+        station.center = station.center + toward * low
+        shifts[station.slot] = toward.x * low
+        shifts[station.slot + 1] = toward.z * low
+        placed.append(station)
+    return shifts
+
+
+def _packs(part: MusclePart) -> Bool:
+    """Return whether a part's belly packs: every muscle, no tendon."""
+    return (
+        part != ILIOTIBIAL_TRACT
+        and part != ACHILLES_TENDON
+        and part != PATELLAR_TENDON
+    )
+
+
+def _fits(
+    d: MuscleDimensions,
+    station: _Station,
+    center: Vector3,
+    placed: List[_Station],
+) -> Bool:
+    """Return whether a station centered at `center` presses too hard."""
+    var S = d.stature.value
+    var bones = _bones_at(d, center.y)
+    for index in range(len(bones)):
+        var bone = bones[index]
+        var gap = _flat(center - bone)
+        var reach = _reach(station.ml, station.ap, gap) + bone.y
+        if gap.length() < (1 - PACK_OVERLAP) * reach:
+            return False
+    for index in range(len(placed)):
+        var other = placed[index]
+        var rise = abs(other.center.y - center.y)
+        if rise < Float32(0.5) * (station.ap + other.ap) + Float32(0.01) * S:
+            var gap = _flat(center - other.center)
+            var reach = _reach(station.ml, station.ap, gap) + _reach(
+                other.ml, other.ap, gap
+            )
+            if gap.length() < (1 - PACK_OVERLAP) * reach:
+                return False
+    return True
+
+
+def _reach(ml: Float32, ap: Float32, toward: Vector3) -> Float32:
+    """Return how far an x-z ellipse reaches along `toward`."""
+    var length = max(toward.length(), Float32(1.0e-6))
+    var ux = toward.x / length
+    var uz = toward.z / length
+    return sqrt(ml * ml * ux * ux + ap * ap * uz * uz)
+
+
+def _flat(v: Vector3) -> Vector3:
+    """Return `v` with its y set to zero."""
+    return Vector3(v.x, 0, v.z)
+
+
+def _axis_at(d: MuscleDimensions, y: Float32) -> Vector3:
+    """Return where the bellies at height `y` pack toward.
+
+    Above the knee, the femoral shaft. Below it, the space between the
+    tibia and the fibula, two thirds of the way to the tibia.
+    """
+    var knee = _at(d.med_condyle, d.lat_condyle, 0.5)
+    if y >= knee.y:
+        return _along(d.lt, d.femur_mid, knee, y)
+    var tibia = _along(
+        _at(d.tib_med, d.tib_lat, 0.5), d.tibia_mid, d.plafond, y
+    )
+    var fibula = _along(d.fib_head, d.fibula_mid, d.lat_mal, y)
+    return _at(fibula, tibia, 0.67)
+
+
+def _bones_at(d: MuscleDimensions, y: Float32) -> List[Vector3]:
+    """Return the bone shafts at height `y`: x and z, and radius in y."""
+    var S = d.stature.value
+    var knee = _at(d.med_condyle, d.lat_condyle, 0.5)
+    var bones = List[Vector3]()
+    if y >= knee.y:
+        var femur = _along(d.lt, d.femur_mid, knee, y)
+        bones.append(Vector3(femur.x, 0.0080 * S, femur.z))
+        return bones^
+    var tibia = _along(
+        _at(d.tib_med, d.tib_lat, 0.5), d.tibia_mid, d.plafond, y
+    )
+    var fibula = _along(d.fib_head, d.fibula_mid, d.lat_mal, y)
+    bones.append(Vector3(tibia.x, 0.0085 * S, tibia.z))
+    bones.append(Vector3(fibula.x, 0.0040 * S, fibula.z))
+    return bones^
+
+
+def _along(
+    top: Vector3, middle: Vector3, bottom: Vector3, y: Float32
+) -> Vector3:
+    """Return the point of a three-point axis at height `y`, held at its
+    ends."""
+    if y >= middle.y:
+        var span = top.y - middle.y
+        var t = min(max((top.y - y) / span, Float32(0)), Float32(1))
+        return _at(top, middle, t)
+    var span = middle.y - bottom.y
+    var t = min(max((middle.y - y) / span, Float32(0)), Float32(1))
+    return _at(middle, bottom, t)
+
+
+def _sort_by_reach(mut stations: List[_Station]):
+    """Sort stations nearest the bone first; an insertion sort."""
+    for index in range(1, len(stations)):
+        var held = stations[index]
+        var k = index - 1
+        while k >= 0 and stations[k].reach > held.reach:
+            stations[k + 1] = stations[k]
+            k -= 1
+        stations[k + 1] = held
 
 
 def _at(a: Vector3, b: Vector3, t: Float32) -> Vector3:

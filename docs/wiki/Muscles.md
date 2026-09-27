@@ -64,6 +64,12 @@ Untoned muscle is calibrated toward typical adult muscle volumes measured by MRI
 | Peroneus longus | 126 |
 | Peroneus brevis | 61 |
 
+### Packing
+
+The authored bellies do not fill the space around the bones by themselves. `muscle_dimensions` packs them. The belly stations nearest a bone go first. Each moves straight toward its bone until it presses into a bone, or a belly already placed at a similar height. A press of `PACK_OVERLAP`, 15 percent of the two reaches, is allowed, because muscle is soft. Attachments do not move.
+
+Above the knee the bellies pack toward the femoral shaft. Below it they pack toward a point between the tibia and the fibula, two thirds of the way to the tibia. `MuscleDimensions.bellies` holds each station's move. A `MuscleField` applies it.
+
 The gluteus medius is below the reported mean. It is a thin fan, and a fuller belly would bulge. The soleus runs down to the calcaneal tendon a hand's breadth above the heel.
 
 ## Named parts

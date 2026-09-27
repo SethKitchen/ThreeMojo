@@ -117,6 +117,30 @@ def test_athleticism_is_valid() raises:
         _ = radius_scale(Athleticism(9))
 
 
+def test_bellies_pack_around_the_bones() raises:
+    var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
+    var moved = 0
+    for slot in range(len(dims.bellies)):
+        if dims.bellies[slot] != 0:
+            moved += 1
+    assert_true(moved > 40)
+    # Tendons and the tract keep their authored stations.
+    for part in [ILIOTIBIAL_TRACT, ACHILLES_TENDON, PATELLAR_TENDON]:
+        for k in range(6):
+            assert_equal(dims.bellies[part.value * 6 + k], 0)
+    # A deep belly sits closer to the femur packed than as authored,
+    # and not inside it.
+    var authored = dims
+    authored.bellies = type_of(dims.bellies)(0)
+    var packed = MuscleField(dims, VASTUS_INTERMEDIUS)
+    var loose = MuscleField(authored, VASTUS_INTERMEDIUS)
+    var axis = Vector3(dims.femur_mid.x, 0, dims.femur_mid.z)
+    var near = (Vector3(packed.p2.x, 0, packed.p2.z) - axis).length()
+    var far = (Vector3(loose.p2.x, 0, loose.p2.z) - axis).length()
+    assert_true(near <= far)
+    assert_true(near > Float32(0.5) * Float32(0.008) * dims.stature.value)
+
+
 def test_spec_defaults_to_untoned() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     assert_true(person.athleticism == UNTONED)
