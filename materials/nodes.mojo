@@ -5798,7 +5798,7 @@ def perspective_shares(
     return Lanes(wa * ia * rcp, wb * ib * rcp, wc * ic * rcp, 0)
 
 
-struct ProgramSource[origin: Origin[mut=False]](NodeSource):
+struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource` for a program on its own, with no triangle:
     what the vertex stage runs a position node and a size node with, since
     neither reads a texture or a derivative. Every corner is one vertex."""
