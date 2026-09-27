@@ -520,7 +520,9 @@ def test_a_cube_is_read_in_a_direction() raises:
     assert_equal(program.cubes[1].value, 5)
     # A source with no cubes reads white.
     assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
-    assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3)
+    assert_lanes(
+        run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3
+    )
     with assert_raises(contains="A cube uniform needs a cube"):
         program.set_cube("sky", CubeTextureId(-1))
     var bad = NodeGraph()
@@ -529,7 +531,9 @@ def test_a_cube_is_read_in_a_direction() raises:
     var sky2 = bad.cube_uniform("sky")
     with assert_raises(contains="A cube read reads a cube texture, not a vec2"):
         _ = bad.texture_cube(bad.uv(), bad.vec3(1, 0, 0))
-    with assert_raises(contains="A cube is read in a vec3 direction, not a vec2"):
+    with assert_raises(
+        contains="A cube is read in a vec3 direction, not a vec2"
+    ):
         _ = bad.texture_cube(sky2, bad.uv())
     # Only a fragment reads a cube.
     var moved = NodeGraph()

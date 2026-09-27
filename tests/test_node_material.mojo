@@ -886,7 +886,9 @@ def test_a_node_program_reads_a_cube_in_a_direction() raises:
     var assets = Assets()
     var sky = assets.cube_textures.add(a_cube())
     var graph = NodeGraph()
-    var read = graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    var read = graph.texture_cube(
+        graph.cube_uniform("sky"), graph.vec3(0, 0, 1)
+    )
     graph.set_output(COLOR_NODE, graph.swizzle(read, "rgb"))
     var id = assets.programs.add(graph.compile())
     var scene = a_scene(assets, shader_material(id))
@@ -902,7 +904,9 @@ def test_a_node_program_reads_a_cube_in_a_direction() raises:
     assert_equal(Int(seen.b), 255)
     # A cube that is not in the store is refused.
     assets.programs.get(id).set_cube("sky", CubeTextureId(7))
-    with assert_raises(contains="A node program reads a cube that is not there"):
+    with assert_raises(
+        contains="A node program reads a cube that is not there"
+    ):
         _ = renderer.render(scene, assets, a_camera())
 
 
@@ -1059,9 +1063,7 @@ def test_a_sprite_runs_its_node_material() raises:
     # of the sprite's and half a pixel below it: (0.6, 0.4).
     var assets = Assets()
     var graph = NodeGraph()
-    graph.set_output(
-        COLOR_NODE, graph.join([graph.uv(), graph.float(1)])
-    )
+    graph.set_output(COLOR_NODE, graph.join([graph.uv(), graph.float(1)]))
     var id = assets.programs.add(graph.compile())
     var scene = Scene()
     var at = scene.add(Object3D())
@@ -1078,7 +1080,9 @@ def test_a_sprite_runs_its_node_material() raises:
     at = moving.add(Object3D())
     moving.add_sprite(Sprite(assets.materials.add(shader_material(moved)), at))
     moving.update()
-    with assert_raises(contains="A sprite's node material has no position node"):
+    with assert_raises(
+        contains="A sprite's node material has no position node"
+    ):
         _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
 
 

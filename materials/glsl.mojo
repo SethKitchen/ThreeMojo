@@ -590,9 +590,7 @@ struct _Lexer(Movable):
             at = end
         return parts^
 
-    def either(
-        self, parts: List[String], mut at: Int, line: Int
-    ) raises -> Int:
+    def either(self, parts: List[String], mut at: Int, line: Int) raises -> Int:
         """Evaluate `a || b` and what binds tighter."""
         var value = self.both(parts, at, line)
         while at < len(parts) and parts[at] == "||":
@@ -1982,11 +1980,7 @@ struct _Compiler(Movable):
             Error: If the type is not one a uniform takes, or the other
                 shader gave the name another type.
         """
-        if (
-            not type.holds()
-            and not type.is_matrix()
-            and not type.is_sampler()
-        ):
+        if not type.holds() and not type.is_matrix() and not type.is_sampler():
             raise self.error(
                 "a uniform of type " + type.name() + " is outside the subset"
             )
@@ -4397,8 +4391,10 @@ struct _Compiler(Movable):
             value.local = value.local or args[index].local
         if _listed(
             name,
-            " texture texture2D textureLod textureProj texture2DProj"
-            " textureCube ",
+            (
+                " texture texture2D textureLod textureProj texture2DProj"
+                " textureCube "
+            ),
         ):
             return self.texture(name, args, nodes, value^)
         if name == "texelFetch" or name == "textureSize":
@@ -4596,9 +4592,7 @@ struct _Compiler(Movable):
             if volume:
                 value.node = self.graph.texture_3d(nodes[0], nodes[1]).value
             else:
-                value.node = self.graph.texture_array(
-                    nodes[0], nodes[1]
-                ).value
+                value.node = self.graph.texture_array(nodes[0], nodes[1]).value
         elif projective:
             if (
                 len(args) != 2
@@ -4947,7 +4941,9 @@ def compile_shader_toy(source: String) raises -> NodeProgram:
             naming the line and the reason.
     """
     if "mainImage" not in source:
-        raise Error("GLSL fragment shader: a ShaderToy shader defines mainImage")
+        raise Error(
+            "GLSL fragment shader: a ShaderToy shader defines mainImage"
+        )
     return _compile(_TOY_VERTEX, source + _TOY_MAIN, False, True).compile()
 
 

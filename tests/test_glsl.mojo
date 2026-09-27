@@ -417,7 +417,8 @@ def test_a_fragment_reads_where_it_is() raises:
     )
     assert_lanes(
         value(
-            "textureProj(map, vec3(1.0, 0.5, 2.0)).xyz", "uniform sampler2D map;"
+            "textureProj(map, vec3(1.0, 0.5, 2.0)).xyz",
+            "uniform sampler2D map;",
         ),
         0.5,
         0.25,
@@ -577,7 +578,9 @@ def test_an_if_takes_the_lines_of_the_branch_that_holds() raises:
     refused("#endif" + ends, "an #endif has no #if")
     refused("#else" + ends, "an #else has no #if")
     refused("#if 1\n#else\n#else\n#endif" + ends, "an #else follows the #else")
-    refused("#if 1\n#else\n#elif 1\n#endif" + ends, "an #elif follows the #else")
+    refused(
+        "#if 1\n#else\n#elif 1\n#endif" + ends, "an #elif follows the #else"
+    )
     refused("#ifdef\n#endif" + ends, "an #ifdef names one macro")
     refused("#ifndef A B\n#endif" + ends, "an #ifndef names one macro")
     refused("#undef\n" + ends, "an #undef names one macro")
@@ -621,7 +624,10 @@ def test_every_other_directive_is_refused() raises:
             " are not made of chunks"
         ),
     )
-    refused("#extension GL_OES_foo : enable\nvoid main() {}", "#extension is outside")
+    refused(
+        "#extension GL_OES_foo : enable\nvoid main() {}",
+        "#extension is outside",
+    )
     refused(
         "#version 300 es\nvoid main() {}", "writes a ShaderMaterial's #version"
     )
@@ -2928,7 +2934,8 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
     # modelMatrix * vec4(normal, 0.0) is read.
     var same = paint(
         "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
-        + "void main() { gl_FragColor = vec4(a - c, 1.0) + vec4(b - c, 0.0); }\n",
+        + "void main() { gl_FragColor = vec4(a - c, 1.0) + vec4(b - c,"
+        " 0.0); }\n",
         "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
         + "void main() {\n"
         + "    a = mat3(modelMatrix) * normal;\n"
@@ -2936,7 +2943,8 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
         + " modelMatrix[2].xyz);\n"
         + "    b = turn * normal;\n"
         + "    c = (modelMatrix * vec4(normal, 0.0)).xyz;\n"
-        + "    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix *"
+        " vec4(position, 1.0);\n"
         + "}\n",
     )
     assert_lanes(same, 0, 0, 0)
@@ -2947,7 +2955,10 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
     toon.set_uniform("uDirLightPos", Vector3(0, 0, 1))
     var shaded = run(toon)
     assert_true(shaded[0] >= 0 and shaded[0] <= 1)
-    var place = "gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);"
+    var place = (
+        "gl_Position = projectionMatrix * modelViewMatrix * vec4(position,"
+        " 1.0);"
+    )
     refused(
         WHITE,
         "a column of modelMatrix is read as its .xyz",
@@ -2957,13 +2968,17 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
         WHITE,
         "cannot make a mat3 of a vec3",
         "void main() { mat3 t = mat3(modelMatrix[1].xyz, modelMatrix[0].xyz,"
-        + " modelMatrix[2].xyz); " + place + " }",
+        + " modelMatrix[2].xyz); "
+        + place
+        + " }",
     )
     refused(
         WHITE,
         "cannot make a mat3 of a vec3",
         "void main() { mat3 t = mat3(modelMatrix[0].xyz, vec3(1.0),"
-        + " modelMatrix[2].xyz); " + place + " }",
+        + " modelMatrix[2].xyz); "
+        + place
+        + " }",
     )
     refused(
         WHITE,

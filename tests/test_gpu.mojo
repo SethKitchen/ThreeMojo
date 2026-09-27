@@ -11554,7 +11554,9 @@ def a_stack_program(
         graph.array_uniform("layers", layers),
         graph.join([v, u, graph.float(1.2)]),
     )
-    graph.set_output(NODES_COLOR, graph.swizzle(graph.mul(deep, layered), "rgb"))
+    graph.set_output(
+        NODES_COLOR, graph.swizzle(graph.mul(deep, layered), "rgb")
+    )
     return graph.compile()
 
 
@@ -11619,7 +11621,9 @@ def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
         a_stack_program(Data3DTextureId(0), DataArrayTextureId(0))
     )
     var graph = NodeGraph()
-    var read = graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    var read = graph.texture_cube(
+        graph.cube_uniform("sky"), graph.vec3(0, 0, 1)
+    )
     graph.set_output(NODES_COLOR, graph.swizzle(read, "rgb"))
     var sky = store.add(graph.compile())
     var pair = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
