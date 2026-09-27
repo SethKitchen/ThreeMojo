@@ -70,7 +70,7 @@ The authored bellies do not fill the space around the bones by themselves. `musc
 
 Above the knee the bellies pack toward the femoral shaft. Below it each packs toward the nearer of the tibia and the fibula, so the lateral compartment settles on the fibula.
 
-A belly that meets no neighbor then spreads into a sheet. It widens around its bone and thins away from it, up to 2.2 times, and keeps its cross-sectional area. Then it packs inward again. `MuscleDimensions.bellies` holds each station's move and spread. A `MuscleField` applies them.
+A belly that meets no neighbor then spreads into a sheet. It widens around its bone and thins away from it, up to 1.6 times, and keeps its cross-sectional area. A muscle spreads as far as its tightest station allows, so it widens evenly along its length. Then it packs inward again. `MuscleDimensions.bellies` holds each station's move and spread. A `MuscleField` applies them.
 
 The gluteus medius is below the reported mean. It is a thin fan, and a fuller belly would bulge. The soleus runs down to the calcaneal tendon a hand's breadth above the heel.
 

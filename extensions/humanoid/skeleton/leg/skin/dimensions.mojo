@@ -429,7 +429,7 @@ struct SkinField(Copyable, DistanceField, Movable):
                     self.calf_subcutaneous - self.knee_subcutaneous
                 ) * ((knee_y - y) / band)
             covers.append(fat + self.dermis)
-        # One pass fills a groove between one muscle's belly and the
+        # Three passes fill a groove between one muscle's belly and the
         # next, as the fat over them does.
         self.loft = fit_loft(
             points,
@@ -438,7 +438,7 @@ struct SkinField(Copyable, DistanceField, Movable):
             dimensions.iliac.y,
             SKIN_SECTIONS,
             covers,
-            1,
+            3,
         )
         self.low = self.loft.low
         self.high = self.loft.high

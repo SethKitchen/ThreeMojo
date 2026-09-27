@@ -38,7 +38,7 @@ Each slice outline is closed as a convex hull. Fat fills the gaps between muscle
 
 The section's cover goes outside the hull. The male template adds 7.3 mm of fat over the thigh and 5.5 mm over the calf. The female template adds 15.0 mm and 11.1 mm. The knee blends the two over a band three percent of stature either side of the joint line. The dermis, 1.8 mm, is part of the cover.
 
-A Catmull-Rom spline joins the sections and the rays. One pass fills a groove one section long, as the fat over two muscle bellies does. Radii only grow, so every structure stays inside.
+A Catmull-Rom spline joins the sections and the rays. Three passes fill a groove up to three sections long, as the fat over two muscle bellies does. Radii only grow, so every structure stays inside.
 
 Below the plafond every structure belongs to the foot. The leg drops those stations, and its skin tapers inside the foot's skin. See [One skin for a limb](#one-skin-for-a-limb).
 

@@ -115,7 +115,7 @@ comptime TIBIALIS_POSTERIOR = MusclePart(24)
 # Room for six shifts of every named part.
 comptime BELLY_SLOTS = 512
 # The most a belly spreads around its bone, as a factor of its width.
-comptime SPREAD_LIMIT = Float32(2.2)
+comptime SPREAD_LIMIT = Float32(1.6)
 # How far two bellies, or a belly and a bone, may press into each other
 # when they pack, as a share of their reach. Muscle is soft.
 comptime PACK_OVERLAP = Float32(0.15)
@@ -708,14 +708,34 @@ def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
         var axis = _nearest_bone(d, stations[index].center)
         stations[index].reach = _flat(stations[index].center - axis).length()
     _sort_by_reach(stations)
+    # First every belly packs in as it is.
+    var packed = List[_Station]()
+    for index in range(len(stations)):
+        var station = stations[index]
+        station.center = _pull_in(d, station, packed)
+        packed.append(station)
+    # Then each muscle spreads as far as its tightest station allows, so
+    # it widens evenly along its length instead of in ridges.
+    var spread = SIMD[DType.float32, BELLY_SLOTS](SPREAD_LIMIT)
+    for index in range(len(packed)):
+        var others = List[_Station]()
+        for other in range(len(packed)):
+            if other != index:
+                others.append(packed[other])
+        var part = packed[index].slot // 12
+        spread[part] = min(
+            spread[part], _spread_factor(d, packed[index], others)
+        )
+    # Last, each muscle packs in again at its spread.
     var placed = List[_Station]()
     for index in range(len(stations)):
         var station = stations[index]
         var start = station.center
         var ml = station.ml
         var ap = station.ap
-        station.center = _pull_in(d, station, placed)
-        station = _spread(d, station, placed)
+        station = _widened(
+            station, spread[station.slot // 12], _widens_z(d, packed[index])
+        )
         station.center = _pull_in(d, station, placed)
         var moved = station.center - start
         shifts[station.slot] = moved.x
@@ -745,18 +765,16 @@ def _pull_in(
     return station.center + toward * low
 
 
-def _spread(
+def _spread_factor(
     d: MuscleDimensions, station: _Station, placed: List[_Station]
-) -> _Station:
-    """Return a station widened around its bone as far as it fits.
+) -> Float32:
+    """Return how far a station can widen around its bone and still fit.
 
     A belly that meets no neighbor spreads into a sheet: wider around
     the bone and thinner away from it, with the same cross-sectional
-    area. The axis of the ellipse nearer the bone's tangent widens.
+    area, up to `SPREAD_LIMIT`.
     """
-    var axis = _nearest_bone(d, station.center)
-    var out = _flat(station.center - axis)
-    var widen_z = abs(out.x) >= abs(out.z)
+    var widen_z = _widens_z(d, station)
     var low = Float32(1)
     var high = SPREAD_LIMIT
     for _ in range(8):
@@ -765,7 +783,17 @@ def _spread(
             low = middle
         else:
             high = middle
-    return _widened(station, low, widen_z)
+    return low
+
+
+def _widens_z(d: MuscleDimensions, station: _Station) -> Bool:
+    """Return whether a station's z radius runs around its bone.
+
+    A belly beside the bone widens along z; one in front of or behind it
+    widens along x.
+    """
+    var out = _flat(station.center - _nearest_bone(d, station.center))
+    return abs(out.x) >= abs(out.z)
 
 
 def _widened(station: _Station, factor: Float32, widen_z: Bool) -> _Station:
