@@ -140,7 +140,9 @@ def test_a_masked_surface_looks_through_glass_too() raises:
     pane.set_position(0, 0, 1)
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(0.5, METER), Length(0.5, METER))),
+            assets.geometries.add(
+                plane(Length(0.5, METER), Length(0.5, METER))
+            ),
             assets.materials.add(glass),
             scene.add(pane^),
         )

@@ -146,6 +146,8 @@ comptime RECT_AREA = LightKind(5)
 # three.js's `LightProbe`. It adds to every surface as the ambient term does,
 # weighted by which way the surface faces. No node.
 comptime LIGHT_PROBE = LightKind(6)
+
+
 @fieldwise_init
 struct LightMask(Equatable, ImplicitlyCopyable, Writable):
     """Which of the scene's lights light a material, by their places in
