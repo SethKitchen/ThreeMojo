@@ -15,7 +15,7 @@ reads it out of a device buffer, through the `NodeSource` trait, so the two
 backends run the same arithmetic in the same order. `materials.glsl`
 compiles GLSL source to the same graphs.
 
-A graph sets up to nine outputs, each three.js's property of the same name:
+A graph sets up to ten outputs, each three.js's property of the same name:
 
 - `COLOR_NODE`, a `vec3`: the surface's diffuse color, three.js's
   `colorNode`. It replaces the material's color, its vertex colors and its
@@ -41,6 +41,9 @@ A graph sets up to nine outputs, each three.js's property of the same name:
 - `DEPTH_NODE`, a `float`: three.js's `depthNode`, the window depth from zero
   at the near plane to one at the far plane. It replaces the depth the
   fragment is tested and stored with.
+- `SIZE_NODE`, a `float`: three.js's `sizeNode` and GLSL's `gl_PointSize`,
+  a point's width in pixels. It runs on the host, once per point, and
+  replaces the material's size and its attenuation. Only a point reads it.
 
 A graph refuses a type error as it is built: a `vec3` added to a `vec2`, a
 `float` output given a `vec3`, a swizzle of a component the value lacks. A
@@ -119,11 +122,11 @@ comptime INSTRUCTION_C = 3
 comptime INSTRUCTION_IMMEDIATE = 4
 comptime INSTRUCTION_DEST = 5
 comptime INSTRUCTION_FLOATS = 6
-# How a program begins: where each of the nine outputs starts and how many
+# How a program begins: where each of the ten outputs starts and how many
 # instructions it holds, then the frame's time in seconds, then the view
 # matrix, sixteen floats, column-major. The renderer writes the last two
 # every frame, as three.js updates its `time` and `cameraViewMatrix` nodes.
-comptime NODE_OUTPUT_COUNT = 9
+comptime NODE_OUTPUT_COUNT = 10
 comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
@@ -213,7 +216,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_TEXTURE_ARRAY.value
+            and self.value <= NODE_POINT_COORD.value
         )
 
 
@@ -374,6 +377,10 @@ comptime NODE_TEXTURE_CUBE = NodeKind(101)
 # `NodeSource.sample_array`.
 comptime NODE_TEXTURE_3D = NodeKind(102)
 comptime NODE_TEXTURE_ARRAY = NodeKind(103)
+# Where a fragment is in its point, GLSL's `gl_PointCoord`: zero to one
+# across from the left and down from the top. A leaf numbered after the
+# operations; see `point_coord`.
+comptime NODE_POINT_COORD = NodeKind(104)
 
 
 @fieldwise_init
@@ -384,7 +391,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the nine outputs there are.
+        """Return True if this is one of the ten outputs there are.
 
         Returns:
             Whether the value names an output.
@@ -395,14 +402,15 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
         """Return the type a node given this output must have.
 
         Returns:
-            `NODE_FLOAT` for the opacity, the mask, the ambient occlusion
-            and the depth, and `NODE_VEC3` for the rest.
+            `NODE_FLOAT` for the opacity, the mask, the ambient occlusion,
+            the depth and the size, and `NODE_VEC3` for the rest.
         """
         return NODE_FLOAT if (
             self == OPACITY_NODE
             or self == MASK_NODE
             or self == AO_NODE
             or self == DEPTH_NODE
+            or self == SIZE_NODE
         ) else NODE_VEC3
 
 
@@ -415,6 +423,7 @@ comptime OUTPUT_NODE = NodeOutput(5)
 comptime MASK_NODE = NodeOutput(6)
 comptime AO_NODE = NodeOutput(7)
 comptime DEPTH_NODE = NodeOutput(8)
+comptime SIZE_NODE = NodeOutput(9)
 
 
 @fieldwise_init
@@ -568,6 +577,7 @@ def _is_attribute(kind: NodeKind) -> Bool:
         or kind == NODE_FRAG_COORD
         or kind == NODE_FRONT_FACING
         or kind == NODE_ATTRIBUTE
+        or kind == NODE_POINT_COORD
     )
 
 
@@ -804,16 +814,16 @@ struct NodeGraph(Copyable, Movable):
         """Return the node that feeds an output, or `NodeRef(-1)` for none.
 
         Args:
-            output: One of the nine outputs.
+            output: One of the ten outputs.
 
         Returns:
             The node's ref.
 
         Raises:
-            Error: If the output is none of the nine.
+            Error: If the output is none of the ten.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the nine")
+            raise Error("A node output that is none of the ten")
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -1356,6 +1366,17 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_FRAG_COORD, NODE_VEC4)
+
+    def point_coord(mut self) -> NodeRef:
+        """Return where the fragment is in its point, a `vec2`, GLSL's
+        `gl_PointCoord`: zero to one across from the left edge and down
+        from the top one. A fragment of a triangle or a line gives zeros.
+        Only a fragment reads it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_POINT_COORD, NODE_VEC2)
 
     def front_facing(mut self) -> NodeRef:
         """Return one where the fragment's triangle is seen from its front
@@ -4243,17 +4264,17 @@ struct NodeGraph(Copyable, Movable):
         does.
 
         Args:
-            output: Which output: one of the nine.
+            output: Which output: one of the ten.
             node: The node, of the type the output takes: a `float` for the
                 opacity, the mask, the ambient occlusion and the depth, and
                 a `vec3` for the rest.
 
         Raises:
-            Error: If the output is none of the nine, the node is not in
+            Error: If the output is none of the ten, the node is not in
                 this graph, or its type is not the output's.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the nine")
+            raise Error("A node output that is none of the ten")
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -4363,6 +4384,24 @@ struct NodeGraph(Copyable, Movable):
                     " and normal"
                 )
             return
+        if output == SIZE_NODE and (
+            kind == NODE_TEXTURE
+            or kind == NODE_TEXTURE_LEVEL
+            or kind == NODE_TEXEL_FETCH
+            or kind == NODE_TEXTURE_SIZE
+            or kind == NODE_TEXTURE_CUBE
+            or kind == NODE_TEXTURE_3D
+            or kind == NODE_TEXTURE_ARRAY
+            or kind == NODE_DFDX
+            or kind == NODE_DFDY
+            or kind == NODE_FRAG_COORD
+            or kind == NODE_POINT_COORD
+            or kind == NODE_FRONT_FACING
+        ):
+            raise Error(
+                "A size node runs once per point, before its pixels: it"
+                " reads no texture, no derivative and no fragment's place"
+            )
         if local:
             raise Error(
                 "Only a position node reads the local position or normal:"
@@ -5012,16 +5051,16 @@ struct NodeProgram(Copyable, Movable):
         """Return True if the program sets an output.
 
         Args:
-            output: One of the nine outputs.
+            output: One of the ten outputs.
 
         Returns:
             Whether a graph node feeds it.
 
         Raises:
-            Error: If the output is none of the nine.
+            Error: If the output is none of the ten.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the nine")
+            raise Error("A node output that is none of the ten")
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:
@@ -5503,6 +5542,20 @@ trait NodeSource:
         """
         ...
 
+    def point_coord(self, context: NodeContext) -> Lanes:
+        """Return where a fragment is in its point, GLSL's `gl_PointCoord`:
+        zero to one across from the left edge, and down from the top one.
+
+        Args:
+            context: Which sample: the fragment, or a neighbor for a
+                derivative. A corner is the point's center.
+
+        Returns:
+            The two numbers, then zeros. A source with no point gives
+            zeros.
+        """
+        return Lanes(0)
+
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube texture read in a direction, GLSL's
         `textureCube`. A source with no cubes reads opaque white.
@@ -5610,18 +5663,35 @@ def perspective_shares(
 
 struct ProgramSource[origin: Origin[mut=False]](NodeSource):
     """The host's `NodeSource` for a program on its own, with no triangle:
-    what the vertex stage runs a position node with, since a position node
-    reads no texture, no varying and no derivative."""
+    what the vertex stage runs a position node and a size node with, since
+    neither reads a texture or a derivative. Every corner is one vertex."""
 
     var program: Pointer[NodeProgram, Self.origin]
+    var vertex: NodeInputs
 
     def __init__(out self, program: Pointer[NodeProgram, Self.origin]):
-        """Borrow a program for as long as the caller keeps it.
+        """Borrow a program for as long as the caller keeps it, with every
+        attribute of the vertex zero.
 
         Args:
             program: The program to read.
         """
+        var none = Vector3(0, 0, 0)
         self.program = program
+        self.vertex = NodeInputs(0, 0, none, none, none, none, False)
+
+    def __init__(
+        out self, program: Pointer[NodeProgram, Self.origin], vertex: NodeInputs
+    ):
+        """Borrow a program for as long as the caller keeps it, at one
+        vertex.
+
+        Args:
+            program: The program to read.
+            vertex: The vertex every corner is.
+        """
+        self.program = program
+        self.vertex = vertex
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program.
@@ -5712,16 +5782,15 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
         return SIMD[DType.float32, 4](0, 0, 0, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
-        """Return a corner of nothing: every attribute zero.
+        """Return the vertex, which every corner is.
 
         Args:
             context: Which corner, not read.
 
         Returns:
-            Zeros.
+            The vertex.
         """
-        var none = Vector3(0, 0, 0)
-        return NodeInputs(0, 0, none, none, none, none, False)
+        return self.vertex
 
 
 def _lanes(v: Vector3) -> Lanes:
@@ -5955,6 +6024,8 @@ def _leaf[
         return _lanes(inputs.lit)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
+    if op == NODE_POINT_COORD.value:
+        return source.point_coord(NodeContext(context))
     if op == NODE_ATTRIBUTE.value:
         # Interpolated from the corners even at the fragment, whose own
         # attributes carry no custom floats.
@@ -6561,7 +6632,7 @@ def has_output[S: NodeSource](source: S, output: NodeOutput) -> Bool:
 
     Args:
         source: The program.
-        output: One of the nine outputs; the caller names it by its constant.
+        output: One of the ten outputs; the caller names it by its constant.
 
     Returns:
         Whether any instruction computes it.
@@ -6585,7 +6656,7 @@ def run_nodes[
     Args:
         source: The program, where its textures are sampled, and its
             triangle.
-        output: One of the nine outputs, one `has_output` answers True for;
+        output: One of the ten outputs, one `has_output` answers True for;
             the caller names it by its constant.
         inputs: The fragment's or the vertex's attributes.
 
@@ -6612,6 +6683,7 @@ def run_nodes[
         if (
             op < NODE_ADD.value
             or op == NODE_FRAG_COORD.value
+            or op == NODE_POINT_COORD.value
             or op == NODE_FRONT_FACING.value
             or op == NODE_TEXTURE_LEVEL.value
             or op == NODE_TEXEL_FETCH.value
@@ -6678,6 +6750,28 @@ def node_depth(depth: Float32, reversed: Bool) -> Float32:
         The stored depth.
     """
     return depth if reversed else depth * 2 - 1
+
+
+def point_size_of(program: NodeProgram, vertex: NodeInputs) raises -> Float32:
+    """Return a point's width in pixels from a program's size node, on the
+    host: what both rasterizers draw the point at.
+
+    Args:
+        program: The program. It must set `SIZE_NODE`.
+        vertex: The point's attributes: its coordinate, world position,
+            color and custom floats.
+
+    Returns:
+        The width the node computes.
+
+    Raises:
+        Error: If the program sets no size node.
+    """
+    if not program.has(SIZE_NODE):
+        raise Error("That node program has no size node")
+    return run_nodes(
+        ProgramSource(Pointer(to=program), vertex), SIZE_NODE, vertex
+    )[0]
 
 
 def moved_position(

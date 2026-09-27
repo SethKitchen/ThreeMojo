@@ -89,7 +89,7 @@ var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
 
 ## Outputs
 
-A graph sets one to nine outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
+A graph sets one to ten outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
 
 | Output | Type | three.js | What it replaces |
 |---|---|---|---|

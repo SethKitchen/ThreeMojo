@@ -2812,10 +2812,40 @@ def check_triangle_maps(
         for index in range(len(named)):  # pragma: no branch
             if named[index] != NO_TEXTURE:
                 check_channel(textures.get(named[index]))
-    # The node program, and every texture it reads: the kernel asks the
-    # same before a launch.
-    if a.nodes != NO_NODES and mode != SHADE_UV:
-        ref program = programs.get(a.nodes)
+    check_program_maps(
+        a.nodes, mode, textures, cubes, programs, volumes, arrays
+    )
+
+
+def check_program_maps(
+    nodes: NodeProgramId,
+    mode: ShadeMode,
+    textures: TextureStore,
+    cubes: CubeTextureStore,
+    programs: NodeProgramStore,
+    volumes: Data3DTextureStore,
+    arrays: DataArrayTextureStore,
+) raises:
+    """Refuse a node program that is not in its store, or that reads a
+    texture uniform that names no texture or one that is not stored, under
+    the mode that would run it. The kernel asks the same before a launch.
+
+    Args:
+        nodes: The program, or `NO_NODES`.
+        mode: Only the uv view runs no program, and only `SHADE_TEXTURE`
+            opens its textures.
+        textures: Where its flat textures live.
+        cubes: Where its cube textures live.
+        programs: Where the program lives.
+        volumes: Where its 3D textures live.
+        arrays: Where its array textures live.
+
+    Raises:
+        Error: If the program or a texture it reads is not in its store,
+            or a texture uniform names none.
+    """
+    if nodes != NO_NODES and mode != SHADE_UV:
+        ref program = programs.get(nodes)
         if mode == SHADE_TEXTURE:
             for index in range(len(program.textures)):
                 if program.textures[index].value < 0:
@@ -4690,6 +4720,153 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         )
 
 
+struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
+    """The host's `NodeSource` for a point: a program in its store, and one
+    point, which every corner is. `x` and `y` move with the pixel."""
+
+    var programs: Pointer[NodeProgramStore, Self.origin]
+    var program: Int
+    var textures: Pointer[TextureStore, Self.origin]
+    var cubes: Pointer[CubeTextureStore, Self.origin]
+    var volumes: Pointer[Data3DTextureStore, Self.origin]
+    var arrays: Pointer[DataArrayTextureStore, Self.origin]
+    var point: Pointer[RasterVertex, Self.origin]
+    var x: Int
+    var y: Int
+    # The target's height, and the point's depth in normalized device
+    # space, for `frag_coord`.
+    var height: Int
+    var depth: Float32
+
+    def __init__(
+        out self,
+        programs: Pointer[NodeProgramStore, Self.origin],
+        program: Int,
+        textures: Pointer[TextureStore, Self.origin],
+        cubes: Pointer[CubeTextureStore, Self.origin],
+        volumes: Pointer[Data3DTextureStore, Self.origin],
+        arrays: Pointer[DataArrayTextureStore, Self.origin],
+        point: Pointer[RasterVertex, Self.origin],
+        height: Int,
+    ):
+        """Borrow a program and a point on a target `height` pixels high,
+        at the pixel (0, 0)."""
+        self.programs = programs
+        self.program = program
+        self.textures = textures
+        self.cubes = cubes
+        self.volumes = volumes
+        self.arrays = arrays
+        self.point = point
+        self.x = 0
+        self.y = 0
+        self.height = height
+        self.depth = 0
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program."""
+        return self.programs[].programs[self.program].code[at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return a texture read at (u, v) at the level the point's size
+        chooses, as `rasterize_point` reads the point's map."""
+        ref image = self.textures[].textures[slot]
+        return _sample_point_map(
+            image,
+            Vector2(u, v),
+            mip_level_of(self.point[].point_size, image.width, image.height),
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level,
+        `Texture.sample_level`."""
+        return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, `CubeTexture.sample`."""
+        return self.cubes[].textures[slot].sample(direction)
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read, `Data3DTexture.sample`."""
+        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read, `DataArrayTexture.sample`."""
+        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, `Texture.fetch`."""
+        return self.textures[].textures[slot].fetch(x, y, level)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, `Texture.fetch_size`."""
+        return self.textures[].textures[slot].fetch_size(level)
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return the whole weight on the first corner: every corner is
+        the point."""
+        return SIMD[DType.float32, 4](1, 0, 0, 0)
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the pixel is, GLSL's `gl_FragCoord`, as
+        `_HostNodes.frag_coord` gives it.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        return SIMD[DType.float32, 4](
+            Float32(x) + 0.5,
+            Float32(self.height - y) - 0.5,
+            self.depth * 0.5 + 0.5,
+            1,
+        )
+
+    def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the pixel is in the point, GLSL's `gl_PointCoord`:
+        the pixel's, its neighbor's for a derivative, or the center's for
+        a corner.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The two numbers, then zeros.
+        """
+        if context.is_corner():
+            return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        var place = gl_point_coord(
+            Vector2(self.point[].x, self.point[].y),
+            self.point[].point_size,
+            x,
+            y,
+        )
+        return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return the point's coordinates, world position, normal, color
+        and custom floats."""
+        ref at = self.point[]
+        return NodeInputs(
+            at.u,
+            at.v,
+            at.world,
+            at.normal,
+            Vector3(at.color.r, at.color.g, at.color.b),
+            Vector3(0, 0, 0),
+            False,
+            at.custom,
+        )
+
+
 # --- lines ------------------------------------------------------------------
 
 
@@ -4955,7 +5132,7 @@ def check_point_state(point: RasterVertex) raises:
             zero, the alpha test is outside zero to one or not finite, or
             a texture id is a negative other than `NO_TEXTURE`, or the
             depth, color and stencil state is refused by
-            `RasterState.check`, or the point names a node program.
+            `RasterState.check`.
     """
     if not point.blend.is_valid():
         raise Error("A point needs a blend policy that exists")
@@ -4963,10 +5140,6 @@ def check_point_state(point: RasterVertex) raises:
         raise Error("A point needs a material kind that exists")
     if not point.kind.is_unlit():
         raise Error("A point's material must be unlit")
-    if point.nodes != NO_NODES:
-        raise Error(
-            "A point runs no node graph: it has no surface for one to shade"
-        )
     if not isfinite(point.point_size) or point.point_size <= 0:
         raise Error("A point needs a size above zero")
     if (
@@ -4983,27 +5156,42 @@ def check_point_state(point: RasterVertex) raises:
 
 
 def check_point_maps(
-    point: RasterVertex, mode: ShadeMode, textures: TextureStore
+    point: RasterVertex,
+    mode: ShadeMode,
+    textures: TextureStore,
+    cubes: CubeTextureStore = CubeTextureStore(),
+    programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
-    """Refuse a point whose alpha map is not stored as data, under the mode
-    that would read it.
+    """Refuse a point whose alpha map is not stored as data, or whose node
+    program cannot run, under the mode that would read them.
 
-    `check_triangle_maps` for a point, which carries a map and an alpha
-    map and nothing else. Asked of every point before any band starts, as
-    the triangles' is, so a point no band reaches is refused too.
+    `check_triangle_maps` for a point, which carries a map, an alpha map
+    and a node program and nothing else. Asked of every point before any
+    band starts, as the triangles' is, so a point no band reaches is
+    refused too.
 
     Args:
         point: The point.
         mode: What a pixel's color is taken from; only `SHADE_TEXTURE`
             opens the maps.
         textures: Where the maps live.
+        cubes: Where the program's cube textures live.
+        programs: Where the program lives.
+        volumes: Where the program's 3D textures live.
+        arrays: Where the program's array textures live.
 
     Raises:
         Error: If an alpha map the mode would open is not in the store or
-            is not stored as data -- see `check_alpha_map`.
+            is not stored as data -- see `check_alpha_map` -- or the
+            program is refused by `check_program_maps`.
     """
     if point.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
         check_alpha_map(textures.get(point.alpha_map))
+    check_program_maps(
+        point.nodes, mode, textures, cubes, programs, volumes, arrays
+    )
 
 
 def _sample_point_map(
@@ -5028,6 +5216,10 @@ def rasterize_point(
     first_row: Int = 0,
     last_row: Int = -1,
     fog: FogView = FogView.none(),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
 ) raises:
     """Draw one point, a square of pixels, into `target`.
 
@@ -5040,6 +5232,10 @@ def rasterize_point(
     and the uv view shows it. The blend, the alpha test and the fog work
     exactly as they do on a triangle, and in the same order.
 
+    A node program runs at each pixel after the maps, as a triangle's
+    does: its color, opacity and mask, and its output last. Every corner
+    it reads is the point, and `point_coord` is where the pixel is.
+
     Args:
         point: The point.
         target: The linear render target to draw into.
@@ -5051,6 +5247,10 @@ def rasterize_point(
         last_row: The last row it owns. Below zero, or past the last row,
             is the rest of the image.
         fog: The scene's fog, seen through the camera.
+        cubes: Where the node program's cube textures live.
+        programs: Where the point's node program lives.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If the mode is none of the three, the point is refused by
@@ -5062,7 +5262,7 @@ def rasterize_point(
         raise Error("A shading mode that is none of the three")
     check_point_state(point)
     fog.validate()
-    check_point_maps(point, mode, textures)
+    check_point_maps(point, mode, textures, cubes, programs, volumes, arrays)
     # Decided by the material and carried here, as a triangle's are; see
     # `rasterize_shaded` for what each changes.
     var blended = point.blend.mixes() and mode != SHADE_UV
@@ -5101,6 +5301,29 @@ def rasterize_point(
     if sampled and point.alpha_map != NO_TEXTURE:
         ref mask = textures.get(point.alpha_map)
         mask_level = mip_level_of(size, mask.width, mask.height)
+    # The node program, as `rasterize_shaded` runs a triangle's.
+    var noded = point.nodes != NO_NODES and mode != SHADE_UV
+    var nodes = _HostPointNodes(
+        Pointer(to=programs),
+        max(point.nodes.value, 0),
+        Pointer(to=textures),
+        Pointer(to=cubes),
+        Pointer(to=volumes),
+        Pointer(to=arrays),
+        Pointer(to=point),
+        target.height,
+    )
+    var masked = noded and has_output(nodes, MASK_NODE)
+    var given = NodeInputs(
+        point.u,
+        point.v,
+        point.world,
+        point.normal,
+        Vector3(point.color.r, point.color.g, point.color.b),
+        Vector3(0, 0, 0),
+        sampled,
+        point.custom,
+    )
     for y in range(above, below + 1):
         for x in range(left, right + 1):
             if not point_covers(center, size, x, y):
@@ -5145,6 +5368,21 @@ def rasterize_point(
                     shaded = FloatColor(
                         shaded.r, shaded.g, shaded.b, shaded.a * thinning.g
                     )
+            # The graph's color, opacity and mask, once the maps have had
+            # their say. A point is unlit, so the color is the color.
+            if noded:
+                nodes.x = x
+                nodes.y = y
+                nodes.depth = point.z
+                if has_output(nodes, COLOR_NODE):
+                    var diffuse = run_nodes(nodes, COLOR_NODE, given)
+                    shaded = FloatColor(
+                        diffuse[0], diffuse[1], diffuse[2], shaded.a
+                    )
+                if has_output(nodes, OPACITY_NODE):
+                    shaded.a = run_nodes(nodes, OPACITY_NODE, given)[0]
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
             # Thrown away for being too transparent, claiming no depth, as
             # a triangle's fragment is.
             if tested and shaded.a < point.alpha_test:
@@ -5154,6 +5392,14 @@ def rasterize_point(
             if fogged:
                 shaded = fog_mix(
                     shaded, fog.color, fog.factor_at(point.view_depth)
+                )
+            # The graph's output last, reading the finished color.
+            if noded and has_output(nodes, OUTPUT_NODE):
+                var lit = given
+                lit.lit = Vector3(shaded.r, shaded.g, shaded.b)
+                var finished = run_nodes(nodes, OUTPUT_NODE, lit)
+                shaded = FloatColor(
+                    finished[0], finished[1], finished[2], shaded.a
                 )
             target.keep_stencil(x, y, test)
             if not test.passes:
@@ -5428,6 +5674,10 @@ async def _frame_band(
                         first_row,
                         last_row,
                         fog,
+                        cubes[],
+                        programs[],
+                        volumes[],
+                        arrays[],
                     )
                 continue
             for segment in range(draw.first, past):
@@ -5595,7 +5845,9 @@ def rasterize_frame(
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
     for point in range(len(points)):
         check_point_state(points[point])
-        check_point_maps(points[point], mode, textures)
+        check_point_maps(
+            points[point], mode, textures, cubes, programs, volumes, arrays
+        )
     check_draws(draws, triangles, lines, len(points))
     # Asked of the triangles a draw names rather than of the whole list:
     # the transmission pass draws the opaque runs of a frame that holds
@@ -5635,7 +5887,15 @@ def rasterize_frame(
             if draw.kind == DRAW_POINTS:
                 for point in range(draw.first, past):
                     rasterize_point(
-                        points[point], target, mode, textures, fog=fog
+                        points[point],
+                        target,
+                        mode,
+                        textures,
+                        fog=fog,
+                        cubes=cubes,
+                        programs=programs,
+                        volumes=volumes,
+                        arrays=arrays,
                     )
                 continue
             for segment in range(draw.first, past):

@@ -156,6 +156,29 @@ def coord(center: Vector2, size: Float32, x: Int, y: Int) -> Vector2:
     )
 
 
+def gl_point_coord(center: Vector2, size: Float32, x: Int, y: Int) -> Vector2:
+    """Return where one pixel is on the point's square as GLSL's
+    `gl_PointCoord` gives it: zero at the left edge and one at the right,
+    zero at the top edge and one at the bottom. `coord` with its y turned
+    back, for a node program's `point_coord`.
+
+    Args:
+        center: Where the point projects, in pixels.
+        size: How many pixels across the point is.
+        x: The pixel's column.
+        y: The pixel's row.
+
+    Returns:
+        The coordinate. A pixel beside the square, which a derivative
+        reads, is outside zero to one.
+    """
+    var half = size / 2
+    return Vector2(
+        (Float32(x) + 0.5 - (center.x - half)) / size,
+        (Float32(y) + 0.5 - (center.y - half)) / size,
+    )
+
+
 def first_covered(center: Float32, size: Float32) -> Int:
     """Return a column or row at or before the first the point covers
     along one axis.
