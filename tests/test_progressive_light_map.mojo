@@ -259,7 +259,7 @@ def test_the_map_draws_no_background_line_point_or_other_mesh() raises:
     # is drawn into the map, and the box casts no shade on it here.
     var node = scene.add(Object3D())
     var solid = box(Length(1, METER), Length(1, METER), Length(1, METER))
-    var cube = assets.geometries.add(solid.copy())
+    var cube = assets.geometries.add(solid.clone())
     var loose = assets.geometries.add(solid.to_non_indexed())
     scene.add_mesh(
         Mesh(cube, assets.materials.add(Material(Color(255, 0, 0))), node)
