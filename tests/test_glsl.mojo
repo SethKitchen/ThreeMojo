@@ -2679,6 +2679,98 @@ def test_a_shader_toy_shader_draws_its_main_image() raises:
         )
 
 
+# three.js's ToonShader1, as it is written.
+comptime TOON_VERTEX = """
+varying vec3 vNormal;
+varying vec3 vRefract;
+void main() {
+    vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+    vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+    vec3 worldNormal = normalize ( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );
+    vNormal = normalize( normalMatrix * normal );
+    vec3 I = worldPosition.xyz - cameraPosition;
+    vRefract = refract( normalize( I ), worldNormal, 1.02 );
+    gl_Position = projectionMatrix * mvPosition;
+}
+"""
+comptime TOON_FRAGMENT = """
+uniform vec3 uBaseColor;
+uniform vec3 uDirLightPos;
+uniform vec3 uDirLightColor;
+uniform vec3 uAmbientLightColor;
+varying vec3 vNormal;
+varying vec3 vRefract;
+void main() {
+    float directionalLightWeighting = max( dot( normalize( vNormal ), uDirLightPos ), 0.0);
+    vec3 lightWeighting = uAmbientLightColor + uDirLightColor * directionalLightWeighting;
+    float intensity = smoothstep( - 0.5, 1.0, pow( length(lightWeighting), 20.0 ) );
+    intensity += length(lightWeighting) * 0.2;
+    float cameraWeighting = dot( normalize( vNormal ), vRefract );
+    intensity += pow( 1.0 - length( cameraWeighting ), 6.0 );
+    intensity = intensity * 0.2 + 0.3;
+    if ( intensity < 0.50 ) {
+        gl_FragColor = vec4( 2.0 * intensity * uBaseColor, 1.0 );
+    } else {
+        gl_FragColor = vec4( 1.0 - 2.0 * ( 1.0 - intensity ) * ( 1.0 - uBaseColor ), 1.0 );
+    }
+}
+"""
+
+
+def test_the_models_turn_carries_the_normal_into_the_world() raises:
+    # mat3(modelMatrix) and its first three columns read as
+    # modelMatrix * vec4(normal, 0.0) is read.
+    var same = paint(
+        "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
+        + "void main() { gl_FragColor = vec4(a - c, 1.0) + vec4(b - c, 0.0); }\n",
+        "varying vec3 a;\nvarying vec3 b;\nvarying vec3 c;\n"
+        + "void main() {\n"
+        + "    a = mat3(modelMatrix) * normal;\n"
+        + "    mat3 turn = mat3(modelMatrix[0].xyz, modelMatrix[1].xyz,"
+        + " modelMatrix[2].xyz);\n"
+        + "    b = turn * normal;\n"
+        + "    c = (modelMatrix * vec4(normal, 0.0)).xyz;\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n"
+        + "}\n",
+    )
+    assert_lanes(same, 0, 0, 0)
+    # three.js's ToonShader1 compiles as it is written.
+    var toon = compile_shader_material(TOON_VERTEX, TOON_FRAGMENT)
+    toon.set_uniform("uBaseColor", Vector3(1, 1, 1))
+    toon.set_uniform("uDirLightColor", Vector3(0.9, 0.9, 0.9))
+    toon.set_uniform("uDirLightPos", Vector3(0, 0, 1))
+    var shaded = run(toon)
+    assert_true(shaded[0] >= 0 and shaded[0] <= 1)
+    var place = "gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);"
+    refused(
+        WHITE,
+        "a column of modelMatrix is read as its .xyz",
+        "void main() { vec2 c = modelMatrix[0].xy; " + place + " }",
+    )
+    refused(
+        WHITE,
+        "cannot make a mat3 of a vec3",
+        "void main() { mat3 t = mat3(modelMatrix[1].xyz, modelMatrix[0].xyz,"
+        + " modelMatrix[2].xyz); " + place + " }",
+    )
+    refused(
+        WHITE,
+        "cannot make a mat3 of a vec3",
+        "void main() { mat3 t = mat3(modelMatrix[0].xyz, vec3(1.0),"
+        + " modelMatrix[2].xyz); " + place + " }",
+    )
+    refused(
+        WHITE,
+        "and mat3(modelMatrix) * normal",
+        "void main() { vec3 p = mat3(modelMatrix) * position; " + place + " }",
+    )
+    refused(
+        WHITE,
+        "a transform's columns are outside the subset",
+        "void main() { int i = 0; vec4 c = modelMatrix[i]; " + place + " }",
+    )
+
+
 def test_break_continue_and_an_early_return_are_read() raises:
     # Odd numbers skipped, and the loop left past seven: 0 + 2 + 4 + 6.
     var loop = (

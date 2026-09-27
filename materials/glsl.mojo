@@ -720,11 +720,17 @@ comptime _CLIP = _POINT + _CLIP_SPACE
 # A struct's value: its `point` is where its fields are in the compiler's
 # bundles, and it has no node.
 comptime _BUNDLE = 7
+# `modelMatrix[i]`, its `.xyz`, and the `mat3` of the first three: the
+# model's turn and stretch, which carries the normal into the world as
+# `modelMatrix * vec4(normal, 0.0)` does. The point holds the column.
+comptime _MODEL_COLUMN = 30
+comptime _MODEL_COLUMN3 = 31
+comptime _MODEL_ROTATION = 32
 
 
 def _is_matrix_tag(tag: Int) -> Bool:
     """Return True for a built-in matrix, or a product of them."""
-    return tag >= _MATRIX
+    return tag >= _MATRIX and tag < _MATRIX + 16
 
 
 def _is_point_tag(tag: Int) -> Bool:
@@ -3170,7 +3176,11 @@ struct _Compiler(Movable):
         Raises:
             Error: If the operands' types do not meet.
         """
-        var transforms = _is_matrix_tag(left.tag) or left.tag == _NORMAL_MATRIX
+        var transforms = (
+            _is_matrix_tag(left.tag)
+            or left.tag == _NORMAL_MATRIX
+            or left.tag == _MODEL_ROTATION
+        )
         if mark == "*" and (transforms or right.tag == _VIEW):
             return self.transformed(left, right)
         var a = left.type
@@ -3347,6 +3357,10 @@ struct _Compiler(Movable):
         var of_normal = self.normal >= 0 and right.node == self.normal
         if matrix == _NORMAL_MATRIX and of_normal:
             return _plain(_VEC3, self.graph.normal_view().value)
+        if matrix == _MODEL_ROTATION and of_normal:
+            # The normal in the world, as `modelMatrix * vec4(normal,
+            # 0.0)` is read.
+            return _plain(_VEC3, self.graph.normal_world().value)
         var of_direction = self.normal >= 0 and right.point == self.normal
         if matrix == _MODEL and carried == _DIRECTION and of_direction:
             var world = self.graph.normal_world()
@@ -3356,7 +3370,8 @@ struct _Compiler(Movable):
             "this port knows the transforms only as projectionMatrix *"
             " modelViewMatrix * vec4(p, 1.0) and the same through"
             " viewMatrix * modelMatrix, modelMatrix * vec4(position, 1.0),"
-            " normalMatrix * normal and modelMatrix * vec4(normal, 0.0)"
+            " normalMatrix * normal, modelMatrix * vec4(normal, 0.0) and"
+            " mat3(modelMatrix) * normal"
         )
 
     def moved(mut self, space: Int, point: Int) raises -> _Value:
@@ -3496,6 +3511,11 @@ struct _Compiler(Movable):
             Error: If the matrix is one of three.js's transforms, or the
                 index is not a constant int in range.
         """
+        if value.tag == _MODEL and index.type == _TINT and index.known:
+            # Known only as a step: `.xyz` of the first three makes the
+            # model's turn and stretch.
+            self.check_column(value.type, 4, index)
+            return _tagged(_VEC4, -1, _MODEL_COLUMN, Int(index.number))
         if value.tag != _PLAIN:
             raise self.error("a transform's columns are outside the subset")
         var size = 3 if value.type == _MAT3 else 4
@@ -3536,6 +3556,14 @@ struct _Compiler(Movable):
         """
         if value.symbol >= 0 and self.symbols[value.symbol].kind == _POSITION:
             raise self.error("gl_Position is written whole")
+        if value.tag == _MODEL_COLUMN:
+            if letters != "xyz":
+                raise self.error(
+                    "a column of modelMatrix is read as its .xyz, to make"
+                    " mat3(modelMatrix[0].xyz, modelMatrix[1].xyz,"
+                    " modelMatrix[2].xyz)"
+                )
+            return _tagged(_VEC3, -1, _MODEL_COLUMN3, value.point)
         if not value.type.is_any_vector():
             raise self.error("only a vector has components to pick")
         if letters.byte_length() > 4:
@@ -3891,6 +3919,8 @@ struct _Compiler(Movable):
                 an argument is a transform or a sampler.
         """
         var size = 3 if type == _MAT3 else 4
+        if type == _MAT3 and self.model_rotation(args):
+            return _tagged(_MAT3, -1, _MODEL_ROTATION, -1)
         var value = _plain(type, -1)
         value.constant = True
         for index in range(len(args)):  # pragma: no branch
@@ -4003,6 +4033,19 @@ struct _Compiler(Movable):
             self.graph.swizzle(m, "wyzx"), self.graph.vec4(1, -1, -1, 1)
         )
         return self.graph.div(adjugate, det)
+
+    def model_rotation(self, args: List[_Value]) -> Bool:
+        """Return True for `mat3(modelMatrix)` and `mat3(modelMatrix[0].xyz,
+        modelMatrix[1].xyz, modelMatrix[2].xyz)`: the model's turn and
+        stretch."""
+        if len(args) == 1:
+            return args[0].tag == _MODEL
+        if len(args) != 3:
+            return False
+        for index in range(3):  # pragma: no branch
+            if args[index].tag != _MODEL_COLUMN3 or args[index].point != index:
+                return False
+        return True
 
     def _matrix_of(mut self, columns: List[NodeRef]) raises -> NodeRef:
         """Return the matrix of three or four columns."""
