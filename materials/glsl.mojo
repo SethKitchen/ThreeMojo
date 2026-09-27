@@ -2922,7 +2922,10 @@ struct _Compiler(Movable):
         """
         var value = self.expression()
         if value.type != _BOOL:
-            raise self.error(what + " needs a bool, not a " + value.type.name())
+            var article = "an " if value.type.is_int() else "a "
+            raise self.error(
+                what + " needs a bool, not " + article + value.type.name()
+            )
         return NodeRef(value.node)
 
     def branch(mut self) raises:
