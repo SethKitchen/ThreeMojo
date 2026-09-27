@@ -512,7 +512,7 @@ def test_the_materials_defines_come_before_both_shaders() raises:
     )
     assert_lanes(run(program), 3, 3, 3)
     with assert_raises(
-        contains="fragment shader, line 0: a #define needs a name"
+        contains="vertex shader, line 0: a #define needs a name"
     ):
         _ = compile_shader_material(VERTEX, WHITE, [" "])
 
