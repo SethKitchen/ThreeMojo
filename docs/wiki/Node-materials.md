@@ -319,6 +319,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
+- `while (c)` and `do { ... } while (c);`. The body of a `do` is a block in braces. See [While and do](#while-and-do).
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
 - Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
 - Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
@@ -329,6 +330,14 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch`, `textureSize` and `textureCube`. `texture` of a `samplerCube` reads it in a direction, as `textureCube` does. `texture` of a `sampler3D` or a `sampler2DArray` reads it at a `vec3`.
 - The preprocessor: `#version` in a raw shader, object-like `#define`, `#undef`, and `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` and `#endif`.
 - An `#if` condition: whole numbers, macros that are one whole number, `defined`, `!`, `&&`, `||`, the six comparisons and parentheses. A name that is not a macro is zero, as in the C preprocessor.
+
+### While and do
+
+A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that would run longer stops there, and the shader must not depend on more. The bytecode has no jumps, so the compiler unrolls such a loop 64 times. A false condition leaves it, as a `break` does.
+
+- A `while` asks its condition at the top of each time through.
+- A `do` runs its body once. It asks its condition at the top of each later time, so a `continue` in it still reaches the condition.
+- A `while` inside another `while` unrolls 64 times 64. That is past the limit of a graph, so write the inner loop as a `for` with a constant count.
 
 A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
 
@@ -347,7 +356,8 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
 - `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
-- `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
+- Recursion. A call inlines its function, so a function that calls itself has no end.
+- A `do` whose body is not a block in braces.
 - A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
 - A declaration directly in a `switch`, outside a block.
 - A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
