@@ -5496,6 +5496,7 @@ def rasterize_kernel(
             )
             var lit = (
                 kind == Int32(LAMBERT.value)
+                or kind == Int32(GOURAUD.value)
                 or kind == Int32(PHONG.value)
                 or kind == Int32(TOON.value)
                 or physical
