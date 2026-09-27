@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `ReflectorForSSRPass`: a ground mirror that fades its
+"""Tests for three.js's `ReflectorForSSRPass`: a ground mirror that fades its
 reflection by height and by a fresnel factor, and the SSR pass that lays no
 reflection of its own over it."""
 
