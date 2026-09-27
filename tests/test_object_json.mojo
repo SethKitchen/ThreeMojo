@@ -835,6 +835,78 @@ def test_a_node_material_round_trips_with_its_textures() raises:
         )
 
 
+def test_a_bare_node_program_round_trips() raises:
+    """A program that reads no uniform, texture or attribute, beside an
+    unset cube, is written and read whole; the refusals are asked."""
+    from exporters.json_writer import JsonWriter
+    from materials.node_json import write_node_program
+
+    var assets = Assets()
+    var scene = Scene()
+    var bare = NodeGraph()
+    bare.set_output(COLOR_NODE, bare.vec3(0.25, 0.5, 1))
+    var plain = assets.programs.add(bare.compile())
+    var cubed = NodeGraph()
+    cubed.set_output(
+        COLOR_NODE,
+        cubed.swizzle(
+            cubed.texture_cube(cubed.cube_uniform("sky"), cubed.vec3(0, 0, 1)),
+            "rgb",
+        ),
+    )
+    var unset = assets.programs.add(cubed.compile())
+    var geometry = assets.geometries.add(_triangle())
+    for id in [plain, unset]:
+        scene.add_mesh(
+            Mesh(
+                geometry,
+                assets.materials.add(shader_material(id)),
+                scene.add(Object3D()),
+            )
+        )
+    var text = object_to_json(scene, assets)
+    var again = Scene()
+    var loaded = Assets()
+    _ = read_object_json(text, again, loaded)
+    ref copy = loaded.programs.get(loaded.materials.get(MaterialId(0)).nodes)
+    assert_equal(len(copy.uniform_names), 0)
+    assert_equal(len(copy.textures), 0)
+    ref still = loaded.programs.get(loaded.materials.get(MaterialId(1)).nodes)
+    assert_equal(len(still.cube_offsets), 1)
+    assert_true(still.code[still.cube_offsets[0]] < 0)
+    # Refused: an array texture, a cube list of the wrong length, an
+    # offset before the program, and code shorter than a header.
+    var writer = JsonWriter()
+    var layered = NodeGraph()
+    layered.set_output(
+        COLOR_NODE,
+        layered.swizzle(
+            layered.texture_array(
+                layered.array_uniform("layers"), layered.vec3(0, 0, 0)
+            ),
+            "rgb",
+        ),
+    )
+    with assert_raises(contains="a 3D or an array texture is not written"):
+        write_node_program(
+            writer, layered.compile(), List[String](), List[String]()
+        )
+    with assert_raises(contains="textures do not match it"):
+        write_node_program(
+            writer, cubed.compile(), List[String](), List[String]()
+        )
+    var before = text.replace('"cubes":[{"offset":', '"cubes":[{"offset":-')
+    with assert_raises(contains="a node program's offset is outside it"):
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(before, nowhere, nothing)
+    var short = text.replace('"nodes":{"code":[', '"nodes":{"code":[],"x":[')
+    with assert_raises(contains="code is too short"):
+        var nowhere = Scene()
+        var nothing = Assets()
+        _ = read_object_json(short, nowhere, nothing)
+
+
 def test_several_things_on_a_node_become_parts() raises:
     """A node that carries two things, or a light or a camera on other
     layers, writes each thing as a child at the identity."""

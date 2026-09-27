@@ -18,7 +18,7 @@ and leave this one alone.
 
 from exporters.json_writer import JsonWriter
 from loaders.json import JsonDocument
-from materials.nodes import NodeProgram, ValueType
+from materials.nodes import PROGRAM_HEADER, NodeProgram, ValueType
 
 
 @fieldwise_init
@@ -66,7 +66,8 @@ def write_node_program(
     writer.begin_object()
     writer.key("code")
     writer.begin_array()
-    for index in range(len(program.code)):
+    # A compiled program holds its header, so the loop runs.
+    for index in range(len(program.code)):  # pragma: no branch
         writer.number(program.code[index])
     writer.end_array()
     writer.key("uniforms")
@@ -140,13 +141,17 @@ def read_node_program(
         The program, and the uuids of what it reads.
 
     Raises:
-        Error: If a field is missing or of the wrong kind, a uniform's type
-            is none there is, or an offset is outside the program.
+        Error: If a field is missing or of the wrong kind, the code is
+            shorter than a program's header, a uniform's type is none there
+            is, or an offset is outside the program.
     """
     var program = NodeProgram()
     var code = document.get(item, "code")
+    if document.length(code) < PROGRAM_HEADER:
+        raise Error("Object JSON: a node program's code is too short")
     program.code = List[Float32](capacity=document.length(code))
-    for index in range(document.length(code)):
+    # At least a header, as asked above, so the loop runs.
+    for index in range(document.length(code)):  # pragma: no branch
         program.code.append(Float32(document.number(document.at(code, index))))
     var uniforms = document.get(item, "uniforms")
     for index in range(document.length(uniforms)):
