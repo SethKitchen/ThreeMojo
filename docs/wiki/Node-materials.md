@@ -478,7 +478,7 @@ var brass = read.ids[0]
 
 A surface input that is a value sets the material's own number. An input that a graph drives becomes a node output: the color, the opacity, the roughness, the metalness, the glow or the normal. The loader refuses a graph that drives any other input, because this port has no node output for it.
 
-The library is three.js's: the math, the adjustments, the mix and the channels, the ramps and the splits, the noises, `place2d`, `rotate2d` and `rotate3d`, the geometry nodes, `image` and `tiledimage`. The loader differs from three.js here:
+The library is three.js's: the math, the adjustments, the mix, the channels, the ramps, the splits and the noises. It also has `place2d`, `rotate2d`, `rotate3d`, the geometry nodes, `image` and `tiledimage`. The loader differs from three.js here:
 
 - `position` and `normal` in object space read the world ones. A fragment here has no object space, and for a mesh at the origin the two are the same.
 - `smoothstep`, `splitlr` and `splittb` take their inputs as the MaterialX specification names them. three.js passes them in another order.
