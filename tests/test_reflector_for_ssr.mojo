@@ -77,6 +77,15 @@ def drawn(
     return renderer.render(scene, assets, camera)
 
 
+def total_red(image: Framebuffer) raises -> Int:
+    """Return the red of every pixel added up."""
+    var total = 0
+    for y in range(SIZE):
+        for x in range(SIZE):
+            total += Int(image.get_pixel(x, y).r)
+    return total
+
+
 def test_without_depth_the_mirror_overlays_as_a_reflector_does() raises:
     var assets = Assets()
     var scene = Scene()
@@ -92,7 +101,7 @@ def test_with_depth_the_reflection_fades_by_height() raises:
     var assets = Assets()
     var scene = Scene()
     var opaque = a_ground(assets, scene, False)
-    var sharp = count_red(drawn(opaque, scene, assets))
+    var sharp = total_red(drawn(opaque, scene, assets))
     var faded_assets = Assets()
     var faded_scene = Scene()
     var mirror = a_ground(faded_assets, faded_scene, True)
@@ -100,12 +109,12 @@ def test_with_depth_the_reflection_fades_by_height() raises:
     assert_true(
         faded_assets.materials.get(mirror.mesh.material).transparent
     )
-    var faded = count_red(drawn(mirror, faded_scene, faded_assets))
-    # The reflection blends, so fewer of its pixels are strongly red.
+    var faded = total_red(drawn(mirror, faded_scene, faded_assets))
+    # The reflection blends at most half in, so it is less red.
     assert_true(faded < sharp)
     # Past the distance, nothing of the box is reflected.
     mirror.max_distance = meters(0.2)
-    var cut = count_red(drawn(mirror, faded_scene, faded_assets))
+    var cut = total_red(drawn(mirror, faded_scene, faded_assets))
     assert_true(cut <= faded)
     mirror.opacity = Float32(0) / Float32(0)
     with assert_raises(contains="distance and opacity are finite"):
