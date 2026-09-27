@@ -10,7 +10,8 @@ the transmitted shadow, and a floor under a red pane."""
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from geometries.buffer_geometry import BufferAttribute, BufferGeometry
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import (
@@ -141,11 +142,12 @@ def test_a_cube_with_colors_lets_their_light_through() raises:
     var colors = List[Float32]()
     for face in range(CUBE_FACES):
         for _ in range(16):
-            depths.append(0.2 if face == 0 else 1)
-            colors.append(1 if face == 0 else 0)
+            var filled = Float32(1) if face == 0 else Float32(0)
+            depths.append(Float32(0.2) if face == 0 else Float32(1))
+            colors.append(filled)
             colors.append(0)
             colors.append(0)
-            colors.append(1 if face == 0 else 0)
+            colors.append(filled)
     var cube = ShadowMap(
         cube_of=0,
         size=4,
@@ -195,7 +197,9 @@ def test_only_the_shadow_pass_shades_its_colors() raises:
         renderer.set_shading(SHADE_SHADOW)
 
 
-def one_texel(red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) -> Texture:
+def one_texel(
+    red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8
+) raises -> Texture:
     """Return a one-texel texture that holds data."""
     return Texture(
         1,
@@ -334,7 +338,10 @@ def test_the_nearest_caster_is_the_one_the_light_sees() raises:
     # Red above blue, drawn in either order: the light sees red.
     for flipped in [False, True]:
         var assets = Assets()
-        var paints = [casting(assets, 1, 0), casting(assets, 0, 1)]
+        var paints: List[Material] = [
+            casting(assets, 1, 0),
+            casting(assets, 0, 1),
+        ]
         var heights: List[Float32] = [2, 1]
         if flipped:
             paints = [casting(assets, 0, 1), casting(assets, 1, 0)]
@@ -440,7 +447,7 @@ def test_a_point_casts_what_the_light_sees_through_it() raises:
     red.nodes = assets.programs.add(red_graph.compile())
     for flipped in [False, True]:
         var heights: List[Float32] = [2, 1]
-        var paints = [red.copy(), a_dot(assets)]
+        var paints: List[Material] = [red.copy(), a_dot(assets)]
         if flipped:
             heights = [1, 2]
             paints = [a_dot(assets), red.copy()]
@@ -527,7 +534,7 @@ def test_a_line_casts_what_the_light_sees_through_it() raises:
     # The nearer of two is the one seen, in either order.
     for flipped in [False, True]:
         var heights: List[Float32] = [2, 1]
-        var paints = [red.copy(), black.copy()]
+        var paints: List[Material] = [red.copy(), black.copy()]
         if flipped:
             heights = [1, 2]
             paints = [black.copy(), red.copy()]
