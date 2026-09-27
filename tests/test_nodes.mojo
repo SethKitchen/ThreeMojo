@@ -792,7 +792,7 @@ def test_compiling_refuses_an_edited_graph() raises:
     with assert_raises(contains="names a node the graph does not hold"):
         _ = nowhere.compile()
     var strange = graph.copy()
-    strange._kinds[a.value] = NodeKind(99)
+    strange._kinds[a.value] = NodeKind(100)
     with assert_raises(contains="a kind or a type there is not"):
         _ = strange.compile()
     var shapeless = graph.copy()

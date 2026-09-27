@@ -344,7 +344,10 @@ def test_a_fragment_reads_where_it_is() raises:
         "precision mediump float;\nuniform sampler2D map;\n"
         + "void main() { gl_FragColor = texelFetch(map, ivec2(0), 0); }",
         "texelFetch() is not in this shader's GLSL version",
-        "void main() { gl_Position = vec4(0.0); }",
+        "attribute vec3 position;\nuniform mat4 projectionMatrix;\n"
+        + "uniform mat4 modelViewMatrix;\n"
+        + "void main() { gl_Position = projectionMatrix * modelViewMatrix *"
+        + " vec4(position, 1.0); }",
         raw=True,
     )
     # The made-up triangle is seen from its front.
