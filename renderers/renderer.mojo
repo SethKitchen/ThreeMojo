@@ -4171,8 +4171,9 @@ struct Renderer(Movable):
     # The scene's meshes, by their place in `scene.meshes`, to draw in the
     # space of their second texture coordinates and nothing else: what
     # `ProgressiveLightMap` draws its light map with, three.js's
-    # `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. Empty, the
-    # default, draws the scene through the camera.
+    # `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. No background,
+    # line or point is drawn. Empty, the default, draws the scene through
+    # the camera.
     var uv_space_meshes: List[Int]
     var auto_clear_color: Bool
     var auto_clear_depth: Bool
@@ -7029,8 +7030,9 @@ struct Renderer(Movable):
             )
         # Spelled as a Bool rather than testing the Optional directly,
         # because the coverage instrumenter wraps every condition in a
-        # probe that takes a Bool; see `materials.material`.
-        var painted = Bool(backdrop)
+        # probe that takes a Bool; see `materials.material`. A frame in
+        # texture space has no background: it is not seen through a camera.
+        var painted = Bool(backdrop) and len(self.uv_space_meshes) == 0
         if painted:
             _paint_backdrop(target, kept, backdrop.value())
         # Triangles, segments and points in the frame's one order, which
