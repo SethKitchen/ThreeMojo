@@ -5577,7 +5577,13 @@ def rasterize_frame(
         # this a bad map on a triangle above the image was refused on one
         # worker and drawn around on four.
         check_triangle_maps(
-            corners[triangle * 3], mode, textures, cubes, programs
+            corners[triangle * 3],
+            mode,
+            textures,
+            cubes,
+            programs,
+            volumes,
+            arrays,
         )
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])

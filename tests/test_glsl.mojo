@@ -399,7 +399,9 @@ def test_a_fragment_reads_where_it_is() raises:
         + cube_end,
         "a sampler3D is not in this shader's GLSL version",
         "#version 100\nattribute vec3 position;\n"
-        + "void main() { gl_Position = vec4(position, 1.0); }",
+        + "uniform mat4 projectionMatrix;\nuniform mat4 modelViewMatrix;\n"
+        + "void main() { gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
         True,
     )
     # textureProj divides through by the last component. The made-up
@@ -1223,7 +1225,8 @@ def test_uniforms_are_shared_and_set_by_name() raises:
         "varying float many[4];\n" + VERTEX,
     )
     refused(
-        "uniform sampler3D sky;\n" + WHITE, "the type sampler3D is outside"
+        "uniform sampler2DShadow sky;\n" + WHITE,
+        "the type sampler2DShadow is outside",
     )
     refused(
         "uniform mat4 modelMatrix;\n" + WHITE,
