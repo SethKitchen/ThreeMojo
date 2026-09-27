@@ -112,5 +112,19 @@ def test_the_last_space_takes_the_place_of_one_filled() raises:
     assert_almost_equal(packing.fill, 0.75)
 
 
+def test_a_box_too_tall_for_a_space_goes_below() raises:
+    # The two-tall box fits the space beside the three-tall one; the
+    # last is as narrow but too tall for what that space has left, and
+    # goes below.
+    var boxes: List[PackedBox] = [box(2, 3, 0), box(2, 2, 1), box(2, 2, 2)]
+    var packing = potpack(boxes)
+    assert_equal(boxes[1].x, 2)
+    assert_equal(boxes[1].y, 0)
+    assert_equal(boxes[2].x, 0)
+    assert_equal(boxes[2].y, 3)
+    assert_equal(packing.w, 4)
+    assert_equal(packing.h, 5)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
