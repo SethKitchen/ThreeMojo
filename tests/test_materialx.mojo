@@ -1037,7 +1037,9 @@ def test_the_corners_of_the_reader() raises:
     var four = read_materialx(SURFACES, surfaces)
     assert_equal(len(four.ids), 4)
     # No base: three.js's gray, times the coat's color.
-    ref program = surfaces.programs.get(surfaces.materials.get(four.ids[0]).nodes)
+    ref program = surfaces.programs.get(
+        surfaces.materials.get(four.ids[0]).nodes
+    )
     assert_true(program.has(COLOR_NODE))
     assert_equal(surfaces.materials.get(four.ids[0]).iridescence, 0)
     # An empty document reads nothing.
