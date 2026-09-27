@@ -308,7 +308,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`, and `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray` uniforms. `sampler3D` and `sampler2DArray` are GLSL ES 3.0 only.
+- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`. Uniforms can also be `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`. `sampler3D` and `sampler2DArray` are GLSL ES 3.0 only.
 - Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Attributes: `position`, `normal`, `uv` and `color`, and custom attributes of a `float` or a vector. See [Custom attributes](#custom-attributes).
