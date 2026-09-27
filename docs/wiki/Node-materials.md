@@ -308,7 +308,8 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
-- A `switch` of a value that is not an `int`, a `case` label that is not a constant, and a declaration directly in a `switch`.
+- A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
+- A declaration directly in a `switch`, outside a block.
 - A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
 - Prototypes, overloads, and functions named like GLSL's own.
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
