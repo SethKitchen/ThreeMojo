@@ -12337,6 +12337,46 @@ def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
         programs=frame.programs,
     )
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+def test_both_backends_march_a_volume_alike() raises:
+    # three.js's volume shader through a ball of intensity, both styles:
+    # the kernel reads the 3D texture from the fog buffer and runs the
+    # unrolled march the host runs.
+    if skipped_for_lack_of_a_gpu("both backends march a volume alike"):
+        return
+    from test_volume_shader import a_camera as volume_camera
+    from test_volume_shader import a_volume_scene
+    from materials.volume_shader import VOLUME_ISO, VOLUME_MIP
+
+    for style in [VOLUME_MIP, VOLUME_ISO]:
+        var made = a_volume_scene(style)
+        ref assets = made[0]
+        ref scene = made[1]
+        var camera = volume_camera()
+        var renderer = Renderer(16, 16)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(16, 16)
+        device.set_textures(
+            assets.textures,
+            assets.cube_textures,
+            assets.data_3d_textures,
+            assets.data_array_textures,
+        )
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene, eye=camera_position(scene, camera)),
+            lines=frame.segments,
+            draws=frame.draws,
+            points=frame.points,
+            programs=frame.programs,
+        )
+        assert_true(16 * 16 - count_background(cpu, BACKGROUND) > 30)
+        assert_equal(
+            count_mismatches(cpu, device.read_back(), tolerance=1), 0
+        )
 
 
 def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
