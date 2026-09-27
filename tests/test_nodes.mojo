@@ -1636,6 +1636,21 @@ def returns_early(mut graph: NodeGraph, args: List[NodeRef]) raises -> NodeRef:
     return graph.get(v)
 
 
+def returns_twice_in_a_loop(
+    mut graph: NodeGraph, args: List[NodeRef]
+) raises -> NodeRef:
+    """Return the first index past `args[0]` if the first time through
+    finds one, and minus two otherwise: a second `Return` in a loop, where
+    the first one's flag gates it."""
+    var i = graph.Loop(4)
+    graph.If(graph.greater_than(i, args[0]))
+    graph.Return(i)
+    graph.End()
+    graph.Return(graph.float(-2))
+    graph.End()
+    return graph.float(-1)
+
+
 def returns_the_wrong_type(
     mut graph: NodeGraph, args: List[NodeRef]
 ) raises -> NodeRef:
@@ -1660,6 +1675,9 @@ def test_a_return_gives_the_functions_answer_where_it_runs() raises:
             break
     assert_true(wanted > 0)
     assert_almost_equal(one(graph, graph.call(search, [bound])), wanted)
+    var twice = Fn("twice", [NODE_FLOAT], NODE_FLOAT, returns_twice_in_a_loop)
+    assert_almost_equal(one(graph, graph.call(twice, [graph.float(-1)])), 0)
+    assert_almost_equal(one(graph, graph.call(twice, [graph.float(1.5)])), -2)
     var early = Fn("early", [NODE_VEC3], NODE_VEC3, returns_early)
     assert_lanes(
         on_corners(graph, graph.call(early, [graph.vec3(1, 2, 3)])), 1, 2, 3
