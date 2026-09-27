@@ -162,6 +162,29 @@ The highlight can exceed one. That is what a highlight is. Set a tone mapping cu
 
 A [specular map](#specular-map) scales the highlight per texel.
 
+### Subsurface scattering
+
+A Phong surface can let a light behind it show through, as three.js's `SubsurfaceScatteringShader` does. Give the material a thickness map:
+
+```mojo
+var wax = phong_material(Color(230, 210, 180))
+wax.set_scattering(subsurface_scattering(thickness, Color(255, 120, 60)))
+```
+
+Each light with a direction adds light through the surface toward the camera. The way to the light is bent along the normal by `distortion`. The light through is `pow(saturate(dot(V, -H)), power) * scale + ambient`, times the light's color, the thickness color, the thickness and `attenuation`. The thickness is the red of the thickness map at the raw coordinates.
+
+The light through joins the direct diffuse light, and the surface's color does not tint it. Shadows darken it, as they darken the light itself. With no thickness map there is no light through, as WebGL reads zero from a sampler with no texture. The thickness map must hold data, and only `SHADE_TEXTURE` reads it.
+
+| Member | three.js | Default |
+|---|---|---|
+| `map` | `thicknessMap` | none |
+| `color` | `thicknessColor` | white |
+| `distortion` | `thicknessDistortion` | 0.1 |
+| `ambient` | `thicknessAmbient` | 0 |
+| `attenuation` | `thicknessAttenuation` | 0.1 |
+| `power` | `thicknessPower` | 2 |
+| `scale` | `thicknessScale` | 10 |
+
 ## Toon
 
 A toon surface is lit like a Lambert one, then stepped through a ramp instead of faded. That is what makes the cartoon look. Build one with its own function:
