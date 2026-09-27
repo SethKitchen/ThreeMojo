@@ -204,9 +204,10 @@ struct ProgressiveLightMap(Movable):
             material.dithering = True
             mesh.cast_shadow = True
             mesh.receive_shadow = True
-            var node = scene.get(mesh.node)
+            var id = mesh.node
+            var node = scene.get(id)
             node.render_order = 1000 + index
-            scene.set(mesh.node, node^)
+            scene.set(id, node^)
             boxes.append(
                 PackedBox(1 + padding * 2, 1 + padding * 2, 0, 0, index)
             )
