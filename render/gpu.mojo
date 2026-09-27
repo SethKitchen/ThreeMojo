@@ -3967,6 +3967,11 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
                 == CORNER_B else 2 * FLOATS_PER_VERTEX
             )
         )
+        # Lane by lane, as `_ltc_texel` reads: a `SIMD` built from the
+        # eight loads in one expression came back all zero on Metal.
+        var custom = SIMD[DType.float32, 8](0)
+        for lane in range(8):  # pragma: no branch
+            custom[lane] = self.corners[unsafe_offset=at + LANE_CUSTOM + lane]
         return NodeInputs(
             self.corners[unsafe_offset=at + LANE_U],
             self.corners[unsafe_offset=at + LANE_V],
@@ -3987,16 +3992,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             ),
             Vector3(0, 0, 0),
             False,
-            SIMD[DType.float32, 8](
-                self.corners[unsafe_offset=at + LANE_CUSTOM],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 1],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 2],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 3],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 4],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 5],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 6],
-                self.corners[unsafe_offset=at + LANE_CUSTOM + 7],
-            ),
+            custom,
         )
 
 
