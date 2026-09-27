@@ -1814,11 +1814,11 @@ def _append_block(
 
 
 @fieldwise_init
-struct _FogTexels(ImplicitlyCopyable, VolumeTexels):
+struct _FogTexels[origin: Origin[mut=True]](ImplicitlyCopyable, VolumeTexels):
     """A decoded 3D or array texture's texels where the fog buffer holds
     them, as `filter_volume` and `filter_array` read texels."""
 
-    var fog: MutPointer[Float32, MutAnyOrigin]
+    var fog: MutPointer[Float32, Self.origin]
     var start: Int
     var width: Int
     var height: Int
@@ -3817,7 +3817,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, as `Data3DTexture.sample` reads it:
         `slot` is where its block starts in the fog buffer."""
-        var fog = self.fog.unsafe_origin_cast[MutAnyOrigin]()
+        var fog = self.fog
         var width = Int(fog[unsafe_offset=slot])
         var height = Int(fog[unsafe_offset=slot + 1])
         return filter_volume(
@@ -3837,7 +3837,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, as `DataArrayTexture.sample` reads
         it: `slot` is where its block starts in the fog buffer."""
-        var fog = self.fog.unsafe_origin_cast[MutAnyOrigin]()
+        var fog = self.fog
         var width = Int(fog[unsafe_offset=slot])
         var height = Int(fog[unsafe_offset=slot + 1])
         return filter_array(
