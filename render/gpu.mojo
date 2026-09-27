@@ -62,7 +62,13 @@ from render.raster_state import (
     test_fragment,
 )
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
-from render.linerule import covers, dash_covers, major_is_x, share_at
+from render.linerule import (
+    covers,
+    dash_covers,
+    major_is_x,
+    share_at,
+    toward_at,
+)
 from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
@@ -647,7 +653,10 @@ comptime LINE_STATE_OPS = 2
 comptime LINE_STATE_STENCIL = 3
 # Whether the scene's fog veils the segment: one or zero.
 comptime LINE_STATE_FOG = 4
-comptime STATE_PER_LINE = LINE_STATE_FOG + 1
+# Where the segment's node program starts in the fog buffer, or -1 for
+# none; see `program_starts`.
+comptime LINE_STATE_NODES = 5
+comptime STATE_PER_LINE = LINE_STATE_NODES + 1
 # How a point's metadata is laid out in its state buffer: its texture, its
 # blend policy and its alpha map. A point is unlit, so it has no kind to
 # carry, no emissive map, no ramp and no matcap.
@@ -3074,7 +3083,11 @@ def _float_at(texels: MutPointer[UInt8, MutAnyOrigin], at: Int) -> Float32:
     )
 
 
-def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
+def line_state(
+    corners: List[RasterVertex],
+    line_width: Int = 1,
+    starts: List[Int] = List[Int](),
+) -> List[Int32]:
     """Return each segment's blend policy and width, `STATE_PER_LINE`
     entries each.
 
@@ -3090,11 +3103,15 @@ def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
         corners: Raster vertices, two per segment.
         line_width: How many pixels across every segment is drawn, never
             below one.
+        starts: Where each node program starts in the fog buffer, as
+            `program_starts` lays them out. A segment naming a program
+            past it, as `GpuRenderer.draw` refuses, gets -1.
 
     Returns:
         The blend policy, the width, then the packed depth, color and
-        stencil state, then one or zero for whether the fog veils it, per
-        segment, from its first end.
+        stencil state, then one or zero for whether the fog veils it, then
+        where its node program starts or -1, per segment, from its first
+        end.
     """
     var state = List[Int32]()
     for segment in range(len(corners) // 2):
@@ -3103,6 +3120,10 @@ def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
         state.append(Int32(corners[segment * 2].state.ops_word()))
         state.append(Int32(corners[segment * 2].state.stencil_word()))
         state.append(Int32(1 if corners[segment * 2].fog else 0))
+        var named = corners[segment * 2].nodes.value
+        state.append(
+            Int32(starts[named] if named >= 0 and named < len(starts) else -1)
+        )
     return state^
 
 
@@ -4053,6 +4074,200 @@ def _device_size(
     )
 
 
+struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
+    """The kernel's `NodeSource` for a segment: a program in the fog
+    buffer, and the segment's two ends, its first two corners, as
+    `rasterizer._HostLineNodes` reads them."""
+
+    var fog: MutPointer[Float32, Self.origin]
+    var start: Int
+    var texels: MutPointer[UInt8, Self.origin]
+    var ramp: MutPointer[Float32, Self.origin]
+    var table: MutPointer[Int32, Self.origin]
+    var segments: MutPointer[Float32, Self.origin]
+    var base: Int
+    var x: Int
+    var y: Int
+    # The target's height, and the pixel's depth, for `frag_coord`.
+    var height: Int
+    var depth: Float32
+
+    def __init__(
+        out self,
+        fog: MutPointer[Float32, Self.origin],
+        start: Int,
+        texels: MutPointer[UInt8, Self.origin],
+        ramp: MutPointer[Float32, Self.origin],
+        table: MutPointer[Int32, Self.origin],
+        segments: MutPointer[Float32, Self.origin],
+        base: Int,
+        x: Int,
+        y: Int,
+        height: Int,
+        depth: Float32,
+    ):
+        """Read the program that starts `start` floats into `fog`, for the
+        segment whose first end's lanes start at `base`, at the pixel
+        (`x`, `y`) of a target `height` pixels high, at the depth
+        `depth`."""
+        self.fog = fog
+        self.start = start
+        self.texels = texels
+        self.ramp = ramp
+        self.table = table
+        self.segments = segments
+        self.base = base
+        self.x = x
+        self.y = y
+        self.height = height
+        self.depth = depth
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program."""
+        return self.fog[unsafe_offset=self.start + at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return a texture read at (u, v) from its full-size level, as
+        `rasterizer._HostLineNodes.sample` reads it."""
+        return _sample_level(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            0,
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level."""
+        return _sample_level(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            level,
+        )
+
+    def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return a 3D texture read, as `Data3DTexture.sample` reads it."""
+        return _fog_volume(self.fog, slot, at)
+
+    def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
+        """Return an array texture read, as `DataArrayTexture.sample` reads
+        it."""
+        return _fog_array(self.fog, slot, at)
+
+    def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
+        """Return a cube read in a direction, as `CubeTexture.sample` reads
+        it."""
+        return _sample_cube(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            direction,
+        )
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row."""
+        return _device_fetch(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            x,
+            y,
+            level,
+        )
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size."""
+        return _device_size(
+            self.table.unsafe_origin_cast[MutAnyOrigin](), slot, level
+        )
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return each end's perspective-correct weight at this pixel, or
+        at the pixel to its right or above it, from `toward_at`."""
+        var far = self.base + FLOATS_PER_VERTEX
+        var toward = toward_at(
+            Vector2(
+                self.segments[unsafe_offset=self.base + LANE_X],
+                self.segments[unsafe_offset=self.base + LANE_Y],
+            ),
+            Vector2(
+                self.segments[unsafe_offset=far + LANE_X],
+                self.segments[unsafe_offset=far + LANE_Y],
+            ),
+            self.segments[unsafe_offset=self.base + LANE_INV_W],
+            self.segments[unsafe_offset=far + LANE_INV_W],
+            self.x + (1 if context == AT_RIGHT else 0),
+            self.y - (1 if context == AT_UP else 0),
+        )
+        return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
+
+    def frag_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return where the pixel is, GLSL's `gl_FragCoord`, as
+        `rasterizer._HostLineNodes.frag_coord` gives it.
+
+        Args:
+            context: Which sample.
+
+        Returns:
+            The four numbers.
+        """
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        return SIMD[DType.float32, 4](
+            Float32(x) + 0.5,
+            Float32(self.height - y) - 0.5,
+            self.depth * 0.5 + 0.5,
+            1,
+        )
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return one end's coordinates, world position, normal, color and
+        custom floats, from its lanes: the first end for the first corner,
+        and the second for the others."""
+        var at = self.base + (
+            0 if context == CORNER_A else FLOATS_PER_VERTEX
+        )
+        return NodeInputs(
+            self.segments[unsafe_offset=at + LANE_U],
+            self.segments[unsafe_offset=at + LANE_V],
+            Vector3(
+                self.segments[unsafe_offset=at + LANE_WX],
+                self.segments[unsafe_offset=at + LANE_WY],
+                self.segments[unsafe_offset=at + LANE_WZ],
+            ),
+            Vector3(
+                self.segments[unsafe_offset=at + LANE_NX],
+                self.segments[unsafe_offset=at + LANE_NY],
+                self.segments[unsafe_offset=at + LANE_NZ],
+            ),
+            Vector3(
+                self.segments[unsafe_offset=at + LANE_R],
+                self.segments[unsafe_offset=at + LANE_G],
+                self.segments[unsafe_offset=at + LANE_B],
+            ),
+            Vector3(0, 0, 0),
+            False,
+            SIMD[DType.float32, 8](
+                self.segments[unsafe_offset=at + LANE_CUSTOM],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 1],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 2],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 3],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 4],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 5],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 6],
+                self.segments[unsafe_offset=at + LANE_CUSTOM + 7],
+            ),
+        )
+
+
 struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
     """The kernel's `NodeSource` for a point: a program in the fog buffer,
     and one point, which every corner is, as
@@ -4837,6 +5052,50 @@ def rasterize_kernel(
                     ),
                     toward,
                 )
+                # The segment's node program, before the tests, as
+                # `rasterize_line` runs it.
+                var line_program = Int(
+                    segment_maps[
+                        unsafe_offset=index * STATE_PER_LINE + LINE_STATE_NODES
+                    ]
+                )
+                var line_noded = line_program >= 0 and mode != Int32(
+                    SHADE_UV.value
+                )
+                var line_nodes = _DeviceLineNodes(
+                    fog,
+                    line_program,
+                    texels,
+                    ramp,
+                    table,
+                    segments,
+                    base,
+                    x,
+                    y,
+                    Int(height),
+                    az + (bz - az) * share,
+                )
+                var line_given = here_inputs(
+                    line_nodes, mode == Int32(SHADE_TEXTURE.value)
+                )
+                if line_noded:
+                    if has_output(line_nodes, COLOR_NODE):
+                        var diffuse = run_nodes(
+                            line_nodes, COLOR_NODE, line_given
+                        )
+                        drawn = FloatColor(
+                            diffuse[0], diffuse[1], diffuse[2], drawn.a
+                        )
+                    if has_output(line_nodes, OPACITY_NODE):
+                        drawn.a = run_nodes(
+                            line_nodes, OPACITY_NODE, line_given
+                        )[0]
+                    if (
+                        has_output(line_nodes, MASK_NODE)
+                        and run_nodes(line_nodes, MASK_NODE, line_given)[0]
+                        == 0
+                    ):
+                        continue
                 # Not covering this sample, WebGL's alpha to coverage,
                 # before the stencil and the depth tests as on the host.
                 if state.alpha_to_coverage and not alpha_covers(drawn.a, x, y):
@@ -4879,6 +5138,15 @@ def rasterize_kernel(
                             fog[unsafe_offset=FOG_FAR],
                             fog[unsafe_offset=FOG_DENSITY],
                         ),
+                    )
+                # The program's output after the fog, as on the host.
+                if line_noded and has_output(line_nodes, OUTPUT_NODE):
+                    line_given.lit = Vector3(drawn.r, drawn.g, drawn.b)
+                    var finished = run_nodes(
+                        line_nodes, OUTPUT_NODE, line_given
+                    )
+                    drawn = FloatColor(
+                        finished[0], finished[1], finished[2], drawn.a
                     )
                 # Dithered at this pixel, as the host's line pass does it.
                 if state.dithering:
@@ -7803,6 +8071,8 @@ struct GpuRenderer(Movable):
                 named_programs.append(corners[triangle * 3].nodes)
             for point in range(len(points)):
                 named_programs.append(points[point].nodes)
+            for segment in range(len(lines) // 2):
+                named_programs.append(lines[segment * 2].nodes)
             for index in range(len(named_programs)):
                 var named = named_programs[index]
                 if named == NO_NODES:
@@ -8166,7 +8436,7 @@ struct GpuRenderer(Movable):
                     src=drawn.unsafe_ptr(),
                     count=len(drawn),
                 )
-            var policies = line_state(lines, strokes)
+            var policies = line_state(lines, strokes, program_starts(programs))
             with self.segment_maps.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
