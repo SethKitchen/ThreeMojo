@@ -238,8 +238,9 @@ def _voronoi3d(
     var p = g.floor(x)
     var f = g.fract(x)
     var spread = g.float(max(smoothness * smoothness, 0.001))
-    var res = g.float(0)
-    var total = g.float(0)
+    # The weighted distances and the weights, summed as one `vec2`: two
+    # sums would keep every weight alive until the second read it.
+    var sums = g.vec2(0, 0)
     for k in range(-1, 2):
         for j in range(-1, 2):
             for i in range(-1, 2):
@@ -249,8 +250,9 @@ def _voronoi3d(
                 )
                 var d = g.length(g.add(g.sub(b, f), offset))
                 var weight = g.exp(g.div(g.negate(g.mul(d, d)), spread))
-                res = g.add(res, g.mul(d, weight))
-                total = g.add(total, weight)
+                sums = g.add(sums, g.join([g.mul(d, weight), weight]))
+    var res = g.swizzle(sums, "x")
+    var total = g.swizzle(sums, "y")
     var averaged = g.select(
         g.greater_than(total, g.float(0)), g.div(res, total), res
     )
