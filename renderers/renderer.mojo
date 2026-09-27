@@ -2735,6 +2735,14 @@ def _checked_nodes(
     for index in range(len(program.cubes)):
         if program.cubes[index].value >= assets.cube_textures.count():
             raise Error("A node program reads a cube that is not there")
+    for index in range(len(program.volumes)):
+        if program.volumes[index].value >= assets.data_3d_textures.count():
+            raise Error("A node program reads a 3D texture that is not there")
+    for index in range(len(program.arrays)):
+        if program.arrays[index].value >= assets.data_array_textures.count():
+            raise Error(
+                "A node program reads an array texture that is not there"
+            )
     return nodes
 
 
@@ -6743,6 +6751,8 @@ struct Renderer(Movable):
             self.render_scale,
             seen,
             frame.programs,
+            assets.data_3d_textures,
+            assets.data_array_textures,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
@@ -6903,6 +6913,8 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
             programs=frame.programs,
+            volumes=assets.data_3d_textures,
+            arrays=assets.data_array_textures,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -6933,6 +6945,8 @@ struct Renderer(Movable):
             self.render_scale,
             seen,
             frame.programs,
+            assets.data_3d_textures,
+            assets.data_array_textures,
         )
         return TransmissionTarget(drawn, view)
 
