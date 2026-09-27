@@ -1240,12 +1240,20 @@ struct _Compiler(Movable):
     # Whether the fragment shader is ShaderToy's, which reads `iTime` and
     # the other inputs ShaderToy gives.
     var toy: Bool
+    # three.js's `material.defines`, each `NAME` or `NAME tokens`.
+    var defines: List[String]
 
-    def __init__(out self, raw: Bool, toy: Bool = False):
+    def __init__(
+        out self,
+        raw: Bool,
+        toy: Bool = False,
+        defines: List[String] = List[String](),
+    ):
         """Start a compiler with an empty graph."""
         self.graph = NodeGraph()
         self.raw = raw
         self.toy = toy
+        self.defines = defines.copy()
         self.stage = _VERTEX
         self.version = 0
         self.tokens = List[_Token]()
@@ -1447,6 +1455,9 @@ struct _Compiler(Movable):
         var lexer = _Lexer(
             "vertex" if stage == _VERTEX else "fragment", self.raw
         )
+        # three.js's `material.defines`, in place before the first line.
+        for index in range(len(self.defines)):
+            lexer.define("define " + self.defines[index], 0)
         lexer.run(text)
         self.version = lexer.version
         self.tokens = lexer.tokens.copy()
@@ -4718,13 +4729,14 @@ def _compile(
     fragment_shader: String,
     raw: Bool,
     toy: Bool = False,
+    defines: List[String] = List[String](),
 ) raises -> NodeGraph:
     """Return the graph two shaders build.
 
     Raises:
         Error: If either shader is outside the subset.
     """
-    var compiler = _Compiler(raw, toy)
+    var compiler = _Compiler(raw, toy, defines)
     compiler.shader(vertex_shader, _VERTEX)
     if compiler.drawn < 0:
         raise Error("GLSL vertex shader: main never writes gl_Position")
@@ -4797,7 +4809,9 @@ def shader_graph(
 
 
 def compile_shader_material(
-    vertex_shader: String, fragment_shader: String
+    vertex_shader: String,
+    fragment_shader: String,
+    defines: List[String] = List[String](),
 ) raises -> NodeProgram:
     """Return the node program three.js's `ShaderMaterial` draws with two
     GLSL shaders. Give its id to `shader_material`.
@@ -4812,6 +4826,9 @@ def compile_shader_material(
     Args:
         vertex_shader: The vertex shader's GLSL.
         fragment_shader: The fragment shader's GLSL.
+        defines: three.js's `material.defines`, each `NAME` or `NAME
+            tokens`, as a `#define` in both shaders before their first
+            line.
 
     Returns:
         The program. Its uniforms are the shaders' uniforms, zero until the
@@ -4819,9 +4836,12 @@ def compile_shader_material(
 
     Raises:
         Error: If either shader is outside the subset, naming the shader,
-            the line and the reason, or the graph does not compile.
+            the line and the reason, a define has no name or arguments, or
+            the graph does not compile.
     """
-    return _compile(vertex_shader, fragment_shader, False).compile()
+    return _compile(
+        vertex_shader, fragment_shader, False, defines=defines
+    ).compile()
 
 
 # The vertex shader and the `main` a ShaderToy shader is drawn with: its

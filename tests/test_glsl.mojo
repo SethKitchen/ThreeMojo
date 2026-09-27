@@ -500,6 +500,24 @@ def test_an_if_takes_the_lines_of_the_branch_that_holds() raises:
     refused("#if ) \n#endif" + ends, "an #if condition cannot hold )")
 
 
+def test_the_materials_defines_come_before_both_shaders() raises:
+    # three.js's `material.defines`: a name alone, and a name with tokens,
+    # which an #if reads; the author's lines keep their numbers.
+    var program = compile_shader_material(
+        VERTEX,
+        "#ifdef TINTED
+"
+        + "void main() { gl_FragColor = vec4(vec3(float(COUNT)), 1.0); }
+"
+        + "#endif
+",
+        ["TINTED", "COUNT 3"],
+    )
+    assert_lanes(run(program), 3, 3, 3)
+    with assert_raises(contains="fragment shader, line 1: a #define needs a name"):
+        _ = compile_shader_material(VERTEX, WHITE, [" "])
+
+
 def test_every_other_directive_is_refused() raises:
     refused(
         "#include <common>\nvoid main() {}",
