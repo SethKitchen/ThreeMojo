@@ -3268,7 +3268,9 @@ struct _Compiler(Movable):
         """Return the value an index picks where the shader runs, the first
         where it picks none."""
         var picked = values[0]
-        for at in range(1, len(values)):
+        # A vector's lanes, its halves and a matrix's columns: at least
+        # two, so the loop runs.
+        for at in range(1, len(values)):  # pragma: no branch
             picked = self.graph.select(
                 self.graph.equal(index, self.graph.float(Float32(at))),
                 values[at],

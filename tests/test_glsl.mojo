@@ -3157,6 +3157,11 @@ def test_the_corners_of_the_subset() raises:
         "a sampler2DArray",
     )
     refused(
+        "uniform sampler2D t;\nvoid main() { mat3 m = mat3(t);"
+        + " gl_FragColor = vec4(1.0); }",
+        "cannot make a mat3 of a sampler2D",
+    )
+    refused(
         white,
         "cannot make a mat4 of a mat4",
         "void main() { mat4 m = mat4(modelMatrix);"
