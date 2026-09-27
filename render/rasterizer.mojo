@@ -4576,7 +4576,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].get(CubeTextureId(slot)).sample(direction)
+        return self.cubes[].textures[slot].sample(direction)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
