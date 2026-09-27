@@ -547,6 +547,14 @@ def _note_texture(mut textures: List[TextureId], map: TextureId):
     textures.append(map)
 
 
+def _note_place(mut places: List[Int], place: Int):
+    """Append a place to a list, once."""
+    for index in range(len(places)):
+        if places[index] == place:
+            return
+    places.append(place)
+
+
 def _pool_size(type: ValueType) -> Int:
     """Return how many floats a constant or a uniform of a type holds."""
     return 9 if type == NODE_MAT3 else (16 if type == NODE_MAT4 else 4)
@@ -4561,26 +4569,20 @@ struct _Pool(Movable):
 
     def cube(mut self, graph: NodeGraph, node: Int) -> Int:
         """Return where a cube read's cube id is: its uniform's place."""
-        return self._kept(graph, node, self.cubes)
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        _note_place(self.cubes, place)
+        return place
 
     def volume(mut self, graph: NodeGraph, node: Int) -> Int:
         """Return where a 3D texture read's texture id is."""
-        return self._kept(graph, node, self.volumes)
+        var place = self.place(graph, graph._inputs[node * 3 + 1])
+        _note_place(self.volumes, place)
+        return place
 
     def array(mut self, graph: NodeGraph, node: Int) -> Int:
         """Return where an array texture read's texture id is."""
-        return self._kept(graph, node, self.arrays)
-
-    def _kept(
-        mut self, graph: NodeGraph, node: Int, mut places: List[Int]
-    ) -> Int:
-        """Return where a read's uniform keeps its id, noted in `places`
-        once."""
         var place = self.place(graph, graph._inputs[node * 3 + 1])
-        for index in range(len(places)):
-            if places[index] == place:
-                return place
-        places.append(place)
+        _note_place(self.arrays, place)
         return place
 
 
