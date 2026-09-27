@@ -47,7 +47,7 @@ from units.si import Angle, DEGREE, Length, METER
 comptime SIZE = 32
 
 
-def a_camera() -> PerspectiveCamera:
+def a_camera() raises -> PerspectiveCamera:
     """Return a camera in front of the planes."""
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE), 1, Length(0.1, METER), Length(100.0, METER)
