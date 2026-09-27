@@ -11353,6 +11353,68 @@ def test_both_backends_read_a_texture_at_a_level_alike() raises:
     assert_true(extreme > 0)
 
 
+def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
+    # texelFetch and textureSize: whole numbers name the texel, wrapped,
+    # at a level held inside the chain.
+    if skipped_for_lack_of_a_gpu("both backends fetch a texel alike"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var graph = NodeGraph()
+    var named = graph.texture_uniform("board", board)
+    var cells = graph.floor(graph.mul(graph.uv(), graph.float(20)))
+    var level = graph.floor(graph.mul(graph.swizzle(graph.uv(), "y"), graph.float(8)))
+    var texel = graph.texture_load(named, cells, level)
+    var size = graph.texture_size(named, level)
+    graph.set_output(
+        NODES_COLOR,
+        graph.join(
+            [
+                graph.swizzle(texel, "r"),
+                graph.swizzle(texel, "b"),
+                graph.div(graph.swizzle(size, "x"), graph.float(64)),
+            ]
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 0, 1, 4, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 24, 1, 0, 0, board))
+    corners = with_nodes(corners^, id.value)
+    var lighting = phong_lighting()
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        24,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
