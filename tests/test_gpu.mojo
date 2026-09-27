@@ -9769,6 +9769,77 @@ def test_both_backends_draw_a_ground_mirror_for_ssr_alike() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_read_the_scene_behind_in_a_graph_alike() raises:
+    # The kernel reads the scene behind from the backdrop buffer where the
+    # host reads the target: as a backdrop mixed into a lit surface's
+    # diffuse light, and as a fragment node's whole color.
+    if skipped_for_lack_of_a_gpu("both backends read the scene behind"):
+        return
+    from materials.nodes import (
+        BACKDROP_ALPHA_NODE,
+        BACKDROP_NODE,
+        FRAGMENT_NODE,
+    )
+
+    var scene = a_scene_behind()
+    var store = NodeProgramStore()
+    var mixed = NodeGraph()
+    var place = mixed.screen_uv()
+    var behind = mixed.viewport_texture(place)
+    mixed.set_output(NODES_COLOR, mixed.vec3(0.8, 0.3, 0.2))
+    mixed.set_output(BACKDROP_NODE, mixed.swizzle(behind, "rgb"))
+    mixed.set_output(
+        BACKDROP_ALPHA_NODE,
+        mixed.mul(mixed.swizzle(place, "x"), mixed.float(0.9)),
+    )
+    var backdrop_id = store.add(mixed.compile())
+    var own = NodeGraph()
+    var own_place = own.screen_uv()
+    var own_behind = own.viewport_texture(
+        own.swizzle(own_place, "yx")
+    )
+    own.set_output(
+        FRAGMENT_NODE,
+        own.join(
+            [
+                own.mul(own.swizzle(own_behind, "rgb"), own.float(0.5)),
+                own.swizzle(own_place, "y"),
+            ]
+        ),
+    )
+    var fragment_id = store.add(own.compile())
+    var lighting = phong_lighting()
+    for id in [backdrop_id, fragment_id]:
+        var corners = with_nodes(
+            phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+        )
+        for mode in [SHADE_TEXTURE, SHADE_LIT]:
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners,
+                target,
+                mode,
+                TextureStore(),
+                lighting,
+                1,
+                transmission=scene,
+                programs=store,
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                mode,
+                TextureStore(),
+                lighting,
+                transmission=scene,
+                programs=store,
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
