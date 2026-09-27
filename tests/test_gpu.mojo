@@ -12048,6 +12048,33 @@ def test_both_backends_run_a_graph_on_lines_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+from materials.material import GOURAUD as GOURAUD_KIND
+
+
+def test_both_backends_shade_a_gouraud_surface_alike() raises:
+    # Each corner carries its own light, which the kernel packs in its
+    # lanes and interpolates as the host does; the shadows darken the
+    # direct part of it and an ao map the indirect part.
+    if skipped_for_lack_of_a_gpu("both backends shade Gouraud alike"):
+        return
+    var textures = TextureStore()
+    var corners = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    for index in range(len(corners)):
+        var k = Float32(index)
+        corners[index].kind = GOURAUD_KIND
+        corners[index].gouraud_direct = Vector3(0.2 + 0.1 * k, 0.5, 0.9 - 0.1 * k)
+        corners[index].gouraud_indirect = Vector3(0.05, 0.02 * k, 0.1)
+    var lighting = phong_lighting()
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, mode, textures, lighting, 1)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, mode, textures, lighting
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
