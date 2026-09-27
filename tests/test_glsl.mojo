@@ -308,7 +308,8 @@ def test_a_fragment_reads_where_it_is() raises:
         + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
         "textureLod() takes a sampler2D, a vec2 and a float",
     )
-    # textureProj divides through by the last component.
+    # textureProj divides through by the last component. The made-up
+    # source gives the coordinate and the slot, none here.
     assert_lanes(
         value(
             "texture2DProj(map, vec4(0.5, 1.0, 0.0, 2.0)).xyz",
@@ -316,7 +317,7 @@ def test_a_fragment_reads_where_it_is() raises:
         ),
         0.25,
         0.5,
-        0,
+        -1,
     )
     assert_lanes(
         value(
@@ -324,7 +325,7 @@ def test_a_fragment_reads_where_it_is() raises:
         ),
         0.5,
         0.25,
-        0,
+        -1,
     )
     refused(
         "uniform sampler2D map;\n"
