@@ -4814,9 +4814,10 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
     var x: Int
     var y: Int
     # The target's height, and the point's depth in normalized device
-    # space, for `frag_coord`.
+    # space, for `frag_coord`; its width, for `screen_uv`.
     var height: Int
     var depth: Float32
+    var width: Int
 
     def __init__(
         out self,
@@ -4828,9 +4829,10 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         arrays: Pointer[DataArrayTextureStore, Self.origin],
         point: Pointer[RasterVertex, Self.origin],
         height: Int,
+        width: Int,
     ):
-        """Borrow a program and a point on a target `height` pixels high,
-        at the pixel (0, 0)."""
+        """Borrow a program and a point on a target `width` by `height`
+        pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
         self.textures = textures
@@ -4842,6 +4844,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         self.y = 0
         self.height = height
         self.depth = 0
+        self.width = width
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -4908,6 +4911,12 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
             1,
         )
 
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
+        )
+
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return where the pixel is in the point, GLSL's `gl_PointCoord`:
         the pixel's, its neighbor's for a derivative, or the center's for
@@ -4963,9 +4972,10 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
     var x: Int
     var y: Int
     # The target's height, and the pixel's depth in normalized device
-    # space, for `frag_coord`.
+    # space, for `frag_coord`; its width, for `screen_uv`.
     var height: Int
     var depth: Float32
+    var width: Int
 
     def __init__(
         out self,
@@ -4978,9 +4988,10 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         a: Pointer[RasterVertex, Self.origin],
         b: Pointer[RasterVertex, Self.origin],
         height: Int,
+        width: Int,
     ):
-        """Borrow a program and a segment on a target `height` pixels
-        high, at the pixel (0, 0)."""
+        """Borrow a program and a segment on a target `width` by `height`
+        pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
         self.textures = textures
@@ -4993,6 +5004,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         self.y = 0
         self.height = height
         self.depth = 0
+        self.width = width
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -5062,6 +5074,12 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
             Float32(self.height - y) - 0.5,
             self.depth * 0.5 + 0.5,
             1,
+        )
+
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
         )
 
     def corner(self, context: NodeContext) -> NodeInputs:
@@ -5218,6 +5236,7 @@ def rasterize_line(
         Pointer(to=a).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
         target.height,
+        target.width,
     )
     var masked = noded and has_output(nodes, MASK_NODE)
     # The rows this call owns, held inside the image. Clamped here rather
@@ -5588,6 +5607,7 @@ def rasterize_point(
         Pointer(to=arrays).unsafe_origin_cast[ImmutAnyOrigin](),
         Pointer(to=point).unsafe_origin_cast[ImmutAnyOrigin](),
         target.height,
+        target.width,
     )
     var masked = noded and has_output(nodes, MASK_NODE)
     var given = NodeInputs(

@@ -4158,9 +4158,11 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
     var base: Int
     var x: Int
     var y: Int
-    # The target's height, and the pixel's depth, for `frag_coord`.
+    # The target's height, and the pixel's depth, for `frag_coord`; its
+    # width, for `screen_uv`.
     var height: Int
     var depth: Float32
+    var width: Int
 
     def __init__(
         out self,
@@ -4175,10 +4177,11 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         y: Int,
         height: Int,
         depth: Float32,
+        width: Int,
     ):
         """Read the program that starts `start` floats into `fog`, for the
         segment whose first end's lanes start at `base`, at the pixel
-        (`x`, `y`) of a target `height` pixels high, at the depth
+        (`x`, `y`) of a target `width` by `height` pixels, at the depth
         `depth`."""
         self.fog = fog
         self.start = start
@@ -4191,6 +4194,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         self.y = y
         self.height = height
         self.depth = depth
+        self.width = width
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -4298,6 +4302,12 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             1,
         )
 
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
+        )
+
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one end's coordinates, world position, normal, color and
         custom floats, from its lanes: the first end for the first corner,
@@ -4350,9 +4360,11 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
     var base: Int
     var x: Int
     var y: Int
-    # The target's height, and the point's depth, for `frag_coord`.
+    # The target's height, and the point's depth, for `frag_coord`; its
+    # width, for `screen_uv`.
     var height: Int
     var depth: Float32
+    var width: Int
 
     def __init__(
         out self,
@@ -4367,10 +4379,11 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         y: Int,
         height: Int,
         depth: Float32,
+        width: Int,
     ):
         """Read the program that starts `start` floats into `fog`, for the
         point whose lanes start at `base`, at the pixel (`x`, `y`) of a
-        target `height` pixels high, at the depth `depth`."""
+        target `width` by `height` pixels, at the depth `depth`."""
         self.fog = fog
         self.start = start
         self.texels = texels
@@ -4382,6 +4395,7 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         self.y = y
         self.height = height
         self.depth = depth
+        self.width = width
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -4479,6 +4493,12 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
             Float32(self.height - y) - 0.5,
             self.depth * 0.5 + 0.5,
             1,
+        )
+
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
         )
 
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
@@ -4810,6 +4830,7 @@ def rasterize_kernel(
                     y,
                     Int(height),
                     z,
+                    Int(width),
                 )
                 var point_masked = point_noded and has_output(
                     point_nodes, MASK_NODE
@@ -5127,6 +5148,7 @@ def rasterize_kernel(
                     y,
                     Int(height),
                     az + (bz - az) * share,
+                    Int(width),
                 )
                 var line_given = here_inputs(
                     line_nodes, mode == Int32(SHADE_TEXTURE.value)
