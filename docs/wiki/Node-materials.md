@@ -283,6 +283,7 @@ A varying that the vertex shader writes becomes a `varying` node. A corner keeps
 | `(modelViewMatrix * vec4(position, 1.0)).xyz` | `position_view()` |
 | `normalMatrix * normal` | `normal_view()`, made unit length |
 | `modelMatrix * vec4(normal, 0.0)` | `normal_world()` with a zero `w` |
+| `mat3(modelMatrix) * normal`, and the same through `mat3(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz)` | `normal_world()` |
 | `viewMatrix * v`, `cameraPosition` | `camera_view_matrix()`, `camera_position()` |
 
 The world and view positions are of the point that `gl_Position` draws.
@@ -343,7 +344,7 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - A matrix times a matrix of another size, and an assignment to a local matrix.
 - A sampler in a local variable, and a sampler array's index that is not a constant.
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
-- A column of one of these or of `viewMatrix`, and a matrix constructor that reads one.
+- A column of one of these or of `viewMatrix`, and a matrix constructor that reads one, but for the forms of `mat3(modelMatrix)` above.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
 - `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
