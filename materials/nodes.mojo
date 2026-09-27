@@ -194,7 +194,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_TEXTURE_LEVEL.value
+            and self.value <= NODE_TEXTURE_SIZE.value
         )
 
 
@@ -335,6 +335,11 @@ comptime NODE_FRONT_FACING = NodeKind(96)
 # `textureLod`: `NODE_TEXTURE` with no footprint. See
 # `NodeSource.sample_level`.
 comptime NODE_TEXTURE_LEVEL = NodeKind(97)
+# A texel by its column and row, and a texture level's size: GLSL's
+# `texelFetch` and `textureSize`, TSL's `textureLoad` and `textureSize`.
+# See `NodeSource.fetch` and `NodeSource.size`.
+comptime NODE_TEXEL_FETCH = NodeKind(98)
+comptime NODE_TEXTURE_SIZE = NodeKind(99)
 
 
 @fieldwise_init
@@ -1286,6 +1291,61 @@ struct NodeGraph(Copyable, Movable):
                 texture, `uv` is not a `vec2`, or `level` is not a `float`.
         """
         return self._at_level(self.texture(sampler, uv), level)
+
+    def texture_load(
+        mut self, sampler: NodeRef, at: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return the texel of a texture uniform at a column and a row, a
+        linear `vec4` with straight alpha: TSL's `textureLoad`, GLSL's
+        `texelFetch`. A coordinate outside the image wraps, and a level
+        outside the chain is held inside it.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            at: The column and the row, a `vec2` of whole numbers.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, `at` is not a `vec2`, or `level` is not a `float`.
+        """
+        var texel = self._at_level(self.texture(sampler, at), level)
+        self._kinds[texel.value] = NODE_TEXEL_FETCH
+        return texel
+
+    def texture_size(mut self, sampler: NodeRef, level: NodeRef) raises -> NodeRef:
+        """Return a texture uniform's width and height at a level, a
+        `vec2`: TSL's `textureSize`, GLSL's `textureSize`.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, or `level` is not a `float`.
+        """
+        self._check(sampler)
+        self._check(level)
+        if self._types[sampler.value] != NODE_SAMPLER:
+            raise Error(
+                "A texture's size is a texture's, not a "
+                + self._types[sampler.value].name()
+            )
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+        return self._add(
+            NODE_TEXTURE_SIZE, NODE_VEC2, level.value, sampler.value
+        )
 
     def _at_level(mut self, texel: NodeRef, level: NodeRef) raises -> NodeRef:
         """Turn a texture node just added, which nothing reads yet, into
@@ -3985,6 +4045,8 @@ struct NodeGraph(Copyable, Movable):
                 (_is_attribute(kind) and not local)
                 or kind == NODE_TEXTURE
                 or kind == NODE_TEXTURE_LEVEL
+                or kind == NODE_TEXEL_FETCH
+                or kind == NODE_TEXTURE_SIZE
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -4386,6 +4448,8 @@ def _children(
     if corner and (
         kind == NODE_TEXTURE
         or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
         or kind == NODE_DFDX
         or kind == NODE_DFDY
     ):
@@ -4437,7 +4501,12 @@ def _emit(
     if kind == NODE_CONSTANT or kind == NODE_UNIFORM:
         pooled = pool.place(graph, node)
         immediate = 0
-    elif kind == NODE_TEXTURE or kind == NODE_TEXTURE_LEVEL:
+    elif (
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
+    ):
         pooled = pool.texture(graph, node)
         immediate = 0
     elif kind == NODE_VARYING:
@@ -4885,6 +4954,33 @@ trait NodeSource:
         """
         ...
 
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, GLSL's `texelFetch`.
+
+        Args:
+            slot: The texture's id.
+            x: The column.
+            y: The row, counted as `v` counts.
+            level: The mip level.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        ...
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a texture level's width and height, GLSL's
+        `textureSize`.
+
+        Args:
+            slot: The texture's id.
+            level: The mip level.
+
+        Returns:
+            The width and the height, then zeros.
+        """
+        ...
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the perspective-correct weight of each corner at the
         fragment, the pixel to its right, or the pixel above it: what
@@ -5031,6 +5127,32 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
             Opaque white.
         """
         return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return opaque white: there is no surface to read a texture on.
+
+        Args:
+            slot: The texture's id, not read.
+            x: The column, not read.
+            y: The row, not read.
+            level: The mip level, not read.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return zeros: there is no texture here.
+
+        Args:
+            slot: The texture's id, not read.
+            level: The mip level, not read.
+
+        Returns:
+            Zeros.
+        """
+        return Lanes(0)
 
     def shares(self, context: NodeContext) -> Lanes:
         """Return all the weight on the first corner: there is no triangle.
@@ -5261,6 +5383,15 @@ def _leaf[
             Int(source.word(Int(immediate))), x[0], x[1], z[0]
         )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXEL_FETCH.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.fetch(
+            Int(source.word(Int(immediate))), Int(x[0]), Int(x[1]), Int(z[0])
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_SIZE.value:
+        return source.size(Int(source.word(Int(immediate))), Int(x[0]))
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
     if op == NODE_FRAG_COORD.value:
@@ -5912,6 +6043,8 @@ def run_nodes[
             or op == NODE_FRAG_COORD.value
             or op == NODE_FRONT_FACING.value
             or op == NODE_TEXTURE_LEVEL.value
+            or op == NODE_TEXEL_FETCH.value
+            or op == NODE_TEXTURE_SIZE.value
         ):
             registers[written] = _leaf(
                 source, op, x, z, immediate, third, inputs

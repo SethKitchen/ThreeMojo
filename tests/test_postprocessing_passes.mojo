@@ -967,6 +967,16 @@ def test_a_screen_source_reads_the_quad() raises:
         screen.sample_level(INPUT_SLOT, 0.25, 0.75, 2),
         FloatColor(1, 0, 0, 0.5),
     )
+    # A pixel by its column and its row from the bottom, held inside.
+    same_color(screen.fetch(INPUT_SLOT, 0, 1, 0), FloatColor(1, 0, 0, 0.5))
+    same_color(screen.fetch(INPUT_SLOT, -3, 9, 0), FloatColor(1, 0, 0, 0.5))
+    same_color(
+        screen.fetch(SAVED_SLOT, 0, 0, 0), FloatColor(0.2, 0.2, 0.2, 1)
+    )
+    same_color(screen.fetch(3, 0, 0, 0), FloatColor(1, 1, 1, 1))
+    near(screen.size(INPUT_SLOT, 0)[0], 2)
+    near(screen.size(SAVED_SLOT, 0)[1], 1)
+    near(screen.size(3, 0)[0], 0)
     var here = screen.shares(AT_FRAGMENT)
     near(here[1], 0.25)
     near(here[2], 0.75)
@@ -997,6 +1007,10 @@ def test_a_screen_source_reads_the_quad() raises:
     near(host.sample(0, 0.5, 0.5).r, 1)
     near(host.sample(0, 0.5, 0.5).g, 0)
     near(host.sample_level(0, 0.5, 0.5, 1).r, 1)
+    near(host.fetch(0, 1, 0, 0).r, 1)
+    same_color(host.fetch(INPUT_SLOT, 0, 1, 0), FloatColor(1, 0, 0, 0.5))
+    near(host.size(0, 0)[0], 2)
+    near(host.size(INPUT_SLOT, 0)[1], 2)
     same_color(
         host.sample_level(INPUT_SLOT, 0.25, 0.75, 1), FloatColor(1, 0, 0, 0.5)
     )

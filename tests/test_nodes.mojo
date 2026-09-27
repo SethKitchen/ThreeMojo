@@ -172,8 +172,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(98).is_valid())
-    assert_true(NodeKind(97).is_valid())
+    assert_false(NodeKind(100).is_valid())
+    assert_true(NodeKind(99).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -288,6 +288,14 @@ struct Checker(NodeSource):
         """Return the coordinate and the level as a color."""
         return FloatColor(u, v, level, 0.25)
 
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the weights `Corners` gives."""
         return Corners().shares(context)
@@ -351,6 +359,33 @@ def test_a_texture_reads_at_the_level_the_graph_gives() raises:
     )
     with assert_raises(contains="A varying runs once per corner"):
         _ = varied.compile()
+
+
+def test_a_texel_and_a_size_are_read_by_whole_numbers() raises:
+    var graph = NodeGraph()
+    var map = graph.texture_uniform("map", TextureId(2))
+    var texel = graph.texture_load(map, graph.vec2(3, 5), graph.float(1))
+    var size = graph.texture_size(map, graph.float(1))
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.swizzle(texel, "xy"), graph.swizzle(size, "x")]),
+    )
+    graph.set_output(OPACITY_NODE, graph.swizzle(texel, "a"))
+    var program = graph.compile()
+    var source = Checker(program)
+    # The checker gives the column, the row and the level as the color.
+    assert_lanes(run_nodes(source, COLOR_NODE, inputs(True)), 3, 5, 32)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(True))[0], 0.75)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(False))[0], 1)
+    var alone = ProgramSource(Pointer(to=program))
+    assert_equal(alone.fetch(0, 1, 2, 0).r, 1)
+    assert_equal(alone.size(0, 0)[0], 0)
+    var bad = NodeGraph()
+    with assert_raises(contains="A texture's size is a texture's, not a vec2"):
+        _ = bad.texture_size(bad.uv(), bad.float(0))
+    var named = bad.texture_uniform("map", TextureId(0))
+    with assert_raises(contains="A texture's level is a float, not a vec2"):
+        _ = bad.texture_size(named, bad.uv())
 
 
 def test_a_texture_reads_where_its_coordinate_says() raises:
@@ -924,6 +959,14 @@ struct Corners(NodeSource):
     ) -> FloatColor:
         """Return the coordinate and the level as a color."""
         return FloatColor(u, v, level, 0.25)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
 
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""

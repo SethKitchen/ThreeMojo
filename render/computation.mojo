@@ -189,6 +189,37 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
         """
         return self.sample(slot, u, v)
 
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a variable's texel by its column and row, wrapped by the
+        variable's modes.
+
+        Args:
+            slot: Which variable.
+            x: The column.
+            y: The row, from the bottom.
+            level: The mip level, not read: an image has one.
+
+        Returns:
+            The texel's four floats, as they are.
+        """
+        return self.sample(
+            slot,
+            (Float32(x) + 0.5) / Float32(self.size_x),
+            (Float32(y) + 0.5) / Float32(self.size_y),
+        )
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a variable's size, the computation's.
+
+        Args:
+            slot: Which variable, not read: all are one size.
+            level: The mip level, not read.
+
+        Returns:
+            The width and the height.
+        """
+        return Lanes(Float32(self.size_x), Float32(self.size_y), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the screen quad's weights at the texel, the texel to its
         right or the texel above it.

@@ -764,6 +764,39 @@ def row_coordinate(v: Float32, flip_y: Bool) -> Float32:
     return v
 
 
+def fetch_row(y: Int, height: Int, flip_y: Bool) -> Int:
+    """Return the stored row, from the top, that GLSL's `texelFetch` reads
+    for row `y`: the row `texture` reads at `v = (y + 0.5) / height`. Pure,
+    because the GPU kernel calls it too.
+
+    Args:
+        y: The row, counted as `v` counts.
+        height: The level's height in texels.
+        flip_y: Whether `v` counts up from the bottom row.
+
+    Returns:
+        The row from the top, possibly outside the image.
+    """
+    if flip_y:
+        return height - 1 - y
+    return y
+
+
+def fetch_level(level: Int, levels: Int) -> Int:
+    """Return the level GLSL's `texelFetch` and `textureSize` read: `level`
+    held inside the chain, where GLSL leaves one outside it undefined. Pure,
+    because the GPU kernel calls it too.
+
+    Args:
+        level: The level asked for.
+        levels: How many levels the chain has, at least one.
+
+    Returns:
+        The level read.
+    """
+    return max(0, min(level, levels - 1))
+
+
 def level_filter(level: Int, mag_filter: Filter, min_filter: Filter) -> Filter:
     """Return the filter a read of one named level uses inside it:
     `mag_filter` for the full-size image, and `min_filter`'s filter within
@@ -1508,6 +1541,43 @@ struct Texture(Movable):
         if not self._has_level(level):
             raise Error("No such mip level")
         return self._wrapped_texel(x, y, level)
+
+    def fetch(self, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the texel GLSL's `texelFetch` reads: column `x` and row
+        `y` of a level, counted as `u` and `v` count, wrapped, with the
+        level held inside the chain.
+
+        Args:
+            x: Column, possibly outside the image.
+            y: Row, possibly outside the image.
+            level: The level, held inside the chain.
+
+        Returns:
+            The color there, or opaque white if the texture is blank.
+        """
+        if self.is_blank():
+            return FloatColor(1.0, 1.0, 1.0, 1.0)
+        var at = fetch_level(level, self.levels)
+        return self._wrapped_texel(
+            x, fetch_row(y, self.level_height(at), self.flip_y), at
+        )
+
+    def fetch_size(self, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a level's width and height, GLSL's `textureSize`, with
+        the level held inside the chain.
+
+        Args:
+            level: The level.
+
+        Returns:
+            The width and the height, then zeros; zeros for a blank texture.
+        """
+        if self.is_blank():
+            return SIMD[DType.float32, 4](0)
+        var at = fetch_level(level, self.levels)
+        return SIMD[DType.float32, 4](
+            Float32(self.level_width(at)), Float32(self.level_height(at)), 0, 0
+        )
 
     def _wrapped_texel(self, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by index without checking that `level` exists.

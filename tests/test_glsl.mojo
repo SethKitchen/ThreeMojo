@@ -93,6 +93,14 @@ struct Corners(NodeSource):
         """Return the coordinate and the level as a color."""
         return FloatColor(u, v, level, 0.25)
 
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return the column, the row and the level as a color."""
+        return FloatColor(Float32(x), Float32(y), Float32(level), 0.75)
+
+    def size(self, slot: Int, level: Int) -> Lanes:
+        """Return a made-up size that halves by level."""
+        return Lanes(Float32(64 >> level), Float32(32 >> level), 0, 0)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""
         if context == AT_RIGHT:
@@ -285,6 +293,59 @@ def test_a_fragment_reads_where_it_is() raises:
         "uniform sampler2D map;\n"
         + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
         "textureLod() takes a sampler2D, a vec2 and a float",
+    )
+    # texelFetch and textureSize read by whole numbers.
+    assert_lanes(
+        value(
+            "texelFetch(map, ivec2(3, 5), 1).xyz", "uniform sampler2D map;"
+        ),
+        3,
+        5,
+        1,
+    )
+    assert_lanes(
+        value(
+            "vec3(vec2(textureSize(map, 1)), 0.0)", "uniform sampler2D map;"
+        ),
+        32,
+        16,
+        0,
+    )
+    var sampled = "uniform sampler2D map;\nvoid main() {\n"
+    var fragment_end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        sampled + "vec4 t = texelFetch(map, ivec2(1));" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(vec4(1.0), ivec2(1), 0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(map, ivec2(1), 0.0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "vec4 t = texelFetch(map, vec2(1.0), 0);" + fragment_end,
+        "texelFetch() takes a sampler2D, an ivec2 and an int",
+    )
+    refused(
+        sampled + "ivec2 s = textureSize(map, 0.0);" + fragment_end,
+        "textureSize() takes a sampler2D and an int",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "a vertex shader reads no texture in this port",
+        "uniform sampler2D map;\n"
+        + "void main() { ivec2 s = textureSize(map, 0);"
+        + " gl_Position = vec4(0.0); }\n",
+    )
+    refused(
+        "precision mediump float;\nuniform sampler2D map;\n"
+        + "void main() { gl_FragColor = texelFetch(map, ivec2(0), 0); }",
+        "texelFetch() is not in this shader's GLSL version",
+        "void main() { gl_Position = vec4(0.0); }",
+        raw=True,
     )
     # The made-up triangle is seen from its front.
     assert_equal(number("gl_FrontFacing ? 1.0 : 0.0"), 1)

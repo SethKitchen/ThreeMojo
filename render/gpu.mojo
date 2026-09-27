@@ -294,6 +294,8 @@ from render.texture import (
     Wrap,
     anisotropic_footprint,
     blend_texels,
+    fetch_level,
+    fetch_row,
     float_from_bytes,
     float_texel,
     level_filter,
@@ -1664,6 +1666,14 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
     ) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
         return FloatColor(1, 1, 1, 1)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return opaque white: a curve reads no texture."""
+        return FloatColor(1, 1, 1, 1)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return zeros: a curve reads no texture."""
+        return SIMD[DType.float32, 4](0)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return no weights: a curve has no triangle."""
@@ -3657,6 +3667,36 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             u,
             v,
             level,
+        )
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, as `Texture.fetch` reads
+        it."""
+        var image = _describe(
+            self.table.unsafe_origin_cast[MutAnyOrigin](), slot
+        )
+        var at = fetch_level(level, image.levels)
+        return _fetch(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            image,
+            x,
+            fetch_row(y, _extent(image.height, at), image.flip_y),
+            at,
+        )
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, as `Texture.fetch_size` gives
+        it."""
+        var image = _describe(
+            self.table.unsafe_origin_cast[MutAnyOrigin](), slot
+        )
+        var at = fetch_level(level, image.levels)
+        return SIMD[DType.float32, 4](
+            Float32(_extent(image.width, at)),
+            Float32(_extent(image.height, at)),
+            0,
+            0,
         )
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:

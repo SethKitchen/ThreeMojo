@@ -278,6 +278,8 @@ def test_a_custom_curve_is_a_node_program() raises:
     # A curve reads no texture and has no triangle.
     assert_equal(curve.sample(0, 0.5, 0.5).g, 1)
     assert_equal(curve.sample_level(0, 0.5, 0.5, 1).g, 1)
+    assert_equal(curve.fetch(0, 1, 1, 0).g, 1)
+    assert_equal(curve.size(0, 0)[0], 0)
     assert_equal(curve.shares(AT_RIGHT)[0], 0)
     assert_equal(curve.corner(CORNER_A).u, 0)
     assert_equal(curve.frag_coord(AT_RIGHT)[3], 1)

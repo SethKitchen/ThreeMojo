@@ -95,14 +95,15 @@ comptime _BUILTINS = (
     " clamp mix step smoothstep length distance dot cross normalize"
     " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
     " transpose determinant inverse textureLod lessThan lessThanEqual"
-    " greaterThan greaterThanEqual equal notEqual any all not "
+    " greaterThan greaterThanEqual equal notEqual any all not texelFetch"
+    " textureSize "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
     " floatBitsToUint intBitsToFloat uintBitsToFloat packSnorm2x16"
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
-    " textureSize textureOffset texelFetch"
+    " textureOffset"
     " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
     " texture2DProj textureCube "
 )
@@ -4007,6 +4008,8 @@ struct _Compiler(Movable):
             value.local = value.local or args[index].local
         if _listed(name, " texture texture2D textureLod "):
             return self.texture(name, args, nodes, value^)
+        if name == "texelFetch" or name == "textureSize":
+            return self.texel(name, args, nodes, value^)
         if _listed(name, " transpose determinant inverse "):
             if (
                 len(args) != 1
@@ -4111,6 +4114,49 @@ struct _Compiler(Movable):
             node = self.graph.not_equal(x, y)
         value.type = _BOOL.resized(a.width())
         value.node = node.value
+        return value^
+
+    def texel(
+        mut self,
+        name: String,
+        args: List[_Value],
+        nodes: List[NodeRef],
+        var value: _Value,
+    ) raises -> _Value:
+        """Return `texelFetch(s, ivec2, int)`, a texel by its column and row,
+        or `textureSize(s, int)`, a level's size, of GLSL ES 3.0.
+
+        Raises:
+            Error: If the shader is GLSL ES 1.0 or a vertex shader, or the
+                arguments are others.
+        """
+        if self.raw and self.version != 300:
+            raise self.error(name + "() is not in this shader's GLSL version")
+        if self.stage == _VERTEX:
+            raise self.error("a vertex shader reads no texture in this port")
+        var fetch = name == "texelFetch"
+        var count = 3 if fetch else 2
+        var fits = (
+            len(args) == count
+            and args[0].type == _SAMPLER
+            and args[count - 1].type == _TINT
+            and (not fetch or args[1].type == _IVEC2)
+        )
+        if not fits:
+            raise self.error(
+                name
+                + "() takes a sampler2D"
+                + (", an ivec2 and an int" if fetch else " and an int")
+            )
+        value.constant = False
+        if fetch:
+            value.type = _VEC4
+            value.node = self.graph.texture_load(
+                nodes[0], nodes[1], nodes[2]
+            ).value
+        else:
+            value.type = _IVEC2
+            value.node = self.graph.texture_size(nodes[0], nodes[1]).value
         return value^
 
     def texture(

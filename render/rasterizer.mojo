@@ -4558,6 +4558,14 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
         texture's two filters, as `Texture.sample_level` reads it."""
         return self.textures[].textures[slot].sample_level(u, v, level)
 
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by its column and row, `Texture.fetch`."""
+        return self.textures[].textures[slot].fetch(x, y, level)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        """Return a texture level's size, `Texture.fetch_size`."""
+        return self.textures[].textures[slot].fetch_size(level)
+
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own

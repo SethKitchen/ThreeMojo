@@ -109,7 +109,11 @@ def test_a_variable_reads_its_one_level_at_any_level() raises:
         """
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
-    gl_FragColor = textureLod( field, uv, 3.0 );
+    ivec2 texel = ivec2( gl_FragCoord.xy );
+    vec4 fetched = texelFetch( field, texel, 0 );
+    ivec2 size = textureSize( field, 0 );
+    gl_FragColor = textureLod( field, uv, 3.0 ) + fetched * 0.0
+        + vec4( vec2( size - size ), 0.0, 0.0 );
 }
 """,
         _starting_positions(computation),

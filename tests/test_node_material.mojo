@@ -425,6 +425,50 @@ def test_a_texture_node_reads_at_the_level_the_graph_says() raises:
         assert_almost_equal(shown.b, blues[level], atol=0.01)
 
 
+def test_a_texel_is_read_by_its_column_and_row() raises:
+    # The crossed texture again: row zero, counted as v counts, is the
+    # bottom row, blue then red.
+    var textures = TextureStore()
+    var map = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(255), 0, 0, 255, 0, 0, 255, 255,
+                0, 0, 255, 255, 255, 0, 0, 255,
+            ],
+            REPEAT,
+            BILINEAR,
+            LINEAR,
+        )
+    )
+    var graph = NodeGraph()
+    var named = graph.texture_uniform("map", map)
+    var left = graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
+    var right = graph.texture_load(named, graph.vec2(1, 0), graph.float(0))
+    var size = graph.texture_size(named, graph.float(1))
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                graph.swizzle(right, "r"),
+                graph.swizzle(size, "x"),
+                graph.swizzle(left, "b"),
+            ]
+        ),
+    )
+    var shown = draw(
+        big_triangle(NodeProgramId(0), BASIC),
+        one_program(graph^),
+        SHADE_TEXTURE,
+        textures,
+    ).color_at(2, 2)
+    assert_color(shown, 1, 1, 1)
+    var blank = Texture()
+    assert_equal(blank.fetch(0, 0, 0).g, 1)
+    assert_equal(blank.fetch_size(0)[0], 0)
+
+
 def test_bands_run_the_graph_as_one_thread_does() raises:
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.swizzle(graph.uv(), "yxy"))
