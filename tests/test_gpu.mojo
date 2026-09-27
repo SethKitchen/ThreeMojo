@@ -12049,6 +12049,77 @@ def test_both_backends_draw_a_glsl_shader_material_on_points_alike() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
+    # A line strip colored by a varying from an attribute, dashed by the
+    # fragment shader with its distance along, and tinted by its place.
+    if skipped_for_lack_of_a_gpu("both backends draw a glsl line alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var program = compile_shader_material(
+        """
+        attribute float heat;
+        varying float vHeat;
+        varying vec3 vWorld;
+        void main() {
+            vHeat = heat;
+            vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+        """,
+        """
+        varying float vHeat;
+        varying vec3 vWorld;
+        void main() {
+            if (fract(vWorld.x * 3.0) > 0.8) discard;
+            gl_FragColor = vec4(vHeat, 0.4 + 0.2 * vWorld.y, 1.0 - vHeat, 1.0)
+                + vec4(gl_FragCoord.xy * 0.002, 0.0, 0.0);
+        }
+        """,
+    )
+    var id = assets.programs.add(program^)
+    var strip = BufferGeometry()
+    var places = List[Float32]()
+    var heats = List[Float32]()
+    for index in range(7):
+        places.append(Float32(index) * 0.35 - 1.05)
+        places.append(Float32(index % 2) * 0.6 - 0.3)
+        places.append(Float32(index % 3) * -0.3)
+        heats.append(Float32(index) / 6)
+    strip.set_attribute(String(POSITION), BufferAttribute(places^, 3))
+    strip.set_attribute("heat", BufferAttribute(heats^, 1))
+    var shape = assets.geometries.add(strip^)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_line(Line(shape, assets.materials.add(shader_material(id)), node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.0, 0.0, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 30, "the line barely drew anything")
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
     # A texture uniform never set reads nothing the kernel can index.
     if skipped_for_lack_of_a_gpu("the gpu refuses an unset texture uniform"):
