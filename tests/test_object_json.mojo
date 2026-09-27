@@ -805,7 +805,12 @@ def test_a_node_material_round_trips_with_its_textures() raises:
         var nothing = Assets()
         _ = read_object_json(broken, nowhere, nothing)
     with assert_raises(contains="a node uniform's type is none there is"):
-        var strange = text.replace('"name":"tint","offset":', '"name":"tint","type":7,"offset":')
+        var at = 0
+        for index in range(len(original.uniform_names)):
+            if original.uniform_names[index] == "tint":
+                at = original.uniform_offsets[index]
+        var field = '"name":"tint","offset":' + String(at) + ',"type":'
+        var strange = text.replace(field + "3}", field + "7}")
         var nowhere = Scene()
         var nothing = Assets()
         _ = read_object_json(strange, nowhere, nothing)
