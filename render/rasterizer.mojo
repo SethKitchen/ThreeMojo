@@ -5273,9 +5273,7 @@ def rasterize_line(
                 )
             # Not covering this sample, WebGL's alpha to coverage, which
             # comes before the stencil and the depth tests.
-            if a.state.alpha_to_coverage and not alpha_covers(
-                shaded.a, x, y
-            ):
+            if a.state.alpha_to_coverage and not alpha_covers(shaded.a, x, y):
                 continue
             # The stencil and the depth tests, settled at once: a line
             # has no alpha test to discard it later.

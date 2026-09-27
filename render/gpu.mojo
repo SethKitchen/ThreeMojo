@@ -4232,9 +4232,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         """Return one end's coordinates, world position, normal, color and
         custom floats, from its lanes: the first end for the first corner,
         and the second for the others."""
-        var at = self.base + (
-            0 if context == CORNER_A else FLOATS_PER_VERTEX
-        )
+        var at = self.base + (0 if context == CORNER_A else FLOATS_PER_VERTEX)
         return NodeInputs(
             self.segments[unsafe_offset=at + LANE_U],
             self.segments[unsafe_offset=at + LANE_V],
@@ -5092,8 +5090,7 @@ def rasterize_kernel(
                         )[0]
                     if (
                         has_output(line_nodes, MASK_NODE)
-                        and run_nodes(line_nodes, MASK_NODE, line_given)[0]
-                        == 0
+                        and run_nodes(line_nodes, MASK_NODE, line_given)[0] == 0
                     ):
                         continue
                 # Not covering this sample, WebGL's alpha to coverage,

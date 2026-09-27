@@ -1788,7 +1788,9 @@ def test_the_statements_build_the_graph() raises:
     )
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
-    refused_statement("while (1.0) {}", "a while loop needs a bool, not a float")
+    refused_statement(
+        "while (1.0) {}", "a while loop needs a bool, not a float"
+    )
     refused_statement("break;", "break needs a loop or a switch to be in")
     refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
@@ -3047,7 +3049,9 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
 
 def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
     # Five times through, then the condition leaves.
-    var counted = "float s = 0.0; int i = 0;\nwhile (i < 5) { s += 1.0; i++; }\n"
+    var counted = (
+        "float s = 0.0; int i = 0;\nwhile (i < 5) { s += 1.0; i++; }\n"
+    )
     assert_equal(number("s", "", counted), 5)
     # A continue skips to the condition, and a break leaves: 1 + 3 + 4.
     var jumps = (
@@ -3062,7 +3066,9 @@ def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
     # A do loop runs once before it asks.
     var once = "float s = 0.0;\ndo { s += 1.0; } while (false);\n"
     assert_equal(number("s", "", once), 1)
-    var thrice = "float s = 0.0; int i = 0;\ndo { s += 1.0; i++; } while (i < 3);\n"
+    var thrice = (
+        "float s = 0.0; int i = 0;\ndo { s += 1.0; i++; } while (i < 3);\n"
+    )
     assert_equal(number("s", "", thrice), 3)
     # Its continue still reaches the condition: i runs to five, and the
     # last three times add one each.

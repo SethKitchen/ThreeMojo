@@ -11894,9 +11894,7 @@ def test_both_backends_run_a_graph_on_lines_alike() raises:
         )
         var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
         assert_true(drawn > 60, "the lines barely drew anything")
-        assert_equal(
-            count_mismatches(cpu, device.read_back(), tolerance=1), 0
-        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:

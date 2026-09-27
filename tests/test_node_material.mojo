@@ -567,9 +567,7 @@ def test_a_line_runs_a_graph_at_each_pixel() raises:
     # what is left.
     var graph = NodeGraph()
     var u = graph.swizzle(graph.uv(), "x")
-    graph.set_output(
-        COLOR_NODE, graph.join([u, graph.dfdx(u), graph.float(1)])
-    )
+    graph.set_output(COLOR_NODE, graph.join([u, graph.dfdx(u), graph.float(1)]))
     graph.set_output(MASK_NODE, graph.less_than(u, graph.float(0.5)))
     graph.set_output(OUTPUT_NODE, graph.mul(graph.lit(), graph.float(0.5)))
     var programs = one_program(graph^)
@@ -639,12 +637,12 @@ def test_a_point_runs_a_graph_at_each_pixel() raises:
     tinted.set_output(
         OUTPUT_NODE, tinted.mul(tinted.lit(), tinted.vec3(1, 0.5, 0.25))
     )
-    tinted.set_output(
-        COLOR_NODE, tinted.swizzle(tinted.frag_coord(), "xyz")
-    )
+    tinted.set_output(COLOR_NODE, tinted.swizzle(tinted.frag_coord(), "xyz"))
     var tints = one_program(tinted^)
     var tinted_target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
-    rasterize_point(point, tinted_target, SHADE_LIT, TextureStore(), programs=tints)
+    rasterize_point(
+        point, tinted_target, SHADE_LIT, TextureStore(), programs=tints
+    )
     assert_color(
         tinted_target.color_at(2, 2),
         2.5,
@@ -654,7 +652,9 @@ def test_a_point_runs_a_graph_at_each_pixel() raises:
     # A program that is not there is refused, and the uv view runs none.
     point.nodes = NodeProgramId(3)
     with assert_raises(contains="No node program has that id"):
-        rasterize_point(point, target, SHADE_LIT, TextureStore(), programs=programs)
+        rasterize_point(
+            point, target, SHADE_LIT, TextureStore(), programs=programs
+        )
     rasterize_point(point, target, SHADE_UV, TextureStore(), programs=programs)
 
 

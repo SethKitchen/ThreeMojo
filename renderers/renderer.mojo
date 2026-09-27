@@ -5512,10 +5512,10 @@ struct Renderer(Movable):
             # A position node moves the line past the bound of its
             # geometry, so such a line is not culled by it.
             var line_nodes = assets.materials.get(line.material).nodes
-            var line_moved = line_nodes != NO_NODES and _checked_nodes(
-                assets, line_nodes
-            ) != NO_NODES and assets.programs.get(line_nodes).has(
-                POSITION_NODE
+            var line_moved = (
+                line_nodes != NO_NODES
+                and _checked_nodes(assets, line_nodes) != NO_NODES
+                and assets.programs.get(line_nodes).has(POSITION_NODE)
             )
             if (
                 line.frustum_culled
@@ -6017,9 +6017,11 @@ struct Renderer(Movable):
             # geometry, so such points are not culled by it, as a mesh's
             # are not.
             var own_nodes = assets.materials.get(points.material).nodes
-            var moved = own_nodes != NO_NODES and _checked_nodes(
-                assets, own_nodes
-            ) != NO_NODES and assets.programs.get(own_nodes).has(POSITION_NODE)
+            var moved = (
+                own_nodes != NO_NODES
+                and _checked_nodes(assets, own_nodes) != NO_NODES
+                and assets.programs.get(own_nodes).has(POSITION_NODE)
+            )
             if (
                 points.frustum_culled
                 and not moved
