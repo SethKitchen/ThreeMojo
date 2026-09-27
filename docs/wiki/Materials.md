@@ -97,6 +97,7 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | Value | three.js | Meaning |
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
+| `GOURAUD` | `MeshGouraudMaterial` | `LAMBERT`, lit at the corners. See [Gouraud](#gouraud). |
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
 | `STANDARD` | `MeshStandardMaterial` | Lit by a roughness and a metalness, with a GGX lobe. See [Standard and physical](#standard-and-physical). |
 | `PHYSICAL` | `MeshPhysicalMaterial` | `STANDARD` with an index of refraction and a clear coat. |
@@ -105,7 +106,21 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray or packed. |
 | `DISTANCE` | `MeshDistanceMaterial` | How far the surface is from a reference point, packed. |
 
-`is_lit()` is true for the first four. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first five. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
+
+## Gouraud
+
+A Gouraud surface is a Lambert surface that is lit at its corners, as three.js's `MeshGouraudMaterial` is. The renderer lights each corner, and each fragment takes the light between its corners. Build one with the kind:
+
+```mojo
+var clay = assets.materials.add(Material(Color(200, 120, 90), kind=GOURAUD))
+```
+
+Each corner holds the direct light of the point, spot and directional lights, and the indirect light of the ambient light, the probes and the hemisphere lights. Each corner also holds the light of its far side, which a `DOUBLE_SIDE` or a `BACK_SIDE` surface shows from behind. The shadows darken the direct light per fragment, by the product of every casting light's shadow: three.js's `getShadowMask`. A spot light's map does not reach a corner, as it does not reach three.js's.
+
+A flat face under a directional light looks the same lit at its corners or at each fragment. A point light near a large face shows the difference: the light between the corners is flat, where a Lambert surface is brightest under the bulb.
+
+A Gouraud surface takes a map, an alpha map, an emissive map, a specular map, an environment map, an ambient occlusion map and a light map. It refuses a normal map, a bump map and a displacement map, which three.js's material does not have.
 
 ## Phong
 
