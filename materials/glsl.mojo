@@ -86,7 +86,7 @@ comptime _REFUSED_TYPES = (
     " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
     " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
-    " usampler2D struct "
+    " usampler2D "
 )
 comptime _BUILTINS = (
     " radians degrees sin cos tan asin acos atan pow exp log exp2 log2 sqrt"
@@ -509,6 +509,10 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
 
     var value: Int
 
+    def is_struct(self) -> Bool:
+        """Return True for a struct the shader declares."""
+        return self.value >= _STRUCT_BASE
+
     def is_valid(self) -> Bool:
         """Return True if this is one of the eleven types."""
         return (
@@ -537,6 +541,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "mat4"
         if self.value == 32:
             return "sampler2D"
+        if self.value >= _STRUCT_BASE:
+            return "struct"
         return "vec" + String(self.value)
 
     def width(self) -> Int:
@@ -584,6 +590,18 @@ comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
 comptime _NO_TYPE = _Type(-1)
+# A struct's type is this plus its place in the shader's list.
+comptime _STRUCT_BASE = 64
+
+
+@fieldwise_init
+struct _Struct(Copyable, Movable):
+    """A struct the shader declares: its name, and its fields' names and
+    types."""
+
+    var name: String
+    var names: List[String]
+    var types: List[_Type]
 
 
 def _type_named(name: String) -> _Type:
@@ -634,6 +652,9 @@ comptime _VIEW = _MATRIX + _WORLD_SPACE * 4 + _VIEW_SPACE
 comptime _MODEL_VIEW = _MATRIX + _LOCAL_SPACE * 4 + _VIEW_SPACE
 comptime _PROJECTION = _MATRIX + _VIEW_SPACE * 4 + _CLIP_SPACE
 comptime _CLIP = _POINT + _CLIP_SPACE
+# A struct's value: its `point` is where its fields are in the compiler's
+# bundles, and it has no node.
+comptime _BUNDLE = 7
 
 
 def _is_matrix_tag(tag: Int) -> Bool:
@@ -697,6 +718,9 @@ comptime _MATRIX_LOCAL = 9
 # An array: its value's type is the element's, its variable is its length,
 # and its elements are the symbols just before it, named `a[0]` and on.
 comptime _ARRAY = 10
+# A struct variable: its fields are the symbols just before it, named
+# `s.a` and on, a struct field's own fields before it.
+comptime _STRUCT_VAR = 11
 
 
 @fieldwise_init
@@ -891,6 +915,9 @@ struct _Compiler(Movable):
     # world or the view, which must be the same.
     var drawn: Int
     var seen: List[Int]
+    # The shader's structs, and the fields of each struct value.
+    var structs: List[_Struct]
+    var bundles: List[List[_Value]]
 
     def __init__(out self, raw: Bool):
         """Start a compiler with an empty graph."""
@@ -913,6 +940,8 @@ struct _Compiler(Movable):
         self.normal = -1
         self.drawn = -1
         self.seen = List[Int]()
+        self.structs = List[_Struct]()
+        self.bundles = List[List[_Value]]()
 
     # --- tokens -------------------------------------------------------------
 
@@ -1048,6 +1077,11 @@ struct _Compiler(Movable):
         Raises:
             Error: If the value is such a transform.
         """
+        if value.type.is_struct():
+            raise self.error(
+                "a " + self.type_name(value.type) + " is read a field at a time"
+                " here"
+            )
         if value.node < 0:
             raise self.error(
                 "this port knows modelMatrix, modelViewMatrix, normalMatrix"
@@ -1093,6 +1127,7 @@ struct _Compiler(Movable):
         self.symbols = List[_Symbol]()
         self.scopes = List[Int]()
         self.functions = List[_Function]()
+        self.structs = List[_Struct]()
         self.open()
         self.declare_outputs()
         if not self.raw:
@@ -1229,9 +1264,251 @@ struct _Compiler(Movable):
         if _listed(word, _REFUSED_TYPES):
             raise self.error("the type " + word + " is outside the subset")
         if not type.is_valid():
+            type = self.struct_named(word)
+        if not type.is_valid() and not type.is_struct():
             raise self.error("expected a type before " + self.describe())
         self.at += 1
         return type
+
+    def struct_named(self, name: String) -> _Type:
+        """Return the struct a name names, or `_NO_TYPE`."""
+        for index in range(len(self.structs)):
+            if self.structs[index].name == name:
+                return _Type(_STRUCT_BASE + index)
+        return _NO_TYPE
+
+    def type_name(self, type: _Type) -> String:
+        """Return a type's name, a struct's as the shader declares it."""
+        if type.is_struct():
+            return self.structs[type.value - _STRUCT_BASE].name
+        return type.name()
+
+    def struct_declaration(mut self) raises:
+        """Parse `struct S { T a; U b, c; };` at the top of a shader.
+
+        Raises:
+            Error: If the name is taken, a field is of a type outside the
+                subset or an array, or variables are declared with it.
+        """
+        self.at += 1
+        var name = self.name()
+        if _listed(name, _KEYWORDS):
+            raise self.error("the name " + name + " is a keyword")
+        if self.struct_named(name).is_struct():
+            raise self.error("the struct " + name + " is declared twice")
+        self.expect("{")
+        var names = List[String]()
+        var types = List[_Type]()
+        while not self.is_mark("}"):
+            if self.at_end():
+                raise self.error("a struct is never closed")
+            _ = self.qualifiers()
+            var type = self.type()
+            if not type.holds() and not type.is_struct():
+                raise self.error(
+                    "a field of type " + type.name() + " is outside the subset"
+                )
+            while True:
+                var field = self.name()
+                if self.is_mark("["):
+                    raise self.error("an array in a struct is outside the subset")
+                for index in range(len(names)):
+                    if names[index] == field:
+                        raise self.error(
+                            "the field " + field + " is declared twice"
+                        )
+                names.append(field)
+                types.append(type)
+                if not self.is_mark(","):
+                    break
+                self.at += 1
+            self.expect(";")
+        self.at += 1
+        if len(names) == 0:
+            raise self.error("a struct needs a field")
+        if not self.is_mark(";"):
+            raise self.error("declare a struct's variables apart from it")
+        self.at += 1
+        self.structs.append(_Struct(name, names^, types^))
+
+    def span(self, type: _Type) -> Int:
+        """Return how many symbols a variable of a type takes: one, or a
+        struct's own and its fields'."""
+        if not type.is_struct():
+            return 1
+        var total = 1
+        ref fields = self.structs[type.value - _STRUCT_BASE]
+        for index in range(len(fields.types)):
+            total += self.span(fields.types[index])
+        return total
+
+    def field_symbol(self, owner: Int, type: _Type, field: Int) -> Int:
+        """Return the symbol of a struct variable's field."""
+        ref fields = self.structs[type.value - _STRUCT_BASE]
+        var at = owner - (self.span(type) - 1)
+        for index in range(field):
+            at += self.span(fields.types[index])
+        return at + self.span(fields.types[field]) - 1
+
+    def bundle(mut self, type: _Type, var fields: List[_Value]) -> _Value:
+        """Return a struct value of its fields' values: constant where all
+        are, and local where any is."""
+        var value = _Value(
+            type, -1, True, False, 0, _BUNDLE, len(self.bundles), False, -1, ""
+        )
+        for index in range(len(fields)):
+            value.constant = value.constant and fields[index].constant
+            value.local = value.local or fields[index].local
+        self.bundles.append(fields^)
+        return value^
+
+    def declare_value(
+        mut self, name: String, type: _Type, kind: Int, given: _Value
+    ) raises:
+        """Declare a variable, a const or a uniform of a type with a value,
+        or with zeros where `given` has none: a struct as a symbol for each
+        field, then its own.
+
+        Raises:
+            Error: If a name is taken, or a uniform's type clashes with the
+                other shader's.
+        """
+        if type.is_struct():
+            var fields = self.structs[type.value - _STRUCT_BASE].copy()
+            for index in range(len(fields.names)):  # pragma: no branch
+                var part = _plain(fields.types[index], -1)
+                if given.tag == _BUNDLE:
+                    part = self.bundles[given.point][index].copy()
+                self.declare_value(
+                    name + "." + fields.names[index],
+                    fields.types[index],
+                    kind,
+                    part,
+                )
+            self.declare(_Symbol(name, _STRUCT_VAR, _plain(type, -1), -1, False))
+            return
+        if kind == _UNIFORM:
+            self.uniform(type, name)
+            return
+        var value = given.copy()
+        if value.node < 0:
+            value.node = self.zero(type)
+        var variable = -1
+        if kind == _LOCAL:
+            variable = self.graph.Var(self.node(value)).value
+            value.known = False
+            value.constant = False
+        value.symbol = -1
+        value.components = ""
+        value.tag = _PLAIN
+        self.declare(_Symbol(name, kind, value^, variable, False))
+
+    def struct_value(mut self, index: Int) raises -> _Value:
+        """Return a struct variable's value, which can be assigned."""
+        var type = self.symbols[index].value.type
+        var count = len(self.structs[type.value - _STRUCT_BASE].names)
+        var fields = List[_Value]()
+        for field in range(count):  # pragma: no branch
+            fields.append(self.value_of(self.field_symbol(index, type, field)))
+        var value = self.bundle(type, fields^)
+        value.symbol = index
+        return value^
+
+    def value_of(mut self, index: Int) raises -> _Value:
+        """Return the value a symbol holds here, a struct's or another."""
+        if self.symbols[index].kind == _STRUCT_VAR:
+            return self.struct_value(index)
+        return self.read_symbol(index)
+
+    def field(mut self, value: _Value, name: String) raises -> _Value:
+        """Return a struct's field: a variable's can be assigned.
+
+        Raises:
+            Error: If the struct has no such field.
+        """
+        var fields = self.structs[value.type.value - _STRUCT_BASE].copy()
+        for index in range(len(fields.names)):
+            if fields.names[index] != name:
+                continue
+            var owner = value.symbol
+            if owner >= 0 and self.symbols[owner].kind == _STRUCT_VAR:
+                return self.value_of(self.field_symbol(owner, value.type, index))
+            var part = self.bundles[value.point][index].copy()
+            part.symbol = -1
+            part.components = ""
+            return part^
+        raise self.error("a " + fields.name + " has no field " + name)
+
+    def choose(
+        mut self, condition: NodeRef, yes: _Value, no: _Value
+    ) raises -> _Value:
+        """Return `yes` where a condition holds and `no` elsewhere, a
+        struct's field by field."""
+        if not yes.type.is_struct():
+            var node = self.graph.select(
+                condition, self.node(yes), self.node(no)
+            )
+            return self.derived(yes.type, node, yes, no)
+        var fields = List[_Value]()
+        for index in range(len(self.bundles[yes.point])):  # pragma: no branch
+            var a = self.bundles[yes.point][index].copy()
+            var b = self.bundles[no.point][index].copy()
+            fields.append(self.choose(condition, a, b))
+        return self.bundle(yes.type, fields^)
+
+    def pick_value(
+        mut self, values: List[_Value], index: NodeRef
+    ) raises -> _Value:
+        """Return the value an index picks where the shader runs, the first
+        where it picks none, a struct's field by field."""
+        var picked = values[0].copy()
+        for at in range(1, len(values)):
+            picked = self.choose(
+                self.graph.equal(index, self.graph.float(Float32(at))),
+                values[at],
+                picked,
+            )
+        return picked^
+
+    def construct_struct(
+        mut self, type: _Type, args: List[_Value]
+    ) raises -> _Value:
+        """Return a struct constructor's value: one argument for each
+        field, of its type.
+
+        Raises:
+            Error: If the arguments are too few, too many or mistyped.
+        """
+        var fields = self.structs[type.value - _STRUCT_BASE].copy()
+        if len(args) != len(fields.names):
+            raise self.error(
+                "a "
+                + fields.name
+                + " is made of "
+                + String(len(fields.names))
+                + " values, not "
+                + String(len(args))
+            )
+        var parts = List[_Value]()
+        for index in range(len(args)):  # pragma: no branch
+            if args[index].type != fields.types[index]:
+                raise self.error(
+                    "a "
+                    + fields.name
+                    + "'s "
+                    + fields.names[index]
+                    + " is a "
+                    + self.type_name(fields.types[index])
+                    + ", not a "
+                    + self.type_name(args[index].type)
+                )
+            if not args[index].type.is_struct():
+                _ = self.node(args[index])
+            var part = args[index].copy()
+            part.symbol = -1
+            part.components = ""
+            parts.append(part^)
+        return self.bundle(type, parts^)
 
     def global_declaration(mut self) raises:
         """Parse one declaration at the top of a shader.
@@ -1241,6 +1518,9 @@ struct _Compiler(Movable):
         """
         if self.is_mark(";"):
             self.at += 1
+            return
+        if self.is_word("struct"):
+            self.struct_declaration()
             return
         if self.is_word("precision"):
             self.at += 1
@@ -1285,7 +1565,9 @@ struct _Compiler(Movable):
             raise self.error(
                 "only a uniform, a const or a local variable can be an array"
             )
-        if storage == "uniform":
+        if type.is_struct():
+            self.global_struct(storage, constant, type, name)
+        elif storage == "uniform":
             self.uniform(type, name)
         elif storage != "":
             self.storage(storage, type, name)
@@ -1534,10 +1816,10 @@ struct _Compiler(Movable):
         Raises:
             Error: If the constructor is of another type or size.
         """
-        if self.peek() != type.name():
+        var named = self.type_name(type)
+        if self.peek() != named:
             raise self.error(
-                "an array of " + type.name() + " is given by " + type.name()
-                + "[](...)"
+                "an array of " + named + " is given by " + named + "[](...)"
             )
         self.at += 1
         var given = self.array_size(True)
@@ -1554,9 +1836,9 @@ struct _Compiler(Movable):
             if values[index].type != type:
                 raise self.error(
                     "cannot put a "
-                    + values[index].type.name()
+                    + self.type_name(values[index].type)
                     + " in an array of "
-                    + type.name()
+                    + named
                 )
         return values^
 
@@ -1570,7 +1852,12 @@ struct _Compiler(Movable):
         var size = self.array_size(not uniform)
         if uniform:
             for index in range(size):  # pragma: no branch
-                self.uniform(type, name + "[" + String(index) + "]")
+                self.declare_value(
+                    name + "[" + String(index) + "]",
+                    type,
+                    _UNIFORM,
+                    _plain(type, -1),
+                )
             self.declare_array(name, type, size)
             return
         if not self.is_mark("="):
@@ -1582,15 +1869,39 @@ struct _Compiler(Movable):
                 raise self.error(
                     "a const's value must be a constant expression"
                 )
-            var value = values[index].copy()
-            value.symbol = -1
-            value.components = ""
-            self.declare(
-                _Symbol(
-                    name + "[" + String(index) + "]", _CONST, value^, -1, False
-                )
+            self.declare_value(
+                name + "[" + String(index) + "]", type, _CONST, values[index]
             )
         self.declare_array(name, type, len(values))
+
+    def global_struct(
+        mut self, storage: String, constant: Bool, type: _Type, name: String
+    ) raises:
+        """Declare a uniform struct, each field a uniform named `s.a` as
+        three.js names it, or a `const` struct of a constant value.
+
+        Raises:
+            Error: If it is a varying or an attribute, or a const's value is
+                not constant.
+        """
+        if storage == "uniform":
+            self.declare_value(name, type, _UNIFORM, _plain(type, -1))
+            return
+        if storage != "" or not constant:
+            raise self.error(
+                "a " + self.type_name(type) + " is a uniform, a const or a"
+                " local variable"
+            )
+        self.expect("=")
+        var value = self.expression()
+        if value.type != type or not value.constant:
+            raise self.error(
+                "a const "
+                + self.type_name(type)
+                + "'s value must be a constant "
+                + self.type_name(type)
+            )
+        self.declare_value(name, type, _CONST, value)
 
     def declare_array(mut self, name: String, type: _Type, size: Int) raises:
         """Declare an array's name after its elements."""
@@ -1654,7 +1965,7 @@ struct _Compiler(Movable):
             modes.append(mode)
             _ = self.qualifiers()
             var type = self.type()
-            if not type.holds():
+            if not type.holds() and not type.is_struct():
                 raise self.error(
                     "a parameter of type "
                     + type.name()
@@ -1716,6 +2027,14 @@ struct _Compiler(Movable):
         self.returned.append(_plain(_VOID, -1))
         var called = self.functions[function].copy()
         for index in range(len(args)):
+            if args[index].type.is_struct():
+                var given = args[index].copy()
+                if called.modes[index] == _OUT:
+                    given = _plain(given.type, -1)
+                self.declare_value(
+                    called.names[index], given.type, _LOCAL, given
+                )
+                continue
             var start = args[index].node
             if called.modes[index] == _OUT:
                 # An out parameter starts at zeros, not at its argument.
@@ -1731,7 +2050,9 @@ struct _Compiler(Movable):
         self.loops = 0
         # A call is a frame of the graph's, for an early return, unless it
         # returns a matrix, which no register holds.
-        var framed = not called.result.is_matrix()
+        var framed = (
+            not called.result.is_matrix() and not called.result.is_struct()
+        )
         if framed:
             var frame = called.result if called.result != _VOID else _FLOAT
             self.graph.open_call(ValueType(frame.width()))
@@ -1817,6 +2138,8 @@ struct _Compiler(Movable):
                 self.graph.Break()
             else:
                 self.graph.Continue()
+        elif self.is_word("struct"):
+            raise self.error("a struct is declared outside every function")
         elif _listed(self.peek(), _REFUSED_STATEMENTS):
             raise self.error(self.peek() + " is outside the subset")
         elif self.starts_declaration():
@@ -1832,8 +2155,10 @@ struct _Compiler(Movable):
         var word = self.peek()
         if word == "const" or _is_precision(word):
             return True
-        var typed = _type_named(word).is_valid() or _listed(
-            word, _REFUSED_TYPES
+        var typed = (
+            _type_named(word).is_valid()
+            or _listed(word, _REFUSED_TYPES)
+            or self.struct_named(word).is_struct()
         )
         return typed and self.peek(1) != "("
 
@@ -1847,6 +2172,9 @@ struct _Compiler(Movable):
         var type = self.type()
         if type.is_matrix():
             self.matrix_declaration(type)
+            return
+        if type.is_struct():
+            self.struct_locals(type, constant)
             return
         if not type.holds():
             raise self.error(
@@ -1904,6 +2232,43 @@ struct _Compiler(Movable):
             self.at += 1
         self.expect(";")
 
+    def struct_locals(mut self, type: _Type, constant: Bool) raises:
+        """Parse `S a = e, b[2];`, each field of each name a variable.
+
+        Raises:
+            Error: If a value is of another type, or a const's is missing or
+                not constant.
+        """
+        while True:
+            var name = self.name()
+            if self.is_mark("["):
+                self.local_array(type, name, constant)
+            else:
+                var value = _plain(type, -1)
+                if self.is_mark("="):
+                    self.at += 1
+                    value = self.expression()
+                    if value.type != type:
+                        raise self.error(
+                            "cannot give a "
+                            + self.type_name(type)
+                            + " a "
+                            + self.type_name(value.type)
+                        )
+                    if constant and not value.constant:
+                        raise self.error(
+                            "a const's value must be a constant expression"
+                        )
+                elif constant:
+                    raise self.error("a const needs a value")
+                self.declare_value(
+                    name, type, _CONST if constant else _LOCAL, value
+                )
+            if not self.is_mark(","):
+                break
+            self.at += 1
+        self.expect(";")
+
     def local_array(mut self, type: _Type, name: String, constant: Bool) raises:
         """Parse a local array, `T a[n]` of zeros or `T a[n] = T[n](...)`,
         each element a variable.
@@ -1922,28 +2287,17 @@ struct _Compiler(Movable):
             raise self.error("an array needs its size or its elements")
         else:
             for _ in range(size):  # pragma: no branch
-                values.append(_plain(type, self.zero(type)))
+                values.append(_plain(type, -1))
         for index in range(len(values)):  # pragma: no branch
-            var value = values[index].copy()
-            if constant and not value.constant:
+            if constant and not values[index].constant:
                 raise self.error(
                     "a const's value must be a constant expression"
                 )
-            var variable = self.graph.Var(self.node(value)).value
-            value.symbol = -1
-            value.components = ""
-            value.tag = _PLAIN
-            if not constant:
-                value.known = False
-                value.constant = False
-            self.declare(
-                _Symbol(
-                    name + "[" + String(index) + "]",
-                    _CONST if constant else _LOCAL,
-                    value^,
-                    variable,
-                    False,
-                )
+            self.declare_value(
+                name + "[" + String(index) + "]",
+                type,
+                _CONST if constant else _LOCAL,
+                values[index],
             )
         self.declare_array(name, type, len(values))
 
@@ -2123,9 +2477,9 @@ struct _Compiler(Movable):
                 "the function "
                 + called.name
                 + " returns a "
-                + called.result.name()
+                + self.type_name(called.result)
                 + ", not a "
-                + value.type.name()
+                + self.type_name(value.type)
             )
         self.expect(";")
         if self.at != called.last or self.depth != 0:
@@ -2137,8 +2491,9 @@ struct _Compiler(Movable):
             ):
                 self.at -= 1
                 raise self.error(
-                    "a function that returns a matrix or a transform, and a"
-                    " vertex shader's main, cannot return early"
+                    "a function that returns a matrix, a struct or a"
+                    " transform, and a vertex shader's main, cannot return"
+                    " early"
                 )
             self.graph.Return(
                 NodeRef(value.node) if called.result != _VOID else self.graph.float(0)
@@ -2203,6 +2558,9 @@ struct _Compiler(Movable):
         if target.symbol < 0:
             raise self.error("that cannot be assigned")
         var kind = self.symbols[target.symbol].kind
+        if kind == _STRUCT_VAR:
+            self.assign_struct(target, value)
+            return
         if kind == _ARRAY:
             self.assign_element(target, value)
             return
@@ -2273,6 +2631,27 @@ struct _Compiler(Movable):
             else:
                 parts.append(self.graph.swizzle(node, _letter("xyzw", found)))
         return self.graph.join(parts)
+
+    def assign_struct(mut self, target: _Value, value: _Value) raises:
+        """Make a struct variable hold a struct's value, field by field.
+
+        Raises:
+            Error: If the types differ, or a field cannot be assigned.
+        """
+        if value.type != target.type:
+            raise self.error(
+                "cannot assign a "
+                + self.type_name(value.type)
+                + " to a "
+                + self.type_name(target.type)
+            )
+        var count = len(self.structs[target.type.value - _STRUCT_BASE].names)
+        for index in range(count):  # pragma: no branch
+            var into = self.value_of(
+                self.field_symbol(target.symbol, target.type, index)
+            )
+            var part = self.bundles[value.point][index].copy()
+            self.assign(into, part)
 
     def assign_element(mut self, target: _Value, value: _Value) raises:
         """Write the element of an array that an index picks where the
@@ -2382,10 +2761,7 @@ struct _Compiler(Movable):
                 + " and a "
                 + no.type.name()
             )
-        var node = self.graph.select(
-            NodeRef(condition.node), self.node(yes), self.node(no)
-        )
-        var value = self.derived(yes.type, node, yes, no)
+        var value = self.choose(NodeRef(condition.node), yes, no)
         value.constant = value.constant and condition.constant
         value.local = value.local or condition.local
         return value^
@@ -2796,7 +3172,10 @@ struct _Compiler(Movable):
         while True:
             if self.is_mark("."):
                 self.at += 1
-                value = self.swizzle(value, self.name())
+                if value.type.is_struct():
+                    value = self.field(value, self.name())
+                else:
+                    value = self.swizzle(value, self.name())
             elif self.is_mark("["):
                 self.at += 1
                 var index = self.expression()
@@ -2988,7 +3367,7 @@ struct _Compiler(Movable):
             raise self.error("the name " + name + " is not declared")
         if self.symbols[index].kind == _ARRAY:
             return self.element(index)
-        return self.read_symbol(index)
+        return self.value_of(index)
 
     def element(mut self, array: Int) raises -> _Value:
         """Parse `a[i]` or `a.length()` after an array's name: the element
@@ -3000,7 +3379,10 @@ struct _Compiler(Movable):
                 not an int.
         """
         var size = self.symbols[array].variable
-        var first = array - size
+        var type = self.symbols[array].value.type
+        var span = self.span(type)
+        # Element i's own symbol, after its fields.
+        var first = array - size * span + span - 1
         if self.is_mark(".") and self.peek(1) == "length":
             self.at += 2
             self.expect("(")
@@ -3016,21 +3398,18 @@ struct _Compiler(Movable):
         if index.known:
             if index.number < 0 or index.number >= Float64(size):
                 raise self.error("the index is outside the array")
-            return self.read_symbol(first + Int(index.number))
-        if self.symbols[array].value.type == _SAMPLER:
+            return self.value_of(first + Int(index.number) * span)
+        if type == _SAMPLER:
             raise self.error("an array of samplers is indexed by a constant")
-        var nodes = List[NodeRef]()
-        var value = self.read_symbol(first)
+        var values = List[_Value]()
         for at in range(size):  # pragma: no branch
-            var one = self.read_symbol(first + at)
-            nodes.append(self.node(one))
-            value.constant = value.constant and one.constant
-            value.local = value.local or one.local
-        value.node = self.pick(nodes, self.node(index)).value
+            values.append(self.value_of(first + at * span))
+        var value = self.pick_value(values, self.node(index))
         value.constant = value.constant and index.constant
         value.local = value.local or index.local
-        value.known = False
-        value.tag = _PLAIN
+        if type.is_struct():
+            # A struct picked where the shader runs is read, not written.
+            return value^
         value.symbol = array
         value.point = index.node
         return value^
@@ -3077,6 +3456,9 @@ struct _Compiler(Movable):
         var type = _type_named(name)
         if type.is_valid():
             return self.construct(type, self.arguments())
+        var named = self.struct_named(name)
+        if named.is_struct():
+            return self.construct_struct(named, self.arguments())
         if _listed(name, _BUILTINS):
             return self.builtin_call(name, self.arguments())
         for index in range(len(self.functions)):
@@ -3120,7 +3502,8 @@ struct _Compiler(Movable):
                     + called.name
                     + " is given back: it must be a variable"
                 )
-            _ = self.node(args[arg])
+            if not args[arg].type.is_struct():
+                _ = self.node(args[arg])
         var result = self.inline(index, args)
         for arg in range(len(args)):
             result.local = result.local or args[arg].local
@@ -3625,6 +4008,8 @@ def _kind_name(kind: Int) -> String:
         return "a local matrix, which is given its value once"
     if kind == _ARRAY:
         return "an array"
+    if kind == _STRUCT_VAR:
+        return "a struct"
     return "a built-in transform"
 
 

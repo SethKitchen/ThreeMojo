@@ -1712,9 +1712,8 @@ def test_the_declarations_at_the_top_of_a_shader() raises:
         "const float g = 1;\nvoid main() {}", "cannot give a const float a int"
     )
     refused("const float g[2];\nvoid main() {}", "a const needs a value")
-    refused(
-        "struct S { float x; };\nvoid main() {}",
-        "the type struct is outside the subset",
+    refused_statement(
+        "struct T { float x; };", "a struct is declared outside every function"
     )
     refused("layout(location = 0 out vec4 c;", "a layout is never closed")
     refused("uniform float;\nvoid main() {}", "expected a name before ';'")
@@ -2182,6 +2181,164 @@ def test_out_and_inout_parameters_give_their_values_back() raises:
     )
 
 
+comptime LIGHT = "struct Light { vec3 color; float power; };\n"
+
+
+def test_structs_are_their_fields() raises:
+    var before = (
+        LIGHT
+        + "struct Lamp { Light light; vec2 place; };\n"
+        + "Light brighter(Light l, float by) { l.power *= by; return l; }\n"
+        + "void dim(inout Lamp lamp) { lamp.light.power = 0.5; }\n"
+    )
+    var body = (
+        "Light a = Light(vec3(1.0, 0.5, 0.25), 2.0);\n"
+        + "Light b = brighter(a, 3.0);\n"
+        + "Lamp lamp = Lamp(a, vec2(1.0, 2.0));\n"
+        + "dim(lamp);\n"
+        + "Light c; c = b; c.color.g = 0.0;\n"
+    )
+    assert_lanes(
+        value("vec3(b.power, lamp.light.power, lamp.place.y)", before, body),
+        6,
+        0.5,
+        2,
+    )
+    assert_lanes(value("c.color", before, body), 1, 0, 0.25)
+    # ?: chooses field by field, and an index picks a struct where it runs.
+    var pairs = (
+        "Light pair[2] = Light[2](Light(vec3(1.0), 1.0), Light(vec3(2.0), 2.0));\n"
+        + "int k = 1;\n"
+        + "Light chosen = k > 0 ? pair[1] : pair[0];\n"
+        + "pair[0].power = 5.0;\n"
+        + "Light zeros[1];\n"
+    )
+    assert_lanes(
+        value(
+            "vec3(chosen.power, pair[k].power, pair[0].power + zeros[0].power)",
+            LIGHT,
+            pairs,
+        ),
+        2,
+        2,
+        5,
+    )
+    # A const struct, and its field read through parentheses.
+    assert_lanes(
+        value(
+            "vec3((K).power, K.color.y, 0.0)",
+            LIGHT + "const Light K = Light(vec3(1.0, 3.0, 1.0), 4.0);\n",
+            "const Light L = Light(vec3(0.0), 1.0);\n",
+        ),
+        4,
+        3,
+        0,
+    )
+    # A uniform struct's fields are uniforms named as three.js names them.
+    var program = compile_shader_material(
+        VERTEX,
+        LIGHT
+        + "uniform Light light;\n"
+        + "uniform Light lights[2];\n"
+        + "void main() {\n"
+        + "    gl_FragColor = vec4(light.color * light.power + lights[1].color, 1.0);\n"
+        + "}\n",
+    )
+    program.set_uniform("light.color", Vector3(1, 2, 3))
+    program.set_uniform("light.power", Float32(2))
+    program.set_uniform("lights[1].color", Vector3(1, 1, 1))
+    assert_lanes(run(program), 3, 5, 7)
+    refused(
+        LIGHT + LIGHT + WHITE, "the struct Light is declared twice"
+    )
+    refused("struct float { float x; };\n" + WHITE, "the name float is a keyword")
+    refused(
+        "struct S { float x; } s;\n" + WHITE,
+        "declare a struct's variables apart from it",
+    )
+    refused("struct S { };\n" + WHITE, "a struct needs a field")
+    refused(
+        "struct S { float x, x; };\n" + WHITE, "the field x is declared twice"
+    )
+    refused(
+        "struct S { float x[2]; };\n" + WHITE,
+        "an array in a struct is outside the subset",
+    )
+    refused(
+        "struct S { sampler2D s; };\n" + WHITE,
+        "a field of type sampler2D is outside the subset",
+    )
+    refused("struct S { float x;", "a struct is never closed")
+    var main = "void main() {\n"
+    var end = "\n    gl_FragColor = vec4(1.0);\n}\n"
+    refused(
+        LIGHT + main + "Light l; float p = l.size;" + end,
+        "a Light has no field size",
+    )
+    refused(
+        LIGHT + main + "Light l = Light(vec3(1.0));" + end,
+        "a Light is made of 2 values, not 1",
+    )
+    refused(
+        LIGHT + main + "Light l = Light(vec3(1.0), 1);" + end,
+        "a Light's power is a float, not a int",
+    )
+    refused(
+        LIGHT + main + "Light l; float p = length(l);" + end,
+        "a Light is read a field at a time here",
+    )
+    refused(
+        LIGHT + "uniform Light u;\n" + main + "u.power = 1.0;" + end,
+        "cannot assign u.power: it is a uniform",
+    )
+    refused(
+        LIGHT
+        + "struct Dark { float power; };\n"
+        + main
+        + "Light l; Dark d; l = d;"
+        + end,
+        "cannot assign a Dark to a Light",
+    )
+    refused(
+        LIGHT
+        + "struct Dark { float power; };\n"
+        + main
+        + "Light l = Dark(1.0);"
+        + end,
+        "cannot give a Light a Dark",
+    )
+    refused(LIGHT + main + "const Light l;" + end, "a const needs a value")
+    refused(
+        LIGHT + main + "float u = 1.0; const Light l = Light(vec3(u), 1.0);" + end,
+        "a const's value must be a constant expression",
+    )
+    refused(
+        LIGHT + "varying Light l;\n" + WHITE,
+        "a Light is a uniform, a const or a local variable",
+    )
+    refused(
+        LIGHT + "uniform float u;\nconst Light l = Light(vec3(u), 1.0);\n" + WHITE,
+        "a const Light's value must be a constant Light",
+    )
+    refused(
+        LIGHT
+        + "Light f() { if (true) { return Light(vec3(1.0), 1.0); }"
+        + " return Light(vec3(0.0), 0.0); }\n"
+        + main
+        + "Light l = f();"
+        + end,
+        "returns a matrix, a struct or a transform",
+    )
+    refused(
+        LIGHT + main + "Light p[2]; int k = 0; p[k].power = 1.0;" + end,
+        "that cannot be assigned",
+    )
+    refused(
+        LIGHT + "float f() { return 1.0; }\n" + main + "Light l = f();" + end,
+        "cannot give a Light a float",
+    )
+
+
 def test_break_continue_and_an_early_return_are_read() raises:
     # Odd numbers skipped, and the loop left past seven: 0 + 2 + 4 + 6.
     var loop = (
@@ -2260,7 +2417,7 @@ def test_break_continue_and_an_early_return_are_read() raises:
     # A transform known only as a step cannot return early either.
     refused(
         "void main() { gl_FragColor = vec4(1.0); }",
-        "returns a matrix or a transform",
+        "returns a matrix, a struct or a transform",
         vertex=(
             "vec4 place() {\n"
             + "    if (true) { return modelViewMatrix * vec4(position, 1.0); }\n"
