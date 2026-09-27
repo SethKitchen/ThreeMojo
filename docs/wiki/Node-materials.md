@@ -63,6 +63,8 @@ program.set_texture("map", texture)
 var card = assets.materials.add(shader_material(assets.programs.add(program^)))
 ```
 
+Pass three.js's `material.defines` as `defines`, a list of `NAME` or `NAME value`. Each is a `#define` in both shaders before their first line, so an error still names the author's line.
+
 The compiler lexes, parses and type checks the source, and builds the graph as it parses. `shader_graph(vertex, fragment)` returns the graph before it is compiled. `compile_raw_shader_material` reads the shaders as three.js's `RawShaderMaterial` does. See [GLSL source](#glsl-source) for the subset.
 
 ### Draw a ShaderToy shader
