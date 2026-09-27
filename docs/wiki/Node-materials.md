@@ -276,8 +276,8 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2`, `vec3`, `vec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
-- Uniforms: every type above but `void`. An `int` or a `bool` uniform is a float that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
+- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
+- Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
@@ -288,6 +288,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
+- Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
 - Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D` and `textureLod`.
 - The preprocessor: `#version` in a raw shader, and object-like `#define`.
 
@@ -295,13 +296,13 @@ A local `mat3` or `mat4` gets its value where you declare it, and keeps that val
 
 An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
 
-An `int` is a whole number that a float holds. An `int` division drops the fraction toward zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
+An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
 ### What the GLSL compiler refuses
 
 - A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers.
+- The types `uint` and `uvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers.
 - Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes, parameters or fields, and an array read whole.
 - A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
 - A struct's field written through an index that is not constant.
