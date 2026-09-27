@@ -1469,6 +1469,7 @@ def _draws(
     receivers_cast: Bool = False,
     distance_casters: Bool = False,
     override: Optional[MaterialId] = None,
+    uv_meshes: List[Int] = List[Int](),
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -1557,8 +1558,13 @@ def _draws(
     )
     var known = List[Bool](length=assets.geometries.count(), fill=False)
     var one: List[Matrix4] = [Matrix4()]
+    # In texture space, only the meshes named, and none culled: the
+    # camera does not frame them.
+    var uv_space = len(uv_meshes) > 0
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
+        if uv_space and index not in uv_meshes:
+            continue
         if casters_only and not _casts(
             mesh.cast_shadow, mesh.receive_shadow, receivers_cast
         ):
@@ -1606,7 +1612,7 @@ def _draws(
                 wears[run],
                 geometry,
                 placing[0],
-                mesh.frustum_culled and not mesh.is_morphed(),
+                mesh.frustum_culled and not mesh.is_morphed() and not uv_space,
                 view,
                 visible,
                 frustum,
@@ -1631,7 +1637,7 @@ def _draws(
     # A light's view holds every other kind that casts, as three.js's
     # `renderObject` draws any mesh, line or points object whose
     # `castShadow` is set: a skinned mesh posed, each instance placed.
-    for index in range(len(scene.skinned_meshes)):
+    for index in range(0 if uv_space else len(scene.skinned_meshes)):
         ref skinned = scene.skinned_meshes[index]
         if casters_only and not _casts(
             skinned.cast_shadow, skinned.receive_shadow, receivers_cast
@@ -1660,7 +1666,7 @@ def _draws(
             len(skins) - 1,
             receive_shadow=skinned.receive_shadow,
         )
-    for index in range(len(scene.instanced_meshes)):
+    for index in range(0 if uv_space else len(scene.instanced_meshes)):
         ref group = scene.instanced_meshes[index]
         if casters_only and not _casts(
             group.cast_shadow, group.receive_shadow, receivers_cast
@@ -1687,7 +1693,7 @@ def _draws(
             colors=group.colors,
             morphs=group.morphs,
         )
-    for index in range(len(scene.batched_meshes)):
+    for index in range(0 if uv_space else len(scene.batched_meshes)):
         ref batch = scene.batched_meshes[index]
         if casters_only and not _casts(
             batch.cast_shadow, batch.receive_shadow, receivers_cast
@@ -1714,7 +1720,7 @@ def _draws(
     # translucent sprite falls between the translucent surfaces either
     # side of it. Culled by the sphere around the unit square carried by
     # the world matrix, three.js's `Sprite` geometry bound.
-    for index in range(len(scene.sprites)):
+    for index in range(0 if uv_space else len(scene.sprites)):
         if casters_only:
             continue
         ref sprite = scene.sprites[index]
@@ -2422,6 +2428,43 @@ struct _Paint(ImplicitlyCopyable):
             corner.scatter_power = scattering.power
             corner.scatter_scale = scattering.scale
         return corner^
+
+    def emit_in_uv_space(
+        self,
+        mut corners: List[RasterVertex],
+        a: ClipVertex,
+        b: ClipVertex,
+        c: ClipVertex,
+        viewport: Rect,
+        height: Int,
+    ):
+        """Append one triangle placed by its second texture coordinates
+        across the viewport, `u1` from its left edge and `v1` up from its
+        bottom one, at the middle depth with no perspective: three.js's
+        `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. It is lit as it
+        stands in the world, from both sides, unfogged.
+
+        Args:
+            corners: The frame's raster vertices, appended to.
+            a: The first corner, in camera space.
+            b: The second.
+            c: The third.
+            viewport: Where the texture's square is on the target.
+            height: The target's height, which the viewport's rows count
+                down from.
+        """
+        var left = Float32(viewport.x)
+        var top = Float32(viewport.top(height))
+        var wide = Float32(viewport.width)
+        var tall = Float32(viewport.height)
+        for vertex in [a, b, c]:
+            var corner = self.raster(vertex)
+            corner.x = left + vertex.u1 * wide
+            corner.y = top + (1 - vertex.v1) * tall
+            corner.z = 0
+            corner.inv_w = 1
+            corner.fog = False
+            corners.append(corner^)
 
     def emit(
         self,
@@ -4125,6 +4168,12 @@ struct Renderer(Movable):
     # Off, the frame draws over what the target holds; `clear` clears it
     # by hand.
     var auto_clear: Bool
+    # The scene's meshes, by their place in `scene.meshes`, to draw in the
+    # space of their second texture coordinates and nothing else: what
+    # `ProgressiveLightMap` draws its light map with, three.js's
+    # `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. Empty, the
+    # default, draws the scene through the camera.
+    var uv_space_meshes: List[Int]
     var auto_clear_color: Bool
     var auto_clear_depth: Bool
     var auto_clear_stencil: Bool
@@ -4179,6 +4228,7 @@ struct Renderer(Movable):
         self.depth_mode = STANDARD_DEPTH
         self.time = Duration(0.0, SECOND)
         self.auto_clear = True
+        self.uv_space_meshes = List[Int]()
         self.auto_clear_color = True
         self.auto_clear_depth = True
         self.auto_clear_stencil = True
@@ -4772,6 +4822,7 @@ struct Renderer(Movable):
             receivers_cast,
             distance_casters,
             self.drawn_override(scene),
+            List[Int]() if casters_only else self.uv_space_meshes.copy(),
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -4780,6 +4831,10 @@ struct Renderer(Movable):
         # corners: resolved once, when the first one is met.
         var gouraud_lights = Lighting.uniform()
         var gouraud_ready = False
+        # A light map's frame: the meshes named, in their own texture
+        # space; see `uv_space_meshes`. A light's view draws the casters
+        # as they stand.
+        var in_uv_space = len(self.uv_space_meshes) > 0 and not casters_only
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -5439,6 +5494,19 @@ struct Renderer(Movable):
                     _light_at_corner(
                         corner_c, gouraud_lights, normal_c, world_points[third]
                     )
+                # In texture space the triangle is placed by its second
+                # coordinates, whole: nothing clips it and neither side
+                # is culled.
+                if in_uv_space:
+                    paint.emit_in_uv_space(
+                        corners,
+                        corner_a,
+                        corner_b,
+                        corner_c,
+                        self.viewport,
+                        self.height,
+                    )
+                    continue
                 # A triangle wholly between the two planes is what the
                 # clipper would hand back untouched, so it is not sent
                 # through: the clipper builds four lists for every triangle
@@ -5575,6 +5643,8 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_lines` raises.
         """
+        if len(self.uv_space_meshes) > 0 and not casters_only:
+            return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
@@ -6077,6 +6147,8 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_points` raises.
         """
+        if len(self.uv_space_meshes) > 0 and not casters_only:
+            return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
