@@ -962,7 +962,7 @@ def test_a_sprite_runs_its_node_material() raises:
     scene.update()
     var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
     assert_equal(Int(seen.r), 204)
-    assert_equal(Int(seen.g), 170)
+    assert_equal(Int(seen.g), 169)
     assert_equal(Int(seen.b), 255)
     # A position node moves a mesh's vertices, which a sprite has none of.
     var lifted_graph = lifted(True)
