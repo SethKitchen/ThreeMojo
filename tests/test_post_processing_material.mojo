@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `MeshPostProcessingMaterial`: a physical plane under ambient
-light, dimmed where a pass's target is dark."""
+"""Tests for three.js's `MeshPostProcessingMaterial`: a physical plane
+under ambient light, dimmed where a pass's target is dark."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
