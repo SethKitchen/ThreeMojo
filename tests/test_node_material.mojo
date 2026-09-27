@@ -84,6 +84,7 @@ from render.rasterizer import (
     check_triangle_state,
     rasterize_all,
     rasterize_frame,
+    rasterize_point,
 )
 from render.srgb import LINEAR
 from render.target import RenderTarget
@@ -558,12 +559,62 @@ def test_a_line_or_a_point_runs_no_graph() raises:
         check_line_state(noded, end)
     with assert_raises(contains="A line runs no node graph"):
         check_line_state(end, noded)
-    var point = end
-    point.point_size = 2
+
+
+def test_a_point_runs_a_graph_at_each_pixel() raises:
+    # A point four pixels across at (4, 4): gl_PointCoord's x is red and
+    # its y green, its step across one pixel is blue, and the right half
+    # is thrown away.
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var across = graph.swizzle(place, "x")
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                across,
+                graph.swizzle(place, "y"),
+                graph.mul(graph.dfdx(across), graph.float(4)),
+            ]
+        ),
+    )
+    graph.set_output(MASK_NODE, graph.less_than(across, graph.float(0.5)))
+    graph.set_output(OPACITY_NODE, graph.float(0.5))
+    var programs = one_program(graph^)
+    var point = RasterVertex(4, 4, 0, 1, FloatColor(1.0, 1.0, 1.0), kind=BASIC)
+    point.point_size = 4
     check_point_state(point)
     point.nodes = NodeProgramId(0)
-    with assert_raises(contains="A point runs no node graph"):
-        check_point_state(point)
+    check_point_state(point)
+    var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_point(point, target, SHADE_LIT, TextureStore(), programs=programs)
+    assert_color(target.color_at(2, 2), 0.125, 0.125, 1)
+    assert_color(target.color_at(3, 5), 0.375, 0.875, 1)
+    # Thrown away where the mask is zero, and the opacity is not a blend
+    # the point asked for.
+    assert_color(target.color_at(4, 3), 0, 0, 0)
+    # The output node reads the finished color, fog and all.
+    var tinted = NodeGraph()
+    tinted.set_output(
+        OUTPUT_NODE, tinted.mul(tinted.lit(), tinted.vec3(1, 0.5, 0.25))
+    )
+    tinted.set_output(
+        COLOR_NODE, tinted.swizzle(tinted.frag_coord(), "xyz")
+    )
+    var tints = one_program(tinted^)
+    var tinted_target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_point(point, tinted_target, SHADE_LIT, TextureStore(), programs=tints)
+    assert_color(
+        tinted_target.color_at(2, 2),
+        2.5,
+        (Float32(SIZE) - 2.5) * 0.5,
+        (point.z * 0.5 + 0.5) * 0.25,
+    )
+    # A program that is not there is refused, and the uv view runs none.
+    point.nodes = NodeProgramId(3)
+    with assert_raises(contains="No node program has that id"):
+        rasterize_point(point, target, SHADE_LIT, TextureStore(), programs=programs)
+    rasterize_point(point, target, SHADE_UV, TextureStore(), programs=programs)
 
 
 # --- the mask, the ambient occlusion and the depth ----------------------------
