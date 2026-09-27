@@ -14,6 +14,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from geometries.plane import plane
 from lights.light import directional_light
+from lights.lighting import Lighting
 from lights.shadow import (
     CUBE_FACES,
     PCF_SHADOW_MAP,
@@ -356,6 +357,61 @@ def test_the_nearest_caster_is_the_one_the_light_sees() raises:
         var seen = seen_through(assets, panes(assets, paints, heights))
         assert_equal(seen[0], 1)
         assert_equal(seen[2], 0)
+
+
+def test_a_caster_behind_one_already_drawn_is_not_seen() raises:
+    # A see-through pane is drawn after the opaque one above it, and one
+    # whose mask and alpha test keep it still loses the depth test there.
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(MASK_NODE, graph.float(1))
+    graph.set_output(
+        CAST_SHADOW_NODE, graph.join([graph.vec3(0, 0, 1), graph.float(1)])
+    )
+    var behind = Material(Color(200, 200, 200))
+    behind.nodes = assets.programs.add(graph.compile())
+    behind.alpha_test = 0.1
+    behind.transparent = True
+    var seen = seen_through(
+        assets,
+        panes(
+            assets,
+            [casting(assets, 1, 0), behind^],
+            [Float32(2), Float32(1)],
+        ),
+    )
+    assert_equal(seen[0], 1)
+    assert_equal(seen[2], 0)
+    # And a point, the same way.
+    var dot_behind = a_dot(assets)
+    dot_behind.nodes = assets.programs.add(graph.compile())
+    dot_behind.alpha_test = 0.1
+    dot_behind.transparent = True
+    var drawn = drawn_texels(
+        assets,
+        dots(
+            assets,
+            [red_caster(assets, a_dot(assets)), dot_behind^],
+            [Float32(2), Float32(1)],
+        ),
+    )
+    assert_equal(len(drawn), 1)
+    assert_equal(drawn[0][0], 1)
+
+
+def test_a_surface_that_receives_no_shadow_is_lit_in_full() raises:
+    var assets = Assets()
+    var scene = a_shadowed_scene(
+        assets, Material(Color(200, 200, 200)), Material(Color(200, 60, 60))
+    )
+    var renderer = Renderer(8, 8)
+    var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
+    var under = Vector3(0, 0, 0)
+    var up = Vector3(0, 1, 0)
+    assert_equal(lighting.shadow_at(0, under, up, False), 1)
+    assert_equal(lighting.shadow_through(0, under, up, False).y, 1)
+    # Receiving, the block's shadow falls there.
+    assert_true(lighting.shadow_at(0, under, up, True) < 1)
 
 
 def test_a_red_pane_casts_a_red_shadow() raises:

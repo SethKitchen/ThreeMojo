@@ -992,6 +992,14 @@ def test_a_spot_map_is_a_picture_seen_through_the_frame() raises:
     # The normal bias moves the surface first: a meter to the right
     # crosses from the red column to the blue.
     var moved = SpotLightMap(0, TextureId(0), slide(), flat_frame(), 0.75)
+    # A copy, as a lighting of a light mask takes one, holds its own
+    # picture.
+    var copied = SpotLightMap(copy=moved)
+    assert_equal(copied.normal_bias, Float32(0.75))
+    assert_equal(
+        copied.tint(Vector3(-0.5, -0.5, 0), UP).x,
+        map.tint(Vector3(-0.5, -0.5, 0), UP).x,
+    )
     assert_equal(
         moved.tint(Vector3(-0.5, -0.5, 0), Vector3(1, 0, 0)).z, Float32(1)
     )

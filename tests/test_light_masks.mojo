@@ -48,6 +48,10 @@ def test_a_mask_names_the_lights_it_holds() raises:
     assert_false(mask.includes(70))
     assert_true(ALL_LIGHTS.includes(70))
     assert_true(ALL_LIGHTS.includes(3))
+    # A mask of no lights lights nothing.
+    var none = lights_of(List[Int]())
+    assert_true(none.is_valid())
+    assert_false(none.includes(0))
     with assert_raises(contains="the first 64 lights"):
         _ = lights_of([-1])
     with assert_raises(contains="the first 64 lights"):
