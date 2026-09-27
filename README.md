@@ -136,11 +136,11 @@ The port is not at parity with three.js yet. 197 features are ported and 6 are o
 
 - [ ] Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
 - [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
-- [ ] A wider GLSL subset, and shader materials on points, lines and sprites [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 
 <details>
-<summary>Ported: 30</summary>
+<summary>Ported: 31</summary>
 
+- [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): int, bool, matrix, array and struct types, loops, samplers, built-ins, custom attributes and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
 - [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)
