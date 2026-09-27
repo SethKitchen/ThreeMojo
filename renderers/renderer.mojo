@@ -171,6 +171,7 @@ from materials.material import (
     DEFAULT_LINE_WIDTH,
     DOUBLE_SIDE,
     FRONT_SIDE,
+    GOURAUD,
     DEFAULT_IOR,
     MULTIPLY_OPERATION,
     NO_ATTENUATION,
@@ -639,6 +640,29 @@ def _moves_a_map(assets: Assets, material: Material) raises -> Bool:
         if assets.textures.get(named[index]).uv_transform() != Matrix3():
             return True
     return False
+
+
+def _light_at_corner(
+    mut corner: ClipVertex,
+    lighting: Lighting,
+    normal: Vector3,
+    position: Vector3,
+):
+    """Light a `GOURAUD` corner on both sides, as three.js's
+    `GouraudShader` vertex does: the direct and the indirect light for its
+    normal, and for the normal turned round."""
+    var direct = lighting.direct_at(normal, position)
+    var indirect = lighting.indirect_at(normal)
+    var back_direct = lighting.direct_at(-normal, position)
+    var back_indirect = lighting.indirect_at(-normal)
+    corner.gouraud_direct = Vector3(direct.r, direct.g, direct.b)
+    corner.gouraud_indirect = Vector3(indirect.r, indirect.g, indirect.b)
+    corner.gouraud_back_direct = Vector3(
+        back_direct.r, back_direct.g, back_direct.b
+    )
+    corner.gouraud_back_indirect = Vector3(
+        back_indirect.r, back_indirect.g, back_indirect.b
+    )
 
 
 def _customs(
@@ -1928,6 +1952,12 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
     """
     var turned = corner
     turned.normal = -corner.normal
+    # A Gouraud corner was lit on both sides; the far side's light is the
+    # one drawn now.
+    turned.gouraud_direct = corner.gouraud_back_direct
+    turned.gouraud_indirect = corner.gouraud_back_indirect
+    turned.gouraud_back_direct = corner.gouraud_direct
+    turned.gouraud_back_indirect = corner.gouraud_indirect
     turned.normal_scale = Vector2(
         -corner.normal_scale.x, -corner.normal_scale.y
     )
@@ -2373,6 +2403,10 @@ struct _Paint(ImplicitlyCopyable):
         )
         corner.frames = self.frames
         corner.custom = vertex.custom
+        corner.gouraud_direct = vertex.gouraud_direct
+        corner.gouraud_indirect = vertex.gouraud_indirect
+        corner.gouraud_back_direct = vertex.gouraud_back_direct
+        corner.gouraud_back_indirect = vertex.gouraud_back_indirect
         return corner^
 
     def emit(
@@ -4715,6 +4749,10 @@ struct Renderer(Movable):
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
         var perspective = not camera.projection_matrix().is_affine()
+        # The camera's lights, with no shadow, for a `GOURAUD` surface's
+        # corners: resolved once, when the first one is met.
+        var gouraud_lights = Lighting.uniform()
+        var gouraud_ready = False
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -5102,6 +5140,11 @@ struct Renderer(Movable):
             ref vertex_v1 = second_set[1]
             # The custom attributes a node material reads, raw.
             var customs = _customs(assets, material, geometry, vertex_count)
+            if kind == GOURAUD and not gouraud_ready:
+                gouraud_lights = Lighting(
+                    scene, visible=camera.visible_layers()
+                )
+                gouraud_ready = True
 
             # World-space normals are their own pass so the normal array can
             # be borrowed only when there is one, and the normal matrix built
@@ -5358,6 +5401,16 @@ struct Renderer(Movable):
                 corner_a.custom = customs[first]
                 corner_b.custom = customs[second]
                 corner_c.custom = customs[third]
+                if kind == GOURAUD:
+                    _light_at_corner(
+                        corner_a, gouraud_lights, normal_a, world_points[first]
+                    )
+                    _light_at_corner(
+                        corner_b, gouraud_lights, normal_b, world_points[second]
+                    )
+                    _light_at_corner(
+                        corner_c, gouraud_lights, normal_c, world_points[third]
+                    )
                 # A triangle wholly between the two planes is what the
                 # clipper would hand back untouched, so it is not sent
                 # through: the clipper builds four lists for every triangle

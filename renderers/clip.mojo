@@ -82,6 +82,12 @@ struct ClipVertex(ImplicitlyCopyable):
     # The custom attributes a node program reads, carried through a cut
     # like every other varying. Zeros by default; the renderer sets them.
     var custom: SIMD[DType.float32, 8]
+    # A `GOURAUD` corner's light on each side, carried like the color; see
+    # `RasterVertex.gouraud_direct`. Zeros by default.
+    var gouraud_direct: Vector3
+    var gouraud_indirect: Vector3
+    var gouraud_back_direct: Vector3
+    var gouraud_back_indirect: Vector3
 
     def __init__(
         out self,
@@ -115,6 +121,10 @@ struct ClipVertex(ImplicitlyCopyable):
         self.u1 = u1
         self.v1 = v1
         self.custom = SIMD[DType.float32, 8](0)
+        self.gouraud_direct = Vector3(0, 0, 0)
+        self.gouraud_indirect = Vector3(0, 0, 0)
+        self.gouraud_back_direct = Vector3(0, 0, 0)
+        self.gouraud_back_indirect = Vector3(0, 0, 0)
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -199,7 +209,22 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
         _mix(a.v1, b.v1, t),
     )
     mixed.custom = a.custom + (b.custom - a.custom) * t
+    mixed.gouraud_direct = _mix_vector(a.gouraud_direct, b.gouraud_direct, t)
+    mixed.gouraud_indirect = _mix_vector(
+        a.gouraud_indirect, b.gouraud_indirect, t
+    )
+    mixed.gouraud_back_direct = _mix_vector(
+        a.gouraud_back_direct, b.gouraud_back_direct, t
+    )
+    mixed.gouraud_back_indirect = _mix_vector(
+        a.gouraud_back_indirect, b.gouraud_back_indirect, t
+    )
     return mixed^
+
+
+def _mix_vector(a: Vector3, b: Vector3, t: Float32) -> Vector3:
+    """Return a vector a fraction `t` of the way from `a` to `b`."""
+    return Vector3(_mix(a.x, b.x, t), _mix(a.y, b.y, t), _mix(a.z, b.z, t))
 
 
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:

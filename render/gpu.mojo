@@ -153,6 +153,7 @@ from lights.lighting import (
     falloff,
     floored_roughness,
     geometry_roughness,
+    gouraud_light,
     occluded_light,
     physical_light,
     physical_outgoing,
@@ -205,6 +206,7 @@ from materials.material import (
     OPAQUE,
     DEPTH,
     DISTANCE,
+    GOURAUD,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -582,7 +584,11 @@ comptime LANE_OBJECT_NORMAL = LANE_REFRACTION_RATIO + 1
 comptime LANE_BLEND_CONSTANT = LANE_OBJECT_NORMAL + 9
 # The custom attributes a node program reads: `RasterVertex.custom`.
 comptime LANE_CUSTOM = LANE_BLEND_CONSTANT + 4
-comptime FLOATS_PER_VERTEX = LANE_CUSTOM + 8
+# A `GOURAUD` corner's direct and indirect light, three floats each:
+# `RasterVertex.gouraud_direct` and `gouraud_indirect`.
+comptime LANE_GOURAUD_DIRECT = LANE_CUSTOM + 8
+comptime LANE_GOURAUD_INDIRECT = LANE_GOURAUD_DIRECT + 3
+comptime FLOATS_PER_VERTEX = LANE_GOURAUD_INDIRECT + 3
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -1070,6 +1076,12 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.state.blend_alpha)
         for lane in range(8):
             flat.append(corner.custom[lane])
+        flat.append(corner.gouraud_direct.x)
+        flat.append(corner.gouraud_direct.y)
+        flat.append(corner.gouraud_direct.z)
+        flat.append(corner.gouraud_indirect.x)
+        flat.append(corner.gouraud_indirect.y)
+        flat.append(corner.gouraud_indirect.z)
     return flat^
 
 
@@ -1608,6 +1620,31 @@ def _direction_through(
         return 0
     return reach[0] * shadow_strength(
         _through(lights, at + 6, receives, position, normal), reach[1]
+    )
+
+
+def _shared_lanes(
+    corners: MutPointer[Float32, MutAnyOrigin],
+    a: Int,
+    b: Int,
+    c: Int,
+    lane: Int,
+    share_a: Float32,
+    share_b: Float32,
+    share_c: Float32,
+) -> Vector3:
+    """Return three lanes of the three corners mixed by their shares, one
+    component at a time: the device counterpart of `rasterizer._shared`."""
+    return Vector3(
+        corners[unsafe_offset=a + lane] * share_a
+        + corners[unsafe_offset=b + lane] * share_b
+        + corners[unsafe_offset=c + lane] * share_c,
+        corners[unsafe_offset=a + lane + 1] * share_a
+        + corners[unsafe_offset=b + lane + 1] * share_b
+        + corners[unsafe_offset=c + lane + 1] * share_c,
+        corners[unsafe_offset=a + lane + 2] * share_a
+        + corners[unsafe_offset=b + lane + 2] * share_b
+        + corners[unsafe_offset=c + lane + 2] * share_c,
     )
 
 
@@ -5893,6 +5930,43 @@ def rasterize_kernel(
                         wz,
                         receives,
                     )
+                elif kind == Int32(GOURAUD.value):
+                    # Lit at the corners, and the direct light darkened
+                    # here by the shadows, as `rasterize_shaded` lights it.
+                    var mask = Float32(1)
+                    if receives:
+                        mask = _shadow_mask(
+                            lights,
+                            Int(light_count),
+                            Int(point_count),
+                            Int(hemisphere_count),
+                            Int(spot_count),
+                            Vector3(wx, wy, wz),
+                            Vector3(nx, ny, nz),
+                        )
+                    arriving = gouraud_light(
+                        _shared_lanes(
+                            corners,
+                            base,
+                            b_base,
+                            c_base,
+                            LANE_GOURAUD_DIRECT,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        _shared_lanes(
+                            corners,
+                            base,
+                            b_base,
+                            c_base,
+                            LANE_GOURAUD_INDIRECT,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        mask,
+                    )
                 elif not physical:
                     # A physical surface is lit below, once its maps have
                     # had their say, exactly as `rasterize_shaded` defers it.
@@ -6050,7 +6124,18 @@ def rasterize_kernel(
                 or occludes
             ) and not physical:
                 var indirect = arriving
-                if lit:
+                if kind == Int32(GOURAUD.value):
+                    indirect = _shared_lanes(
+                        corners,
+                        base,
+                        b_base,
+                        c_base,
+                        LANE_GOURAUD_INDIRECT,
+                        share_a,
+                        share_b,
+                        share_c,
+                    )
+                elif lit:
                     indirect = _indirect(
                         lights,
                         Int(light_count),

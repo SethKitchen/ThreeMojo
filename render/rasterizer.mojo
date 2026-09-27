@@ -33,6 +33,7 @@ from materials.material import (
     MAX_IOR,
     MIN_IOR,
     DISTANCE,
+    GOURAUD,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -139,6 +140,7 @@ from lights.lighting import (
     ambient_occlusion,
     floored_roughness,
     geometry_roughness,
+    gouraud_light,
     occluded_light,
     physical_outgoing,
     physical_surface,
@@ -1094,6 +1096,14 @@ struct RasterVertex(ImplicitlyCopyable):
     # floats. Set after construction, by `Renderer.prepare`; zeros by
     # default.
     var custom: SIMD[DType.float32, 8]
+    # A `GOURAUD` corner's light, three.js's `vLightFront` and
+    # `vIndirectFront`, and the light of its far side, `vLightBack` and
+    # `vIndirectBack`, which `Renderer.prepare` puts in front when the far
+    # side is the one drawn. Set after construction; zeros by default.
+    var gouraud_direct: Vector3
+    var gouraud_indirect: Vector3
+    var gouraud_back_direct: Vector3
+    var gouraud_back_indirect: Vector3
 
     def __init__(
         out self,
@@ -1259,6 +1269,10 @@ struct RasterVertex(ImplicitlyCopyable):
         self.seen_from_behind = False
         self.flip_sided = False
         self.custom = SIMD[DType.float32, 8](0)
+        self.gouraud_direct = Vector3(0, 0, 0)
+        self.gouraud_indirect = Vector3(0, 0, 0)
+        self.gouraud_back_direct = Vector3(0, 0, 0)
+        self.gouraud_back_indirect = Vector3(0, 0, 0)
 
 
 @fieldwise_init
@@ -2191,12 +2205,13 @@ def check_triangle_state(
         )
     if a.normal_map != NO_TEXTURE and a.bump_map != NO_TEXTURE:
         raise Error("A triangle names a normal map or a bump map, not both")
-    if not a.kind.has_normal() and (
+    if not a.kind.has_normal_map() and (
         a.normal_map != NO_TEXTURE or a.bump_map != NO_TEXTURE
     ):
         raise Error(
-            "Only a lit or matcap triangle has a normal map: no other"
-            " shader reads a normal in the frame a map perturbs"
+            "Only a lit or matcap triangle has a normal map, and a Gouraud"
+            " one has none: no other shader reads a normal in the frame a map"
+            " perturbs"
         )
     # The two baked maps and their intensities, asked as the material asks
     # them: agreed, finite, not negative, and only where an indirect
@@ -3064,6 +3079,23 @@ def check_alpha_data_map(image: Texture, name: String) raises:
         )
 
 
+def _shared(
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    share_a: Float32,
+    share_b: Float32,
+    share_c: Float32,
+) -> Vector3:
+    """Return three corners' values mixed by their shares, one component
+    at a time, in the order the kernel mixes them."""
+    return Vector3(
+        a.x * share_a + b.x * share_b + c.x * share_c,
+        a.y * share_a + b.y * share_b + c.y * share_c,
+        a.z * share_a + b.z * share_b + c.z * share_c,
+    )
+
+
 def check_light_map(image: Texture) raises:
     """Refuse a light map whose alpha is read as coverage.
 
@@ -3624,6 +3656,32 @@ def rasterize_shaded(
                     arriving = lighting.toon_at(
                         facing, spot, ramp, a.receives_shadow
                     )
+                elif a.kind == GOURAUD:
+                    # Lit at the corners, and the direct light darkened
+                    # here by the shadows; see `gouraud_light`.
+                    var mask = Float32(1)
+                    if a.receives_shadow:
+                        mask = lighting.shadow_mask(spot, facing)
+                    var light = gouraud_light(
+                        _shared(
+                            a.gouraud_direct,
+                            b.gouraud_direct,
+                            c.gouraud_direct,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        _shared(
+                            a.gouraud_indirect,
+                            b.gouraud_indirect,
+                            c.gouraud_indirect,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        mask,
+                    )
+                    arriving = FloatColor(light.x, light.y, light.z, 1.0)
                 elif not physical:
                     # A physical surface is lit below, once its maps have
                     # had their say over the color the lobe is tinted by.
@@ -3723,7 +3781,16 @@ def rasterize_shaded(
                 )[0]
             if (bakes or occludes) and not physical:
                 var indirect = Vector3(arriving.r, arriving.g, arriving.b)
-                if a.kind.is_lit():
+                if a.kind == GOURAUD:
+                    indirect = _shared(
+                        a.gouraud_indirect,
+                        b.gouraud_indirect,
+                        c.gouraud_indirect,
+                        share_a,
+                        share_b,
+                        share_c,
+                    )
+                elif a.kind.is_lit():
                     var around = lighting.indirect_at(facing)
                     indirect = Vector3(around.r, around.g, around.b)
                 var occluded = occluded_light(

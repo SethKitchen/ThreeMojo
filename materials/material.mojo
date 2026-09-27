@@ -606,10 +606,11 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eleven kinds there are."""
+        """Return True if this is one of the twelve kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
+            or self == GOURAUD
             or self == NORMALS
             or self == DEPTH
             or self == PHONG
@@ -634,13 +635,14 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
-        `LAMBERT`, `PHONG`, `TOON`, `STANDARD` or `PHYSICAL`.
+        `LAMBERT`, `GOURAUD`, `PHONG`, `TOON`, `STANDARD` or `PHYSICAL`.
 
         Both rasterizers ask this before they evaluate a light, so a kind
         that is lit in one place and not the other is not expressible.
         """
         return (
             self == LAMBERT
+            or self == GOURAUD
             or self == PHONG
             or self == TOON
             or self == STANDARD
@@ -670,6 +672,15 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return self.is_lit() or self == MATCAP
 
+    def has_normal_map(self) -> Bool:
+        """Return True if a surface of this kind can carry a normal map or
+        a bump map: every kind that reads its normal but `GOURAUD`.
+
+        A Gouraud surface is lit at its corners, before a map could turn
+        its normal, and three.js's `MeshGouraudMaterial` has neither map.
+        """
+        return self.has_normal() and self != GOURAUD
+
     def has_indirect(self) -> Bool:
         """Return True if a surface of this kind has an indirect diffuse
         term, and so can carry an ambient occlusion map and a light map:
@@ -689,9 +700,10 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
         The kinds three.js gives a `displacementMap`: the lit five,
         `MATCAP`, `NORMALS` and `DEPTH`. three.js's basic and shadow
-        materials have none, and a wireframe is `BASIC` here.
+        materials have none, and a wireframe is `BASIC` here. three.js's
+        `MeshGouraudMaterial` has none either.
         """
-        return self != BASIC and self != SHADOW
+        return self != BASIC and self != SHADOW and self != GOURAUD
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -719,6 +731,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         return (
             self == BASIC
             or self == LAMBERT
+            or self == GOURAUD
             or self == PHONG
             or self == STANDARD
             or self == PHYSICAL
@@ -744,7 +757,12 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         other kind has a highlight or a reflection to scale. Both
         rasterizers ask this before they sample one.
         """
-        return self == BASIC or self == LAMBERT or self == PHONG
+        return (
+            self == BASIC
+            or self == LAMBERT
+            or self == GOURAUD
+            or self == PHONG
+        )
 
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
@@ -786,6 +804,10 @@ comptime SHADOW = MaterialKind(9)
 # from a near distance to a far one, packed into four channels: three.js's
 # `MeshDistanceMaterial`, the material its point-light shadows draw with.
 comptime DISTANCE = MaterialKind(10)
+# Lit at its corners, and the light interpolated between them: three.js's
+# `MeshGouraudMaterial`, a `LAMBERT` surface lit per vertex. The shadows
+# darken the direct light per fragment, as three.js's `getShadowMask` does.
+comptime GOURAUD = MaterialKind(11)
 # three.js's `MeshDistanceMaterial` uniform defaults: one meter and a
 # thousand meters, measured from the origin.
 comptime DEFAULT_NEAR_DISTANCE = Length(1.0, METER)
@@ -1598,7 +1620,8 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW or DISTANCE"
+                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE or"
+                " GOURAUD"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -2108,12 +2131,13 @@ struct Material(ImplicitlyCopyable):
                 "A material names a normal map or a bump map, not both:"
                 " three.js reads the normal map and ignores the bump map"
             )
-        if not kind.has_normal() and (
+        if not kind.has_normal_map() and (
             normal_map != NO_TEXTURE or bump_map != NO_TEXTURE
         ):
             raise Error(
-                "Only a lit or matcap material has a normal map: no other"
-                " shader reads a normal in the frame a map perturbs"
+                "Only a lit or matcap material has a normal map, and a"
+                " Gouraud one has none: no other shader reads a normal in the"
+                " frame a map perturbs"
             )
         if normal_map == NO_TEXTURE and (
             normal_scale.x != 1 or normal_scale.y != 1
