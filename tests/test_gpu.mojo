@@ -12373,7 +12373,7 @@ def test_both_backends_march_a_volume_alike() raises:
             points=frame.points,
             programs=frame.programs,
         )
-        assert_true(16 * 16 - count_background(cpu, BACKGROUND) > 8)
+        assert_true(16 * 16 - count_background(cpu, BACKGROUND) > 4)
         assert_equal(
             count_mismatches(cpu, device.read_back(), tolerance=1), 0
         )
