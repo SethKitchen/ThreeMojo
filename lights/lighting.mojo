@@ -44,7 +44,9 @@ from lights.physical_layers import (
 from lights.shadow import (
     ShadowCascade,
     ShadowMap,
+    ShadowShape,
     SpotLightMap,
+    Unshaped,
     cascade_reach,
     shadow_strength,
     view_depth,
@@ -1579,14 +1581,52 @@ struct Lighting(Movable):
             return 1
         return self.shadows[slot].lit(position, normal)
 
-    def direction_through(
-        self, index: Int, position: Vector3, normal: Vector3, receives: Bool
-    ) -> Float32:
+    def shadow_through[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        slot: Int,
+        position: Vector3,
+        normal: Vector3,
+        receives: Bool,
+        shape: R = Unshaped(),
+    ) -> Vector3:
+        """Return what one light's shadow lets through to a surface, per
+        channel, once the surface has shaped it: `shadow_at` handed to
+        `shape`, as three.js hands a light's shadow to the material's
+        `receivedShadowNode`. A light that casts no shadow on the surface
+        lets all of it through and is not shaped, as three.js builds no
+        shadow node for it.
+
+        Args:
+            slot: Which shadow map the light drew, or -1 for none.
+            position: Where the surface is, in world space.
+            normal: Its unit normal, for the map's normal bias.
+            receives: Whether shadows fall on this surface at all.
+            shape: What the surface makes of the shadow.
+
+        Returns:
+            The red, green and blue fractions of the light that arrive.
+        """
+        if slot < 0 or not receives:
+            return Vector3(1, 1, 1)
+        return shape.shaped(self.shadows[slot].lit(position, normal))
+
+    def direction_through[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        index: Int,
+        position: Vector3,
+        normal: Vector3,
+        receives: Bool,
+        shape: R = Unshaped(),
+    ) -> Vector3:
         """Return how much of one directional light reaches a surface:
         what its shadow lets through, and for a cascade of a `CSM`, how
         much of its light and its shadow fall at the surface's depth.
 
-        A light that is no cascade gives `shadow_at`. A cascade measures
+        A light that is no cascade gives `shadow_through`. A cascade measures
         the surface's depth in front of the camera, `view_depth` over the
         cascade's span, and weighs the light and its shadow as
         `cascade_reach` says.
@@ -1597,14 +1637,16 @@ struct Lighting(Movable):
             position: Where the surface is, in world space.
             normal: Its unit normal, for the map's normal bias.
             receives: Whether shadows fall on this surface at all.
+            shape: What the surface makes of the shadow; see
+                `shadow_through`.
 
         Returns:
-            The fraction of the light that arrives.
+            The red, green and blue fractions of the light that arrive.
         """
         var slot = self.direction_shadows[index]
         ref band = self.cascades[index]
         if not band.is_cascade():
-            return self.shadow_at(slot, position, normal, receives)
+            return self.shadow_through(slot, position, normal, receives, shape)
         var reach = cascade_reach(
             view_depth(position, self.eye, self.back) / band.span.to(METER),
             band.start,
@@ -1613,9 +1655,14 @@ struct Lighting(Movable):
             band.fade,
         )
         if reach[0] == 0:
-            return 0
-        return reach[0] * shadow_strength(
-            self.shadow_at(slot, position, normal, receives), reach[1]
+            return Vector3(0, 0, 0)
+        var through = self.shadow_through(
+            slot, position, normal, receives, shape
+        )
+        return Vector3(
+            reach[0] * shadow_strength(through.x, reach[1]),
+            reach[0] * shadow_strength(through.y, reach[1]),
+            reach[0] * shadow_strength(through.z, reach[1]),
         )
 
     def shadow_mask(self, position: Vector3, normal: Vector3) -> Float32:
@@ -1682,8 +1729,14 @@ struct Lighting(Movable):
         """Return how many spot lights there are."""
         return len(self.spot_positions)
 
-    def intensity_at(
-        self, normal: Vector3, position: Vector3, receives: Bool = True
+    def intensity_at[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        normal: Vector3,
+        position: Vector3,
+        receives: Bool = True,
+        shape: R = Unshaped(),
     ) -> FloatColor:
         """Return how much light of each color reaches a surface here.
 
@@ -1714,6 +1767,8 @@ struct Lighting(Movable):
             receives: Whether the lights' shadows fall on this surface;
                 see `shadow_at`. A light that casts is scaled by what its
                 map lets through, as three.js scales `directLight.color`.
+            shape: What the surface makes of each light's shadow, three.js's
+                `receivedShadowNode`; the shadow as it falls by default.
 
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
@@ -1723,12 +1778,14 @@ struct Lighting(Movable):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
                 continue
-            lambert *= self.direction_through(index, position, normal, receives)
+            var through = self.direction_through(
+                index, position, normal, receives, shape
+            )
             ref light = self.radiances[index]
             total = FloatColor(
-                total.r + light.r * lambert,
-                total.g + light.g * lambert,
-                total.b + light.b * lambert,
+                total.r + light.r * (lambert * through.x),
+                total.g + light.g * (lambert * through.y),
+                total.b + light.b * (lambert * through.z),
                 1.0,
             )
         for index in range(len(self.positions)):
@@ -1743,18 +1800,17 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = (
-                lambert
-                * falloff(distance, self.decays[index], self.cutoffs[index])
-                * self.shadow_at(
-                    self.point_shadows[index], position, normal, receives
-                )
+            var bare = lambert * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            var through = self.shadow_through(
+                self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
             total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
+                total.r + bulb.r * (bare * through.x),
+                total.g + bulb.g * (bare * through.y),
+                total.b + bulb.b * (bare * through.z),
                 1.0,
             )
         for index in range(len(self.sky_directions)):
@@ -1792,32 +1848,35 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = (
+            var bare = (
                 lambert
                 * rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]
                 )
-                * self.shadow_at(
-                    self.spot_shadows[index], position, normal, receives
-                )
+            )
+            var through = self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = FloatColor(
-                total.r + bulb.r * tint.x * reach,
-                total.g + bulb.g * tint.y * reach,
-                total.b + bulb.b * tint.z * reach,
+                total.r + bulb.r * tint.x * (bare * through.x),
+                total.g + bulb.g * tint.y * (bare * through.y),
+                total.b + bulb.b * tint.z * (bare * through.z),
                 1.0,
             )
         return total.scaled(self.scale)
 
-    def toon_at(
+    def toon_at[
+        R: ShadowShape = Unshaped
+    ](
         self,
         normal: Vector3,
         position: Vector3,
         ramp: List[Float32],
         receives: Bool = True,
+        shape: R = Unshaped(),
     ) -> FloatColor:
         """Return how much light of each color reaches a `TOON` surface here.
 
@@ -1848,20 +1907,23 @@ struct Lighting(Movable):
                 or empty for three.js's two-tone fallback.
             receives: Whether the lights' shadows fall on this surface;
                 see `shadow_at`.
+            shape: What the surface makes of each light's shadow, three.js's
+                `receivedShadowNode`; the shadow as it falls by default.
 
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
         var total = self.ambient_at(normal)
         for index in range(len(self.directions)):
-            var tone = toon_tone(
-                normal.dot(self.directions[index]), ramp
-            ) * self.direction_through(index, position, normal, receives)
+            var tone = toon_tone(normal.dot(self.directions[index]), ramp)
+            var through = self.direction_through(
+                index, position, normal, receives, shape
+            )
             ref light = self.radiances[index]
             total = FloatColor(
-                total.r + light.r * tone,
-                total.g + light.g * tone,
-                total.b + light.b * tone,
+                total.r + light.r * (tone * through.x),
+                total.g + light.g * (tone * through.y),
+                total.b + light.b * (tone * through.z),
                 1.0,
             )
         for index in range(len(self.positions)):
@@ -1871,18 +1933,17 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / distance, ramp)
-            var reach = (
-                tone
-                * falloff(distance, self.decays[index], self.cutoffs[index])
-                * self.shadow_at(
-                    self.point_shadows[index], position, normal, receives
-                )
+            var bare = tone * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            var through = self.shadow_through(
+                self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
             total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
+                total.r + bulb.r * (bare * through.x),
+                total.g + bulb.g * (bare * through.y),
+                total.b + bulb.b * (bare * through.z),
                 1.0,
             )
         for index in range(len(self.sky_directions)):
@@ -1913,33 +1974,36 @@ struct Lighting(Movable):
             if rim <= 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / distance, ramp)
-            var reach = (
+            var bare = (
                 tone
                 * rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]
                 )
-                * self.shadow_at(
-                    self.spot_shadows[index], position, normal, receives
-                )
+            )
+            var through = self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = FloatColor(
-                total.r + bulb.r * tint.x * reach,
-                total.g + bulb.g * tint.y * reach,
-                total.b + bulb.b * tint.z * reach,
+                total.r + bulb.r * tint.x * (bare * through.x),
+                total.g + bulb.g * tint.y * (bare * through.y),
+                total.b + bulb.b * tint.z * (bare * through.z),
                 1.0,
             )
         return total.scaled(self.scale)
 
-    def specular_at(
+    def specular_at[
+        R: ShadowShape = Unshaped
+    ](
         self,
         normal: Vector3,
         position: Vector3,
         specular: Vector3,
         shininess: Float32,
         receives: Bool = True,
+        shape: R = Unshaped(),
     ) -> FloatColor:
         """Return the highlight a `PHONG` surface here sends to the camera.
 
@@ -1966,6 +2030,8 @@ struct Lighting(Movable):
             shininess: How tight the highlight is.
             receives: Whether the lights' shadows fall on this surface;
                 see `shadow_at`.
+            shape: What the surface makes of each light's shadow, three.js's
+                `receivedShadowNode`; the shadow as it falls by default.
 
         Returns:
             The reflected light, linear. Alpha is not light and stays at one.
@@ -1984,7 +2050,9 @@ struct Lighting(Movable):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
                 continue
-            lambert *= self.direction_through(index, position, normal, receives)
+            var through = self.direction_through(
+                index, position, normal, receives, shape
+            )
             var sent = blinn_phong(
                 self.directions[index],
                 toward_eye,
@@ -1993,9 +2061,9 @@ struct Lighting(Movable):
                 shininess,
             )
             ref light = self.radiances[index]
-            red += light.r * lambert * sent.x
-            green += light.g * lambert * sent.y
-            blue += light.b * lambert * sent.z
+            red += light.r * (lambert * through.x) * sent.x
+            green += light.g * (lambert * through.y) * sent.y
+            blue += light.b * (lambert * through.z) * sent.z
         for index in range(len(self.positions)):
             var toward = self.positions[index] - position
             var distance = toward.length()
@@ -2004,21 +2072,20 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = (
-                lambert
-                * falloff(distance, self.decays[index], self.cutoffs[index])
-                * self.shadow_at(
-                    self.point_shadows[index], position, normal, receives
-                )
+            var bare = lambert * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            var through = self.shadow_through(
+                self.point_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
             var sent = blinn_phong(
                 toward, toward_eye, normal, specular, shininess
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * reach * sent.x
-            green += bulb.g * reach * sent.y
-            blue += bulb.b * reach * sent.z
+            red += bulb.r * (bare * through.x) * sent.x
+            green += bulb.g * (bare * through.y) * sent.y
+            blue += bulb.b * (bare * through.z) * sent.z
         for index in range(len(self.spot_positions)):
             var toward = self.spot_positions[index] - position
             var distance = toward.length()
@@ -2035,15 +2102,15 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = (
+            var bare = (
                 lambert
                 * rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]
                 )
-                * self.shadow_at(
-                    self.spot_shadows[index], position, normal, receives
-                )
+            )
+            var through = self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
             var sent = blinn_phong(
@@ -2051,9 +2118,9 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * reach * sent.x
-            green += bulb.g * tint.y * reach * sent.y
-            blue += bulb.b * tint.z * reach * sent.z
+            red += bulb.r * tint.x * (bare * through.x) * sent.x
+            green += bulb.g * tint.y * (bare * through.y) * sent.y
+            blue += bulb.b * tint.z * (bare * through.z) * sent.z
         return FloatColor(red, green, blue, 1.0).scaled(self.scale)
 
     def ambient_at(self, normal: Vector3) -> FloatColor:
@@ -2305,7 +2372,9 @@ struct Lighting(Movable):
             )
         return total.scaled(self.scale)
 
-    def physical_at(
+    def physical_at[
+        R: ShadowShape = Unshaped
+    ](
         self,
         normal: Vector3,
         coat_normal: Vector3,
@@ -2316,6 +2385,7 @@ struct Lighting(Movable):
         clearcoat_roughness: Float32,
         receives: Bool = True,
         layers: PhysicalLayers = PhysicalLayers(),
+        shape: R = Unshaped(),
     ) -> Reflected:
         """Return what a physical surface here sends to the camera from the
         lights that have a direction: three.js's `RE_Direct_Physical`,
@@ -2343,6 +2413,8 @@ struct Lighting(Movable):
             layers: The fragment's sheen, film and stretch; see
                 `lights.physical_layers`. A rectangle of light reads none of them,
                 as three.js's `RE_Direct_RectArea_Physical` reads none.
+            shape: What the surface makes of each light's shadow, three.js's
+                `receivedShadowNode`; the shadow as it falls by default.
 
         Returns:
             The diffuse, specular, clear coat and sheen sums, linear, each
@@ -2366,12 +2438,14 @@ struct Lighting(Movable):
                 continue
             ref light = self.radiances[index]
             var through = self.direction_through(
-                index, position, normal, receives
+                index, position, normal, receives, shape
             )
             sum = physical_light(
                 sum,
                 Vector3(
-                    light.r * through, light.g * through, light.b * through
+                    light.r * through.x,
+                    light.g * through.y,
+                    light.b * through.z,
                 ),
                 lambert,
                 coat_lambert,
@@ -2397,16 +2471,21 @@ struct Lighting(Movable):
                 )
             if lambert == 0 and coat_lambert == 0:
                 continue
-            var reach = falloff(
+            var bare = falloff(
                 distance, self.decays[index], self.cutoffs[index]
-            ) * self.shadow_at(
-                self.point_shadows[index], position, normal, receives
+            )
+            var through = self.shadow_through(
+                self.point_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
             ref bulb = self.point_radiances[index]
             sum = physical_light(
                 sum,
-                Vector3(bulb.r * reach, bulb.g * reach, bulb.b * reach),
+                Vector3(
+                    bulb.r * (bare * through.x),
+                    bulb.g * (bare * through.y),
+                    bulb.b * (bare * through.z),
+                ),
                 lambert,
                 coat_lambert,
                 toward,
@@ -2439,14 +2518,11 @@ struct Lighting(Movable):
                 )
             if lambert == 0 and coat_lambert == 0:
                 continue
-            var reach = (
-                rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-                * self.shadow_at(
-                    self.spot_shadows[index], position, normal, receives
-                )
+            var bare = rim * falloff(
+                distance, self.spot_decays[index], self.spot_cutoffs[index]
+            )
+            var through = self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
             ref bulb = self.spot_radiances[index]
@@ -2454,9 +2530,9 @@ struct Lighting(Movable):
             sum = physical_light(
                 sum,
                 Vector3(
-                    bulb.r * tint.x * reach,
-                    bulb.g * tint.y * reach,
-                    bulb.b * tint.z * reach,
+                    bulb.r * tint.x * (bare * through.x),
+                    bulb.g * tint.y * (bare * through.y),
+                    bulb.b * tint.z * (bare * through.z),
                 ),
                 lambert,
                 coat_lambert,

@@ -749,6 +749,41 @@ def cascade_reach(
     )
 
 
+trait ShadowShape:
+    """What a surface makes of the shadow that falls on it: three.js's
+    `receivedShadowNode`, a function of the shadow whose answer multiplies
+    the light's color. `Unshaped` keeps the shadow as it is; a node graph's
+    `RECEIVED_SHADOW_NODE` is `materials.nodes.ProgramShape`."""
+
+    def shaped(self, shadow: Float32) -> Vector3:
+        """Return what a light's color is multiplied by, per channel, where
+        its shadow lets `shadow` of it through.
+
+        Args:
+            shadow: What the light's shadow map lets through, one for all.
+
+        Returns:
+            The red, green and blue multipliers.
+        """
+        ...
+
+
+@fieldwise_init
+struct Unshaped(ImplicitlyCopyable, ShadowShape):
+    """The shadow as it falls: a surface with no `receivedShadowNode`."""
+
+    def shaped(self, shadow: Float32) -> Vector3:
+        """Return the shadow in every channel.
+
+        Args:
+            shadow: What the light's shadow map lets through.
+
+        Returns:
+            The shadow three times.
+        """
+        return Vector3(shadow, shadow, shadow)
+
+
 def shadow_strength(through: Float32, intensity: Float32) -> Float32:
     """Return what a shadow lets through, weakened by its intensity:
     three.js's `mix( 1.0, shadow, shadowIntensity )`, the last line of

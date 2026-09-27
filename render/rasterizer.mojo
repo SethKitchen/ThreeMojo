@@ -116,6 +116,8 @@ from materials.nodes import (
     NO_NODES,
     OPACITY_NODE,
     OUTPUT_NODE,
+    RECEIVED_SHADOW_NODE,
+    ProgramShape,
     NodeContext,
     NodeInputs,
     NodeProgram,
@@ -3449,6 +3451,9 @@ def rasterize_shaded(
     var fragmented = noded and has_output(nodes, FRAGMENT_NODE)
     tested = tested and not fragmented
     hashed = hashed and not fragmented
+    # Whether the graph shapes the shadows the lights cast on it, three.js's
+    # `receivedShadowNode`; see `ProgramShape`.
+    var received = noded and has_output(nodes, RECEIVED_SHADOW_NODE)
     var reversed = a.state.depth_mode == REVERSED_DEPTH
     # Where each map is sampled: its own channel and matrix, three.js's
     # `vMapUv`, `vNormalMapUv` and the rest. The corners carry the two raw
@@ -3733,6 +3738,21 @@ def rasterize_shaded(
                         ),
                     ),
                 )
+            # Each light's shadow as the graph shapes it, at this fragment
+            # and its bent normal, before the lights read it.
+            var shape = ProgramShape(
+                nodes,
+                NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                ),
+                received,
+            )
             if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 if a.kind == MATCAP:
                     # Looked up by which way the surface is turned in the
@@ -3762,7 +3782,7 @@ def rasterize_shaded(
                     # Every cosine read off the ramp rather than faded, and
                     # never clamped at zero: see `Lighting.toon_at`.
                     arriving = lighting.toon_at(
-                        facing, spot, ramp, a.receives_shadow
+                        facing, spot, ramp, a.receives_shadow, shape
                     )
                 elif a.kind == GOURAUD:
                     # Lit at the corners, and the direct light darkened
@@ -3794,7 +3814,7 @@ def rasterize_shaded(
                     # A physical surface is lit below, once its maps have
                     # had their say over the color the lobe is tinted by.
                     arriving = lighting.intensity_at(
-                        facing, spot, a.receives_shadow
+                        facing, spot, a.receives_shadow, shape
                     )
                 if a.kind == PHONG:
                     # Interpolated like the emissive, and summed over the
@@ -3817,6 +3837,7 @@ def rasterize_shaded(
                         Vector3(sheen.r, sheen.g, sheen.b),
                         a.shininess,
                         a.receives_shadow,
+                        shape,
                     )
                     # The light through, where a thickness map says how
                     # thick the surface is: three.js reads its red at the
@@ -4593,6 +4614,7 @@ def rasterize_shaded(
                     coat_rough,
                     a.receives_shadow,
                     layers,
+                    shape,
                 )
                 # The light map's light joins the indirect light here, as
                 # three.js adds it to `irradiance`; zero adds nothing.
@@ -4846,7 +4868,7 @@ def rasterize_shaded(
         row = row + down
 
 
-struct _HostNodes[origin: Origin[mut=False]](NodeSource):
+struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
     material's map. `x` and `y` move with the fragment."""
