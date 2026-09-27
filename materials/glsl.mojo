@@ -50,6 +50,7 @@ outside the subset is refused with the shader, the line and the reason.
 from materials.nodes import (
     COLOR_NODE,
     DEPTH_NODE,
+    MAX_ATTRIBUTE_FLOATS,
     MAX_LOOP_COUNT,
     NODE_FLOAT,
     OPACITY_NODE,
@@ -985,6 +986,8 @@ struct _Compiler(Movable):
     # The shader's structs, and the fields of each struct value.
     var structs: List[_Struct]
     var bundles: List[List[_Value]]
+    # How many floats the custom attributes hold so far.
+    var attribute_floats: Int
 
     def __init__(out self, raw: Bool):
         """Start a compiler with an empty graph."""
@@ -1010,6 +1013,7 @@ struct _Compiler(Movable):
         self.seen = List[Int]()
         self.structs = List[_Struct]()
         self.bundles = List[List[_Value]]()
+        self.attribute_floats = 0
 
     # --- tokens -------------------------------------------------------------
 
@@ -1841,21 +1845,35 @@ struct _Compiler(Movable):
         )
 
     def declare_attribute(mut self, type: _Type, name: String) raises:
-        """Declare one of the attributes three.js gives a raw shader.
+        """Declare one of the attributes three.js gives a raw shader, or a
+        custom attribute of the geometry's.
 
         Raises:
-            Error: If the shader is not raw, the name is not one this port
-                has, or the type is not its type.
+            Error: If a ShaderMaterial declares one of three.js's own, a
+                built-in's type is not its type, or a custom one is not a
+                float or a vector or would hold too many floats.
         """
+        if not _listed(name, " position normal uv color "):
+            if not type.is_float():
+                raise self.error(
+                    "an attribute of type " + type.name() + " is outside the"
+                    " subset"
+                )
+            self.attribute_floats += type.width()
+            if self.attribute_floats > MAX_ATTRIBUTE_FLOATS:
+                raise self.error(
+                    "the custom attributes hold at most "
+                    + String(MAX_ATTRIBUTE_FLOATS)
+                    + " floats"
+                )
+            var node = self.graph.attribute(name, ValueType(type.width()))
+            self.declare(
+                _Symbol(name, _ATTRIBUTE, _plain(type, node.value), -1, False)
+            )
+            return
         if not self.raw:
             raise self.error(
                 "three.js declares a ShaderMaterial's attributes itself"
-            )
-        if not _listed(name, " position normal uv color "):
-            raise self.error(
-                "the attribute "
-                + name
-                + " is not one this port has: position, normal, uv, color"
             )
         var wanted = _VEC2 if name == "uv" else _VEC3
         if type != wanted:

@@ -48,6 +48,8 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     MASK_NODE,
+    NODE_VEC3,
+    NODE_VEC4,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
@@ -788,6 +790,54 @@ def test_a_fragment_knows_which_way_its_triangle_faces() raises:
         assert_equal(Int(seen.r), front)
         assert_equal(Int(seen.g), greens[index])
         assert_equal(Int(seen.b), front)
+
+
+def test_a_custom_attribute_of_the_geometry_colors_the_mesh() raises:
+    # The same tint at every vertex; a pair read as a vec4 takes zero and
+    # one for its missing floats, and an attribute the geometry lacks all
+    # zeros and one.
+    var graph = NodeGraph()
+    var tint = graph.attribute("tint", NODE_VEC3)
+    var pair = graph.attribute("pair", NODE_VEC4)
+    var missing = graph.attribute("missing", NODE_VEC4)
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                graph.swizzle(tint, "x"),
+                graph.add(graph.swizzle(pair, "y"), graph.swizzle(pair, "z")),
+                graph.mul(graph.swizzle(pair, "w"), graph.swizzle(missing, "w")),
+            ]
+        ),
+    )
+    var assets = Assets()
+    var id = assets.programs.add(graph.compile())
+    var geometry = plane(Length(2.0, METER), Length(2.0, METER), 2, 2)
+    var count = geometry.attribute_view(String(POSITION)).count()
+    var tints = List[Float32]()
+    var pairs = List[Float32]()
+    for _ in range(count):
+        tints.append(0.25)
+        tints.append(0.5)
+        tints.append(0.75)
+        pairs.append(0.1)
+        pairs.append(0.5)
+    geometry.set_attribute("tint", BufferAttribute(tints^, 3))
+    geometry.set_attribute("pair", BufferAttribute(pairs^, 2))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(geometry^),
+            assets.materials.add(shader_material(id)),
+            node,
+        )
+    )
+    scene.update()
+    var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 137)
+    assert_equal(Int(seen.g), 188)
+    assert_equal(Int(seen.b), 255)
 
 
 def test_the_frame_carries_the_renderers_time_and_the_cameras_view() raises:

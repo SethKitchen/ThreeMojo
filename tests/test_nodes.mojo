@@ -23,7 +23,6 @@ from materials.nodes import (
     CORNER_C,
     DEPTH_NODE,
     EMISSIVE_NODE,
-    Fn,
     INSTRUCTION_FLOATS,
     MASK_NODE,
     MAX_GRAPH_NODES,
@@ -47,6 +46,7 @@ from materials.nodes import (
     POSITION_NODE,
     PROGRAM_HEADER,
     PROGRAM_TIME,
+    Fn,
     NodeContext,
     NodeGraph,
     NodeInputs,
@@ -60,19 +60,19 @@ from materials.nodes import (
     NodeVar,
     ProgramSource,
     ValueType,
+    cell_noise,
+    cell_noise_vec3,
     has_output,
     here_inputs,
+    moved_position,
     node_attributes,
     node_depth,
     offset_normal,
-    moved_position,
-    cell_noise,
-    cell_noise_vec3,
     perlin_noise,
     perlin_noise_vec3,
-    worley_noise,
     perspective_shares,
     run_nodes,
+    worley_noise,
 )
 from math.matrix3 import Matrix3
 from math.vector4 import Vector4
@@ -172,8 +172,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(100).is_valid())
-    assert_true(NodeKind(99).is_valid())
+    assert_false(NodeKind(101).is_valid())
+    assert_true(NodeKind(100).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -386,6 +386,54 @@ def test_a_texel_and_a_size_are_read_by_whole_numbers() raises:
     var named = bad.texture_uniform("map", TextureId(0))
     with assert_raises(contains="A texture's level is a float, not a vec2"):
         _ = bad.texture_size(named, bad.uv())
+
+
+def test_a_custom_attribute_is_read_at_each_corner() raises:
+    var graph = NodeGraph()
+    var size = graph.attribute("size", NODE_FLOAT)
+    var offset = graph.attribute("offset", NODE_VEC3)
+    var again = graph.attribute("size", NODE_FLOAT)
+    graph.set_output(
+        COLOR_NODE,
+        graph.join([graph.add(size, again), graph.swizzle(offset, "xy")]),
+    )
+    graph.set_output(
+        EMISSIVE_NODE, graph.varying(graph.join([size, graph.swizzle(offset, "yz")]))
+    )
+    var program = graph.compile()
+    assert_equal(len(program.attribute_names), 2)
+    assert_equal(program.attribute_names[1], "offset")
+    assert_equal(program.attribute_offsets[1], 1)
+    assert_equal(program.attribute_widths[1], 3)
+    # Corners gives each float k + 1 at the first corner, ten times that at
+    # the second and a hundred times at the third.
+    var s = Corners().shares(AT_HERE)
+    var mean = s[0] + 10 * s[1] + 100 * s[2]
+    var here = run_nodes(Corners(program), COLOR_NODE, inputs())
+    assert_almost_equal(here[0], 2 * mean, atol=1e-4)
+    assert_almost_equal(here[1], 2 * mean, atol=1e-4)
+    assert_almost_equal(here[2], 3 * mean, atol=1e-4)
+    var carried = run_nodes(Corners(program), EMISSIVE_NODE, inputs())
+    assert_almost_equal(carried[2], 4 * mean, atol=1e-4)
+    var bad = NodeGraph()
+    with assert_raises(contains="uv is a built-in attribute"):
+        _ = bad.attribute("uv", NODE_VEC2)
+    with assert_raises(contains="An attribute is a float or a vector, not a mat3"):
+        _ = bad.attribute("frame", NODE_MAT3)
+    _ = bad.attribute("size", NODE_FLOAT)
+    with assert_raises(contains="The attribute size is a float, not a vec2"):
+        _ = bad.attribute("size", NODE_VEC2)
+    _ = bad.attribute("a", NODE_VEC4)
+    with assert_raises(contains="A graph's attributes hold at most 8 floats"):
+        _ = bad.attribute("b", NODE_VEC4)
+    # A position node runs on the host, where no corner carries them.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.add(moved.position_local(), moved.attribute("lift", NODE_VEC3)),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
 
 
 def test_a_texture_reads_where_its_coordinate_says() raises:
@@ -792,7 +840,7 @@ def test_compiling_refuses_an_edited_graph() raises:
     with assert_raises(contains="names a node the graph does not hold"):
         _ = nowhere.compile()
     var strange = graph.copy()
-    strange._kinds[a.value] = NodeKind(100)
+    strange._kinds[a.value] = NodeKind(101)
     with assert_raises(contains="a kind or a type there is not"):
         _ = strange.compile()
     var shapeless = graph.copy()
@@ -986,6 +1034,17 @@ struct Corners(NodeSource):
         return Lanes(10.5, 20.5, 0.75, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
+        """Return the made-up corners, each with custom floats of its own:
+        one to eight at the first, ten times those at the second, and a
+        hundred times at the third."""
+        var at = self._plain_corner(context)
+        var scale = Float32(1) if context == CORNER_A else (
+            Float32(10) if context == CORNER_B else Float32(100)
+        )
+        at.custom = SIMD[DType.float32, 8](1, 2, 3, 4, 5, 6, 7, 8) * scale
+        return at
+
+    def _plain_corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners: normals two long, to see them made
         unit."""
         if context == CORNER_A:

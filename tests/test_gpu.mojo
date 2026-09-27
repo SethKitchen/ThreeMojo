@@ -11415,6 +11415,50 @@ def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+from materials.nodes import NODE_VEC3 as NODES_VEC3
+
+
+def test_both_backends_read_a_custom_attribute_alike() raises:
+    # Each corner carries its own custom floats, which the kernel packs in
+    # its lanes and interpolates as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read an attribute alike"):
+        return
+    var graph = NodeGraph()
+    var tint = graph.attribute("tint", NODES_VEC3)
+    var glow = graph.attribute("glow", NODES_FLOAT)
+    graph.set_output(
+        NODES_COLOR, graph.add(tint, graph.join([glow, glow, glow]))
+    )
+    var textures = TextureStore()
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var lighting = phong_lighting()
+    var corners = with_nodes(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value
+    )
+    for index in range(len(corners)):
+        var k = Float32(index)
+        corners[index].custom = SIMD[DType.float32, 8](
+            0.1 * k, 0.9 - 0.1 * k, 0.05 * k, 0.02 * k, 0, 0, 0, 0
+        )
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a

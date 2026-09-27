@@ -194,7 +194,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_TEXTURE_SIZE.value
+            and self.value <= NODE_ATTRIBUTE.value
         )
 
 
@@ -340,6 +340,12 @@ comptime NODE_TEXTURE_LEVEL = NodeKind(97)
 # See `NodeSource.fetch` and `NodeSource.size`.
 comptime NODE_TEXEL_FETCH = NodeKind(98)
 comptime NODE_TEXTURE_SIZE = NodeKind(99)
+# A custom attribute of the geometry, three.js's `attribute(name)`: its
+# immediate is its first float among a corner's custom floats, plus eight
+# times its width. See `NodeGraph.attribute`.
+comptime NODE_ATTRIBUTE = NodeKind(100)
+# How many floats a corner carries for the custom attributes, all of them.
+comptime MAX_ATTRIBUTE_FLOATS = 8
 
 
 @fieldwise_init
@@ -525,6 +531,7 @@ def _is_attribute(kind: NodeKind) -> Bool:
         or kind == NODE_LIT
         or kind == NODE_FRAG_COORD
         or kind == NODE_FRONT_FACING
+        or kind == NODE_ATTRIBUTE
     )
 
 
@@ -709,6 +716,11 @@ struct NodeGraph(Copyable, Movable):
     # Per variable, whether it is a closed loop's or call's hidden flag,
     # which no later loop needs to carry.
     var _retired: List[Bool]
+    # Each custom attribute: its name, its first float among a corner's
+    # custom floats, and its width.
+    var _attribute_names: List[String]
+    var _attribute_offsets: List[Int]
+    var _attribute_widths: List[Int]
 
     def __init__(out self):
         """Create an empty graph with no outputs."""
@@ -725,6 +737,9 @@ struct NodeGraph(Copyable, Movable):
         self._discards = List[Int]()
         self._returns = List[_Return]()
         self._retired = List[Bool]()
+        self._attribute_names = List[String]()
+        self._attribute_offsets = List[Int]()
+        self._attribute_widths = List[Int]()
 
     def count(self) -> Int:
         """Return how many nodes the graph holds.
@@ -1159,6 +1174,67 @@ struct NodeGraph(Copyable, Movable):
             The node.
         """
         return self._add(NODE_FRONT_FACING, NODE_FLOAT, value=Lanes(1))
+
+    def attribute(mut self, name: String, type: ValueType) raises -> NodeRef:
+        """Return a custom attribute of the geometry, three.js's
+        `attribute(name)`: each corner's value of it, interpolated at the
+        fragment. A geometry without it gives zeros and one, as WebGL gives
+        an attribute that is not set.
+
+        Args:
+            name: The geometry attribute's name.
+            type: A `float`, `vec2`, `vec3` or `vec4`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If the name is a built-in attribute's, the type is not a
+                float or a vector, the name was declared with another type,
+                or the attributes would hold more than `MAX_ATTRIBUTE_FLOATS`
+                floats.
+        """
+        if name == "position" or name == "normal" or name == "uv" or name == "uv1" or name == "color":
+            raise Error(
+                name + " is a built-in attribute: read it with its own node"
+            )
+        if type.value < 1 or type.value > 4:
+            raise Error(
+                "An attribute is a float or a vector, not a " + type.name()
+            )
+        var used = 0
+        for index in range(len(self._attribute_names)):
+            if self._attribute_names[index] == name:
+                if self._attribute_widths[index] != type.value:
+                    raise Error(
+                        "The attribute "
+                        + name
+                        + " is a "
+                        + ValueType(self._attribute_widths[index]).name()
+                        + ", not a "
+                        + type.name()
+                    )
+                return self._add_attribute(index)
+            used += self._attribute_widths[index]
+        if used + type.value > MAX_ATTRIBUTE_FLOATS:
+            raise Error(
+                "A graph's attributes hold at most "
+                + String(MAX_ATTRIBUTE_FLOATS)
+                + " floats"
+            )
+        self._attribute_names.append(name)
+        self._attribute_offsets.append(used)
+        self._attribute_widths.append(type.value)
+        return self._add_attribute(len(self._attribute_names) - 1)
+
+    def _add_attribute(mut self, index: Int) -> NodeRef:
+        """Return a node that reads one of the graph's attributes."""
+        var width = self._attribute_widths[index]
+        return self._add(
+            NODE_ATTRIBUTE,
+            ValueType(width),
+            value=Lanes(Float32(self._attribute_offsets[index] + 8 * width)),
+        )
 
     def time(mut self) -> NodeRef:
         """Return the frame's time in seconds, a `float`, three.js's `time`.
@@ -4178,6 +4254,9 @@ struct NodeGraph(Copyable, Movable):
         for index in range(len(pool.textures)):
             program.texture_offsets.append(base + pool.textures[index])
         program._list_textures()
+        program.attribute_names = self._attribute_names.copy()
+        program.attribute_offsets = self._attribute_offsets.copy()
+        program.attribute_widths = self._attribute_widths.copy()
         return program^
 
 
@@ -4607,6 +4686,11 @@ struct NodeProgram(Copyable, Movable):
     # them before a fragment asks, and where each id is in `code`.
     var textures: List[TextureId]
     var texture_offsets: List[Int]
+    # The custom attributes the renderer gives each corner: name, first
+    # float and width, as `NodeGraph.attribute` laid them out.
+    var attribute_names: List[String]
+    var attribute_offsets: List[Int]
+    var attribute_widths: List[Int]
 
     def __init__(out self):
         """Create a program with no outputs, at time zero under an identity
@@ -4621,6 +4705,9 @@ struct NodeProgram(Copyable, Movable):
         self.uniform_types = List[ValueType]()
         self.textures = List[TextureId]()
         self.texture_offsets = List[Int]()
+        self.attribute_names = List[String]()
+        self.attribute_offsets = List[Int]()
+        self.attribute_widths = List[Int]()
 
     def _list_textures(mut self):
         """List every texture the texture nodes read now, each once."""
@@ -4885,7 +4972,6 @@ struct NodeProgramStore(Copyable, Movable):
 # --- the interpreter ----------------------------------------------------------
 
 
-@fieldwise_init
 struct NodeInputs(ImplicitlyCopyable):
     """What a fragment, a vertex or a corner hands a program: its attributes
     and, for an output node, the lit color."""
@@ -4904,6 +4990,40 @@ struct NodeInputs(ImplicitlyCopyable):
     # Whether texture nodes read their textures: only under the mode that
     # opens them. Otherwise they read opaque white.
     var textured: Bool
+    # A corner's custom attributes, `MAX_ATTRIBUTE_FLOATS` floats.
+    var custom: SIMD[DType.float32, 8]
+
+    def __init__(
+        out self,
+        u: Float32,
+        v: Float32,
+        position: Vector3,
+        normal: Vector3,
+        color: Vector3,
+        lit: Vector3,
+        textured: Bool,
+        custom: SIMD[DType.float32, 8] = SIMD[DType.float32, 8](0),
+    ):
+        """Gather a fragment's, a vertex's or a corner's attributes.
+
+        Args:
+            u: The texture coordinate across.
+            v: The texture coordinate up.
+            position: The position.
+            normal: The unit normal.
+            color: The interpolated corner color, linear.
+            lit: What the standard lighting made of the fragment.
+            textured: Whether texture nodes read their textures.
+            custom: The custom attributes' floats; zeros by default.
+        """
+        self.u = u
+        self.v = v
+        self.position = position
+        self.normal = normal
+        self.color = color
+        self.lit = lit
+        self.textured = textured
+        self.custom = custom
 
 
 trait NodeSource:
@@ -5219,7 +5339,14 @@ def node_attributes[
     if context.is_corner():
         var at = source.corner(context)
         return NodeInputs(
-            at.u, at.v, at.position, _unit(at.normal), at.color, none, textured
+            at.u,
+            at.v,
+            at.position,
+            _unit(at.normal),
+            at.color,
+            none,
+            textured,
+            at.custom,
         )
     var s = source.shares(context)
     var a = source.corner(CORNER_A)
@@ -5247,6 +5374,7 @@ def node_attributes[
         ),
         none,
         textured,
+        a.custom * s[0] + b.custom * s[1] + c.custom * s[2],
     )
 
 
@@ -5396,6 +5524,18 @@ def _leaf[
         return _lanes(inputs.lit)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
+    if op == NODE_ATTRIBUTE.value:
+        # Interpolated from the corners even at the fragment, whose own
+        # attributes carry no custom floats.
+        var at = AT_HERE if context == AT_FRAGMENT.value else NodeContext(
+            context
+        )
+        var custom = node_attributes(source, at, inputs.textured).custom
+        var first = Int(immediate) % 8
+        var out = Lanes(0)
+        for lane in range(Int(immediate) // 8):  # pragma: no branch
+            out[lane] = custom[first + lane]
+        return out
     if op == NODE_FRONT_FACING.value:
         var behind = source.seen_from_behind()
         if immediate != 0:
@@ -6045,6 +6185,7 @@ def run_nodes[
             or op == NODE_TEXTURE_LEVEL.value
             or op == NODE_TEXEL_FETCH.value
             or op == NODE_TEXTURE_SIZE.value
+            or op == NODE_ATTRIBUTE.value
         ):
             registers[written] = _leaf(
                 source, op, x, z, immediate, third, inputs

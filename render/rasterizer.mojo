@@ -1081,6 +1081,10 @@ struct RasterVertex(ImplicitlyCopyable):
     # default is a front seen from the front.
     var seen_from_behind: Bool
     var flip_sided: Bool
+    # The custom attributes a node program reads, `MAX_ATTRIBUTE_FLOATS`
+    # floats. Set after construction, by `Renderer.prepare`; zeros by
+    # default.
+    var custom: SIMD[DType.float32, 8]
 
     def __init__(
         out self,
@@ -1245,6 +1249,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.frames = TextureFrames()
         self.seen_from_behind = False
         self.flip_sided = False
+        self.custom = SIMD[DType.float32, 8](0)
 
 
 @fieldwise_init
@@ -4624,6 +4629,7 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             Vector3(at.color.r, at.color.g, at.color.b),
             Vector3(0, 0, 0),
             False,
+            at.custom,
         )
 
 

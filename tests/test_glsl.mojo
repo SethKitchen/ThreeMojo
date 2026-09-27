@@ -19,6 +19,7 @@ from materials.glsl import (
     shader_graph,
 )
 from materials.nodes import (
+    AT_FRAGMENT,
     AT_RIGHT,
     AT_UP,
     COLOR_NODE,
@@ -119,6 +120,17 @@ struct Corners(NodeSource):
         return Lanes(10.5, 20.5, 0.75, 1)
 
     def corner(self, context: NodeContext) -> NodeInputs:
+        """Return the made-up corners, each with custom floats of its own:
+        one to eight at the first, ten times those at the second, and a
+        hundred times at the third."""
+        var at = self._plain_corner(context)
+        var scale = Float32(1) if context == CORNER_A else (
+            Float32(10) if context == CORNER_B else Float32(100)
+        )
+        at.custom = SIMD[DType.float32, 8](1, 2, 3, 4, 5, 6, 7, 8) * scale
+        return at
+
+    def _plain_corner(self, context: NodeContext) -> NodeInputs:
         """Return the made-up corners."""
         var none = Vector3(0, 0, 0)
         if context == CORNER_A:
@@ -576,8 +588,8 @@ def test_a_raw_shader_keeps_to_its_version_and_its_built_ins() raises:
     )
     refused(
         fragment,
-        "the attribute tangent is not one this port has",
-        modern + "in vec4 tangent;\nvoid main() {}",
+        "an attribute of type mat3 is outside the subset",
+        modern + "in mat3 frame;\nvoid main() {}",
         True,
     )
     refused(
@@ -1854,7 +1866,7 @@ def test_the_corners_of_the_grammar() raises:
     refused(
         WHITE,
         "three.js declares a ShaderMaterial's attributes itself",
-        "in vec3 extra;\n" + VERTEX,
+        "attribute vec3 position;\n" + VERTEX,
     )
     refused(
         WHITE,
@@ -2587,6 +2599,38 @@ def test_int_and_bool_vectors_hold_whole_numbers_and_truths() raises:
     refused_statement(
         "vec3 x = mix(vec3(1.0), vec3(1.0), bvec2(true));",
         "mix() of a bool takes two values of one type, as wide as the bool",
+    )
+
+
+def test_a_custom_attribute_reaches_the_fragment_through_a_varying() raises:
+    var program = compile_shader_material(
+        "attribute float size;\n"
+        + "attribute vec2 offset;\n"
+        + "varying vec3 seen;\n"
+        + "void main() {\n"
+        + "    seen = vec3(size, offset);\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n"
+        + "}\n",
+        "varying vec3 seen;\nvoid main() { gl_FragColor = vec4(seen, 1.0); }\n",
+    )
+    assert_equal(len(program.attribute_names), 2)
+    # Corners gives each float k + 1 at the first corner, ten times that at
+    # the second and a hundred times at the third.
+    var s = Corners(program).shares(AT_FRAGMENT)
+    var mean = s[0] + 10 * s[1] + 100 * s[2]
+    var got = run(program)
+    assert_almost_equal(got[0], mean, atol=1e-3)
+    assert_almost_equal(got[1], 2 * mean, atol=1e-3)
+    assert_almost_equal(got[2], 3 * mean, atol=1e-3)
+    refused(
+        WHITE,
+        "the custom attributes hold at most 8 floats",
+        "attribute vec4 a;\nattribute vec4 b;\nattribute float c;\n" + VERTEX,
+    )
+    refused(
+        WHITE,
+        "an attribute of type int is outside the subset",
+        "attribute int count;\n" + VERTEX,
     )
 
 

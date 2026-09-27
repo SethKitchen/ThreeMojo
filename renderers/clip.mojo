@@ -79,6 +79,9 @@ struct ClipVertex(ImplicitlyCopyable):
     # light map are sampled. Carried through a cut like the first pair.
     var u1: Float32
     var v1: Float32
+    # The custom attributes a node program reads, carried through a cut
+    # like every other varying. Zeros by default; the renderer sets them.
+    var custom: SIMD[DType.float32, 8]
 
     def __init__(
         out self,
@@ -111,6 +114,7 @@ struct ClipVertex(ImplicitlyCopyable):
         self.line_distance = line_distance
         self.u1 = u1
         self.v1 = v1
+        self.custom = SIMD[DType.float32, 8](0)
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -158,7 +162,7 @@ def within_depth(z: Float32, near: Float32, far: Float32) -> Bool:
 def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """Return the vertex a fraction `t` of the way from `a` to `b`, every
     varying interpolated with the position."""
-    return ClipVertex(
+    var mixed = ClipVertex(
         Vector3(
             _mix(a.position.x, b.position.x, t),
             _mix(a.position.y, b.position.y, t),
@@ -194,6 +198,8 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
         _mix(a.u1, b.u1, t),
         _mix(a.v1, b.v1, t),
     )
+    mixed.custom = a.custom + (b.custom - a.custom) * t
+    return mixed^
 
 
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:

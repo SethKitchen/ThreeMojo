@@ -559,7 +559,9 @@ comptime LANE_OBJECT_NORMAL = LANE_REFRACTION_RATIO + 1
 # The constant color the constant blend factors read, three.js's
 # `blendColor` and `blendAlpha`: `RasterState.blend_constant`, four floats.
 comptime LANE_BLEND_CONSTANT = LANE_OBJECT_NORMAL + 9
-comptime FLOATS_PER_VERTEX = LANE_BLEND_CONSTANT + 4
+# The custom attributes a node program reads: `RasterVertex.custom`.
+comptime LANE_CUSTOM = LANE_BLEND_CONSTANT + 4
+comptime FLOATS_PER_VERTEX = LANE_CUSTOM + 8
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -1035,6 +1037,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.state.blend_green)
         flat.append(corner.state.blend_blue)
         flat.append(corner.state.blend_alpha)
+        for lane in range(8):
+            flat.append(corner.custom[lane])
     return flat^
 
 
@@ -3785,6 +3789,16 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             ),
             Vector3(0, 0, 0),
             False,
+            SIMD[DType.float32, 8](
+                self.corners[unsafe_offset=at + LANE_CUSTOM],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 1],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 2],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 3],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 4],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 5],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 6],
+                self.corners[unsafe_offset=at + LANE_CUSTOM + 7],
+            ),
         )
 
 
