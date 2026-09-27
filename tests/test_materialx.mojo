@@ -13,6 +13,7 @@ from materials.nodes import (
     COLOR_NODE,
     EMISSIVE_NODE,
     METALNESS_NODE,
+    NORMAL_NODE,
     OPACITY_NODE,
     ROUGHNESS_NODE,
     NodeInputs,
@@ -23,6 +24,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from std.pathlib import Path
+from units.si import DEGREE
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -469,6 +471,164 @@ def test_the_noises_are_in_their_ranges() raises:
             ProgramSource(Pointer(to=program)), COLOR_NODE, at_uv(0.25, 0.5)
         )
         assert_true(color[0] >= 0, element)
+
+
+comptime EVERY_INPUT = """<materialx>
+  <nodegraph name="G">
+    <texcoord name="uv0" type="vector2" />
+    <separate2 name="parts" type="multioutput">
+      <input name="in" type="vector2" nodename="uv0" />
+    </separate2>
+    <combine3 name="up" type="vector3">
+      <input name="in1" type="float" value="0" />
+      <input name="in2" type="float" value="1" />
+      <input name="in3" type="float" value="0" />
+    </combine3>
+    <output name="metal" type="float" nodename="parts" output="outy" />
+    <output name="bent" type="vector3" nodename="up" />
+  </nodegraph>
+  <standard_surface name="S" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.5, 0.5, 0.5" />
+    <input name="base" type="float" value="0.5" />
+    <input name="coat_color" type="color3" value="1, 0.5, 1" />
+    <input name="metalness" type="float" nodegraph="G" output="metal" />
+    <input name="normal" type="vector3" nodegraph="G" output="bent" />
+    <input name="specular_roughness" type="float" value="0.35" />
+    <input name="specular" type="float" value="0.75" />
+    <input name="specular_color" type="color3" value="1, 1, 1" />
+    <input name="specular_anisotropy" type="float" value="0.4" />
+    <input name="specular_rotation" type="float" value="0.25" />
+    <input name="transmission" type="float" value="0" />
+    <input name="thin_film_thickness" type="float" value="300" />
+    <input name="thin_film_ior" type="float" value="3" />
+    <input name="sheen" type="float" value="0.6" />
+    <input name="sheen_color" type="color3" value="0, 0, 0" />
+    <input name="sheen_roughness" type="float" value="0.2" />
+    <input name="coat_roughness" type="float" value="0.15" />
+    <input name="emission" type="float" value="0.5" />
+  </standard_surface>
+  <gltf_pbr name="P" type="surfaceshader" />
+  <surfacematerial name="M" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="S" />
+    <input name="displacementshader" type="displacementshader" />
+  </surfacematerial>
+  <surfacematerial name="Q" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="P" />
+  </surfacematerial>
+</materialx>
+"""
+
+
+def test_every_surface_input_is_read() raises:
+    var assets = Assets()
+    var read = read_materialx(EVERY_INPUT, assets)
+    assert_equal(len(read.names), 2)
+    var material = assets.materials.get(read.ids[0])
+    assert_almost_equal(material.roughness, 0.35)
+    assert_almost_equal(material.specular_intensity, 0.75)
+    assert_equal(material.specular_color.hex(), 0xFFFFFF)
+    assert_almost_equal(material.anisotropy, 0.4)
+    assert_almost_equal(material.anisotropy_rotation.to(DEGREE), 90, atol=1e-3)
+    assert_false(material.transparent)
+    assert_equal(material.iridescence, 1)
+    assert_almost_equal(material.iridescence_ior, 2.333)
+    assert_almost_equal(material.sheen, 0.6)
+    assert_equal(material.sheen_color.hex(), 0)
+    assert_almost_equal(material.sheen_roughness, 0.2)
+    assert_almost_equal(material.clearcoat_roughness, 0.15)
+    ref program = assets.programs.get(material.nodes)
+    var source = ProgramSource(Pointer(to=program))
+    # The base color times the base, times the coat's color.
+    var color = run_nodes(source, COLOR_NODE, at_uv(0.25, 0.5))
+    assert_almost_equal(color[0], 0.25)
+    assert_almost_equal(color[1], 0.125)
+    assert_almost_equal(run_nodes(source, METALNESS_NODE, at_uv(0.25, 0.5))[0], 0.5)
+    # The normal, as an offset from the surface's own.
+    var bent = run_nodes(source, NORMAL_NODE, at_uv(0.25, 0.5))
+    assert_almost_equal(bent[1], 1)
+    assert_almost_equal(bent[2], -1)
+    assert_almost_equal(run_nodes(source, EMISSIVE_NODE, at_uv(0, 0))[0], 0.5)
+    # A glTF surface keeps three.js's gray and nothing else.
+    var gray = assets.materials.get(read.ids[1])
+    ref plain = assets.programs.get(gray.nodes)
+    assert_almost_equal(
+        run_nodes(ProgramSource(Pointer(to=plain)), COLOR_NODE, at_uv(0, 0))[0],
+        0.8,
+    )
+
+
+def refused(text: String, why: String) raises:
+    """Assert that a document is refused with a message."""
+    var assets = Assets()
+    with assert_raises(contains=why):
+        _ = read_materialx(text, assets)
+
+
+def test_what_a_document_cannot_say_is_refused() raises:
+    var graph = String('<materialx><nodegraph name="G">')
+    var tail = String(
+        '<output name="out" type="color3" nodename="n" /></nodegraph></materialx>'
+    )
+    refused(graph + '<add name="n" type="float" />' + tail, "add needs its input in1")
+    refused(
+        graph
+        + '<extract name="n" type="float">'
+        + '<input name="in" type="vector3" value="1, 2, 3" />'
+        + '<input name="index" type="integer" value="4" /></extract>'
+        + tail,
+        "extract reads a component zero to three",
+    )
+    refused(
+        graph
+        + '<extract name="n" type="float">'
+        + '<input name="in" type="vector3" value="1, 2, 3" />'
+        + '<input name="index" type="integer" nodename="n" /></extract>'
+        + tail,
+        "the input index of extract must be a value",
+    )
+    refused(
+        graph
+        + '<constant name="n" type="float">'
+        + '<input name="value" type="matrix33" value="1, 0, 0" /></constant>'
+        + tail,
+        "a value of type matrix33 that is not read",
+    )
+    refused(
+        graph + '<image name="n" type="color3" />' + tail,
+        "an image needs its file",
+    )
+    refused(
+        '<materialx><unlit_surface name="S" type="surfaceshader" />'
+        + '<surfacematerial name="M" type="material">'
+        + '<input name="surfaceshader" type="surfaceshader" nodename="S" />'
+        + "</surfacematerial></materialx>",
+        "the surface unlit_surface is not read",
+    )
+    # A graph with no output named out makes no material.
+    var assets = Assets()
+    var none = read_materialx(
+        '<materialx><nodegraph name="G"><output name="other" type="float"'
+        ' nodename="x" /></nodegraph></materialx>',
+        assets,
+    )
+    assert_equal(len(none.names), 0)
+
+
+def test_an_image_reads_the_coordinates_by_default() raises:
+    var image = Framebuffer(1, 1, Color(255, 255, 255))
+    Path("/tmp/threemojo_materialx_white.png").write_bytes(encode_png(image))
+    var assets = Assets()
+    var read = read_materialx(
+        '<materialx><nodegraph name="G"><image name="n" type="color3">'
+        '<input name="file" type="filename" value="threemojo_materialx_white.png" />'
+        '</image><output name="out" type="color3" nodename="n" /></nodegraph>'
+        "</materialx>",
+        assets,
+        "/tmp/",
+    )
+    ref program = assets.programs.get(assets.materials.get(read.ids[0]).nodes)
+    assert_equal(len(program.textures), 1)
+    assert_equal(assets.textures.count(), 1)
 
 
 def main() raises:
