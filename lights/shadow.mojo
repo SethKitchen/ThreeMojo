@@ -173,14 +173,17 @@ comptime VSM_DARK = Float32(0.3)
 comptime VSM_LIT = Float32(0.95)
 # How many floats a shadow map's header takes in the flat light buffer:
 # its size, its bias, its normal bias, its radius, its sixteen-float
-# frame, then its `ShadowMapType` and its intensity; the depths follow. See
+# frame, then its `ShadowMapType`, its intensity and where its colors
+# start; the depths follow, then the colors. See
 # `render.gpu.flatten_lights`. A point light's cube puts its bulb's
 # position, its near plane and its far plane in the first five of the
 # frame's floats instead, and zeros after them.
-comptime SHADOW_HEADER = 22
-# Where in the header the `ShadowMapType` is, and the intensity.
+comptime SHADOW_HEADER = 23
+# Where in the header the `ShadowMapType` is, the intensity, and how far
+# past the map's start its colors begin, zero for a map with none.
 comptime SHADOW_TYPE_AT = 20
 comptime SHADOW_INTENSITY_AT = 21
+comptime SHADOW_COLORS_AT = 22
 # How many faces a point light's cube has, and how many texels of one
 # face of its map the nine taps spread `radius` over: three.js lays the six
 # out on a texture four faces wide and two high and offsets a tap by the
@@ -390,6 +393,12 @@ struct ShadowMap(Copyable, Movable):
     # How much of the light the shadow takes away, the light's
     # `shadow.intensity`; see `shadow_strength`.
     var intensity: Float32
+    # What the light sees through each texel, four floats a texel: red,
+    # green, blue and alpha, linear and straight, as the shadow pass drew
+    # them under three.js's `shadowMap.transmitted`. One square, or six
+    # faces for a cube, laid out as the depths are. Empty for a map drawn
+    # without them. See `transmitted_shadow`.
+    var colors: List[Float32]
 
     def __init__(
         out self,
@@ -402,6 +411,7 @@ struct ShadowMap(Copyable, Movable):
         radius: Float32,
         shadow_type: ShadowMapType = PCF_SHADOW_MAP,
         intensity: Float32 = FULL_SHADOW,
+        var colors: List[Float32] = List[Float32](),
     ) raises:
         """Adopt a rendered depth square.
 
@@ -418,11 +428,13 @@ struct ShadowMap(Copyable, Movable):
             radius: How many texels the taps spread over.
             shadow_type: Which filter reads the map.
             intensity: How much of the light the shadow takes away.
+            colors: What the light sees through each texel, four floats a
+                texel from the top; empty for none.
 
         Raises:
             Error: If the size is not positive, the type is none of the
-                four, or the depths do not fill the square, or two squares
-                under `VSM_SHADOW_MAP`.
+                four, the depths do not fill the square, or two squares
+                under `VSM_SHADOW_MAP`, or the colors fill no square.
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
@@ -433,6 +445,8 @@ struct ShadowMap(Copyable, Movable):
             squares = 2
         if len(depths) != squares * size * size:
             raise Error("A shadow map's depths must fill its square")
+        if len(colors) != 0 and len(colors) != 4 * size * size:
+            raise Error("A shadow map's colors must fill its square")
         self.light = light
         self.size = size
         self.frame = frame
@@ -446,6 +460,7 @@ struct ShadowMap(Copyable, Movable):
         self.near = 0
         self.far = 0
         self.intensity = intensity
+        self.colors = colors^
 
     def __init__(
         out self,
@@ -461,6 +476,7 @@ struct ShadowMap(Copyable, Movable):
         radius: Float32,
         shadow_type: ShadowMapType = PCF_SHADOW_MAP,
         intensity: Float32 = FULL_SHADOW,
+        var colors: List[Float32] = List[Float32](),
     ) raises:
         """Adopt a point light's six rendered faces, three.js's
         `PointLightShadow` map.
@@ -482,11 +498,13 @@ struct ShadowMap(Copyable, Movable):
             shadow_type: Which filter reads the cube: one tap under
                 `BASIC_SHADOW_MAP` and nine under the other three.
             intensity: How much of the light the shadow takes away.
+            colors: What the light sees through each texel, four floats a
+                texel, face by face as the depths are; empty for none.
 
         Raises:
             Error: If the size is not positive, the type is none of the
-                four, the depths do not fill six squares, or the far plane
-                does not lie beyond the near plane.
+                four, the depths or the colors do not fill six squares, or
+                the far plane does not lie beyond the near plane.
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
@@ -494,6 +512,8 @@ struct ShadowMap(Copyable, Movable):
             raise Error("A shadow map type that is none of the four")
         if len(depths) != CUBE_FACES * size * size:
             raise Error("A point light's shadow must fill six square faces")
+        if len(colors) != 0 and len(colors) != 4 * CUBE_FACES * size * size:
+            raise Error("A point light's shadow colors must fill six faces")
         if not (far > near):
             raise Error(
                 "A shadow camera's far plane must lie beyond its near plane"
@@ -511,6 +531,7 @@ struct ShadowMap(Copyable, Movable):
         self.near = near
         self.far = far
         self.intensity = intensity
+        self.colors = colors^
 
     def lit(self, position: Vector3, normal: Vector3) -> Float32:
         """Return how much of the light reaches a surface, one for all of
@@ -528,6 +549,72 @@ struct ShadowMap(Copyable, Movable):
         """
         return shadow_strength(
             self._unweakened(position, normal), self.intensity
+        )
+
+    def through(self, position: Vector3, normal: Vector3) -> Vector3:
+        """Return how much of the light's red, green and blue reach a
+        surface: `lit` in every channel, or for a map with colors three.js's
+        transmitted shadow, `transmitted_shadow` of what the depths let
+        through and the color the light sees there. A surface outside the
+        map is lit in full, as `lit` lights it.
+
+        Args:
+            position: Where the surface is, in world space.
+            normal: Its unit normal, for the normal bias.
+
+        Returns:
+            The fractions of the light that arrive.
+        """
+        if len(self.colors) == 0:
+            var through = self.lit(position, normal)
+            return Vector3(through, through, through)
+        var away = biased_position(position, normal, self.normal_bias)
+        var seen: SIMD[DType.float32, 4]
+        if self.cube:
+            var toward = Vector3(
+                away.x - self.origin.x,
+                away.y - self.origin.y,
+                away.z - self.origin.z,
+            )
+            var distance = toward.length()
+            if not inside_point_shadow(distance, self.near, self.far):
+                return Vector3(1, 1, 1)
+            var texel = cube_texel(
+                Vector3(
+                    toward.x / distance,
+                    toward.y / distance,
+                    toward.z / distance,
+                ),
+                self.size,
+            )
+            seen = SIMD[DType.float32, 4](
+                self.colors[texel * 4],
+                self.colors[texel * 4 + 1],
+                self.colors[texel * 4 + 2],
+                self.colors[texel * 4 + 3],
+            )
+        else:
+            var place = shadow_coordinate(self.frame, away)
+            if not inside_shadow_map(place, self.bias):
+                return Vector3(1, 1, 1)
+            var across = place.x * Float32(self.size)
+            var down = place.y * Float32(self.size)
+            var red_green = SIMD[DType.float32, 8](0)
+            var blue_alpha = SIMD[DType.float32, 8](0)
+            for corner in range(4):  # pragma: no branch
+                var texel = bilinear_texel(across, down, corner, self.size)
+                red_green[corner] = self.colors[texel * 4]
+                red_green[corner + 4] = self.colors[texel * 4 + 1]
+                blue_alpha[corner] = self.colors[texel * 4 + 2]
+                blue_alpha[corner + 4] = self.colors[texel * 4 + 3]
+            seen = SIMD[DType.float32, 4](
+                bilinear(red_green, 0, across, down),
+                bilinear(red_green, 4, across, down),
+                bilinear(blue_alpha, 0, across, down),
+                bilinear(blue_alpha, 4, across, down),
+            )
+        return transmitted_shadow(
+            self._unweakened(position, normal), seen, self.intensity
         )
 
     def _unweakened(self, position: Vector3, normal: Vector3) -> Float32:
@@ -806,6 +893,37 @@ def shadow_strength(through: Float32, intensity: Float32) -> Float32:
     if intensity == FULL_SHADOW:
         return through
     return 1 + (through - 1) * intensity
+
+
+def transmitted_shadow(
+    shadow: Float32, seen: SIMD[DType.float32, 4], intensity: Float32
+) -> Vector3:
+    """Return how much of a light's red, green and blue reach a surface
+    through a shadow map with colors: three.js's
+    `mix( 1, shadow.rgb.mix( shadowColor, 1 ), shadowIntensity.mul(
+    shadowColor.a ) )`, where TSL's `a.mix( b, t )` is `mix( b, t, a )`.
+
+    Where the depths say the surface is lit, all the light arrives. Where
+    they say it is shadowed, the color the light sees there arrives,
+    weakened by the intensity times that color's alpha. So a texel nothing
+    was drawn in, alpha zero, leaves the light alone, and an opaque black
+    caster, three.js's default, casts the shadow `shadow_strength` makes.
+    Both rasterizers call it.
+
+    Args:
+        shadow: What the depths let through at full intensity.
+        seen: The color and alpha the light sees there, straight.
+        intensity: How much of the light the shadow takes away.
+
+    Returns:
+        The red, green and blue fractions.
+    """
+    var share = intensity * seen[3]
+    return Vector3(
+        shadow_strength(seen[0] * (1 - shadow) + shadow, share),
+        shadow_strength(seen[1] * (1 - shadow) + shadow, share),
+        shadow_strength(seen[2] * (1 - shadow) + shadow, share),
+    )
 
 
 def biased_position(

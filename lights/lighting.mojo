@@ -1610,8 +1610,7 @@ struct Lighting(Movable):
         """
         if slot < 0 or not receives:
             return Vector3(1, 1, 1)
-        var through = self.shadows[slot].lit(position, normal)
-        return shape.shaped(Vector3(through, through, through))
+        return shape.shaped(self.shadows[slot].through(position, normal))
 
     def direction_through[
         R: ShadowShape = Unshaped

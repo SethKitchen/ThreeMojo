@@ -117,6 +117,7 @@ from materials.nodes import (
     OPACITY_NODE,
     OUTPUT_NODE,
     RECEIVED_SHADOW_NODE,
+    CAST_SHADOW_NODE,
     ProgramShape,
     NodeContext,
     NodeInputs,
@@ -1318,10 +1319,15 @@ struct RasterVertex(ImplicitlyCopyable):
 struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
     """What a fragment's color is taken from, as a type rather than an int.
 
-    The three cases differ in which numbers they read, not in what the
+    The first three cases differ in which numbers they read, not in what the
     rasterizer does around them. `SHADE_TEXTURE` multiplies the sampled texel
     by the interpolated lighting, so a white texture shades exactly as
     `SHADE_LIT` does and an unlit white mesh shows the image unchanged.
+    `SHADE_SHADOW` is the shadow pass's own: each fragment writes what a
+    light sees through it, its `CAST_SHADOW_NODE` or opaque black, times
+    its maps' alpha, three.js's shadow material under
+    `shadowMap.transmitted`. Only the host draws a shadow map, so only the
+    host rasterizer takes it.
 
     A type because an unrecognized integer here was once read in opposite
     directions by the two backends: the CPU's last branch treated it as
@@ -1335,13 +1341,19 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the three modes there are."""
-        return self == SHADE_LIT or self == SHADE_UV or self == SHADE_TEXTURE
+        """Return True if this is one of the four modes there are."""
+        return (
+            self == SHADE_LIT
+            or self == SHADE_UV
+            or self == SHADE_TEXTURE
+            or self == SHADE_SHADOW
+        )
 
 
 comptime SHADE_LIT = ShadeMode(0)
 comptime SHADE_UV = ShadeMode(1)
 comptime SHADE_TEXTURE = ShadeMode(2)
+comptime SHADE_SHADOW = ShadeMode(3)
 
 
 def _coordinates_at(
@@ -3315,7 +3327,7 @@ def rasterize_shaded(
             write lands out of bounds — the last of which the loop prevents.
     """
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     check_triangle_state(a, b, c)
     # A view of the fog can be built by hand, and its fields are open:
     # refused here, before a fragment reads it, as the GPU refuses it
@@ -3440,7 +3452,9 @@ def rasterize_shaded(
         target.width,
         Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
     )
-    var textured = mode == SHADE_TEXTURE
+    # The shadow pass reads the maps' alpha and the graph's textures as the
+    # textured view does.
+    var textured = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     # Whether the graph can throw a fragment away, as an alpha test can:
     # its mask, which every `Discard` joins. And whether it sets the depth
     # itself, before the tests read it.
@@ -3632,6 +3646,61 @@ def rasterize_shaded(
             # The normal before any map perturbs it: what a clear coat lies
             # on, three.js's `nonPerturbedNormal`.
             var coat_facing = facing
+            # The shadow pass's color, three.js's transmitted shadow: what
+            # the light sees through the surface, its alpha thinned by the
+            # map and the alpha map, then tested as three.js's shadow
+            # material tests it. Written as it is, alpha and all, as
+            # `NoBlending` writes it.
+            if mode == SHADE_SHADOW:
+                var given = NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                )
+                var cast = cast_shadow_color(nodes, noded, given)
+                if a.texture != NO_TEXTURE:
+                    cast.a *= _sample_placed(
+                        textures.get(a.texture),
+                        placed[MAP_SLOT],
+                        uv,
+                        uv1,
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                    ).a
+                if a.alpha_map != NO_TEXTURE:
+                    cast.a *= _sample_placed(
+                        textures.get(a.alpha_map),
+                        placed[ALPHA_MAP_SLOT],
+                        uv,
+                        uv1,
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                    ).g
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
+                if tested and cast.a < a.alpha_test:
+                    continue
+                if hashed and cast.a < hashed_threshold(nodes):
+                    continue
+                target.keep_stencil(x, y, test)
+                if not test.passes:
+                    continue
+                if writes_depth:
+                    target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
+                continue
             # `check_triangle_state` has refused a map on any kind that is
             # not lit or a matcap, so a perturbed triangle has a normal
             # above to perturb.
@@ -5473,7 +5542,7 @@ def rasterize_line(
         a.nodes, mode, textures, cubes, programs, volumes, arrays
     )
     var noded = a.nodes != NO_NODES and mode != SHADE_UV
-    var textured = mode == SHADE_TEXTURE
+    var textured = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     var nodes = _HostLineNodes(
         Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
         max(a.nodes.value, 0),
@@ -5607,6 +5676,17 @@ def rasterize_line(
                     shaded.a = run_nodes(nodes, OPACITY_NODE, given)[0]
                 if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
                     continue
+            # The shadow pass's color; see `rasterize_shaded`.
+            if mode == SHADE_SHADOW:
+                var cast = cast_shadow_color(nodes, noded, given)
+                var shadowed = target.test_fragment(x, y, stored_z, a.state)
+                target.keep_stencil(x, y, shadowed)
+                if not shadowed.passes:
+                    continue
+                if writes_depth:
+                    target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
+                continue
             if fogged:
                 shaded = fog_mix(shaded, fog.color, veil)
             # The output last, reading the finished color.
@@ -5652,6 +5732,27 @@ def rasterize_line(
                 # is.
                 drawn.a = 1
                 target.write(x, y, drawn, not a.state.tone_mapped)
+
+
+def cast_shadow_color[
+    S: NodeSource
+](source: S, noded: Bool, given: NodeInputs) -> FloatColor:
+    """Return what a light sees through a fragment in the shadow pass,
+    before the maps thin its alpha: the program's `CAST_SHADOW_NODE`, or
+    opaque black, three.js's shadow material's `vec4( 0, 0, 0, 1 )`.
+
+    Args:
+        source: The fragment's program.
+        noded: Whether the fragment runs a program.
+        given: The fragment's attributes.
+
+    Returns:
+        The color and alpha, linear and straight.
+    """
+    if noded and has_output(source, CAST_SHADOW_NODE):
+        var made = run_nodes(source, CAST_SHADOW_NODE, given)
+        return FloatColor(made[0], made[1], made[2], made[3])
+    return FloatColor(0.0, 0.0, 0.0, 1.0)
 
 
 # --- points -----------------------------------------------------------------
@@ -5802,7 +5903,7 @@ def rasterize_point(
             texture the store does not have.
     """
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     check_point_state(point)
     fog.validate()
     check_point_maps(point, mode, textures, cubes, programs, volumes, arrays)
@@ -5814,7 +5915,7 @@ def rasterize_point(
     var covered = point.state.alpha_to_coverage and mode != SHADE_UV
     var may_discard = tested or covered
     var writes_depth = point.state.writes_depth()
-    var sampled = mode == SHADE_TEXTURE
+    var sampled = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     var center = Vector2(point.x, point.y)
     var size = point.point_size
     # The rows this call owns, held inside the image, and the square held
@@ -5877,6 +5978,32 @@ def rasterize_point(
             var test = target.test_fragment(x, y, stored_z, point.state)
             if not shades(test, may_discard or masked):
                 target.keep_stencil(x, y, test)
+                continue
+            # The shadow pass's color; see `rasterize_shaded`.
+            if mode == SHADE_SHADOW:
+                nodes.x = x
+                nodes.y = y
+                nodes.depth = point.z
+                var place = point_coord(center, size, x, y)
+                var cast = cast_shadow_color(nodes, noded, given)
+                if point.texture != NO_TEXTURE:
+                    cast.a *= _sample_point_map(
+                        textures.get(point.texture), place, level
+                    ).a
+                if point.alpha_map != NO_TEXTURE:
+                    cast.a *= _sample_point_map(
+                        textures.get(point.alpha_map), place, mask_level
+                    ).g
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
+                if tested and cast.a < point.alpha_test:
+                    continue
+                target.keep_stencil(x, y, test)
+                if not test.passes:
+                    continue
+                if writes_depth:
+                    target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
                 continue
             var shaded = point.color
             if mode != SHADE_LIT:
@@ -6390,7 +6517,7 @@ def rasterize_frame(
     if workers < 1:
         raise Error("Rasterizing needs at least one worker")
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     # Refused here, before any band starts, for the reason the triangle
     # state is: whether or not a triangle is visible, and however many
     # workers there are.

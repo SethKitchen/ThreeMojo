@@ -260,6 +260,7 @@ from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     DRAW_TRIANGLES,
@@ -4835,11 +4836,17 @@ struct Renderer(Movable):
                 coordinates as red and green instead.
 
         Raises:
-            Error: If the mode is none of those three. The type stops a bare
-                integer; it does not stop `ShadeMode(99)`.
+            Error: If the mode is none of those three: `SHADE_SHADOW` is the
+                shadow pass's. The type stops a bare integer; it does not
+                stop `ShadeMode(99)`.
         """
         if not mode.is_valid():
-            raise Error("A shading mode that is none of the three")
+            raise Error("A shading mode that is none of the four")
+        if mode == SHADE_SHADOW:
+            raise Error(
+                "SHADE_SHADOW draws a shadow map's colors, which the"
+                " renderer draws for itself"
+            )
         self.shading = mode
 
     def prepare[

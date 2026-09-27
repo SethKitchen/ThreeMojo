@@ -101,6 +101,7 @@ from lights.shadow import (
     PCF_SOFT_SHADOW_MAP,
     PCF_TAPS,
     POINT_SHADOW_TAPS,
+    SHADOW_COLORS_AT,
     SHADOW_HEADER,
     SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
@@ -120,6 +121,7 @@ from lights.shadow import (
     point_shadow_spread,
     point_shadow_tap,
     shadow_coordinate,
+    transmitted_shadow,
     shadow_strength,
     shadow_tap,
     shadow_texel,
@@ -179,6 +181,7 @@ from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     DRAW_TRIANGLES,
@@ -1278,7 +1281,11 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         next += 2 * LTC_FLOATS
     for slot in range(len(lighting.shadows)):
         starts.append(next)
-        next += SHADOW_HEADER + len(lighting.shadows[slot].depths)
+        next += (
+            SHADOW_HEADER
+            + len(lighting.shadows[slot].depths)
+            + len(lighting.shadows[slot].colors)
+        )
     var map_starts = List[Int]()
     for _ in range(len(lighting.spot_maps)):
         map_starts.append(next)
@@ -1405,8 +1412,15 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
             flat.append(frame[element])
         flat.append(Float32(map.shadow_type.value))
         flat.append(map.intensity)
+        # Where the colors start, past the depths, or zero for none.
+        flat.append(
+            Float32(SHADOW_HEADER + len(map.depths)) if len(map.colors)
+            > 0 else 0
+        )
         for texel in range(len(map.depths)):
             flat.append(map.depths[texel])
+        for element in range(len(map.colors)):
+            flat.append(map.colors[element])
     for slot in range(len(lighting.spot_maps)):
         ref picture = lighting.spot_maps[slot]
         flat.append(Float32(picture.texture.value))
@@ -1639,6 +1653,95 @@ def _through(
     return _shadow_at(lights, Int(block), position, normal)
 
 
+def _square_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Vector3:
+    """Return how much of a light's red, green and blue reach a surface
+    past its square map: the device counterpart of `ShadowMap.through`."""
+    var colors = Int(lights[unsafe_offset=block + SHADOW_COLORS_AT])
+    if colors == 0:
+        var through = _shadow_at(lights, block, position, normal)
+        return Vector3(through, through, through)
+    var size = Int(lights[unsafe_offset=block])
+    var frame = SIMD[DType.float32, 16](0)
+    for element in range(16):
+        frame[element] = lights[unsafe_offset=block + 4 + element]
+    var place = shadow_coordinate(
+        frame,
+        biased_position(position, normal, lights[unsafe_offset=block + 2]),
+    )
+    if not inside_shadow_map(place, lights[unsafe_offset=block + 1]):
+        return Vector3(1, 1, 1)
+    var across = place.x * Float32(size)
+    var down = place.y * Float32(size)
+    var red_green = SIMD[DType.float32, 8](0)
+    var blue_alpha = SIMD[DType.float32, 8](0)
+    var first = block + colors
+    for corner in range(4):
+        var texel = first + bilinear_texel(across, down, corner, size) * 4
+        red_green[corner] = lights[unsafe_offset=texel]
+        red_green[corner + 4] = lights[unsafe_offset=texel + 1]
+        blue_alpha[corner] = lights[unsafe_offset=texel + 2]
+        blue_alpha[corner + 4] = lights[unsafe_offset=texel + 3]
+    return transmitted_shadow(
+        _unweakened_shadow_at(lights, block, position, normal),
+        SIMD[DType.float32, 4](
+            bilinear(red_green, 0, across, down),
+            bilinear(red_green, 4, across, down),
+            bilinear(blue_alpha, 0, across, down),
+            bilinear(blue_alpha, 4, across, down),
+        ),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
+def _cube_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Vector3:
+    """Return how much of a point light's red, green and blue reach a
+    surface past its cube: the device counterpart of `ShadowMap.through`
+    on a cube."""
+    var colors = Int(lights[unsafe_offset=block + SHADOW_COLORS_AT])
+    if colors == 0:
+        var through = _cube_shadow_at(lights, block, position, normal)
+        return Vector3(through, through, through)
+    var near = lights[unsafe_offset=block + 7]
+    var far = lights[unsafe_offset=block + 8]
+    var away = biased_position(
+        position, normal, lights[unsafe_offset=block + 2]
+    )
+    var toward = Vector3(
+        away.x - lights[unsafe_offset=block + 4],
+        away.y - lights[unsafe_offset=block + 5],
+        away.z - lights[unsafe_offset=block + 6],
+    )
+    var distance = toward.length()
+    if not inside_point_shadow(distance, near, far):
+        return Vector3(1, 1, 1)
+    var texel = block + colors + cube_texel(
+        Vector3(
+            toward.x / distance, toward.y / distance, toward.z / distance
+        ),
+        Int(lights[unsafe_offset=block]),
+    ) * 4
+    return transmitted_shadow(
+        _unweakened_cube_at(lights, block, position, normal),
+        SIMD[DType.float32, 4](
+            lights[unsafe_offset=texel],
+            lights[unsafe_offset=texel + 1],
+            lights[unsafe_offset=texel + 2],
+            lights[unsafe_offset=texel + 3],
+        ),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
 def _shaped_through[
     R: ShadowShape
 ](
@@ -1656,8 +1759,7 @@ def _shaped_through[
     var block = lights[unsafe_offset=at]
     if block < 0 or not receives:
         return Vector3(1, 1, 1)
-    var through = _shadow_at(lights, Int(block), position, normal)
-    return shape.shaped(Vector3(through, through, through))
+    return shape.shaped(_square_through(lights, Int(block), position, normal))
 
 
 def _point_shaped[
@@ -1676,8 +1778,7 @@ def _point_shaped[
     var block = lights[unsafe_offset=at]
     if block < 0 or not receives:
         return Vector3(1, 1, 1)
-    var through = _cube_shadow_at(lights, Int(block), position, normal)
-    return shape.shaped(Vector3(through, through, through))
+    return shape.shaped(_cube_through(lights, Int(block), position, normal))
 
 
 def _direction_through[
@@ -8671,7 +8772,12 @@ struct GpuRenderer(Movable):
         if len(lines) % 2 != 0:
             raise Error("Rasterizing needs whole segments")
         if not mode.is_valid():
-            raise Error("A shading mode that is none of the three")
+            raise Error("A shading mode that is none of the four")
+        if mode == SHADE_SHADOW:
+            raise Error(
+                "A shadow map's colors are drawn on the host: the kernel"
+                " takes no SHADE_SHADOW"
+            )
         # The kernel cannot raise on a curve or a fog it does not know, so
         # the refusals `RenderTarget.resolve` and `rasterize_all` make are
         # made here, before the launch, by the same functions.

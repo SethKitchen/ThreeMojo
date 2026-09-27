@@ -15,7 +15,7 @@ reads it out of a device buffer, through the `NodeSource` trait, so the two
 backends run the same arithmetic in the same order. `materials.glsl`
 compiles GLSL source to the same graphs.
 
-A graph sets up to sixteen outputs, each three.js's property of the same name:
+A graph sets up to seventeen outputs, each three.js's property of the same name:
 
 - `COLOR_NODE`, a `vec3`: the surface's diffuse color, three.js's
   `colorNode`. It replaces the material's color, its vertex colors and its
@@ -58,6 +58,11 @@ A graph sets up to sixteen outputs, each three.js's property of the same name:
   `shadow` node reads what the light's shadow lets through, a `vec3`. The
   light's color is multiplied by it in place of the shadow. See
   `ProgramShape`.
+- `CAST_SHADOW_NODE`, a `vec4`: three.js's `castShadowNode`, the color and
+  alpha a light sees through the surface where it casts a shadow. It runs
+  in the shadow pass, under `Renderer.shadow_map_transmitted`, in place of
+  opaque black, and the map's alpha multiplies its alpha. See
+  `lights.shadow`.
 
 A graph refuses a type error as it is built: a `vec3` added to a `vec2`, a
 `float` output given a `vec3`, a swizzle of a component the value lacks. A
@@ -137,11 +142,11 @@ comptime INSTRUCTION_C = 3
 comptime INSTRUCTION_IMMEDIATE = 4
 comptime INSTRUCTION_DEST = 5
 comptime INSTRUCTION_FLOATS = 6
-# How a program begins: where each of the sixteen outputs starts and how many
+# How a program begins: where each of the seventeen outputs starts and how many
 # instructions it holds, then the frame's time in seconds, then the view
 # matrix, sixteen floats, column-major. The renderer writes the last two
 # every frame, as three.js updates its `time` and `cameraViewMatrix` nodes.
-comptime NODE_OUTPUT_COUNT = 16
+comptime NODE_OUTPUT_COUNT = 17
 comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
@@ -416,7 +421,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the sixteen outputs there are.
+        """Return True if this is one of the seventeen outputs there are.
 
         Returns:
             Whether the value names an output.
@@ -429,8 +434,8 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             `NODE_FLOAT` for the opacity, the mask, the ambient occlusion,
             the depth, the size, the backdrop's alpha, the roughness and the
-            metalness, `NODE_VEC4` for
-            the fragment, and `NODE_VEC3` for the rest.
+            metalness, `NODE_VEC4` for the fragment and the cast shadow,
+            and `NODE_VEC3` for the rest.
         """
         return NODE_FLOAT if (
             self == OPACITY_NODE
@@ -441,7 +446,10 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
             or self == BACKDROP_ALPHA_NODE
             or self == ROUGHNESS_NODE
             or self == METALNESS_NODE
-        ) else (NODE_VEC4 if self == FRAGMENT_NODE else NODE_VEC3)
+        ) else (
+            NODE_VEC4 if self == FRAGMENT_NODE
+            or self == CAST_SHADOW_NODE else NODE_VEC3
+        )
 
 
 comptime COLOR_NODE = NodeOutput(0)
@@ -460,6 +468,7 @@ comptime FRAGMENT_NODE = NodeOutput(12)
 comptime ROUGHNESS_NODE = NodeOutput(13)
 comptime METALNESS_NODE = NodeOutput(14)
 comptime RECEIVED_SHADOW_NODE = NodeOutput(15)
+comptime CAST_SHADOW_NODE = NodeOutput(16)
 
 
 @fieldwise_init
@@ -852,16 +861,16 @@ struct NodeGraph(Copyable, Movable):
         """Return the node that feeds an output, or `NodeRef(-1)` for none.
 
         Args:
-            output: One of the sixteen outputs.
+            output: One of the seventeen outputs.
 
         Returns:
             The node's ref.
 
         Raises:
-            Error: If the output is none of the sixteen.
+            Error: If the output is none of the seventeen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the sixteen")
+            raise Error("A node output that is none of the seventeen")
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -4348,17 +4357,17 @@ struct NodeGraph(Copyable, Movable):
         does.
 
         Args:
-            output: Which output: one of the sixteen.
+            output: Which output: one of the seventeen.
             node: The node, of the type the output takes: a `float` for the
                 opacity, the mask, the ambient occlusion and the depth, and
                 a `vec3` for the rest.
 
         Raises:
-            Error: If the output is none of the sixteen, the node is not in
+            Error: If the output is none of the seventeen, the node is not in
                 this graph, or its type is not the output's.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the sixteen")
+            raise Error("A node output that is none of the seventeen")
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -5160,16 +5169,16 @@ struct NodeProgram(Copyable, Movable):
         """Return True if the program sets an output.
 
         Args:
-            output: One of the sixteen outputs.
+            output: One of the seventeen outputs.
 
         Returns:
             Whether a graph node feeds it.
 
         Raises:
-            Error: If the output is none of the sixteen.
+            Error: If the output is none of the seventeen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the sixteen")
+            raise Error("A node output that is none of the seventeen")
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:
@@ -6782,7 +6791,7 @@ def has_output[S: NodeSource](source: S, output: NodeOutput) -> Bool:
 
     Args:
         source: The program.
-        output: One of the sixteen outputs; the caller names it by its constant.
+        output: One of the seventeen outputs; the caller names it by its constant.
 
     Returns:
         Whether any instruction computes it.
@@ -6806,7 +6815,7 @@ def run_nodes[
     Args:
         source: The program, where its textures are sampled, and its
             triangle.
-        output: One of the sixteen outputs, one `has_output` answers True for;
+        output: One of the seventeen outputs, one `has_output` answers True for;
             the caller names it by its constant.
         inputs: The fragment's or the vertex's attributes.
 
