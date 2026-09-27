@@ -12337,6 +12337,64 @@ def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
         programs=frame.programs,
     )
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+def test_both_backends_draw_the_toon_shaders_alike() raises:
+    # three.js's four toon shaders on a sphere under one light: the rim,
+    # the bands, the hatching and the dots, from the same GLSL.
+    if skipped_for_lack_of_a_gpu("both backends draw the toon shaders"):
+        return
+    from materials.toon_shaders import (
+        toon_shader_1,
+        toon_shader_2,
+        toon_shader_dotted,
+        toon_shader_hatching,
+    )
+
+    var programs = List[NodeProgram]()
+    programs.append(toon_shader_1())
+    programs.append(toon_shader_2())
+    programs.append(toon_shader_hatching())
+    programs.append(toon_shader_dotted())
+    for index in range(len(programs)):
+        var assets = Assets()
+        var program = programs[index].copy()
+        program.set_uniform("uDirLightPos", Vector3(0.6, 0.48, 0.64))
+        var id = assets.programs.add(program^)
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.add_mesh(
+            Mesh(
+                assets.geometries.add(sphere(Length(0.9, METER), 16, 12)),
+                assets.materials.add(shader_material(id)),
+                node,
+            )
+        )
+        scene.update()
+        var camera = PerspectiveCamera(
+            Angle(45.0, DEGREE), 1, Length(0.1, METER), Length(100.0, METER)
+        )
+        camera.place(Vector3(0, 0.5, 3), Vector3(0, 0, 0))
+        var renderer = Renderer(32, 32)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(32, 32)
+        device.set_textures(assets.textures)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene, eye=camera_position(scene, camera)),
+            lines=frame.segments,
+            draws=frame.draws,
+            points=frame.points,
+            programs=frame.programs,
+        )
+        assert_true(32 * 32 - count_background(cpu, BACKGROUND) > 200)
+        assert_equal(
+            count_mismatches(cpu, device.read_back(), tolerance=1), 0
+        )
+
+
 def test_both_backends_march_a_volume_alike() raises:
     # three.js's volume shader through a ball of intensity, both styles:
     # the kernel reads the 3D texture from the fog buffer and runs the
