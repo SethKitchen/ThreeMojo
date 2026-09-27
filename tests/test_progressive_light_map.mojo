@@ -174,7 +174,7 @@ def test_a_mesh_the_map_cannot_hold_is_refused() raises:
     )
     with assert_raises(contains="basic or lit material"):
         light_map.add_objects_to_light_map(scene, assets, [3])
-    var wire = Material(Color(0, 0, 0), wireframe=True)
+    var wire = Material(Color(0, 0, 0), kind=BASIC, wireframe=True)
     scene.add_mesh(
         Mesh(
             scene.meshes[0].geometry,
@@ -241,13 +241,13 @@ def test_the_padding_takes_the_color_beside_it() raises:
     light_map.add_objects_to_light_map(scene, assets, [0])
     var renderer = Renderer(8, 8)
     light_map.update(renderer, scene, assets, a_camera(), 1)
-    # The bottom row is padding, below the facing plane: blurred from the
-    # row above it, it is lit.
+    # The plane covers the rows from 2.5 to 29.5. Row 30 is padding:
+    # blurred from the row above it, it is lit.
     light_map.update(renderer, scene, assets, a_camera(), 1)
-    assert_true(texel(assets, light_map.maps[0], 16, SIZE - 1) > 0.01)
+    assert_true(texel(assets, light_map.maps[0], 16, SIZE - 2) > 0.01)
     # Unblurred, it is black.
     light_map.update(renderer, scene, assets, a_camera(), 1, False)
-    assert_equal(texel(assets, light_map.maps[1], 16, SIZE - 1), 0)
+    assert_equal(texel(assets, light_map.maps[1], 16, SIZE - 2), 0)
     assert_true(texel(assets, light_map.maps[1], 16, 24) > 0.05)
 
 
@@ -258,18 +258,18 @@ def test_the_map_draws_no_background_line_point_or_other_mesh() raises:
     # A box in front of the planes, a line, points and a background: none
     # is drawn into the map, and the box casts no shade on it here.
     var node = scene.add(Object3D())
-    var cube = assets.geometries.add(
-        box(Length(1, METER), Length(1, METER), Length(1, METER))
-    )
+    var solid = box(Length(1, METER), Length(1, METER), Length(1, METER))
+    var cube = assets.geometries.add(solid.copy())
+    var loose = assets.geometries.add(solid.to_non_indexed())
     scene.add_mesh(
         Mesh(cube, assets.materials.add(Material(Color(255, 0, 0))), node)
     )
     scene.add_line(
-        Line(cube, assets.materials.add(line_material(Color(255, 0, 0))), node)
+        Line(loose, assets.materials.add(line_material(Color(255, 0, 0))), node)
     )
     scene.add_points(
         Points(
-            cube, assets.materials.add(points_material(Color(255, 0, 0))), node
+            loose, assets.materials.add(points_material(Color(255, 0, 0))), node
         )
     )
     scene.background = texture_background(
