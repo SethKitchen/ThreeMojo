@@ -171,6 +171,7 @@ from materials.material import (
     DEFAULT_LINE_WIDTH,
     DEPTH,
     DISTANCE,
+    GOURAUD,
     LAMBERT,
     NO_DASH,
     NO_TEXTURE,
@@ -354,6 +355,7 @@ def _has_emissive(kind: MaterialKind) -> Bool:
     """Return True for a kind whose three.js class has an emissive color."""
     return (
         kind == LAMBERT
+        or kind == GOURAUD
         or kind == PHONG
         or kind == TOON
         or kind == STANDARD
@@ -369,7 +371,7 @@ def _has_color(kind: MaterialKind) -> Bool:
 def _reflects(kind: MaterialKind) -> Bool:
     """Return True for a kind whose three.js class has `reflectivity` and
     `combine`."""
-    return kind == BASIC or kind == LAMBERT or kind == PHONG
+    return kind == BASIC or kind == LAMBERT or kind == GOURAUD or kind == PHONG
 
 
 struct _Header(Copyable, Movable):

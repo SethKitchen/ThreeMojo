@@ -919,6 +919,72 @@ def specular_occlusion(
     return _saturated(power - 1 + occlusion)
 
 
+def scattering_through(
+    toward_light: Vector3,
+    normal: Vector3,
+    toward_eye: Vector3,
+    distortion: Float32,
+    power: Float32,
+    scale: Float32,
+    ambient: Float32,
+) -> Float32:
+    """Return how much of one light shows through a surface toward the
+    camera: three.js's `SubsurfaceScatteringShader`, `scatteringDot +
+    thicknessAmbient`. The way to the light is bent along the normal by
+    the distortion, and the camera sees the light that comes out of the
+    far side. Shared by both rasterizers.
+
+    Args:
+        toward_light: The unit direction to the light.
+        normal: The surface's unit normal.
+        toward_eye: The unit direction to the camera.
+        distortion: How far the normal bends the way to the light.
+        power: How tight the light through is.
+        scale: How bright it is.
+        ambient: Light through from every side.
+
+    Returns:
+        The light's share that shows through, before its color.
+    """
+    var half = Vector3(
+        toward_light.x + normal.x * distortion,
+        toward_light.y + normal.y * distortion,
+        toward_light.z + normal.z * distortion,
+    )
+    half.normalize()
+    var facing = max(Float32(0), min(Float32(1), -toward_eye.dot(half)))
+    # The power as `exp2` of `log2`, as `blinn_phong` spells it, with zero
+    # kept off `log2`.
+    var lit = Float32(0)
+    if facing > 0:
+        lit = exp2(power * log2(facing))
+    return lit * scale + ambient
+
+
+def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
+    """Return a Gouraud surface's arriving light at a fragment: the direct
+    light interpolated from its corners, darkened by the shadows there, and
+    the indirect light interpolated from its corners. three.js's
+    `MeshGouraudMaterial` fragment: `vLightFront * getShadowMask()` and
+    `vIndirectFront`, before `BRDF_Lambert`. Shared by both rasterizers.
+
+    Args:
+        direct: The direct light, interpolated; see `Lighting.direct_at`.
+        indirect: The indirect light, interpolated; see
+            `Lighting.indirect_at`.
+        mask: What `Lighting.shadow_mask` returned, or one where no shadow
+            falls on the surface.
+
+    Returns:
+        The arriving light, linear.
+    """
+    return Vector3(
+        direct.x * mask + indirect.x,
+        direct.y * mask + indirect.y,
+        direct.z * mask + indirect.z,
+    )
+
+
 def occluded_light(
     arriving: Vector3, indirect: Vector3, baked: Vector3, occlusion: Float32
 ) -> Vector3:
@@ -2003,6 +2069,198 @@ struct Lighting(Movable):
             self.ambient.b + lift.z,
             1.0,
         )
+
+    def scattered_at(
+        self,
+        normal: Vector3,
+        position: Vector3,
+        distortion: Float32,
+        power: Float32,
+        scale: Float32,
+        ambient: Float32,
+        receives: Bool = True,
+    ) -> FloatColor:
+        """Return the light that shows through a surface from behind:
+        three.js's `RE_Direct_Scattering`, summed over the lights with a
+        direction, each its `scattering_through` times its color as it
+        reaches here, shadowed and in its cone. The surface's thickness,
+        color and attenuation multiply it after. Not scaled: three.js adds
+        it to the direct diffuse light, not through `BRDF_Lambert`. Summed
+        in the order `specular_at` sums.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            distortion: How far the normal bends the way to the light.
+            power: How tight the light through is.
+            scale: How bright it is.
+            ambient: Light through from every side.
+            receives: Whether the lights' shadows fall on this surface.
+
+        Returns:
+            The light through, linear. Alpha is one.
+        """
+        var toward_eye = toward_eye_at(self.eye, self.toward_eye, position)
+        if toward_eye.length() == 0:
+            return FloatColor(0.0, 0.0, 0.0, 1.0)
+        var red = Float32(0)
+        var green = Float32(0)
+        var blue = Float32(0)
+        for index in range(len(self.directions)):
+            var through = scattering_through(
+                self.directions[index],
+                normal,
+                toward_eye,
+                distortion,
+                power,
+                scale,
+                ambient,
+            ) * self.direction_through(index, position, normal, receives)
+            ref light = self.radiances[index]
+            red += light.r * through
+            green += light.g * through
+            blue += light.b * through
+        for index in range(len(self.positions)):
+            var toward = self.positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var reach = falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            ) * self.shadow_at(
+                self.point_shadows[index], position, normal, receives
+            )
+            toward.normalize()
+            var through = (
+                scattering_through(
+                    toward,
+                    normal,
+                    toward_eye,
+                    distortion,
+                    power,
+                    scale,
+                    ambient,
+                )
+                * reach
+            )
+            ref bulb = self.point_radiances[index]
+            red += bulb.r * through
+            green += bulb.g * through
+            blue += bulb.b * through
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+            if rim <= 0:
+                continue
+            var reach = (
+                rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                )
+                * self.shadow_at(
+                    self.spot_shadows[index], position, normal, receives
+                )
+            )
+            toward.normalize()
+            var through = (
+                scattering_through(
+                    toward,
+                    normal,
+                    toward_eye,
+                    distortion,
+                    power,
+                    scale,
+                    ambient,
+                )
+                * reach
+            )
+            ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
+            red += bulb.r * tint.x * through
+            green += bulb.g * tint.y * through
+            blue += bulb.b * tint.z * through
+        return FloatColor(red, green, blue, 1.0)
+
+    def direct_at(self, normal: Vector3, position: Vector3) -> FloatColor:
+        """Return the light with a direction reaching a surface here, with
+        no shadow and no spot light's map: three.js's `GouraudShader`
+        vertex, `vLightFront`. The point lights, the spot lights and the
+        directional lights, in three.js's order, each Lambert by its cosine
+        and the point and spot lights by their falloff and cone, then
+        scaled as `intensity_at` scales.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+
+        Returns:
+            The arriving light, linear. Alpha is one.
+        """
+        var total = FloatColor(0.0, 0.0, 0.0, 1.0)
+        for index in range(len(self.positions)):
+            var toward = self.positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var lambert = normal.dot(toward) / distance
+            if lambert <= 0:
+                continue
+            var reach = lambert * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            ref bulb = self.point_radiances[index]
+            total = FloatColor(
+                total.r + bulb.r * reach,
+                total.g + bulb.g * reach,
+                total.b + bulb.b * reach,
+                1.0,
+            )
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+            var lambert = normal.dot(toward) / distance
+            if rim <= 0 or lambert <= 0:
+                continue
+            var reach = (
+                lambert
+                * rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                )
+            )
+            ref bulb = self.spot_radiances[index]
+            total = FloatColor(
+                total.r + bulb.r * reach,
+                total.g + bulb.g * reach,
+                total.b + bulb.b * reach,
+                1.0,
+            )
+        for index in range(len(self.directions)):
+            var lambert = max(Float32(0), normal.dot(self.directions[index]))
+            ref light = self.radiances[index]
+            total = FloatColor(
+                total.r + light.r * lambert,
+                total.g + light.g * lambert,
+                total.b + light.b * lambert,
+                1.0,
+            )
+        return total.scaled(self.scale)
 
     def indirect_at(self, normal: Vector3) -> FloatColor:
         """Return the light with no direction reaching a surface here: the

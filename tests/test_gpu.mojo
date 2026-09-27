@@ -4352,7 +4352,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(11)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(12)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)
@@ -12048,6 +12048,78 @@ def test_both_backends_run_a_graph_on_lines_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+from materials.material import GOURAUD as GOURAUD_KIND
+
+
+def test_both_backends_shade_a_gouraud_surface_alike() raises:
+    # Each corner carries its own light, which the kernel packs in its
+    # lanes and interpolates as the host does; the shadows darken the
+    # direct part of it and an ao map the indirect part.
+    if skipped_for_lack_of_a_gpu("both backends shade Gouraud alike"):
+        return
+    var textures = TextureStore()
+    var corners = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    for index in range(len(corners)):
+        var k = Float32(index)
+        corners[index].kind = GOURAUD_KIND
+        corners[index].gouraud_direct = Vector3(
+            0.2 + 0.1 * k, 0.5, 0.9 - 0.1 * k
+        )
+        corners[index].gouraud_indirect = Vector3(0.05, 0.02 * k, 0.1)
+    var lighting = phong_lighting()
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, mode, textures, lighting, 1)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, mode, textures, lighting
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_let_light_through_a_phong_surface_alike() raises:
+    # The thickness map's red, read at the raw coordinates, scales the
+    # light through, which each light adds by `scattering_through`.
+    if skipped_for_lack_of_a_gpu("both backends scatter alike"):
+        return
+    var textures = TextureStore()
+    var thick = textures.add(
+        checkerboard(
+            8,
+            2,
+            Color(255, 255, 255),
+            Color(90, 90, 90),
+            REPEAT,
+            BILINEAR,
+            color_space=LINEAR,
+            alpha=IGNORED,
+        )
+    )
+    var corners = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    for index in range(len(corners)):
+        corners[index].scatter_map = thick
+        corners[index].scatter_color = FloatColor(0.8, 0.4, 0.2, 1.0)
+        corners[index].scatter_ambient = 0.2
+    var lighting = phong_lighting()
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures, lighting, 1)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 36, 30, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    var plain = render_triangles(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    assert_true(count_mismatches(gpu, plain) > 50)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a
@@ -12267,6 +12339,102 @@ def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
         programs=frame.programs,
     )
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_the_toon_shaders_alike() raises:
+    # three.js's four toon shaders on a sphere under one light: the rim,
+    # the bands, the hatching and the dots, from the same GLSL.
+    if skipped_for_lack_of_a_gpu("both backends draw the toon shaders"):
+        return
+    from materials.toon_shaders import (
+        toon_shader_1,
+        toon_shader_2,
+        toon_shader_dotted,
+        toon_shader_hatching,
+    )
+
+    var programs = List[NodeProgram]()
+    programs.append(toon_shader_1())
+    programs.append(toon_shader_2())
+    programs.append(toon_shader_hatching())
+    programs.append(toon_shader_dotted())
+    for index in range(len(programs)):
+        var assets = Assets()
+        var program = programs[index].copy()
+        program.set_uniform("uDirLightPos", Vector3(0.6, 0.48, 0.64))
+        var id = assets.programs.add(program^)
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.add_mesh(
+            Mesh(
+                assets.geometries.add(sphere(Length(0.9, METER), 16, 12)),
+                assets.materials.add(shader_material(id)),
+                node,
+            )
+        )
+        scene.update()
+        var camera = PerspectiveCamera(
+            Angle(45.0, DEGREE), 1, Length(0.1, METER), Length(100.0, METER)
+        )
+        camera.place(Vector3(0, 0.5, 3), Vector3(0, 0, 0))
+        var renderer = Renderer(32, 32)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(32, 32)
+        device.set_textures(assets.textures)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene, eye=camera_position(scene, camera)),
+            lines=frame.segments,
+            draws=frame.draws,
+            points=frame.points,
+            programs=frame.programs,
+        )
+        assert_true(32 * 32 - count_background(cpu, BACKGROUND) > 200)
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_march_a_volume_alike() raises:
+    # three.js's volume shader through a ball of intensity, both styles:
+    # the kernel reads the 3D texture from the fog buffer and runs the
+    # unrolled march the host runs.
+    if skipped_for_lack_of_a_gpu("both backends march a volume alike"):
+        return
+    from test_volume_shader import a_camera as volume_camera
+    from test_volume_shader import a_volume_scene
+    from materials.volume_shader import VOLUME_ISO, VOLUME_MIP
+
+    for style in [VOLUME_MIP, VOLUME_ISO]:
+        var made = a_volume_scene(style)
+        ref assets = made[0]
+        ref scene = made[1]
+        var camera = volume_camera()
+        var renderer = Renderer(16, 16)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(16, 16)
+        device.set_textures(
+            assets.textures,
+            assets.cube_textures,
+            assets.data_3d_textures,
+            assets.data_array_textures,
+        )
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene, eye=camera_position(scene, camera)),
+            lines=frame.segments,
+            draws=frame.draws,
+            points=frame.points,
+            programs=frame.programs,
+        )
+        assert_true(16 * 16 - count_background(cpu, BACKGROUND) > 4)
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:

@@ -33,6 +33,7 @@ from materials.material import (
     MAX_IOR,
     MIN_IOR,
     DISTANCE,
+    GOURAUD,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -139,6 +140,7 @@ from lights.lighting import (
     ambient_occlusion,
     floored_roughness,
     geometry_roughness,
+    gouraud_light,
     occluded_light,
     physical_outgoing,
     physical_surface,
@@ -1094,6 +1096,26 @@ struct RasterVertex(ImplicitlyCopyable):
     # floats. Set after construction, by `Renderer.prepare`; zeros by
     # default.
     var custom: SIMD[DType.float32, 8]
+    # A `GOURAUD` corner's light, three.js's `vLightFront` and
+    # `vIndirectFront`, and the light of its far side, `vLightBack` and
+    # `vIndirectBack`, which `Renderer.prepare` puts in front when the far
+    # side is the one drawn. Set after construction; zeros by default.
+    var gouraud_direct: Vector3
+    var gouraud_indirect: Vector3
+    var gouraud_back_direct: Vector3
+    var gouraud_back_indirect: Vector3
+    # A `PHONG` triangle's light through from behind, three.js's
+    # `SubsurfaceScatteringShader`: the thickness map, or `NO_TEXTURE` for
+    # none; the color, linear; and the distortion, ambient, attenuation,
+    # power and scale. Per-triangle, read from the first corner. Set after
+    # construction, by `Renderer.prepare`; off by default.
+    var scatter_map: TextureId
+    var scatter_color: FloatColor
+    var scatter_distortion: Float32
+    var scatter_ambient: Float32
+    var scatter_attenuation: Float32
+    var scatter_power: Float32
+    var scatter_scale: Float32
 
     def __init__(
         out self,
@@ -1259,6 +1281,17 @@ struct RasterVertex(ImplicitlyCopyable):
         self.seen_from_behind = False
         self.flip_sided = False
         self.custom = SIMD[DType.float32, 8](0)
+        self.gouraud_direct = Vector3(0, 0, 0)
+        self.gouraud_indirect = Vector3(0, 0, 0)
+        self.gouraud_back_direct = Vector3(0, 0, 0)
+        self.gouraud_back_indirect = Vector3(0, 0, 0)
+        self.scatter_map = NO_TEXTURE
+        self.scatter_color = FloatColor(1.0, 1.0, 1.0, 1.0)
+        self.scatter_distortion = 0.1
+        self.scatter_ambient = 0
+        self.scatter_attenuation = 0.1
+        self.scatter_power = 2
+        self.scatter_scale = 10
 
 
 @fieldwise_init
@@ -2027,7 +2060,7 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the eleven")
+        raise Error("A triangle's material kind is none of the twelve")
     if b.receives_shadow != a.receives_shadow or (
         c.receives_shadow != a.receives_shadow
     ):
@@ -2191,12 +2224,13 @@ def check_triangle_state(
         )
     if a.normal_map != NO_TEXTURE and a.bump_map != NO_TEXTURE:
         raise Error("A triangle names a normal map or a bump map, not both")
-    if not a.kind.has_normal() and (
+    if not a.kind.has_normal_map() and (
         a.normal_map != NO_TEXTURE or a.bump_map != NO_TEXTURE
     ):
         raise Error(
-            "Only a lit or matcap triangle has a normal map: no other"
-            " shader reads a normal in the frame a map perturbs"
+            "Only a lit or matcap triangle has a normal map, and a Gouraud"
+            " one has none: no other shader reads a normal in the frame a map"
+            " perturbs"
         )
     # The two baked maps and their intensities, asked as the material asks
     # them: agreed, finite, not negative, and only where an indirect
@@ -3064,6 +3098,23 @@ def check_alpha_data_map(image: Texture, name: String) raises:
         )
 
 
+def _shared(
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    share_a: Float32,
+    share_b: Float32,
+    share_c: Float32,
+) -> Vector3:
+    """Return three corners' values mixed by their shares, one component
+    at a time, in the order the kernel mixes them."""
+    return Vector3(
+        a.x * share_a + b.x * share_b + c.x * share_c,
+        a.y * share_a + b.y * share_b + c.y * share_c,
+        a.z * share_a + b.z * share_b + c.z * share_c,
+    )
+
+
 def check_light_map(image: Texture) raises:
     """Refuse a light map whose alpha is read as coverage.
 
@@ -3416,6 +3467,9 @@ def rasterize_shaded(
             # after the texture has had its say over the diffuse color and
             # before the emissive, exactly where three.js sums it.
             var highlight = FloatColor(0.0, 0.0, 0.0, 1.0)
+            # The light a `PHONG` surface lets through from behind, added
+            # with the highlight; see `Lighting.scattered_at`.
+            var scatter = FloatColor(0.0, 0.0, 0.0, 1.0)
             var facing = Vector3(0, 0, 1)
             if (
                 a.kind.is_lit()
@@ -3624,6 +3678,32 @@ def rasterize_shaded(
                     arriving = lighting.toon_at(
                         facing, spot, ramp, a.receives_shadow
                     )
+                elif a.kind == GOURAUD:
+                    # Lit at the corners, and the direct light darkened
+                    # here by the shadows; see `gouraud_light`.
+                    var mask = Float32(1)
+                    if a.receives_shadow:
+                        mask = lighting.shadow_mask(spot, facing)
+                    var light = gouraud_light(
+                        _shared(
+                            a.gouraud_direct,
+                            b.gouraud_direct,
+                            c.gouraud_direct,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        _shared(
+                            a.gouraud_indirect,
+                            b.gouraud_indirect,
+                            c.gouraud_indirect,
+                            share_a,
+                            share_b,
+                            share_c,
+                        ),
+                        mask,
+                    )
+                    arriving = FloatColor(light.x, light.y, light.z, 1.0)
                 elif not physical:
                     # A physical surface is lit below, once its maps have
                     # had their say over the color the lobe is tinted by.
@@ -3652,6 +3732,37 @@ def rasterize_shaded(
                         a.shininess,
                         a.receives_shadow,
                     )
+                    # The light through, where a thickness map says how
+                    # thick the surface is: three.js reads its red at the
+                    # raw coordinates.
+                    if a.scatter_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+                        var thickness = _sample_map(
+                            textures.get(a.scatter_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                        var through = lighting.scattered_at(
+                            facing,
+                            spot,
+                            a.scatter_distortion,
+                            a.scatter_power,
+                            a.scatter_scale,
+                            a.scatter_ambient,
+                            a.receives_shadow,
+                        )
+                        var share = thickness * a.scatter_attenuation
+                        scatter = FloatColor(
+                            through.r * a.scatter_color.r * share,
+                            through.g * a.scatter_color.g * share,
+                            through.b * a.scatter_color.b * share,
+                            1.0,
+                        )
             # The baked maps, three.js's `lights_fragment_maps` and
             # `aomap_fragment`, each sampled where its own placement puts
             # the fragment, usually on the second pair. The
@@ -3723,7 +3834,16 @@ def rasterize_shaded(
                 )[0]
             if (bakes or occludes) and not physical:
                 var indirect = Vector3(arriving.r, arriving.g, arriving.b)
-                if a.kind.is_lit():
+                if a.kind == GOURAUD:
+                    indirect = _shared(
+                        a.gouraud_indirect,
+                        b.gouraud_indirect,
+                        c.gouraud_indirect,
+                        share_a,
+                        share_b,
+                        share_c,
+                    )
+                elif a.kind.is_lit():
                     var around = lighting.indirect_at(facing)
                     indirect = Vector3(around.r, around.g, around.b)
                 var occluded = occluded_light(
@@ -4489,9 +4609,9 @@ def rasterize_shaded(
                 # outgoing light the same way. Alpha is coverage rather
                 # than light, so it stays what the material said.
                 shaded = FloatColor(
-                    shaded.r + highlight.r + glow.r,
-                    shaded.g + highlight.g + glow.g,
-                    shaded.b + highlight.b + glow.b,
+                    shaded.r + scatter.r + highlight.r + glow.r,
+                    shaded.g + scatter.g + highlight.g + glow.g,
+                    shaded.b + scatter.b + highlight.b + glow.b,
                     shaded.a,
                 )
                 # Then the reflection, joined to the finished light by the

@@ -595,6 +595,114 @@ comptime NO_ENV_ROTATION = Euler(NO_ROTATION, NO_ROTATION, NO_ROTATION, XYZ)
 
 
 @fieldwise_init
+struct Scattering(ImplicitlyCopyable):
+    """How light shows through a `PHONG` surface from behind: three.js's
+    `SubsurfaceScatteringShader`, its thickness uniforms.
+
+    Each light with a direction adds `(pow(saturate(dot(V, -H)), power) *
+    scale + ambient) * color * thickness * attenuation` times its own
+    color, where `H` is the way to the light bent along the normal by
+    `distortion`, and the thickness is the red of `map`. three.js adds it
+    to the direct diffuse light, not through the surface's color. With no
+    map there is no thickness and no light through: WebGL reads zero from
+    a sampler with no texture.
+    """
+
+    # The texture whose red is the thickness, three.js's `thicknessMap`,
+    # or `NO_TEXTURE` for none, which turns the scattering off.
+    var map: TextureId
+    # The color of the light through, three.js's `thicknessColor`.
+    var color: Color
+    # How far the normal bends the way to the light, `thicknessDistortion`.
+    var distortion: Float32
+    # Light through from every side, `thicknessAmbient`.
+    var ambient: Float32
+    # How much of the light gets through, `thicknessAttenuation`.
+    var attenuation: Float32
+    # How tight the light through is about the way to the light,
+    # `thicknessPower`.
+    var power: Float32
+    # How bright it is, `thicknessScale`.
+    var scale: Float32
+
+    def is_on(self) -> Bool:
+        """Return True if the surface lets light through: it names a
+        thickness map."""
+        return self.map != NO_TEXTURE
+
+    def check(self) raises:
+        """Refuse numbers no shader could use.
+
+        Raises:
+            Error: If the map is a negative other than `NO_TEXTURE`, or a
+                number is not finite, or the power, the scale, the ambient
+                or the attenuation is negative.
+        """
+        if self.map.value < 0 and self.map != NO_TEXTURE:
+            raise Error("A thickness map is a texture id or NO_TEXTURE")
+        if not (
+            isfinite(self.distortion)
+            and isfinite(self.ambient)
+            and isfinite(self.attenuation)
+            and isfinite(self.power)
+            and isfinite(self.scale)
+        ):
+            raise Error("A subsurface scattering's numbers must be finite")
+        if (
+            self.power < 0
+            or self.scale < 0
+            or self.ambient < 0
+            or self.attenuation < 0
+        ):
+            raise Error(
+                "A subsurface scattering's power, scale, ambient and"
+                " attenuation cannot be negative"
+            )
+
+
+# No light through: three.js's `SubsurfaceScatteringShader` defaults, with
+# no thickness map.
+comptime NO_SCATTERING = Scattering(
+    NO_TEXTURE, Color(255, 255, 255), 0.1, 0.0, 0.1, 2.0, 10.0
+)
+
+
+def subsurface_scattering(
+    map: TextureId,
+    color: Color = Color(255, 255, 255),
+    distortion: Float32 = 0.1,
+    ambient: Float32 = 0.0,
+    attenuation: Float32 = 0.1,
+    power: Float32 = 2.0,
+    scale: Float32 = 10.0,
+) raises -> Scattering:
+    """Return the light through a `PHONG` surface, three.js's
+    `SubsurfaceScatteringShader` at its defaults. Give it to
+    `Material.set_scattering`.
+
+    Args:
+        map: The texture whose red is the thickness, `thicknessMap`.
+        color: The color of the light through, `thicknessColor`.
+        distortion: How far the normal bends the way to the light.
+        ambient: Light through from every side.
+        attenuation: How much of the light gets through.
+        power: How tight the light through is about the way to the light.
+        scale: How bright it is.
+
+    Returns:
+        The scattering.
+
+    Raises:
+        Error: If a number is refused; see `Scattering.check`.
+    """
+    var scattering = Scattering(
+        map, color, distortion, ambient, attenuation, power, scale
+    )
+    scattering.check()
+    return scattering
+
+
+@fieldwise_init
 struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface is lit, as a type rather than a bare int.
 
@@ -606,10 +714,11 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eleven kinds there are."""
+        """Return True if this is one of the twelve kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
+            or self == GOURAUD
             or self == NORMALS
             or self == DEPTH
             or self == PHONG
@@ -634,13 +743,14 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
-        `LAMBERT`, `PHONG`, `TOON`, `STANDARD` or `PHYSICAL`.
+        `LAMBERT`, `GOURAUD`, `PHONG`, `TOON`, `STANDARD` or `PHYSICAL`.
 
         Both rasterizers ask this before they evaluate a light, so a kind
         that is lit in one place and not the other is not expressible.
         """
         return (
             self == LAMBERT
+            or self == GOURAUD
             or self == PHONG
             or self == TOON
             or self == STANDARD
@@ -670,6 +780,15 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return self.is_lit() or self == MATCAP
 
+    def has_normal_map(self) -> Bool:
+        """Return True if a surface of this kind can carry a normal map or
+        a bump map: every kind that reads its normal but `GOURAUD`.
+
+        A Gouraud surface is lit at its corners, before a map could turn
+        its normal, and three.js's `MeshGouraudMaterial` has neither map.
+        """
+        return self.has_normal() and self != GOURAUD
+
     def has_indirect(self) -> Bool:
         """Return True if a surface of this kind has an indirect diffuse
         term, and so can carry an ambient occlusion map and a light map:
@@ -689,9 +808,10 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
         The kinds three.js gives a `displacementMap`: the lit five,
         `MATCAP`, `NORMALS` and `DEPTH`. three.js's basic and shadow
-        materials have none, and a wireframe is `BASIC` here.
+        materials have none, and a wireframe is `BASIC` here. three.js's
+        `MeshGouraudMaterial` has none either.
         """
-        return self != BASIC and self != SHADOW
+        return self != BASIC and self != SHADOW and self != GOURAUD
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -719,6 +839,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         return (
             self == BASIC
             or self == LAMBERT
+            or self == GOURAUD
             or self == PHONG
             or self == STANDARD
             or self == PHYSICAL
@@ -744,7 +865,9 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         other kind has a highlight or a reflection to scale. Both
         rasterizers ask this before they sample one.
         """
-        return self == BASIC or self == LAMBERT or self == PHONG
+        return (
+            self == BASIC or self == LAMBERT or self == GOURAUD or self == PHONG
+        )
 
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
@@ -786,6 +909,10 @@ comptime SHADOW = MaterialKind(9)
 # from a near distance to a far one, packed into four channels: three.js's
 # `MeshDistanceMaterial`, the material its point-light shadows draw with.
 comptime DISTANCE = MaterialKind(10)
+# Lit at its corners, and the light interpolated between them: three.js's
+# `MeshGouraudMaterial`, a `LAMBERT` surface lit per vertex. The shadows
+# darken the direct light per fragment, as three.js's `getShadowMask` does.
+comptime GOURAUD = MaterialKind(11)
 # three.js's `MeshDistanceMaterial` uniform defaults: one meter and a
 # thousand meters, measured from the origin.
 comptime DEFAULT_NEAR_DISTANCE = Length(1.0, METER)
@@ -1069,6 +1196,10 @@ struct Material(ImplicitlyCopyable):
     # `positionNode` and `outputNode`, or `NO_NODES`. A program in the
     # store the renderer draws with; see `materials.nodes`.
     var nodes: NodeProgramId
+    # The light through a `PHONG` surface, three.js's
+    # `SubsurfaceScatteringShader`, or `NO_SCATTERING`. Set with
+    # `set_scattering`.
+    var scattering: Scattering
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -1598,7 +1729,8 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW or DISTANCE"
+                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE or"
+                " GOURAUD"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -2072,6 +2204,7 @@ struct Material(ImplicitlyCopyable):
         self.env_map_rotation = env_map_rotation
         self.refraction_ratio = refraction_ratio
         self.normal_map_type = normal_map_type
+        self.scattering = NO_SCATTERING
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -2108,12 +2241,13 @@ struct Material(ImplicitlyCopyable):
                 "A material names a normal map or a bump map, not both:"
                 " three.js reads the normal map and ignores the bump map"
             )
-        if not kind.has_normal() and (
+        if not kind.has_normal_map() and (
             normal_map != NO_TEXTURE or bump_map != NO_TEXTURE
         ):
             raise Error(
-                "Only a lit or matcap material has a normal map: no other"
-                " shader reads a normal in the frame a map perturbs"
+                "Only a lit or matcap material has a normal map, and a"
+                " Gouraud one has none: no other shader reads a normal in the"
+                " frame a map perturbs"
             )
         if normal_map == NO_TEXTURE and (
             normal_scale.x != 1 or normal_scale.y != 1
@@ -2535,6 +2669,26 @@ struct Material(ImplicitlyCopyable):
         never passes the dash's end.
         """
         return self.gap_size > NO_DASH
+
+    def set_scattering(mut self, scattering: Scattering) raises:
+        """Let light through the surface from behind, three.js's
+        `SubsurfaceScatteringShader`, or turn it off with `NO_SCATTERING`.
+
+        Args:
+            scattering: The thickness and how the light goes through.
+
+        Raises:
+            Error: If it is refused by `Scattering.check`, or it names a
+                map and the material is not `PHONG`: three.js builds it on
+                `MeshPhongMaterial`'s shader.
+        """
+        scattering.check()
+        if scattering.is_on() and self.kind != PHONG:
+            raise Error(
+                "Only a PHONG material scatters light through it: three.js"
+                " builds SubsurfaceScatteringShader on the phong shader"
+            )
+        self.scattering = scattering
 
     def set_clipping_planes(
         mut self,

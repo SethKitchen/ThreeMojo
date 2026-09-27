@@ -97,6 +97,7 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | Value | three.js | Meaning |
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
+| `GOURAUD` | `MeshGouraudMaterial` | `LAMBERT`, lit at the corners. See [Gouraud](#gouraud). |
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
 | `STANDARD` | `MeshStandardMaterial` | Lit by a roughness and a metalness, with a GGX lobe. See [Standard and physical](#standard-and-physical). |
 | `PHYSICAL` | `MeshPhysicalMaterial` | `STANDARD` with an index of refraction and a clear coat. |
@@ -105,7 +106,21 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray or packed. |
 | `DISTANCE` | `MeshDistanceMaterial` | How far the surface is from a reference point, packed. |
 
-`is_lit()` is true for the first four. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first five. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
+
+## Gouraud
+
+A Gouraud surface is a Lambert surface that is lit at its corners, as three.js's `MeshGouraudMaterial` is. The renderer lights each corner, and each fragment takes the light between its corners. Build one with the kind:
+
+```mojo
+var clay = assets.materials.add(Material(Color(200, 120, 90), kind=GOURAUD))
+```
+
+Each corner holds the direct light of the point, spot and directional lights. It also holds the indirect light of the ambient light, the probes and the hemisphere lights. Each corner also holds the light of its far side, which a `DOUBLE_SIDE` or a `BACK_SIDE` surface shows from behind. The shadows darken the direct light per fragment, by the product of every casting light's shadow: three.js's `getShadowMask`. A spot light's map does not reach a corner, as it does not reach three.js's.
+
+A flat face under a directional light looks the same lit at its corners or at each fragment. A point light near a large face shows the difference. The light between the corners is flat, and a Lambert surface is brightest under the bulb.
+
+A Gouraud surface takes a map, an alpha map, an emissive map and a specular map. It takes an environment map, an ambient occlusion map and a light map too. It refuses a normal map, a bump map and a displacement map, which three.js's material does not have.
 
 ## Phong
 
@@ -146,6 +161,29 @@ three.js divides both its diffuse and its specular term by pi, and so does this:
 The highlight can exceed one. That is what a highlight is. Set a tone mapping curve to bring it back. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
 A [specular map](#specular-map) scales the highlight per texel.
+
+### Subsurface scattering
+
+A Phong surface can let a light behind it show through, as three.js's `SubsurfaceScatteringShader` does. Give the material a thickness map:
+
+```mojo
+var wax = phong_material(Color(230, 210, 180))
+wax.set_scattering(subsurface_scattering(thickness, Color(255, 120, 60)))
+```
+
+Each light with a direction adds light through the surface toward the camera. The way to the light is bent along the normal by `distortion`. The light through is `pow(saturate(dot(V, -H)), power) * scale + ambient`, times the light's color, the thickness color, the thickness and `attenuation`. The thickness is the red of the thickness map at the raw coordinates.
+
+The light through joins the direct diffuse light, and the surface's color does not tint it. Shadows darken it, as they darken the light itself. With no thickness map there is no light through, as WebGL reads zero from a sampler with no texture. The thickness map must hold data, and only `SHADE_TEXTURE` reads it.
+
+| Member | three.js | Default |
+|---|---|---|
+| `map` | `thicknessMap` | none |
+| `color` | `thicknessColor` | white |
+| `distortion` | `thicknessDistortion` | 0.1 |
+| `ambient` | `thicknessAmbient` | 0 |
+| `attenuation` | `thicknessAttenuation` | 0.1 |
+| `power` | `thicknessPower` | 2 |
+| `scale` | `thicknessScale` | 10 |
 
 ## Toon
 

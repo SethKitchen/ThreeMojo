@@ -469,6 +469,48 @@ three.js writes each node of the graph with its type and its inputs. This port w
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
+## Shaders from three.js's examples
+
+Five of the shaders in three.js's `examples/jsm/shaders` come as programs. Each compiles three.js's own GLSL through the subset, with three.js's default uniforms. Give the program's id to `shader_material`.
+
+| Function | three.js | What it draws |
+|---|---|---|
+| `toon_shader_1()` | `ToonShader1` | Two tones, and a rim where the camera sees past the edge. |
+| `toon_shader_2()` | `ToonShader2` | Bands of light, darker in steps. |
+| `toon_shader_hatching()` | `ToonShaderHatching` | Lines where the light is low. |
+| `toon_shader_dotted()` | `ToonShaderDotted` | Dots where the light is low. |
+| `volume_render_shader(style)` | `VolumeRenderShader1` | A ray marched through a 3D texture. See [Volume rendering](#volume-rendering). |
+
+The toon shaders are in `materials.toon_shaders`. Each one lights by one direction and one color. Set `uDirLightPos` to the light's direction in view space. A uniform that you set from a `Color` is decoded from sRGB, as three.js's color management decodes it.
+
+```mojo
+var program = toon_shader_1()
+var light = Vector3(0.5, 0.5, 1)
+light.normalize()
+program.set_uniform("uDirLightPos", light)
+var toon = assets.materials.add(shader_material(assets.programs.add(program^)))
+```
+
+### Volume rendering
+
+`volume_render_shader(style)` in `materials.volume_shader` marches a ray through a 3D texture of intensities. It colors the ray through a colormap. `VOLUME_MIP` shows the brightest value on the ray. `VOLUME_ISO` lights the first surface where the value passes `u_renderthreshold`.
+
+Draw it on a box that spans the volume, from the box's back faces, as three.js's `webgl2_materials_texture3d` example does:
+
+1. Make a `box` of the volume's size in texels, and translate it by half the size minus one half. Its local coordinates then run from -0.5 to the size minus 0.5.
+2. Set `u_data` to the 3D texture with `set_volume`, and `u_cmdata` to the colormap with `set_texture`.
+3. Set `u_size` to the size in texels, and `u_clim` to the two intensities that the colormap spans.
+4. Set `u_world_to_local` to the inverse of the box's world matrix. The default is the identity.
+5. Draw it with `shader_material(id, side=BACK_SIDE)`.
+
+The shader is three.js's, with these differences:
+
+- The fragment shader takes the world position and the camera into the box's space with `u_world_to_local`. three.js inverts the model-view matrix at each vertex instead.
+- The ray starts at the camera, not at the near plane. The two are the same for a camera outside the volume.
+- The style is set when the program is compiled, not by `u_renderstyle`.
+- A ray takes at most `VOLUME_MIP_STEPS` steps, 256, or `VOLUME_ISO_STEPS` steps, 64. three.js takes up to 887. A step is one texel, so a volume whose longest diagonal is that many texels is marched whole. A program runs at most `MAX_INSTRUCTIONS` instructions, and an ISO step reads five texels.
+- The march keeps what it finds in one `vec2`, and each step reads its place from the start. An ISO render refines each step and lights the first one that it finds. The steps and the colors are three.js's.
+
 ## How it runs
 
 `compile` lays out each output as a list of instructions. A node is one instruction in each context it runs in. The contexts are the fragment, the pixel beside it for a derivative, and a corner for a varying. Each instruction writes one of `MAX_REGISTERS` registers of four floats. The compiler gives a register back when the last reader of its value has run.
