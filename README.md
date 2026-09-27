@@ -140,7 +140,7 @@ The port is not at parity with three.js yet. 198 features are ported and 5 are o
 <details>
 <summary>Ported: 31</summary>
 
-- [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): int, bool, matrix, array and struct types, loops, samplers, built-ins, custom attributes and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
+- [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): more types, loops, samplers and built-ins, and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
 - [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)
