@@ -463,10 +463,16 @@ def test_a_3d_and_an_array_texture_are_read_at_a_vec3() raises:
     assert_equal(program.arrays[0].value, -1)
     program.set_array("stack", DataArrayTextureId(4))
     assert_equal(program.arrays[0].value, 4)
+    var named = NodeGraph()
+    _ = named.array_uniform("given", DataArrayTextureId(2))
     program.set_volume("cloud", Data3DTextureId(1))
     assert_equal(program.volumes[0].value, 1)
     # A source with neither reads white.
     assert_lanes(run_nodes(Checker(program), COLOR_NODE, inputs(True)), 3, 3, 3)
+    # Untextured, each read is opaque white without asking the source.
+    assert_lanes(
+        run_nodes(Checker(program), COLOR_NODE, inputs(False)), 3, 3, 3
+    )
     with assert_raises(contains="A 3D texture uniform needs a texture"):
         program.set_volume("cloud", Data3DTextureId(-1))
     with assert_raises(contains="An array texture uniform needs a texture"):
@@ -498,6 +504,16 @@ def test_a_3d_and_an_array_texture_are_read_at_a_vec3() raises:
     )
     with assert_raises(contains="A varying runs once per corner"):
         _ = varied.compile()
+
+
+def test_a_call_needs_a_type_and_an_open_call() raises:
+    var graph = NodeGraph()
+    with assert_raises(contains="A call returns a float or a vector"):
+        graph.open_call(NODE_MAT3)
+    with assert_raises(contains="A close_call needs an open_call"):
+        _ = graph.close_call(graph.float(0))
+    with assert_raises(contains="An attribute is a float or a vector"):
+        _ = graph.attribute("heat", ValueType(0))
 
 
 def test_a_cube_is_read_in_a_direction() raises:
