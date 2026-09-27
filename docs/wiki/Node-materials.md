@@ -65,6 +65,26 @@ var card = assets.materials.add(shader_material(assets.programs.add(program^)))
 
 The compiler lexes, parses and type checks the source, and builds the graph as it parses. `shader_graph(vertex, fragment)` returns the graph before it is compiled. `compile_raw_shader_material` reads the shaders as three.js's `RawShaderMaterial` does. See [GLSL source](#glsl-source) for the subset.
 
+### Draw a ShaderToy shader
+
+`compile_shader_toy(source)` compiles a ShaderToy shader, as three.js's `ShaderToyDecoder` does. Its `mainImage` colors each pixel of the surface.
+
+```mojo
+var toy = compile_shader_toy(
+    """
+    void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+        vec2 uv = fragCoord / iResolution.xy;
+        vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
+        fragColor = vec4(col, 1.0);
+    }
+    """
+)
+toy.set_uniform("iResolution", Vector3(800, 600, 1))
+var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
+```
+
+`fragCoord` is the pixel's center, in pixels from the bottom left. `iTime` is `Renderer.time`. Set the other inputs yourself: `iResolution`, `iTimeDelta`, `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`, `iChannelResolution[i]` and `iChannelTime[i]` with `set_uniform`. Set `iChannel0` to `iChannel3` with `set_texture`. The source must fit the [subset](#the-subset), and an error names the line of the source.
+
 ## Outputs
 
 A graph sets one to nine outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
