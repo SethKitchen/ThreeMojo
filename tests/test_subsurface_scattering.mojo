@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `SubsurfaceScatteringShader`: a `PHONG` surface that lets a
-light behind it show through toward the camera."""
+"""Tests for three.js's `SubsurfaceScatteringShader`: a `PHONG` surface that
+lets a light behind it show through toward the camera."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

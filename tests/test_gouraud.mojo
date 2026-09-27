@@ -3,10 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `MeshGouraudMaterial`: a `LAMBERT` surface lit at its
+"""Tests for three.js's `MeshGouraudMaterial`: a `LAMBERT` surface lit at its
 corners. Where the light is the same at every point of a flat face, as a
-directional light's is, a Gouraud surface draws as a Lambert one does,
-shadows and all; a point light near a face shows the difference."""
+directional light's is, a Gouraud surface draws as a Lambert one does, shadows
+and all; a point light near a face shows the difference."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `FlakesTexture`: discs of random normals on the flat
+"""Tests for three.js's `FlakesTexture`: discs of random normals on the flat
 normal, from a seed."""
 
 from render.flakes_texture import FLAKE_COUNT, flakes_texture

@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's toon shaders, drawn on a plane that faces the camera: its
-normal in view space is (0, 0, 1), so each shader's arithmetic is worked
+"""Tests for three.js's toon shaders, drawn on a plane that faces the camera:
+its normal in view space is (0, 0, 1), so each shader's arithmetic is worked
 out by hand below."""
 
 from cameras.perspective_camera import PerspectiveCamera

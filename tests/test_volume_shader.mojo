@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `VolumeRenderShader1`, marched through a ball of intensity in
-an eight-texel volume, as a MIP render and as an ISO render."""
+"""Tests for three.js's `VolumeRenderShader1`, marched through a ball of
+intensity in an eight-texel volume, as a MIP render and as an ISO render."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
