@@ -102,6 +102,9 @@ A graph sets one to thirteen outputs. Each output replaces one part of the mater
 | `MASK_NODE` | `float` | `maskNode` | Nothing. A fragment where it is zero is thrown away, before the alpha test. |
 | `AO_NODE` | `float` | `aoNode` | The ambient occlusion map's value. It dims the indirect light. |
 | `DEPTH_NODE` | `float` | `depthNode` | The fragment's depth: zero at the near plane, one at the far plane. The depth test reads it. |
+| `BACKDROP_NODE` | `vec3` | `backdropNode` | The diffuse light, mixed by `BACKDROP_ALPHA_NODE` where that is set. The specular light and the glow are added after it. See [The scene behind](#the-scene-behind). |
+| `BACKDROP_ALPHA_NODE` | `float` | `backdropAlphaNode` | Nothing. It is how much of the backdrop replaces the diffuse light, zero to one. |
+| `FRAGMENT_NODE` | `vec4` | `fragmentNode` | All of the material's shading: the color and the alpha. The fog veils it. The alpha test, the alpha hash and the output node do not run. |
 | `SIZE_NODE` | `float` | `sizeNode` | A point's width in pixels: the material's size and its attenuation. Only a point reads it. See [Points and lines](#points-and-lines). |
 
 The alpha of the finished color stays what the fragment had. An output node changes only its color.
@@ -134,6 +137,8 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `face_direction()` | `float` | `faceDirection` | One where the triangle is seen from its front, and minus one where it is seen from its back. A fragment only. |
 | `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
 | `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
+| `screen_uv()` | `vec2` | `screenUV` | Where the pixel is on the target: zero to one across from the left edge and up from the bottom edge, at the pixel's center. A fragment only. |
+| `viewport_texture(uv)` | `vec4` | `viewportSharedTexture(uv)` | The opaque scene behind the surface at a place on the target, linear, with straight alpha. See [The scene behind](#the-scene-behind). A fragment only. |
 | `point_coord()` | `vec2` | GLSL's `gl_PointCoord` | Where the pixel is in its point: zero to one across from the left edge and down from the top edge. Zeros on a triangle and a line. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
 | `cube_uniform(name, map)` | `cubeTexture` | `cubeTexture(map)` | A named cube texture the caller can change with `set_cube`. |
@@ -449,6 +454,22 @@ A fragment runs the outputs in this order:
 
 A fragment that the mask can throw away claims no depth until it survives, as a GPU does for a shader that can discard. The position node runs on the host, once per vertex, after the morph targets, the bones and the displacement map. So both rasterizers draw the same moved triangles, and the shadow pass casts them. A mesh with a position node is not culled by the bound of its geometry.
 
+### The scene behind
+
+`viewport_texture(screen_uv())` reads the opaque scene behind the fragment, as three.js's `viewportSharedTexture()` does. A backdrop node usually reads it, to filter what is behind a surface:
+
+```mojo
+var behind = graph.viewport_texture(graph.screen_uv())
+graph.set_output(BACKDROP_NODE, graph.mul(graph.swizzle(behind, "rgb"), graph.vec3(0.8, 1, 0.8)))
+```
+
+The renderer draws the opaque scene first for a program that reads it, as it does for a transmissive surface. It uses the same target, three.js's `transmissionRenderTarget`. The triangle is drawn after that pass and is not in it.
+
+- Only the texture view (`SHADE_TEXTURE`) reads the scene. `SHADE_LIT` reads opaque white, as it reads every texture.
+- A call to `rasterize_all` or `GpuRenderer.draw` that runs such a program in the texture view must pass a `TransmissionTarget`. A call without one is refused.
+- The read is the target's full-size level, bilinear. three.js reads the same level by default.
+- A point and a line read opaque white.
+
 ### Points and lines
 
 A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial` or a `PointsNodeMaterial` on them. The material must be `BASIC`. Each pixel runs the color, the opacity and the mask, then the fog and the output node. The lights, the emissive, the normal, the ambient occlusion and the depth nodes do not run, because a point and a line are unlit.
@@ -487,6 +508,6 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 ## What is not ported
 
 - Compute nodes, storage buffers and `instancedArray`.
-- Other outputs: `backdropNode`, `lightsNode`, `shadowNode`, `castShadowNode` and `fragmentNode`.
+- Other outputs: `lightsNode`, `receivedShadowNode` and `castShadowNode`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
 - Reading and writing node materials in files.
