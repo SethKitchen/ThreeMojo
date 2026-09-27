@@ -25,12 +25,16 @@ The source is three.js's but for four things the subset asks:
   identity by default.
 - The ray starts at the camera, not at the near plane: the two agree for
   a camera outside the volume.
-- A ray takes at most `VOLUME_STEPS` steps, where three.js takes 887. A
-  loop is unrolled, and a step is one texel, so a volume of up to that
-  many texels across is marched whole.
-- An ISO render finds the first step past the threshold in the march and
-  refines and lights it once after, where three.js does both in the loop
-  and leaves it. The steps and the colors are the same.
+- The style is chosen when the program is compiled, not by the uniform.
+- A ray takes at most `VOLUME_MIP_STEPS` or `VOLUME_ISO_STEPS` steps,
+  where three.js takes 887. A loop is unrolled, and a step is one texel,
+  so a volume of up to that many texels on its longest diagonal is
+  marched whole.
+- Each step reads its place from the start, and the march keeps what it
+  has found in one `vec2`: an unrolled loop that carried three values
+  from step to step held too many at once. An ISO render refines every
+  step and lights the first one found, once, after the march. The steps
+  and the colors are three.js's.
 """
 
 from materials.glsl import compile_shader_material
@@ -39,12 +43,31 @@ from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 
 
-# The most steps a ray takes through the volume, one texel each.
-comptime VOLUME_STEPS = 96
-# `u_renderstyle`'s two values: the brightest texel along the ray, and the
-# first surface past the threshold, lit.
-comptime VOLUME_MIP = 0
-comptime VOLUME_ISO = 1
+@fieldwise_init
+struct VolumeStyle(Equatable, ImplicitlyCopyable, Writable):
+    """How `volume_render_shader` colors a ray, three.js's `u_renderstyle`,
+    as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `VOLUME_MIP` or `VOLUME_ISO`.
+
+        Returns:
+            Whether the value names a style.
+        """
+        return self == VOLUME_MIP or self == VOLUME_ISO
+
+
+# The brightest texel along the ray, through the colormap.
+comptime VOLUME_MIP = VolumeStyle(0)
+# The first surface past the threshold, lit.
+comptime VOLUME_ISO = VolumeStyle(1)
+# The most steps a ray takes through the volume, one texel each, in each
+# style. A step of an ISO render reads five texels to a MIP render's one,
+# and a program runs at most `MAX_INSTRUCTIONS` instructions.
+comptime VOLUME_MIP_STEPS = 256
+comptime VOLUME_ISO_STEPS = 64
 
 # The vertex shader: the world position, for the fragment to march from.
 comptime VOLUME_RENDER_VERTEX = """
@@ -194,24 +217,34 @@ void main() {
 """
 
 
-def volume_render_shader() raises -> NodeProgram:
+def volume_render_shader(style: VolumeStyle = VOLUME_MIP) raises -> NodeProgram:
     """Return three.js's `VolumeRenderShader1` as a node program, with its
-    uniforms at three.js's defaults: an MIP render, a threshold of 0.5, an
-    intensity range of zero to one, and `u_world_to_local` the identity.
-    Set `u_data`, `u_cmdata` and `u_size` before it draws.
+    uniforms at three.js's defaults: a threshold of 0.5, an intensity range
+    of zero to one, and `u_world_to_local` the identity. Set `u_data`,
+    `u_cmdata` and `u_size` before it draws.
+
+    Args:
+        style: `VOLUME_MIP` or `VOLUME_ISO`.
 
     Returns:
         The program, for a `BACK_SIDE` `shader_material` on a box that spans
         the volume.
 
     Raises:
-        Error: Never: the source is inside the subset.
+        Error: If the style is neither.
     """
+    if not style.is_valid():
+        raise Error("A volume render style is VOLUME_MIP or VOLUME_ISO")
+    var steps = VOLUME_MIP_STEPS if style == VOLUME_MIP else VOLUME_ISO_STEPS
     var program = compile_shader_material(
         VOLUME_RENDER_VERTEX,
         VOLUME_RENDER_FRAGMENT,
-        ["VOLUME_STEPS " + String(VOLUME_STEPS)],
+        [
+            "VOLUME_STEPS " + String(steps),
+            "VOLUME_STYLE " + String(style.value),
+        ],
     )
+    program.set_uniform("u_renderstyle", Float32(style.value))
     program.set_uniform("u_renderthreshold", Float32(0.5))
     program.set_uniform("u_clim", Vector2(0, 1))
     program.set_uniform("u_world_to_local", Matrix4())

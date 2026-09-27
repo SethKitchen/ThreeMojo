@@ -14,8 +14,10 @@ from geometries.box import box
 from materials.material import BACK_SIDE, shader_material
 from materials.volume_shader import (
     VOLUME_ISO,
+    VOLUME_ISO_STEPS,
     VOLUME_MIP,
-    VOLUME_STEPS,
+    VOLUME_MIP_STEPS,
+    VolumeStyle,
     volume_render_shader,
 )
 from math.matrix4 import Matrix4
@@ -27,7 +29,13 @@ from render.texture import BILINEAR, CLAMP, Texture
 from render.volume_texture import Data3DTexture, VolumeImage
 from renderers.renderer import Renderer
 from std.math import sqrt
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 from units.si import Angle, DEGREE, Length, METER
 
 comptime SIDE = 8
@@ -61,14 +69,13 @@ def a_colormap() raises -> Texture:
     return Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR, False)
 
 
-def a_volume_scene(style: Int) raises -> Tuple[Assets, Scene]:
+def a_volume_scene(style: VolumeStyle) raises -> Tuple[Assets, Scene]:
     """Return the ball in a box that spans it, drawn from its back faces."""
     var assets = Assets()
-    var program = volume_render_shader()
+    var program = volume_render_shader(style)
     program.set_volume("u_data", assets.data_3d_textures.add(a_ball()))
     program.set_texture("u_cmdata", assets.textures.add(a_colormap()))
     program.set_uniform("u_size", Vector3(SIDE, SIDE, SIDE))
-    program.set_uniform("u_renderstyle", Float32(style))
     program.set_uniform("u_renderthreshold", Float32(0.4))
     # The box runs from -0.5 to 7.5 in its own space, and the node puts
     # that back on the origin, so `u_world_to_local` undoes the move.
@@ -110,7 +117,7 @@ def a_camera() raises -> PerspectiveCamera:
     return camera^
 
 
-def render(style: Int) raises -> Framebuffer:
+def render(style: VolumeStyle) raises -> Framebuffer:
     """Return the ball rendered in a style."""
     var made = a_volume_scene(style)
     var renderer = Renderer(SIZE, SIZE)
@@ -142,9 +149,15 @@ def test_an_iso_render_lights_the_surface_it_finds() raises:
     assert_equal(Int(edge.r) + Int(edge.g) + Int(edge.b), 0)
 
 
-def test_the_march_is_long_enough_for_the_volume() raises:
+def test_the_march_is_long_enough_and_a_style_is_one_of_two() raises:
     # The longest ray through an eight-texel cube is under fourteen texels.
-    assert_true(VOLUME_STEPS >= 14)
+    assert_true(VOLUME_ISO_STEPS >= 14)
+    assert_true(VOLUME_MIP_STEPS >= VOLUME_ISO_STEPS)
+    assert_true(VOLUME_MIP.is_valid())
+    assert_true(VOLUME_ISO.is_valid())
+    assert_false(VolumeStyle(2).is_valid())
+    with assert_raises(contains="VOLUME_MIP or VOLUME_ISO"):
+        _ = volume_render_shader(VolumeStyle(-1))
 
 
 def main() raises:
