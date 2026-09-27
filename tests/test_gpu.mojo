@@ -10145,6 +10145,43 @@ def test_both_backends_keep_the_same_metalness_and_roughness() raises:
     assert_true(metal > 100, "too little of the floor is metal")
 
 
+def test_both_backends_light_each_material_by_its_own_lights() raises:
+    # A plane lit by the red light alone beside one lit by the red and the
+    # blue: the device reads each triangle's light block.
+    if skipped_for_lack_of_a_gpu("both backends light by masks alike"):
+        return
+    from renderers.renderer import light_masks
+    from test_light_masks import a_camera as masked_camera
+    from test_light_masks import a_scene as masked_scene
+
+    var assets = Assets()
+    var scene = masked_scene(assets)
+    var camera = masked_camera()
+    var renderer = Renderer(16, 16)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var eye = camera_position(scene, camera)
+    var lightings = List[Lighting]()
+    var masks = light_masks(assets)
+    for index in range(len(masks)):
+        lightings.append(Lighting(scene, eye=eye, chosen=masks[index]))
+    var device = GpuRenderer(16, 16)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=eye),
+        draws=frame.draws,
+        programs=frame.programs,
+        lightings=lightings,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+    # A triangle that names a lighting the frame lacks is refused.
+    with assert_raises(contains="names a lighting the frame does not have"):
+        device.draw(frame.corners, BACKGROUND, SHADE_TEXTURE)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
