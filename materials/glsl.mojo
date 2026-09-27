@@ -38,11 +38,11 @@ renderer calls front: under `BACK_SIDE`, every face drawn.
 
 **The subset.** The types `void`, `bool`, `int`, `float`, `vec2` to
 `vec4`, `mat2` to `mat4`, and `sampler2D` uniforms. Uniforms, varyings,
-`const` globals, functions with `in`, `out` and `inout` parameters, `if` and `else`, `for`
-with a constant count, the operators but the bit ones, `?:`, swizzles,
-indexes, arrays of one dimension, constructors, object-like `#define`s, and the built-in
-functions GLSL has for floats and vectors. An `int` is a whole number held
-in a float. GLSL ES has no conversion between `int` and `float`, and
+`const` globals, functions with `in`, `out` and `inout` parameters, `if`
+and `else`, `for` with a constant count, the operators but the bit ones,
+`?:`, swizzles, indexes, arrays of one dimension, constructors,
+object-like `#define`s, and the built-in functions GLSL has for floats and
+vectors. An `int` is a whole number held in a float. GLSL ES has no conversion between `int` and `float`, and
 neither has this. Whatever is outside the subset is refused with the
 shader, the line and the reason.
 """
