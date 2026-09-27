@@ -248,6 +248,8 @@ from render.tonemap import (
 )
 from materials.nodes import (
     AO_NODE,
+    BACKDROP_ALPHA_NODE,
+    BACKDROP_NODE,
     AT_RIGHT,
     AT_UP,
     COLOR_NODE,
@@ -255,6 +257,7 @@ from materials.nodes import (
     CORNER_B,
     DEPTH_NODE,
     EMISSIVE_NODE,
+    FRAGMENT_NODE,
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
@@ -3764,6 +3767,10 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
     var depth: Float32
     # The triangle's facing, as `STATE_FACING` holds it.
     var facing: Int
+    # The target's width, for `screen_uv`, and the buffer that holds the
+    # opaque scene behind after the background, for `viewport_texture`.
+    var width: Int
+    var backdrop: MutPointer[UInt8, Self.origin]
 
     def __init__(
         out self,
@@ -3787,11 +3794,14 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         height: Int,
         depth: Float32,
         facing: Int,
+        width: Int,
+        backdrop: MutPointer[UInt8, Self.origin],
     ):
         """Read the program that starts `start` floats into `fog`, at the
-        sample (`px`, `py`) of a target `height` pixels high, at the depth
-        `depth` in normalized device space, on a triangle whose facing is
-        `facing`, as `STATE_FACING` holds it."""
+        sample (`px`, `py`) of a target `width` by `height` pixels, at the
+        depth `depth` in normalized device space, on a triangle whose
+        facing is `facing`, as `STATE_FACING` holds it, with the opaque
+        scene behind in `backdrop`."""
         self.fog = fog
         self.start = start
         self.texels = texels
@@ -3812,6 +3822,8 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
         self.height = height
         self.depth = depth
         self.facing = facing
+        self.width = width
+        self.backdrop = backdrop
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
@@ -3944,6 +3956,24 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             1,
         )
 
+    def screen_size(self) -> SIMD[DType.float32, 4]:
+        """Return the target's width and height in pixels."""
+        return SIMD[DType.float32, 4](
+            Float32(self.width), Float32(self.height), 0, 0
+        )
+
+    def behind(self, u: Float32, v: Float32) -> FloatColor:
+        """Return the opaque scene behind at a place on the target, as
+        `rasterizer._HostNodes.behind` reads it."""
+        return _device_behind(
+            self.backdrop.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.width,
+            self.height,
+            u,
+            v,
+        )
+
     def seen_from_behind(self) -> Bool:
         """Return whether the triangle is seen from its back."""
         return self.facing & 1 != 0
@@ -3989,6 +4019,50 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             False,
             custom,
         )
+
+
+def _transmission_image(
+    backdrop: MutPointer[UInt8, MutAnyOrigin], start: Int
+) -> _Descriptor:
+    """Return the transmission target's chain that starts `start` bytes
+    into the backdrop buffer, as its header describes it."""
+    return _Descriptor(
+        start + TRANSMISSION_HEADER * 4,
+        Int(_float_at(backdrop, start + TRANSMISSION_WIDTH * 4)),
+        Int(_float_at(backdrop, start + TRANSMISSION_HEIGHT * 4)),
+        CLAMP,
+        BILINEAR,
+        LINEAR,
+        Int(_float_at(backdrop, start + TRANSMISSION_LEVELS * 4)),
+        COVERAGE,
+        1,
+        FLOAT_TYPE,
+        CLAMP,
+        LINEAR_MIPMAP_LINEAR,
+        True,
+        UV_MAPPING,
+    )
+
+
+def _device_behind(
+    backdrop: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    u: Float32,
+    v: Float32,
+) -> FloatColor:
+    """Return the opaque scene behind at a place on the target: the
+    transmission target's full-size level, bilinear, after the `width` by
+    `height` background in the backdrop buffer."""
+    return _sample_at(
+        backdrop,
+        ramp,
+        _transmission_image(backdrop, width * height * 4),
+        u,
+        v,
+        0,
+    )
 
 
 def _fog_volume(
@@ -4490,22 +4564,7 @@ def _transmitted(
     var view = SIMD[DType.float32, VIEW_FLOATS](0)
     for index in range(VIEW_FLOATS):
         view[index] = _float_at(backdrop, start + index * 4)
-    var image = _Descriptor(
-        start + TRANSMISSION_HEADER * 4,
-        Int(_float_at(backdrop, start + TRANSMISSION_WIDTH * 4)),
-        Int(_float_at(backdrop, start + TRANSMISSION_HEIGHT * 4)),
-        CLAMP,
-        BILINEAR,
-        LINEAR,
-        Int(_float_at(backdrop, start + TRANSMISSION_LEVELS * 4)),
-        COVERAGE,
-        1,
-        FLOAT_TYPE,
-        CLAMP,
-        LINEAR_MIPMAP_LINEAR,
-        True,
-        UV_MAPPING,
-    )
+    var image = _transmission_image(backdrop, start)
     return volume_refraction(
         _DeviceSource(backdrop, ramp, image),
         view,
@@ -5323,10 +5382,16 @@ def rasterize_kernel(
                         unsafe_offset=index * STATE_PER_TRIANGLE + STATE_FACING
                     ]
                 ),
+                Int(width),
+                backdrop,
             )
             # Whether the graph can throw the fragment away, and its depth
             # in place of the plane's, as `rasterize_shaded` asks both.
             var masked = noded and has_output(nodes, MASK_NODE)
+            # A fragment node runs no alpha test and no alpha hash, as the
+            # host decides it.
+            var fragmented = noded and has_output(nodes, FRAGMENT_NODE)
+            tested = tested and not fragmented
             if noded and has_output(nodes, DEPTH_NODE):
                 stored_z = node_depth(
                     run_nodes(nodes, DEPTH_NODE, here_inputs(nodes, textured))[
@@ -5340,7 +5405,11 @@ def rasterize_kernel(
             var test = test_fragment(state, stored_z, held, stencil)
             # Whether a hashed alpha test or the alpha's coverage can
             # still throw the fragment away, as `rasterize_shaded` asks.
-            var hashed = state.alpha_hash and mode != Int32(SHADE_UV.value)
+            var hashed = (
+                state.alpha_hash
+                and mode != Int32(SHADE_UV.value)
+                and not fragmented
+            )
             var covered = state.alpha_to_coverage and mode != Int32(
                 SHADE_UV.value
             )
@@ -6607,6 +6676,20 @@ def rasterize_kernel(
                         glow_r = given_off[0]
                         glow_g = given_off[1]
                         glow_b = given_off[2]
+                    # The backdrop in place of the diffuse light, as the
+                    # host mixes it.
+                    if has_output(nodes, BACKDROP_NODE):
+                        var backdrop_light = run_nodes(
+                            nodes, BACKDROP_NODE, given
+                        )
+                        var share = Float32(1)
+                        if has_output(nodes, BACKDROP_ALPHA_NODE):
+                            share = run_nodes(
+                                nodes, BACKDROP_ALPHA_NODE, given
+                            )[0]
+                        red = red + (backdrop_light[0] - red) * share
+                        green = green + (backdrop_light[1] - green) * share
+                        blue = blue + (backdrop_light[2] - blue) * share
                     # The mask, before the alpha test, as the host asks it.
                     if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
                         continue
@@ -7266,6 +7349,26 @@ def rasterize_kernel(
                         red = joined.r
                         green = joined.g
                         blue = joined.b
+                # A fragment node's color in place of the material's, as the
+                # host takes it.
+                if fragmented:
+                    var own = run_nodes(
+                        nodes,
+                        FRAGMENT_NODE,
+                        NodeInputs(
+                            u,
+                            v,
+                            Vector3(wx, wy, wz),
+                            Vector3(nx, ny, nz),
+                            tint,
+                            Vector3(0, 0, 0),
+                            textured,
+                        ),
+                    )
+                    red = own[0]
+                    green = own[1]
+                    blue = own[2]
+                    alpha = own[3]
                 # Veiled by the fog last, in linear light, from the same depth
                 # lane and with the same function as `rasterize_shaded`. Alpha
                 # is coverage and is left alone.
@@ -7303,7 +7406,7 @@ def rasterize_kernel(
                     blue = veiled.b
                 # The node graph's output last, reading the finished light,
                 # exactly as `rasterize_shaded` runs it.
-                if noded and has_output(nodes, OUTPUT_NODE):
+                if noded and not fragmented and has_output(nodes, OUTPUT_NODE):
                     var finished = run_nodes(
                         nodes,
                         OUTPUT_NODE,
