@@ -77,13 +77,14 @@ comptime _KEYWORDS = (
     " attribute const uniform varying layout centroid flat smooth break"
     " continue do for while switch case default if else in out inout true"
     " false invariant discard return struct precision highp mediump lowp"
-    " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D "
+    " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D ivec2"
+    " ivec3 ivec4 bvec2 bvec3 bvec4 "
 )
 # The most elements an array holds: each is a variable, and an index picked
 # where the shader runs reads every one.
 comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
-    " uint ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4 mat2x2"
+    " uint uvec2 uvec3 uvec4 mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 samplerCube"
     " sampler3D sampler2DArray sampler2DShadow samplerCubeShadow isampler2D"
     " usampler2D "
@@ -93,21 +94,25 @@ comptime _BUILTINS = (
     " inversesqrt abs sign floor ceil trunc round roundEven fract mod min max"
     " clamp mix step smoothstep length distance dot cross normalize"
     " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
-    " transpose determinant inverse textureLod "
+    " transpose determinant inverse textureLod lessThan lessThanEqual"
+    " greaterThan greaterThanEqual equal notEqual any all not "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
     " floatBitsToUint intBitsToFloat uintBitsToFloat packSnorm2x16"
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
-    " lessThan lessThanEqual greaterThan greaterThanEqual equal"
-    " notEqual any all not textureSize textureOffset texelFetch"
+    " textureSize textureOffset texelFetch"
     " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
     " texture2DProj textureCube "
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
 comptime _REFUSED_STATEMENTS = " while do "
+# The built-ins that compare two vectors one component at a time.
+comptime _COMPARISONS = (
+    " lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual "
+)
 # What a `break` leaves when it is a loop's; see `_Compiler.breakables`.
 comptime _A_LOOP = -2
 comptime _BIT_MARKS = " | & ^ << >> ~ "
@@ -505,9 +510,10 @@ struct _Lexer(Movable):
 @fieldwise_init
 struct _Type(Equatable, ImplicitlyCopyable, Writable):
     """A GLSL type of the subset: `void`, `bool`, `int`, `float`, `vec2` to
-    `vec4`, `mat2`, `mat3`, `mat4` or `sampler2D`. A float's or a vector's
-    value is its width, as `ValueType` counts it. A `mat2` is held as a
-    `vec4` of its two columns, so it is four wide."""
+    `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3`, `mat4`
+    or `sampler2D`. A float's or a vector's value is its width, as
+    `ValueType` counts it; an `ivec`'s is 16 more, and a `bvec`'s 20 more.
+    A `mat2` is held as a `vec4` of its two columns, so it is four wide."""
 
     var value: Int
 
@@ -516,9 +522,11 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= _STRUCT_BASE
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eleven types."""
+        """Return True if this is one of the seventeen types."""
         return (
             (self.value >= 0 and self.value <= 6)
+            or (self.value >= 18 and self.value <= 20)
+            or (self.value >= 22 and self.value <= 24)
             or self.value == 8
             or self.value == 9
             or self.value == 16
@@ -537,6 +545,10 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return "bool"
         if self.value == 8:
             return "mat2"
+        if self.value >= 18 and self.value <= 20:
+            return "ivec" + String(self.value - 16)
+        if self.value >= 22 and self.value <= 24:
+            return "bvec" + String(self.value - 20)
         if self.value == 9:
             return "mat3"
         if self.value == 16:
@@ -552,7 +564,34 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         `bool` or an `int`, and four for a `mat2`."""
         if self.value == 8:
             return 4
+        if self.value >= 18 and self.value <= 20:
+            return self.value - 16
+        if self.value >= 22 and self.value <= 24:
+            return self.value - 20
         return 1 if self.is_scalar() else self.value
+
+    def is_int(self) -> Bool:
+        """Return True for `int` and `ivec2` to `ivec4`."""
+        return self.value == 5 or (self.value >= 18 and self.value <= 20)
+
+    def is_bool(self) -> Bool:
+        """Return True for `bool` and `bvec2` to `bvec4`."""
+        return self.value == 6 or (self.value >= 22 and self.value <= 24)
+
+    def is_any_vector(self) -> Bool:
+        """Return True for a vector of floats, ints or bools."""
+        return self.is_vector() or (
+            (self.is_int() or self.is_bool()) and not self.is_scalar()
+        )
+
+    def resized(self, width: Int) -> _Type:
+        """Return the type of this one's kind of component, `width` wide: a
+        scalar for one."""
+        if self.is_int():
+            return _TINT if width == 1 else _Type(16 + width)
+        if self.is_bool():
+            return _BOOL if width == 1 else _Type(20 + width)
+        return _Type(width)
 
     def is_scalar(self) -> Bool:
         """Return True for `float`, `int` and `bool`."""
@@ -571,13 +610,17 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         return self.value == 9 or self.value == 16
 
     def is_number(self) -> Bool:
-        """Return True for `int`, `float` and the vectors."""
-        return self.is_float() or self.value == 5
+        """Return True for `int`, `float` and their vectors."""
+        return self.is_float() or self.is_int()
 
     def holds(self) -> Bool:
         """Return True for what a local variable can hold: a `bool`, an
-        `int`, a `float`, a vector or a `mat2`."""
-        return (self.value >= 1 and self.value <= 6) or self.value == 8
+        `int`, a `float`, a vector of them or a `mat2`."""
+        return (
+            (self.value >= 1 and self.value <= 6)
+            or self.value == 8
+            or self.is_any_vector()
+        )
 
 
 comptime _VOID = _Type(0)
@@ -588,6 +631,12 @@ comptime _VEC4 = _Type(4)
 comptime _TINT = _Type(5)
 comptime _BOOL = _Type(6)
 comptime _MAT2 = _Type(8)
+comptime _IVEC2 = _Type(18)
+comptime _IVEC3 = _Type(19)
+comptime _IVEC4 = _Type(20)
+comptime _BVEC2 = _Type(22)
+comptime _BVEC3 = _Type(23)
+comptime _BVEC4 = _Type(24)
 comptime _MAT3 = _Type(9)
 comptime _MAT4 = _Type(16)
 comptime _SAMPLER = _Type(32)
@@ -624,6 +673,18 @@ def _type_named(name: String) -> _Type:
         return _BOOL
     if name == "mat2":
         return _MAT2
+    if name == "ivec2":
+        return _IVEC2
+    if name == "ivec3":
+        return _IVEC3
+    if name == "ivec4":
+        return _IVEC4
+    if name == "bvec2":
+        return _BVEC2
+    if name == "bvec3":
+        return _BVEC3
+    if name == "bvec4":
+        return _BVEC4
     if name == "mat3":
         return _MAT3
     if name == "mat4":
@@ -1062,12 +1123,13 @@ struct _Compiler(Movable):
     # --- values -------------------------------------------------------------
 
     def zero(mut self, type: _Type) -> Int:
-        """Return a node of zeros of a type."""
-        if type == _VEC2:
+        """Return a node of zeros of a type, as wide as it."""
+        var width = type.width()
+        if width == 2:
             return self.graph.vec2(0, 0).value
-        if type == _VEC3:
+        if width == 3:
             return self.graph.vec3(0, 0, 0).value
-        if type == _VEC4 or type == _MAT2:
+        if width == 4:
             return self.graph.vec4(0, 0, 0, 0).value
         return self.graph.float(0).value
 
@@ -1636,18 +1698,20 @@ struct _Compiler(Movable):
             for index in range(0, 16, 5):  # pragma: no branch
                 zero.elements[index] = 0
             node = self.graph.uniform(name, zero)
-        elif type == _VEC2:
-            node = self.graph.uniform(name, Vector2(0, 0))
-        elif type == _VEC3:
-            node = self.graph.uniform(name, Vector3(0, 0, 0))
-        elif type == _VEC4 or type == _MAT2:
-            # A mat2 is set as a Vector4 of its two columns.
-            node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
         else:
-            node = self.graph.uniform(name, Float32(0))
-            if type == _TINT:
+            var width = type.width()
+            if width == 2:
+                node = self.graph.uniform(name, Vector2(0, 0))
+            elif width == 3:
+                node = self.graph.uniform(name, Vector3(0, 0, 0))
+            elif width == 4:
+                # A mat2 is set as a Vector4 of its two columns.
+                node = self.graph.uniform(name, Vector4(0, 0, 0, 0))
+            else:
+                node = self.graph.uniform(name, Float32(0))
+            if type.is_int():
                 node = self.graph.trunc(node)
-            elif type == _BOOL:
+            elif type.is_bool():
                 node = self.graph.not_equal(node, self.graph.float(0))
         var symbol = _Symbol(
             name, _UNIFORM, _plain(type, node.value), -1, False
@@ -3061,16 +3125,16 @@ struct _Compiler(Movable):
             return self.transformed(left, right)
         var a = left.type
         var b = right.type
-        if mark == "%" and (a != _TINT or b != _TINT):
+        if mark == "%" and (not a.is_int() or not b.is_int()):
             raise self.error("% takes two ints: write mod() for floats")
         if a == _MAT2 or b == _MAT2:
             return self.mat2_arithmetic(mark, left, right)
         if a.is_matrix() or b.is_matrix():
             return self.matrix_product(mark, left, right)
         var numeric = (a.is_float() and b.is_float()) or (
-            a == _TINT and b == _TINT
+            a.is_int() and b.is_int()
         )
-        var sizes = a == b or a == _FLOAT or b == _FLOAT
+        var sizes = a == b or a.is_scalar() or b.is_scalar()
         if not numeric or not sizes:
             raise self.error(
                 "cannot use "
@@ -3092,7 +3156,7 @@ struct _Compiler(Movable):
             node = self.graph.mul(x, y)
         elif mark == "/":
             node = self.graph.div(x, y)
-            if type == _TINT:
+            if type.is_int():
                 node = self.graph.trunc(node)
         else:
             var quotient = self.graph.trunc(self.graph.div(x, y))
@@ -3342,7 +3406,7 @@ struct _Compiler(Movable):
                         columns, "xy" if index.number == 0 else "zw"
                     )
                     continue
-                if not value.type.is_vector():
+                if not value.type.is_any_vector():
                     raise self.error(
                         "only a vector or a matrix can be indexed in this"
                         " subset"
@@ -3359,7 +3423,10 @@ struct _Compiler(Movable):
                             )
                         )
                     value = self.derived(
-                        _FLOAT, self.pick(lanes, self.node(index)), value, index
+                        value.type.resized(1),
+                        self.pick(lanes, self.node(index)),
+                        value,
+                        index,
                     )
                     continue
                 if index.number < 0 or index.number >= Float64(
@@ -3419,7 +3486,7 @@ struct _Compiler(Movable):
         """
         if value.symbol >= 0 and self.symbols[value.symbol].kind == _POSITION:
             raise self.error("gl_Position is written whole")
-        if not value.type.is_vector():
+        if not value.type.is_any_vector():
             raise self.error("only a vector has components to pick")
         if letters.byte_length() > 4:
             raise self.error("a swizzle picks one to four components")
@@ -3438,7 +3505,7 @@ struct _Compiler(Movable):
             picked += _letter("xyzw", place % 4)
         var node = self.graph.swizzle(self.node(value), picked)
         var result = self.derived(
-            _Type(picked.byte_length()), node, value, value
+            value.type.resized(picked.byte_length()), node, value, value
         )
         if value.symbol < 0:
             return result^
@@ -3699,7 +3766,12 @@ struct _Compiler(Movable):
                     "a " + type.name() + " constructor has too many arguments"
                 )
             var part = NodeRef(args[index].node)
-            var size = args[index].type.width()
+            var given = args[index].type
+            if type.is_int() and not given.is_int() and not given.is_bool():
+                part = self.graph.trunc(part)
+            elif type.is_bool() and not given.is_bool():
+                part = self.graph.not_equal(part, self.graph.float(0))
+            var size = given.width()
             if filled + size > width:
                 size = width - filled
                 part = self.graph.swizzle(part, String("xyzw"[byte=0:size]))
@@ -3953,11 +4025,92 @@ struct _Compiler(Movable):
             else:
                 value.node = self.graph.determinant(nodes[0]).value
             return value^
+        if _listed(name, _COMPARISONS + " any all not "):
+            return self.compare(name, args, nodes, value^)
+        if name == "mix" and len(args) == 3 and args[2].type.is_bool():
+            var width = args[2].type.width()
+            if (
+                args[0].type != args[1].type
+                or args[0].type.resized(width) != args[0].type
+            ):
+                raise self.error(
+                    "mix() of a bool takes two values of one type, as wide as"
+                    " the bool"
+                )
+            # Where the bool is true, the second; elsewhere, the first.
+            value.type = args[0].type
+            value.node = self.graph.select(nodes[2], nodes[1], nodes[0]).value
+            return value^
         if _derivative(name) and self.stage == _VERTEX:
             raise self.error(name + "() is a fragment shader's")
         var type = self.signature(name, args)
         value.type = _FLOAT if _listed(name, " length distance dot ") else type
         value.node = self.apply(name, nodes).value
+        return value^
+
+    def compare(
+        mut self,
+        name: String,
+        args: List[_Value],
+        nodes: List[NodeRef],
+        var value: _Value,
+    ) raises -> _Value:
+        """Return `lessThan` and the other comparisons of two vectors, one
+        bool each, or `any`, `all` or `not` of a `bvec`.
+
+        Raises:
+            Error: If the arguments are not two vectors of one type, or one
+                `bvec`.
+        """
+        if not _listed(name, _COMPARISONS):
+            if len(args) != 1 or not args[0].type.is_bool() or args[0].type.is_scalar():
+                raise self.error(name + "() takes one bvec")
+            var x = nodes[0]
+            if name == "not":
+                value.type = args[0].type
+                value.node = self.graph.logical_not(x).value
+                return value^
+            var all = name == "all"
+            var folded = self.graph.swizzle(x, "x")
+            for lane in range(1, args[0].type.width()):  # pragma: no branch
+                var next = self.graph.swizzle(x, _letter("xyzw", lane))
+                folded = (
+                    self.graph.logical_and(folded, next) if all else self.graph.logical_or(folded, next)
+                )
+            value.type = _BOOL
+            value.node = folded.value
+            return value^
+        var ordered = not _listed(name, " equal notEqual ")
+        var a = args[0].type if len(args) > 0 else _VOID
+        var fits = (
+            len(args) == 2
+            and args[1].type == a
+            and a.is_any_vector()
+            and (not ordered or not a.is_bool())
+        )
+        if not fits:
+            raise self.error(
+                name
+                + "() takes two vectors of one type"
+                + (" of numbers" if ordered else "")
+            )
+        var x = nodes[0]
+        var y = nodes[1]
+        var node: NodeRef
+        if name == "lessThan":
+            node = self.graph.less_than(x, y)
+        elif name == "lessThanEqual":
+            node = self.graph.less_than_equal(x, y)
+        elif name == "greaterThan":
+            node = self.graph.greater_than(x, y)
+        elif name == "greaterThanEqual":
+            node = self.graph.greater_than_equal(x, y)
+        elif name == "equal":
+            node = self.graph.equal(x, y)
+        else:
+            node = self.graph.not_equal(x, y)
+        value.type = _BOOL.resized(a.width())
+        value.node = node.value
         return value^
 
     def texture(
@@ -4111,13 +4264,13 @@ struct _Compiler(Movable):
             for index in range(len(args)):  # pragma: no branch
                 var letter = _letter(letters, index)
                 var type = args[index].type
-                var number = type.is_float() or (ints and type == _TINT)
+                var number = type.is_float() or (ints and type.is_int())
                 if letter == "3":
                     generic = _VEC3
                     fits = fits and type == _VEC3
                 elif letter == "F":
                     # The scalar of the generic type: an int beside ints.
-                    var scalar = _TINT if generic == _TINT else _FLOAT
+                    var scalar = _TINT if generic.is_int() else _FLOAT
                     fits = fits and type == scalar
                 else:
                     fits = (

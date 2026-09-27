@@ -1158,11 +1158,9 @@ def test_a_constructor_converts_or_lays_components_end_to_end() raises:
         "cannot assign m: it is a local matrix",
     )
     refused_statement(
-        "ivec2 v = ivec2(1);", "the type ivec2 is outside the subset"
+        "uvec2 v = uvec2(1);", "the type uvec2 is outside the subset"
     )
-    refused_statement(
-        "vec2 v = ivec2(1);", "the type ivec2 is outside the subset"
-    )
+    refused_statement("vec2 v = ivec2(1);", "cannot give a vec2 a ivec2")
     refused_statement(
         "vec3 v = vec3(viewMatrix);", "cannot make a vec3 of a mat4"
     )
@@ -1318,8 +1316,8 @@ def test_a_built_in_takes_only_its_signatures() raises:
         "float x = sinh(1.0);", "GLSL's sinh() is outside the subset"
     )
     refused_statement(
-        "float x = lessThan(1.0, 2.0);",
-        "GLSL's lessThan() is outside the subset",
+        "float x = packHalf2x16(vec2(1.0));",
+        "GLSL's packHalf2x16() is outside the subset",
     )
     refused_statement(
         "float x = shade(1.0);", "the function shade is not declared"
@@ -2412,6 +2410,120 @@ def test_a_switch_falls_through_to_its_break() raises:
         "declare a variable before the switch, or in a block",
     )
     refused_statement("case 1: ;", "case and default belong in a switch")
+
+
+def test_int_and_bool_vectors_hold_whole_numbers_and_truths() raises:
+    # A constructor drops each float's fraction, and a bvec is true where
+    # a number is not zero.
+    var made = (
+        "ivec2 i = ivec2(vec2(2.7, -1.5));\n"
+        + "ivec3 j = ivec3(i, 7) / 2;\n"
+        + "bvec2 b = bvec2(vec2(0.0, 3.0));\n"
+        + "int k = 1;\n"
+    )
+    assert_lanes(value("vec3(i, float(j.z))", "", made), 2, -1, 3)
+    assert_lanes(value("vec3(j.xy, float(b.y))", "", made), 1, 0, 1)
+    assert_lanes(
+        value(
+            "vec3(i * 3 + ivec2(1), float((ivec4(7, 5, 1, 2) % 3).y))",
+            "",
+            made,
+        ),
+        7,
+        -2,
+        2,
+    )
+    # The comparisons, one bool each, and any, all and not.
+    assert_lanes(
+        value(
+            "vec3(float(any(lessThan(vec2(1.0, 5.0), vec2(2.0)))),"
+            + " float(all(greaterThanEqual(i, ivec2(-1)))),"
+            + " float(not(equal(b, bvec2(true))).x))",
+            "",
+            made,
+        ),
+        1,
+        1,
+        1,
+    )
+    assert_lanes(
+        value(
+            "vec3(float(notEqual(i, ivec2(2)).x),"
+            + " float(lessThanEqual(vec3(1.0), vec3(0.0)).z),"
+            + " float(greaterThan(ivec2(3), i).y))",
+            "",
+            made,
+        ),
+        0,
+        0,
+        1,
+    )
+    assert_lanes(
+        value("vec3(float(any(bvec3(false))), float(all(b)), 0.0)", "", made),
+        0,
+        0,
+        0,
+    )
+    assert_lanes(
+        value("mix(vec3(1.0), vec3(2.0), bvec3(true, false, true))"), 2, 1, 2
+    )
+    assert_lanes(
+        value("vec3(float(i.y), float(i[k]), float(b[k]))", "", made), -1, -1, 1
+    )
+    assert_lanes(
+        value("vec3(vec2(abs(ivec2(-2, 3))), float(max(i.x, 5)))", "", made),
+        2,
+        3,
+        5,
+    )
+    var program = compile_shader_material(
+        VERTEX,
+        "uniform ivec2 cells;\n"
+        + "uniform bvec3 flags;\n"
+        + "void main() { gl_FragColor = vec4(vec2(cells), float(flags.z), 1.0); }\n",
+    )
+    program.set_uniform("cells", Vector2(2.5, -3.5))
+    program.set_uniform("flags", Vector3(0, 0, 2))
+    assert_lanes(run(program), 2, -3, 1)
+    refused_statement(
+        "bvec2 b = bvec2(true); bvec2 c = b + b;",
+        "cannot use + on a bvec2 and a bvec2",
+    )
+    refused_statement(
+        "ivec2 i = ivec2(1); vec2 v = i + vec2(1.0);",
+        "cannot use + on a ivec2 and a vec2",
+    )
+    refused_statement("bool x = any();", "any() takes one bvec")
+    refused_statement("bool x = any(vec2(1.0));", "any() takes one bvec")
+    refused_statement("bool x = any(true);", "any() takes one bvec")
+    refused_statement(
+        "bvec2 x = lessThan();",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = lessThan(vec2(1.0), ivec2(1));",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bool x = lessThan(1.0, 2.0);",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = lessThan(bvec2(true), bvec2(false));",
+        "lessThan() takes two vectors of one type of numbers",
+    )
+    refused_statement(
+        "bvec2 x = equal(vec2(1.0), vec3(1.0));",
+        "equal() takes two vectors of one type",
+    )
+    refused_statement(
+        "vec2 x = mix(vec2(1.0), vec3(1.0), bvec2(true));",
+        "mix() of a bool takes two values of one type, as wide as the bool",
+    )
+    refused_statement(
+        "vec3 x = mix(vec3(1.0), vec3(1.0), bvec2(true));",
+        "mix() of a bool takes two values of one type, as wide as the bool",
+    )
 
 
 def test_break_continue_and_an_early_return_are_read() raises:
