@@ -318,7 +318,9 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
     """Return how far `point` lies outside the loft, in meters.
 
     Negative is inside. Past either end section the loft is cut flat,
-    so the solid ends where the sections end.
+    so the solid ends where the sections end. Outside the loft's padded
+    box the distance to the box stands in: it is smaller than the true
+    distance and has the same sign, and it costs little.
 
     Args:
         loft: A loft from `fit_loft`.
@@ -327,6 +329,9 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
     Returns:
         The signed distance, in meters.
     """
+    var off_box = _box_gap(loft.low, loft.high, point)
+    if off_box > 0:
+        return off_box
     var along = _along(point, loft.axis)
     var last = loft.start + loft.spacing * Float32(loft.count - 1)
     var clamped = min(max(along, loft.start), last)
@@ -341,67 +346,82 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
 def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
     """Return the radial gap at axis coordinate `along`, normalized."""
     var s = (along - loft.start) / loft.spacing
-    var index = Int(s)
-    if index > loft.count - 2:
-        index = loft.count - 2
+    var index = min(Int(s), loft.count - 2)
     var t = s - Float32(index)
     var w = _spline_weights(t)
     var dw = _spline_slopes(t)
-    var cu = Float32(0)
-    var cv = Float32(0)
-    var dcu = Float32(0)
-    var dcv = Float32(0)
-    var k = 0
-    while k < 4:
-        var row = _clamp_index(index - 1 + k, loft.count)
-        cu += w[k] * loft.center_u[row]
-        cv += w[k] * loft.center_v[row]
-        dcu += dw[k] * loft.center_u[row]
-        dcv += dw[k] * loft.center_v[row]
-        k += 1
+    var cu4 = _four(loft.center_u, index, loft.count)
+    var cv4 = _four(loft.center_v, index, loft.count)
     var plane = _plane(point, loft.axis)
-    var du = plane[0] - cu
-    var dv = plane[1] - cv
+    var du = plane[0] - (w * cu4).reduce_add()
+    var dv = plane[1] - (w * cv4).reduce_add()
     var rho = sqrt(du * du + dv * dv)
-    var angle = atan2(dv, du)
-    if angle < 0:
-        angle += Float32(2 * pi)
+    var angle = atan2(dv, du) + Float32(2 * pi)
     var step = Float32(2 * pi) / Float32(LOFT_RAYS)
     var r_pos = angle / step
     var ray = Int(r_pos)
     var q = r_pos - Float32(ray)
+    var c0 = _column(loft, index, ray - 1)
+    var c1 = _column(loft, index, ray)
+    var c2 = _column(loft, index, ray + 1)
+    var c3 = _column(loft, index, ray + 2)
+    var values = SIMD[DType.float32, 4](
+        (w * c0).reduce_add(),
+        (w * c1).reduce_add(),
+        (w * c2).reduce_add(),
+        (w * c3).reduce_add(),
+    )
+    var slopes = SIMD[DType.float32, 4](
+        (dw * c0).reduce_add(),
+        (dw * c1).reduce_add(),
+        (dw * c2).reduce_add(),
+        (dw * c3).reduce_add(),
+    )
     var wq = _spline_weights(q)
-    var dwq = _spline_slopes(q)
-    var radius = Float32(0)
-    var by_angle = Float32(0)
-    var by_axis = Float32(0)
-    var j = 0
-    while j < 4:
-        var column = (ray - 1 + j + LOFT_RAYS) % LOFT_RAYS
-        var value = Float32(0)
-        var slope = Float32(0)
-        k = 0
-        while k < 4:
-            var row = _clamp_index(index - 1 + k, loft.count)
-            var r = loft.section_radius(row, column)
-            value += w[k] * r
-            slope += dw[k] * r
-            k += 1
-        radius += wq[j] * value
-        by_angle += dwq[j] * value
-        by_axis += wq[j] * slope
-        j += 1
-    var gap = rho - radius
+    var gap = rho - (wq * values).reduce_add()
     # The gradient of rho - R(angle, along): the angular term over rho,
     # and the axial term including the drift of the center.
     var tangential = Float32(0)
+    var axial = (wq * slopes).reduce_add() / loft.spacing
     if rho > Float32(1e-6):
-        tangential = by_angle / step / rho
-    var axial = by_axis / loft.spacing
-    if rho > Float32(1e-6):
-        axial += (du * dcu + dv * dcv) / (rho * loft.spacing)
-    var norm = sqrt(1 + tangential * tangential + axial * axial)
-    return gap / norm
+        tangential = (_spline_slopes(q) * values).reduce_add() / step / rho
+        axial += (
+            du * (dw * cu4).reduce_add() + dv * (dw * cv4).reduce_add()
+        ) / (rho * loft.spacing)
+    return gap / sqrt(1 + tangential * tangential + axial * axial)
+
+
+def _four(
+    values: List[Float32], index: Int, count: Int
+) -> SIMD[DType.float32, 4]:
+    """Return the four values a spline between `index` and the next reads."""
+    return SIMD[DType.float32, 4](
+        values[_clamp_index(index - 1, count)],
+        values[index],
+        values[index + 1],
+        values[_clamp_index(index + 2, count)],
+    )
+
+
+def _column(loft: Loft, index: Int, ray: Int) -> SIMD[DType.float32, 4]:
+    """Return one ray's radius in the four sections a spline reads."""
+    var column = (ray + 2 * LOFT_RAYS) % LOFT_RAYS
+    return SIMD[DType.float32, 4](
+        loft.section_radius(_clamp_index(index - 1, loft.count), column),
+        loft.section_radius(index, column),
+        loft.section_radius(index + 1, column),
+        loft.section_radius(_clamp_index(index + 2, loft.count), column),
+    )
+
+
+def _box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
+    """Return how far `point` lies outside the box, or zero inside it."""
+    var out = Vector3(
+        max(max(low.x - point.x, point.x - high.x), Float32(0)),
+        max(max(low.y - point.y, point.y - high.y), Float32(0)),
+        max(max(low.z - point.z, point.z - high.z), Float32(0)),
+    )
+    return out.length()
 
 
 def _reaches(

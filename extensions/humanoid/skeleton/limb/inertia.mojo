@@ -352,24 +352,36 @@ def _bone_fill(
     foot_bones: List[FootBoneField],
     ankle: Vector3,
 ) -> BoneOccupancy:
-    """Return which bone fill `p` lies in, or `EMPTY`."""
-    var fill = femur_field_occupancy(femur, p - pose.femur_origin)
-    if fill != EMPTY:
-        return fill
-    fill = tibia_field_occupancy(tibia, p - pose.tibia_origin)
-    if fill != EMPTY:
-        return fill
-    fill = fibula_field_occupancy(fibula, p - pose.fibula_origin)
-    if fill != EMPTY:
-        return fill
-    fill = patella_field_occupancy(patella, p - pose.patella_origin)
-    if fill != EMPTY:
-        return fill
-    var local = p - ankle
-    for index in range(len(foot_bones)):
-        fill = foot_bone_field_occupancy(foot_bones[index], local)
+    """Return which bone fill `p` lies in, or `EMPTY`.
+
+    A bone is sampled only where its box holds the point.
+    """
+    var at = p - pose.femur_origin
+    if _inside(femur.low, femur.high, at):
+        var fill = femur_field_occupancy(femur, at)
         if fill != EMPTY:
             return fill
+    at = p - pose.tibia_origin
+    if _inside(tibia.low, tibia.high, at):
+        var fill = tibia_field_occupancy(tibia, at)
+        if fill != EMPTY:
+            return fill
+    at = p - pose.fibula_origin
+    if _inside(fibula.low, fibula.high, at):
+        var fill = fibula_field_occupancy(fibula, at)
+        if fill != EMPTY:
+            return fill
+    at = p - pose.patella_origin
+    if _inside(patella.low, patella.high, at):
+        var fill = patella_field_occupancy(patella, at)
+        if fill != EMPTY:
+            return fill
+    var local = p - ankle
+    for index in range(len(foot_bones)):
+        if _inside(foot_bones[index].low, foot_bones[index].high, local):
+            var fill = foot_bone_field_occupancy(foot_bones[index], local)
+            if fill != EMPTY:
+                return fill
     return EMPTY
 
 

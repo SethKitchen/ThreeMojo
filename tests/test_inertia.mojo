@@ -36,8 +36,9 @@ from units.si import (
     MILLIMETER,
 )
 
-# A coarse grid keeps the suite quick. The values move by a few percent.
-comptime COARSE = Length(15.0, MILLIMETER)
+# The coarsest grid keeps the suite quick. The values move by a few
+# percent.
+comptime COARSE = Length(20.0, MILLIMETER)
 
 
 def _person() -> HumanoidSpec:
