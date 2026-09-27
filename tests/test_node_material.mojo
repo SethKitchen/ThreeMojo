@@ -85,8 +85,11 @@ from render.rasterizer import (
     check_triangle_state,
     rasterize_all,
     rasterize_frame,
+    rasterize_line,
     rasterize_point,
 )
+from render.linerule import covers as line_covers, toward_at
+from math.vector2 import Vector2
 from render.srgb import LINEAR
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, IGNORED, NEAREST, REPEAT, Texture
@@ -551,15 +554,52 @@ def test_a_triangles_corners_must_agree_on_a_program_it_can_run() raises:
         check_triangle_state(data[0], data[1], data[2])
 
 
-def test_a_line_or_a_point_runs_no_graph() raises:
+def test_a_line_runs_a_graph_at_each_pixel() raises:
     var end = RasterVertex(0, 0, 0, 1, FloatColor(1.0, 1.0, 1.0), kind=BASIC)
     var noded = end
     noded.nodes = NodeProgramId(0)
     check_line_state(end, end)
-    with assert_raises(contains="A line runs no node graph"):
+    check_line_state(noded, noded)
+    with assert_raises(contains="ends must agree about the node program"):
         check_line_state(noded, end)
-    with assert_raises(contains="A line runs no node graph"):
-        check_line_state(end, noded)
+    # Left to right, the line's coordinate is red and its step across a
+    # pixel green, the right half is thrown away, and the output halves
+    # what is left.
+    var graph = NodeGraph()
+    var u = graph.swizzle(graph.uv(), "x")
+    graph.set_output(
+        COLOR_NODE, graph.join([u, graph.dfdx(u), graph.float(1)])
+    )
+    graph.set_output(MASK_NODE, graph.less_than(u, graph.float(0.5)))
+    graph.set_output(OUTPUT_NODE, graph.mul(graph.lit(), graph.float(0.5)))
+    var programs = one_program(graph^)
+    var a = noded
+    a.x = 1.5
+    a.y = 4.5
+    var b = a
+    b.x = 13.5
+    b.u = 1
+    var target = RenderTarget(SIZE, SIZE, Color(0, 0, 0))
+    rasterize_line(a, b, target, programs=programs)
+    var first = Vector2(a.x, a.y)
+    var second = Vector2(b.x, b.y)
+    var kept = 0
+    for x in range(SIZE):
+        var toward = toward_at(first, second, 1, 1, x, 4)
+        var step = toward_at(first, second, 1, 1, x + 1, 4) - toward
+        var got = target.color_at(x, 4)
+        if line_covers(first, second, x, 4) and toward < 0.5:
+            assert_color(got, toward * 0.5, step * 0.5, 0.5)
+            kept += 1
+        else:
+            assert_color(got, 0, 0, 0)
+    assert_true(kept > 4)
+    # The uv view runs no program, and a program not there is refused.
+    rasterize_line(a, b, target, mode=SHADE_UV, programs=programs)
+    a.nodes = NodeProgramId(2)
+    b.nodes = NodeProgramId(2)
+    with assert_raises(contains="No node program has that id"):
+        rasterize_line(a, b, target, programs=programs)
 
 
 def test_a_point_runs_a_graph_at_each_pixel() raises:
