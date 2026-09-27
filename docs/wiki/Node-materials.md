@@ -431,6 +431,36 @@ graph.set_output(COLOR_NODE, graph.swizzle(stripes, "xyx"))
 var card = assets.materials.add(shader_material(assets.programs.add(graph.compile())))
 ```
 
+## Materials from three.js's examples
+
+Two of the materials in three.js's `examples/jsm/materials` come as node programs on a `PHYSICAL` material.
+
+### Wood
+
+`materials.wood` is three.js's `WoodNodeMaterial`: procedural wood, from rings of warped distance around the trunk, noise and a smooth Voronoi of cells.
+
+```mojo
+var params = wood_preset(WALNUT, GLOSS)
+var plank = assets.materials.add(wood_material(assets.programs.add(wood_program(params)), params))
+```
+
+- `wood_preset(genus, finish)` is three.js's `GetWoodPreset`. The ten genuses are `TEAK`, `WALNUT`, `WHITE_OAK`, `PINE`, `POPLAR`, `MAPLE`, `RED_OAK`, `CHERRY`, `CEDAR` and `MAHOGANY`. The finishes are `RAW`, `MATTE`, `SEMIGLOSS` and `GLOSS`, each a clear coat.
+- `wood_program(params)` is the color node. Its uniforms have three.js's names, from `centerSize` to `transformationMatrix`. Change them with `set_uniform`.
+- `wood_material(id, params)` is the physical material with the finish's clear coat.
+
+A fragment here has no local position, so the program reads the world position through `transformationMatrix`. For a mesh at the origin, the two are the same. Otherwise, set `transformationMatrix` to the inverse of the mesh's world matrix. three.js darkens the color by the darkening of the preset that it loads first, which is one. This port does the same.
+
+### Ambient occlusion from a pass
+
+`materials.post_processing_material` is three.js's `MeshPostProcessingMaterial`: the ambient occlusion of a physical surface, read from a post-processing pass's target at the fragment's own pixel.
+
+```mojo
+var occlusion = assets.programs.add(mesh_post_processing_program(gtao_target))
+var wall = assets.materials.add(Material(Color(200, 200, 200), kind=PHYSICAL, nodes=occlusion))
+```
+
+The program reads the target's texel at `gl_FragCoord.xy * aoPassMapScale`. With an ambient occlusion map, it takes the lower of the two values and applies `aoMapIntensity`, as three.js does. The result is the `AO_NODE`, so the physical shading dims the indirect light with it.
+
 ## In a file
 
 `object_to_json` writes a node material's program in the material's `nodes` field, and `read_object_json` reads it back into `assets.programs`. three.js's loaders read the other fields of the material and ignore this one.
