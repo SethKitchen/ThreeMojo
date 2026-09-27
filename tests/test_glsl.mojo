@@ -505,16 +505,15 @@ def test_the_materials_defines_come_before_both_shaders() raises:
     # which an #if reads; the author's lines keep their numbers.
     var program = compile_shader_material(
         VERTEX,
-        "#ifdef TINTED
-"
-        + "void main() { gl_FragColor = vec4(vec3(float(COUNT)), 1.0); }
-"
-        + "#endif
-",
+        "#ifdef TINTED\n"
+        + "void main() { gl_FragColor = vec4(vec3(float(COUNT)), 1.0); }\n"
+        + "#endif\n",
         ["TINTED", "COUNT 3"],
     )
     assert_lanes(run(program), 3, 3, 3)
-    with assert_raises(contains="fragment shader, line 1: a #define needs a name"):
+    with assert_raises(
+        contains="fragment shader, line 0: a #define needs a name"
+    ):
         _ = compile_shader_material(VERTEX, WHITE, [" "])
 
 
