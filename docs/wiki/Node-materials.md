@@ -112,6 +112,8 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
 | `texture_level(map, uv, level)` | `vec4` | `texture(map, uv).level(n)` | As `texture`, at the mip level that a `float` gives. Level zero is the full-size image. A texture with one level reads it at every level. |
+| `texture_load(map, at, level)` | `vec4` | `textureLoad(map, at, level)` | The texel of a texture uniform at a column and a row, counted as `uv` counts. A coordinate outside the image wraps, and a level outside the chain is held inside it. |
+| `texture_size(map, level)` | `vec2` | `textureSize(map, level)` | A texture uniform's width and height at a level, held inside the chain. |
 | `lit()` | `vec3` | `output` | The color that the material's own shading made. An output node only. |
 
 ### Math
@@ -289,7 +291,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
-- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D` and `textureLod`.
+- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureLod`, `texelFetch` and `textureSize`.
 - The preprocessor: `#version` in a raw shader, and object-like `#define`.
 
 A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
@@ -322,7 +324,7 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
 - `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
-- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `lessThan`, `textureGrad` and `texelFetch`.
+- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `textureGrad` and `textureOffset`.
 - A vector compared with `<`, and a scalar swizzled.
 
 ### Why no chunks
