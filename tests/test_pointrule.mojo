@@ -22,6 +22,7 @@ from render.pointrule import (
     coord,
     covers,
     first_covered,
+    gl_point_coord,
     last_covered,
     mip_level_of,
 )
@@ -155,6 +156,22 @@ def test_a_pixel_is_covered_when_its_center_is_in_the_square() raises:
         for x in range(9):
             var inside = x >= 3 and x <= 5 and y >= 3 and y <= 5
             assert_equal(covers(center, 3, x, y), inside)
+
+
+def test_gl_point_coord_runs_down_from_the_top_left() raises:
+    # A four-pixel point at (4, 4): the top-left pixel's center is an
+    # eighth of the way in on each axis, the coordinate grows right and
+    # down, and it is `coord` with its y turned back.
+    var center = Vector2(4, 4)
+    var top_left = gl_point_coord(center, 4, 2, 2)
+    assert_almost_equal(top_left.x, 0.125)
+    assert_almost_equal(top_left.y, 0.125)
+    var lower = gl_point_coord(center, 4, 3, 5)
+    assert_almost_equal(lower.x, 0.375)
+    assert_almost_equal(lower.y, 0.875)
+    assert_almost_equal(lower.y, 1 - coord(center, 4, 3, 5).y)
+    # A pixel beside the square is outside zero to one.
+    assert_true(gl_point_coord(center, 4, 6, 2).x > 1)
 
 
 def test_the_square_is_half_open() raises:
