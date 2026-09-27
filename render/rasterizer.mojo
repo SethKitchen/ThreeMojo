@@ -1326,7 +1326,8 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
     `SHADE_SHADOW` is the shadow pass's own: each fragment writes what a
     light sees through it, its `CAST_SHADOW_NODE` or opaque black, times
     its maps' alpha, three.js's shadow material under
-    `shadowMap.transmitted`. Only the host draws a shadow map, so only the
+    `shadowMap.transmitted`. It writes the depth whatever the draw's state
+    says, as that material does. Only the host draws a shadow map, so only the
     host rasterizer takes it.
 
     A type because an unrecognized integer here was once read in opposite
@@ -3648,9 +3649,10 @@ def rasterize_shaded(
             var coat_facing = facing
             # The shadow pass's color, three.js's transmitted shadow: what
             # the light sees through the surface, its alpha thinned by the
-            # map and the alpha map, then tested as three.js's shadow
-            # material tests it. Written as it is, alpha and all, as
-            # `NoBlending` writes it.
+            # map and the alpha map, then tested against the alpha test, the
+            # two things three.js's shadow material copies from the
+            # caster's. Written as it is, alpha and all, as `NoBlending`
+            # writes it, with the depth, as that material writes it.
             if mode == SHADE_SHADOW:
                 var given = NodeInputs(
                     u,
@@ -3692,13 +3694,10 @@ def rasterize_shaded(
                     continue
                 if tested and cast.a < a.alpha_test:
                     continue
-                if hashed and cast.a < hashed_threshold(nodes):
-                    continue
                 target.keep_stencil(x, y, test)
                 if not test.passes:
                     continue
-                if writes_depth:
-                    target.claim_depth(x, y, stored_z)
+                target.claim_depth(x, y, stored_z)
                 target.write(x, y, cast, True)
                 continue
             # `check_triangle_state` has refused a map on any kind that is
@@ -5683,8 +5682,7 @@ def rasterize_line(
                 target.keep_stencil(x, y, shadowed)
                 if not shadowed.passes:
                     continue
-                if writes_depth:
-                    target.claim_depth(x, y, stored_z)
+                target.claim_depth(x, y, stored_z)
                 target.write(x, y, cast, True)
                 continue
             if fogged:
@@ -6001,8 +5999,7 @@ def rasterize_point(
                 target.keep_stencil(x, y, test)
                 if not test.passes:
                     continue
-                if writes_depth:
-                    target.claim_depth(x, y, stored_z)
+                target.claim_depth(x, y, stored_z)
                 target.write(x, y, cast, True)
                 continue
             var shaded = point.color

@@ -8,7 +8,7 @@
 the transmitted shadow, and a floor under a red pane."""
 
 from core.assets import Assets
-from core.object3d import Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
@@ -21,6 +21,7 @@ from lights.shadow import (
     transmitted_shadow,
 )
 from materials.material import (
+    BASIC,
     DOUBLE_SIDE,
     Material,
     PointSize,
@@ -38,7 +39,7 @@ from objects.points import Points
 from render.framebuffer import Color
 from render.rasterizer import SHADE_SHADOW
 from render.srgb import LINEAR
-from render.texture import IGNORED, NEAREST, REPEAT, Texture
+from render.texture import COVERAGE, NEAREST, REPEAT, Texture
 from renderers.renderer import Renderer
 from std.math import inf
 from std.testing import (
@@ -209,7 +210,7 @@ def one_texel(
         NEAREST,
         LINEAR,
         False,
-        IGNORED,
+        COVERAGE,
     )
 
 
@@ -327,11 +328,6 @@ def test_a_caster_thrown_away_leaves_its_texel_clear() raises:
     tested.map = assets.textures.add(one_texel(255, 255, 255, 64))
     tested.alpha_test = 0.5
     assert_equal(seen_through_one(assets, tested)[3], 0)
-    # Hashed away at no alpha.
-    var hashed = Material(Color(200, 200, 200))
-    hashed.alpha_map = assets.textures.add(one_texel(0, 0, 0, 255))
-    hashed.alpha_hash = True
-    assert_equal(seen_through_one(assets, hashed)[3], 0)
 
 
 def test_the_nearest_caster_is_the_one_the_light_sees() raises:
@@ -349,19 +345,6 @@ def test_the_nearest_caster_is_the_one_the_light_sees() raises:
         var seen = seen_through(assets, panes(assets, paints, heights))
         assert_equal(seen[0], 1)
         assert_equal(seen[2], 0)
-    # A caster that writes no depth is painted over by one behind it.
-    var assets = Assets()
-    var above = casting(assets, 1, 0)
-    above.depth_write = False
-    var seen = seen_through(
-        assets,
-        panes(
-            assets,
-            [above^, casting(assets, 0, 1)],
-            [Float32(2), Float32(1)],
-        ),
-    )
-    assert_equal(seen[2], 1)
 
 
 def test_a_red_pane_casts_a_red_shadow() raises:
@@ -395,13 +378,11 @@ def dots(
     one.set_attribute("uv", BufferAttribute([Float32(0.5), 0.5], 2))
     var shape = assets.geometries.add(one^)
     for index in range(len(paints)):
-        var node = Object3D()
-        node.set_position(0, heights[index], 0)
         scene.add_points(
             Points(
                 shape,
                 assets.materials.add(paints[index].copy()),
-                scene.add(node^),
+                on_the_ray(scene, heights[index]),
                 cast_shadow=True,
             )
         )
@@ -415,52 +396,81 @@ def a_dot(mut assets: Assets) raises -> Material:
     )
 
 
+def drawn_texels(
+    mut assets: Assets, var scene: Scene
+) raises -> List[SIMD[DType.float32, 4]]:
+    """Return what the sun sees through each texel anything was drawn in:
+    a point is one texel wide in the shadow pass, as three.js draws it."""
+    a_sun(scene)
+    scene.update()
+    var renderer = Renderer(8, 8)
+    renderer.shadow_map_transmitted = True
+    var maps = renderer.shadow_maps(scene, assets)
+    ref colors = maps[0].colors
+    var drawn = List[SIMD[DType.float32, 4]]()
+    for texel in range(len(colors) // 4):
+        if colors[texel * 4 + 3] > 0:
+            drawn.append(
+                SIMD[DType.float32, 4](
+                    colors[texel * 4],
+                    colors[texel * 4 + 1],
+                    colors[texel * 4 + 2],
+                    colors[texel * 4 + 3],
+                )
+            )
+    return drawn^
+
+
+def reddest(drawn: List[SIMD[DType.float32, 4]]) raises -> Float32:
+    """Return the most red any drawn texel holds."""
+    assert_true(len(drawn) > 0, "the sun saw nothing")
+    var most = Float32(0)
+    for index in range(len(drawn)):
+        most = max(most, drawn[index][0])
+    return most
+
+
+def red_caster(mut assets: Assets, var paint: Material) raises -> Material:
+    """Return `paint` with a cast shadow node of opaque red."""
+    var graph = NodeGraph()
+    graph.set_output(
+        CAST_SHADOW_NODE, graph.join([graph.vec3(1, 0, 0), graph.float(1)])
+    )
+    paint.nodes = assets.programs.add(graph.compile())
+    return paint^
+
+
 def test_a_point_casts_what_the_light_sees_through_it() raises:
     var assets = Assets()
-    var plain = a_dot(assets)
-    var seen = seen_through(assets, dots(assets, [plain.copy()], [Float32(2)]))
-    assert_equal(seen[0], 0)
-    assert_equal(seen[3], 1)
+    var drawn = drawn_texels(assets, dots(assets, [a_dot(assets)], [2]))
+    assert_equal(len(drawn), 1)
+    assert_equal(drawn[0][0], 0)
+    assert_equal(drawn[0][3], 1)
     # Its map and its alpha map thin it, and its alpha test throws it away.
     var thin = a_dot(assets)
     thin.map = assets.textures.add(one_texel(255, 255, 255, 128))
     thin.alpha_map = assets.textures.add(one_texel(0, 128, 0, 255))
-    seen = seen_through(assets, dots(assets, [thin.copy()], [Float32(2)]))
-    assert_almost_equal(seen[3], (128.0 / 255) * (128.0 / 255), atol=1e-3)
+    drawn = drawn_texels(assets, dots(assets, [thin.copy()], [2]))
+    assert_almost_equal(drawn[0][3], (128.0 / 255) * (128.0 / 255), atol=1e-3)
     thin.alpha_test = 0.5
-    seen = seen_through(assets, dots(assets, [thin^], [Float32(2)]))
-    assert_equal(seen[3], 0)
+    assert_equal(len(drawn_texels(assets, dots(assets, [thin^], [2]))), 0)
     # Its mask throws it away.
     var graph = NodeGraph()
     graph.set_output(MASK_NODE, graph.float(0))
     var masked = a_dot(assets)
     masked.nodes = assets.programs.add(graph.compile())
-    seen = seen_through(assets, dots(assets, [masked^], [Float32(2)]))
-    assert_equal(seen[3], 0)
-    # The nearer of two is the one seen, in either order.
-    var red_graph = NodeGraph()
-    red_graph.set_output(
-        CAST_SHADOW_NODE,
-        red_graph.join([red_graph.vec3(1, 0, 0), red_graph.float(1)]),
-    )
-    var red = a_dot(assets)
-    red.nodes = assets.programs.add(red_graph.compile())
+    assert_equal(len(drawn_texels(assets, dots(assets, [masked^], [2]))), 0)
+    # The nearer of two on one ray is the one seen, in either order.
+    var red = red_caster(assets, a_dot(assets))
     for flipped in [False, True]:
         var heights: List[Float32] = [2, 1]
         var paints: List[Material] = [red.copy(), a_dot(assets)]
         if flipped:
             heights = [1, 2]
             paints = [a_dot(assets), red.copy()]
-        seen = seen_through(assets, dots(assets, paints, heights))
-        assert_equal(seen[0], 1)
-    # One that writes no depth is painted over by one behind it.
-    var above = red.copy()
-    above.depth_write = False
-    seen = seen_through(
-        assets,
-        dots(assets, [above^, a_dot(assets)], [Float32(2), Float32(1)]),
-    )
-    assert_equal(seen[0], 0)
+        drawn = drawn_texels(assets, dots(assets, paints, heights))
+        assert_equal(len(drawn), 1)
+        assert_equal(drawn[0][0], 1)
 
 
 def sticks(
@@ -475,79 +485,47 @@ def sticks(
     )
     var shape = assets.geometries.add(two^)
     for index in range(len(paints)):
-        # Moved back as it moves down, so every stick lies on the one
-        # ray from the sun and lands on the same texels.
-        var node = Object3D()
-        node.set_position(0, heights[index], (heights[index] - 2) * 0.2)
         scene.add_line(
             Line(
                 shape,
                 assets.materials.add(paints[index].copy()),
-                scene.add(node^),
+                on_the_ray(scene, heights[index]),
                 cast_shadow=True,
             )
         )
     return scene^
 
 
-def reddest(
-    mut assets: Assets, var scene: Scene
-) raises -> SIMD[DType.float32, 4]:
-    """Return the texel the sun sees most red through, or one with
-    nothing in it."""
-    a_sun(scene)
-    scene.update()
-    var renderer = Renderer(8, 8)
-    renderer.shadow_map_transmitted = True
-    var maps = renderer.shadow_maps(scene, assets)
-    ref colors = maps[0].colors
-    var best = SIMD[DType.float32, 4](0)
-    var drawn = 0
-    for texel in range(len(colors) // 4):
-        if colors[texel * 4 + 3] > 0:
-            drawn += 1
-            if colors[texel * 4] >= best[0]:
-                best = SIMD[DType.float32, 4](
-                    colors[texel * 4],
-                    colors[texel * 4 + 1],
-                    colors[texel * 4 + 2],
-                    colors[texel * 4 + 3],
-                )
-    assert_true(drawn > 0, "the sun saw no line")
-    return best
+def on_the_ray(mut scene: Scene, height: Float32) raises -> NodeId:
+    """Return a node at `height` on the sun's ray through the origin, so
+    every thing put on one lands on the same texels of the sun's map."""
+    var node = Object3D()
+    node.set_position(0, height, height * 0.2)
+    return scene.add(node^)
+
+
+def a_stick() raises -> Material:
+    """Return a plain line material."""
+    return Material(Color(200, 200, 200), kind=BASIC)
 
 
 def test_a_line_casts_what_the_light_sees_through_it() raises:
     var assets = Assets()
-    var red_graph = NodeGraph()
-    red_graph.set_output(
-        CAST_SHADOW_NODE,
-        red_graph.join([red_graph.vec3(1, 0, 0), red_graph.float(1)]),
-    )
-    var red = Material(Color(200, 200, 200))
-    red.nodes = assets.programs.add(red_graph.compile())
-    var black = Material(Color(200, 200, 200))
-    # Alone, black; red where its node says red.
-    var seen = reddest(assets, sticks(assets, [black.copy()], [Float32(2)]))
-    assert_equal(seen[0], 0)
-    assert_equal(seen[3], 1)
-    # The nearer of two is the one seen, in either order.
+    # Alone, black.
+    var drawn = drawn_texels(assets, sticks(assets, [a_stick()], [2]))
+    assert_equal(reddest(drawn), 0)
+    assert_equal(drawn[0][3], 1)
+    # The nearer of two on one ray is the one seen, in either order.
+    var red = red_caster(assets, a_stick())
     for flipped in [False, True]:
         var heights: List[Float32] = [2, 1]
-        var paints: List[Material] = [red.copy(), black.copy()]
+        var paints: List[Material] = [red.copy(), a_stick()]
         if flipped:
             heights = [1, 2]
-            paints = [black.copy(), red.copy()]
-        seen = reddest(assets, sticks(assets, paints, heights))
-        assert_equal(seen[0], 1)
-    # One that writes no depth is painted over by one behind it.
-    var above = red.copy()
-    above.depth_write = False
-    seen = reddest(
-        assets,
-        sticks(assets, [above^, black.copy()], [Float32(2), Float32(1)]),
-    )
-    assert_equal(seen[0], 0)
+            paints = [a_stick(), red.copy()]
+        drawn = drawn_texels(assets, sticks(assets, paints, heights))
+        for index in range(len(drawn)):
+            assert_equal(drawn[index][0], 1)
 
 
 def main() raises:
