@@ -5332,7 +5332,7 @@ def rasterize_point(
             # Tested and settled as a triangle's fragment is; see
             # `rasterize_shaded`.
             var test = target.test_fragment(x, y, stored_z, point.state)
-            if not shades(test, may_discard):
+            if not shades(test, may_discard or masked):
                 target.keep_stencil(x, y, test)
                 continue
             var shaded = point.color
