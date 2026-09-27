@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""mapbox's `potpack`: the places and the container it gives, checked
-against the JavaScript's own answers."""
+"""Tests for mapbox's `potpack`: the places and the container it gives,
+checked against the JavaScript's own answers."""
 
 from math.potpack import PackedBox, potpack
 from std.testing import TestSuite, assert_almost_equal, assert_equal
