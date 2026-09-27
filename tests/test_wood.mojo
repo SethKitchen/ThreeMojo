@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's `WoodNodeMaterial`: the presets, and a plank of teak and one
-of walnut drawn in their own colors."""
+"""Tests for three.js's `WoodNodeMaterial`: the presets, and a plank of
+teak and one of walnut drawn in their own colors."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
