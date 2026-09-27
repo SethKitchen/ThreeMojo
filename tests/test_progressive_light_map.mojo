@@ -59,7 +59,9 @@ def a_camera() raises -> PerspectiveCamera:
 def two_planes(mut assets: Assets, mut scene: Scene) raises:
     """Add a plane that faces the light and one that faces away, each with
     its own node and lambert material, and a light in front of them."""
-    var facing = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var facing = assets.geometries.add(
+        plane(Length(1, METER), Length(1, METER))
+    )
     var turned = plane(Length(1, METER), Length(1, METER))
     turned.rotate_y(Angle(180, DEGREE))
     var away = assets.geometries.add(turned^)

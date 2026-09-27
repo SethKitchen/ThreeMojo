@@ -258,13 +258,13 @@ The port is not at parity with three.js yet. 200 features are ported and 3 are o
 
 ### Rendering
 
-- [ ] GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 
 <details>
-<summary>Ported: 30</summary>
+<summary>Ported: 31</summary>
 
 - [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
+- [x] [GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort](https://github.com/SethKitchen/ThreeMojo/wiki/Progressive-light-map): float images stepped by shaders, a light map baked in texture space on both rasterizers, meshes merged into batches, and a radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [x] [SVGRenderer and Projector](https://github.com/SethKitchen/ThreeMojo/wiki/SVG-renderer): a scene drawn as SVG paths, faces lit flat, lines and sprites, matching three.js's output [#205](https://github.com/SethKitchen/ThreeMojo/issues/205)
 - [x] [TSL display nodes as passes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#display-nodes): Gaussian, box and hash blurs, chromatic aberration, the anamorphic streak, the lens flare and bayer16 [#190](https://github.com/SethKitchen/ThreeMojo/issues/190)
 - [x] [Render-target features](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#multisampled-render-targets): per-target MSAA, 3D, array and cube targets, drawing into a layer or mip level, and texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)

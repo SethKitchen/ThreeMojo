@@ -91,9 +91,7 @@ def _blend_program() raises -> NodeGraph:
     var graph = NodeGraph()
     var previous = graph.texture_uniform("previousShadowMap")
     var window = graph.uniform("averagingWindow", DEFAULT_BLEND_WINDOW)
-    var old = graph.swizzle(
-        graph.texture(previous, graph.screen_uv()), "rgb"
-    )
+    var old = graph.swizzle(graph.texture(previous, graph.screen_uv()), "rgb")
     graph.set_output(
         OUTPUT_NODE,
         graph.mix(old, graph.lit(), graph.div(graph.float(1), window)),
@@ -125,9 +123,7 @@ struct ProgressiveLightMap(Movable):
     # `labelMesh`, or `None` before `show_debug_light_map` adds it.
     var label: Optional[NodeId]
 
-    def __init__(
-        out self, mut assets: Assets, resolution: Int = 1024
-    ) raises:
+    def __init__(out self, mut assets: Assets, resolution: Int = 1024) raises:
         """Make the two maps, black, and the material the meshes are drawn
         with: three.js's `new ProgressiveLightMap(renderer, res)`.
 
