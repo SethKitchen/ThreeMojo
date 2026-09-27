@@ -2364,20 +2364,31 @@ def test_a_switch_falls_through_to_its_break() raises:
         value("vec3(pick(5), pick(k), 0.0)", pick, "int k = 2;\n"), 7, 3, 0
     )
     # In a loop, a continue continues the loop and a break leaves the
-    # switch, and a switch in a switch passes the continue out.
+    # switch.
     var body = (
         "float s = 0.0;\n"
         + "for (int i = 0; i < 6; i++) {\n"
         + "    switch (i) {\n"
         + "    case 1: continue;\n"
         + "    case 4: break;\n"
+        + "    default: s += float(i);\n"
+        + "    }\n"
+        + "    s += 10.0;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(s)", "", body), 51, 51, 51)
+    # A switch in a switch passes the continue out.
+    var nested = (
+        "float s = 0.0;\n"
+        + "for (int i = 0; i < 6; i++) {\n"
+        + "    switch (i) {\n"
         + "    case 5: switch (i) { default: continue; }\n"
         + "    default: s += float(i);\n"
         + "    }\n"
         + "    s += 10.0;\n"
         + "}\n"
     )
-    assert_lanes(value("vec3(s)", "", body), 45, 45, 45)
+    assert_lanes(value("vec3(s)", "", nested), 60, 60, 60)
     refused_statement(
         "switch (1.0) { default: break; }",
         "a switch chooses by an int, not a float",
