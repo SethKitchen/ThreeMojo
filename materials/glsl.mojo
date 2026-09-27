@@ -662,7 +662,8 @@ struct _Lexer(Movable):
                 at += 1
             return 1 if holds else 0
         if _is_digit(part.as_bytes()[0]):
-            for index in range(part.byte_length()):
+            # A part has at least one byte.
+            for index in range(part.byte_length()):  # pragma: no branch
                 if not _is_digit(part.as_bytes()[index]):
                     raise self.error(
                         line, "an #if condition counts in whole numbers"
@@ -820,7 +821,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             return 4
         if self.value >= 18 and self.value <= 20:
             return self.value - 16
-        if self.value >= 22 and self.value <= 24:
+        # `bvec2` to `bvec4`, as one unsigned comparison.
+        if UInt(self.value - 22) < 3:
             return self.value - 20
         return 1 if self.is_scalar() else self.value
 
@@ -1723,7 +1725,8 @@ struct _Compiler(Movable):
             return 1
         var total = 1
         ref fields = self.structs[type.value - _STRUCT_BASE]
-        for index in range(len(fields.types)):
+        # A struct has at least one field.
+        for index in range(len(fields.types)):  # pragma: no branch
             total += self.span(fields.types[index])
         return total
 
@@ -1741,7 +1744,8 @@ struct _Compiler(Movable):
         var value = _Value(
             type, -1, True, False, 0, _BUNDLE, len(self.bundles), False, -1, ""
         )
-        for index in range(len(fields)):
+        # A struct has at least one field.
+        for index in range(len(fields)):  # pragma: no branch
             value.constant = value.constant and fields[index].constant
             value.local = value.local or fields[index].local
         self.bundles.append(fields^)
@@ -1814,7 +1818,8 @@ struct _Compiler(Movable):
             Error: If the struct has no such field.
         """
         var fields = self.structs[value.type.value - _STRUCT_BASE].copy()
-        for index in range(len(fields.names)):
+        # A struct has at least one field.
+        for index in range(len(fields.names)):  # pragma: no branch
             if fields.names[index] != name:
                 continue
             var owner = value.symbol
@@ -3549,7 +3554,8 @@ struct _Compiler(Movable):
             return self.derived(_MAT2, both, left, right)
         if mark == "*" and a == _MAT2 and b == _VEC2:
             return self.derived(_VEC2, self.mat2_times(x, y), left, right)
-        if mark == "*" and a == _VEC2 and b == _MAT2:
+        # The other operand is the `mat2`.
+        if mark == "*" and a == _VEC2:
             var row = self.graph.join(
                 [
                     self.graph.dot(x, self.graph.swizzle(y, "xy")),

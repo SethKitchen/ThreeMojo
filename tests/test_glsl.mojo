@@ -3082,5 +3082,161 @@ def test_break_continue_and_an_early_return_are_read() raises:
     )
 
 
+def test_the_corners_of_the_subset() raises:
+    # The preprocessor: an #undef of nothing, #elif after a branch taken
+    # and after none, a comment, and the conditions it refuses.
+    var white = String("\nvoid main() { gl_FragColor = vec4(1.0); }\n")
+    assert_lanes(paint("#undef NOPE" + white), 1, 1, 1)
+    assert_lanes(paint("#if 0\n#elif 0\n#elif 1\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if 1\n#elif 1\n#elif 0\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if 1 // a note\n#endif" + white), 1, 1, 1)
+    assert_lanes(paint("#if NOPE\n#else\n#endif" + white), 1, 1, 1)
+    refused("#if (1 2)\n#endif" + white, "an #if condition leaves a ( open")
+    refused("#if defined\n#endif" + white, "defined names a macro")
+    refused(
+        "#if defined(A 2)\n#endif" + white, "an #if condition leaves a ( open"
+    )
+    refused(
+        "#define TWO 1 2\n#if TWO\n#endif" + white,
+        "the macro TWO is not one whole number",
+    )
+    # Types and values.
+    var shape = String("struct S { float a; };\n")
+    refused_statement("bvec4 b = bvec4(true); if (b) {}", "not a bvec4")
+    refused(
+        shape + "void main() { S s = S(1.0); if (s) {} gl_FragColor = vec4(1.0); }",
+        "an if needs a bool, not a struct",
+    )
+    assert_equal(
+        number("x", "", "float a[1] = float[1](2.0); int k = 0; float x = a[k];"),
+        2,
+    )
+    assert_equal(
+        number(
+            "x",
+            shape,
+            "S a[1] = S[1](S(3.0)); int k = 0; float x = a[k].a;",
+        ),
+        3,
+    )
+    assert_equal(number("c.a", shape + "const S c = S(0.5);"), 0.5)
+    assert_equal(
+        number("f(S(0.25))", shape + "float f(S s) { return s.a; }"), 0.25
+    )
+    assert_equal(
+        number(
+            "t.a",
+            shape + "void f(out S s) { s = S(2.0); }",
+            "S t; f(t);",
+        ),
+        2,
+    )
+    assert_equal(
+        number("b + a[1]", "", "float a[2] = float[2](1.0, 2.0), b = 3.0;"), 5
+    )
+    assert_equal(
+        number("q.a", shape, "S p = S(1.0), q = S(2.0);"), 2
+    )
+    assert_equal(
+        number("m[0][0] + n[1][1]", "", "mat3 m = mat3(1.0), n = mat3(2.0);"), 3
+    )
+    assert_equal(number("float(int(true))"), 1)
+    assert_equal(
+        number(
+            "a[0][0] + b[1][1]",
+            "",
+            "mat3 a = mat3(mat3(1.0)); mat2 b = mat2(mat3(2.0));",
+        ),
+        3,
+    )
+    refused("uniform float u[];" + white, "expected a value before ']'")
+    refused_statement(
+        "float a[2.0];", "an array's size is a positive constant int"
+    )
+    refused_statement(
+        "int n = 2; float a[n];", "an array's size is a positive constant int"
+    )
+    refused_statement(
+        "float a[2] = float[3](1.0, 2.0);",
+        "an array constructor of 3 elements lists 2",
+    )
+    refused(shape + "S g;" + white, "a S is a uniform, a const or a local")
+    refused(
+        shape + "const S c = 1.0;" + white,
+        "a const S's value must be a constant S",
+    )
+    refused_statement("case 1: ;", "case and default belong in a switch")
+    refused_statement(
+        "int i = 0; switch (i) { case 1.0: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement(
+        "int i = 0; int j = 1; switch (i) { case j: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement("mat3 m[2];", "arrays are outside the subset")
+    refused_statement("mat3 m = mat4(1.0);", "cannot give a mat3 a mat4")
+    refused_statement(
+        "mat3 a = mat3(1.0); mat4 b = mat4(1.0); mat3 c = a * b;",
+        "cannot use * on a mat3 and a mat4",
+    )
+    refused(
+        white,
+        "a transform's columns are outside the subset",
+        "void main() { vec4 c = modelMatrix[1.0];"
+        + " gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
+    )
+    refused_statement(
+        "float a[2] = float[2](1.0, 2.0); float x = a.x;",
+        "an array is read one element at a time",
+    )
+    refused_statement(
+        "float a[2] = float[2](1.0, 2.0); float x = a[-1];",
+        "the index is outside the array",
+    )
+    refused_statement(
+        "float x = float(uint(1));", "the type uint is outside the subset"
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() { vec4 c = sampler2D(1.0);"
+        + " gl_FragColor = c; }",
+        "a sampler2D constructor is outside the subset",
+    )
+    refused(
+        "uniform sampler2D map;\nvoid main() { vec4 c = vec4(map);"
+        + " gl_FragColor = c; }",
+        "cannot make a vec4 of a sampler2D",
+    )
+    refused_statement(
+        "vec3 a = mix(vec3(1.0), vec3(0.0));",
+        "no signature of mix() takes (vec3, vec3)",
+    )
+    refused(
+        "uniform samplerCube sky;\nvoid main() { vec4 c = textureCube(sky);"
+        + " gl_FragColor = c; }",
+        "textureCube() takes a samplerCube and a vec3",
+    )
+    refused(
+        "uniform sampler3D cloud;\nvoid main() { vec4 c = texture(cloud);"
+        + " gl_FragColor = c; }",
+        "texture() takes a sampler3D and a vec3",
+    )
+    refused_statement(
+        "const float a[2] = float[2](1.0, 2.0); a[0] = 1.0;",
+        "cannot assign a[0]: it is a const",
+    )
+    # A raw GLSL ES 3.0 shader fetches a texel.
+    var modern = compile_raw_shader_material(
+        "#version 300 es\nin vec3 position;\nuniform mat4 projectionMatrix;"
+        + "\nuniform mat4 modelViewMatrix;\nvoid main() { gl_Position ="
+        + " projectionMatrix * modelViewMatrix * vec4(position, 1.0); }\n",
+        "#version 300 es\nprecision highp float;\nuniform sampler2D map;"
+        + "\nout vec4 c;\nvoid main() { c = texelFetch(map, ivec2(0, 0),"
+        + " 0); }\n",
+    )
+    assert_equal(len(modern.textures), 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

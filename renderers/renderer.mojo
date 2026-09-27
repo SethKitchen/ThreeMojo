@@ -673,7 +673,8 @@ def _customs(
         var size = 0
         if geometry.has_attribute(name):
             size = geometry.attribute_view(name).item_size
-        for vertex in range(count):
+        # A drawn geometry has vertices.
+        for vertex in range(count):  # pragma: no branch
             for lane in range(width):  # pragma: no branch
                 var value = Float32(1) if lane == 3 else Float32(0)
                 if lane < size:
