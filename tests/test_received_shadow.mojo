@@ -13,7 +13,12 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
-from lights.light import ambient_light, directional_light, point_light, spot_light
+from lights.light import (
+    ambient_light,
+    directional_light,
+    point_light,
+    spot_light,
+)
 from lights.shadow import Unshaped
 from materials.material import (
     Material,
@@ -52,44 +57,44 @@ def a_fragment() -> NodeInputs:
 
 def test_only_a_received_shadow_node_reads_the_shadow() raises:
     var graph = NodeGraph()
-    var shadow = graph.shadow()
-    graph.set_output(COLOR_NODE, graph.join([shadow, shadow, shadow]))
+    graph.set_output(COLOR_NODE, graph.shadow())
     with assert_raises(contains="Only a received shadow node reads"):
         _ = graph.compile()
     var varied = NodeGraph()
-    var passed = varied.varying(varied.shadow())
-    varied.set_output(
-        RECEIVED_SHADOW_NODE, varied.join([passed, passed, passed])
-    )
+    varied.set_output(RECEIVED_SHADOW_NODE, varied.varying(varied.shadow()))
     with assert_raises(contains="cannot read the lit color or the shadow"):
         _ = varied.compile()
 
 
 def test_a_shape_runs_the_output_on_each_shadow() raises:
     # Red where the shadow falls and white where it does not: three.js's
-    # `shadow.mix( color( 0xff0000 ), 1 )`.
-    var graph = NodeGraph()
-    var shadow = graph.shadow()
-    graph.set_output(
-        RECEIVED_SHADOW_NODE,
-        graph.join([graph.float(1), shadow, shadow]),
-    )
-    var program = graph.compile()
+    # `shadow.mix( color( 0xff0000 ), 1 )`, which is `mix( red, 1, shadow )`.
+    var program = red_shadows().compile()
     var source = ProgramSource(Pointer(to=program))
     var shape = ProgramShape(source, a_fragment(), True)
-    var half = shape.shaped(0.5)
-    assert_equal(half.x, 1)
+    var dark = shape.shaped(Vector3(0, 0, 0))
+    assert_equal(dark.x, 1)
+    assert_equal(dark.y, 0)
+    assert_equal(dark.z, 0)
+    var half = shape.shaped(Vector3(0.5, 0.5, 0.5))
     assert_equal(half.y, 0.5)
     assert_equal(half.z, 0.5)
     # A program that sets no such output keeps the shadow as it falls.
     var idle = ProgramShape(source, a_fragment(), False)
-    assert_equal(idle.shaped(0.25).x, 0.25)
-    assert_equal(idle.shaped(0.25).z, 0.25)
-    assert_equal(Unshaped().shaped(0.75).y, 0.75)
+    assert_equal(idle.shaped(Vector3(0.25, 0.5, 0.75)).x, 0.25)
+    assert_equal(idle.shaped(Vector3(0.25, 0.5, 0.75)).z, 0.75)
+    assert_equal(Unshaped().shaped(Vector3(0.75, 0.5, 0.25)).y, 0.5)
     # The leaf reads what the fragment was handed.
     var given = a_fragment()
-    given.shadow = 0.125
-    assert_equal(run_nodes(source, RECEIVED_SHADOW_NODE, given)[1], 0.125)
+    given.shadow = Vector3(0.125, 0.25, 0.5)
+    var passed = NodeGraph()
+    passed.set_output(RECEIVED_SHADOW_NODE, passed.shadow())
+    var echo = passed.compile()
+    var echoed = run_nodes(
+        ProgramSource(Pointer(to=echo)), RECEIVED_SHADOW_NODE, given
+    )
+    assert_equal(echoed[0], 0.125)
+    assert_equal(echoed[2], 0.5)
 
 
 def a_shadowed_scene(
@@ -162,10 +167,9 @@ def red_shadows() raises -> NodeGraph:
     """Return a graph that turns each shadow red, three.js's
     `shadow.mix( color( 0xff0000 ), 1 )`."""
     var graph = NodeGraph()
-    var shadow = graph.shadow()
     graph.set_output(
         RECEIVED_SHADOW_NODE,
-        graph.join([graph.float(1), shadow, shadow]),
+        graph.mix(graph.vec3(1, 0, 0), graph.float(1), graph.shadow()),
     )
     return graph^
 
@@ -173,10 +177,7 @@ def red_shadows() raises -> NodeGraph:
 def as_it_falls() raises -> NodeGraph:
     """Return a graph that hands each shadow back as it is."""
     var graph = NodeGraph()
-    var shadow = graph.shadow()
-    graph.set_output(
-        RECEIVED_SHADOW_NODE, graph.join([shadow, shadow, shadow])
-    )
+    graph.set_output(RECEIVED_SHADOW_NODE, graph.shadow())
     return graph^
 
 

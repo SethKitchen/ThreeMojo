@@ -55,8 +55,9 @@ A graph sets up to sixteen outputs, each three.js's property of the same name:
   surface's roughness and metalness, their maps included.
 - `RECEIVED_SHADOW_NODE`, a `vec3`: three.js's `receivedShadowNode`. It
   runs once for each light that casts a shadow on the surface, and the
-  `shadow` node reads what the light's map lets through. The light's color
-  is multiplied by it in place of the shadow. See `ProgramShape`.
+  `shadow` node reads what the light's shadow lets through, a `vec3`. The
+  light's color is multiplied by it in place of the shadow. See
+  `ProgramShape`.
 
 A graph refuses a type error as it is built: a `vec3` added to a `vec2`, a
 `float` output given a `vec3`, a swizzle of a component the value lacks. A
@@ -401,8 +402,8 @@ comptime NODE_POINT_COORD = NodeKind(104)
 # after the operations; see `screen_uv` and `viewport_texture`.
 comptime NODE_SCREEN_UV = NodeKind(105)
 comptime NODE_VIEWPORT_TEXTURE = NodeKind(106)
-# What a light's shadow map lets through to the fragment, one for all of
-# it: the argument of three.js's `receivedShadowNode`. A leaf numbered
+# What a light's shadow lets through to the fragment, a `vec3`, one for all
+# of it: the argument of three.js's `receivedShadowNode`. A leaf numbered
 # after the operations; see `shadow`.
 comptime NODE_SHADOW = NodeKind(107)
 
@@ -1760,14 +1761,15 @@ struct NodeGraph(Copyable, Movable):
         return texel
 
     def shadow(mut self) -> NodeRef:
-        """Return what a light's shadow map lets through to the fragment, a
-        `float` from zero to one: the argument three.js hands its
-        `receivedShadowNode`. Only a `RECEIVED_SHADOW_NODE` reads it.
+        """Return what a light's shadow lets through to the fragment, a
+        `vec3` of red, green and blue from zero to one: the argument three.js
+        hands its `receivedShadowNode`. Only a `RECEIVED_SHADOW_NODE` reads
+        it.
 
         Returns:
             The node.
         """
-        return self._add(NODE_SHADOW, NODE_FLOAT)
+        return self._add(NODE_SHADOW, NODE_VEC3)
 
     def lit(mut self) -> NodeRef:
         """Return the color the material's own lighting made of the surface,
@@ -5511,8 +5513,8 @@ struct NodeInputs(ImplicitlyCopyable):
     var textured: Bool
     # A corner's custom attributes, `MAX_ATTRIBUTE_FLOATS` floats.
     var custom: SIMD[DType.float32, 8]
-    # What a light's shadow map lets through, for a received shadow node.
-    var shadow: Float32
+    # What a light's shadow lets through, for a received shadow node.
+    var shadow: Vector3
 
     def __init__(
         out self,
@@ -5524,7 +5526,7 @@ struct NodeInputs(ImplicitlyCopyable):
         lit: Vector3,
         textured: Bool,
         custom: SIMD[DType.float32, 8] = SIMD[DType.float32, 8](0),
-        shadow: Float32 = 1,
+        shadow: Vector3 = Vector3(1, 1, 1),
     ):
         """Gather a fragment's, a vertex's or a corner's attributes.
 
@@ -5537,7 +5539,7 @@ struct NodeInputs(ImplicitlyCopyable):
             lit: What the standard lighting made of the fragment.
             textured: Whether texture nodes read their textures.
             custom: The custom attributes' floats; zeros by default.
-            shadow: What a light's shadow lets through; one by default.
+            shadow: What a light's shadow lets through; ones by default.
         """
         self.u = u
         self.v = v
@@ -6160,7 +6162,7 @@ def _leaf[
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
     if op == NODE_SHADOW.value:
-        return Lanes(inputs.shadow)
+        return _lanes(inputs.shadow)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
     if op == NODE_POINT_COORD.value:
@@ -6864,9 +6866,7 @@ struct ProgramShape[S: NodeSource & Copyable & Deinitable](ShadowShape):
     # the shadow as it is, as `Unshaped` does.
     var active: Bool
 
-    def __init__(
-        out self, source: Self.S, inputs: NodeInputs, active: Bool
-    ):
+    def __init__(out self, source: Self.S, inputs: NodeInputs, active: Bool):
         """Shape shadows by a program at one fragment.
 
         Args:
@@ -6878,18 +6878,18 @@ struct ProgramShape[S: NodeSource & Copyable & Deinitable](ShadowShape):
         self.inputs = inputs
         self.active = active
 
-    def shaped(self, shadow: Float32) -> Vector3:
-        """Return what the output makes of a shadow, or the shadow in every
-        channel for a program that does not set it.
+    def shaped(self, shadow: Vector3) -> Vector3:
+        """Return what the output makes of a shadow, or the shadow as it is
+        for a program that does not set it.
 
         Args:
-            shadow: What the light's shadow map lets through.
+            shadow: What the light's shadow lets through.
 
         Returns:
             The red, green and blue multipliers.
         """
         if not self.active:
-            return Vector3(shadow, shadow, shadow)
+            return shadow
         var given = self.inputs
         given.shadow = shadow
         var made = run_nodes(self.source, RECEIVED_SHADOW_NODE, given)

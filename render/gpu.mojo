@@ -1656,7 +1656,8 @@ def _shaped_through[
     var block = lights[unsafe_offset=at]
     if block < 0 or not receives:
         return Vector3(1, 1, 1)
-    return shape.shaped(_shadow_at(lights, Int(block), position, normal))
+    var through = _shadow_at(lights, Int(block), position, normal)
+    return shape.shaped(Vector3(through, through, through))
 
 
 def _point_shaped[
@@ -1675,9 +1676,8 @@ def _point_shaped[
     var block = lights[unsafe_offset=at]
     if block < 0 or not receives:
         return Vector3(1, 1, 1)
-    return shape.shaped(
-        _cube_shadow_at(lights, Int(block), position, normal)
-    )
+    var through = _cube_shadow_at(lights, Int(block), position, normal)
+    return shape.shaped(Vector3(through, through, through))
 
 
 def _direction_through[
@@ -1695,7 +1695,9 @@ def _direction_through[
     reading the light's shadow and cascade from its record at `at`."""
     var span = lights[unsafe_offset=at + CASCADE_AT + 2]
     if span == 0:
-        return _shaped_through(lights, at + 6, receives, position, normal, shape)
+        return _shaped_through(
+            lights, at + 6, receives, position, normal, shape
+        )
     var reach = cascade_reach(
         view_depth(
             position,
