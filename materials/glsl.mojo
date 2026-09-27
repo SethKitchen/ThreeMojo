@@ -97,7 +97,7 @@ comptime _BUILTINS = (
     " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
     " transpose determinant inverse textureLod lessThan lessThanEqual"
     " greaterThan greaterThanEqual equal notEqual any all not texelFetch"
-    " textureSize "
+    " textureSize textureProj texture2DProj "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
@@ -105,8 +105,7 @@ comptime _REFUSED_FUNCTIONS = (
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
     " textureOffset"
-    " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
-    " texture2DProj textureCube "
+    " texelFetchOffset textureProjLod textureGrad texture2DLod textureCube "
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
@@ -4098,7 +4097,9 @@ struct _Compiler(Movable):
             nodes.append(self.node(args[index]))
             value.constant = value.constant and args[index].constant
             value.local = value.local or args[index].local
-        if _listed(name, " texture texture2D textureLod "):
+        if _listed(
+            name, " texture texture2D textureLod textureProj texture2DProj "
+        ):
             return self.texture(name, args, nodes, value^)
         if name == "texelFetch" or name == "textureSize":
             return self.texel(name, args, nodes, value^)
@@ -4270,12 +4271,30 @@ struct _Compiler(Movable):
                 is a vertex shader, or the arguments are others.
         """
         var level = name == "textureLod"
-        var modern = name != "texture2D"
+        var projective = name == "textureProj" or name == "texture2DProj"
+        var modern = name != "texture2D" and name != "texture2DProj"
         if self.raw and modern != (self.version == 300):
             raise self.error(name + "() is not in this shader's GLSL version")
         if self.stage == _VERTEX:
             raise self.error("a vertex shader reads no texture in this port")
-        if level:
+        if projective:
+            if (
+                len(args) != 2
+                or args[0].type != _SAMPLER
+                or (args[1].type != _VEC3 and args[1].type != _VEC4)
+            ):
+                raise self.error(
+                    name + "() takes a sampler2D and a vec3 or a vec4"
+                )
+            # Divided through by its last component, then read as
+            # `texture` reads.
+            var last = "z" if args[1].type == _VEC3 else "w"
+            var uv = self.graph.div(
+                self.graph.swizzle(nodes[1], "xy"),
+                self.graph.swizzle(nodes[1], last),
+            )
+            value.node = self.graph.texture(nodes[0], uv).value
+        elif level:
             if (
                 len(args) != 3
                 or args[0].type != _SAMPLER

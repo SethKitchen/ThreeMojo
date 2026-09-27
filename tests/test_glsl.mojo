@@ -308,6 +308,29 @@ def test_a_fragment_reads_where_it_is() raises:
         + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
         "textureLod() takes a sampler2D, a vec2 and a float",
     )
+    # textureProj divides through by the last component.
+    assert_lanes(
+        value(
+            "texture2DProj(map, vec4(0.5, 1.0, 0.0, 2.0)).xyz",
+            "uniform sampler2D map;",
+        ),
+        0.25,
+        0.5,
+        0,
+    )
+    assert_lanes(
+        value(
+            "textureProj(map, vec3(1.0, 0.5, 2.0)).xyz", "uniform sampler2D map;"
+        ),
+        0.5,
+        0.25,
+        0,
+    )
+    refused(
+        "uniform sampler2D map;\n"
+        + "void main() { gl_FragColor = textureProj(map, vec2(0.5)); }",
+        "textureProj() takes a sampler2D and a vec3 or a vec4",
+    )
     # texelFetch and textureSize read by whole numbers.
     assert_lanes(
         value("texelFetch(map, ivec2(3, 5), 1).xyz", "uniform sampler2D map;"),
