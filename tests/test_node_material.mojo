@@ -57,6 +57,7 @@ from materials.nodes import (
     OUTPUT_NODE,
     POSITION_NODE,
     PROGRAM_TIME,
+    SIZE_NODE,
     PROGRAM_VIEW,
     NodeGraph,
     NodeProgram,
@@ -1210,9 +1211,15 @@ def test_points_run_a_node_material() raises:
     var flat = NodeGraph()
     flat.set_output(SIZE_NODE, flat.float(0))
     var nothing = assets.programs.add(flat.compile())
-    assets.materials.get(noded).nodes = nothing
+    var unsized = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=nothing)
+    )
+    var bad = Scene()
+    at = bad.add(Object3D())
+    bad.add_points(Points(shape, unsized, at))
+    bad.update()
     with assert_raises(contains="size node gave a size that is not above"):
-        _ = renderer.render(scene, assets, a_camera())
+        _ = renderer.render(bad, assets, a_camera())
 
 
 def main() raises:
