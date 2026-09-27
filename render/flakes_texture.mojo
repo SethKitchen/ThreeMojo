@@ -27,8 +27,10 @@ from std.math import ceil, floor, sqrt
 
 # How many discs three.js paints.
 comptime FLAKE_COUNT = 4000
-# How many samples a side a pixel's coverage is measured with.
+# How many samples a side a pixel's coverage is measured with, and how far
+# the farthest is from the pixel's center: 0.375 across and down.
 comptime _SAMPLES = 4
+comptime _REACH = 0.5304
 
 
 def _byte(value: Float64) -> UInt8:
@@ -41,7 +43,16 @@ def _coverage(
     x: Int, y: Int, center_x: Float64, center_y: Float64, radius: Float64
 ) -> Float64:
     """Return the share of the pixel at column `x` and row `y` inside a
-    disc, measured at `_SAMPLES` by `_SAMPLES` points."""
+    disc, measured at `_SAMPLES` by `_SAMPLES` points. A pixel whose center
+    is farther inside or outside the edge than its farthest sample, 0.53
+    of a pixel, is measured whole."""
+    var dx = Float64(x) + 0.5 - center_x
+    var dy = Float64(y) + 0.5 - center_y
+    var apart = sqrt(dx * dx + dy * dy)
+    if apart + _REACH <= radius:
+        return 1
+    if apart - _REACH > radius:
+        return 0
     var inside = 0
     var squared = radius * radius
     for i in range(_SAMPLES):  # pragma: no branch
