@@ -398,7 +398,8 @@ def test_a_custom_attribute_is_read_at_each_corner() raises:
         graph.join([graph.add(size, again), graph.swizzle(offset, "xy")]),
     )
     graph.set_output(
-        EMISSIVE_NODE, graph.varying(graph.join([size, graph.swizzle(offset, "yz")]))
+        EMISSIVE_NODE,
+        graph.varying(graph.join([size, graph.swizzle(offset, "yz")])),
     )
     var program = graph.compile()
     assert_equal(len(program.attribute_names), 2)
@@ -418,7 +419,9 @@ def test_a_custom_attribute_is_read_at_each_corner() raises:
     var bad = NodeGraph()
     with assert_raises(contains="uv is a built-in attribute"):
         _ = bad.attribute("uv", NODE_VEC2)
-    with assert_raises(contains="An attribute is a float or a vector, not a mat3"):
+    with assert_raises(
+        contains="An attribute is a float or a vector, not a mat3"
+    ):
         _ = bad.attribute("frame", NODE_MAT3)
     _ = bad.attribute("size", NODE_FLOAT)
     with assert_raises(contains="The attribute size is a float, not a vec2"):

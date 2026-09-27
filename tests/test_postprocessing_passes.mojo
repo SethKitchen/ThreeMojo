@@ -970,9 +970,7 @@ def test_a_screen_source_reads_the_quad() raises:
     # A pixel by its column and its row from the bottom, held inside.
     same_color(screen.fetch(INPUT_SLOT, 0, 1, 0), FloatColor(1, 0, 0, 0.5))
     same_color(screen.fetch(INPUT_SLOT, -3, 9, 0), FloatColor(1, 0, 0, 0.5))
-    same_color(
-        screen.fetch(SAVED_SLOT, 0, 0, 0), FloatColor(0.2, 0.2, 0.2, 1)
-    )
+    same_color(screen.fetch(SAVED_SLOT, 0, 0, 0), FloatColor(0.2, 0.2, 0.2, 1))
     same_color(screen.fetch(3, 0, 0, 0), FloatColor(1, 1, 1, 1))
     near(screen.size(INPUT_SLOT, 0)[0], 2)
     near(screen.size(SAVED_SLOT, 0)[1], 1)

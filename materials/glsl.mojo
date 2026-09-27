@@ -1856,8 +1856,9 @@ struct _Compiler(Movable):
         if not _listed(name, " position normal uv color "):
             if not type.is_float():
                 raise self.error(
-                    "an attribute of type " + type.name() + " is outside the"
-                    " subset"
+                    "an attribute of type "
+                    + type.name()
+                    + " is outside the subset"
                 )
             self.attribute_floats += type.width()
             if self.attribute_floats > MAX_ATTRIBUTE_FLOATS:
@@ -2314,7 +2315,9 @@ struct _Compiler(Movable):
         for index in range(len(labels)):
             matched = self.graph.logical_or(
                 matched,
-                self.graph.equal(chosen, self.graph.float(Float32(labels[index]))),
+                self.graph.equal(
+                    chosen, self.graph.float(Float32(labels[index]))
+                ),
             )
         # A continue in the switch breaks out of it and sets this.
         var continued = -1
@@ -2332,7 +2335,9 @@ struct _Compiler(Movable):
                 self.at += 1
                 var label = self.additive()
                 self.expect(":")
-                hit = self.graph.equal(chosen, self.graph.float(Float32(label.number)))
+                hit = self.graph.equal(
+                    chosen, self.graph.float(Float32(label.number))
+                )
             elif self.is_word("default"):
                 self.at += 1
                 self.expect(":")
@@ -4084,7 +4089,11 @@ struct _Compiler(Movable):
                 `bvec`.
         """
         if not _listed(name, _COMPARISONS):
-            if len(args) != 1 or not args[0].type.is_bool() or args[0].type.is_scalar():
+            if (
+                len(args) != 1
+                or not args[0].type.is_bool()
+                or args[0].type.is_scalar()
+            ):
                 raise self.error(name + "() takes one bvec")
             var x = nodes[0]
             if name == "not":
@@ -4095,9 +4104,9 @@ struct _Compiler(Movable):
             var folded = self.graph.swizzle(x, "x")
             for lane in range(1, args[0].type.width()):  # pragma: no branch
                 var next = self.graph.swizzle(x, _letter("xyzw", lane))
-                folded = (
-                    self.graph.logical_and(folded, next) if all else self.graph.logical_or(folded, next)
-                )
+                folded = self.graph.logical_and(
+                    folded, next
+                ) if all else self.graph.logical_or(folded, next)
             value.type = _BOOL
             value.node = folded.value
             return value^

@@ -106,6 +106,7 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `camera_position()` | `vec3` | `cameraPosition` | The camera's position in world space, from the frame's view. |
 | `camera_view_matrix()` | `mat4` | `cameraViewMatrix` | The frame's world-to-camera matrix. |
 | `time()` | `float` | `time` | `Renderer.time`, in seconds. |
+| `attribute(name, type)` | as named | `attribute(name)` | A custom attribute of the geometry, a `float` or a vector, interpolated at the fragment. See [Custom attributes](#custom-attributes). |
 | `front_facing()` | `float` | `frontFacing` | One where the triangle is seen from its front, and zero where it is seen from its back. A fragment only. |
 | `face_direction()` | `float` | `faceDirection` | One where the triangle is seen from its front, and minus one where it is seen from its back. A fragment only. |
 | `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
@@ -281,6 +282,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
 - Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
+- Attributes: `position`, `normal`, `uv` and `color`, and custom attributes of a `float` or a vector. See [Custom attributes](#custom-attributes).
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
@@ -309,7 +311,7 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
 - A struct's field written through an index that is not constant.
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
-- Custom attributes: only `position`, `normal`, `uv` and `color`.
+- A custom attribute of `int`, `bool` or a matrix, custom attributes of more than 8 floats in all, and `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`.
 - `while`, `do` and recursion. The bytecode has no jumps, so each loop needs a count that the compiler knows.
 - A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
 - A declaration directly in a `switch`, outside a block.
@@ -326,6 +328,14 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 - `gl_PointCoord`, `gl_PointSize` and every other `gl_` variable but `gl_FragCoord` and `gl_FrontFacing`. `gl_FrontFacing` in a vertex shader.
 - The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `textureGrad` and `textureOffset`.
 - A vector compared with `<`, and a scalar swizzled.
+
+### Custom attributes
+
+A custom attribute is a geometry attribute that a program reads by its name. A graph declares one with `attribute(name, type)`, and a vertex shader with `attribute` or `in`. Each corner carries 8 floats for the custom attributes, so all of them together can hold at most 8 floats.
+
+The renderer reads each attribute from the geometry for each vertex. A missing component is zero, and a missing fourth component is one. A geometry without the attribute gives zeros and one. WebGL fills a missing attribute in the same way.
+
+A custom attribute is carried through a cut at the near plane, as the other attributes are. A position node cannot read one: the host moves each vertex before the corners are made.
 
 ### Why no chunks
 

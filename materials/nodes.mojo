@@ -1194,7 +1194,13 @@ struct NodeGraph(Copyable, Movable):
                 or the attributes would hold more than `MAX_ATTRIBUTE_FLOATS`
                 floats.
         """
-        if name == "position" or name == "normal" or name == "uv" or name == "uv1" or name == "color":
+        if (
+            name == "position"
+            or name == "normal"
+            or name == "uv"
+            or name == "uv1"
+            or name == "color"
+        ):
             raise Error(
                 name + " is a built-in attribute: read it with its own node"
             )
@@ -1392,7 +1398,9 @@ struct NodeGraph(Copyable, Movable):
         self._kinds[texel.value] = NODE_TEXEL_FETCH
         return texel
 
-    def texture_size(mut self, sampler: NodeRef, level: NodeRef) raises -> NodeRef:
+    def texture_size(
+        mut self, sampler: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
         """Return a texture uniform's width and height at a level, a
         `vec2`: TSL's `textureSize`, GLSL's `textureSize`.
 

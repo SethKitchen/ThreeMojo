@@ -308,17 +308,13 @@ def test_a_fragment_reads_where_it_is() raises:
     )
     # texelFetch and textureSize read by whole numbers.
     assert_lanes(
-        value(
-            "texelFetch(map, ivec2(3, 5), 1).xyz", "uniform sampler2D map;"
-        ),
+        value("texelFetch(map, ivec2(3, 5), 1).xyz", "uniform sampler2D map;"),
         3,
         5,
         1,
     )
     assert_lanes(
-        value(
-            "vec3(vec2(textureSize(map, 1)), 0.0)", "uniform sampler2D map;"
-        ),
+        value("vec3(vec2(textureSize(map, 1)), 0.0)", "uniform sampler2D map;"),
         32,
         16,
         0,
@@ -2556,7 +2552,8 @@ def test_int_and_bool_vectors_hold_whole_numbers_and_truths() raises:
         VERTEX,
         "uniform ivec2 cells;\n"
         + "uniform bvec3 flags;\n"
-        + "void main() { gl_FragColor = vec4(vec2(cells), float(flags.z), 1.0); }\n",
+        + "void main() { gl_FragColor = vec4(vec2(cells), float(flags.z),"
+        " 1.0); }\n",
     )
     program.set_uniform("cells", Vector2(2.5, -3.5))
     program.set_uniform("flags", Vector3(0, 0, 2))
@@ -2609,7 +2606,8 @@ def test_a_custom_attribute_reaches_the_fragment_through_a_varying() raises:
         + "varying vec3 seen;\n"
         + "void main() {\n"
         + "    seen = vec3(size, offset);\n"
-        + "    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n"
+        + "    gl_Position = projectionMatrix * modelViewMatrix *"
+        " vec4(position, 1.0);\n"
         + "}\n",
         "varying vec3 seen;\nvoid main() { gl_FragColor = vec4(seen, 1.0); }\n",
     )

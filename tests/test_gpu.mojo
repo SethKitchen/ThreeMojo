@@ -11373,7 +11373,9 @@ def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
     var graph = NodeGraph()
     var named = graph.texture_uniform("board", board)
     var cells = graph.floor(graph.mul(graph.uv(), graph.float(20)))
-    var level = graph.floor(graph.mul(graph.swizzle(graph.uv(), "y"), graph.float(8)))
+    var level = graph.floor(
+        graph.mul(graph.swizzle(graph.uv(), "y"), graph.float(8))
+    )
     var texel = graph.texture_load(named, cells, level)
     var size = graph.texture_size(named, level)
     graph.set_output(
