@@ -216,6 +216,7 @@ from materials.nodes import (
     POSITION_NODE,
     SIZE_NODE,
     NodeInputs,
+    NodeProgram,
     NodeProgramId,
     NodeProgramStore,
     moved_position,
@@ -6088,6 +6089,12 @@ struct Renderer(Movable):
             var sized = noded and assets.programs.get(physics.nodes).has(
                 SIZE_NODE
             )
+            # The size node reads the frame's time and view, as the
+            # frame's copy of the program has them.
+            var sizer = NodeProgram()
+            if sized:
+                sizer = assets.programs.get(physics.nodes).copy()
+                sizer.set_frame(self.time, view)
             # Only the points the draw range lets through.
             var ranged = geometry.drawn_vertices()
             for vertex in range(ranged[0], ranged[0] + ranged[1]):
@@ -6129,7 +6136,7 @@ struct Renderer(Movable):
                 )
                 if sized:
                     size = point_size_of(
-                        assets.programs.get(physics.nodes),
+                        sizer,
                         NodeInputs(
                             u,
                             v,
