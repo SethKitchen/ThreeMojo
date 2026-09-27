@@ -2241,7 +2241,14 @@ struct _Compiler(Movable):
         var given = self.array_size(True)
         var values = self.arguments()
         var wanted = size if size > 0 else len(values)
-        if (given > 0 and given != len(values)) or len(values) != wanted:
+        if given > 0 and given != len(values):
+            raise self.error(
+                "an array constructor of "
+                + String(given)
+                + " elements lists "
+                + String(len(values))
+            )
+        if len(values) != wanted:
             raise self.error(
                 "the array needs "
                 + String(wanted)
