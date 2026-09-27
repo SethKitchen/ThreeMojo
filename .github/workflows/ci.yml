@@ -70,6 +70,40 @@ jobs:
       - name: check-cpu
         run: make -B check-cpu AFFECTED="$AFFECTED"
 
+  # The same check on Apple Silicon. Months of work on Linux alone let three
+  # suites break on a Mac without a sign: a pseudo-terminal there holds far
+  # less, Xlib lives in another folder under another name, and Apple's libm
+  # rounds a cosine differently from glibc.
+  #
+  # `macos-latest` is a standard runner, which GitHub runs free for a public
+  # repository. A larger one (`-large`, `-xlarge`) is billed even here, so
+  # this job must not move to one.
+  cpu-macos:
+    name: check-cpu (macOS, Apple Silicon)
+    runs-on: macos-latest
+    timeout-minutes: 150
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # Homebrew's X server brings Xvfb and the Xlib the window loads.
+      - name: Install Xvfb
+        run: brew install xorg-server
+
+      - name: check-cpu
+        run: make -B check-cpu AFFECTED="$AFFECTED"
+
   # Coverage runs beside the CPU suites rather than after them: each takes
   # half an hour or more on a hosted runner, and one after the other ran
   # past every timeout the check job was given.

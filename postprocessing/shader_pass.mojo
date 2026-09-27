@@ -180,8 +180,15 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
     """
 
     var code: Pointer[Float32, Untracked]
-    var input: LightView
-    var saved: LightView
+    # Each image as its pointer and its size, not as a `LightView`: on
+    # Metal, a view held inside another struct read zeros through every
+    # copy of it, so a shader pass on the device drew black on a Mac.
+    var input_floats: Pointer[Float32, Untracked]
+    var input_width: Int
+    var input_height: Int
+    var saved_floats: Pointer[Float32, Untracked]
+    var saved_width: Int
+    var saved_height: Int
     var x: Int
     var y: Int
 
@@ -205,8 +212,12 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             y: The row, down from the top.
         """
         self.code = code
-        self.input = input
-        self.saved = saved
+        self.input_floats = input.floats
+        self.input_width = input.width
+        self.input_height = input.height
+        self.saved_floats = saved.floats
+        self.saved_width = saved.width
+        self.saved_height = saved.height
         self.x = x
         self.y = y
 
@@ -233,9 +244,25 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             The straight color; opaque white for a texture in the assets.
         """
         if slot == INPUT_SLOT:
-            return self.input.sample(u, v).unpremultiplied()
+            return (
+                LightView(
+                    pixels=self.input_floats,
+                    width=self.input_width,
+                    height=self.input_height,
+                )
+                .sample(u, v)
+                .unpremultiplied()
+            )
         if slot == SAVED_SLOT:
-            return self.saved.sample(u, v).unpremultiplied()
+            return (
+                LightView(
+                    pixels=self.saved_floats,
+                    width=self.saved_width,
+                    height=self.saved_height,
+                )
+                .sample(u, v)
+                .unpremultiplied()
+            )
         return FloatColor(1, 1, 1, 1)
 
     def shares(self, context: NodeContext) -> Lanes:
@@ -248,12 +275,12 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         Returns:
             The weights.
         """
-        var u = u_of(self.x, self.input.width)
-        var v = v_of(self.y, self.input.height)
+        var u = u_of(self.x, self.input_width)
+        var v = v_of(self.y, self.input_height)
         if context == AT_RIGHT:
-            u += 1 / Float32(self.input.width)
+            u += 1 / Float32(self.input_width)
         if context == AT_UP:
-            v += 1 / Float32(self.input.height)
+            v += 1 / Float32(self.input_height)
         return Lanes(1 - u - v, u, v, 0)
 
     def frag_coord(self, context: NodeContext) -> Lanes:
@@ -271,7 +298,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         var y = self.y - (1 if context == AT_UP else 0)
         return Lanes(
             Float32(x) + 0.5,
-            Float32(self.input.height - y) - 0.5,
+            Float32(self.input_height - y) - 0.5,
             0.5,
             1,
         )

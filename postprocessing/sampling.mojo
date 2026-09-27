@@ -31,7 +31,10 @@ struct LightView(ImplicitlyCopyable):
     the list or the buffer must outlive every read.
     """
 
-    var colors: Pointer[FloatColor, Untracked]
+    # Four floats a pixel. A `Float32` pointer and not a `FloatColor` one:
+    # on Metal, a whole color loaded through a device buffer crashed
+    # Apple's linker (`air-lld`), so no kernel that read a frame built.
+    var floats: Pointer[Float32, Untracked]
     var width: Int
     var height: Int
 
@@ -44,7 +47,11 @@ struct LightView(ImplicitlyCopyable):
             width: The frame's width in pixels.
             height: The frame's height in pixels.
         """
-        self.colors = colors.unsafe_ptr().unsafe_origin_cast[Untracked]()
+        self.floats = (
+            colors.unsafe_ptr()
+            .unsafe_bitcast[Float32]()
+            .unsafe_origin_cast[Untracked]()
+        )
         self.width = width
         self.height = height
 
@@ -64,11 +71,29 @@ struct LightView(ImplicitlyCopyable):
             width: The frame's width in pixels.
             height: The frame's height in pixels.
         """
-        self.colors = (
-            floats.unsafe_bitcast[FloatColor]()
-            .unsafe_mut_cast[False]()
-            .unsafe_origin_cast[Untracked]()
-        )
+        self.floats = floats.unsafe_mut_cast[False]().unsafe_origin_cast[
+            Untracked
+        ]()
+        self.width = width
+        self.height = height
+
+    def __init__(
+        out self,
+        *,
+        pixels: Pointer[Float32, Untracked],
+        width: Int,
+        height: Int,
+    ):
+        """View four floats a pixel that another view's `floats` points
+        at.
+
+        Args:
+            pixels: The first pixel's red. The memory must outlive the
+                view.
+            width: The frame's width in pixels.
+            height: The frame's height in pixels.
+        """
+        self.floats = pixels
         self.width = width
         self.height = height
 
@@ -82,7 +107,13 @@ struct LightView(ImplicitlyCopyable):
         Returns:
             The light stored there.
         """
-        return self.colors[unsafe_offset=y * self.width + x]
+        var at = (y * self.width + x) * 4
+        return FloatColor(
+            self.floats[unsafe_offset=at],
+            self.floats[unsafe_offset=at + 1],
+            self.floats[unsafe_offset=at + 2],
+            self.floats[unsafe_offset=at + 3],
+        )
 
     def tap(self, x: Float32, y: Float32) -> FloatColor:
         """Return the light at a point in pixel coordinates, blended from

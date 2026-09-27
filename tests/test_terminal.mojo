@@ -265,18 +265,21 @@ def test_a_window_asks_its_size_and_takes_a_new_one() raises:
     _ = pty.screen()
     window.request_size()
     assert_equal(pty.screen(), "\x1b[18t")
-    # The terminal's answer: 24 rows of 80 columns, 80 by 48 pixels.
-    pty.type_text("\x1b[8;24;80t")
+    # The terminal's answer: 5 rows of 12 columns, 12 by 10 pixels. A
+    # small one, because nothing reads while the frame is written, and a
+    # macOS pseudo-terminal holds far less than a Linux one: a full
+    # 80-column frame blocked the write there for good.
+    pty.type_text("\x1b[8;5;12t")
     var events = window.poll(Duration(100.0, MILLISECOND))
     assert_equal(len(events), 1)
     assert_true(events[0].kind == RESIZE)
-    assert_equal(events[0].x, 80)
-    assert_equal(events[0].y, 48)
-    window.resize(80, 48)
-    assert_equal(window.width, 80)
-    assert_equal(window.height, 48)
+    assert_equal(events[0].x, 12)
+    assert_equal(events[0].y, 10)
+    window.resize(12, 10)
+    assert_equal(window.width, 12)
+    assert_equal(window.height, 10)
     assert_true(pty.screen().endswith("\x1b[2J"))
-    window.present(Framebuffer(80, 48, Color(0, 0, 0)))
+    window.present(Framebuffer(12, 10, Color(0, 0, 0)))
     _ = pty.screen()
     with assert_raises(contains="must be positive"):
         window.resize(0, 4)

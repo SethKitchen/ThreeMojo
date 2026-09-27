@@ -1038,13 +1038,14 @@ def _blend_constant(
     buffer: MutPointer[Float32, MutAnyOrigin], base: Int
 ) -> Rgba:
     """Return the blend constant a vertex's lanes hold, as
-    `RasterState.blend_constant` returns it on the host."""
-    return Rgba(
-        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT],
-        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 1],
-        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 2],
-        buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + 3],
-    )
+    `RasterState.blend_constant` returns it on the host.
+
+    Lane by lane, as `_ltc_texel` reads: an `Rgba` built from the four
+    loads in one expression came back all zero on Metal."""
+    var constant = Rgba(0)
+    for lane in range(4):  # pragma: no branch
+        constant[lane] = buffer[unsafe_offset=base + LANE_BLEND_CONSTANT + lane]
+    return constant
 
 
 def _append_basis(mut flat: List[Float32], basis: Basis3):

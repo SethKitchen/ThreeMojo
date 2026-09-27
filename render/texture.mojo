@@ -777,9 +777,13 @@ def level_filter(level: Int, mag_filter: Filter, min_filter: Filter) -> Filter:
     Returns:
         `NEAREST` or `BILINEAR`.
     """
-    if level > 0:
-        return min_filter.within_level()
-    return mag_filter
+    # Arithmetic, not a branch: with a branch here, Apple's Metal linker
+    # (`air-lld`) crashed with a segmentation fault while it linked the
+    # rasterize kernel, so the GPU half did not build on a Mac.
+    var full = Int(level <= 0)
+    return Filter(
+        full * mag_filter.value + (1 - full) * min_filter.within_level().value
+    )
 
 
 @fieldwise_init

@@ -52,7 +52,7 @@ A change to one leaf module, for example a loader, checks one suite in about a m
 
 Coverage is exact for each module it measures, because every suite that can reach the module runs. A test change can lower the coverage of a module that the change does not reach. `AFFECTED` does not see that. The full run does.
 
-The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`.
+The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs `check-cpu` twice: on Ubuntu and on a macOS runner with Apple Silicon.
 
 ## Measure the examples
 

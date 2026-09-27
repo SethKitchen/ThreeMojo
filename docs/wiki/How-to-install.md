@@ -17,9 +17,11 @@ You also need Python 3.9 or later, `git`, `make` and [`uv`](https://docs.astral.
 1. Install the tools:
 
 ```bash
-brew install uv
+brew install uv xorg-server
 xcode-select --install
 ```
+
+`xorg-server` gives `Xvfb` and `libX11`. The window tests start an `Xvfb` server. See [Windowing and controls](Windowing-and-controls#tests).
 
 2. Clone and install the toolchain:
 
@@ -35,11 +37,11 @@ uv pip install "mojo==1.1.0"
 1. Install the tools. On Debian or Ubuntu:
 
 ```bash
-sudo apt update && sudo apt install -y build-essential curl git
+sudo apt update && sudo apt install -y build-essential curl git xvfb
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-On Fedora, use `sudo dnf install -y make gcc git curl`. On Arch, use `sudo pacman -S --needed base-devel git curl`.
+On Fedora, use `sudo dnf install -y make gcc git curl xorg-x11-server-Xvfb`. On Arch, use `sudo pacman -S --needed base-devel git curl xorg-server-xvfb`. The window tests start an `Xvfb` server.
 
 2. Clone and install the toolchain:
 
@@ -86,6 +88,7 @@ make check-cpu
 | Mojo | `1.1.0` (`8189361e`) | Everything |
 | MAX | `26.6.0` | `render/gpu.mojo` and its tests only |
 | Metal toolchain | Xcode component | GPU kernels on macOS |
+| Xvfb | Any | `tests/test_x11.mojo` |
 
 The toolchain version is part of the build cache key. An upgrade invalidates every cached result.
 

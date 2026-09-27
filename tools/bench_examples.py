@@ -23,7 +23,19 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = json.loads((ROOT / "bench" / "catalog.json").read_text(encoding="utf-8"))
 BUILD = ROOT / "bench" / "build"
 SCRATCH = ROOT / "bench" / "scratch"
-RESULTS = ROOT / "bench" / "results.json"
+# One result file and one set of tables for each kind of host. A run on a
+# Mac must not overwrite the Linux numbers, and the reverse.
+PLATFORMS = {"linux": "Linux", "macos": "macOS"}
+
+
+def this_platform() -> str:
+    return "macos" if sys.platform == "darwin" else "linux"
+
+
+def results_path(platform_key: str) -> Path:
+    return ROOT / "bench" / f"results-{platform_key}.json"
+
+
 WIKI = ROOT / "docs" / "wiki" / "Benchmarks.md"
 THREEJS = ROOT / "bench" / "threejs"
 TIME_BIN = "/usr/bin/time"
@@ -158,16 +170,40 @@ def mojo_version(binary: Path) -> str:
     return text[0] if text else "unknown"
 
 
-def host_info(mojo11: Path | None, mojo10: Path | None) -> dict:
-    cpu = platform.processor() or platform.machine()
+def sysctl(name: str) -> str:
+    out = subprocess.run(
+        ["sysctl", "-n", name], capture_output=True, text=True, check=False
+    )
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def cpu_name() -> str:
+    """Return the processor's marketing name, with its core count on macOS.
+
+    Linux names it in `/proc/cpuinfo`. macOS has no such file, and
+    `platform.processor()` says only `arm`, so `sysctl` names it there.
+    """
+    if sys.platform == "darwin":
+        brand = sysctl("machdep.cpu.brand_string") or platform.machine()
+        cores = sysctl("hw.logicalcpu")
+        return f"{brand}, {cores} cores" if cores else brand
     try:
-        cpu = Path("/proc/cpuinfo").read_text(encoding="utf-8")
-        for line in cpu.splitlines():
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
             if line.lower().startswith("model name"):
-                cpu = line.split(":", 1)[1].strip()
-                break
+                return line.split(":", 1)[1].strip()
     except OSError:
         pass
+    return platform.processor() or platform.machine()
+
+
+def os_name() -> str:
+    if sys.platform == "darwin":
+        return f"macOS {platform.mac_ver()[0]} ({platform.machine()})"
+    return f"{platform.system()} {platform.release()}"
+
+
+def host_info(mojo11: Path | None, mojo10: Path | None) -> dict:
+    cpu = cpu_name()
     node = which_node()
     node_ver = ""
     if node:
@@ -179,7 +215,7 @@ def host_info(mojo11: Path | None, mojo10: Path | None) -> dict:
             env={**os.environ, **node_env()},
         ).stdout.strip()
     return {
-        "os": f"{platform.system()} {platform.release()}",
+        "os": os_name(),
         "cpu": cpu,
         "python": sys.version.split()[0],
         "mojo_1_1": mojo_version(mojo11) if mojo11 else "",
@@ -693,6 +729,7 @@ def mojo10_table(probe11: dict, probe10: dict | None, examples: list[dict]) -> s
 def replace_span(text: str, name: str, body: str) -> str:
     start = f"<!-- BENCH:{name} -->"
     end = f"<!-- /BENCH:{name} -->"
+    # A lambda, so a backslash in a measured error is not read as a group.
     pattern = re.compile(
         re.escape(start) + r".*?" + re.escape(end),
         re.DOTALL,
@@ -700,7 +737,7 @@ def replace_span(text: str, name: str, body: str) -> str:
     block = f"{start}\n{body}\n{end}"
     if not pattern.search(text):
         raise SystemExit(f"Benchmarks.md is missing {start}")
-    return pattern.sub(block, text)
+    return pattern.sub(lambda _: block, text)
 
 
 def slim_metric(metric: dict | None) -> dict | None:
@@ -780,7 +817,7 @@ def baseline_lines(payload: dict) -> list[str]:
     ]
 
 
-def write_wiki(payload: dict) -> None:
+def write_wiki(payload: dict, platform_key: str) -> None:
     host = payload["host"]
     host_md = "\n".join(
         [
@@ -800,15 +837,15 @@ def write_wiki(payload: dict) -> None:
         + baseline_lines(payload)
     )
     text = WIKI.read_text(encoding="utf-8")
-    text = replace_span(text, "HOST", host_md)
+    text = replace_span(text, f"HOST:{platform_key}", host_md)
     text = replace_span(
         text,
-        "EXAMPLES",
+        f"EXAMPLES:{platform_key}",
         example_table(payload["examples"], bool(payload.get("threejs_webgl"))),
     )
     text = replace_span(
         text,
-        "MOJO10",
+        f"MOJO10:{platform_key}",
         mojo10_table(
             payload["probe"]["v11"],
             payload["probe"].get("v10"),
@@ -827,7 +864,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Merge into an existing bench/results.json",
+        help="Merge into this host's existing bench/results-<platform>.json",
     )
     parser.add_argument(
         "--skip-threejs",
@@ -853,12 +890,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--from-results",
         action="store_true",
-        help="Rebuild wiki tables from bench/results.json",
+        help="Rebuild wiki tables from bench/results-<platform>.json",
+    )
+    parser.add_argument(
+        "--platform",
+        choices=sorted(PLATFORMS),
+        default=this_platform(),
+        help="Which host's tables --from-results rebuilds (default: this host)",
     )
     return parser.parse_args()
 
 
-def emit_tables(payload: dict, write_wiki_page: bool) -> None:
+def emit_tables(payload: dict, write_wiki_page: bool, platform_key: str) -> None:
     print(example_table(payload["examples"], bool(payload.get("threejs_webgl"))))
     print()
     print(
@@ -869,18 +912,29 @@ def emit_tables(payload: dict, write_wiki_page: bool) -> None:
         )
     )
     if write_wiki_page:
-        write_wiki(payload)
+        write_wiki(payload, platform_key)
         print(f"\nUpdated {WIKI.relative_to(ROOT)}", flush=True)
 
 
 def main() -> int:
     args = parse_args()
+    results = results_path(args.platform)
     if args.from_results:
-        if not RESULTS.is_file():
-            print("bench/results.json is missing. Run the benches first.", file=sys.stderr)
+        if not results.is_file():
+            print(
+                f"{results.relative_to(ROOT)} is missing. Run the benches first.",
+                file=sys.stderr,
+            )
             return 1
-        emit_tables(json.loads(RESULTS.read_text(encoding="utf-8")), args.write_wiki)
+        emit_tables(
+            json.loads(results.read_text(encoding="utf-8")),
+            args.write_wiki,
+            args.platform,
+        )
         return 0
+    if args.platform != this_platform():
+        print("--platform only applies with --from-results.", file=sys.stderr)
+        return 2
     ensure_dirs()
     mojo11 = which_mojo(ROOT / ".venv" / "bin" / "mojo")
     if mojo11 is None:
@@ -1040,8 +1094,8 @@ def main() -> int:
         )
 
     slim = slim_payload(payload)
-    if args.merge and RESULTS.is_file():
-        previous = json.loads(RESULTS.read_text(encoding="utf-8"))
+    if args.merge and results.is_file():
+        previous = json.loads(results.read_text(encoding="utf-8"))
         by_name = {row["name"]: row for row in previous.get("examples", [])}
         for row in slim["examples"]:
             by_name[row["name"]] = row
@@ -1060,10 +1114,10 @@ def main() -> int:
         payload["probe"] = slim["probe"]
         payload["host"] = slim["host"]
         payload["threejs_webgl"] = slim["threejs_webgl"]
-    RESULTS.write_text(json.dumps(slim, indent=2) + "\n", encoding="utf-8")
-    print(f"\nWrote {RESULTS.relative_to(ROOT)}", flush=True)
+    results.write_text(json.dumps(slim, indent=2) + "\n", encoding="utf-8")
+    print(f"\nWrote {results.relative_to(ROOT)}", flush=True)
     print()
-    emit_tables(slim if args.merge else payload, args.write_wiki)
+    emit_tables(slim if args.merge else payload, args.write_wiki, args.platform)
     return 0
 
 

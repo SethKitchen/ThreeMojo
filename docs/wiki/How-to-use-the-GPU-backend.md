@@ -16,6 +16,8 @@ xcodebuild -downloadComponent MetalToolchain
 
 Without it every kernel fails with `Metal Compiler failed to compile metallib`. That message looks like a code error and is not.
 
+The same message also comes when Apple's Metal linker, `air-lld`, crashes. Mojo shows no other text. To find the cause, look for a new `air-lld-*.ips` report in `~/Library/Logs/DiagnosticReports/`. Then compile one kernel at a time with `DeviceContext.compile_function` to find the kernel that crashes it. Two known causes are a whole struct loaded through a cast device pointer, and a branch in `level_filter`. The code now avoids both.
+
 ## Check that a GPU is visible
 
 ```bash

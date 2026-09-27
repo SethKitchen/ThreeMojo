@@ -8,7 +8,13 @@ It also times a standalone probe on Mojo 1.0 when that compiler is present.
 make bench-examples
 ```
 
-The command writes `bench/results.json` and updates the tables on [Benchmarks](Benchmarks).
+The command writes the results for this kind of host and updates that host's tables on [Benchmarks](Benchmarks). A Linux host writes `bench/results-linux.json`. A Mac writes `bench/results-macos.json`. A run on one host does not change the tables of the other.
+
+To rebuild the tables of one host from its results file, give the host:
+
+```bash
+python3 tools/bench_examples.py --from-results --platform macos
+```
 
 ## What you need
 
@@ -37,7 +43,9 @@ Compile time is `mojo build` only. Run time is the fastest of three runs of the 
 
 ThreeMojo writes the image file. three.js draws the same width, height and frame count, and reads the pixels back. three.js does not encode an animated PNG.
 
-The runner always times a `cpu-flat` fill. It also times WebGL 2 when `webgl-node` can open a context. That context needs `libGLESv2` on the library path. On Ubuntu the package is `libgles2`. Without root, `make bench-examples` downloads the dispatcher into `bench/threejs/lib`. See [Benchmarks](Benchmarks#what-the-columns-measure).
+The runner always times a `cpu-flat` fill. It also times WebGL 2 when `webgl-node` can open a context. On Linux, that context needs `libGLESv2` on the library path. On Ubuntu the package is `libgles2`. Without root, `make bench-examples` downloads the dispatcher into `bench/threejs/lib`. See [Benchmarks](Benchmarks#what-the-columns-measure).
+
+On macOS, `webgl-node` opens the context with no extra package.
 
 The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 

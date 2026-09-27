@@ -68,9 +68,13 @@ def atan2_float32(y: Float32, x: Float32) -> Float32:
     if x > 0:
         return atan_float32(y / x)
     if x < 0:
-        return atan_float32(y / x) + Float32(
-            3.141592653589793 if y >= 0 else -3.141592653589793
+        # Each branch a Float32 of its own. A Float32 of the choice picks
+        # between two doubles first, and Metal has no double: the kernel
+        # that called this failed to build on a Mac.
+        var half_turn = Float32(3.141592653589793) if y >= 0 else Float32(
+            -3.141592653589793
         )
+        return atan_float32(y / x) + half_turn
     if y > 0:
         return Float32(1.5707963267948966)
     if y < 0:

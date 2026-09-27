@@ -525,8 +525,9 @@ bench-scene:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/scene_bench.mojo); \
 	[ $$rc -eq 0 ] || exit 1
 
-# Uncached: the point is a fresh measurement. Writes bench/results.json and
-# fills the tables on docs/wiki/Benchmarks.md.
+# Uncached: the point is a fresh measurement. Writes this host's
+# bench/results-<linux|macos>.json and fills its tables on
+# docs/wiki/Benchmarks.md.
 bench-examples:
 	@python3 tools/bench_examples.py
 

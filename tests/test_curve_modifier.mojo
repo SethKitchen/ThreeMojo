@@ -113,13 +113,20 @@ def test_the_spine_texture_matches_three_bit_for_bit() raises:
     var first = 0
     for index in range(len(flow.spine)):
         var value = Int(flow.spine[index])
+        # A negative zero counts as zero. A coordinate that is zero on the
+        # curve comes out near 1e-14 either way, and its sign follows the
+        # last bit of the platform's cosine: Apple's libm and V8's differ
+        # by one ulp where glibc and V8 agree. Four texels of the 8192 turn
+        # on it, and a shader reads either zero as the same number.
+        if value == 0x8000:
+            value = 0
         sum += value
         hash = (hash * 31 + value) % 1000000007
         if index < 4 * 1024 * 4:
             first += value
-    assert_equal(sum, 866886410)
-    assert_equal(hash, 301607886)
-    assert_equal(first, 444310935)
+    assert_equal(sum, 866525962)
+    assert_equal(hash, 929165346)
+    assert_equal(first, 444081559)
     var start: List[Int] = [
         20352,
         0,

@@ -41,7 +41,14 @@ from std.testing import (
 )
 from units.si import Duration, MILLISECOND, SECOND
 from std.os import setenv
-from window.x11 import X11Window, event_of, is_true_color, key_of
+from window.x11 import (
+    X11Window,
+    event_of,
+    is_true_color,
+    key_of,
+    library_path,
+    macos_folders,
+)
 
 
 def _put32(mut bytes: List[UInt8], offset: Int, value: Int):
@@ -172,22 +179,41 @@ struct Server(Movable):
         # its socket file is gone, and the next server can take the same
         # display number: its clients then reach the one leaving and are
         # refused. A process that has ended but not been reaped shows as
-        # state Z, which counts as gone.
+        # state Z, which counts as gone. `ps` and not `/proc`, which macOS
+        # does not have.
         var number = self.display[byte=1:]
         _ = run(
             "kill "
             + self.pid
-            + "; for i in $(seq 600); do [ -e /proc/"
+            + "; for i in $(seq 600); do s=$(ps -o stat= -p "
             + self.pid
-            + " ] && ! grep -q ') Z' /proc/"
-            + self.pid
-            + "/stat 2>/dev/null || break; sleep 0.05; done"
+            + ' 2>/dev/null); case "$s" in ""|Z*) break;; esac;'
+            + " sleep 0.05; done"
             + "; for i in $(seq 600); do [ -e /tmp/.X11-unix/X"
             + number
             + " ] || [ -e /tmp/.X"
             + number
             + "-lock ] || break; sleep 0.05; done"
         )
+
+
+def _xlib() -> String:
+    """Return the Xlib the window loads.
+
+    Returns:
+        The library's path or soname.
+    """
+    return library_path(macos_folders())
+
+
+def test_xlib_is_found_by_its_macos_path_or_its_soname() raises:
+    var folder = String("/tmp/threemojo-test-x11-library")
+    _ = run("mkdir -p " + folder + " && touch " + folder + "/libX11.6.dylib")
+    var missing = String("/tmp/threemojo-test-x11-no-library")
+    assert_equal(library_path([missing, folder]), folder + "/libX11.6.dylib")
+    assert_equal(library_path([missing]), "libX11.so.6")
+    assert_equal(library_path(List[String]()), "libX11.so.6")
+    _ = run("rm -rf " + folder)
 
 
 def _pixel(window: X11Window, x: Int, y: Int) raises -> Int:
@@ -204,7 +230,7 @@ def _pixel(window: X11Window, x: Int, y: Int) raises -> Int:
     Raises:
         Error: If the server returns no image.
     """
-    var lib = OwnedDLHandle("libX11.so.6")
+    var lib = OwnedDLHandle(_xlib())
     var image = lib.call["XGetImage", Int](
         window._display,
         window._window,
@@ -232,7 +258,7 @@ def _send(window: X11Window, bytes: List[UInt8]) raises:
     Raises:
         Error: Never.
     """
-    var lib = OwnedDLHandle("libX11.so.6")
+    var lib = OwnedDLHandle(_xlib())
     var event = bytes.copy()
     # The window at 32, as every event names it.
     for index in range(8):
@@ -262,7 +288,7 @@ def _sync(window: X11Window) raises:
     Raises:
         Error: Never.
     """
-    var lib = OwnedDLHandle("libX11.so.6")
+    var lib = OwnedDLHandle(_xlib())
     _ = lib.call["XSync", c_int](window._display, c_int(0))
 
 
@@ -297,7 +323,7 @@ def test_a_window_reads_keys_buttons_resizes_and_a_close() raises:
     var server = Server()
     var window = X11Window(40, 30, display=server.display)
     _ = window.poll(Duration(200.0, MILLISECOND))
-    var lib = OwnedDLHandle("libX11.so.6")
+    var lib = OwnedDLHandle(_xlib())
     var code = lib.call["XKeysymToKeycode", Int](window._display, Int(0x71))
     _send(window, _event(2, 0, 0, 0, code))
     _send(window, _event(4, 5, 6, 0, 1))

@@ -8,13 +8,14 @@ and resizes.
 
 three.js draws into a canvas in a browser window. On Linux, and on
 Windows under WSL 2 with WSLg, the window system is X11 or answers X11,
-and Xlib is its C library. This module loads `libX11.so.6` when a window
-opens, through `std.ffi.OwnedDLHandle`, so the library still builds and
-runs with nothing but the standard library: a machine without X11 fails
-only when it asks for a window. `TerminalWindow` stays the default.
+and Xlib is its C library. On macOS, XQuartz or Homebrew's `libx11`
+supplies it. This module loads Xlib when a window opens, through
+`std.ffi.OwnedDLHandle`, so the library still builds and runs with
+nothing but the standard library: a machine without X11 fails only when
+it asks for a window. `TerminalWindow` stays the default.
 
-The Xlib structures are read at their offsets on a 64-bit Linux ABI,
-the only one X11 runs on here: `XEvent` is 192 bytes, and a key, button
+The Xlib structures are read at their offsets on a 64-bit ABI, which
+Linux and macOS share: `XEvent` is 192 bytes, and a key, button
 or motion event holds its position at 64 and 68, its modifier state at
 80 and its key code or button at 84. A frame is sent as a 24-bit
 `ZPixmap` of 32 bits a pixel, blue first, which is what every TrueColor
@@ -43,9 +44,12 @@ from controls.input import (
 )
 from render.framebuffer import Framebuffer
 from std.ffi import OwnedDLHandle, c_int, external_call
+from std.os.path import exists
 from units.si import Duration, MILLISECOND
 
+# Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
+comptime MACOS_LIBRARY = "libX11.6.dylib"
 comptime EVENT_BYTES = 192
 # The events asked for: key press and release, button press and release,
 # pointer motion, exposure and structure changes.
@@ -233,6 +237,34 @@ def is_true_color(depth: Int, red_mask: Int) -> Bool:
     return depth == 24 and red_mask == 0xFF0000
 
 
+def macos_folders() -> List[String]:
+    """Return the folders that hold Xlib on macOS.
+
+    macOS has no Xlib of its own, and `dlopen` searches none of these.
+
+    Returns:
+        XQuartz's folder, then Homebrew's on Apple Silicon and on Intel.
+    """
+    return ["/opt/X11/lib", "/opt/homebrew/lib", "/usr/local/lib"]
+
+
+def library_path(folders: List[String]) -> String:
+    """Return the Xlib to load.
+
+    Args:
+        folders: The folders to search for the macOS library, in order.
+
+    Returns:
+        The first `libX11.6.dylib` in `folders`, or `libX11.so.6` when no
+        folder has one.
+    """
+    for folder in folders:
+        var path = folder + "/" + MACOS_LIBRARY
+        if exists(path):
+            return path
+    return LIBRARY
+
+
 struct X11Window(Movable):
     """A window from the X server, showing frames of its size."""
 
@@ -268,8 +300,7 @@ struct X11Window(Movable):
                 `DISPLAY` from the environment.
 
         Raises:
-            Error: If the size is not positive, `libX11.so.6` cannot be
-                loaded, the display cannot be opened, or its visual is not
+            Error: If the size is not positive, Xlib cannot be loaded, the display cannot be opened, or its visual is not
                 24-bit TrueColor.
         """
         if width <= 0 or height <= 0:
@@ -280,7 +311,7 @@ struct X11Window(Movable):
         self.height = height
         self.is_open = False
         self.close_requested = False
-        self._lib = OwnedDLHandle(LIBRARY)
+        self._lib = OwnedDLHandle(library_path(macos_folders()))
         var name = display
         var display_name = Int(name.as_c_string_span().ptr())
         if display == "":

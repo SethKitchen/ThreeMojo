@@ -16,12 +16,14 @@ A band is the same code with a row range. SIMD would need new arithmetic. The sc
 
 `make bench-scene` renders a mipmapped checkerboard sphere of twelve thousand triangles at 1280 by 720:
 
-| Workers | Rasterize | Resolve | Whole frame |
-|---|---|---|---|
-| 1 | 66 ms | 48 ms | 122 ms |
-| 24 | 6 ms | 6 ms | 19 ms |
+| Machine | Workers | Rasterize | Resolve | Whole frame |
+|---|---|---|---|---|
+| Ryzen 9 5900X, Linux | 1 | 66 ms | 48 ms | 122 ms |
+| Ryzen 9 5900X, Linux | 24 | 6 ms | 6 ms | 19 ms |
+| Apple M4 Max, macOS | 1 | 83 ms | 9 ms | 97 ms |
+| Apple M4 Max, macOS | 16 | 9 ms | 1 ms | 15 ms |
 
-`prepare` is single threaded at about 7 ms and is now the largest stage.
+`prepare` is single threaded. It takes about 7 ms on the Ryzen and about 2 ms on the M4 Max, and it is now the largest stage.
 
 ## One worker by default
 

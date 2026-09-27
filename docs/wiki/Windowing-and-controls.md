@@ -89,7 +89,9 @@ The terminal is put back before a failure is raised.
 
 ## X11Window
 
-`window/x11.mojo` opens a native window on an X server. It loads `libX11.so.6` when the window opens. Nothing else in the project needs the library.
+`window/x11.mojo` opens a native window on an X server. It loads Xlib when the window opens. Nothing else in the project needs the library.
+
+On Linux, the window loads `libX11.so.6`. macOS has no Xlib of its own. There, the window loads the first `libX11.6.dylib` it finds in `/opt/X11/lib` (XQuartz), `/opt/homebrew/lib` or `/usr/local/lib` (Homebrew). `library_path` makes that choice.
 
 | Member | Meaning |
 |---|---|
@@ -114,7 +116,7 @@ The window manager's close button does not close the window. It sets `close_requ
 
 ### Tests
 
-`tests/test_x11.mojo` starts an `Xvfb` server for each test. You must install it first, for example with `apt-get install xvfb`.
+`tests/test_x11.mojo` starts an `Xvfb` server for each test. You must install it first. On Linux, use `apt-get install xvfb`. On macOS, use `brew install xorg-server`.
 
 ## Input events
 

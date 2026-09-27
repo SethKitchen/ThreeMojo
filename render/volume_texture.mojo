@@ -787,7 +787,16 @@ struct DecodedVolume(ImplicitlyCopyable, VolumeSampler, VolumeTexels):
         Returns:
             The color.
         """
-        return self.texels[unsafe_offset=(z * self.height + y) * self.width + x]
+        # Four floats, not one `FloatColor`: a whole color loaded through
+        # a device buffer crashed Apple's Metal linker (`air-lld`).
+        var floats = self.texels.unsafe_bitcast[Float32]()
+        var at = ((z * self.height + y) * self.width + x) * 4
+        return FloatColor(
+            floats[unsafe_offset=at],
+            floats[unsafe_offset=at + 1],
+            floats[unsafe_offset=at + 2],
+            floats[unsafe_offset=at + 3],
+        )
 
     def volume_width(self) -> Int:
         """Return how many texels across the volume is.
