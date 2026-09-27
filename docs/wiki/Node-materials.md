@@ -331,6 +331,12 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - The preprocessor: `#version` in a raw shader, object-like `#define`, `#undef`, and `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` and `#endif`.
 - An `#if` condition: whole numbers, macros that are one whole number, `defined`, `!`, `&&`, `||`, the six comparisons and parentheses. A name that is not a macro is zero, as in the C preprocessor.
 
+A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
+
+An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
+
+An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
+
 ### While and do
 
 A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that would run longer stops there, and the shader must not depend on more. The bytecode has no jumps, so the compiler unrolls such a loop 64 times. A false condition leaves it, as a `break` does.
@@ -338,12 +344,6 @@ A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that w
 - A `while` asks its condition at the top of each time through.
 - A `do` runs its body once. It asks its condition at the top of each later time, so a `continue` in it still reaches the condition.
 - A `while` inside another `while` unrolls 64 times 64. That is past the limit of a graph, so write the inner loop as a `for` with a constant count.
-
-A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
-
-An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
-
-An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
 ### What the GLSL compiler refuses
 
