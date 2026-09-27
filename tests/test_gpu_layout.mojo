@@ -210,6 +210,7 @@ from render.gpu import (
     POINT_STATE_ALPHA_MAP,
     POINT_STATE_BLEND,
     POINT_STATE_FOG,
+    POINT_STATE_NODES,
     POINT_STATE_OPS,
     POINT_STATE_STENCIL,
     POINT_STATE_TEXTURE,
@@ -1328,8 +1329,18 @@ def test_the_depth_packing_the_range_and_the_fog_switch_cross() raises:
     assert_equal(lined[LINE_STATE_FOG], Int32(0))
     var dot = a_point(4.5, 4.5, 3, 0.5, Color(255, 255, 255))
     var dots = point_state([dot])
-    assert_equal(POINT_STATE_FOG, STATE_PER_POINT - 1)
+    assert_equal(POINT_STATE_FOG, STATE_PER_POINT - 2)
     assert_equal(dots[POINT_STATE_FOG], Int32(1))
+    # Then where its node program starts: -1 for none, and for one past
+    # the starts given, which the draw refuses.
+    assert_equal(POINT_STATE_NODES, STATE_PER_POINT - 1)
+    assert_equal(dots[POINT_STATE_NODES], Int32(-1))
+    var noded = dot
+    noded.nodes = NodeProgramId(1)
+    var starts: List[Int] = [40, 90]
+    assert_equal(point_state([noded], starts)[POINT_STATE_NODES], Int32(90))
+    noded.nodes = NodeProgramId(2)
+    assert_equal(point_state([noded], starts)[POINT_STATE_NODES], Int32(-1))
 
 
 def test_the_layer_lanes_and_columns_ride_last() raises:

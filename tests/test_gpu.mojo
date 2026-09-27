@@ -147,6 +147,7 @@ from render.rasterizer import (
     LayerFactors,
     Draw,
     rasterize_all,
+    rasterize_frame,
     rasterize_lines_all,
     rasterize_points_all,
 )
@@ -11709,6 +11710,94 @@ def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
             SHADE_TEXTURE,
             programs=store,
         )
+
+
+def test_both_backends_run_a_graph_on_points_alike() raises:
+    # A texture read at gl_PointCoord, the coordinate's step across a
+    # pixel, a custom attribute, a round mask, an opacity and an output
+    # that reads the pixel's place: all from the point's own lanes.
+    if skipped_for_lack_of_a_gpu("both backends run a graph on points"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32, 4, Color(240, 200, 120), Color(30, 60, 120), REPEAT, BILINEAR
+        )
+    )
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var across = graph.swizzle(place, "x")
+    var read = graph.texture(graph.texture_uniform("map", board), place)
+    var tinted = graph.mul(
+        graph.swizzle(read, "rgb"),
+        graph.add(
+            graph.attribute("tint", NODES_VEC3),
+            graph.join([across, graph.dfdx(across), graph.float(0.2)]),
+        ),
+    )
+    graph.set_output(NODES_COLOR, tinted)
+    graph.set_output(NODES_OPACITY, graph.float(0.7))
+    graph.set_output(
+        NODES_MASK,
+        graph.less_than(
+            graph.length(graph.sub(place, graph.vec2(0.5, 0.5))),
+            graph.float(0.5),
+        ),
+    )
+    graph.set_output(
+        NODES_OUTPUT,
+        graph.mul(
+            graph.lit(),
+            graph.add(
+                graph.vec3(0.5, 0.5, 0.5),
+                graph.mul(
+                    graph.swizzle(graph.frag_coord(), "xyz"),
+                    graph.float(0.01),
+                ),
+            ),
+        ),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var points: List[RasterVertex] = [
+        a_point(8.5, 8.5, 12, 0.5, Color(255, 255, 255)),
+        a_point(24.5, 10.5, 7, 0.4, Color(255, 255, 255), BLEND),
+        a_point(40.5, 20.5, 14, 0.6, Color(255, 255, 255), alpha_test=0.5),
+    ]
+    for index in range(len(points)):
+        points[index].nodes = id
+        points[index].custom = SIMD[DType.float32, 8](
+            0.2 * Float32(index), 0.5, 1 - 0.3 * Float32(index), 0, 0, 0, 0, 0
+        )
+    for mode in [SHADE_TEXTURE, SHADE_LIT, SHADE_UV]:
+        var target = RenderTarget(48, 36, BACKGROUND)
+        rasterize_frame(
+            List[RasterVertex](),
+            List[RasterVertex](),
+            [Draw(DRAW_POINTS, 0, len(points))],
+            target,
+            mode,
+            textures,
+            Lighting.uniform(),
+            1,
+            points=points,
+            programs=store,
+        )
+        var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+        var gpu = render_triangles(
+            List[RasterVertex](),
+            48,
+            36,
+            BACKGROUND,
+            mode,
+            textures,
+            Lighting.uniform(),
+            points=points,
+            programs=store,
+        )
+        var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+        assert_true(drawn > 100, "the points barely drew anything")
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
