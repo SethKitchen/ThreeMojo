@@ -13,6 +13,10 @@ checks the builder, the layout and the interpreter together.
 
 from materials.nodes import (
     AO_NODE,
+    BACKDROP_ALPHA_NODE,
+    BACKDROP_NODE,
+    FRAGMENT_NODE,
+    SIZE_NODE,
     AT_FRAGMENT,
     AT_HERE,
     AT_RIGHT,
@@ -2390,6 +2394,54 @@ def test_the_new_outputs_take_floats() raises:
     # window depth.
     assert_equal(node_depth(0.25, False), -0.5)
     assert_equal(node_depth(0.25, True), 0.25)
+
+
+def test_the_backdrop_the_fragment_and_the_scene_behind() raises:
+    var graph = NodeGraph()
+    var place = graph.screen_uv()
+    var behind = graph.viewport_texture(place)
+    graph.set_output(BACKDROP_NODE, graph.swizzle(behind, "rgb"))
+    graph.set_output(BACKDROP_ALPHA_NODE, graph.float(0.5))
+    graph.set_output(FRAGMENT_NODE, graph.join([place, graph.vec2(0.25, 1)]))
+    with assert_raises(contains="takes a vec4, not a vec3"):
+        graph.set_output(FRAGMENT_NODE, graph.vec3(0, 0, 0))
+    var program = graph.compile()
+    assert_true(program.reads_scene)
+    var source = Corners(program)
+    # A source with no target divides the place by one, and reads the
+    # scene behind as opaque white, as an untextured read does.
+    var own = run_nodes(source, FRAGMENT_NODE, inputs(True))
+    assert_lanes(own, 10.5, 20.5, 0.25)
+    assert_equal(own[3], 1)
+    assert_lanes(run_nodes(source, BACKDROP_NODE, inputs(True)), 1, 1, 1)
+    assert_lanes(run_nodes(source, BACKDROP_NODE, inputs(False)), 1, 1, 1)
+    assert_equal(run_nodes(source, BACKDROP_ALPHA_NODE, inputs())[0], 0.5)
+    var plain = NodeGraph()
+    plain.set_output(COLOR_NODE, plain.vec3(1, 1, 1))
+    assert_false(plain.compile().reads_scene)
+    with assert_raises(contains="The scene behind is read at a vec2, not a"):
+        _ = plain.viewport_texture(plain.vec3(0, 0, 0))
+    # Only a fragment reads either.
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(varied.viewport_texture(varied.uv()), "xyz")
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
+    var sized = NodeGraph()
+    sized.set_output(SIZE_NODE, sized.swizzle(sized.screen_uv(), "x"))
+    with assert_raises(contains="A size node runs once per point"):
+        _ = sized.compile()
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.swizzle(moved.viewport_texture(moved.vec2(0, 0)), "xyz"),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
 
 
 def test_the_helpers_the_rasterizers_share() raises:
