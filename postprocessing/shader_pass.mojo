@@ -265,6 +265,22 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             )
         return FloatColor(1, 1, 1, 1)
 
+    def _view(self, slot: Int) -> LightView:
+        """Return the input image for `INPUT_SLOT` and the saved one for
+        any other slot, as a view made here: see the fields for why one
+        is not kept."""
+        if slot == INPUT_SLOT:
+            return LightView(
+                pixels=self.input_floats,
+                width=self.input_width,
+                height=self.input_height,
+            )
+        return LightView(
+            pixels=self.saved_floats,
+            width=self.saved_width,
+            height=self.saved_height,
+        )
+
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
     ) -> FloatColor:
@@ -297,7 +313,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         """
         if slot != INPUT_SLOT and slot != SAVED_SLOT:
             return FloatColor(1, 1, 1, 1)
-        var view = self.input if slot == INPUT_SLOT else self.saved
+        var view = self._view(slot)
         var column = max(0, min(x, view.width - 1))
         var row = max(0, min(y, view.height - 1))
         return view.at(column, view.height - 1 - row).unpremultiplied()
@@ -314,7 +330,7 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         """
         if slot != INPUT_SLOT and slot != SAVED_SLOT:
             return Lanes(0)
-        var view = self.input if slot == INPUT_SLOT else self.saved
+        var view = self._view(slot)
         return Lanes(Float32(view.width), Float32(view.height), 0, 0)
 
     def shares(self, context: NodeContext) -> Lanes:
