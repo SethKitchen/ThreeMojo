@@ -1859,7 +1859,8 @@ def test_matrices_are_built_indexed_and_inverted() raises:
     # Columns, a scalar's diagonal, sixteen scalars, and a mat4's upper
     # left.
     var built = (
-        "mat3 a = mat3(vec3(2.0, 0.0, 0.0), vec3(1.0, 3.0, 0.0), vec3(0.0, 0.0, 4.0));\n"
+        "mat3 a = mat3(vec3(2.0, 0.0, 0.0), vec3(1.0, 3.0, 0.0), vec3(0.0, 0.0,"
+        " 4.0));\n"
     )
     assert_lanes(value("a * vec3(1.0)", "", before_main=built), 3, 3, 4)
     assert_lanes(value("vec3(1.0) * a", "", before_main=built), 2, 4, 4)
@@ -1881,12 +1882,8 @@ def test_matrices_are_built_indexed_and_inverted() raises:
         "mat4 f = mat4(1.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0,"
         " 0.0, 0.0, 3.0, 0.0, 1.0, 1.0, 1.0, 1.0);\n"
     )
-    assert_lanes(
-        value("(f * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4
-    )
-    assert_lanes(
-        value("mat3(f) * vec3(1.0)", "", before_main=sixteen), 1, 2, 3
-    )
+    assert_lanes(value("(f * vec4(1.0)).xyz", "", before_main=sixteen), 2, 3, 4)
+    assert_lanes(value("mat3(f) * vec3(1.0)", "", before_main=sixteen), 1, 2, 3)
     assert_lanes(
         value("(mat4(a) * vec4(1.0)).xyw", "", before_main=built), 3, 3, 1
     )
@@ -1991,7 +1988,8 @@ def test_a_mat2_is_a_vec4_of_its_columns() raises:
     var program = compile_shader_material(
         VERTEX,
         "uniform mat2 turn;\n"
-        + "void main() { gl_FragColor = vec4(turn * vec2(1.0, 2.0), 0.0, 1.0); }\n",
+        + "void main() { gl_FragColor = vec4(turn * vec2(1.0, 2.0), 0.0,"
+        " 1.0); }\n",
     )
     program.set_uniform("turn", Vector4(0, 1, -1, 0))
     assert_lanes(run(program), -2, 1, 0)
@@ -2138,7 +2136,8 @@ def test_arrays_hold_elements_that_an_index_picks() raises:
     )
     refused(
         "uniform sampler2D maps[2];\n"
-        + "void main() { int k = 0; gl_FragColor = texture2D(maps[k], vec2(0.5)); }\n",
+        + "void main() { int k = 0; gl_FragColor = texture2D(maps[k],"
+        " vec2(0.5)); }\n",
         "an array of samplers is indexed by a constant",
     )
 
@@ -2207,7 +2206,8 @@ def test_structs_are_their_fields() raises:
     assert_lanes(value("c.color", before, body), 1, 0, 0.25)
     # ?: chooses field by field, and an index picks a struct where it runs.
     var pairs = (
-        "Light pair[2] = Light[2](Light(vec3(1.0), 1.0), Light(vec3(2.0), 2.0));\n"
+        "Light pair[2] = Light[2](Light(vec3(1.0), 1.0), Light(vec3(2.0),"
+        " 2.0));\n"
         + "int k = 1;\n"
         + "Light chosen = k > 0 ? pair[1] : pair[0];\n"
         + "pair[0].power = 5.0;\n"
@@ -2241,17 +2241,18 @@ def test_structs_are_their_fields() raises:
         + "uniform Light light;\n"
         + "uniform Light lights[2];\n"
         + "void main() {\n"
-        + "    gl_FragColor = vec4(light.color * light.power + lights[1].color, 1.0);\n"
+        + "    gl_FragColor = vec4(light.color * light.power + lights[1].color,"
+        " 1.0);\n"
         + "}\n",
     )
     program.set_uniform("light.color", Vector3(1, 2, 3))
     program.set_uniform("light.power", Float32(2))
     program.set_uniform("lights[1].color", Vector3(1, 1, 1))
     assert_lanes(run(program), 3, 5, 7)
+    refused(LIGHT + LIGHT + WHITE, "the struct Light is declared twice")
     refused(
-        LIGHT + LIGHT + WHITE, "the struct Light is declared twice"
+        "struct float { float x; };\n" + WHITE, "the name float is a keyword"
     )
-    refused("struct float { float x; };\n" + WHITE, "the name float is a keyword")
     refused(
         "struct S { float x; } s;\n" + WHITE,
         "declare a struct's variables apart from it",
@@ -2309,7 +2310,10 @@ def test_structs_are_their_fields() raises:
     )
     refused(LIGHT + main + "const Light l;" + end, "a const needs a value")
     refused(
-        LIGHT + main + "float u = 1.0; const Light l = Light(vec3(u), 1.0);" + end,
+        LIGHT
+        + main
+        + "float u = 1.0; const Light l = Light(vec3(u), 1.0);"
+        + end,
         "a const's value must be a constant expression",
     )
     refused(
@@ -2317,7 +2321,9 @@ def test_structs_are_their_fields() raises:
         "a Light is a uniform, a const or a local variable",
     )
     refused(
-        LIGHT + "uniform float u;\nconst Light l = Light(vec3(u), 1.0);\n" + WHITE,
+        LIGHT
+        + "uniform float u;\nconst Light l = Light(vec3(u), 1.0);\n"
+        + WHITE,
         "a const Light's value must be a constant Light",
     )
     refused(
@@ -2359,14 +2365,10 @@ def test_break_continue_and_an_early_return_are_read() raises:
     )
     # A function that returns early, from a branch and from a loop.
     var early = (
-        "float capped(float x) { if (x > 1.0) { return 1.0; } return x * 0.5; }\n"
-        "float first(float limit) {\n"
-        "    for (int i = 0; i < 8; i++) {\n"
-        "        if (float(i * i) > limit) { return float(i); }\n"
-        "    }\n"
-        "    return -1.0;\n"
-        "}\n"
-        "void nothing() { return; }\n"
+        "float capped(float x) { if (x > 1.0) { return 1.0; } return x * 0.5;"
+        " }\nfloat first(float limit) {\n    for (int i = 0; i < 8; i++) {\n   "
+        "     if (float(i * i) > limit) { return float(i); }\n    }\n    return"
+        " -1.0;\n}\nvoid nothing() { return; }\n"
     )
     assert_equal(number("capped(3.0)", early), 1)
     assert_equal(number("capped(0.5)", early), 0.25)
@@ -2396,9 +2398,11 @@ def test_break_continue_and_an_early_return_are_read() raises:
     )
     # A loop around a call is not the call's to break.
     refused(
-        "void stop() { break; }\nvoid main() {\n"
-        "    for (int i = 0; i < 2; i++) { stop(); }\n"
-        "    gl_FragColor = vec4(1.0);\n}\n",
+        (
+            "void stop() { break; }\nvoid main() {\n"
+            "    for (int i = 0; i < 2; i++) { stop(); }\n"
+            "    gl_FragColor = vec4(1.0);\n}\n"
+        ),
         "break needs a loop to be in",
     )
     refused(
@@ -2409,9 +2413,11 @@ def test_break_continue_and_an_early_return_are_read() raises:
         ),
     )
     refused(
-        "uniform mat3 m;\n"
-        "mat3 pick() { if (true) { return m; } return m; }\n"
-        "void main() { gl_FragColor = vec4(pick() * vec3(1.0), 1.0); }\n",
+        (
+            "uniform mat3 m;\n"
+            "mat3 pick() { if (true) { return m; } return m; }\n"
+            "void main() { gl_FragColor = vec4(pick() * vec3(1.0), 1.0); }\n"
+        ),
         "a function that returns a matrix",
     )
     # A transform known only as a step cannot return early either.
@@ -2420,7 +2426,8 @@ def test_break_continue_and_an_early_return_are_read() raises:
         "returns a matrix, a struct or a transform",
         vertex=(
             "vec4 place() {\n"
-            + "    if (true) { return modelViewMatrix * vec4(position, 1.0); }\n"
+            + "    if (true) { return modelViewMatrix * vec4(position,"
+            " 1.0); }\n"
             + "    return modelViewMatrix * vec4(position, 1.0);\n"
             + "}\n"
             + "void main() { gl_Position = projectionMatrix * place(); }\n"

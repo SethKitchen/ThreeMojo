@@ -1079,8 +1079,9 @@ struct _Compiler(Movable):
         """
         if value.type.is_struct():
             raise self.error(
-                "a " + self.type_name(value.type) + " is read a field at a time"
-                " here"
+                "a "
+                + self.type_name(value.type)
+                + " is read a field at a time here"
             )
         if value.node < 0:
             raise self.error(
@@ -1311,7 +1312,9 @@ struct _Compiler(Movable):
             while True:
                 var field = self.name()
                 if self.is_mark("["):
-                    raise self.error("an array in a struct is outside the subset")
+                    raise self.error(
+                        "an array in a struct is outside the subset"
+                    )
                 for index in range(len(names)):
                     if names[index] == field:
                         raise self.error(
@@ -1385,7 +1388,9 @@ struct _Compiler(Movable):
                     kind,
                     part,
                 )
-            self.declare(_Symbol(name, _STRUCT_VAR, _plain(type, -1), -1, False))
+            self.declare(
+                _Symbol(name, _STRUCT_VAR, _plain(type, -1), -1, False)
+            )
             return
         if kind == _UNIFORM:
             self.uniform(type, name)
@@ -1432,7 +1437,9 @@ struct _Compiler(Movable):
                 continue
             var owner = value.symbol
             if owner >= 0 and self.symbols[owner].kind == _STRUCT_VAR:
-                return self.value_of(self.field_symbol(owner, value.type, index))
+                return self.value_of(
+                    self.field_symbol(owner, value.type, index)
+                )
             var part = self.bundles[value.point][index].copy()
             part.symbol = -1
             part.components = ""
@@ -1802,15 +1809,11 @@ struct _Compiler(Movable):
             raise self.error("an array's size is a positive constant int")
         if size.number > Float64(MAX_ARRAY_SIZE):
             raise self.error(
-                "an array holds at most "
-                + String(MAX_ARRAY_SIZE)
-                + " elements"
+                "an array holds at most " + String(MAX_ARRAY_SIZE) + " elements"
             )
         return Int(size.number)
 
-    def array_values(
-        mut self, type: _Type, size: Int
-    ) raises -> List[_Value]:
+    def array_values(mut self, type: _Type, size: Int) raises -> List[_Value]:
         """Parse an array's initializer, `T[n](a, b, ...)` or `T[](...)`.
 
         Raises:
@@ -1889,8 +1892,9 @@ struct _Compiler(Movable):
             return
         if storage != "" or not constant:
             raise self.error(
-                "a " + self.type_name(type) + " is a uniform, a const or a"
-                " local variable"
+                "a "
+                + self.type_name(type)
+                + " is a uniform, a const or a local variable"
             )
         self.expect("=")
         var value = self.expression()
@@ -2315,8 +2319,9 @@ struct _Compiler(Movable):
                 raise self.error("arrays are outside the subset")
             if not self.is_mark("="):
                 raise self.error(
-                    "a local " + type.name() + " needs its value where it is"
-                    " declared"
+                    "a local "
+                    + type.name()
+                    + " needs its value where it is declared"
                 )
             self.at += 1
             var value = self.expression()
@@ -2496,7 +2501,8 @@ struct _Compiler(Movable):
                     " early"
                 )
             self.graph.Return(
-                NodeRef(value.node) if called.result != _VOID else self.graph.float(0)
+                NodeRef(value.node) if called.result
+                != _VOID else self.graph.float(0)
             )
             return
         value.symbol = -1
@@ -3186,7 +3192,9 @@ struct _Compiler(Movable):
                 if value.type == _MAT2 and not index.known:
                     var halves = List[NodeRef]()
                     for half in ["xy", "zw"]:  # pragma: no branch
-                        halves.append(self.graph.swizzle(self.node(value), half))
+                        halves.append(
+                            self.graph.swizzle(self.node(value), half)
+                        )
                     self.check_column(value.type, 2, index)
                     value = self.derived(
                         _VEC2, self.pick(halves, self.node(index)), value, index
@@ -3240,9 +3248,7 @@ struct _Compiler(Movable):
                 index is not a constant int in range.
         """
         if value.tag != _PLAIN:
-            raise self.error(
-                "a transform's columns are outside the subset"
-            )
+            raise self.error("a transform's columns are outside the subset")
         var size = 3 if value.type == _MAT3 else 4
         self.check_column(value.type, size, index)
         var matrix = NodeRef(self.node(value).value)
@@ -3259,9 +3265,7 @@ struct _Compiler(Movable):
         out.local = value.local
         return out^
 
-    def check_column(
-        mut self, type: _Type, size: Int, index: _Value
-    ) raises:
+    def check_column(mut self, type: _Type, size: Int, index: _Value) raises:
         """Refuse a matrix index that is not an int, or a constant one not
         below `size`.
 
@@ -3679,7 +3683,9 @@ struct _Compiler(Movable):
                         lanes.append(pad)
                 else:
                     for r in range(size):  # pragma: no branch
-                        lanes.append(self.graph.float(Float32(1 if r == c else 0)))
+                        lanes.append(
+                            self.graph.float(Float32(1 if r == c else 0))
+                        )
                 columns.append(self.graph.join(lanes))
             value.node = self._matrix_of(columns).value
             return value^
@@ -3695,7 +3701,9 @@ struct _Compiler(Movable):
                 parts.append(node)
             else:
                 for lane in range(width):  # pragma: no branch
-                    parts.append(self.graph.swizzle(node, _letter("xyzw", lane)))
+                    parts.append(
+                        self.graph.swizzle(node, _letter("xyzw", lane))
+                    )
         if len(parts) == 1:
             # One scalar down the diagonal.
             for c in range(size):  # pragma: no branch
@@ -3853,7 +3861,9 @@ struct _Compiler(Movable):
             value.node = self.graph.texture_level(
                 nodes[0], nodes[1], nodes[2]
             ).value
-        elif len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2:
+        elif (
+            len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2
+        ):
             raise self.error(name + "() takes a sampler2D and a vec2")
         else:
             value.node = self.graph.texture(nodes[0], nodes[1]).value

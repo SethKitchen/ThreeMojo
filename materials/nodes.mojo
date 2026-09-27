@@ -3400,7 +3400,10 @@ struct NodeGraph(Copyable, Movable):
         self._retired[frame.returned] = True
         self._retired[frame.result] = True
         self._check(answer)
-        if not frame.used or self.type_of(answer) != self._var_types[frame.result]:
+        if (
+            not frame.used
+            or self.type_of(answer) != self._var_types[frame.result]
+        ):
             return answer
         # A `Return` gives its value where it ran; the body's answer is the
         # value everywhere else.
