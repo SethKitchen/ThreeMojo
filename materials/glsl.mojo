@@ -303,7 +303,7 @@ struct _Lexer(Movable):
                     raise self.error(line, "a comment is never closed")
                 line += String(text[byte=at:close]).count("\n")
                 at = close + 2
-            elif c == UInt8(ord("#")):
+            elif c == UInt8(ord("#")) and (starts_line or self.active()):
                 if not starts_line:
                     raise self.error(line, "a # must begin its line")
                 var end = text.find("\n", at)
