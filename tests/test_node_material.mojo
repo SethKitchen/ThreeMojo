@@ -1178,7 +1178,7 @@ def test_a_sprite_runs_its_node_material() raises:
         _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
 
 
-def test_lines_and_wide_lines_refuse_a_node_material() raises:
+def test_wide_lines_refuse_a_node_material() raises:
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
@@ -1193,14 +1193,8 @@ def test_lines_and_wide_lines_refuse_a_node_material() raises:
     var shape = assets.geometries.add(bare^)
     var camera = a_camera()
     var renderer = Renderer(SIZE, SIZE)
-    var lines = Scene()
-    var at = lines.add(Object3D())
-    lines.add_line(Line(shape, noded, at))
-    lines.update()
-    with assert_raises(contains="A line runs no node graph"):
-        _ = renderer.render(lines, assets, camera)
     var wide = Scene()
-    at = wide.add(Object3D())
+    var at = wide.add(Object3D())
     var sticks = assets.geometries.add(
         line_segments_geometry([Vector3(-1, 0, 0), Vector3(1, 0, 0)])
     )
@@ -1208,6 +1202,46 @@ def test_lines_and_wide_lines_refuse_a_node_material() raises:
     wide.update()
     with assert_raises(contains="A wide line runs no node graph"):
         _ = renderer.render(wide, assets, camera)
+
+
+def test_lines_run_a_node_material() raises:
+    # A line across the middle, colored by its coordinate and a custom
+    # attribute. A position node that moves it nowhere keeps it from being
+    # culled by its bound.
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [
+                graph.swizzle(graph.uv(), "x"),
+                graph.attribute("green", NODE_FLOAT),
+                graph.float(1),
+            ]
+        ),
+    )
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
+    var id = assets.programs.add(graph.compile())
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION), BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3)
+    )
+    bare.set_attribute(String(UV), BufferAttribute([Float32(1), 0, 1, 0], 2))
+    bare.set_attribute("green", BufferAttribute([Float32(0), 0], 1))
+    var shape = assets.geometries.add(bare^)
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_line(Line(shape, noded, at))
+    scene.update()
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    var seen = middle(renderer.render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 255)
+    assert_equal(Int(seen.g), 0)
+    assert_equal(Int(seen.b), 255)
 
 
 def test_points_run_a_node_material() raises:
