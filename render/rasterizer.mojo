@@ -2680,6 +2680,8 @@ def check_triangle_maps(
             texture.
         programs: Where the node program lives. Every mode but the uv view
             runs it, and only `SHADE_TEXTURE` opens the textures it reads.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If a map the mode would open is not in the store; an
@@ -3123,6 +3125,8 @@ def rasterize_shaded(
             color, opacity and emissive nodes once the maps have had their
             say, and its output node after the fog. See
             `materials.nodes`.
+        volumes: Where the node program's 3D textures live.
+        arrays: Where the node program's array textures live.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -5539,6 +5543,8 @@ def rasterize_frame(
             see `render.transmission`.
         programs: Where the node materials' programs live; see
             `rasterize_shaded`.
+        volumes: Where the node programs' 3D textures live.
+        arrays: Where the node programs' array textures live.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -5721,6 +5727,8 @@ def rasterize_all(
         transmission: The opaque scene the transmissive triangles show
             through themselves, or an empty target when none transmits.
         programs: Where the node materials' programs live.
+        volumes: Where the node programs' 3D textures live.
+        arrays: Where the node programs' array textures live.
 
     Raises:
         Error: Everything `rasterize_frame` raises of the triangles: a

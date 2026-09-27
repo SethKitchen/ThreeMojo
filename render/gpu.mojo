@@ -8349,6 +8349,8 @@ def render_triangles(
         transmission: The opaque scene the transmissive triangles show
             through themselves; see `GpuRenderer.draw`.
         programs: The node materials' programs; see `GpuRenderer.draw`.
+        volumes: The 3D textures the programs read.
+        arrays: The array textures the programs read.
 
     Returns:
         The rendered image.

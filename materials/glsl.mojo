@@ -4887,7 +4887,7 @@ def compile_shader_material(
     Args:
         vertex_shader: The vertex shader's GLSL.
         fragment_shader: The fragment shader's GLSL.
-        defines: three.js's `material.defines`, each `NAME` or `NAME
+        defines: The `material.defines` of three.js, each `NAME` or `NAME
             tokens`, as a `#define` in both shaders before their first
             line.
 
