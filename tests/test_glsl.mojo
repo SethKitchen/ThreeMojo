@@ -30,12 +30,14 @@ from materials.nodes import (
     MASK_NODE,
     OPACITY_NODE,
     POSITION_NODE,
+    SIZE_NODE,
     NodeContext,
     NodeInputs,
     NodeProgram,
     NodeSource,
     here_inputs,
     moved_position,
+    point_size_of,
     run_nodes,
 )
 from math.matrix3 import Matrix3
@@ -101,6 +103,11 @@ struct Corners(NodeSource):
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return the direction and the slot as a color."""
         return FloatColor(direction.x, direction.y, direction.z, Float32(slot))
+
+    def point_coord(self, context: NodeContext) -> Lanes:
+        """Return a made-up place in a point, a quarter across and three
+        quarters down."""
+        return Lanes(0.25, 0.75, 0, 0)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return the coordinate and the slot plus ten as a color."""
@@ -657,6 +664,62 @@ void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 """
+
+
+def test_a_point_reads_where_it_is_and_sets_its_size() raises:
+    # gl_PointCoord is where the fragment is in its point.
+    assert_lanes(value("vec3(gl_PointCoord, 0.0)"), 0.25, 0.75, 0)
+    # gl_PointSize runs once per point: here 300 pixels at a distance of
+    # one, times the point's own size attribute.
+    var sized = compile_shader_material(
+        """
+        attribute float scale;
+        void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = scale * 300.0 / -mv.z;
+            gl_Position = projectionMatrix * mv;
+        }
+        """,
+        "void main() { gl_FragColor = vec4(1.0); }",
+    )
+    assert_true(sized.has(SIZE_NODE))
+    var none = Vector3(0, 0, 0)
+    var custom = SIMD[DType.float32, 8](0)
+    custom[0] = 2
+    var size = point_size_of(
+        sized,
+        NodeInputs(0, 0, Vector3(0, 0, -3), none, none, none, False, custom),
+    )
+    assert_almost_equal(size, 200, atol=1e-3)
+    assert_false(
+        compile_shader_material(
+            VERTEX, "void main() { gl_FragColor = vec4(1.0); }"
+        ).has(SIZE_NODE)
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "gl_PointSize reads position or normal",
+        "void main() {
+    gl_PointSize = position.x;
+"
+        + "    gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0);
+}
+",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(gl_PointSize); }",
+        "GLSL's gl_PointSize is outside the subset",
+    )
+    refused(
+        "void main() { gl_FragColor = vec4(1.0); }",
+        "GLSL's gl_PointCoord is outside the subset",
+        "void main() {
+    gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position.xy + gl_PointCoord, position.z, 1.0);
+}
+",
+    )
 
 
 def test_a_raw_shader_declares_what_it_reads() raises:
@@ -1728,10 +1791,6 @@ def test_the_statements_build_the_graph() raises:
     refused_statement("float if = 1.0;", "the name if is a keyword")
     refused_statement(
         "float gl_Thing = 1.0;", "a name that begins gl_ is GLSL's"
-    )
-    refused_statement(
-        "float x = gl_PointCoord.x;",
-        "GLSL's gl_PointCoord is outside the subset",
     )
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")

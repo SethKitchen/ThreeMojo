@@ -60,6 +60,7 @@ from materials.nodes import (
     NODE_FLOAT,
     OPACITY_NODE,
     POSITION_NODE,
+    SIZE_NODE,
     NodeGraph,
     NodeProgram,
     NodeRef,
@@ -1512,9 +1513,20 @@ struct _Compiler(Movable):
 
     def declare_outputs(mut self) raises:
         """Declare GLSL's outputs this shader and version have: a vertex's
-        `gl_Position`, and a fragment's color and depth."""
+        `gl_Position` and `gl_PointSize`, and a fragment's color and
+        depth."""
         if self.stage == _VERTEX:
             self.builtin("gl_Position", _POSITION, _plain(_VEC4, -1))
+            var size = self.zero(_FLOAT)
+            self.symbols.append(
+                _Symbol(
+                    "gl_PointSize",
+                    _OUTPUT,
+                    _plain(_FLOAT, size),
+                    self.graph.Var(NodeRef(size)).value,
+                    False,
+                )
+            )
             return
         var color = self.zero(_VEC4)
         var variable = self.graph.Var(NodeRef(color)).value
@@ -1565,6 +1577,11 @@ struct _Compiler(Movable):
                 "gl_FrontFacing",
                 _ATTRIBUTE,
                 _plain(_BOOL, self.graph.gl_front_facing().value),
+            )
+            self.builtin(
+                "gl_PointCoord",
+                _ATTRIBUTE,
+                _plain(_VEC2, self.graph.point_coord().value),
             )
             if self.toy:
                 self.declare_toy()
@@ -4838,6 +4855,18 @@ def _compile(
         var local = compiler.graph.position_local()
         var offset = compiler.graph.sub(NodeRef(compiler.drawn), local)
         compiler.graph.set_output(POSITION_NODE, offset)
+    # A point's size, once per point, from what the vertex shader wrote.
+    var sized = compiler.symbols[compiler.find("gl_PointSize")].copy()
+    if sized.written:
+        if sized.value.local:
+            raise Error(
+                "GLSL vertex shader: gl_PointSize reads position or normal,"
+                " which a point does not keep: read the world or view"
+                " position instead"
+            )
+        compiler.graph.set_output(
+            SIZE_NODE, compiler.graph.get(NodeVar(sized.variable))
+        )
     compiler.shader(fragment_shader, _FRAGMENT)
     var color = -1
     var depth = -1
