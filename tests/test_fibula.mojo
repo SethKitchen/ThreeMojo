@@ -254,7 +254,9 @@ def test_full_porosity_has_no_mass_but_keeps_regions() raises:
 
 def test_left_and_right_masses_agree() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var step = Length(10.0, MILLIMETER)
+    # A 10 mm grid samples a bone two centimeters thick too coarsely for
+    # the two sides to agree: where the grid falls decides the count.
+    var step = Length(5.0, MILLIMETER)
     var right = fibula_mass(person, RIGHT, step)
     var left = fibula_mass(person, LEFT, step)
     var scale = right.mass.value

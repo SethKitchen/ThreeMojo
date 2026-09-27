@@ -41,7 +41,7 @@ The labeled set follows the standard adult lower-limb courses.
 | `PERONEAL_ARTERY` | Compatibility name for `FIBULAR_ARTERY`. |
 | `FEMORAL_VEIN` | Popliteal continuation through the adductor hiatus to the groin. |
 | `POPLITEAL_VEIN` | Deep-vein confluence through the posterior knee. |
-| `GREAT_SAPHENOUS_VEIN` | Anterior medial malleolus, medial leg and knee, then femoral vein. |
+| `GREAT_SAPHENOUS_VEIN` | In front of the medial malleolus, along the tibia's medial border and the medial knee, then femoral vein. |
 | `SMALL_SAPHENOUS_VEIN` | Posterior lateral malleolus and calf, then popliteal vein. |
 
 The femoral artery ends exactly where the popliteal artery starts. The anterior tibial artery and tibioperoneal trunk share the popliteal split.

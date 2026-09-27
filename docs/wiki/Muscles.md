@@ -68,7 +68,9 @@ Untoned muscle is calibrated toward typical adult muscle volumes measured by MRI
 
 The authored bellies do not fill the space around the bones by themselves. `muscle_dimensions` packs them. The belly stations nearest a bone go first. Each moves straight toward its bone until it presses into a bone, or a belly already placed at a similar height. A press of `PACK_OVERLAP`, 15 percent of the two reaches, is allowed, because muscle is soft. Attachments do not move.
 
-Above the knee the bellies pack toward the femoral shaft. Below it they pack toward a point between the tibia and the fibula, two thirds of the way to the tibia. `MuscleDimensions.bellies` holds each station's move. A `MuscleField` applies it.
+Above the knee the bellies pack toward the femoral shaft. Below it each packs toward the nearer of the tibia and the fibula, so the lateral compartment settles on the fibula.
+
+A belly that meets no neighbor then spreads into a sheet. It widens around its bone and thins away from it, up to 2.2 times, and keeps its cross-sectional area. Then it packs inward again. `MuscleDimensions.bellies` holds each station's move and spread. A `MuscleField` applies them.
 
 The gluteus medius is below the reported mean. It is a thin fan, and a fuller belly would bulge. The soleus runs down to the calcaneal tendon a hand's breadth above the heel.
 

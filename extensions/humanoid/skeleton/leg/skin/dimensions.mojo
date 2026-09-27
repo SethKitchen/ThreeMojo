@@ -5,7 +5,7 @@
 
 """Skin envelope derived from the modeled anatomy of one leg.
 
-Thirty transverse sections run from the ankle to the iliac crest. Each
+Sixty transverse sections run from the ankle to the iliac crest. Each
 one slices the bones, knee tissues, muscles, vessels, lymphatics and
 nerves at its height, closes the outline as a convex hull, and adds
 the subcutaneous fat and the dermis. See
@@ -125,9 +125,9 @@ from math.vector3 import Vector3
 from std.math import max, min
 
 
-# Sections from the ankle to the iliac crest: about three centimeters
+# Sections from the ankle to the iliac crest: about a centimeter and a half
 # apart on a six-foot leg.
-comptime SKIN_SECTIONS = 30
+comptime SKIN_SECTIONS = 60
 
 
 struct SkinField(Copyable, DistanceField, Movable):
@@ -429,7 +429,7 @@ struct SkinField(Copyable, DistanceField, Movable):
                     self.calf_subcutaneous - self.knee_subcutaneous
                 ) * ((knee_y - y) / band)
             covers.append(fat + self.dermis)
-        # Two passes fill the grooves between one muscle's belly and the
+        # One pass fills a groove between one muscle's belly and the
         # next, as the fat over them does.
         self.loft = fit_loft(
             points,
@@ -438,7 +438,7 @@ struct SkinField(Copyable, DistanceField, Movable):
             dimensions.iliac.y,
             SKIN_SECTIONS,
             covers,
-            2,
+            1,
         )
         self.low = self.loft.low
         self.high = self.loft.high

@@ -113,7 +113,9 @@ comptime TIBIALIS_POSTERIOR = MusclePart(24)
 
 
 # Room for six shifts of every named part.
-comptime BELLY_SLOTS = 256
+comptime BELLY_SLOTS = 512
+# The most a belly spreads around its bone, as a factor of its width.
+comptime SPREAD_LIMIT = Float32(2.2)
 # How far two bellies, or a belly and a bone, may press into each other
 # when they pack, as a share of their reach. Muscle is soft.
 comptime PACK_OVERLAP = Float32(0.15)
@@ -175,10 +177,11 @@ struct MuscleDimensions(ImplicitlyCopyable):
     var tibia_mid: Vector3
     var fibula_mid: Vector3
     var patella: Vector3
-    # How far each belly station moves when the bellies pack around the
-    # bones: x then z for stations one, two and three, six numbers a
-    # part, at `part.value * 6`. Zero until `muscle_dimensions` packs
-    # them. See `_pack`.
+    # How each belly station moves and spreads when the bellies pack
+    # around the bones. Four numbers a station, for stations one, two
+    # and three, at `part.value * 12 + station * 4`: the move in x and
+    # in z, then the x radius and the z radius each as a factor less
+    # one. Zero until `muscle_dimensions` packs them. See `_pack`.
     var bellies: SIMD[DType.float32, BELLY_SLOTS]
 
     def validate(self) raises:
@@ -264,11 +267,17 @@ struct MuscleField(DistanceField, ImplicitlyCopyable):
         if not part.is_valid():
             raise Error("A muscle part must be a named muscle, tract or tendon")
         var chain = _raw_chain(dimensions, part)
-        var at = part.value * 6
-        var shifts = dimensions.bellies
-        chain.p1 = chain.p1 + Vector3(shifts[at], 0, shifts[at + 1])
-        chain.p2 = chain.p2 + Vector3(shifts[at + 2], 0, shifts[at + 3])
-        chain.p3 = chain.p3 + Vector3(shifts[at + 4], 0, shifts[at + 5])
+        var at = part.value * 12
+        var packed = dimensions.bellies
+        chain.p1 = chain.p1 + Vector3(packed[at], 0, packed[at + 1])
+        chain.r1 = chain.r1 * (1 + packed[at + 2])
+        chain.a1 = chain.a1 * (1 + packed[at + 3])
+        chain.p2 = chain.p2 + Vector3(packed[at + 4], 0, packed[at + 5])
+        chain.r2 = chain.r2 * (1 + packed[at + 6])
+        chain.a2 = chain.a2 * (1 + packed[at + 7])
+        chain.p3 = chain.p3 + Vector3(packed[at + 8], 0, packed[at + 9])
+        chain.r3 = chain.r3 * (1 + packed[at + 10])
+        chain.a3 = chain.a3 * (1 + packed[at + 11])
         self.p0 = chain.p0
         self.p1 = chain.p1
         self.p2 = chain.p2
@@ -691,34 +700,85 @@ def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
         if not _packs(part):
             continue
         var chain = _raw_chain(d, part)
-        var at = part.value * 6
+        var at = part.value * 12
         stations.append(_Station(at, chain.p1, chain.r1, chain.a1, 0))
-        stations.append(_Station(at + 2, chain.p2, chain.r2, chain.a2, 0))
-        stations.append(_Station(at + 4, chain.p3, chain.r3, chain.a3, 0))
+        stations.append(_Station(at + 4, chain.p2, chain.r2, chain.a2, 0))
+        stations.append(_Station(at + 8, chain.p3, chain.r3, chain.a3, 0))
     for index in range(len(stations)):
-        var axis = _axis_at(d, stations[index].center.y)
+        var axis = _nearest_bone(d, stations[index].center)
         stations[index].reach = _flat(stations[index].center - axis).length()
     _sort_by_reach(stations)
     var placed = List[_Station]()
     for index in range(len(stations)):
         var station = stations[index]
-        var axis = _axis_at(d, station.center.y)
-        var inward = _flat(axis - station.center)
-        var room = inward.length()
-        var toward = inward * (1 / max(room, Float32(1.0e-6)))
-        var low = Float32(0)
-        var high = room
-        for _ in range(10):
-            var middle = Float32(0.5) * (low + high)
-            if _fits(d, station, station.center + toward * middle, placed):
-                low = middle
-            else:
-                high = middle
-        station.center = station.center + toward * low
-        shifts[station.slot] = toward.x * low
-        shifts[station.slot + 1] = toward.z * low
+        var start = station.center
+        var ml = station.ml
+        var ap = station.ap
+        station.center = _pull_in(d, station, placed)
+        station = _spread(d, station, placed)
+        station.center = _pull_in(d, station, placed)
+        var moved = station.center - start
+        shifts[station.slot] = moved.x
+        shifts[station.slot + 1] = moved.z
+        shifts[station.slot + 2] = station.ml / ml - 1
+        shifts[station.slot + 3] = station.ap / ap - 1
         placed.append(station)
     return shifts
+
+
+def _pull_in(
+    d: MuscleDimensions, station: _Station, placed: List[_Station]
+) -> Vector3:
+    """Return how far toward its bone's axis a station can move."""
+    var axis = _nearest_bone(d, station.center)
+    var inward = _flat(axis - station.center)
+    var room = inward.length()
+    var toward = inward * (1 / max(room, Float32(1.0e-6)))
+    var low = Float32(0)
+    var high = room
+    for _ in range(10):
+        var middle = Float32(0.5) * (low + high)
+        if _fits(d, station, station.center + toward * middle, placed):
+            low = middle
+        else:
+            high = middle
+    return station.center + toward * low
+
+
+def _spread(
+    d: MuscleDimensions, station: _Station, placed: List[_Station]
+) -> _Station:
+    """Return a station widened around its bone as far as it fits.
+
+    A belly that meets no neighbor spreads into a sheet: wider around
+    the bone and thinner away from it, with the same cross-sectional
+    area. The axis of the ellipse nearer the bone's tangent widens.
+    """
+    var axis = _nearest_bone(d, station.center)
+    var out = _flat(station.center - axis)
+    var widen_z = abs(out.x) >= abs(out.z)
+    var low = Float32(1)
+    var high = SPREAD_LIMIT
+    for _ in range(8):
+        var middle = Float32(0.5) * (low + high)
+        if _fits(d, _widened(station, middle, widen_z), station.center, placed):
+            low = middle
+        else:
+            high = middle
+    return _widened(station, low, widen_z)
+
+
+def _widened(station: _Station, factor: Float32, widen_z: Bool) -> _Station:
+    """Return a station `factor` wider along one axis and thinner along
+    the other."""
+    var wider = station
+    if widen_z:
+        wider.ap = station.ap * factor
+        wider.ml = station.ml / factor
+    else:
+        wider.ml = station.ml * factor
+        wider.ap = station.ap / factor
+    return wider
 
 
 def _packs(part: MusclePart) -> Bool:
@@ -771,20 +831,19 @@ def _flat(v: Vector3) -> Vector3:
     return Vector3(v.x, 0, v.z)
 
 
-def _axis_at(d: MuscleDimensions, y: Float32) -> Vector3:
-    """Return where the bellies at height `y` pack toward.
+def _nearest_bone(d: MuscleDimensions, point: Vector3) -> Vector3:
+    """Return the shaft axis a belly at `point` packs toward.
 
-    Above the knee, the femoral shaft. Below it, the space between the
-    tibia and the fibula, two thirds of the way to the tibia.
+    Above the knee, the femur. Below it, whichever of the tibia and the
+    fibula is nearer, so a lateral belly settles on the fibula.
     """
-    var knee = _at(d.med_condyle, d.lat_condyle, 0.5)
-    if y >= knee.y:
-        return _along(d.lt, d.femur_mid, knee, y)
-    var tibia = _along(
-        _at(d.tib_med, d.tib_lat, 0.5), d.tibia_mid, d.plafond, y
-    )
-    var fibula = _along(d.fib_head, d.fibula_mid, d.lat_mal, y)
-    return _at(fibula, tibia, 0.67)
+    var bones = _bones_at(d, point.y)
+    var best = bones[0]
+    for index in range(1, len(bones)):
+        var bone = bones[index]
+        if _flat(point - bone).length() < _flat(point - best).length():
+            best = bone
+    return Vector3(best.x, point.y, best.z)
 
 
 def _bones_at(d: MuscleDimensions, y: Float32) -> List[Vector3]:

@@ -32,13 +32,13 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 `SkinField` fits the skin directly to the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
 
-Thirty transverse sections run from just below the tibial plafond to the iliac landmark. Each section slices every structure at its height. A slanted structure is sliced along its length, so its cut is an ellipse or a strip.
+Sixty transverse sections run from just below the tibial plafond to the iliac landmark, about a centimeter and a half apart. Each section slices every structure at its height. A slanted structure is sliced along its length, so its cut is an ellipse or a strip.
 
 Each slice outline is closed as a convex hull. Fat fills the gaps between muscles, so the hull is the outline you feel through the skin. `LOFT_RAYS` rays measure the hull's reach in each direction exactly. The polygon of those tangent lines exceeds the hull by less than half a percent.
 
 The section's cover goes outside the hull. The male template adds 7.3 mm of fat over the thigh and 5.5 mm over the calf. The female template adds 15.0 mm and 11.1 mm. The knee blends the two over a band three percent of stature either side of the joint line. The dermis, 1.8 mm, is part of the cover.
 
-A Catmull-Rom spline joins the sections and the rays. Two passes fill a groove one section long, as the fat over two muscle bellies does. Radii only grow, so every structure stays inside.
+A Catmull-Rom spline joins the sections and the rays. One pass fills a groove one section long, as the fat over two muscle bellies does. Radii only grow, so every structure stays inside.
 
 Below the plafond every structure belongs to the foot. The leg drops those stations, and its skin tapers inside the foot's skin. See [One skin for a limb](#one-skin-for-a-limb).
 

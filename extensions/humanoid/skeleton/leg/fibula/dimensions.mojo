@@ -371,8 +371,12 @@ def fibula_dimensions(
         head.y + 0.55 * styloid_len,
         head.z - 0.40 * styloid_len,
     )
+    # The shaft slants medially and forward as it descends, so the
+    # lateral malleolus hugs the talus: about two and a half centimeters
+    # lateral of the plafond's center, and a centimeter and a half behind
+    # it, as the tibia narrows from its plateau to its plafond.
     var malleolus = Vector3(
-        0.04 * L + 0.20 * bow, -0.5 * L + 0.35 * mal_h_len, -0.015 * L
+        -0.003 * L + 0.20 * bow, -0.5 * L + 0.35 * mal_h_len, 0.030 * L
     )
     if side == LEFT:
         head = flip_x(head)

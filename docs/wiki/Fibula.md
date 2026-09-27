@@ -58,6 +58,8 @@ The other linear measures are sex-specific ratios of that length. They are autho
 
 The shaft is a thin ellipse. The AP and ML diameters are independent. A proximal head and styloid meet a distal lateral malleolus.
 
+The shaft slants medially and forward as it descends, as the tibia narrows from its plateau to its plafond. The lateral malleolus hugs the talus: about 2.5 cm lateral of the plafond's center and 1.5 cm behind it.
+
 The mesh is a marching-tetrahedra isosurface. Connectivity and smooth normals come from the sampled field.
 
 `FibulaDimensions` is editable. Editing a length does not rebuild landmarks. Call `fibula_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.

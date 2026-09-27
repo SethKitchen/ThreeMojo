@@ -126,8 +126,8 @@ def test_bellies_pack_around_the_bones() raises:
     assert_true(moved > 40)
     # Tendons and the tract keep their authored stations.
     for part in [ILIOTIBIAL_TRACT, ACHILLES_TENDON, PATELLAR_TENDON]:
-        for k in range(6):
-            assert_equal(dims.bellies[part.value * 6 + k], 0)
+        for k in range(12):
+            assert_equal(dims.bellies[part.value * 12 + k], 0)
     # A deep belly sits closer to the femur packed than as authored,
     # and not inside it.
     var authored = dims

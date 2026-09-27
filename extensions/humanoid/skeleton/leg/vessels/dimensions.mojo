@@ -427,10 +427,13 @@ def _popliteal_vein(d: MuscleDimensions, S: Float32) -> TubeChain:
 
 
 def _great_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
+    """Return the great saphenous vein: in front of the medial malleolus,
+    up along the tibia's medial border, behind the knee's medial side,
+    and over the thigh to the groin."""
     var lat = _lat(d)
-    var p0 = d.med_mal + Vector3(-lat * 0.010 * S, 0, 0.008 * S)
+    var p0 = d.med_mal + Vector3(lat * 0.002 * S, 0, 0.010 * S)
     var p1 = mix_point(d.med_mal, d.tibia_mid, 0.58) + Vector3(
-        -lat * 0.020 * S, 0, 0.004 * S
+        -lat * 0.010 * S, 0, -0.004 * S
     )
     var p2 = d.med_condyle + Vector3(-lat * 0.026 * S, 0, -0.010 * S)
     var p3 = mix_point(d.med_condyle, d.hip, 0.62) + Vector3(
@@ -452,7 +455,8 @@ def _great_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
 
 def _small_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var p0 = d.lat_mal + Vector3(lat * 0.006 * S, 0, -0.010 * S)
+    # Behind the lateral malleolus.
+    var p0 = d.lat_mal + Vector3(-lat * 0.002 * S, 0, -0.010 * S)
     var p1 = mix_point(d.lat_mal, d.tibia_mid, 0.45) + Vector3(
         lat * 0.004 * S, 0, -0.026 * S
     )
