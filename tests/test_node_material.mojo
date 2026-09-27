@@ -946,7 +946,35 @@ def test_the_renderer_refuses_a_program_that_is_not_there() raises:
     _ = Renderer(SIZE, SIZE).render(scene, assets, a_camera())
 
 
-def test_lines_points_sprites_and_wide_lines_refuse_a_node_material() raises:
+def test_a_sprite_runs_its_node_material() raises:
+    # The square's coordinates, as a mesh's reach its graph: the middle of
+    # a sprite facing the camera is at (0.5, 0.5).
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE, graph.join([graph.uv(), graph.float(1)])
+    )
+    var id = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_sprite(Sprite(assets.materials.add(shader_material(id)), at))
+    scene.update()
+    var seen = middle(Renderer(SIZE, SIZE).render(scene, assets, a_camera()))
+    assert_equal(Int(seen.r), 188)
+    assert_equal(Int(seen.g), 188)
+    assert_equal(Int(seen.b), 255)
+    # A position node moves a mesh's vertices, which a sprite has none of.
+    var lifted_graph = lifted(True)
+    var moved = assets.programs.add(lifted_graph.compile())
+    var moving = Scene()
+    at = moving.add(Object3D())
+    moving.add_sprite(Sprite(assets.materials.add(shader_material(moved)), at))
+    moving.update()
+    with assert_raises(contains="A sprite's node material has no position node"):
+        _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
+
+
+def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
@@ -973,12 +1001,6 @@ def test_lines_points_sprites_and_wide_lines_refuse_a_node_material() raises:
     points.update()
     with assert_raises(contains="A point runs no node graph"):
         _ = renderer.render(points, assets, camera)
-    var sprites = Scene()
-    at = sprites.add(Object3D())
-    sprites.add_sprite(Sprite(noded, at))
-    sprites.update()
-    with assert_raises(contains="A sprite runs no node graph"):
-        _ = renderer.render(sprites, assets, camera)
     var wide = Scene()
     at = wide.add(Object3D())
     var sticks = assets.geometries.add(

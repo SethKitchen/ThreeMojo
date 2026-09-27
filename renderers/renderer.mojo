@@ -2987,7 +2987,16 @@ def _emit_sprite(
             "A sprite material must be BASIC: a sprite is a picture facing"
             " the camera, and no light reaches it"
         )
-    _refuse_nodes(material, "A sprite")
+    # A node material shades the square as it shades a mesh, three.js's
+    # `SpriteNodeMaterial`; a position node moves a mesh's own vertices,
+    # which a sprite has none of.
+    if _moves(assets, material):
+        raise Error(
+            "A sprite's node material has no position node: a sprite has no"
+            " vertices of its own to move"
+        )
+    var physics = _Physics()
+    physics.nodes = _checked_nodes(assets, material.nodes)
     if material.wireframe:
         raise Error(
             "A sprite cannot be a wireframe: it is a picture, and its"
@@ -3070,7 +3079,7 @@ def _emit_sprite(
         NO_CUBE_TEXTURE,
         1,
         MULTIPLY_OPERATION,
-        _Physics(),
+        physics,
         False,
         # three.js's `sprite` shader hashes its alpha, and neither dithers
         # nor premultiplies.
