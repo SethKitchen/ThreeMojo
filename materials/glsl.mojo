@@ -711,6 +711,13 @@ struct _Symbol(Copyable, Movable):
     var written: Bool
 
 
+# How a parameter passes its value: into the function, back out of it, or
+# both.
+comptime _IN = 0
+comptime _OUT = 1
+comptime _INOUT = 2
+
+
 @fieldwise_init
 struct _Function(Copyable, Movable):
     """A function of the shader: its signature and where its body is."""
@@ -719,6 +726,8 @@ struct _Function(Copyable, Movable):
     var result: _Type
     var types: List[_Type]
     var names: List[String]
+    # Each parameter's `_IN`, `_OUT` or `_INOUT`.
+    var modes: List[Int]
     # The body's opening and closing braces.
     var first: Int
     var last: Int
@@ -1628,18 +1637,21 @@ struct _Compiler(Movable):
         self.at += 1
         var types = List[_Type]()
         var names = List[String]()
+        var modes = List[Int]()
         if self.is_word("void") and self.peek(1) == ")":
             self.at += 1
         while not self.is_mark(")"):
             if len(types) > 0:
                 self.expect(",")
             _ = self.qualifiers()
-            if self.is_word("out") or self.is_word("inout"):
-                raise self.error(
-                    "out and inout parameters are outside the subset"
-                )
-            if self.is_word("in"):
+            var mode = _IN
+            if self.is_word("out"):
+                mode = _OUT
+            elif self.is_word("inout"):
+                mode = _INOUT
+            if self.is_word("in") or mode != _IN:
                 self.at += 1
+            modes.append(mode)
             _ = self.qualifiers()
             var type = self.type()
             if not type.holds():
@@ -1669,7 +1681,7 @@ struct _Compiler(Movable):
                     break
             self.at += 1
         self.functions.append(
-            _Function(name, result, types^, names^, first, self.at)
+            _Function(name, result, types^, names^, modes^, first, self.at)
         )
         self.at += 1
 
@@ -1704,8 +1716,12 @@ struct _Compiler(Movable):
         self.returned.append(_plain(_VOID, -1))
         var called = self.functions[function].copy()
         for index in range(len(args)):
-            var variable = self.graph.Var(NodeRef(args[index].node)).value
-            var value = _plain(args[index].type, args[index].node)
+            var start = args[index].node
+            if called.modes[index] == _OUT:
+                # An out parameter starts at zeros, not at its argument.
+                start = self.zero(args[index].type)
+            var variable = self.graph.Var(NodeRef(start)).value
+            var value = _plain(args[index].type, start)
             value.local = args[index].local
             self.declare(
                 _Symbol(called.names[index], _LOCAL, value^, variable, False)
@@ -1738,6 +1754,11 @@ struct _Compiler(Movable):
             # A transform known only as a step: an early return of one is
             # refused, so there is nothing to choose between.
             _ = self.graph.close_call(self.graph.float(0))
+        # What each out and inout parameter holds at the end.
+        var given = List[_Value]()
+        for index in range(len(args)):
+            if called.modes[index] != _IN:
+                given.append(self.read(called.names[index]))
         self.close()
         for index in range(len(hidden)):
             self.symbols.append(hidden[index].copy())
@@ -1745,6 +1766,15 @@ struct _Compiler(Movable):
         self.depth = depth
         self.loops = loops
         self.at = back
+        # Given back to the arguments, where the call runs.
+        var next = 0
+        for index in range(len(args)):
+            if called.modes[index] != _IN:
+                var value = given[next].copy()
+                value.symbol = -1
+                value.components = ""
+                self.assign(args[index], value)
+                next += 1
         return result^
 
     # --- statements ---------------------------------------------------------
@@ -3081,6 +3111,14 @@ struct _Compiler(Movable):
                     + called.types[arg].name()
                     + " as argument "
                     + String(arg + 1)
+                )
+            if called.modes[arg] != _IN and args[arg].symbol < 0:
+                raise self.error(
+                    "argument "
+                    + String(arg + 1)
+                    + " of "
+                    + called.name
+                    + " is given back: it must be a variable"
                 )
             _ = self.node(args[arg])
         var result = self.inline(index, args)

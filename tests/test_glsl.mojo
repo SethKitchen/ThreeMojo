@@ -1612,12 +1612,9 @@ def test_a_function_is_inlined_at_each_call() raises:
         "float f(float x);\nvoid main() {}", "prototypes are outside the subset"
     )
     refused(
-        "float f(out float x) { return 1.0; }\nvoid main() {}",
-        "out and inout parameters are outside",
-    )
-    refused(
-        "float f(inout float x) { return 1.0; }\nvoid main() {}",
-        "out and inout parameters are outside",
+        "void f(out float x) { x = 1.0; }\n"
+        + "void main() { f(2.0); gl_FragColor = vec4(1.0); }",
+        "argument 1 of f is given back: it must be a variable",
     )
     refused(
         "float f(sampler2D s) { return 1.0; }\nvoid main() {}",
@@ -2144,6 +2141,44 @@ def test_arrays_hold_elements_that_an_index_picks() raises:
         "uniform sampler2D maps[2];\n"
         + "void main() { int k = 0; gl_FragColor = texture2D(maps[k], vec2(0.5)); }\n",
         "an array of samplers is indexed by a constant",
+    )
+
+
+def test_out_and_inout_parameters_give_their_values_back() raises:
+    # ShaderToy's mainImage, called as its decoder calls it.
+    var toy = paint(
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        + "    fragColor = vec4(fragCoord / 100.0, 0.5, 1.0);\n"
+        + "}\n"
+        + "void main() { mainImage(gl_FragColor, gl_FragCoord.xy); }\n"
+    )
+    assert_lanes(toy, 0.105, 0.205, 0.5)
+    var before = (
+        "void twice(inout float x, out vec2 halves, float step) {\n"
+        + "    if (x > 3.0) { halves = vec2(x); return; }\n"
+        + "    x = x * 2.0 + step;\n"
+        + "    halves = vec2(x) * 0.5;\n"
+        + "}\n"
+    )
+    var body = (
+        "float a = 1.0; vec3 v = vec3(9.0);\n"
+        + "twice(a, v.xz, 1.0);\n"
+        + "float b = 5.0; vec2 kept = vec2(0.0);\n"
+        + "if (a > 2.0) { twice(b, kept, 0.0); }\n"
+    )
+    # a is 3, v gets halves of 1.5, b stays 5 past the early return.
+    assert_lanes(value("vec3(a, v.x, v.y)", before, body), 3, 1.5, 9)
+    assert_lanes(value("vec3(v.z, b, kept.x)", before, body), 1.5, 5, 5)
+    # An array's element picked where it runs takes the value back.
+    assert_lanes(
+        value(
+            "vec3(w[0], w[1], 0.0)",
+            "void one(out float x) { x = 1.0; }\n",
+            "float w[2]; int k = 1; one(w[k]);\n",
+        ),
+        0,
+        1,
+        0,
     )
 
 
