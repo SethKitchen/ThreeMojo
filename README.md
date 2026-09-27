@@ -227,7 +227,7 @@ The port is not at parity with three.js yet. 199 features are ported and 4 are o
 
 ### Loaders and exporters
 
-- [ ] TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
+- [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 
 <details>
 <summary>Ported: 21</summary>
