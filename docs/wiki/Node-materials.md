@@ -134,6 +134,8 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `gl_front_facing()` | `float` | GLSL's `gl_FrontFacing` | As `front_facing()`, but one on every face that a `BACK_SIDE` material draws. See [Facing](#facing). A fragment only. |
 | `frag_coord()` | `vec4` | GLSL's `gl_FragCoord` | The pixel's center in pixels from the bottom left, the depth from zero to one, and one. A fragment only. |
 | `texture(map, uv)` | `vec4` | `texture(map, uv)` | A texture read at a `vec2` coordinate, linear, with straight alpha. `map` is a `TextureId` or a texture uniform. |
+| `cube_uniform(name, map)` | `cubeTexture` | `cubeTexture(map)` | A named cube texture the caller can change with `set_cube`. |
+| `texture_cube(sampler, direction)` | `vec4` | `cubeTexture(map, dir)` | A cube texture read in a `vec3` direction of any length, linear, with straight alpha. The face the direction points at is read where it points. |
 | `texture_level(map, uv, level)` | `vec4` | `texture(map, uv).level(n)` | As `texture`, at the mip level that a `float` gives. Level zero is the full-size image. A texture with one level reads it at every level. |
 | `texture_load(map, at, level)` | `vec4` | `textureLoad(map, at, level)` | The texel of a texture uniform at a column and a row, counted as `uv` counts. A coordinate outside the image wraps, and a level outside the chain is held inside it. |
 | `texture_size(map, level)` | `vec2` | `textureSize(map, level)` | A texture uniform's width and height at a level, held inside the chain. |
@@ -302,7 +304,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` uniforms.
+- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`, and `sampler2D` and `samplerCube` uniforms.
 - Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Attributes: `position`, `normal`, `uv` and `color`, and custom attributes of a `float` or a vector. See [Custom attributes](#custom-attributes).
@@ -316,7 +318,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
-- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch` and `textureSize`.
+- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch`, `textureSize` and `textureCube`. `texture` of a `samplerCube` reads it in a direction, as `textureCube` does.
 - The preprocessor: `#version` in a raw shader, object-like `#define`, `#undef`, and `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` and `#endif`.
 - An `#if` condition: whole numbers, macros that are one whole number, `defined`, `!`, `&&`, `||`, the six comparisons and parentheses. A name that is not a macro is zero, as in the C preprocessor.
 
@@ -330,7 +332,7 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 
 - A `#include`, `#pragma`, `#extension`, `#error`, `#line`, and a `#define` with arguments. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint` and `uvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers.
+- The types `uint` and `uvec`, the non-square matrices, `sampler3D`, `sampler2DArray` and the other samplers.
 - Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes, parameters or fields, and an array read whole.
 - A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
 - A struct's field written through an index that is not constant.
