@@ -51,7 +51,9 @@ def a_ground(
     """Return a ground mirror under a red box, on layer three."""
     _ = red_box(assets, scene, Vector3(0, 1, 0))
     var floor = Object3D()
-    floor.set_euler(Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE))
+    floor.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
     floor.layers = Layers(UInt32(1 << 3))
     var node = scene.add(floor^)
     var mirror = ReflectorForSSR(
@@ -109,9 +111,7 @@ def test_with_depth_the_reflection_fades_by_height() raises:
     var faded_scene = Scene()
     var mirror = a_ground(faded_assets, faded_scene, True)
     assert_true(mirror.depth != NO_TEXTURE)
-    assert_true(
-        faded_assets.materials.get(mirror.mesh.material).transparent
-    )
+    assert_true(faded_assets.materials.get(mirror.mesh.material).transparent)
     var faded = total_red(drawn(mirror, faded_scene, faded_assets))
     # The reflection blends at most half in, so it is no longer bright.
     assert_true(faded < sharp)
