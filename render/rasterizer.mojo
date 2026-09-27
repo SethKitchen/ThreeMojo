@@ -3930,6 +3930,7 @@ def rasterize_shaded(
                             a.scatter_scale,
                             a.scatter_ambient,
                             a.receives_shadow,
+                            shape,
                         )
                         var share = thickness * a.scatter_attenuation
                         scatter = FloatColor(

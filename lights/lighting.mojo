@@ -2147,7 +2147,9 @@ struct Lighting(Movable):
             1.0,
         )
 
-    def scattered_at(
+    def scattered_at[
+        R: ShadowShape = Unshaped
+    ](
         self,
         normal: Vector3,
         position: Vector3,
@@ -2156,6 +2158,7 @@ struct Lighting(Movable):
         scale: Float32,
         ambient: Float32,
         receives: Bool = True,
+        shape: R = Unshaped(),
     ) -> FloatColor:
         """Return the light that shows through a surface from behind:
         three.js's `RE_Direct_Scattering`, summed over the lights with a
@@ -2173,6 +2176,8 @@ struct Lighting(Movable):
             scale: How bright it is.
             ambient: Light through from every side.
             receives: Whether the lights' shadows fall on this surface.
+            shape: What the surface makes of each light's shadow, three.js's
+                `receivedShadowNode`; the shadow as it falls by default.
 
         Returns:
             The light through, linear. Alpha is one.
@@ -2184,7 +2189,7 @@ struct Lighting(Movable):
         var green = Float32(0)
         var blue = Float32(0)
         for index in range(len(self.directions)):
-            var through = scattering_through(
+            var sent = scattering_through(
                 self.directions[index],
                 normal,
                 toward_eye,
@@ -2192,38 +2197,39 @@ struct Lighting(Movable):
                 power,
                 scale,
                 ambient,
-            ) * self.direction_through(index, position, normal, receives)
+            )
+            var shadowed = self.direction_through(
+                index, position, normal, receives, shape
+            )
             ref light = self.radiances[index]
-            red += light.r * through
-            green += light.g * through
-            blue += light.b * through
+            red += light.r * (sent * shadowed.x)
+            green += light.g * (sent * shadowed.y)
+            blue += light.b * (sent * shadowed.z)
         for index in range(len(self.positions)):
             var toward = self.positions[index] - position
             var distance = toward.length()
             if distance == 0:
                 continue
-            var reach = falloff(
+            var bare = falloff(
                 distance, self.decays[index], self.cutoffs[index]
-            ) * self.shadow_at(
-                self.point_shadows[index], position, normal, receives
+            )
+            var shadowed = self.shadow_through(
+                self.point_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
-            var through = (
-                scattering_through(
-                    toward,
-                    normal,
-                    toward_eye,
-                    distortion,
-                    power,
-                    scale,
-                    ambient,
-                )
-                * reach
+            var sent = scattering_through(
+                toward,
+                normal,
+                toward_eye,
+                distortion,
+                power,
+                scale,
+                ambient,
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * through
-            green += bulb.g * through
-            blue += bulb.b * through
+            red += bulb.r * (sent * (bare * shadowed.x))
+            green += bulb.g * (sent * (bare * shadowed.y))
+            blue += bulb.b * (sent * (bare * shadowed.z))
         for index in range(len(self.spot_positions)):
             var toward = self.spot_positions[index] - position
             var distance = toward.length()
@@ -2237,33 +2243,27 @@ struct Lighting(Movable):
             )
             if rim <= 0:
                 continue
-            var reach = (
-                rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-                * self.shadow_at(
-                    self.spot_shadows[index], position, normal, receives
-                )
+            var bare = rim * falloff(
+                distance, self.spot_decays[index], self.spot_cutoffs[index]
+            )
+            var shadowed = self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
             )
             toward.normalize()
-            var through = (
-                scattering_through(
-                    toward,
-                    normal,
-                    toward_eye,
-                    distortion,
-                    power,
-                    scale,
-                    ambient,
-                )
-                * reach
+            var sent = scattering_through(
+                toward,
+                normal,
+                toward_eye,
+                distortion,
+                power,
+                scale,
+                ambient,
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * through
-            green += bulb.g * tint.y * through
-            blue += bulb.b * tint.z * through
+            red += bulb.r * tint.x * (sent * (bare * shadowed.x))
+            green += bulb.g * tint.y * (sent * (bare * shadowed.y))
+            blue += bulb.b * tint.z * (sent * (bare * shadowed.z))
         return FloatColor(red, green, blue, 1.0)
 
     def direct_at(self, normal: Vector3, position: Vector3) -> FloatColor:

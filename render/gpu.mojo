@@ -2704,7 +2704,9 @@ def _highlight[
     return Vector3(red * scale, green * scale, blue * scale)
 
 
-def _scattered(
+def _scattered[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2724,6 +2726,7 @@ def _scattered(
     scale: Float32,
     ambient: Float32,
     receives: Bool,
+    shape: R = Unshaped(),
 ) -> Vector3:
     """Return the light that shows through a surface from behind: the
     device counterpart of `Lighting.scattered_at`, summing the kinds in the
@@ -2755,12 +2758,15 @@ def _scattered(
             lights[unsafe_offset=at + 1],
             lights[unsafe_offset=at + 2],
         )
-        var through = scattering_through(
+        var sent = scattering_through(
             toward, normal, toward_eye, distortion, power, scale, ambient
-        ) * _direction_through(lights, at, receives, place, normal)
-        red += lights[unsafe_offset=at + 3] * through
-        green += lights[unsafe_offset=at + 4] * through
-        blue += lights[unsafe_offset=at + 5] * through
+        )
+        var shadowed = _direction_through(
+            lights, at, receives, place, normal, shape
+        )
+        red += lights[unsafe_offset=at + 3] * (sent * shadowed.x)
+        green += lights[unsafe_offset=at + 4] * (sent * shadowed.y)
+        blue += lights[unsafe_offset=at + 5] * (sent * shadowed.z)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
@@ -2772,21 +2778,21 @@ def _scattered(
         var distance = toward.length()
         if distance == 0:
             continue
-        var reach = falloff(
+        var bare = falloff(
             distance,
             lights[unsafe_offset=at + 6],
             lights[unsafe_offset=at + 7],
-        ) * _point_through(lights, at + 8, receives, place, normal)
-        toward.normalize()
-        var through = (
-            scattering_through(
-                toward, normal, toward_eye, distortion, power, scale, ambient
-            )
-            * reach
         )
-        red += lights[unsafe_offset=at + 3] * through
-        green += lights[unsafe_offset=at + 4] * through
-        blue += lights[unsafe_offset=at + 5] * through
+        var shadowed = _point_shaped(
+            lights, at + 8, receives, place, normal, shape
+        )
+        toward.normalize()
+        var sent = scattering_through(
+            toward, normal, toward_eye, distortion, power, scale, ambient
+        )
+        red += lights[unsafe_offset=at + 3] * (sent * (bare * shadowed.x))
+        green += lights[unsafe_offset=at + 4] * (sent * (bare * shadowed.y))
+        blue += lights[unsafe_offset=at + 5] * (sent * (bare * shadowed.z))
     var first_spot = (
         first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
     )
@@ -2812,28 +2818,30 @@ def _scattered(
         )
         if rim <= 0:
             continue
-        var reach = (
-            rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
-            )
-            * _through(lights, at + 13, receives, place, normal)
+        var bare = rim * falloff(
+            distance,
+            lights[unsafe_offset=at + 9],
+            lights[unsafe_offset=at + 10],
+        )
+        var shadowed = _shaped_through(
+            lights, at + 13, receives, place, normal, shape
         )
         toward.normalize()
-        var through = (
-            scattering_through(
-                toward, normal, toward_eye, distortion, power, scale, ambient
-            )
-            * reach
+        var sent = scattering_through(
+            toward, normal, toward_eye, distortion, power, scale, ambient
         )
         var tint = _spot_tint(
             lights, texels, ramp, table, at + 14, place, normal
         )
-        red += lights[unsafe_offset=at + 6] * tint.x * through
-        green += lights[unsafe_offset=at + 7] * tint.y * through
-        blue += lights[unsafe_offset=at + 8] * tint.z * through
+        red += (
+            lights[unsafe_offset=at + 6] * tint.x * (sent * (bare * shadowed.x))
+        )
+        green += (
+            lights[unsafe_offset=at + 7] * tint.y * (sent * (bare * shadowed.y))
+        )
+        blue += (
+            lights[unsafe_offset=at + 8] * tint.z * (sent * (bare * shadowed.z))
+        )
     return Vector3(red, green, blue)
 
 
@@ -6541,6 +6549,7 @@ def rasterize_kernel(
                             corners[unsafe_offset=base + LANE_SCATTER + 7],
                             corners[unsafe_offset=base + LANE_SCATTER + 4],
                             receives,
+                            shape,
                         )
                         var share = (
                             thickness
