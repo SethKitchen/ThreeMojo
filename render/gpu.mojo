@@ -1846,6 +1846,13 @@ def flatten_programs(
 
     Args:
         programs: The store to flatten.
+        cube_base: The texture table's row of the first cube's first face:
+            how many flat textures were uploaded before the cubes.
+        blocks_base: Where the decoded 3D and array textures start in the
+            fog buffer, after every program.
+        volume_starts: Where each 3D texture's block starts, from
+            `blocks_base`; see `volume_blocks`.
+        array_starts: Where each array texture's block starts, the same.
 
     Returns:
         The floats, in id order.
