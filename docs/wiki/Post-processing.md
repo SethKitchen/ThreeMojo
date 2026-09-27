@@ -225,6 +225,24 @@ With `selective` on, only the objects on the `selects` layers reflect. three.js 
 
 With `bouncing` on, the reflections are read from the frame that the pass made last time, as three.js reads its `prevRenderTarget`. So the reflections gather one more bounce each frame. The first frame reads transparent black, as three.js's fresh target holds.
 
+#### A ground mirror
+
+`ReflectorForSSR` in `objects/reflector_for_ssr.mojo` is three.js's `ReflectorForSSRPass`: a mirror on the ground under the SSR pass. It is a [Reflector](Scene-objects) with three.js's own shader for the pass.
+
+```mojo
+var ground = ReflectorForSSR(assets, square, floor_node, use_depth_texture=True)
+scene.add_mesh(ground.mesh.copy())
+var step = ssr_pass()
+step.ssr.ground = Layers(UInt32(1 << 3))   # the layers the mirror's node is on
+```
+
+1. Put the mirror's node on layers of its own, and give those layers to the pass as `ground`. The pass lays no reflection over the mirror's pixels, because the mirror shows its own. three.js hides the mirror from the pass's normals instead, which leaves the same pixels unreflected.
+2. Call `ground.update(renderer, scene, assets, camera)` before each frame, as for a `Reflector`. three.js's pass calls `doRender` in its own beauty render. The composer here reads the scene and does not change it, so the caller updates the mirror.
+
+Without a depth texture, the mirror overlays the mirrored scene with its `color`, as a `Reflector` does. With `use_depth_texture`, it reads the height of each reflected point above the ground and blends. The reflection starts at `opacity`. It fades with the square of the height over `max_distance` (`distance_attenuation`), and by a fresnel factor of the camera's height (`fresnel`). A point higher than `max_distance` is not reflected.
+
+The ground is the plane `y = 0` in world space, and the clipping plane is `y = -clip_bias`, as in three.js. The fresnel factor reads the camera's world position. three.js reads its local `position`, which is the same for a camera at the scene's root.
+
 ### Outline
 
 `outline_pass(selection)` is three.js's `OutlinePass`. three.js takes a list of objects. This port takes a set of layers: the objects on those layers are selected. An empty set outlines nothing, as three.js's pass does with no objects.
@@ -274,7 +292,6 @@ With `use_pattern_texture` on, the selected objects are filled with a pattern. T
 
 ### Not ported in the screen-space passes
 
-- SSR's `groundReflector` and three.js's `ReflectorForSSRPass`.
 - The outline's `downSampleRatio`, which is fixed at two as in three.js.
 - A pass that the renderer's viewport or scissor narrows. The passes take the camera to fill the whole frame.
 

@@ -9733,6 +9733,41 @@ def test_both_backends_look_through_a_volume_alike() raises:
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_draw_a_ground_mirror_for_ssr_alike() raises:
+    # three.js's `ReflectorForSSRPass` with its depth texture: the mirror
+    # reads the mirrored scene and its depth projectively and fades by the
+    # reflected point's height, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends draw a ground mirror"):
+        return
+    from test_reflector_for_ssr import a_ground
+    from test_reflector import high_camera
+    from core.layers import Layers
+
+    var assets = Assets()
+    var scene = Scene()
+    var mirror = a_ground(assets, scene, True)
+    var renderer = Renderer(24, 24)
+    renderer.set_background(BACKGROUND)
+    var camera = high_camera()
+    camera.layers = Layers(UInt32(0xFFFFFFFF))
+    _ = mirror.update(renderer, scene, assets, camera)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(24, 24)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.

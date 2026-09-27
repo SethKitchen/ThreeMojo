@@ -1149,12 +1149,17 @@ struct SsrSettings(ImplicitlyCopyable):
     # `bouncing`: whether the reflections are read from the frame the pass
     # made last time, so they gather bounces frame by frame.
     var bouncing: Bool
+    # `groundReflector`, as the layers its `ReflectorForSSR` is on: the
+    # pass lays no reflection over the mirror's pixels, which show their
+    # own. None by default, as three.js's `null`.
+    var ground: Layers
 
     def __init__(out self):
         """Start with three.js's defaults."""
         self.selective = False
         self.selects = Layers(UInt32(0))
         self.bouncing = False
+        self.ground = Layers(UInt32(0))
         self.opacity = 0.5
         self.max_distance = Length(180.0, METER)
         self.thickness = Length(0.018, METER)
@@ -1412,6 +1417,7 @@ def ssr_light(
     settings: SsrSettings,
     selected: List[Bool] = List[Bool](),
     bounced: List[FloatColor] = List[FloatColor](),
+    ground: List[Bool] = List[Bool](),
 ) raises:
     """Lay what each surface reflects over the frame: three.js's `SSRPass`
     after its beauty render.
@@ -1429,6 +1435,9 @@ def ssr_light(
         bounced: With `settings.bouncing`, what the pass made last time,
             which the reflections are read from; empty, the first time,
             for transparent black, as three.js's fresh target holds.
+        ground: Whether each pixel shows the ground mirror, which
+            reflects nothing here: three.js hides the mirror from the
+            pass's normals. Empty for no mirror.
 
     Raises:
         Error: Everything `check_ssr` raises, or if the frame and the depth
@@ -1462,6 +1471,9 @@ def ssr_light(
             var chosen = slot < len(selected) and selected[slot]
             if not chosen:
                 reflections[slot] = FloatColor(0, 0, 0, 0)
+    for slot in range(len(ground)):
+        if ground[slot]:
+            reflections[slot] = FloatColor(0, 0, 0, 0)
     if output == EFFECT_OUTPUT:
         _show_reflections(frame, reflections)
         return

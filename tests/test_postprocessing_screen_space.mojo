@@ -1025,6 +1025,30 @@ def test_ssr_reflects_only_the_selected_and_bounces_off_the_last_frame() raises:
     assert_equal(count_changed(again, plain), 0)
 
 
+def test_ssr_lays_nothing_over_the_ground_mirror() raises:
+    var camera = a_camera()
+    var target = drawn(camera)
+    var view = view_of(target, camera)
+    var settings = SsrSettings()
+    settings.opacity = 1
+    settings.max_distance = meters(5)
+    settings.thickness = meters(0.2)
+    var plain = drawn(camera)
+    ssr_light(plain, view, settings)
+    assert_true(count_changed(plain, target) > 0)
+    # Every pixel the mirror's: no reflection is laid over.
+    var mirrored = drawn(camera)
+    ssr_light(
+        mirrored,
+        view,
+        settings,
+        List[Bool](),
+        List[FloatColor](),
+        List[Bool](length=WIDTH * HEIGHT, fill=True),
+    )
+    assert_equal(count_changed(mirrored, target), 0)
+
+
 def test_the_composer_runs_a_selective_bouncing_ssr() raises:
     var camera = a_camera()
     var scene_assets = Assets()

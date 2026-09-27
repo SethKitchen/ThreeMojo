@@ -2457,12 +2457,19 @@ struct EffectComposer(Movable):
                 selected = _covered(
                     renderer, scene, assets, camera, step.ssr.selects
                 )
+            # The ground mirror's pixels, which show their own reflection.
+            var ground = List[Bool]()
+            if step.ssr.ground.mask != 0:
+                ground = _covered(
+                    renderer, scene, assets, camera, step.ssr.ground
+                )
             ssr_light(
                 frame,
                 _depth_view(frame, camera),
                 step.ssr,
                 selected,
                 self.memories[index],
+                ground,
             )
             if step.ssr.bouncing:
                 self.memories[index] = frame.colors.copy()
