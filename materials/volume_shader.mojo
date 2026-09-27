@@ -124,53 +124,47 @@ vec4 add_lighting(float val, vec3 loc, vec3 step, vec3 view_ray) {
 }
 
 vec4 cast_mip(vec3 start_loc, vec3 step, int nsteps) {
-    float max_val = -1e6;
-    int max_i = 100;
-    vec3 loc = start_loc;
+    // The brightest value and the step it is at, as one vec2, and each
+    // step's place from the start: one chain of values through the
+    // unrolled march.
+    vec2 best = vec2(-1e6, 100.0);
     for (int iter = 0; iter < VOLUME_STEPS; iter++) {
-        if (iter >= nsteps) break;
-        float val = sample1(loc);
-        if (val > max_val) {
-            max_val = val;
-            max_i = iter;
-        }
-        loc += step;
+        float val = sample1(start_loc + step * float(iter));
+        if (iter < nsteps && val > best.x) best = vec2(val, float(iter));
     }
-    vec3 iloc = start_loc + step * (float(max_i) - 0.5);
+    float max_val = best.x;
+    vec3 iloc = start_loc + step * (best.y - 0.5);
     vec3 istep = step / float(REFINEMENT_STEPS);
     for (int i = 0; i < REFINEMENT_STEPS; i++) {
-        max_val = max(max_val, sample1(iloc));
-        iloc += istep;
+        max_val = max(max_val, sample1(iloc + istep * float(i)));
     }
     return apply_colormap(max_val);
 }
 
 vec4 cast_iso(vec3 start_loc, vec3 step, int nsteps, vec3 view_ray) {
+    vec3 dstep = 1.5 / u_size;
     float low_threshold = u_renderthreshold - 0.02 * (u_clim[1] - u_clim[0]);
-    int hit = -1;
-    vec3 loc = start_loc;
-    for (int iter = 0; iter < VOLUME_STEPS; iter++) {
-        if (iter >= nsteps) break;
-        if (sample1(loc) > low_threshold) {
-            hit = iter;
-            break;
-        }
-        loc += step;
-    }
-    if (hit < 0) return vec4(0.0);
-    vec3 iloc = loc - 0.5 * step;
     vec3 istep = step / float(REFINEMENT_STEPS);
-    vec4 color = vec4(0.0);
-    bool found = false;
-    for (int i = 0; i < REFINEMENT_STEPS; i++) {
-        float val = sample1(iloc);
-        if (!found && val > u_renderthreshold) {
-            color = add_lighting(val, iloc, step, view_ray);
-            found = true;
+    // The first step past the low threshold whose refinement finds the
+    // threshold, and the refinement step that finds it, as one vec2.
+    vec2 hit = vec2(-1.0, 0.0);
+    for (int iter = 0; iter < VOLUME_STEPS; iter++) {
+        vec3 loc = start_loc + step * float(iter);
+        float val = sample1(loc);
+        float first = -1.0;
+        for (int i = 0; i < REFINEMENT_STEPS; i++) {
+            vec3 iloc = loc - 0.5 * step + istep * float(i);
+            if (first < 0.0 && sample1(iloc) > u_renderthreshold) {
+                first = float(i);
+            }
         }
-        iloc += istep;
+        if (hit.x < 0.0 && iter < nsteps && val > low_threshold && first >= 0.0) {
+            hit = vec2(float(iter), first);
+        }
     }
-    return color;
+    if (hit.x < 0.0) return vec4(0.0);
+    vec3 iloc = start_loc + step * (hit.x - 0.5) + istep * hit.y;
+    return add_lighting(sample1(iloc), iloc, dstep, view_ray);
 }
 
 void main() {
