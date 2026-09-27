@@ -281,7 +281,8 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Functions: functions with `in` parameters. A call inlines the body. A `return` can come before the end of its function.
 - Statements: local variables, `if` and `else`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
-- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, constant indexes, and constructors of scalars, vectors and matrices.
+- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
+- Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
 - Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
@@ -290,13 +291,16 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` and `continue` must be in a loop of the same function.
 
+An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
+
 An `int` is a whole number that a float holds. An `int` division drops the fraction toward zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
 
 ### What the GLSL compiler refuses
 
 - A `#include`, and every directive but `#version` and an object-like `#define`. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, structs and arrays.
+- The types `uint`, `ivec`, `uvec`, `bvec`, the non-square matrices, `samplerCube`, `sampler3D` and the other samplers, and structs.
+- Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes or parameters, and an array read whole.
 - Global variables that are not `const`, and the qualifiers `flat`, `centroid` and `invariant`.
 - Custom attributes: only `position`, `normal`, `uv` and `color`.
 - `while`, `do`, `switch` and recursion.
@@ -305,7 +309,7 @@ An `int` is a whole number that a float holds. An `int` division drops the fract
 - The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
 - A matrix times a matrix of another size, and an assignment to a local matrix.
-- A sampler in a local variable, and a column index that is not a constant.
+- A sampler in a local variable, and a sampler array's index that is not a constant.
 - `modelMatrix`, `modelViewMatrix`, `projectionMatrix` and `normalMatrix` in any form but the ones above, and in a fragment shader.
 - A column of one of these or of `viewMatrix`, and a matrix constructor that reads one.
 - A `gl_Position` in any other form, written twice, in a branch or in a function.
