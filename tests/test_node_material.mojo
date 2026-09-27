@@ -1294,7 +1294,7 @@ def test_points_run_a_node_material() raises:
 
 def every_read(mut assets: Assets) raises -> NodeProgramId:
     """Return a program that reads every kind of texture, the fragment's
-    place, the screen and a varying point coordinate, times a zero uniform,
+    place and a varying point coordinate, times a zero uniform,
     plus white: what a point or a line shows is white, and every read ran.
     """
     from render.framebuffer import Framebuffer
@@ -1335,7 +1335,7 @@ def every_read(mut assets: Assets) raises -> NodeProgramId:
     )
     var extra = graph.add(
         graph.add(
-            graph.texture_size(named, graph.float(0)), graph.screen_uv()
+            graph.texture_size(named, graph.float(0)), graph.vec2(0, 0)
         ),
         graph.varying(place),
     )
