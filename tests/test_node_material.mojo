@@ -1548,5 +1548,110 @@ def test_points_and_lines_read_every_kind_of_texture() raises:
         assert_true(middle(renderer.render(lines, assets, a_camera())).r > 0)
 
 
+def every_read(mut assets: Assets) raises -> NodeProgramId:
+    """Return a program that reads every kind of texture, the fragment's
+    place, the screen and a varying point coordinate, times a zero uniform,
+    plus white: what a point or a line shows is white, and every read ran.
+    """
+    from render.framebuffer import Framebuffer
+    from render.texture import texture_of
+
+    var map = assets.textures.add(
+        texture_of(Framebuffer(2, 2, Color(255, 0, 0)))
+    )
+    var sky = assets.cube_textures.add(a_cube())
+    var cloud = assets.data_3d_textures.add(
+        Data3DTexture(a_stack(Color(255, 0, 0), Color(0, 255, 0)))
+    )
+    var layers = assets.data_array_textures.add(
+        DataArrayTexture(a_stack(Color(0, 0, 255), Color(255, 255, 0)))
+    )
+    var graph = NodeGraph()
+    var place = graph.point_coord()
+    var named = graph.texture_uniform("map", map)
+    var sum = graph.texture(map, graph.uv())
+    sum = graph.add(sum, graph.texture_level(map, place, graph.float(0)))
+    sum = graph.add(
+        sum, graph.texture_cube(graph.cube_uniform("sky"), graph.vec3(0, 0, 1))
+    )
+    sum = graph.add(
+        sum,
+        graph.texture_3d(
+            graph.volume_uniform("cloud"), graph.vec3(0.5, 0.5, 0.75)
+        ),
+    )
+    sum = graph.add(
+        sum,
+        graph.texture_array(
+            graph.array_uniform("layers"), graph.vec3(0.5, 0.5, 0)
+        ),
+    )
+    sum = graph.add(
+        sum, graph.texture_load(named, graph.vec2(0, 0), graph.float(0))
+    )
+    var extra = graph.add(
+        graph.add(
+            graph.texture_size(named, graph.float(0)), graph.screen_uv()
+        ),
+        graph.varying(place),
+    )
+    var zero = graph.uniform("zero", Float32(0))
+    var rgb = graph.add(
+        graph.swizzle(sum, "rgb"),
+        graph.join([extra, graph.swizzle(graph.frag_coord(), "z")]),
+    )
+    graph.set_output(
+        COLOR_NODE, graph.add(graph.mul(rgb, zero), graph.vec3(1, 1, 1))
+    )
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
+    graph.set_output(SIZE_NODE, graph.float(4))
+    var id = assets.programs.add(graph.compile())
+    assets.programs.get(id).set_cube("sky", sky)
+    assets.programs.get(id).set_volume("cloud", cloud)
+    assets.programs.get(id).set_array("layers", layers)
+    return id
+
+
+def test_points_and_lines_read_every_kind_of_texture() raises:
+    var assets = Assets()
+    var id = every_read(assets)
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    # An opacity alone, with no color: the material's color shows.
+    var faint = NodeGraph()
+    faint.set_output(OPACITY_NODE, faint.float(0.5))
+    faint.set_output(POSITION_NODE, faint.vec3(0, 0, 0))
+    var faded = assets.materials.add(
+        Material(
+            Color(255, 255, 255), kind=BASIC, nodes=assets.programs.add(
+                faint.compile()
+            )
+        )
+    )
+    var one = BufferGeometry()
+    one.set_attribute(String(POSITION), BufferAttribute([Float32(0), 0, 0], 3))
+    one.set_attribute(String(UV), BufferAttribute([Float32(0.5), 0.5], 2))
+    var dot = assets.geometries.add(one^)
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION), BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3)
+    )
+    bare.set_attribute(String(UV), BufferAttribute([Float32(0), 0, 1, 0], 2))
+    var stroke = assets.geometries.add(bare^)
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.shading = SHADE_TEXTURE
+    renderer.set_background(Color(0, 0, 0))
+    for material in [noded, faded]:
+        var points = Scene()
+        points.add_points(Points(dot, material, points.add(Object3D())))
+        points.update()
+        assert_true(middle(renderer.render(points, assets, a_camera())).r > 0)
+        var lines = Scene()
+        lines.add_line(Line(stroke, material, lines.add(Object3D())))
+        lines.update()
+        assert_true(middle(renderer.render(lines, assets, a_camera())).r > 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
