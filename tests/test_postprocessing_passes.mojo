@@ -28,6 +28,7 @@ from materials.nodes import (
     MASK_NODE,
     NO_NODES,
     OPACITY_NODE,
+    PROGRAM_TIME,
     OUTPUT_NODE,
     NodeGraph,
     NodeProgram,
@@ -898,7 +899,7 @@ def test_screen_code_binds_the_samplers_and_the_time() raises:
     var program = compile_shader_material(SCREEN_VERTEX_SHADER, FRAGMENT)
     var settings = ShaderSettings(NodeProgramId(0))
     var unbound = screen_code(program, settings, 2.5)
-    near(unbound[18], 2.5)
+    near(unbound[PROGRAM_TIME], 2.5)
     settings.saved = "tSaved"
     settings.saved_pass = 0
     var code = screen_code(program, settings, 0)
@@ -930,7 +931,7 @@ def test_a_program_without_uniforms_binds_nothing_and_reads_nothing() raises:
     settings.saved_pass = 0
     var code = screen_code(program, settings, 1.5)
     assert_equal(len(code), len(program.code))
-    near(code[18], 1.5)
+    near(code[PROGRAM_TIME], 1.5)
     assert_false(reads_assets(program, settings))
     var frame = RenderTarget(2, 2, Color(255, 0, 0))
     shader_light(
