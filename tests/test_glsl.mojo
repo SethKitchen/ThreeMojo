@@ -1452,7 +1452,7 @@ def test_the_statements_build_the_graph() raises:
     refused_statement("float x = y;", "the name y is not declared")
     refused_statement("if (1.0) {}", "an if needs a bool, not a float")
     refused_statement("while (true) {}", "while is outside the subset")
-    refused_statement("break;", "break needs a loop to be in")
+    refused_statement("break;", "break needs a loop or a switch to be in")
     refused_statement("continue;", "continue needs a loop to be in")
     refused_statement("{ float a = 1.0;", "a function's body is never closed")
     refused("void main() { float a = 1.0;", "a function's body is never closed")
@@ -2345,6 +2345,64 @@ def test_structs_are_their_fields() raises:
     )
 
 
+def test_a_switch_falls_through_to_its_break() raises:
+    var pick = (
+        "float pick(int k) {\n"
+        + "    float r = 0.0;\n"
+        + "    switch (k) {\n"
+        + "    case 0: r = 10.0; break;\n"
+        + "    case 1:\n"
+        + "    case 2: r += 1.0;\n"
+        + "    default: r += 2.0; break;\n"
+        + "    case 5: { float t = 7.0; r = t; }\n"
+        + "    }\n"
+        + "    return r;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(pick(0), pick(1), pick(3))", pick), 10, 3, 2)
+    assert_lanes(
+        value("vec3(pick(5), pick(k), 0.0)", pick, "int k = 2;\n"), 7, 3, 0
+    )
+    # In a loop, a continue continues the loop and a break leaves the
+    # switch, and a switch in a switch passes the continue out.
+    var body = (
+        "float s = 0.0;\n"
+        + "for (int i = 0; i < 6; i++) {\n"
+        + "    switch (i) {\n"
+        + "    case 1: continue;\n"
+        + "    case 4: break;\n"
+        + "    case 5: switch (i) { default: continue; }\n"
+        + "    default: s += float(i);\n"
+        + "    }\n"
+        + "    s += 10.0;\n"
+        + "}\n"
+    )
+    assert_lanes(value("vec3(s)", "", body), 45, 45, 45)
+    refused_statement(
+        "switch (1.0) { default: break; }",
+        "a switch chooses by an int, not a float",
+    )
+    refused_statement(
+        "switch (1) { case 1: case 1: break; }", "the case 1 is listed twice"
+    )
+    refused_statement(
+        "switch (1) { default: default: break; }", "a switch has one default"
+    )
+    refused_statement(
+        "int u = 1; switch (1) { case u: break; }",
+        "a case label is a constant int",
+    )
+    refused_statement(
+        "switch (1) { break; }",
+        "a switch's statements follow a case or a default",
+    )
+    refused_statement(
+        "switch (1) { case 1: float x = 1.0; }",
+        "declare a variable before the switch, or in a block",
+    )
+    refused_statement("case 1: ;", "case and default belong in a switch")
+
+
 def test_break_continue_and_an_early_return_are_read() raises:
     # Odd numbers skipped, and the loop left past seven: 0 + 2 + 4 + 6.
     var loop = (
@@ -2403,7 +2461,7 @@ def test_break_continue_and_an_early_return_are_read() raises:
             "    for (int i = 0; i < 2; i++) { stop(); }\n"
             "    gl_FragColor = vec4(1.0);\n}\n"
         ),
-        "break needs a loop to be in",
+        "break needs a loop or a switch to be in",
     )
     refused(
         "void main() { gl_FragColor = vec4(1.0); }",

@@ -107,7 +107,9 @@ comptime _REFUSED_FUNCTIONS = (
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
-comptime _REFUSED_STATEMENTS = " while do switch case default "
+comptime _REFUSED_STATEMENTS = " while do "
+# What a `break` leaves when it is a loop's; see `_Compiler.breakables`.
+comptime _A_LOOP = -2
 comptime _BIT_MARKS = " | & ^ << >> ~ "
 
 
@@ -905,6 +907,9 @@ struct _Compiler(Movable):
     # How many loops the function being built is inside, for `break` and
     # `continue`: a loop around a call is its caller's, not its own.
     var loops: Int
+    # What a `break` leaves, innermost last: False for a loop, and for a
+    # switch the variable a `continue` in it sets, or -1 outside a loop.
+    var breakables: List[Int]
     # The uniforms both shaders declare, and the varyings.
     var uniforms: List[_Symbol]
     var varyings: List[_Varying]
@@ -934,6 +939,7 @@ struct _Compiler(Movable):
         self.returned = List[_Value]()
         self.depth = 0
         self.loops = 0
+        self.breakables = List[Int]()
         self.uniforms = List[_Symbol]()
         self.varyings = List[_Varying]()
         self.position = -1
@@ -2014,6 +2020,7 @@ struct _Compiler(Movable):
         var back = self.at
         var depth = self.depth
         var loops = self.loops
+        var breakables = self.breakables.copy()
         # A function sees the built-ins, the globals and its own names, not
         # its caller's.
         var globals_end = self.scopes[2] if len(self.scopes) > 2 else len(
@@ -2052,6 +2059,7 @@ struct _Compiler(Movable):
         self.at = called.first + 1
         self.depth = 0
         self.loops = 0
+        self.breakables = List[Int]()
         # A call is a frame of the graph's, for an early return, unless it
         # returns a matrix, which no register holds.
         var framed = (
@@ -2090,6 +2098,7 @@ struct _Compiler(Movable):
         self.scopes = scopes^
         self.depth = depth
         self.loops = loops
+        self.breakables = breakables^
         self.at = back
         # Given back to the arguments, where the call runs.
         var next = 0
@@ -2132,16 +2141,22 @@ struct _Compiler(Movable):
             self.graph.Discard()
         elif self.is_word("return"):
             self.return_statement()
-        elif self.is_word("break") or self.is_word("continue"):
-            var word = self.peek()
-            if self.loops == 0:
-                raise self.error(word + " needs a loop to be in")
+        elif self.is_word("break"):
+            if len(self.breakables) == 0:
+                raise self.error("break needs a loop or a switch to be in")
             self.at += 1
             self.expect(";")
-            if word == "break":
-                self.graph.Break()
-            else:
-                self.graph.Continue()
+            self.graph.Break()
+        elif self.is_word("continue"):
+            if self.loops == 0:
+                raise self.error("continue needs a loop to be in")
+            self.at += 1
+            self.expect(";")
+            self.continue_here()
+        elif self.is_word("switch"):
+            self.switch_statement()
+        elif self.is_word("case") or self.is_word("default"):
+            raise self.error("case and default belong in a switch")
         elif self.is_word("struct"):
             raise self.error("a struct is declared outside every function")
         elif _listed(self.peek(), _REFUSED_STATEMENTS):
@@ -2150,6 +2165,121 @@ struct _Compiler(Movable):
             self.local_declaration()
         else:
             self.expression_statement()
+
+    def continue_here(mut self) raises:
+        """Build a `continue`: the loop's own, or, in a switch, a flag the
+        switch's end continues by, after a break out of the switch."""
+        var innermost = self.breakables[len(self.breakables) - 1]
+        if innermost == _A_LOOP:
+            self.graph.Continue()
+            return
+        self.graph.assign(NodeVar(innermost), self.graph.float(1))
+        self.graph.Break()
+
+    def switch_statement(mut self) raises:
+        """Parse `switch (i) { case 1: ... default: ... }` as a loop of one
+        time through, which a `break` leaves: each statement runs where a
+        case before it matched, so a case falls through to the next.
+
+        Raises:
+            Error: If the selector is not an int, a label is not a constant
+                int or is listed twice, or a statement is before every label
+                or declares a variable.
+        """
+        self.at += 1
+        self.expect("(")
+        var selector = self.expression()
+        self.expect(")")
+        if selector.type != _TINT:
+            raise self.error(
+                "a switch chooses by an int, not a " + selector.type.name()
+            )
+        var chosen = self.node(selector)
+        self.expect("{")
+        var body = self.at
+        # The labels, read ahead, so the default knows whether any matches.
+        # The braces balance: `function` counted them.
+        var labels = List[Float64]()
+        var defaults = 0
+        var nesting = 0
+        while nesting > 0 or not self.is_mark("}"):
+            if self.is_mark("{"):
+                nesting += 1
+            elif self.is_mark("}"):
+                nesting -= 1
+            elif nesting == 0 and self.is_word("case"):
+                self.at += 1
+                var label = self.additive()
+                if label.type != _TINT or not label.known:
+                    raise self.error("a case label is a constant int")
+                for index in range(len(labels)):
+                    if labels[index] == label.number:
+                        raise self.error(
+                            "the case "
+                            + String(Int(label.number))
+                            + " is listed twice"
+                        )
+                labels.append(label.number)
+                continue
+            elif nesting == 0 and self.is_word("default"):
+                defaults += 1
+                if defaults > 1:
+                    raise self.error("a switch has one default")
+            self.at += 1
+        self.at = body
+        var matched = self.graph.float(0)
+        for index in range(len(labels)):
+            matched = self.graph.logical_or(
+                matched,
+                self.graph.equal(chosen, self.graph.float(Float32(labels[index]))),
+            )
+        # A continue in the switch breaks out of it and sets this.
+        var continued = -1
+        if self.loops > 0:
+            continued = self.graph.Var(self.graph.float(0)).value
+        var entered = self.graph.Var(self.graph.float(0))
+        _ = self.graph.Loop(1)
+        self.open()
+        self.depth += 1
+        self.breakables.append(continued)
+        var labeled = False
+        while not self.is_mark("}"):
+            var hit: NodeRef
+            if self.is_word("case"):
+                self.at += 1
+                var label = self.additive()
+                self.expect(":")
+                hit = self.graph.equal(chosen, self.graph.float(Float32(label.number)))
+            elif self.is_word("default"):
+                self.at += 1
+                self.expect(":")
+                hit = self.graph.logical_not(matched)
+            else:
+                if not labeled:
+                    raise self.error(
+                        "a switch's statements follow a case or a default"
+                    )
+                if self.starts_declaration():
+                    raise self.error(
+                        "declare a variable before the switch, or in a block"
+                    )
+                self.graph.If(self.graph.get(entered))
+                self.statement()
+                self.graph.End()
+                continue
+            labeled = True
+            self.graph.assign(
+                entered, self.graph.logical_or(self.graph.get(entered), hit)
+            )
+        self.at += 1
+        _ = self.breakables.pop()
+        self.depth -= 1
+        self.close()
+        self.graph.End()
+        if continued >= 0:
+            self.graph.If(self.graph.get(NodeVar(continued)))
+            self.continue_here()
+            self.graph.End()
 
     def starts_declaration(self) -> Bool:
         """Return True if the current token begins a local declaration: a
@@ -2429,7 +2559,9 @@ struct _Compiler(Movable):
         self.declare(_Symbol(name, _INDEX, _plain(type, node.value), -1, False))
         self.depth += 1
         self.loops += 1
+        self.breakables.append(_A_LOOP)
         self.statement()
+        _ = self.breakables.pop()
         self.loops -= 1
         self.depth -= 1
         self.close()
