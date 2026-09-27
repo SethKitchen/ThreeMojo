@@ -3092,6 +3092,7 @@ def test_the_corners_of_the_subset() raises:
     assert_lanes(paint("#if 1 // a note\n#endif" + white), 1, 1, 1)
     assert_lanes(paint("#if NOPE\n#else\n#endif" + white), 1, 1, 1)
     refused("#if (1 2)\n#endif" + white, "an #if condition leaves a ( open")
+    refused("#if 4 / 2\n#endif" + white, "the character / is outside an #if")
     refused("#if defined\n#endif" + white, "defined names a macro")
     refused(
         "#if defined(A 2)\n#endif" + white, "an #if condition leaves a ( open"
@@ -3142,6 +3143,26 @@ def test_the_corners_of_the_subset() raises:
         number("m[0][0] + n[1][1]", "", "mat3 m = mat3(1.0), n = mat3(2.0);"), 3
     )
     assert_equal(number("float(int(true))"), 1)
+    assert_equal(number("float(ivec2(true).y)"), 1)
+    # An index the shader picks at run time, into one element.
+    assert_equal(
+        number(
+            "x", "uniform int k;", "float a[1] = float[1](2.0); float x = a[k];"
+        ),
+        2,
+    )
+    refused(
+        "uniform sampler2DArray t;\nvoid main() { float x = t;"
+        + " gl_FragColor = vec4(1.0); }",
+        "a sampler2DArray",
+    )
+    refused(
+        white,
+        "cannot make a mat4 of a mat4",
+        "void main() { mat4 m = mat4(modelMatrix);"
+        + " gl_Position = projectionMatrix * modelViewMatrix"
+        + " * vec4(position, 1.0); }",
+    )
     assert_equal(
         number(
             "a[0][0] + b[1][1]",
@@ -3166,7 +3187,7 @@ def test_the_corners_of_the_subset() raises:
         shape + "const S c = 1.0;" + white,
         "a const S's value must be a constant S",
     )
-    refused_statement("case 1: ;", "case and default belong in a switch")
+    refused_statement("default: ;", "case and default belong in a switch")
     refused_statement(
         "int i = 0; switch (i) { case 1.0: break; }",
         "a case label is a constant int",
