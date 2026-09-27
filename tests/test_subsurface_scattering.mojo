@@ -12,7 +12,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from lights.light import directional_light, point_light, spot_light
-from lights.lighting import scattering_through
+from lights.lighting import Lighting, scattering_through
 from materials.material import (
     LAMBERT,
     NO_SCATTERING,
@@ -92,14 +92,19 @@ def lit_from_behind(
     return scene^
 
 
-def middle_of(mut assets: Assets, scene: Scene) raises -> Color:
-    """Return the middle pixel of the square, seen from four meters."""
+def middle_of(
+    mut assets: Assets, scene: Scene, lit_only: Bool = False
+) raises -> Color:
+    """Return the middle pixel of the square, seen from four meters, and
+    under `SHADE_LIT` when `lit_only`."""
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE), 1, Length(0.1, METER), Length(100.0, METER)
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     var renderer = Renderer(SIZE, SIZE)
     renderer.set_background(Color(0, 0, 0))
+    if lit_only:
+        renderer.set_shading(SHADE_LIT)
     return renderer.render(scene, assets, camera).get_pixel(
         SIZE // 2, SIZE // 2
     )
@@ -123,6 +128,14 @@ def test_a_sun_behind_a_thin_surface_shows_through() raises:
     )
     assert_equal(Int(through.r), 128)
     assert_equal(Int(through.b), 128)
+    # A mode that opens no texture reads no thickness, and nothing shows
+    # through.
+    var unread = middle_of(
+        assets,
+        lit_from_behind(assets, "sun", True, Color(128, 128, 128)),
+        lit_only=True,
+    )
+    assert_equal(Int(unread.r), 0)
 
 
 def test_a_bulb_and_a_spot_behind_show_through_too() raises:
@@ -184,6 +197,42 @@ def test_a_thickness_map_must_be_there_and_hold_data() raises:
     scene.update()
     with assert_raises(contains="A thickness map is named that is not there"):
         _ = middle_of(assets, scene)
+
+
+def test_nothing_shows_through_where_a_light_cannot_reach() raises:
+    # A surface at the eye sees nothing through it. A surface on the bulb
+    # and the spot is lit by neither, and one outside the narrow spot's
+    # cone by the bulb alone.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, -2)
+    var at = scene.add(lamp^)
+    scene.add_light(point_light(Color(255, 255, 255), at, 1.0))
+    scene.add_light(
+        spot_light(Color(255, 255, 255), at, 1.0, angle=Angle(10.0, DEGREE))
+    )
+    scene.update()
+    var eye = Vector3(0, 0, 4)
+    var lighting = Lighting(scene, eye=eye)
+    var normal = Vector3(0, 0, 1)
+    assert_equal(lighting.scattered_at(normal, eye, 0.1, 2, 10, 0.5).r, 0)
+    assert_equal(
+        lighting.scattered_at(normal, Vector3(0, 0, -2), 0.1, 2, 10, 0.5).r,
+        0,
+    )
+    var aside = lighting.scattered_at(normal, Vector3(3, 0, 0), 0.1, 2, 10, 0.5)
+    var bulb_only = Scene()
+    var bare = Object3D()
+    bare.set_position(0, 0, -2)
+    bulb_only.add_light(
+        point_light(Color(255, 255, 255), bulb_only.add(bare^), 1.0)
+    )
+    bulb_only.update()
+    var alone = Lighting(bulb_only, eye=eye).scattered_at(
+        normal, Vector3(3, 0, 0), 0.1, 2, 10, 0.5
+    )
+    assert_true(aside.r > 0)
+    assert_equal(aside.r, alone.r)
 
 
 def main() raises:

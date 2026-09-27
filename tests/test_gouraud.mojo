@@ -14,7 +14,13 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
-from lights.light import ambient_light, directional_light, point_light
+from lights.light import (
+    ambient_light,
+    directional_light,
+    point_light,
+    spot_light,
+)
+from lights.lighting import Lighting
 from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
@@ -28,6 +34,8 @@ from materials.material import (
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
+from render.srgb import LINEAR
+from render.texture import IGNORED, NEAREST, REPEAT, Texture
 from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,
@@ -210,6 +218,80 @@ def test_a_gouraud_material_has_no_normal_map() raises:
     assert_true(GOURAUD.reflects())
     assert_true(GOURAUD.has_specular_map())
     assert_true(GOURAUD.has_indirect())
+
+
+def test_an_ao_map_takes_a_gouraud_surface_s_ambient_light() raises:
+    # Lit at the corners, the ambient light is still dimmed at each
+    # fragment by the ao map, three.js's `aomap_fragment`. Two squares of
+    # the one material share one lighting of their corners.
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    var seen = List[Int]()
+    for mapped in [False, True]:
+        var assets = Assets()
+        var scene = Scene()
+        var paint = Material(Color(255, 255, 255), kind=GOURAUD)
+        if mapped:
+            paint.ao_map = assets.textures.add(
+                Texture(
+                    1,
+                    1,
+                    [UInt8(0), 0, 0, 255],
+                    REPEAT,
+                    NEAREST,
+                    LINEAR,
+                    False,
+                    IGNORED,
+                )
+            )
+        var painted = assets.materials.add(paint)
+        var square = assets.geometries.add(
+            plane(Length(2.0, METER), Length(2.0, METER))
+        )
+        for across in [Float32(-1.1), Float32(1.1)]:
+            var node = Object3D()
+            node.set_position(across, 0, 0)
+            scene.add_mesh(Mesh(square, painted, scene.add(node^)))
+        scene.add_light(ambient_light(Color(255, 255, 255)))
+        scene.update()
+        var image = renderer.render(scene, assets, camera_at(6))
+        seen.append(Int(image.get_pixel(SIZE // 4, SIZE // 2).r))
+        seen.append(Int(image.get_pixel(3 * SIZE // 4, SIZE // 2).r))
+    assert_true(seen[0] > 100)
+    assert_equal(seen[0], seen[1])
+    assert_equal(seen[2], 0)
+    assert_equal(seen[3], 0)
+
+
+def test_the_corners_skip_a_light_that_cannot_reach_them() raises:
+    # A bulb on the corner, and a narrow spot whose cone misses it or which
+    # is behind it: none lights the corner. A sun does.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 2)
+    var at = scene.add(lamp^)
+    scene.add_light(point_light(Color(255, 255, 255), at, 1.0))
+    scene.add_light(
+        spot_light(Color(255, 255, 255), at, 1.0, angle=Angle(10.0, DEGREE))
+    )
+    scene.update()
+    var lighting = Lighting(scene)
+    var up = Vector3(0, 0, 1)
+    # On the bulb, and in the spot's cone but with the spot behind.
+    assert_equal(lighting.direct_at(up, Vector3(0, 0, 2)).r, 0)
+    assert_equal(lighting.direct_at(Vector3(0, 0, -1), Vector3(0, 0, 0)).r, 0)
+    # Out of the spot's cone, the bulb alone lights the corner.
+    var aside = lighting.direct_at(up, Vector3(3, 0, 0))
+    var bulb_only = Scene()
+    var bare = Object3D()
+    bare.set_position(0, 0, 2)
+    bulb_only.add_light(
+        point_light(Color(255, 255, 255), bulb_only.add(bare^), 1.0)
+    )
+    bulb_only.update()
+    assert_equal(aside.r, Lighting(bulb_only).direct_at(up, Vector3(3, 0, 0)).r)
+    # Straight under both, each adds its light.
+    assert_true(lighting.direct_at(up, Vector3(0, 0, 0)).r > aside.r)
 
 
 def main() raises:
