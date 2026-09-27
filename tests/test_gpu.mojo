@@ -4352,7 +4352,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(11)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(12)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)

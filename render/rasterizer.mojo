@@ -2060,7 +2060,7 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the eleven")
+        raise Error("A triangle's material kind is none of the twelve")
     if b.receives_shadow != a.receives_shadow or (
         c.receives_shadow != a.receives_shadow
     ):

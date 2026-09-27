@@ -2635,10 +2635,10 @@ def test_a_data_material_draws_the_same_on_one_worker_and_on_four() raises:
 
 
 def test_an_unknown_material_kind_is_refused_even_when_agreed() raises:
-    # `MaterialKind(11)` constructs, because a struct's fields are open, and
+    # `MaterialKind(12)` constructs, because a struct's fields are open, and
     # neither backend has a fragment path for it. Agreement is not enough.
     var target = RenderTarget(8, 8, Color(0, 0, 0))
-    var corners = data_quad(MaterialKind(11))
+    var corners = data_quad(MaterialKind(12))
     with assert_raises():
         rasterize_shaded(corners[0], corners[1], corners[2], target)
     for workers in [1, 4]:
