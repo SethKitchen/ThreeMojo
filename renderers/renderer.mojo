@@ -214,9 +214,12 @@ from units.si import (
 from materials.nodes import (
     NO_NODES,
     POSITION_NODE,
+    SIZE_NODE,
+    NodeInputs,
     NodeProgramId,
     NodeProgramStore,
     moved_position,
+    point_size_of,
 )
 from render.pointrule import attenuated_size
 from render.texture import IGNORED, Texture
@@ -5969,8 +5972,25 @@ struct Renderer(Movable):
             if not scene.shows(points.node, camera.visible_layers()):
                 continue
             var world = scene.world_matrix(points.node)
-            if points.frustum_culled and not _in_view(
-                assets, points.geometry, world, frustum, slack, bounds, known
+            # A position node moves the points past the bound of their
+            # geometry, so such points are not culled by it, as a mesh's
+            # are not.
+            var own_nodes = assets.materials.get(points.material).nodes
+            var moved = own_nodes != NO_NODES and _checked_nodes(
+                assets, own_nodes
+            ) != NO_NODES and assets.programs.get(own_nodes).has(POSITION_NODE)
+            if (
+                points.frustum_culled
+                and not moved
+                and not _in_view(
+                    assets,
+                    points.geometry,
+                    world,
+                    frustum,
+                    slack,
+                    bounds,
+                    known,
+                )
             ):
                 continue
             var depth = view.transform_point(
@@ -5988,7 +6008,11 @@ struct Renderer(Movable):
                 self.drawn_override(scene), own, points.material
             )
             var material = assets.materials.get(drawn)
-            _refuse_nodes(material, "A point")
+            # A node material shades each point's square as it shades a
+            # triangle, three.js's `PointsNodeMaterial` and a
+            # `ShaderMaterial` on `Points`.
+            var physics = _Physics()
+            physics.nodes = _checked_nodes(assets, material.nodes)
             # three.js's `points` shader premultiplies and does not dither.
             # A light's view takes the default state; see `_draw_state`.
             var state = _draw_state(material, casters_only, False, False, True)
@@ -6053,16 +6077,34 @@ struct Renderer(Movable):
             var colors = _vertex_colors(
                 geometry, material.vertex_colors, base, vertex_count
             )
+            # What a node program reads of each point: its coordinates
+            # and its custom attributes, raw, as a mesh's corner has them.
+            var noded = physics.nodes != NO_NODES
+            var coordinates = _coordinates(geometry, String(UV), vertex_count)
+            var customs = _customs(assets, material, geometry, vertex_count)
+            var moves = noded and assets.programs.get(physics.nodes).has(
+                POSITION_NODE
+            )
+            var sized = noded and assets.programs.get(physics.nodes).has(
+                SIZE_NODE
+            )
             # Only the points the draw range lets through.
             var ranged = geometry.drawn_vertices()
             for vertex in range(ranged[0], ranged[0] + ranged[1]):
-                var point = world.transform_point(
-                    Vector3(
-                        positions.component(vertex, 0),
-                        positions.component(vertex, 1),
-                        positions.component(vertex, 2),
-                    )
+                var local = Vector3(
+                    positions.component(vertex, 0),
+                    positions.component(vertex, 1),
+                    positions.component(vertex, 2),
                 )
+                # A position node moves it in the model's own space; a
+                # point has no normal, so the node reads zero.
+                if moves:
+                    local = moved_position(
+                        assets.programs.get(physics.nodes),
+                        local,
+                        Vector3(0, 0, 0),
+                    )
+                var point = world.transform_point(local)
                 var seen = view.transform_point(point)
                 # Kept or thrown away whole: a point has no extent in the
                 # scene to cut, so one whose center is outside the volume
@@ -6073,14 +6115,49 @@ struct Renderer(Movable):
                     continue
                 if not within_any(seen, any_of):
                     continue
+                var u = coordinates[0][vertex]
+                var v = coordinates[1][vertex]
+                # The size node, once per point, in pixels, in place of
+                # the material's size and its attenuation. A light's view
+                # draws every point one pixel across, as it does without.
+                var size = attenuated_size(
+                    material.point_size.pixels,
+                    seen.z,
+                    scale,
+                    perspective and material.size_attenuation,
+                    self.render_scale,
+                )
+                if sized:
+                    size = point_size_of(
+                        assets.programs.get(physics.nodes),
+                        NodeInputs(
+                            u,
+                            v,
+                            point,
+                            Vector3(0, 0, 0),
+                            Vector3(
+                                colors[vertex].r,
+                                colors[vertex].g,
+                                colors[vertex].b,
+                            ),
+                            Vector3(0, 0, 0),
+                            False,
+                            customs[vertex],
+                        ),
+                    ) * Float32(self.render_scale)
+                    if not isfinite(size) or size <= 0:
+                        raise Error(
+                            "A point's size node gave a size that is not"
+                            " above zero"
+                        )
                 corners.append(
                     _to_raster(
                         ClipVertex(
                             seen,
                             colors[vertex],
                             Vector3(0, 0, 0),
-                            0,
-                            0,
+                            u,
+                            v,
                             point,
                         ),
                         to_screen,
@@ -6094,19 +6171,13 @@ struct Renderer(Movable):
                         0,
                         NO_TEXTURE,
                         NO_TEXTURE,
-                        point_size=Float32(1) if casters_only else (
-                            attenuated_size(
-                                material.point_size.pixels,
-                                seen.z,
-                                scale,
-                                perspective and material.size_attenuation,
-                                self.render_scale,
-                            )
-                        ),
+                        point_size=Float32(1) if casters_only else size,
+                        physics=physics,
                         state=state,
                         shown=shown,
                     )
                 )
+                corners[len(corners) - 1].custom = customs[vertex]
             _note_span(
                 unsorted,
                 DRAW_POINTS,

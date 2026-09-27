@@ -1137,7 +1137,7 @@ def test_a_sprite_runs_its_node_material() raises:
         _ = Renderer(SIZE, SIZE).render(moving, assets, a_camera())
 
 
-def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
+def test_lines_and_wide_lines_refuse_a_node_material() raises:
     var assets = Assets()
     var graph = NodeGraph()
     graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
@@ -1158,12 +1158,6 @@ def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
     lines.update()
     with assert_raises(contains="A line runs no node graph"):
         _ = renderer.render(lines, assets, camera)
-    var points = Scene()
-    at = points.add(Object3D())
-    points.add_points(Points(shape, noded, at))
-    points.update()
-    with assert_raises(contains="A point runs no node graph"):
-        _ = renderer.render(points, assets, camera)
     var wide = Scene()
     at = wide.add(Object3D())
     var sticks = assets.geometries.add(
@@ -1173,6 +1167,52 @@ def test_lines_points_and_wide_lines_refuse_a_node_material() raises:
     wide.update()
     with assert_raises(contains="A wide line runs no node graph"):
         _ = renderer.render(wide, assets, camera)
+
+
+def test_points_run_a_node_material() raises:
+    # One point at the origin, six pixels across from its own `size`
+    # attribute, colored from its coordinate. A position node that moves
+    # it nowhere keeps it from being culled by its bound.
+    var assets = Assets()
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    graph.set_output(
+        COLOR_NODE,
+        graph.join(
+            [graph.swizzle(uv, "x"), graph.swizzle(uv, "y"), graph.float(1)]
+        ),
+    )
+    graph.set_output(SIZE_NODE, graph.attribute("size", NODE_FLOAT))
+    graph.set_output(POSITION_NODE, graph.vec3(0, 0, 0))
+    var id = assets.programs.add(graph.compile())
+    var noded = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, nodes=id)
+    )
+    var one = BufferGeometry()
+    one.set_attribute(String(POSITION), BufferAttribute([Float32(0), 0, 0], 3))
+    one.set_attribute(String(UV), BufferAttribute([Float32(1), 0], 2))
+    one.set_attribute("size", BufferAttribute([Float32(6)], 1))
+    var shape = assets.geometries.add(one^)
+    var scene = Scene()
+    var at = scene.add(Object3D())
+    scene.add_points(Points(shape, noded, at))
+    scene.update()
+    var renderer = Renderer(SIZE, SIZE)
+    var image = renderer.render(scene, assets, a_camera())
+    var seen = middle(image)
+    assert_equal(Int(seen.r), 255)
+    assert_equal(Int(seen.g), 0)
+    assert_equal(Int(seen.b), 255)
+    # Six pixels across: columns five to ten.
+    assert_equal(Int(image.get_pixel(5, SIZE // 2).b), 255)
+    assert_equal(Int(image.get_pixel(4, SIZE // 2).b), 0)
+    # A size that is not above zero is refused.
+    var flat = NodeGraph()
+    flat.set_output(SIZE_NODE, flat.float(0))
+    var nothing = assets.programs.add(flat.compile())
+    assets.materials.get(noded).nodes = nothing
+    with assert_raises(contains="size node gave a size that is not above"):
+        _ = renderer.render(scene, assets, a_camera())
 
 
 def main() raises:
