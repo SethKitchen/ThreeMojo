@@ -10,6 +10,7 @@ reflection of its own over it."""
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.layers import Layers
+from core.object3d import Object3D
 from core.scene import Scene
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -29,7 +30,6 @@ from std.testing import (
 from test_reflector import (
     SIZE,
     count_red,
-    floor_node,
     high_camera,
     meters,
     red_box,
@@ -50,7 +50,10 @@ def a_ground(
 ) raises -> ReflectorForSSR:
     """Return a ground mirror under a red box, on layer three."""
     _ = red_box(assets, scene, Vector3(0, 1, 0))
-    var node = floor_node(scene)
+    var floor = Object3D()
+    floor.set_euler(Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE))
+    floor.layers = Layers(UInt32(1 << 3))
+    var node = scene.add(floor^)
     var mirror = ReflectorForSSR(
         assets,
         square(assets, 6),
@@ -58,8 +61,6 @@ def a_ground(
         use_depth_texture=depth,
         resolution=Vector2(SIZE, SIZE),
     )
-    var layers = Layers(UInt32(1 << 3))
-    scene.get(node).layers = layers
     scene.add_mesh(mirror.mesh.copy())
     scene.update()
     return mirror^
