@@ -1186,11 +1186,6 @@ def test_wide_lines_refuse_a_node_material() raises:
     var noded = assets.materials.add(
         Material(Color(255, 255, 255), kind=BASIC, nodes=id)
     )
-    var bare = BufferGeometry()
-    bare.set_attribute(
-        String(POSITION), BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3)
-    )
-    var shape = assets.geometries.add(bare^)
     var camera = a_camera()
     var renderer = Renderer(SIZE, SIZE)
     var wide = Scene()
