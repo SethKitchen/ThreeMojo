@@ -1172,7 +1172,9 @@ def test_the_renderer_draws_the_scene_behind_first() raises:
             back,
         )
     )
-    scene.add_mesh(Mesh(sheet, assets.materials.add(shader_material(id)), front))
+    scene.add_mesh(
+        Mesh(sheet, assets.materials.add(shader_material(id)), front)
+    )
     scene.update()
     var renderer = Renderer(SIZE, SIZE)
     renderer.shading = SHADE_TEXTURE
