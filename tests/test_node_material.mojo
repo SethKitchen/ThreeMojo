@@ -1199,6 +1199,7 @@ def test_points_run_a_node_material() raises:
     scene.add_points(Points(shape, noded, at))
     scene.update()
     var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
     var image = renderer.render(scene, assets, a_camera())
     var seen = middle(image)
     assert_equal(Int(seen.r), 255)
