@@ -35,6 +35,7 @@ from materials.nodes import (
     NODE_MAT4,
     NODE_OUTPUT_COUNT,
     NODE_SAMPLER,
+    NODE_SAMPLER_CUBE,
     NODE_SWIZZLE,
     NODE_VEC2,
     NODE_VEC3,
@@ -153,7 +154,9 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_MAT3.is_valid())
     assert_true(NODE_MAT4.is_valid())
     assert_true(NODE_SAMPLER.is_valid())
-    assert_false(ValueType(33).is_valid())
+    assert_true(NODE_SAMPLER_CUBE.is_valid())
+    assert_equal(NODE_SAMPLER_CUBE.name(), "cubeTexture")
+    assert_false(ValueType(34).is_valid())
     assert_false(NODE_MAT4.is_vector())
     assert_false(ValueType(0).is_vector())
     assert_equal(NODE_FLOAT.name(), "float")

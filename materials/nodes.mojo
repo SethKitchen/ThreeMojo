@@ -4681,6 +4681,7 @@ def _emit(
         or kind == NODE_TEXTURE_SIZE
     ):
         pooled = pool.texture(graph, node)
+        immediate = 0
     elif kind == NODE_TEXTURE_CUBE:
         pooled = pool.cube(graph, node)
         immediate = 0
