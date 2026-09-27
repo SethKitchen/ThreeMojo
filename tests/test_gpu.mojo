@@ -9840,6 +9840,94 @@ def test_both_backends_read_the_scene_behind_in_a_graph_alike() raises:
             assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
+    # three.js's two procedural materials on a lit plank: the wood's graph
+    # of warps, noise and Voronoi cells, and the ambient occlusion a pass's
+    # target gives a physical surface at its own pixels.
+    if skipped_for_lack_of_a_gpu("both backends draw the wood alike"):
+        return
+    from materials.material import PHYSICAL
+    from materials.post_processing_material import (
+        mesh_post_processing_program,
+    )
+    from materials.wood import GLOSS, WALNUT, wood_material, wood_preset
+    from materials.wood import wood_program
+
+    for which in range(2):
+        var assets = Assets()
+        var material: Material
+        if which == 0:
+            var params = wood_preset(WALNUT, GLOSS)
+            material = wood_material(
+                assets.programs.add(wood_program(params)), params
+            )
+        else:
+            var pixels = List[UInt8]()
+            for y in range(36):
+                for x in range(48):
+                    var shade = UInt8((x * 5 + y * 3) % 256)
+                    pixels.append(shade)
+                    pixels.append(shade)
+                    pixels.append(shade)
+                    pixels.append(255)
+            var target = assets.textures.add(
+                Texture(48, 36, pixels^, CLAMP, NEAREST, LINEAR, False)
+            )
+            material = Material(
+                Color(200, 180, 160),
+                kind=PHYSICAL,
+                nodes=assets.programs.add(
+                    mesh_post_processing_program(target)
+                ),
+            )
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.add_mesh(
+            Mesh(
+                assets.geometries.add(
+                    plane(Length(1.2, METER), Length(0.9, METER), 2, 2)
+                ),
+                assets.materials.add(material^),
+                node,
+            )
+        )
+        var lamp = Object3D()
+        lamp.set_position(0.3, 0.4, 2)
+        var lamp_node = scene.add(lamp^)
+        scene.add_light(
+            directional_light(Color(255, 255, 255), lamp_node, 2.0)
+        )
+        scene.add_light(ambient_light(Color(255, 255, 255), 0.8))
+        scene.update()
+        var camera = PerspectiveCamera(
+            Angle(50.0, DEGREE),
+            Float32(48) / Float32(36),
+            Length(0.1, METER),
+            Length(100.0, METER),
+        )
+        camera.place(Vector3(0, 0, 1.2), Vector3(0, 0, 0))
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(48, 36)
+        device.set_textures(assets.textures)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene, eye=camera_position(scene, camera)),
+            lines=frame.segments,
+            draws=frame.draws,
+            points=frame.points,
+            programs=frame.programs,
+        )
+        assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 500)
+        assert_equal(
+            count_mismatches(cpu, device.read_back(), tolerance=1), 0
+        )
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
