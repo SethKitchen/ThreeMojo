@@ -6852,19 +6852,21 @@ def run_nodes[
     return registers[written]
 
 
-struct ProgramShape[S: NodeSource & Copyable](ShadowShape):
+struct ProgramShape[S: NodeSource & Copyable & Deinitable](ShadowShape):
     """A shadow shaped by a program's `RECEIVED_SHADOW_NODE`, three.js's
     `receivedShadowNode`: the output run on the fragment, with the `shadow`
     node reading what one light's map lets through. Both rasterizers hand
     the lights one, so a light that casts runs the output once."""
 
-    var source: S
+    var source: Self.S
     var inputs: NodeInputs
     # Whether the program sets the output. A program that does not keeps
     # the shadow as it is, as `Unshaped` does.
     var active: Bool
 
-    def __init__(out self, source: S, inputs: NodeInputs, active: Bool):
+    def __init__(
+        out self, source: Self.S, inputs: NodeInputs, active: Bool
+    ):
         """Shape shadows by a program at one fragment.
 
         Args:
