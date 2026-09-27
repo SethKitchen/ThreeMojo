@@ -84,9 +84,7 @@ def a_volume_scene(style: VolumeStyle) raises -> Tuple[Assets, Scene]:
         Length(Float32(SIDE), METER),
         Length(Float32(SIDE), METER),
     )
-    shape.translate(
-        Length(3.5, METER), Length(3.5, METER), Length(3.5, METER)
-    )
+    shape.translate(Length(3.5, METER), Length(3.5, METER), Length(3.5, METER))
     var to_local = Matrix4()
     to_local.elements[12] = 3.5
     to_local.elements[13] = 3.5

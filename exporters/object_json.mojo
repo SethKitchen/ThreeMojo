@@ -371,9 +371,7 @@ def _has_color(kind: MaterialKind) -> Bool:
 def _reflects(kind: MaterialKind) -> Bool:
     """Return True for a kind whose three.js class has `reflectivity` and
     `combine`."""
-    return (
-        kind == BASIC or kind == LAMBERT or kind == GOURAUD or kind == PHONG
-    )
+    return kind == BASIC or kind == LAMBERT or kind == GOURAUD or kind == PHONG
 
 
 struct _Header(Copyable, Movable):

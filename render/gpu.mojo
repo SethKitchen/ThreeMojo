@@ -2609,7 +2609,9 @@ def _scattered(
             )
             * reach
         )
-        var tint = _spot_tint(lights, texels, ramp, table, at + 14, place, normal)
+        var tint = _spot_tint(
+            lights, texels, ramp, table, at + 14, place, normal
+        )
         red += lights[unsafe_offset=at + 6] * tint.x * through
         green += lights[unsafe_offset=at + 7] * tint.y * through
         blue += lights[unsafe_offset=at + 8] * tint.z * through
@@ -6182,9 +6184,7 @@ def rasterize_kernel(
                         unsafe_offset=index * STATE_PER_TRIANGLE
                         + STATE_SCATTER_MAP
                     ]
-                    if scatter_slot >= 0 and mode == Int32(
-                        SHADE_TEXTURE.value
-                    ):
+                    if scatter_slot >= 0 and mode == Int32(SHADE_TEXTURE.value):
                         var thickness = _sample_slot(
                             texels,
                             ramp,
@@ -6226,9 +6226,10 @@ def rasterize_kernel(
                             corners[unsafe_offset=base + LANE_SCATTER + 4],
                             receives,
                         )
-                        var share = thickness * corners[
-                            unsafe_offset=base + LANE_SCATTER + 5
-                        ]
+                        var share = (
+                            thickness
+                            * corners[unsafe_offset=base + LANE_SCATTER + 5]
+                        )
                         scatter = Vector3(
                             through.x
                             * corners[unsafe_offset=base + LANE_SCATTER]

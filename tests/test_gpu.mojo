@@ -12062,7 +12062,9 @@ def test_both_backends_shade_a_gouraud_surface_alike() raises:
     for index in range(len(corners)):
         var k = Float32(index)
         corners[index].kind = GOURAUD_KIND
-        corners[index].gouraud_direct = Vector3(0.2 + 0.1 * k, 0.5, 0.9 - 0.1 * k)
+        corners[index].gouraud_direct = Vector3(
+            0.2 + 0.1 * k, 0.5, 0.9 - 0.1 * k
+        )
         corners[index].gouraud_indirect = Vector3(0.05, 0.02 * k, 0.1)
     var lighting = phong_lighting()
     for mode in [SHADE_TEXTURE, SHADE_LIT]:
@@ -12390,9 +12392,7 @@ def test_both_backends_draw_the_toon_shaders_alike() raises:
             programs=frame.programs,
         )
         assert_true(32 * 32 - count_background(cpu, BACKGROUND) > 200)
-        assert_equal(
-            count_mismatches(cpu, device.read_back(), tolerance=1), 0
-        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_both_backends_march_a_volume_alike() raises:
@@ -12432,9 +12432,7 @@ def test_both_backends_march_a_volume_alike() raises:
             programs=frame.programs,
         )
         assert_true(16 * 16 - count_background(cpu, BACKGROUND) > 4)
-        assert_equal(
-            count_mismatches(cpu, device.read_back(), tolerance=1), 0
-        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
 def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:

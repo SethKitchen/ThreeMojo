@@ -961,9 +961,7 @@ def scattering_through(
     return lit * scale + ambient
 
 
-def gouraud_light(
-    direct: Vector3, indirect: Vector3, mask: Float32
-) -> Vector3:
+def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     """Return a Gouraud surface's arriving light at a fragment: the direct
     light interpolated from its corners, darkened by the shadows there, and
     the indirect light interpolated from its corners. three.js's
@@ -2135,7 +2133,13 @@ struct Lighting(Movable):
             toward.normalize()
             var through = (
                 scattering_through(
-                    toward, normal, toward_eye, distortion, power, scale, ambient
+                    toward,
+                    normal,
+                    toward_eye,
+                    distortion,
+                    power,
+                    scale,
+                    ambient,
                 )
                 * reach
             )
@@ -2168,7 +2172,13 @@ struct Lighting(Movable):
             toward.normalize()
             var through = (
                 scattering_through(
-                    toward, normal, toward_eye, distortion, power, scale, ambient
+                    toward,
+                    normal,
+                    toward_eye,
+                    distortion,
+                    power,
+                    scale,
+                    ambient,
                 )
                 * reach
             )

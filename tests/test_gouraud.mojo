@@ -140,7 +140,9 @@ def bulb_scene(
     var node = scene.add(Object3D())
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(2.0, METER), Length(2.0, METER))),
+            assets.geometries.add(
+                plane(Length(2.0, METER), Length(2.0, METER))
+            ),
             assets.materials.add(
                 Material(Color(255, 255, 255), kind=kind, side=side)
             ),

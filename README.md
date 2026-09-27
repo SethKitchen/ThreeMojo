@@ -134,7 +134,7 @@ The port is not at parity with three.js yet. 198 features are ported and 5 are o
 
 ### Materials
 
-- [ ] Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
+- [x] [Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shaders-from-threejss-examples) [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
 - [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 
 <details>

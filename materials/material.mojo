@@ -866,10 +866,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         rasterizers ask this before they sample one.
         """
         return (
-            self == BASIC
-            or self == LAMBERT
-            or self == GOURAUD
-            or self == PHONG
+            self == BASIC or self == LAMBERT or self == GOURAUD or self == PHONG
         )
 
 

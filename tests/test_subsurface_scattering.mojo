@@ -70,7 +70,9 @@ def lit_from_behind(
         )
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(2.0, METER), Length(2.0, METER))),
+            assets.geometries.add(
+                plane(Length(2.0, METER), Length(2.0, METER))
+            ),
             assets.materials.add(material),
             node,
         )
@@ -84,9 +86,7 @@ def lit_from_behind(
         scene.add_light(point_light(Color(255, 255, 255), at, 1.0))
     else:
         scene.add_light(
-            spot_light(
-                Color(255, 255, 255), at, 1.0, angle=Angle(60.0, DEGREE)
-            )
+            spot_light(Color(255, 255, 255), at, 1.0, angle=Angle(60.0, DEGREE))
         )
     scene.update()
     return scene^
@@ -100,7 +100,9 @@ def middle_of(mut assets: Assets, scene: Scene) raises -> Color:
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     var renderer = Renderer(SIZE, SIZE)
     renderer.set_background(Color(0, 0, 0))
-    return renderer.render(scene, assets, camera).get_pixel(SIZE // 2, SIZE // 2)
+    return renderer.render(scene, assets, camera).get_pixel(
+        SIZE // 2, SIZE // 2
+    )
 
 
 def test_a_sun_behind_a_thin_surface_shows_through() raises:
@@ -172,7 +174,9 @@ def test_a_thickness_map_must_be_there_and_hold_data() raises:
     var node = scene.add(Object3D())
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(2.0, METER), Length(2.0, METER))),
+            assets.geometries.add(
+                plane(Length(2.0, METER), Length(2.0, METER))
+            ),
             assets.materials.add(material),
             node,
         )
