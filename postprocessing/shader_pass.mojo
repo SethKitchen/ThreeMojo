@@ -265,6 +265,23 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
             )
         return FloatColor(1, 1, 1, 1)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the input or the saved image at a coordinate: an image of
+        one level reads it at every level.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            u: Across.
+            v: Up.
+            level: The mip level, not read.
+
+        Returns:
+            The straight color; opaque white for a texture in the assets.
+        """
+        return self.sample(slot, u, v)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the three corners' weights at the pixel, the pixel to its
         right or the pixel above it: one minus u minus v, u and v.
@@ -376,6 +393,24 @@ struct HostScreenNodes[origin: Origin[mut=False]](NodeSource):
         if slot < 0:
             return self.screen.sample(slot, u, v)
         return self.textures[].textures[slot].sample(u, v)
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return an image or a texture at a coordinate and a mip level.
+
+        Args:
+            slot: `INPUT_SLOT`, `SAVED_SLOT`, or a texture in the assets.
+            u: Across.
+            v: Up.
+            level: The mip level, fractional.
+
+        Returns:
+            The straight color.
+        """
+        if slot < 0:
+            return self.screen.sample_level(slot, u, v, level)
+        return self.textures[].textures[slot].sample_level(u, v, level)
 
     def shares(self, context: NodeContext) -> Lanes:
         """Return the screen quad's weights; see `ScreenNodes.shares`.

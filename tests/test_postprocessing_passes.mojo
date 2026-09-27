@@ -962,6 +962,11 @@ def test_a_screen_source_reads_the_quad() raises:
         screen.sample(SAVED_SLOT, 0.5, 0.5), FloatColor(0.2, 0.2, 0.2, 1)
     )
     same_color(screen.sample(3, 0.5, 0.5), FloatColor(1, 1, 1, 1))
+    # An image of one level reads it at every level.
+    same_color(
+        screen.sample_level(INPUT_SLOT, 0.25, 0.75, 2),
+        FloatColor(1, 0, 0, 0.5),
+    )
     var here = screen.shares(AT_FRAGMENT)
     near(here[1], 0.25)
     near(here[2], 0.75)
@@ -991,6 +996,10 @@ def test_a_screen_source_reads_the_quad() raises:
     near(host.word(0), 7)
     near(host.sample(0, 0.5, 0.5).r, 1)
     near(host.sample(0, 0.5, 0.5).g, 0)
+    near(host.sample_level(0, 0.5, 0.5, 1).r, 1)
+    same_color(
+        host.sample_level(INPUT_SLOT, 0.25, 0.75, 1), FloatColor(1, 0, 0, 0.5)
+    )
     same_color(host.sample(INPUT_SLOT, 0.25, 0.75), FloatColor(1, 0, 0, 0.5))
     near(host.shares(AT_UP)[2], 1.25)
     near(host.frag_coord(AT_UP)[1], 2.5)

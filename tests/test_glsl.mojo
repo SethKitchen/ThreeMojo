@@ -87,6 +87,12 @@ struct Corners(NodeSource):
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 0.5)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""
         if context == AT_RIGHT:
@@ -270,6 +276,16 @@ def test_a_fragment_reads_where_it_is() raises:
     assert_equal(here[1], 20.5)
     assert_equal(here[2], 0.75)
     assert_equal(value("vec3(gl_FragCoord.w)")[0], 1)
+    # textureLod reads at the level it is given.
+    var level = value(
+        "textureLod(map, vec2(0.25, 0.5), 1.5).xyz", "uniform sampler2D map;"
+    )
+    assert_lanes(level, 0.25, 0.5, 1.5)
+    refused(
+        "uniform sampler2D map;\n"
+        + "void main() { gl_FragColor = textureLod(map, vec2(0.5)); }",
+        "textureLod() takes a sampler2D, a vec2 and a float",
+    )
     # The made-up triangle is seen from its front.
     assert_equal(number("gl_FrontFacing ? 1.0 : 0.0"), 1)
     refused(

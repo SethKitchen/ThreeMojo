@@ -172,8 +172,8 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(97).is_valid())
-    assert_true(NodeKind(96).is_valid())
+    assert_false(NodeKind(98).is_valid())
+    assert_true(NodeKind(97).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
     assert_false(NodeOutput(-1).is_valid())
@@ -282,6 +282,12 @@ struct Checker(NodeSource):
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 0.5)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the weights `Corners` gives."""
         return Corners().shares(context)
@@ -293,6 +299,58 @@ struct Checker(NodeSource):
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the corners `Corners` gives."""
         return Corners().corner(context)
+
+
+def test_a_texture_reads_at_the_level_the_graph_gives() raises:
+    var graph = NodeGraph()
+    var level = graph.add(graph.float(1), graph.float(0.5))
+    var read = graph.texture_level(TextureId(3), graph.uv(), level)
+    var named = graph.texture_level(
+        graph.texture_uniform("map", TextureId(4)), graph.uv(), level
+    )
+    graph.set_output(
+        COLOR_NODE,
+        graph.add(graph.swizzle(read, "rgb"), graph.swizzle(named, "rgb")),
+    )
+    graph.set_output(OPACITY_NODE, graph.swizzle(read, "a"))
+    var program = graph.compile()
+    assert_equal(len(program.textures), 2)
+    var source = Checker(program)
+    # The checker gives the coordinate and the level as the color.
+    assert_equal(run_nodes(source, COLOR_NODE, inputs(True))[2], 3)
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(True))[0], 0.25)
+    # A mode that opens no textures reads white.
+    assert_equal(run_nodes(source, OPACITY_NODE, inputs(False))[0], 1)
+    # The host's source for a program alone reads white.
+    var alone = ProgramSource(Pointer(to=program))
+    assert_equal(alone.sample_level(3, 0.5, 0.5, 1).g, 1)
+    var bad = NodeGraph()
+    with assert_raises(contains="A texture's level is a float, not a vec2"):
+        _ = bad.texture_level(TextureId(0), bad.uv(), bad.uv())
+    # Only a fragment reads a texture, at a level or not.
+    var moved = NodeGraph()
+    moved.set_output(
+        POSITION_NODE,
+        moved.swizzle(
+            moved.texture_level(TextureId(0), moved.uv(), moved.float(0)), "xyz"
+        ),
+    )
+    with assert_raises(contains="A position node runs once per vertex"):
+        _ = moved.compile()
+    var varied = NodeGraph()
+    varied.set_output(
+        COLOR_NODE,
+        varied.varying(
+            varied.swizzle(
+                varied.texture_level(
+                    TextureId(0), varied.uv(), varied.float(0)
+                ),
+                "xyz",
+            )
+        ),
+    )
+    with assert_raises(contains="A varying runs once per corner"):
+        _ = varied.compile()
 
 
 def test_a_texture_reads_where_its_coordinate_says() raises:
@@ -860,6 +918,12 @@ struct Corners(NodeSource):
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return the coordinate and the slot as a color."""
         return FloatColor(u, v, Float32(slot), 1.0)
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the coordinate and the level as a color."""
+        return FloatColor(u, v, level, 0.25)
 
     def shares(self, context: NodeContext) -> Lanes:
         """Return the made-up weights."""

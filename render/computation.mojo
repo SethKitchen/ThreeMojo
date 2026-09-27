@@ -172,6 +172,23 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             self.images[unsafe_offset=at + 3],
         )
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the texel a coordinate falls in: a variable's image has
+        one level, which it reads at every level.
+
+        Args:
+            slot: Which variable.
+            u: Across, from zero to one.
+            v: Up, from zero to one.
+            level: The mip level, not read.
+
+        Returns:
+            The texel's four floats, as they are.
+        """
+        return self.sample(slot, u, v)
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the screen quad's weights at the texel, the texel to its
         right or the texel above it.

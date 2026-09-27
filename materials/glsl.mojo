@@ -93,7 +93,7 @@ comptime _BUILTINS = (
     " inversesqrt abs sign floor ceil trunc round roundEven fract mod min max"
     " clamp mix step smoothstep length distance dot cross normalize"
     " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
-    " transpose determinant inverse "
+    " transpose determinant inverse textureLod "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
@@ -101,7 +101,7 @@ comptime _REFUSED_FUNCTIONS = (
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
     " lessThan lessThanEqual greaterThan greaterThanEqual equal"
-    " notEqual any all not textureSize textureLod textureOffset texelFetch"
+    " notEqual any all not textureSize textureOffset texelFetch"
     " texelFetchOffset textureProj textureProjLod textureGrad texture2DLod"
     " texture2DProj textureCube "
 )
@@ -3372,7 +3372,7 @@ struct _Compiler(Movable):
             nodes.append(self.node(args[index]))
             value.constant = value.constant and args[index].constant
             value.local = value.local or args[index].local
-        if name == "texture" or name == "texture2D":
+        if _listed(name, " texture texture2D textureLod "):
             return self.texture(name, args, nodes, value^)
         if _listed(name, " transpose determinant inverse "):
             if (
@@ -3406,22 +3406,38 @@ struct _Compiler(Movable):
         nodes: List[NodeRef],
         var value: _Value,
     ) raises -> _Value:
-        """Return `texture(s, uv)` or `texture2D(s, uv)`.
+        """Return `texture(s, uv)` or `texture2D(s, uv)`, or `textureLod(s,
+        uv, level)` at a mip level.
 
         Raises:
             Error: If the spelling is not the shader's version's, the shader
                 is a vertex shader, or the arguments are others.
         """
-        var modern = name == "texture"
+        var level = name == "textureLod"
+        var modern = name != "texture2D"
         if self.raw and modern != (self.version == 300):
             raise self.error(name + "() is not in this shader's GLSL version")
         if self.stage == _VERTEX:
             raise self.error("a vertex shader reads no texture in this port")
-        if len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2:
+        if level:
+            if (
+                len(args) != 3
+                or args[0].type != _SAMPLER
+                or args[1].type != _VEC2
+                or args[2].type != _FLOAT
+            ):
+                raise self.error(
+                    name + "() takes a sampler2D, a vec2 and a float"
+                )
+            value.node = self.graph.texture_level(
+                nodes[0], nodes[1], nodes[2]
+            ).value
+        elif len(args) != 2 or args[0].type != _SAMPLER or args[1].type != _VEC2:
             raise self.error(name + "() takes a sampler2D and a vec2")
+        else:
+            value.node = self.graph.texture(nodes[0], nodes[1]).value
         value.type = _VEC4
         value.constant = False
-        value.node = self.graph.texture(nodes[0], nodes[1]).value
         return value^
 
     def apply(mut self, name: String, nodes: List[NodeRef]) raises -> NodeRef:

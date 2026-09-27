@@ -11292,6 +11292,67 @@ def test_both_backends_read_a_triangles_facing_alike() raises:
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_read_a_texture_at_a_level_alike() raises:
+    # textureLod: the graph gives the level, not the footprint, and both
+    # backends read it through the host's plan of levels.
+    if skipped_for_lack_of_a_gpu("both backends read a texture level alike"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var level = graph.mul(graph.swizzle(uv, "x"), graph.float(1.5))
+    graph.set_output(
+        NODES_COLOR,
+        graph.swizzle(graph.texture_level(board, uv, level), "rgb"),
+    )
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 0, 1, 4, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 24, 1, 0, 0, board))
+    corners = with_nodes(corners^, id.value)
+    var lighting = phong_lighting()
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, textures, lighting, 1, programs=store
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        24,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+        programs=store,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The left edge reads the full-size board, whose colors the footprint's
+    # level would have blended away.
+    var extreme = 0
+    for y in range(24):
+        var shown = cpu.get_pixel(0, y)
+        if shown.r > 150 or shown.b > 150:
+            extreme += 1
+    assert_true(extreme > 0)
+
+
 def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     # GLSL compiled to the node program: a vertex shader that lifts the
     # sphere and hands its coordinates and world position on, and a

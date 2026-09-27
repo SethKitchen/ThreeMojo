@@ -1659,6 +1659,12 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
         """Return opaque white: a curve reads no texture."""
         return FloatColor(1, 1, 1, 1)
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return opaque white: a curve reads no texture."""
+        return FloatColor(1, 1, 1, 1)
+
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return no weights: a curve has no triangle."""
         return SIMD[DType.float32, 4](0)
@@ -3637,6 +3643,20 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             self.py,
             u,
             v,
+        )
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level, as
+        `rasterizer._HostNodes.sample_level` reads it."""
+        return _sample_level(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            level,
         )
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:

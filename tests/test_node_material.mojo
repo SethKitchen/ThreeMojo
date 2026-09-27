@@ -84,7 +84,7 @@ from render.rasterizer import (
 )
 from render.srgb import LINEAR
 from render.target import RenderTarget
-from render.texture import IGNORED, NEAREST, REPEAT, Texture
+from render.texture import BILINEAR, IGNORED, NEAREST, REPEAT, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import sin, sqrt
@@ -374,6 +374,41 @@ def test_a_texture_node_reads_where_the_graph_says() raises:
     # A mode that opens no texture reads white.
     var white = draw(big_triangle(NodeProgramId(0), BASIC), programs, SHADE_LIT)
     assert_color(white.color_at(2, 2), 1, 1, 1)
+
+
+def test_a_texture_node_reads_at_the_level_the_graph_says() raises:
+    # Blue and red crossed: the full-size image reads blue at the bottom
+    # left, and the one-texel level below it is their mean.
+    var textures = TextureStore()
+    var map = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(255), 0, 0, 255, 0, 0, 255, 255,
+                0, 0, 255, 255, 255, 0, 0, 255,
+            ],
+            REPEAT,
+            BILINEAR,
+            LINEAR,
+        )
+    )
+    var reds: List[Float32] = [0, 0.5]
+    var blues: List[Float32] = [1, 0.5]
+    for level in range(2):
+        var graph = NodeGraph()
+        var read = graph.texture_level(
+            map, graph.vec2(0.25, 0.25), graph.float(Float32(level))
+        )
+        graph.set_output(COLOR_NODE, graph.swizzle(read, "rgb"))
+        var shown = draw(
+            big_triangle(NodeProgramId(0), BASIC),
+            one_program(graph^),
+            SHADE_TEXTURE,
+            textures,
+        ).color_at(2, 2)
+        assert_almost_equal(shown.r, reds[level], atol=0.01)
+        assert_almost_equal(shown.b, blues[level], atol=0.01)
 
 
 def test_bands_run_the_graph_as_one_thread_does() raises:

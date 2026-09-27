@@ -4551,6 +4551,13 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.y,
         )
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at (u, v) and a mip level, through the
+        texture's two filters, as `Texture.sample_level` reads it."""
+        return self.textures[].textures[slot].sample_level(u, v, level)
+
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own

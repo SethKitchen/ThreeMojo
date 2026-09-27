@@ -194,7 +194,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_FRONT_FACING.value
+            and self.value <= NODE_TEXTURE_LEVEL.value
         )
 
 
@@ -331,6 +331,10 @@ comptime NODE_WORLEY = NodeKind(95)
 # renderer, which turns a `BACK_SIDE` material's front face round. See
 # `NodeSource.seen_from_behind`.
 comptime NODE_FRONT_FACING = NodeKind(96)
+# A texture read at a mip level its third input gives, GLSL's
+# `textureLod`: `NODE_TEXTURE` with no footprint. See
+# `NodeSource.sample_level`.
+comptime NODE_TEXTURE_LEVEL = NodeKind(97)
 
 
 @fieldwise_init
@@ -1239,6 +1243,66 @@ struct NodeGraph(Copyable, Movable):
                 + self._types[uv.value].name()
             )
         return self._add(NODE_TEXTURE, NODE_VEC4, uv.value, sampler.value)
+
+    def texture_level(
+        mut self, map: TextureId, uv: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture read at a coordinate and a mip level, a linear
+        `vec4` with straight alpha: three.js's `texture(map, uv).level(n)`.
+        Level zero is the full-size image, and a texture with one level
+        reads it at every level.
+
+        Args:
+            map: The texture. It must be in the store the renderer draws
+                with.
+            uv: Where to read it, a `vec2`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `map` is `NO_TEXTURE` or negative, `uv` is not a
+                `vec2`, or `level` is not a `float` of this graph.
+        """
+        return self._at_level(self.texture(map, uv), level)
+
+    def texture_level(
+        mut self, sampler: NodeRef, uv: NodeRef, level: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture uniform read at a coordinate and a mip level,
+        GLSL's `textureLod`.
+
+        Args:
+            sampler: A node of type `texture`, from `texture_uniform`.
+            uv: Where to read it, a `vec2`.
+            level: The mip level, a `float`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If a node is not of this graph, `sampler` is not a
+                texture, `uv` is not a `vec2`, or `level` is not a `float`.
+        """
+        return self._at_level(self.texture(sampler, uv), level)
+
+    def _at_level(mut self, read: NodeRef, level: NodeRef) raises -> NodeRef:
+        """Turn a texture node just added, which nothing reads yet, into
+        one read at a level.
+
+        Raises:
+            Error: If `level` is not a `float` of this graph.
+        """
+        self._check(level)
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+        self._kinds[read.value] = NODE_TEXTURE_LEVEL
+        self._inputs[read.value * 3 + 2] = level.value
+        return read
 
     def lit(mut self) -> NodeRef:
         """Return the color the material's own lighting made of the surface,
@@ -3917,6 +3981,7 @@ struct NodeGraph(Copyable, Movable):
             var fragment = (
                 (_is_attribute(kind) and not local)
                 or kind == NODE_TEXTURE
+                or kind == NODE_TEXTURE_LEVEL
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -4316,7 +4381,10 @@ def _children(
             " the fragment has it"
         )
     if corner and (
-        kind == NODE_TEXTURE or kind == NODE_DFDX or kind == NODE_DFDY
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_DFDX
+        or kind == NODE_DFDY
     ):
         raise Error(
             "A varying runs once per corner: it reads no texture and no"
@@ -4366,7 +4434,7 @@ def _emit(
     if kind == NODE_CONSTANT or kind == NODE_UNIFORM:
         pooled = pool.place(graph, node)
         immediate = 0
-    elif kind == NODE_TEXTURE:
+    elif kind == NODE_TEXTURE or kind == NODE_TEXTURE_LEVEL:
         pooled = pool.texture(graph, node)
         immediate = 0
     elif kind == NODE_VARYING:
@@ -4797,6 +4865,23 @@ trait NodeSource:
         """
         ...
 
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return a texture read at a coordinate and a mip level, GLSL's
+        `textureLod`.
+
+        Args:
+            slot: The texture's id.
+            u: Across.
+            v: Up.
+            level: The mip level, fractional.
+
+        Returns:
+            The linear color, straight alpha.
+        """
+        ...
+
     def shares(self, context: NodeContext) -> Lanes:
         """Return the perspective-correct weight of each corner at the
         fragment, the pixel to its right, or the pixel above it: what
@@ -4922,6 +5007,22 @@ struct ProgramSource[origin: Origin[mut=False]](NodeSource):
             slot: The texture's id, not read.
             u: Across, not read.
             v: Up, not read.
+
+        Returns:
+            Opaque white.
+        """
+        return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return opaque white: there is no surface to read a texture on.
+
+        Args:
+            slot: The texture's id, not read.
+            u: Across, not read.
+            v: Up, not read.
+            level: The mip level, not read.
 
         Returns:
             Opaque white.
@@ -5126,11 +5227,13 @@ def _leaf[
     source: S,
     op: Int,
     x: Lanes,
+    z: Lanes,
     immediate: Float32,
     context: Int,
     inputs: NodeInputs,
 ) -> Lanes:
-    """Return what a node that computes nothing from other nodes holds."""
+    """Return what a node that computes nothing from other nodes holds, or
+    a texture read, whose coordinate is `x` and whose level is `z`."""
     if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
         var at = Int(immediate)
         return Lanes(
@@ -5147,6 +5250,13 @@ def _leaf[
         if not inputs.textured:
             return Lanes(1)
         var texel = source.sample(Int(source.word(Int(immediate))), x[0], x[1])
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_LEVEL.value:
+        if not inputs.textured:
+            return Lanes(1)
+        var texel = source.sample_level(
+            Int(source.word(Int(immediate))), x[0], x[1], z[0]
+        )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
@@ -5792,14 +5902,17 @@ def run_nodes[
         var z = registers[third]
         var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
         written = Int(source.word(at + INSTRUCTION_DEST))
-        # The leaves, and `gl_FragCoord` and the facing, leaves numbered
-        # after them.
+        # The leaves, and `gl_FragCoord`, the facing and a texture read at
+        # a level, leaves numbered after them.
         if (
             op < NODE_ADD.value
             or op == NODE_FRAG_COORD.value
             or op == NODE_FRONT_FACING.value
+            or op == NODE_TEXTURE_LEVEL.value
         ):
-            registers[written] = _leaf(source, op, x, immediate, third, inputs)
+            registers[written] = _leaf(
+                source, op, x, z, immediate, third, inputs
+            )
         else:
             registers[written] = _operation(source, op, x, y, z, immediate)
     return registers[written]
