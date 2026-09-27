@@ -156,6 +156,7 @@ from lights.lighting import (
     gouraud_light,
     occluded_light,
     physical_light,
+    scattering_through,
     physical_outgoing,
     physical_surface,
     toon_coord,
@@ -588,7 +589,11 @@ comptime LANE_CUSTOM = LANE_BLEND_CONSTANT + 4
 # `RasterVertex.gouraud_direct` and `gouraud_indirect`.
 comptime LANE_GOURAUD_DIRECT = LANE_CUSTOM + 8
 comptime LANE_GOURAUD_INDIRECT = LANE_GOURAUD_DIRECT + 3
-comptime FLOATS_PER_VERTEX = LANE_GOURAUD_INDIRECT + 3
+# A `PHONG` triangle's light through from behind: its color, then its
+# distortion, ambient, attenuation, power and scale; see
+# `RasterVertex.scatter_color`.
+comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
+comptime FLOATS_PER_VERTEX = LANE_SCATTER + 8
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -700,7 +705,10 @@ comptime STATE_NORMAL_MAP_TYPE = STATE_CLEARCOAT_NORMAL_MAP + 1
 # The triangle's facing: one if it is seen from its back, plus two if its
 # material is `BACK_SIDE`; see `RasterVertex.seen_from_behind`.
 comptime STATE_FACING = STATE_NORMAL_MAP_TYPE + 1
-comptime STATE_PER_TRIANGLE = STATE_FACING + 1
+# Which texture's red is a `PHONG` triangle's thickness, or `NO_TEXTURE`
+# for none; see `RasterVertex.scatter_map`.
+comptime STATE_SCATTER_MAP = STATE_FACING + 1
+comptime STATE_PER_TRIANGLE = STATE_SCATTER_MAP + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -1082,6 +1090,14 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.gouraud_indirect.x)
         flat.append(corner.gouraud_indirect.y)
         flat.append(corner.gouraud_indirect.z)
+        flat.append(corner.scatter_color.r)
+        flat.append(corner.scatter_color.g)
+        flat.append(corner.scatter_color.b)
+        flat.append(corner.scatter_distortion)
+        flat.append(corner.scatter_ambient)
+        flat.append(corner.scatter_attenuation)
+        flat.append(corner.scatter_power)
+        flat.append(corner.scatter_scale)
     return flat^
 
 
@@ -2469,6 +2485,137 @@ def _highlight(
     return Vector3(red * scale, green * scale, blue * scale)
 
 
+def _scattered(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
+    distortion: Float32,
+    power: Float32,
+    scale: Float32,
+    ambient: Float32,
+    receives: Bool,
+) -> Vector3:
+    """Return the light that shows through a surface from behind: the
+    device counterpart of `Lighting.scattered_at`, summing the kinds in the
+    same order, each by `scattering_through`, and not scaled."""
+    var place = Vector3(px, py, pz)
+    var toward_eye = toward_eye_at(
+        Vector3(
+            lights[unsafe_offset=LIGHTS_EYE],
+            lights[unsafe_offset=LIGHTS_EYE + 1],
+            lights[unsafe_offset=LIGHTS_EYE + 2],
+        ),
+        Vector3(
+            lights[unsafe_offset=LIGHTS_TOWARD],
+            lights[unsafe_offset=LIGHTS_TOWARD + 1],
+            lights[unsafe_offset=LIGHTS_TOWARD + 2],
+        ),
+        place,
+    )
+    if toward_eye.length() == 0:
+        return Vector3(0, 0, 0)
+    var normal = Vector3(nx, ny, nz)
+    var red = Float32(0)
+    var green = Float32(0)
+    var blue = Float32(0)
+    for index in range(count):
+        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
+        var toward = Vector3(
+            lights[unsafe_offset=at],
+            lights[unsafe_offset=at + 1],
+            lights[unsafe_offset=at + 2],
+        )
+        var through = scattering_through(
+            toward, normal, toward_eye, distortion, power, scale, ambient
+        ) * _direction_through(lights, at, receives, place, normal)
+        red += lights[unsafe_offset=at + 3] * through
+        green += lights[unsafe_offset=at + 4] * through
+        blue += lights[unsafe_offset=at + 5] * through
+    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
+    for index in range(points):
+        var at = first_point + index * POINT_FLOATS
+        var toward = Vector3(
+            lights[unsafe_offset=at] - px,
+            lights[unsafe_offset=at + 1] - py,
+            lights[unsafe_offset=at + 2] - pz,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var reach = falloff(
+            distance,
+            lights[unsafe_offset=at + 6],
+            lights[unsafe_offset=at + 7],
+        ) * _point_through(lights, at + 8, receives, place, normal)
+        toward.normalize()
+        var through = (
+            scattering_through(
+                toward, normal, toward_eye, distortion, power, scale, ambient
+            )
+            * reach
+        )
+        red += lights[unsafe_offset=at + 3] * through
+        green += lights[unsafe_offset=at + 4] * through
+        blue += lights[unsafe_offset=at + 5] * through
+    var first_spot = (
+        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
+    )
+    for index in range(spots):
+        var at = first_spot + index * SPOT_FLOATS
+        var toward = Vector3(
+            lights[unsafe_offset=at] - px,
+            lights[unsafe_offset=at + 1] - py,
+            lights[unsafe_offset=at + 2] - pz,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var angle_cos = (
+            toward.x * lights[unsafe_offset=at + 3]
+            + toward.y * lights[unsafe_offset=at + 4]
+            + toward.z * lights[unsafe_offset=at + 5]
+        ) / distance
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+        if rim <= 0:
+            continue
+        var reach = (
+            rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+            * _through(lights, at + 13, receives, place, normal)
+        )
+        toward.normalize()
+        var through = (
+            scattering_through(
+                toward, normal, toward_eye, distortion, power, scale, ambient
+            )
+            * reach
+        )
+        var tint = _spot_tint(lights, texels, ramp, table, at + 14, place, normal)
+        red += lights[unsafe_offset=at + 6] * tint.x * through
+        green += lights[unsafe_offset=at + 7] * tint.y * through
+        blue += lights[unsafe_offset=at + 8] * tint.z * through
+    return Vector3(red, green, blue)
+
+
 def _world_at(
     corners: MutPointer[Float32, MutAnyOrigin],
     base: Int,
@@ -3241,8 +3388,8 @@ def triangle_state(
         iridescence, film thickness and anisotropy map ids, then where its
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
-        ids, then the normal map type's value, then its facing, per
-        triangle, from its first corner.
+        ids, then the normal map type's value, then its facing, then its
+        thickness map's id, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -3296,6 +3443,7 @@ def triangle_state(
                 + (2 if corners[triangle * 3].flip_sided else 0)
             )
         )
+        state.append(Int32(corners[triangle * 3].scatter_map.value))
     return state^
 
 
@@ -5536,6 +5684,9 @@ def rasterize_kernel(
             # normal, a matcap, a reflection or a shadow reads it for a color.
             var arriving = Vector3(1, 1, 1)
             var highlight = Vector3(0, 0, 0)
+            # The light a `PHONG` surface lets through from behind, as
+            # `rasterize_shaded` adds it.
+            var scatter = Vector3(0, 0, 0)
             var nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
                 + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -6027,6 +6178,68 @@ def rasterize_kernel(
                         corners[unsafe_offset=base + LANE_SHININESS],
                         receives,
                     )
+                    var scatter_slot = maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_SCATTER_MAP
+                    ]
+                    if scatter_slot >= 0 and mode == Int32(
+                        SHADE_TEXTURE.value
+                    ):
+                        var thickness = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(scatter_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                        var through = _scattered(
+                            lights,
+                            texels,
+                            ramp,
+                            table,
+                            Int(light_count),
+                            Int(point_count),
+                            Int(hemisphere_count),
+                            Int(spot_count),
+                            nx,
+                            ny,
+                            nz,
+                            wx,
+                            wy,
+                            wz,
+                            corners[unsafe_offset=base + LANE_SCATTER + 3],
+                            corners[unsafe_offset=base + LANE_SCATTER + 6],
+                            corners[unsafe_offset=base + LANE_SCATTER + 7],
+                            corners[unsafe_offset=base + LANE_SCATTER + 4],
+                            receives,
+                        )
+                        var share = thickness * corners[
+                            unsafe_offset=base + LANE_SCATTER + 5
+                        ]
+                        scatter = Vector3(
+                            through.x
+                            * corners[unsafe_offset=base + LANE_SCATTER]
+                            * share,
+                            through.y
+                            * corners[unsafe_offset=base + LANE_SCATTER + 1]
+                            * share,
+                            through.z
+                            * corners[unsafe_offset=base + LANE_SCATTER + 2]
+                            * share,
+                        )
 
             # The baked maps, each sampled where its own placement puts
             # the pixel, by the host's own functions in the host's own
@@ -7396,9 +7609,9 @@ def rasterize_kernel(
                 else:
                     # The highlight and then the glow, exactly as
                     # `rasterize_shaded` sums them.
-                    red += highlight.x + glow_r
-                    green += highlight.y + glow_g
-                    blue += highlight.z + glow_b
+                    red += scatter.x + highlight.x + glow_r
+                    green += scatter.y + highlight.y + glow_g
+                    blue += scatter.z + highlight.z + glow_b
                     # Then the reflection, by the host's own three
                     # functions: the view turned back through the normal,
                     # the cube read in that direction, and the two lights

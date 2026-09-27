@@ -1104,6 +1104,18 @@ struct RasterVertex(ImplicitlyCopyable):
     var gouraud_indirect: Vector3
     var gouraud_back_direct: Vector3
     var gouraud_back_indirect: Vector3
+    # A `PHONG` triangle's light through from behind, three.js's
+    # `SubsurfaceScatteringShader`: the thickness map, or `NO_TEXTURE` for
+    # none; the color, linear; and the distortion, ambient, attenuation,
+    # power and scale. Per-triangle, read from the first corner. Set after
+    # construction, by `Renderer.prepare`; off by default.
+    var scatter_map: TextureId
+    var scatter_color: FloatColor
+    var scatter_distortion: Float32
+    var scatter_ambient: Float32
+    var scatter_attenuation: Float32
+    var scatter_power: Float32
+    var scatter_scale: Float32
 
     def __init__(
         out self,
@@ -1273,6 +1285,13 @@ struct RasterVertex(ImplicitlyCopyable):
         self.gouraud_indirect = Vector3(0, 0, 0)
         self.gouraud_back_direct = Vector3(0, 0, 0)
         self.gouraud_back_indirect = Vector3(0, 0, 0)
+        self.scatter_map = NO_TEXTURE
+        self.scatter_color = FloatColor(1.0, 1.0, 1.0, 1.0)
+        self.scatter_distortion = 0.1
+        self.scatter_ambient = 0
+        self.scatter_attenuation = 0.1
+        self.scatter_power = 2
+        self.scatter_scale = 10
 
 
 @fieldwise_init
@@ -3448,6 +3467,9 @@ def rasterize_shaded(
             # after the texture has had its say over the diffuse color and
             # before the emissive, exactly where three.js sums it.
             var highlight = FloatColor(0.0, 0.0, 0.0, 1.0)
+            # The light a `PHONG` surface lets through from behind, added
+            # with the highlight; see `Lighting.scattered_at`.
+            var scatter = FloatColor(0.0, 0.0, 0.0, 1.0)
             var facing = Vector3(0, 0, 1)
             if (
                 a.kind.is_lit()
@@ -3710,6 +3732,37 @@ def rasterize_shaded(
                         a.shininess,
                         a.receives_shadow,
                     )
+                    # The light through, where a thickness map says how
+                    # thick the surface is: three.js reads its red at the
+                    # raw coordinates.
+                    if a.scatter_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+                        var thickness = _sample_map(
+                            textures.get(a.scatter_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                        var through = lighting.scattered_at(
+                            facing,
+                            spot,
+                            a.scatter_distortion,
+                            a.scatter_power,
+                            a.scatter_scale,
+                            a.scatter_ambient,
+                            a.receives_shadow,
+                        )
+                        var share = thickness * a.scatter_attenuation
+                        scatter = FloatColor(
+                            through.r * a.scatter_color.r * share,
+                            through.g * a.scatter_color.g * share,
+                            through.b * a.scatter_color.b * share,
+                            1.0,
+                        )
             # The baked maps, three.js's `lights_fragment_maps` and
             # `aomap_fragment`, each sampled where its own placement puts
             # the fragment, usually on the second pair. The
@@ -4556,9 +4609,9 @@ def rasterize_shaded(
                 # outgoing light the same way. Alpha is coverage rather
                 # than light, so it stays what the material said.
                 shaded = FloatColor(
-                    shaded.r + highlight.r + glow.r,
-                    shaded.g + highlight.g + glow.g,
-                    shaded.b + highlight.b + glow.b,
+                    shaded.r + scatter.r + highlight.r + glow.r,
+                    shaded.g + scatter.g + highlight.g + glow.g,
+                    shaded.b + scatter.b + highlight.b + glow.b,
                     shaded.a,
                 )
                 # Then the reflection, joined to the finished light by the

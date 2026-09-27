@@ -183,6 +183,8 @@ from materials.material import (
     Blending,
     Combine,
     Material,
+    NO_SCATTERING,
+    Scattering,
     MaterialId,
     MaterialKind,
     Side,
@@ -2164,6 +2166,8 @@ struct _Physics(ImplicitlyCopyable):
     var layers: LayerFactors
     # The node material's program, or `NO_NODES`.
     var nodes: NodeProgramId
+    # The light through a `PHONG` surface; see `Scattering`.
+    var scattering: Scattering
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -2195,6 +2199,7 @@ struct _Physics(ImplicitlyCopyable):
         self.ior = DEFAULT_IOR
         self.layers = LayerFactors()
         self.nodes = NO_NODES
+        self.scattering = NO_SCATTERING
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -2407,6 +2412,15 @@ struct _Paint(ImplicitlyCopyable):
         corner.gouraud_indirect = vertex.gouraud_indirect
         corner.gouraud_back_direct = vertex.gouraud_back_direct
         corner.gouraud_back_indirect = vertex.gouraud_back_indirect
+        ref scattering = self.physics.scattering
+        if scattering.is_on():
+            corner.scatter_map = scattering.map
+            corner.scatter_color = FloatColor(srgb=scattering.color)
+            corner.scatter_distortion = scattering.distortion
+            corner.scatter_ambient = scattering.ambient
+            corner.scatter_attenuation = scattering.attenuation
+            corner.scatter_power = scattering.power
+            corner.scatter_scale = scattering.scale
         return corner^
 
     def emit(
@@ -2741,6 +2755,19 @@ def _layer_factors(
         factors.clearcoat_roughness_map = NO_TEXTURE
         factors.clearcoat_normal_map = NO_TEXTURE
     return factors
+
+
+def _checked_scattering(
+    assets: Assets, material: Material
+) raises -> Scattering:
+    """Return a material's light through, once its thickness map is known
+    to be in the store and stored as data.
+
+    Raises:
+        Error: If the thickness map names nothing, or is not data.
+    """
+    _ = _checked_data_map(assets, material.scattering.map, "A thickness map")
+    return material.scattering
 
 
 def _checked_nodes(
@@ -5016,6 +5043,7 @@ struct Renderer(Movable):
                 material.ior,
                 _layer_factors(assets, material, self.shading),
                 _checked_nodes(assets, material.nodes),
+                _checked_scattering(assets, material),
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE
