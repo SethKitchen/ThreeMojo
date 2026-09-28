@@ -16,12 +16,82 @@ import threading
 import time
 
 
+LINE = b'COVLINE:'
+BRANCH = b'COVBRANCH:'
+
+
+class Reducer:
+    """Keep what the coverage report reads of a probe stream, once each.
+
+    The report reads two things. Its hit set holds every distinct probe
+    payload. Its MC/DC traces hold each decision's distinct evaluations: the
+    states its condition records left pending, closed by the decision's own
+    record. A suite that runs a probe in a loop repeats both a million
+    times, so the raw stream is gigabytes and the report spent most of a CI
+    run reading it on one core. This keeps:
+
+    - the first occurrence of each payload, written as a `COVLINE:` record,
+      which fills the hit set and which the trace parser skips;
+    - each distinct evaluation, when its decision closes, rebuilt as its
+      pending condition records and then the decision record.
+
+    So the report sees the same hit set and the same evaluations in the same
+    order of first closing, from a few thousand lines. Any other line passes
+    through unchanged, for the failure summary. See `coverage/mcdc.mojo`'s
+    `TraceParser`, whose reading this follows.
+    """
+
+    def __init__(self, write):
+        self.write = write
+        self.payloads = set()
+        self.pending = {}
+        self.evaluations = set()
+
+    def feed(self, line):
+        """Read one raw line of the stream, and write what it adds."""
+        record = line.strip()
+        if record.startswith(LINE):
+            self._payload(record[len(LINE):])
+            return
+        if not record.startswith(BRANCH):
+            self.write(line)
+            return
+        payload = record[len(BRANCH):]
+        head, colon, state = payload.rpartition(b':')
+        base, dot, position = head.rpartition(b'.')
+        if not colon or (dot and not position.isdigit()):
+            # Malformed: passed as it is, for the report to refuse.
+            self.write(line)
+            return
+        self._payload(payload)
+        state = b'T' if state == b'T' else b'F'
+        if dot:
+            self.pending.setdefault(base, {})[int(position)] = state
+            return
+        conditions = tuple(sorted(self.pending.pop(head, {}).items()))
+        key = (head, conditions, state)
+        if key in self.evaluations:
+            return
+        self.evaluations.add(key)
+        for index, value in conditions:
+            self.write(BRANCH + head + b'.' + str(index).encode() + b':' + value + b'\n')
+        self.write(BRANCH + head + b':' + state + b'\n')
+
+    def _payload(self, payload):
+        if payload not in self.payloads:
+            self.payloads.add(payload)
+            self.write(LINE + payload + b'\n')
+
+
 def capture(command, out_path, err_path):
-    """Run a suite and compress its stderr without changing any probe record."""
+    """Run a suite and keep what its probe records tell the report, once
+    each, compressed; see `Reducer`."""
     with open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
         with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE) as process:
             try:
-                shutil.copyfileobj(process.stderr, errors, length=1 << 20)
+                reducer = Reducer(errors.write)
+                for line in process.stderr:
+                    reducer.feed(line)
                 status = process.wait()
             except BaseException:
                 process.kill()

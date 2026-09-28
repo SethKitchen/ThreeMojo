@@ -164,29 +164,59 @@ class MakeCacheTests(unittest.TestCase):
 
 
 class CoverageIoTests(unittest.TestCase):
-    def test_capture_and_replay_preserve_every_byte_and_order(self):
+    def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
         import gzip
         import sys
         import coverage_io
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            expected = b'COVLINE:m:1\nCOVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n' * 10000
+            stream = b'COVLINE:m:1\nCOVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n' * 10000
+            reduced = (b'COVLINE:m:1\nCOVLINE:m:2.0:T\nCOVLINE:m:2:T\n'
+                       b'COVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n')
             captures = []
             for index in range(2):
                 source = root / f'{index}.input'
-                source.write_bytes(expected + str(index).encode())
+                source.write_bytes(stream + str(index).encode())
                 capture = root / f'{index}.txt.gz'
                 self.assertEqual(coverage_io.capture([
                     sys.executable, '-c', 'import sys;sys.stderr.buffer.write(open(sys.argv[1], "rb").read());print("passed")', str(source)
                 ], root / f'{index}.out', capture), 0)
-                self.assertEqual(gzip.decompress(capture.read_bytes()), source.read_bytes())
-                self.assertLess(capture.stat().st_size, source.stat().st_size // 10)
+                # Other output passes through, after the records.
+                self.assertEqual(gzip.decompress(capture.read_bytes()), reduced + str(index).encode())
                 captures.append(capture)
             result = root / 'replayed'
             command = [sys.executable, '-c',
                        'import sys; out=open(sys.argv[1], "wb"); [out.write(open(p,"rb").read()) for p in sys.argv[2:]]', str(result)]
             self.assertEqual(coverage_io.report(command, captures), 0)
-            self.assertEqual(result.read_bytes(), expected + b'0' + expected + b'1')
+            self.assertEqual(result.read_bytes(), reduced + b'0' + reduced + b'1')
+
+    def test_the_reducer_keeps_every_payload_and_distinct_evaluation(self):
+        import coverage_io
+        written = []
+        reducer = coverage_io.Reducer(written.append)
+        for line in [
+            # Two decisions interleaved; the first evaluated twice alike.
+            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:a:1:T\n',
+            b'COVBRANCH:b:2:F\n', b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
+            # A condition overwritten before its decision closes: both
+            # payloads reach the hit set, the last state the evaluation.
+            b'COVBRANCH:a:1.1:T\n', b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
+            # A condition left open, carried into the next evaluation.
+            b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3:F\n',
+            # Output and malformed records pass as they are.
+            b'  COVLINE:a:9  \n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
+        ]:
+            reducer.feed(line)
+        self.assertEqual(b''.join(written), b''.join([
+            b'COVLINE:a:1.0:T\n', b'COVLINE:b:2.0:F\n', b'COVLINE:a:1:T\n',
+            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
+            b'COVLINE:b:2:F\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:b:2:F\n',
+            b'COVLINE:a:1.1:T\n', b'COVLINE:a:1.1:F\n', b'COVLINE:a:1:F\n',
+            b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
+            b'COVLINE:c:3.1:T\n', b'COVLINE:c:3.0:F\n', b'COVLINE:c:3:F\n',
+            b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3:F\n',
+            b'COVLINE:a:9\n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
+        ]))
 
     def test_failed_suite_retains_diagnostics_and_exit_status(self):
         import contextlib
