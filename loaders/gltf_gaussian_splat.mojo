@@ -644,6 +644,8 @@ def _bands(
     """
     var out = List[List[UInt8]]()
     var stop = False
+    # How many bands were read: a band of no splats is read and empty.
+    var bands_read = 0
     for degree in range(1, 4):  # pragma: no branch
         if stop:
             out.append(List[UInt8]())
@@ -680,7 +682,8 @@ def _bands(
                 + " coefficients"
             )
         out.append(_band_bytes(found, count, degree))
-    _check_contiguous(document, attributes, out)
+        bands_read = degree
+    _check_contiguous(document, attributes, bands_read)
     return out^
 
 
@@ -712,7 +715,7 @@ def _band_bytes(
 
 
 def _check_contiguous(
-    document: JsonDocument, attributes: Int, bands: List[List[UInt8]]
+    document: JsonDocument, attributes: Int, bands_read: Int
 ) raises:
     """Refuse a band's attribute when the band was not read, three.js's
     last check.
@@ -720,10 +723,11 @@ def _check_contiguous(
     Args:
         document: The glTF JSON.
         attributes: The primitive's `attributes` object.
-        bands: The bands read.
+        bands_read: How many bands were read, 0 through 3.
 
     Raises:
-        Error: If an attribute names band 1, 2 or 3 and that band is empty.
+        Error: If an attribute names band 1, 2 or 3 and that band was not
+            read.
     """
     var prefix = String(KHR_GAUSSIAN_SPLATTING) + ":SH_DEGREE_"
     for at in range(document.length(attributes)):  # pragma: no branch
@@ -734,7 +738,7 @@ def _check_contiguous(
         for degree in range(1, 4):  # pragma: no branch
             if (
                 rest.startswith(String(degree) + "_COEF_")
-                and len(bands[degree - 1]) == 0
+                and degree > bands_read
             ):
                 raise Error(
                     "glTF: KHR_gaussian_splatting spherical harmonics"
