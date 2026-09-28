@@ -256,6 +256,15 @@ from render.tonemap import (
     check_tone_mapping,
 )
 from math.vector2 import Vector2
+from renderers.draw_filter import (
+    ALL_DRAWS,
+    DrawFilter,
+    ONE_OIT_DRAW,
+    check_draw_filter,
+    kept_draws,
+    oit_capable,
+    snap_to_pixels,
+)
 from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
@@ -4362,6 +4371,16 @@ struct Renderer(Movable):
     # `setTransparentSort`, or none for this renderer's own order.
     var _opaque_sort: Optional[RenderSort]
     var _transparent_sort: Optional[RenderSort]
+    # Which of a frame's draws `render_into` draws, and which
+    # order-independent draw `ONE_OIT_DRAW` keeps: what three.js's
+    # `OITPassNode` sets with `setRenderObjectFunction`. Every draw by
+    # default. See `renderers.draw_filter`.
+    var draw_filter: DrawFilter
+    var oit_draw: Int
+    # Whether each corner is rounded to a whole pixel from the center
+    # before it is drawn, three.js's `RetroPassNode` vertex node. Off by
+    # default.
+    var snap_vertices: Bool
     # What the renderer counts while it draws, shared with a supersampled
     # twin; see `_RendererState`.
     var _state: ArcPointer[_RendererState]
@@ -4411,6 +4430,9 @@ struct Renderer(Movable):
         self.info_auto_reset = True
         self._opaque_sort = None
         self._transparent_sort = None
+        self.draw_filter = ALL_DRAWS
+        self.oit_draw = 0
+        self.snap_vertices = False
         self._state = ArcPointer(_RendererState())
 
     def set_opaque_sort(mut self, method: Optional[RenderSort]):
@@ -4588,6 +4610,44 @@ struct Renderer(Movable):
         # `render_scale`.
         big.render_scale = self.render_scale * factor
         return big^
+
+    def resized(self, width: Int, height: Int) raises -> Renderer:
+        """Return a renderer of another size with the same settings, drawing
+        over its whole target, that shares this one's velocity history: what
+        a pass that draws the scene at its own resolution scale draws with,
+        as three.js's `PassNode.setResolutionScale` draws into a smaller
+        target with the same renderer.
+
+        Args:
+            width: The new width in pixels.
+            height: The new height in pixels.
+
+        Returns:
+            The renderer.
+
+        Raises:
+            Error: If a size is not positive.
+        """
+        var sized = Renderer(width, height, self.workers)
+        sized.background = self.background
+        sized.shading = self.shading
+        sized.tone_mapping = self.tone_mapping
+        sized.tone_mapping_exposure = self.tone_mapping_exposure
+        sized.output_color_space = self.output_color_space
+        sized.override_material = self.override_material
+        sized.clipping_planes = self.clipping_planes.copy()
+        sized.local_clipping_enabled = self.local_clipping_enabled
+        sized.shadow_map_type = self.shadow_map_type
+        sized.shadow_map_transmitted = self.shadow_map_transmitted
+        sized.depth_mode = self.depth_mode
+        sized.time = self.time
+        sized.custom_tone_mapping = self.custom_tone_mapping
+        sized._opaque_sort = self._opaque_sort
+        sized._transparent_sort = self._transparent_sort
+        sized._state = self._state
+        sized.ltc = self.ltc.copy()
+        sized.render_scale = self.render_scale
+        return sized^
 
     def set_viewport(mut self, rect: Rect) raises:
         """Put the camera's image in `rect`, three.js's `setViewport`.
@@ -7207,6 +7267,27 @@ struct Renderer(Movable):
         var frame = self.prepare_frame(
             scene, assets, camera, target.has_velocities()
         )
+        # The draws a filter leaves out, and the snap; see
+        # `renderers.draw_filter`.
+        check_draw_filter(self.draw_filter, self.oit_draw)
+        var alone = self.draw_filter == ONE_OIT_DRAW
+        if self.draw_filter != ALL_DRAWS:
+            var capable = List[Bool]()
+            for index in range(len(frame.items)):
+                capable.append(
+                    oit_capable(assets.materials.get(frame.items[index].material))
+                )
+            var kept = kept_draws(capable, self.draw_filter, self.oit_draw)
+            var draws = List[Draw]()
+            var items = List[RenderItem]()
+            for index in range(len(kept)):
+                if kept[index]:
+                    draws.append(frame.draws[index])
+                    items.append(frame.items[index])
+            frame.draws = draws^
+            frame.items = items^
+        if self.snap_vertices:
+            snap_to_pixels(frame.corners, self.width, self.height)
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
         # asks it before a launch. The uv view is data throughout and is
@@ -7272,10 +7353,15 @@ struct Renderer(Movable):
         state.count(frame.items)
         for index in range(len(frame.items)):
             hooks.on_before_render(scene, frame.items[index])
+        # One order-independent draw alone is weighed over nothing, as
+        # three.js clears its accumulation target to transparent black.
+        var cleared = self.clear_color(scene)
+        if alone:
+            cleared = Color(0, 0, 0, 0)
         if self.auto_clear:
             target.clear_inside(
                 kept,
-                self.clear_color(scene),
+                cleared,
                 self.depth_mode_for(camera),
                 self.auto_clear_color,
                 self.auto_clear_depth,
@@ -7285,7 +7371,9 @@ struct Renderer(Movable):
         # because the coverage instrumenter wraps every condition in a
         # probe that takes a Bool; see `materials.material`. A frame in
         # texture space has no background: it is not seen through a camera.
-        var painted = Bool(backdrop) and len(self.uv_space_meshes) == 0
+        var painted = (
+            Bool(backdrop) and len(self.uv_space_meshes) == 0 and not alone
+        )
         if painted:
             _paint_backdrop(target, kept, backdrop.value())
         # Triangles, segments and points in the frame's one order, which
