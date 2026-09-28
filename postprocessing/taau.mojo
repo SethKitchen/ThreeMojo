@@ -333,8 +333,17 @@ def taau_pixel(
     var sum_b = Float32(0)
     var sum_a = Float32(0)
     var total = Float32(0)
-    var m1 = FloatColor(0, 0, 0, 0)
-    var m2 = FloatColor(0, 0, 0, 0)
+    # Plain floats, not two `FloatColor`s: a struct built again in two
+    # nested loops and read after them hangs codegen. See
+    # docs/wiki/The-Mojo-compiler-hang.md.
+    var m1_r = Float32(0)
+    var m1_g = Float32(0)
+    var m1_b = Float32(0)
+    var m1_a = Float32(0)
+    var m2_r = Float32(0)
+    var m2_g = Float32(0)
+    var m2_b = Float32(0)
+    var m2_a = Float32(0)
     for oy in range(-1, 2):  # pragma: no branch
         for ox in range(-1, 2):  # pragma: no branch
             var tx = tap_x + ox
@@ -355,13 +364,16 @@ def taau_pixel(
             sum_b += c.b * w
             sum_a += c.a * w
             total += w
-            m1 = FloatColor(m1.r + c.r, m1.g + c.g, m1.b + c.b, m1.a + c.a)
-            m2 = FloatColor(
-                m2.r + c.r * c.r,
-                m2.g + c.g * c.g,
-                m2.b + c.b * c.b,
-                m2.a + c.a * c.a,
-            )
+            m1_r += c.r
+            m1_g += c.g
+            m1_b += c.b
+            m1_a += c.a
+            m2_r += c.r * c.r
+            m2_g += c.g * c.g
+            m2_b += c.b * c.b
+            m2_a += c.a * c.a
+    var m1 = FloatColor(m1_r, m1_g, m1_b, m1_a)
+    var m2 = FloatColor(m2_r, m2_g, m2_b, m2_a)
     var share = max(total, Float32(1e-5))
     var current = FloatColor(
         sum_r / share, sum_g / share, sum_b / share, sum_a / share
