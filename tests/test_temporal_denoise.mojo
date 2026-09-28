@@ -128,7 +128,7 @@ def test_the_helpers_are_three_js_s() raises:
     assert_almost_equal(blended.x, 0.26, atol=1e-5)
 
 
-def plane_of[T: Copyable & Movable](value: T) -> List[T]:
+def plane_of[T: Copyable](value: T) -> List[T]:
     """Return a 4 by 4 image of one value."""
     return List[T](length=SIDE * SIDE, fill=value)
 
