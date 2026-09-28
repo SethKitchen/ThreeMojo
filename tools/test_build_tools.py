@@ -126,14 +126,17 @@ class MakeCacheTests(unittest.TestCase):
     def test_explicit_partial_checks_have_distinct_keys(self):
         import subprocess
         root = Path(__file__).resolve().parent.parent
-        command = ['make', '--no-print-directory', '-s', '--eval',
-                   'cache-key-test:;@echo $(HASH)', 'cache-key-test']
-        full = subprocess.check_output(command, cwd=root, text=True).strip()
-        for override in ('CPU_TESTS=', 'COVERED=', 'MOJOFLAGS=-I . -O0'):
-            partial = subprocess.check_output(command + [override], cwd=root, text=True).strip()
-            self.assertNotEqual(full, partial, override)
-
-
+        # A second makefile adds the target: macOS ships GNU Make 3.81,
+        # which has no --eval.
+        with tempfile.TemporaryDirectory() as scratch:
+            extra = Path(scratch) / 'key.mk'
+            extra.write_text('cache-key-test:\n\t@echo $(HASH)\n')
+            command = ['make', '--no-print-directory', '-s', '-f', 'Makefile',
+                       '-f', str(extra), 'cache-key-test']
+            full = subprocess.check_output(command, cwd=root, text=True).strip()
+            for override in ('CPU_TESTS=', 'COVERED=', 'MOJOFLAGS=-I . -O0'):
+                partial = subprocess.check_output(command + [override], cwd=root, text=True).strip()
+                self.assertNotEqual(full, partial, override)
 
 
 class CoverageIoTests(unittest.TestCase):
