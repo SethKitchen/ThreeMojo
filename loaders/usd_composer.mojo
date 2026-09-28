@@ -556,7 +556,8 @@ def _split(path: String) -> List[String]:
         Its parts, an empty one before a leading `/`.
     """
     var out = List[String]()
-    for part in path.split("/"):
+    # `split` gives one part at least, the empty string's own.
+    for part in path.split("/"):  # pragma: no branch
         out.append(String(part))
     return out^
 

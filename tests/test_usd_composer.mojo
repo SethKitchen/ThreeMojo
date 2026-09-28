@@ -252,6 +252,8 @@ def test_ordered_transforms() raises:
         ' "xformOp:translate:pivot", "xformOp:rotateZ"]\n}\n'
         + 'def Xform "E"\n{\n    float xformOp:scale = 2\n'
         + '    uniform token[] xformOpOrder = ["xformOp:scale"]\n}\n'
+        + 'def Xform "F"\n{\n    uniform token[] xformOpOrder ='
+        ' ["xformOp:transform", "xformOp:scale", "xformOp:orient"]\n}\n'
     )
     var a = out.node("A")
     _near(a.scale.x, -1)
@@ -266,6 +268,9 @@ def test_ordered_transforms() raises:
     _near(d.position.x, -1)
     _near(d.position.z, -3)
     _near(out.node("E").scale.y, 2)
+    # Operations of no value are skipped.
+    _near(out.node("F").scale.x, 1)
+    _near(out.node("F").quaternion.w, 1)
 
 
 def test_unordered_transforms() raises:
@@ -588,6 +593,24 @@ def test_nested_variant_selections() raises:
         assets,
     )
     assert_equal(out.count("Tag"), 1)
+    # A file between them that selects nothing passes the selection on.
+    _layer_asset(
+        assets,
+        "between.usda",
+        (
+            'def Xform "O" (\n    prepend references = @toy.usda@\n    variants'
+            " = {\n    }\n)\n{\n}\n"
+        ),
+    )
+    var through = _text(
+        (
+            'def Xform "P" (\n    prepend references = @between.usda@\n   '
+            ' variants = {\n        string color = "blue"\n    }\n)\n{\n}\n'
+        ),
+        assets,
+    )
+    assert_equal(through.count("Tag"), 1)
+    assert_equal(through.count("Badge"), 0)
 
 
 def _looks() -> String:
@@ -693,6 +716,75 @@ def test_own_bindings() raises:
         # A binding of its own, or none and the first look.
         var r = out.material("M").color.r
         assert_equal(Int(r), 0 if kind < 2 else 255)
+
+
+def _relationship(
+    mut layer: UsdLayer, path: String, var value: UsdValue
+) raises:
+    """Add a relationship of targets to a layer."""
+    var spec = UsdSpec(SPEC_RELATIONSHIP)
+    spec.set("targetPaths", layer.add(value^))
+    _ = layer.put(path, spec^)
+
+
+def _prim(mut layer: UsdLayer, path: String, type_name: String) raises -> Int:
+    """Add a prim of a type to a layer, and return its spec."""
+    var spec = UsdSpec(SPEC_PRIM)
+    spec.set("typeName", layer.add(usd_string(type_name)))
+    return layer.put(path, spec^)
+
+
+def test_binding_edges() raises:
+    var layer = parse_usda_layer(
+        '#usda 1.0\ndef Xform "V"\n{\n' + _mesh("M") + "}\n" + _mesh("B")
+    )
+    # `/V` has a variant set of no selection and no variants, so nothing
+    # under `{s=x}` is selected. Its own binding has no targets.
+    var sets = layer.add(usd_strings(["s"]))
+    layer.specs[layer.spec("/V")].set("variantSetChildren", sets)
+    _relationship(layer, "/V.material:binding", UsdValue(USD_NULL))
+    _relationship(layer, "/V/M.material:binding", usd_strings(["/V/{s=x}/Mat"]))
+    _ = _prim(layer, "/V/{s=x}/Mat", "Material")
+    var shader = _prim(layer, "/V/{s=x}/Mat/S", "Shader")
+    var info = layer.add(usd_string("UsdPreviewSurface"))
+    layer.specs[shader].set("info:id", info)
+    var color = UsdSpec(SPEC_ATTRIBUTE)
+    color.set("default", layer.add(usd_numbers([1, 0, 0])))
+    _ = layer.put("/V/{s=x}/Mat/S.inputs:diffuseColor", color^)
+    # `/B` has no binding. Of the two below it, the first has no targets
+    # and the second names a material of no shaders.
+    _relationship(layer, "/B/C.material:binding", UsdValue(USD_NULL))
+    _relationship(layer, "/B/D.material:binding", usd_strings(["/L/Empty"]))
+    var out = _compose(layer^)
+    assert_equal(out.material("M").color.r, 255)
+    assert_equal(out.material("M").color.g, 0)
+    assert_equal(out.material("B").color.g, 255)
+
+
+def test_referenced_binding_edges() raises:
+    var layer = parse_usda_layer(
+        '#usda 1.0\ndef Xform "P" (\n    prepend references ='
+        " @flat.usda@\n)\n{\n}\n"
+        + 'def Xform "Q"\n{\n}\n'
+        + 'def Xform "R"\n{\n}\n'
+        + _looks()
+    )
+    # A target that keeps its angle brackets loses them.
+    _relationship(layer, "/P.material:binding", usd_strings(["</Looks/A>"]))
+    # A selection of no variant sets.
+    var selection = layer.add(UsdValue(USD_OBJECT))
+    layer.specs[layer.spec("/P")].set("variantSelection", selection)
+    # References of no files, and of a file that is not `@file@`.
+    var none = layer.add(usd_strings(List[String]()))
+    layer.specs[layer.spec("/Q")].set("references", none)
+    var odd = layer.add(usd_strings(["abc"]))
+    layer.specs[layer.spec("/R")].set("references", odd)
+    var out = _compose(layer^, _archive())
+    assert_true(out.model.objects[out.find("P")].is_mesh)
+    assert_equal(out.material("P").color.r, 255)
+    assert_equal(out.material("P").color.g, 0)
+    assert_false(out.model.objects[out.find("Q")].is_mesh)
+    assert_false(out.model.objects[out.find("R")].is_mesh)
 
 
 def _shader(name: String, body: String) -> String:
@@ -929,13 +1021,30 @@ def _maps() -> String:
         "Maps3",
         _surface(
             "PS",
-            (
-                "            normal3f inputs:normal.connect ="
-                " </L/Maps3/N.outputs:rgb>\n"
-            ),
+            "            normal3f inputs:normal.connect ="
+            " </L/Maps3/N.outputs:rgb>\n"
+            + "            color3f inputs:emissiveColor.connect ="
+            " </L/Maps3/E.outputs:rgb>\n"
+            + "            color3f inputs:specularColor.connect ="
+            " </L/Maps3/S.outputs:rgb>\n"
+            + "            float inputs:occlusion.connect ="
+            " </L/Maps3/Gone.outputs:r>\n",
+        )
+        + _texture("N", "brick.png", "            float[] inputs:scale = [2]\n")
+        + _texture(
+            "E",
+            "brick.png",
+            "            float4 inputs:scale = (0.5, 0.5, 0.5, 2)\n",
         )
         + _texture(
-            "N", "brick.png", "            float[] inputs:scale = [2]\n"
+            "S",
+            "brick.png",
+            "            float2 inputs:scale = (1, 2)\n"
+            + "            float2 inputs:st.connect ="
+            " </L/Maps3/T.outputs:result>\n",
+        )
+        + _shader(
+            "T", '            uniform token info:id = "UsdTransform2d"\n'
         ),
     )
     return 'def Scope "L"\n{\n' + maps + maps2 + maps3 + "}\n"
@@ -948,6 +1057,11 @@ def test_texture_maps() raises:
         _bound("A", "Maps")
         + _bound("B", "Maps2")
         + _bound("C", "Maps3")
+        + _mesh(
+            "D",
+            "    rel material:binding = </L/Maps2>\n"
+            + "    color3f[] primvars:displayColor = [(0.2, 0.4, 0.6)]\n",
+        )
         + _maps(),
         assets,
     )
@@ -991,6 +1105,18 @@ def test_texture_maps() raises:
     var c = out.material("C")
     _near(c.normal_scale.x, 2)
     assert_true(isnan(Float64(c.normal_scale.y)))
+    # An emissive map's scale of three numbers is the emissive color. A
+    # specular map's of two is not a color, and leaves it alone.
+    assert_equal(c.emissive.r, 128)
+    assert_true(c.specular_color_map != NO_TEXTURE)
+    assert_equal(c.specular_color.r, 255)
+    assert_true(c.ao_map == NO_TEXTURE)
+    ref specular = out.store.textures.get(c.specular_color_map)
+    _near(specular.repeat.x, 1)
+    # A material of a color map does not wear the mesh's tint.
+    var d = out.material("D")
+    assert_true(d.map != NO_TEXTURE)
+    assert_equal(d.color.r, 255)
     var found_bias = False
     for texture in out.model.textures:
         if texture.bias:
@@ -1430,6 +1556,7 @@ def test_resolved_values() raises:
 def test_empty_scene() raises:
     var out = _text("")
     assert_equal(len(out.model.objects), 1)
+    assert_equal(len(_compose(UsdLayer()).model.objects), 1)
     assert_true(out.scene.get(out.model.root).object_type == GROUP_TYPE)
 
 

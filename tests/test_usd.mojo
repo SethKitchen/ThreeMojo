@@ -794,6 +794,8 @@ def test_bytes_that_are_text() raises:
     assert_equal(scene.get(model.objects[1].node).name, "B")
     model = parse_usd(_bytes("P"), scene, assets)
     assert_equal(len(model.objects), 1)
+    model = parse_usd(_bytes("P\n"), scene, assets)
+    assert_equal(len(model.objects), 1)
 
 
 def test_refusals() raises:
