@@ -416,7 +416,24 @@ from postprocessing.shaders import MIRROR as MIRROR_SHADER
 from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram, NodeProgramId
 from render.computation import GPUComputationRenderer
-from render.gpu import GpuComposer, GpuComputation, runs_on_device
+from render.gpu import (
+    GpuCompute,
+    GpuComposer,
+    GpuComputation,
+    runs_on_device,
+)
+from materials.compute_ids import StorageBufferId
+from materials.compute_nodes import (
+    ComputeKernel,
+    ComputeNode,
+    HostCompute,
+    StorageBufferNode,
+    StorageBufferStore,
+    run_compute,
+)
+from render.gpgpu_sort import BitonicSort, CountingSort
+from materials.nodes import NODE_FLOAT as COMPUTE_FLOAT
+from materials.nodes import NODE_VEC4 as COMPUTE_VEC4
 from render.volume_texture import (
     Data3DTexture,
     DataArrayTexture,
@@ -13861,3 +13878,137 @@ def test_both_backends_cut_what_a_clipping_group_holds() raises:
         "the cube drew nothing",
     )
     assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+# --- compute nodes -----------------------------------------------------------
+
+
+def _compute_store() raises -> StorageBufferStore:
+    """Return the buffers `_compute_node` reads: twelve floats, and room for
+    what it writes."""
+    var store = StorageBufferStore()
+    var values = List[Float32]()
+    for at in range(12):
+        values.append(Float32((at * 7) % 12))
+    _ = store.instanced_array(values^, COMPUTE_FLOAT)
+    _ = store.instanced_array(12, COMPUTE_VEC4)
+    _ = store.instanced_array(4, COMPUTE_FLOAT)
+    return store^
+
+
+def _compute_node() raises -> ComputeNode:
+    """Return a kernel over `_compute_store`'s buffers that reads the
+    invocation's numbers, reverses each workgroup's span through a
+    workgroup array after a barrier, keeps a value across it, stores in a
+    branch, and counts with an atomic function."""
+    var data = StorageBufferNode(StorageBufferId(0), COMPUTE_FLOAT, 12)
+    var out = StorageBufferNode(StorageBufferId(1), COMPUTE_VEC4, 12)
+    var counts = StorageBufferNode(StorageBufferId(2), COMPUTE_FLOAT, 4)
+    var kernel = ComputeKernel()
+    var local = kernel.workgroup_array(COMPUTE_FLOAT, 4)
+    var i = kernel.instance_index()
+    var here = kernel.invocation_local_index()
+    var value = kernel.element(data, i)
+    var bin = kernel.graph.mod(value, kernel.graph.float(4))
+    _ = kernel.atomic_add(counts, bin, kernel.graph.float(1))
+    var held = kernel.to_const(kernel.graph.mul(value, kernel.graph.float(3)))
+    kernel.assign(local, here, value)
+    kernel.workgroup_barrier()
+    var mirrored = kernel.element(
+        local, kernel.graph.sub(kernel.graph.float(3), here)
+    )
+    kernel.graph.If(kernel.graph.greater_than(mirrored, kernel.graph.float(5)))
+    kernel.assign(data, i, kernel.graph.float(-1))
+    kernel.graph.End()
+    var workgroup = kernel.workgroup_id()
+    kernel.assign(
+        out,
+        i,
+        kernel.graph.join(
+            [mirrored, held, kernel.graph.swizzle(workgroup, "x"), here]
+        ),
+    )
+    return kernel.compute(10, 4)
+
+
+def test_both_backends_run_a_compute_node_alike() raises:
+    # Ten invocations in workgroups of four: the last workgroup has two,
+    # and its array's other two elements stay zero. The arithmetic is
+    # whole numbers, and the atomics only count, so the two agree exactly.
+    if skipped_for_lack_of_a_gpu("both backends run a compute node alike"):
+        return
+    var node = _compute_node()
+    var host = _compute_store()
+    var device = _compute_store()
+    run_compute(host, node)
+    var gpu = GpuCompute()
+    gpu.compute(device, node)
+    for buffer in range(3):
+        var want = host.buffers[buffer].array.copy()
+        var got = device.buffers[buffer].array.copy()
+        assert_equal(len(got), len(want))
+        for at in range(len(want)):
+            assert_equal(got[at], want[at])
+
+
+def test_both_backends_bitonic_sort_alike() raises:
+    if skipped_for_lack_of_a_gpu("both backends bitonic sort alike"):
+        return
+    var values = List[Float32]()
+    for at in range(64):
+        values.append(Float32((at * 37 + 11) % 64) - 20)
+    var host = StorageBufferStore()
+    var host_data = host.instanced_array(values.copy(), COMPUTE_FLOAT)
+    var device = StorageBufferStore()
+    var device_data = device.instanced_array(values^, COMPUTE_FLOAT)
+    var host_sort = BitonicSort(host, host_data, 4)
+    var device_sort = BitonicSort(device, device_data, 4)
+    var runner = HostCompute()
+    host_sort.compute(runner, host)
+    var gpu = GpuCompute()
+    device_sort.compute(gpu, device)
+    var want = host.array(host_data)
+    var got = device.array(device_data)
+    for at in range(64):
+        assert_equal(got[at], want[at])
+    for at in range(63):
+        assert_true(want[at] <= want[at + 1])
+
+
+def _counting_bin(mut kernel: ComputeKernel) raises -> NodeRef:
+    """Return the invocation's place times five, modulo seven."""
+    return kernel.graph.mod(
+        kernel.graph.mul(kernel.instance_index(), kernel.graph.float(5)),
+        kernel.graph.float(7),
+    )
+
+
+def test_both_backends_counting_sort_alike() raises:
+    # Places in one bin can come in any order on the device, as three.js
+    # says; the bins in order, and the counts, agree.
+    if skipped_for_lack_of_a_gpu("both backends counting sort alike"):
+        return
+    var host = StorageBufferStore()
+    var device = StorageBufferStore()
+    var host_sort = CountingSort(host, 40, 7, 8)
+    var device_sort = CountingSort(device, 40, 7, 8)
+    host_sort.set_bin_node(_counting_bin)
+    device_sort.set_bin_node(_counting_bin)
+    var runner = HostCompute()
+    host_sort.compute(runner, host)
+    var gpu = GpuCompute()
+    device_sort.compute(gpu, device)
+    var want = host.array(host_sort.histogram)
+    var got = device.array(device_sort.histogram)
+    for at in range(7):
+        assert_equal(got[at], want[at])
+    var order = device.array(device_sort.order)
+    var seen = List[Bool](length=40, fill=False)
+    var last = -1
+    for at in range(40):
+        var place = Int(order[at])
+        assert_true(not seen[place])
+        seen[place] = True
+        var bin = (place * 5) % 7
+        assert_true(bin >= last)
+        last = bin

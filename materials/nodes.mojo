@@ -4831,7 +4831,9 @@ struct NodeGraph(Copyable, Movable):
         var pool = _Pool(work)
         for index in range(len(roots)):
             work._check(roots[index])
-            layouts.append(work._root_layout(roots[index].value, -1, zero, pool))
+            layouts.append(
+                work._root_layout(roots[index].value, -1, zero, pool)
+            )
         var program = NodeProgram()
         var at = work._assemble(layouts, pool, program)
         starts = List[Int]()

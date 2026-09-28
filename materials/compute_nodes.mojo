@@ -154,7 +154,9 @@ def _width(type: ValueType) raises -> Int:
         Error: If the type is not a `float` or a vector.
     """
     if not type.is_vector():
-        raise Error("A storage element is a float or a vector, not a " + type.name())
+        raise Error(
+            "A storage element is a float or a vector, not a " + type.name()
+        )
     return type.value
 
 
@@ -693,7 +695,9 @@ struct ComputeKernel(Movable):
                 the graph.
         """
         self._note(buffer)
-        var loaded = self.graph.storage_element(buffer.buffer, index, buffer.type)
+        var loaded = self.graph.storage_element(
+            buffer.buffer, index, buffer.type
+        )
         return self._forwarded(buffer.buffer.value, index, loaded)
 
     def element(
@@ -771,9 +775,7 @@ struct ComputeKernel(Movable):
                     + given.name()
                 )
             # A vector, as the float is not the slot's type.
-            made = self.graph.join(
-                List[NodeRef](length=type.value, fill=value)
-            )
+            made = self.graph.join(List[NodeRef](length=type.value, fill=value))
         _ = self._statement(STATEMENT_STORE, slot, index, made, type)
 
     def assign(
@@ -954,9 +956,7 @@ struct ComputeKernel(Movable):
         Raises:
             Error: As `atomic_func` does.
         """
-        return self.atomic_func(
-            ATOMIC_LOAD, buffer, index, self.graph.float(0)
-        )
+        return self.atomic_func(ATOMIC_LOAD, buffer, index, self.graph.float(0))
 
     def atomic_store(
         mut self, buffer: StorageBufferNode, index: NodeRef, value: NodeRef
@@ -1381,9 +1381,7 @@ struct ComputeKernel(Movable):
         var zero = self.graph.float(0)
         return self.graph.join([bit, zero, zero, zero])
 
-    def subgroup_broadcast(
-        mut self, x: NodeRef, id: NodeRef
-    ) raises -> NodeRef:
+    def subgroup_broadcast(mut self, x: NodeRef, id: NodeRef) raises -> NodeRef:
         """Return one invocation's value to the subgroup, three.js's
         `subgroupBroadcast`: `x`, the only invocation's.
 
@@ -1526,7 +1524,7 @@ struct ComputeKernel(Movable):
         if len(self._statements) == 0:
             raise Error("A compute kernel needs a statement")
         var roots = List[NodeRef]()
-        for at in range(len(self._statements)):
+        for at in range(len(self._statements)):  # pragma: no branch
             ref statement = self._statements[at]
             if statement.index >= 0:
                 roots.append(NodeRef(statement.index))
@@ -1538,13 +1536,13 @@ struct ComputeKernel(Movable):
         var root = 0
         var results = 0
         var stage_starts = List[Int]()
-        for at in range(len(self._statements)):
+        for at in range(len(self._statements)):  # pragma: no branch
             ref statement = self._statements[at]
             if at == 0 or statement.stage != self._statements[at - 1].stage:
                 stage_starts.append(at)
             program.code.append(Float32(statement.op))
             program.code.append(Float32(statement.slot))
-            for part in range(2):
+            for part in range(2):  # pragma: no branch
                 var node = statement.index if part == 0 else statement.value
                 if node >= 0:
                     program.code.append(Float32(starts[root * 2]))
@@ -1840,7 +1838,10 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         """
         if which == INSTANCE_INDEX.value:
             return Float32(self.index)
-        if which == INVOCATION_LOCAL_INDEX.value or which == SUBGROUP_INDEX.value:
+        if (
+            which == INVOCATION_LOCAL_INDEX.value
+            or which == SUBGROUP_INDEX.value
+        ):
             return Float32(self.index % self.workgroup_size)
         if which == WORKGROUP_ID.value:
             return Float32(self.index // self.workgroup_size)
@@ -1874,7 +1875,9 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
             One to four.
         """
         return Int(
-            self.regions[unsafe_offset=self.region(slot) * REGION_INTS + REGION_SIZE]
+            self.regions[
+                unsafe_offset=self.region(slot) * REGION_INTS + REGION_SIZE
+            ]
         )
 
     def address(self, slot: Int, index: Float32) -> Int:
@@ -1896,9 +1899,9 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         var element = Int(index)
         if slot < 0:
             element += (self.index // self.workgroup_size) * count
-        return Int(self.regions[unsafe_offset=row + REGION_START]) + element * Int(
-            self.regions[unsafe_offset=row + REGION_SIZE]
-        )
+        return Int(
+            self.regions[unsafe_offset=row + REGION_START]
+        ) + element * Int(self.regions[unsafe_offset=row + REGION_SIZE])
 
     def storage_element(self, slot: Int, index: Float32) -> Lanes:
         """Return an element as the step began, zeros off the buffer.
@@ -2180,10 +2183,14 @@ def _run_step(
         .unsafe_origin_cast[Untracked]()
     )
     var before_at = (
-        before.unsafe_ptr().unsafe_mut_cast[False]().unsafe_origin_cast[Untracked]()
+        before.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked]()
     )
     var regions_at = (
-        regions.unsafe_ptr().unsafe_mut_cast[False]().unsafe_origin_cast[Untracked]()
+        regions.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked]()
     )
     var memory_at = memory.unsafe_ptr().unsafe_origin_cast[MutUntracked]()
     var kept_at = kept.unsafe_ptr().unsafe_origin_cast[MutUntracked]()
@@ -2220,7 +2227,9 @@ def run_compute(mut store: StorageBufferStore, node: ComputeNode) raises:
     """
     var packed = pack_storage(store, node)
     var memory = packed[0].copy()
-    var kept = List[Float32](length=max(node.count * node.results * 4, 4), fill=0)
+    var kept = List[Float32](
+        length=max(node.count * node.results * 4, 4), fill=0
+    )
     for stage in range(node.stages()):  # pragma: no branch
         var before = memory.copy()
         _run_step(
@@ -2240,7 +2249,9 @@ trait ComputeRunner:
     """What runs a compute node: the host, or the device. three.js's
     `renderer.compute`."""
 
-    def compute(mut self, mut store: StorageBufferStore, node: ComputeNode) raises:
+    def compute(
+        mut self, mut store: StorageBufferStore, node: ComputeNode
+    ) raises:
         """Run a compute node over a store's buffers.
 
         Args:
@@ -2261,7 +2272,9 @@ struct HostCompute(ComputeRunner, Movable):
         """Create a runner."""
         pass
 
-    def compute(mut self, mut store: StorageBufferStore, node: ComputeNode) raises:
+    def compute(
+        mut self, mut store: StorageBufferStore, node: ComputeNode
+    ) raises:
         """Run a compute node over a store's buffers on the host.
 
         Args:

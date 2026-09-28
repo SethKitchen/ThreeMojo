@@ -80,7 +80,9 @@ from std.testing import (
 )
 
 
-def _floats(store: StorageBufferStore, node: StorageBufferNode) raises -> List[Float32]:
+def _floats(
+    store: StorageBufferStore, node: StorageBufferNode
+) raises -> List[Float32]:
     """Return a buffer's floats."""
     return store.array(node)
 
@@ -170,7 +172,9 @@ def test_a_storage_texture_is_a_buffer_of_texels() raises:
 def test_a_particle_moves_by_its_velocity() raises:
     # three.js's compute example: `position.addAssign( velocity )`.
     var store = StorageBufferStore()
-    var positions = store.instanced_array([0, 0, 0, 1, 1, 1, 2, 2, 2], NODE_VEC3)
+    var positions = store.instanced_array(
+        [0, 0, 0, 1, 1, 1, 2, 2, 2], NODE_VEC3
+    )
     var velocities = store.instanced_array(
         [1, 0, 0, 0, 2, 0, 0, 0, 3], NODE_VEC3
     )
@@ -399,11 +403,17 @@ def test_a_workgroup_array_refuses_what_it_is_not() raises:
     var local = kernel.workgroup_array(NODE_VEC2, 4)
     var zero = kernel.graph.float(0)
     with assert_raises(contains="no such workgroup array"):
-        _ = kernel.element(WorkgroupArrayNode(WorkgroupArrayId(-1), NODE_VEC2, 4), zero)
+        _ = kernel.element(
+            WorkgroupArrayNode(WorkgroupArrayId(-1), NODE_VEC2, 4), zero
+        )
     with assert_raises(contains="no such workgroup array"):
-        _ = kernel.element(WorkgroupArrayNode(WorkgroupArrayId(1), NODE_VEC2, 4), zero)
+        _ = kernel.element(
+            WorkgroupArrayNode(WorkgroupArrayId(1), NODE_VEC2, 4), zero
+        )
     with assert_raises(contains="no such workgroup array"):
-        kernel.assign(WorkgroupArrayNode(local.array, NODE_FLOAT, 4), zero, zero)
+        kernel.assign(
+            WorkgroupArrayNode(local.array, NODE_FLOAT, 4), zero, zero
+        )
     with assert_raises(contains="no such workgroup array"):
         _ = kernel.element(WorkgroupArrayNode(local.array, NODE_VEC2, 5), zero)
 
@@ -447,14 +457,14 @@ def test_every_atomic_function_leaves_what_wgsl_leaves() raises:
     assert_equal(atomic_result(ATOMIC_XOR.value, 12, 10), 6)
     # NaN reads as zero, and infinity as the largest whole number held.
     assert_equal(atomic_result(ATOMIC_OR.value, nan[DType.float32](), 3), 3)
-    assert_equal(
-        atomic_result(ATOMIC_AND.value, inf[DType.float32](), 7), 0
-    )
+    assert_equal(atomic_result(ATOMIC_AND.value, inf[DType.float32](), 7), 0)
 
 
 def test_each_atomic_function_runs_on_an_element() raises:
     var store = StorageBufferStore()
-    var cells = store.instanced_array([12, 12, 12, 12, 12, 12, 12, 12], NODE_FLOAT)
+    var cells = store.instanced_array(
+        [12, 12, 12, 12, 12, 12, 12, 12], NODE_FLOAT
+    )
     var olds = store.instanced_array(9, NODE_FLOAT)
     var kernel = ComputeKernel()
     var ten = kernel.graph.float(10)
@@ -486,10 +496,18 @@ def test_an_atomic_off_the_buffer_returns_zero() raises:
     var olds = store.instanced_array(1, NODE_FLOAT)
     var kernel = ComputeKernel()
     var zero = kernel.graph.float(0)
-    var old = kernel.atomic_add(cells, kernel.graph.float(5), kernel.graph.float(1))
+    var old = kernel.atomic_add(
+        cells, kernel.graph.float(5), kernel.graph.float(1)
+    )
     kernel.assign(olds, zero, kernel.graph.add(old, kernel.graph.float(3)))
     # A read after an atomic function of its step is not laid over it.
-    kernel.assign(olds, zero, kernel.graph.add(kernel.element(olds, zero), kernel.element(cells, zero)))
+    kernel.assign(
+        olds,
+        zero,
+        kernel.graph.add(
+            kernel.element(olds, zero), kernel.element(cells, zero)
+        ),
+    )
     run_compute(store, kernel.compute(1))
     assert_equal(_floats(store, cells)[0], 4)
     assert_equal(_floats(store, olds)[0], 7)
@@ -527,7 +545,9 @@ def test_a_held_value_lasts_across_a_barrier() raises:
     var held = kernel.to_const(kernel.element(data, other))
     kernel.assign(data, other, kernel.graph.float(0))
     kernel.workgroup_barrier()
-    var pair = kernel.to_const(kernel.graph.join([held, kernel.element(data, other)]))
+    var pair = kernel.to_const(
+        kernel.graph.join([held, kernel.element(data, other)])
+    )
     kernel.assign(out, i, pair)
     var node = kernel.compute(2)
     assert_equal(node.results, 2)
@@ -586,9 +606,32 @@ def test_a_subgroup_is_one_invocation() raises:
     kernel.assign(ballots, id, kernel.subgroup_ballot(x))
     var v2 = kernel.graph.vec2(2, 5)
     kernel.assign(pairs, id, kernel.subgroup_exclusive_add(v2))
-    kernel.assign(pairs, kernel.graph.float(1), kernel.subgroup_exclusive_mul(v2))
+    kernel.assign(
+        pairs, kernel.graph.float(1), kernel.subgroup_exclusive_mul(v2)
+    )
     run_compute(store, kernel.compute(1))
-    var want: List[Float32] = [3, 3, 0, 3, 3, 1, 3, 3, 3, 3, 3, 1, 0, 1, 3, 3, 3, 3, 3, 3]
+    var want: List[Float32] = [
+        3,
+        3,
+        0,
+        3,
+        3,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        1,
+        0,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+    ]
     for at in range(20):
         assert_equal(_floats(store, out)[at], want[at])
     assert_equal(_floats(store, ballots)[0], 1)
@@ -600,8 +643,12 @@ def test_a_subgroup_is_one_invocation() raises:
     assert_equal(got[3], 1)
     var v3 = kernel.graph.vec3(1, 2, 3)
     var v4 = kernel.graph.vec4(1, 2, 3, 4)
-    assert_equal(kernel.graph.type_of(kernel.subgroup_exclusive_add(v3)), NODE_VEC3)
-    assert_equal(kernel.graph.type_of(kernel.subgroup_exclusive_mul(v4)), NODE_VEC4)
+    assert_equal(
+        kernel.graph.type_of(kernel.subgroup_exclusive_add(v3)), NODE_VEC3
+    )
+    assert_equal(
+        kernel.graph.type_of(kernel.subgroup_exclusive_mul(v4)), NODE_VEC4
+    )
     var m = kernel.graph.uniform("m", Matrix3())
     with assert_raises(contains="float or a vector"):
         _ = kernel.subgroup_add(m)
@@ -621,7 +668,9 @@ def test_a_storage_texture_is_written_texel_by_texel() raises:
     var x = kernel.graph.mod(i, kernel.graph.float(3))
     var y = kernel.graph.floor(kernel.graph.div(i, kernel.graph.float(3)))
     var coord = kernel.graph.join([x, y])
-    var texel = kernel.graph.join([x, y, kernel.graph.float(0), kernel.graph.float(1)])
+    var texel = kernel.graph.join(
+        [x, y, kernel.graph.float(0), kernel.graph.float(1)]
+    )
     kernel.texture_store(texture, coord, texel)
     kernel.storage_barrier()
     kernel.assign(echo, i, kernel.texture_load(texture, coord))
@@ -673,9 +722,13 @@ def test_a_kernel_refuses_what_it_cannot_run() raises:
     with assert_raises(contains="cannot hold a vec2"):
         kernel.assign(wide, zero, pair)
     with assert_raises(contains="no buffer there can be"):
-        kernel.assign(StorageBufferNode(StorageBufferId(-1), NODE_FLOAT, 2), zero, zero)
+        kernel.assign(
+            StorageBufferNode(StorageBufferId(-1), NODE_FLOAT, 2), zero, zero
+        )
     with assert_raises(contains="float or a vector"):
-        kernel.assign(StorageBufferNode(StorageBufferId(5), NODE_MAT3, 2), zero, zero)
+        kernel.assign(
+            StorageBufferNode(StorageBufferId(5), NODE_MAT3, 2), zero, zero
+        )
     kernel.assign(data, zero, zero)
     with assert_raises(contains="one storage buffer as two types"):
         _ = kernel.element(StorageBufferNode(data.buffer, NODE_VEC2, 1), zero)
@@ -719,7 +772,9 @@ def test_a_compute_program_reads_no_surface() raises:
     var textured = ComputeKernel()
     var sampler = textured.graph.texture_uniform("map")
     var texel = textured.graph.texture(sampler, textured.graph.vec2(0, 0))
-    textured.assign(data, textured.graph.float(0), textured.graph.swizzle(texel, "xy"))
+    textured.assign(
+        data, textured.graph.float(0), textured.graph.swizzle(texel, "xy")
+    )
     with assert_raises(contains="runs on no surface"):
         _ = textured.compute(1)
     var discarded = ComputeKernel()
@@ -764,7 +819,9 @@ def test_the_graph_refuses_a_compute_leaf_there_cannot_be() raises:
     with assert_raises(contains="no array there can be"):
         _ = graph.storage_element(WorkgroupArrayId(-1), zero, NODE_FLOAT)
     with assert_raises(contains="float index"):
-        _ = graph.storage_element(StorageBufferId(0), graph.vec2(0, 0), NODE_FLOAT)
+        _ = graph.storage_element(
+            StorageBufferId(0), graph.vec2(0, 0), NODE_FLOAT
+        )
     with assert_raises(contains="float or a vector"):
         _ = graph.storage_element(StorageBufferId(0), zero, NODE_MAT3)
     with assert_raises(contains="no statement there can be"):
@@ -805,9 +862,15 @@ def test_a_compute_source_reads_no_surface() raises:
     var regions: List[Int32] = [0, 1, 1]
     var kept: List[Float32] = [0, 0, 0, 0]
     var source = ComputeSource(
-        code.unsafe_ptr().unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
-        memory.unsafe_ptr().unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
-        regions.unsafe_ptr().unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        memory.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        regions.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
         kept.unsafe_ptr().unsafe_origin_cast[MutUntracked](),
         1,
         0,
@@ -825,7 +888,9 @@ def test_a_compute_source_reads_no_surface() raises:
     # NaN is off every buffer.
     assert_equal(source.address(0, nan[DType.float32]()), -1)
     assert_equal(source.address(0, 0), 0)
-    var memory_at = HostMemory(kept.unsafe_ptr().unsafe_origin_cast[MutUntracked]())
+    var memory_at = HostMemory(
+        kept.unsafe_ptr().unsafe_origin_cast[MutUntracked]()
+    )
     memory_at.store(1, 4)
     assert_equal(memory_at.atomic(ATOMIC_ADD.value, 1, 2), 4)
     assert_equal(kept[1], 6)
