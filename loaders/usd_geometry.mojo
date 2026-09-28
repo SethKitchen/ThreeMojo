@@ -731,14 +731,14 @@ def _coordinates(
     Raises:
         Error: If the identity is too long.
     """
-    if uv_indices.filled() and pattern:
+    if uv_indices.filled() and Bool(pattern):
         return expand_attribute(
             uvs.values, apply_pattern(uv_indices.values, pattern.value()), 2
         )
     var pairs = Float64(len(uvs.values)) / 2
     if indices.present and pairs == Float64(points) / 3:
         return expand_attribute(uvs.values, indices.values, 2)
-    if pattern and pairs == Float64(face_vertices):
+    if Bool(pattern) and pairs == Float64(face_vertices):
         var corners = apply_pattern(
             _identity(Float64(face_vertices)), pattern.value()
         )
@@ -782,7 +782,7 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
     geometry.set_attribute(String(POSITION), _attribute(positions, 3))
     if mesh.normals.filled():
         var normals = mesh.normals.values.copy()
-        if mesh.normal_indices.filled() and pattern:
+        if mesh.normal_indices.filled() and Bool(pattern):
             normals = expand_attribute(
                 mesh.normals.values,
                 apply_pattern(mesh.normal_indices.values, pattern.value()),
@@ -793,7 +793,7 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
                 normals = expand_attribute(
                     mesh.normals.values, indices.values, 3
                 )
-        elif pattern:
+        elif Bool(pattern):
             var corners = apply_pattern(
                 _identity(Float64(len(mesh.normals.values)) / 3),
                 pattern.value(),
@@ -1016,10 +1016,10 @@ def build_usd_geometry_with_subsets(
                 point,
             )
             var source = point
-            if mesh.normals.present and normal_corners:
+            if mesh.normals.present and Bool(normal_corners):
                 source = value_at(normal_corners.value(), original)
             var sourced = (
-                (mesh.normals.present and normal_corners)
+                (mesh.normals.present and Bool(normal_corners))
                 or (mesh.normals.present and per_point_normals)
                 or has_computed
             )

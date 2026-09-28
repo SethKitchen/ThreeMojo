@@ -51,7 +51,7 @@ def _or(
     mut g: NodeGraph, given: Optional[NodeRef], default: Float32
 ) -> NodeRef:
     """Return the given node, or a constant `float` where none is given."""
-    if given:
+    if Bool(given):
         return given.value()
     return g.float(default)
 

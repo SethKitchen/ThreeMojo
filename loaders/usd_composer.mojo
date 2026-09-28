@@ -1517,7 +1517,7 @@ struct _Composer(Movable):
                     matrix.multiply(m)
             ref node = built.objects[object].node
             decompose_onto(node, matrix, "USD")
-            if scale:
+            if Bool(scale):
                 var s = scale.value().copy()
                 if s[0] < 0 and s[1] < 0 and s[2] < 0:
                     node.set_scale(Float32(s[0]), Float32(s[1]), Float32(s[2]))
@@ -2422,7 +2422,7 @@ struct _Composer(Movable):
         if image.loaded:
             image.wrap_s = _wrap_of(self.string_of(attrs.get("inputs:wrapS")))
             image.wrap_t = _wrap_of(self.string_of(attrs.get("inputs:wrapT")))
-            if transform:
+            if Bool(transform):
                 self.place(image, transform.value())
         built.images.append(image^)
         return len(built.images) - 1
