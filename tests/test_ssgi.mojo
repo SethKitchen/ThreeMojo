@@ -352,7 +352,7 @@ def test_an_orthographic_depth_reads_its_own_view_z() raises:
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     var projection = camera.projection_matrix()
     var depth = List[Float32]()
-    for y in range(8):
+    for _ in range(8):
         for x in range(8):
             # Farther to the left, and a near strip on the right.
             var z = Float32(-3)

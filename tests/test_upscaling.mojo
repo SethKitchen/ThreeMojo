@@ -202,6 +202,8 @@ def test_easu_is_three_js_s_arithmetic() raises:
     var even = easu_pixel(LightView(flat, 4, 4), 3, 4, 8, 8)
     assert_almost_equal(even.r, 0.4, atol=1e-6)
     assert_almost_equal(even.a, 1, atol=1e-6)
+    # The view points into the image, so the image must outlive it.
+    _ = image^
 
 
 def test_the_light_functions_run_over_a_frame() raises:

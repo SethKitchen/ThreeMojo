@@ -252,7 +252,7 @@ def test_the_depth_conversions_are_three_js_s() raises:
 
 def test_the_depth_aware_blur_stops_at_a_depth_step() raises:
     var distances = List[Float32]()
-    for y in range(SIZE):
+    for _ in range(SIZE):
         for x in range(SIZE):
             distances.append(2 if x < 4 else Float32(20))
     var view = a_view(distances)
@@ -342,6 +342,8 @@ def test_sample_down_reads_from_the_top() raises:
     assert_almost_equal(
         sample_down(LightView(image, 2, 2), 0.25, 0.25).r, 1, atol=1e-6
     )
+    # The view points into the image, so the image must outlive it.
+    _ = image^
 
 
 def test_the_composer_runs_every_filter() raises:
