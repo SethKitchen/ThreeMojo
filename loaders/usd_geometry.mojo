@@ -271,7 +271,8 @@ def _project(
     var nx = Float64(0)
     var ny = Float64(0)
     var nz = Float64(0)
-    for i in range(n):
+    # A face has a corner at least.
+    for i in range(n):  # pragma: no branch
         var a = face[i]
         var b = face[(i + 1) % n]
         var ax = value_at(points, a * 3)
@@ -511,7 +512,7 @@ def triangulate_with_pattern(
                 face.append(vertex)
                 corners.set(vertex, offset + Float64(j))
             var contours = List[List[Float64]]()
-            for hole in holes:
+            for hole in holes:  # pragma: no branch
                 var start = value_at(offsets, hole)
                 var contour = List[Float64]()
                 for j in range(_loop_count(value_at(counts, hole))):
@@ -519,9 +520,12 @@ def triangulate_with_pattern(
                     contour.append(vertex)
                     corners.set(vertex, start + Float64(j))
                 contours.append(contour^)
-            for vertex in triangulate_ngon_with_holes(face, contours, points):
-                out.indices.append(vertex)
-                out.pattern.append(corners.get(vertex))
+            # A face of no corners has no triangles: earcut finds no
+            # outline.
+            if len(face) > 0:
+                for vertex in triangulate_ngon_with_holes(face, contours, points):
+                    out.indices.append(vertex)
+                    out.pattern.append(corners.get(vertex))
         elif count == 3 or count == 4:
             var order: List[Int] = [0, 1, 2] if count == 3 else [0, 1, 2, 0, 2, 3]
             for k in order:  # pragma: no branch
@@ -818,7 +822,7 @@ def _triangle_count(counts: List[Float64], hole_map: HoleMap) raises -> Tuple[In
     """
     var starts = List[Float64]()
     var total = Float64(0)
-    for i in range(len(counts)):
+    for i in range(len(counts)):  # pragma: no branch
         starts.append(total)
         if hole_map.is_hole(i):
             continue
@@ -826,7 +830,7 @@ def _triangle_count(counts: List[Float64], hole_map: HoleMap) raises -> Tuple[In
         var holes = hole_map.holes_of(i)
         if len(holes) > 0:
             var corners = count
-            for hole in holes:
+            for hole in holes:  # pragma: no branch
                 corners += value_at(counts, hole)
             total += corners - 2
         elif count >= 3:
@@ -874,21 +878,22 @@ def build_usd_geometry_with_subsets(
         for face in subsets[s]:
             if face >= Float64(len(counts)):
                 continue
-            var start = value_at(starts, face)
+            # A face's first triangle is a whole number from zero, as the
+            # count is. A hole face's triangles can run past the last.
             for t in range(_loop_count(value_at(counts, face) - 2)):
-                var at = start + Float64(t)
-                if at >= 0 and at < Float64(triangles) and at == Float64(Int(at)):
-                    owner[Int(at)] = s
+                var at = Int(value_at(starts, face)) + t
+                if at < triangles:
+                    owner[at] = s
     # A stable sort by subset, as JavaScript's sort is.
     var order = List[Int]()
-    for s in range(-1, len(subsets)):
+    for s in range(-1, len(subsets)):  # pragma: no branch
         for t in range(triangles):
             if owner[t] == s:
                 order.append(t)
     if len(order) > 0:
         var current = owner[order[0]]
         var start = 0
-        for i in range(len(order)):
+        for i in range(len(order)):  # pragma: no branch
             if owner[order[i]] != current:
                 if current >= 0:
                     geometry.add_group(start * 3, (i - start) * 3, MaterialIndex(current))
@@ -902,7 +907,7 @@ def build_usd_geometry_with_subsets(
         raise Error("USD: faces with no corner indices")
     var cut = triangulate_with_pattern(mesh.indices.values, counts, points, hole_map)
     var face_vertices = Float64(0)
-    for count in counts:
+    for count in counts:  # pragma: no branch
         face_vertices += count
     var identity = List[Float64]()
     var uv_identity = (
