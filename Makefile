@@ -159,9 +159,27 @@ JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
 # same reason, and because it needs MAX, which the coverage run does not
 # install. It runs in `make test` and in CI as `make test-gpu-host`.
 COVERAGE_TESTS := $(CPU_TESTS)
+
+# CI splits the suites over runners that work at once: `SHARD=i/n` keeps
+# group i of n, balanced by the source each suite imports, since a suite's
+# time is almost all compilation. See tools/shard.py. Only the suites split:
+# formatting, lint, the docs and the compile-fail cases run whole, on one
+# runner. `coverage-report` reads the captures of every group, so it checks
+# that each suite of the whole list left one.
+SHARD ?=
+TEST_SUITES := $(CPU_TESTS)
+ifneq ($(strip $(SHARD)),)
+TEST_SUITES := $(shell python3 tools/shard.py $(SHARD) $(CPU_TESTS) \
+                 || echo SHARD_ERROR)
+ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
+$(error SHARD must be I/N with 1 <= I <= N, not '$(SHARD)')
+endif
+endif
+COVERAGE_SUITES := $(filter $(TEST_SUITES),$(COVERAGE_TESTS))
+
 # At least a minute: a run of a few affected suites still pays a compile
 # that takes longer than a second.
-COV_BUDGET := $(shell n=$(words $(COVERAGE_TESTS)); \
+COV_BUDGET := $(shell n=$(words $(COVERAGE_SUITES)); \
                 [ $$n -lt 60 ] && n=60; echo $$n)
 
 CACHE_DIR := .cache
@@ -174,6 +192,7 @@ HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
+          --setting=$(call quote,shard:$(SHARD)) \
           --setting=$(call quote,cpu-entries:$(CPU_ENTRY_POINTS)) \
           --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
           --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
@@ -208,6 +227,7 @@ endef
 
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
         docs-check wiki-publish test-tools \
+        coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
         clean clean-images draco-export-check
@@ -273,14 +293,14 @@ BIN_DIR := $(CACHE_DIR)/bin
 test-cpu: $(TEST_CPU_STAMP)
 $(TEST_CPU_STAMP):
 	@mkdir -p $(BIN_DIR)
-	@printf '%s\n' $(CPU_TESTS) \
+	@printf '%s\n' $(TEST_SUITES) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'bin=$(BIN_DIR)/$$(basename "$$1" .mojo); \
 	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1 && "$$bin" 2>&1); rc=$$?; rm -f "$$bin"; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some CPU suites FAILED."; exit 1; }
-	@echo "All $(words $(CPU_TESTS)) CPU suites passed."
+	@echo "All $(words $(TEST_SUITES)) CPU suites passed."
 	@$(call stamp,test-cpu)
 
 # Deliberately uncached: the one thing that decides whether this suite tests
@@ -408,6 +428,17 @@ $(FMT_STAMP):
 # arrangement the new rule can resolve the way this needs.
 coverage: $(COV_STAMP)
 $(COV_STAMP):
+	@$(MAKE) --no-print-directory coverage-instrument
+	@$(MAKE) --no-print-directory coverage-capture
+	@$(MAKE) --no-print-directory coverage-report
+	@$(call stamp,coverage)
+
+# The three steps of `coverage`, which CI runs apart: every runner of a
+# sharded run instruments the same tree and captures its own suites, and one
+# more runner instruments the tree again, gathers every capture into
+# $(COV_DIR)/hits, and reports. Instrumenting takes seconds; the suites take
+# the time.
+coverage-instrument:
 	@rm -rf $(COV_DIR)
 ifeq ($(strip $(COVERED)),)
 	@echo "No measured module is affected; coverage not measured."
@@ -427,15 +458,22 @@ else
 	@# package rather than the probe runtime alone: the tool's own suites
 	@# test the instrumenter, the scanner and the report. See the note
 	@# above. These copies are never instrumented, so measuring the tool
-	@# with itself is still not attempted.
+	@# with itself is still not attempted. Every suite is copied, not only
+	@# this runner's group: a suite can import another.
 	@mkdir -p $(COV_DIR)/coverage
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
+endif
+
+coverage-capture:
+ifneq ($(strip $(COVERED)),)
+	@[ -f $(COV_DIR)/manifest.txt ] || \
+	  { echo "Run 'make coverage-instrument' first."; exit 1; }
 	@# Exact streams are compressed as they arrive. MC-DC record order stays
 	@# intact, without keeping tens of gigabytes of repeated probes on disk.
-	@printf '%s\n' $(COVERAGE_TESTS) \
+	@printf '%s\n' $(COVERAGE_SUITES) \
 	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
@@ -455,12 +493,25 @@ else
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
+	@echo "Captured $(words $(COVERAGE_SUITES)) suites under instrumentation."
+endif
+
+coverage-report:
+ifneq ($(strip $(COVERED)),)
+	@[ -f $(COV_DIR)/manifest.txt ] || \
+	  { echo "Run 'make coverage-instrument' first."; exit 1; }
+	@# A capture from every suite of the whole list, not only this runner's
+	@# group: a group whose captures went missing must not pass by silence.
+	@missing=0; for f in $(COVERAGE_TESTS); do \
+	  name=$$(basename "$$f" .mojo); \
+	  if [ ! -f "$(COV_DIR)/hits/$$name.txt.gz" ]; then \
+	    echo "No capture from $$name."; missing=1; \
+	  fi; \
+	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
 	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits -- \
 	  $(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo $(COV_DIR)/manifest.txt
-
 endif
-	@$(call stamp,coverage)
 
 # The units system's value is what it *rejects*, and a rejection cannot be
 # tested from inside a test suite: a file exercising one would not build. So

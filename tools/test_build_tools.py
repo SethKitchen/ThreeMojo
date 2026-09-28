@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import affected
 import cache_key
+import shard
 
 
 class DependencyTests(unittest.TestCase):
@@ -120,6 +121,29 @@ class GpuStatusTests(unittest.TestCase):
             with patch.object(sys, 'argv', ['gpu_status.py']), contextlib.redirect_stderr(io.StringIO()):
                 del driver.accelerator_count
                 self.assertEqual(gpu_status.main(), 2)
+
+
+class ShardTests(unittest.TestCase):
+    def test_groups_cover_every_suite_once_and_balance(self):
+        weights = {'a': 9, 'b': 7, 'c': 4, 'd': 3, 'e': 2, 'f': 1}
+        groups = shard.split(list(weights), 3, weights.__getitem__)
+        dealt = [name for group in groups for name in group]
+        self.assertEqual(sorted(dealt), sorted(weights))
+        loads = [sum(weights[name] for name in group) for group in groups]
+        self.assertEqual(sorted(loads), [8, 9, 9])
+        # The same split every time.
+        self.assertEqual(groups, shard.split(list(weights), 3, weights.__getitem__))
+
+    def test_a_group_keeps_the_given_order_and_refuses_a_bad_index(self):
+        import contextlib
+        import io
+        suites = ['tests/test_potpack.mojo', 'tests/test_vector3.mojo']
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(shard.main(['1/1'] + suites), 0)
+        self.assertEqual(output.getvalue().split(), suites)
+        with contextlib.redirect_stderr(io.StringIO()):
+            for bad in ([], ['0/2'], ['3/2'], ['x/2'], ['1']):
+                self.assertEqual(shard.main(bad), 2)
 
 
 class MakeCacheTests(unittest.TestCase):
