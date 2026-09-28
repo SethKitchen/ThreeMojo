@@ -791,5 +791,5 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 - `receivedShadowNode` on a volume's ray. The shadows at each step are not shaped by the graph.
 - three.js's node JSON does not keep the name of a uniform, the update of a uniform or the type of an attribute. So `time` is a plain uniform named by its uuid. Set it with `set_uniform` before each frame.
 - The node classes of three.js that are TSL functions, and the classes that have no node here, such as `ModelNode`, `MaterialNode` and `PropertyNode`. A material that uses them cannot load.
-- Compute nodes, storage buffers and `instancedArray`.
+- A material that reads a storage buffer. Compute nodes, storage buffers and `instancedArray` are on [Compute nodes](Compute-nodes). A material reads what they compute as a texture or an attribute.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).

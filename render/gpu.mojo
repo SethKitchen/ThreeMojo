@@ -459,6 +459,20 @@ from render.computation import (
     GPUComputationRenderer,
     compute_texel,
 )
+from materials.compute_ids import ATOMIC_LOAD
+from materials.compute_nodes import (
+    ComputeNode,
+    ComputeRunner,
+    ComputeSource,
+    MutUntracked,
+    StorageBufferStore,
+    StorageMemory,
+    atomic_result,
+    pack_storage,
+    run_statements,
+    unpack_storage,
+)
+from std.atomic import Atomic
 from renderers.renderer import Renderer
 from objects.gaussian_splat import GaussianSplat
 from render.splat_raster import prepare_gaussian_splat
@@ -12556,3 +12570,225 @@ struct GpuSplats(Movable):
             target.depth_mode,
         )
         self.draw(target, splats)
+
+
+# --- compute nodes -----------------------------------------------------------
+
+
+struct _DeviceMemory(ImplicitlyCopyable, StorageMemory):
+    """The device's `StorageMemory`: the invocations run at once, so an
+    atomic function swaps the float's bits in a loop until no other
+    invocation changed them between the read and the write."""
+
+    var live: Pointer[Float32, MutUntracked]
+
+    def __init__(out self, live: Pointer[Float32, MutUntracked]):
+        """Point at the memory the step writes.
+
+        Args:
+            live: The memory.
+        """
+        self.live = live
+
+    def store(self, at: Int, value: Float32):
+        """Write one float.
+
+        Args:
+            at: Its place in the memory.
+            value: The float.
+        """
+        self.live[unsafe_offset=at] = value
+
+    def atomic(self, op: Int, at: Int, value: Float32) -> Float32:
+        """Run an atomic function on one float, at once:
+        `materials.compute_nodes.atomic_result` in a compare-and-swap loop.
+
+        Args:
+            op: The function, an `AtomicOp`'s value.
+            at: The float's place in the memory.
+            value: The operand.
+
+        Returns:
+            What the float held before.
+        """
+        var bits = self.live.unsafe_offset(at).unsafe_bitcast[Int32]()
+        var expected = Atomic[Int32].fetch_add(bits, 0)
+        while True:
+            var old = bitcast[DType.float32](expected)
+            if op == ATOMIC_LOAD.value:
+                return old
+            var new = bitcast[DType.int32](atomic_result(op, old, value))
+            if Atomic[Int32].compare_exchange(bits, expected, new):
+                return old
+
+
+def compute_node_kernel(
+    code: MutPointer[Float32, MutAnyOrigin],
+    before: MutPointer[Float32, MutAnyOrigin],
+    regions: MutPointer[Int32, MutAnyOrigin],
+    live: MutPointer[Float32, MutAnyOrigin],
+    kept: MutPointer[Float32, MutAnyOrigin],
+    buffers: Int32,
+    table_at: Int32,
+    count: Int32,
+    workgroup_size: Int32,
+    workgroups: Int32,
+    results: Int32,
+    first: Int32,
+    last: Int32,
+):
+    """Run one step of a compute node at one invocation: `run_statements`
+    on a `ComputeSource`, as `materials.compute_nodes.run_compute` runs it
+    on the host. A workgroup is a block, and an invocation past the count
+    returns, as three.js's does."""
+    var index = Int(global_idx.x)
+    if index >= Int(count):
+        return
+    var source = ComputeSource(
+        code.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        before.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        regions.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        kept.unsafe_origin_cast[MutUntracked]().unsafe_offset(
+            index * Int(results) * 4
+        ),
+        Int(buffers),
+        Int(table_at),
+        index,
+        Int(workgroup_size),
+        Int(workgroups),
+    )
+    run_statements(
+        source,
+        _DeviceMemory(live.unsafe_origin_cast[MutUntracked]()),
+        Int(first),
+        Int(last),
+    )
+
+
+struct GpuCompute(ComputeRunner, Movable):
+    """Runs compute nodes on the device, three.js's `renderer.compute` on
+    WebGPU. Each step is one launch, a block a workgroup, so a barrier is
+    the end of a launch."""
+
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    var code: DeviceBuffer[DType.float32]
+    var before: DeviceBuffer[DType.float32]
+    var live: DeviceBuffer[DType.float32]
+    var regions: DeviceBuffer[DType.int32]
+    var kept: DeviceBuffer[DType.float32]
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.code^
+        _ = self.before^
+        _ = self.live^
+        _ = self.regions^
+        _ = self.kept^
+        _ = self.context^
+
+    def __init__(out self) raises:
+        """Open the device.
+
+        Raises:
+            Error: If no GPU is present.
+        """
+        if not available():
+            raise Error("No GPU available")
+        self.context = DeviceContext()
+        self.code = self.context.enqueue_create_buffer[DType.float32](4)
+        self.before = self.context.enqueue_create_buffer[DType.float32](4)
+        self.live = self.context.enqueue_create_buffer[DType.float32](4)
+        self.regions = self.context.enqueue_create_buffer[DType.int32](4)
+        self.kept = self.context.enqueue_create_buffer[DType.float32](4)
+
+    def compute(
+        mut self, mut store: StorageBufferStore, node: ComputeNode
+    ) raises:
+        """Run a compute node over a store's buffers on the device, as
+        `materials.compute_nodes.run_compute` runs it on the host.
+
+        Args:
+            store: The buffers. They are read from and written back to it.
+            node: The node.
+
+        Raises:
+            Error: If the store has no buffer the node names, or holds it
+                as another type.
+        """
+        var packed = pack_storage(store, node)
+        ref memory = packed[0]
+        ref regions = packed[1]
+        var floats = max(len(memory), 1)
+        var kept = max(node.count * node.results * 4, 4)
+        # A launch in flight may still read the old buffers.
+        self.context.synchronize()
+        self.code = self.context.enqueue_create_buffer[DType.float32](
+            len(node.program.code)
+        )
+        self.live = self.context.enqueue_create_buffer[DType.float32](floats)
+        self.before = self.context.enqueue_create_buffer[DType.float32](floats)
+        self.regions = self.context.enqueue_create_buffer[DType.int32](
+            max(len(regions), 1)
+        )
+        self.kept = self.context.enqueue_create_buffer[DType.float32](kept)
+        with self.code.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=node.program.code.unsafe_ptr(),
+                count=len(node.program.code),
+            )
+        with self.live.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=memory.unsafe_ptr(),
+                count=len(memory),
+            )
+        with self.regions.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=regions.unsafe_ptr(),
+                count=len(regions),
+            )
+        var zeros = List[Float32](length=kept, fill=0)
+        with self.kept.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=zeros.unsafe_ptr(), count=kept
+            )
+        var copy_blocks = ceildiv(floats, TILE * TILE)
+        for stage in range(node.stages()):
+            self.context.enqueue_function[copy_floats_kernel](
+                self.before.unsafe_ptr(),
+                self.live.unsafe_ptr(),
+                Int32(floats),
+                grid_dim=copy_blocks,
+                block_dim=TILE * TILE,
+            )
+            self.context.enqueue_function[compute_node_kernel](
+                self.code.unsafe_ptr(),
+                self.before.unsafe_ptr(),
+                self.regions.unsafe_ptr(),
+                self.live.unsafe_ptr(),
+                self.kept.unsafe_ptr(),
+                Int32(store.count()),
+                Int32(node.table_at),
+                Int32(node.count),
+                Int32(node.workgroup_size),
+                Int32(node.workgroups()),
+                Int32(node.results),
+                Int32(node.stage_starts[stage]),
+                Int32(node.stage_starts[stage + 1]),
+                grid_dim=node.workgroups(),
+                block_dim=node.workgroup_size,
+            )
+        var out = List[Float32](length=len(memory), fill=0)
+        with self.live.map_to_host() as host:
+            unsafe_memcpy(
+                dest=out.unsafe_ptr(), src=host.unsafe_ptr(), count=len(memory)
+            )
+        unpack_storage(store, out)

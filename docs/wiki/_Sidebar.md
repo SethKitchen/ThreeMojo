@@ -46,6 +46,7 @@
 - [Render target](Render-target-and-framebuffer)
 - [Post-processing](Post-processing)
 - [GPU computation](GPU-computation)
+- [Compute nodes](Compute-nodes)
 - [Progressive light map](Progressive-light-map)
 - [Gaussian splats](Gaussian-splats)
 - [Voxel global illumination](Voxel-global-illumination)

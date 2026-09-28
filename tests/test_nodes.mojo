@@ -181,7 +181,7 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(108).is_valid())
+    assert_false(NodeKind(111).is_valid())
     assert_true(NodeKind(103).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
@@ -986,7 +986,7 @@ def test_compiling_refuses_an_edited_graph() raises:
     with assert_raises(contains="names a node the graph does not hold"):
         _ = nowhere.compile()
     var strange = graph.copy()
-    strange._kinds[a.value] = NodeKind(108)
+    strange._kinds[a.value] = NodeKind(111)
     with assert_raises(contains="a kind or a type there is not"):
         _ = strange.compile()
     var shapeless = graph.copy()
