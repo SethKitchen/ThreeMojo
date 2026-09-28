@@ -1199,7 +1199,10 @@ struct Sculptor(Movable):
         Args:
             pointer_id: Which pointer.
         """
-        if Bool(self._active_pointer) and self._active_pointer.value() == pointer_id:
+        if (
+            Bool(self._active_pointer)
+            and self._active_pointer.value() == pointer_id
+        ):
             self.end_stroke()
 
     def _sculpt_stroke[
