@@ -65,6 +65,8 @@ from lights.ltc import (
 )
 from lights.shadow import (
     BASIC_SHADOW_MAP,
+    CSM_BLEND,
+    SUN_BLEND,
     PCF_SHADOW_MAP,
     SHADOW_HEADER,
     SHADOW_INTENSITY_AT,
@@ -1023,7 +1025,7 @@ def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() r
 
 
 def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
-    # A directional light's last five floats are its cascade, and every
+    # A directional light's last eight floats are its cascade, and every
     # shadow map's header ends with its intensity.
     var assets = Assets()
     var scene = a_shadowed_scene(assets)
@@ -1034,7 +1036,7 @@ def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
     var renderer = Renderer(24, 18)
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
     var flat = flatten_lights(lighting)
-    assert_equal(DIRECTIONAL_FLOATS, CASCADE_AT + 5)
+    assert_equal(DIRECTIONAL_FLOATS, CASCADE_AT + 8)
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT], Float32(0.25))
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 1], Float32(0.75))
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 2], Float32(20))
@@ -1044,6 +1046,16 @@ def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
     assert_equal(flat[first_map + SHADOW_INTENSITY_AT], Float32(0.4))
     var second_map = Int(flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13])
     assert_equal(flat[second_map + SHADOW_INTENSITY_AT], Float32(1))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 5], Float32(CSM_BLEND.value))
+    # A sun's cascade carries its blend, its fade start and where the one
+    # before it ends.
+    scene.lights[0].cascade = ShadowCascade(
+        2, 9, Length(1.0, METER), True, False, SUN_BLEND, 8.5, 3
+    )
+    var sun = flatten_lights(Lighting(scene))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 5], Float32(SUN_BLEND.value))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 6], Float32(8.5))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 7], Float32(3))
     # A light that is no cascade carries a span of zero.
     var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
     assert_equal(bare[LIGHTS_FIRST + CASCADE_AT + 2], Float32(0))

@@ -47,7 +47,9 @@ from lights.shadow import (
     ShadowShape,
     SpotLightMap,
     Unshaped,
+    SUN_BLEND,
     cascade_reach,
+    sun_reach,
     shadow_strength,
     view_depth,
 )
@@ -1248,7 +1250,7 @@ struct Lighting(Movable):
         back: Vector3 = Vector3(0, 0, 1),
         chosen: LightMask = ALL_LIGHTS,
         var profiles: List[SpotProfile] = List[SpotProfile](),
-        probe_grid: LightProbeGrid = LightProbeGrid(),
+        probe_grid: LightProbeGrid = LightProbeGrid.none(),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -1572,7 +1574,7 @@ struct Lighting(Movable):
         self.ltc = LtcTables()
         self.spot_profiles = List[SpotProfile]()
         self.spot_profile_slots = List[Int]()
-        self.grid = LightProbeGrid()
+        self.grid = LightProbeGrid.none()
 
     def rect_count(self) -> Int:
         """Return how many rect area lights there are."""
@@ -1736,13 +1738,21 @@ struct Lighting(Movable):
         ref band = self.cascades[index]
         if not band.is_cascade():
             return self.shadow_through(slot, position, normal, receives, shape)
-        var reach = cascade_reach(
-            view_depth(position, self.eye, self.back) / band.span.to(METER),
-            band.start,
-            band.end,
-            band.last,
-            band.fade,
+        var depth = view_depth(position, self.eye, self.back) / band.span.to(
+            METER
         )
+        var reach = cascade_reach(
+            depth, band.start, band.end, band.last, band.fade
+        )
+        if band.blend == SUN_BLEND:
+            reach = sun_reach(
+                depth,
+                band.start,
+                band.ramp_end,
+                band.fade_start,
+                band.end,
+                band.last,
+            )
         if reach[0] == 0:
             return Vector3(0, 0, 0)
         var through = self.shadow_through(
@@ -2229,7 +2239,7 @@ struct Lighting(Movable):
         )
         if self.grid.is_empty():
             return total
-        var grid = self.grid.sh_at(position).get_irradiance_at(normal)
+        var grid = self.grid.irradiance_at(position, normal)
         return FloatColor(
             total.r + grid.x, total.g + grid.y, total.b + grid.z, 1.0
         )

@@ -75,6 +75,7 @@ was drawn. It is compared in the map's zero-to-one depth, as three.js
 compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
+from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
@@ -695,6 +696,33 @@ struct ShadowMap(Copyable, Movable):
 
 
 @fieldwise_init
+struct CascadeBlend(Equatable, ImplicitlyCopyable, Writable):
+    """How the cascades of one sun blend into each other, as a type
+    rather than an int.
+
+    `CSM_BLEND` is three.js's `CSMShader`, which weighs each cascade's
+    light. `SUN_BLEND` is its `SunShadowNode`, which lights once and
+    blends the cascades' shadows. `ShadowCascade.validate` refuses a
+    blend that is neither.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `CSM_BLEND` or `SUN_BLEND`.
+
+        Returns:
+            Whether the blend is one of the two.
+        """
+        return self == CSM_BLEND or self == SUN_BLEND
+
+
+# three.js's `CSM`: see `cascade_reach`.
+comptime CSM_BLEND = CascadeBlend(0)
+# three.js's `SunLight`: see `sun_reach`.
+comptime SUN_BLEND = CascadeBlend(1)
+
+
 struct ShadowCascade(ImplicitlyCopyable):
     """Which slice of a camera's depth one directional light lights, as
     three.js's `CSMShader` gates each light of a `CSM`.
@@ -719,6 +747,48 @@ struct ShadowCascade(ImplicitlyCopyable):
     var last: Bool
     # Whether the slices blend into each other, three.js's `CSM.fade`.
     var fade: Bool
+    # Which of three.js's two schemes the slices follow.
+    var blend: CascadeBlend
+    # Under `SUN_BLEND`: where this slice's shadow starts to fade into the
+    # next, three.js's `cascadeData.z`, and where the slice before it ends,
+    # so this slice's light ramps in between `start` and it. Read by
+    # `sun_reach`.
+    var fade_start: Float32
+    var ramp_end: Float32
+
+    def __init__(
+        out self,
+        start: Float32,
+        end: Float32,
+        span: Length,
+        last: Bool,
+        fade: Bool,
+        blend: CascadeBlend = CSM_BLEND,
+        fade_start: Float32 = 0,
+        ramp_end: Float32 = 0,
+    ):
+        """Describe one slice.
+
+        Args:
+            start: Where the slice begins, as a fraction of `span`.
+            end: Where it ends.
+            span: What a depth is divided by. Zero for no cascade.
+            last: Whether this is the furthest slice.
+            fade: Whether the slices blend, three.js's `CSM.fade`. Read
+                under `CSM_BLEND`.
+            blend: `CSM_BLEND` or `SUN_BLEND`.
+            fade_start: Under `SUN_BLEND`, where the shadow starts to fade
+                into the next slice.
+            ramp_end: Under `SUN_BLEND`, where the slice before ends.
+        """
+        self.start = start
+        self.end = end
+        self.span = span
+        self.last = last
+        self.fade = fade
+        self.blend = blend
+        self.fade_start = fade_start
+        self.ramp_end = ramp_end
 
     @staticmethod
     def none() -> ShadowCascade:
@@ -762,6 +832,18 @@ struct ShadowCascade(ImplicitlyCopyable):
                 "A shadow cascade must start at zero or later and end no"
                 " sooner than it starts"
             )
+        if not self.blend.is_valid():
+            raise Error("A cascade blend that is none of the two")
+        if self.blend == SUN_BLEND and (
+            not isfinite(self.fade_start)
+            or not isfinite(self.ramp_end)
+            or self.fade_start > self.end
+            or self.ramp_end < self.start
+        ):
+            raise Error(
+                "A sun's cascade must fade before it ends, and its light"
+                " must ramp in after it starts"
+            )
 
 
 def view_depth(position: Vector3, eye: Vector3, back: Vector3) -> Float32:
@@ -781,6 +863,47 @@ def view_depth(position: Vector3, eye: Vector3, back: Vector3) -> Float32:
         + (position.y - eye.y) * back.y
         + (position.z - eye.z) * back.z
     )
+
+
+def sun_reach(
+    depth: Float32,
+    start: Float32,
+    ramp_end: Float32,
+    fade_start: Float32,
+    end: Float32,
+    last: Bool,
+) -> SIMD[DType.float32, 2]:
+    """Return how much of a sun's cascade's light reaches a depth and how
+    much of its shadow falls there: three.js's `SunShadowNode`, split
+    among the cascade lights.
+
+    three.js lights a sun once and walks its cascades back to front,
+    `shadow = mix( cascadeShadow, shadow, smoothstep( fadeStart, end,
+    depth ) )` inside each. Here each cascade is a light, so the same
+    blend is split into shares. A cascade takes the light where the one
+    before fades out, `smoothstep( start, ramp_end, depth )`, and gives it
+    up where its own shadow fades, `smoothstep( fade_start, end, depth
+    )`. The last cascade keeps the light past its end and fades its
+    shadow out instead.
+
+    Args:
+        depth: The fragment's depth in meters, over a span of one meter.
+        start: Where the cascade begins, `ShadowCascade.start`.
+        ramp_end: Where the cascade before it ends.
+        fade_start: Where its shadow starts to fade.
+        end: Where it ends.
+        last: Whether it is the furthest cascade.
+
+    Returns:
+        The share of the light, then the share of its shadow.
+    """
+    if depth < start:
+        return SIMD[DType.float32, 2](0, 0)
+    var ramp_in = smoothstep(start, ramp_end, depth)
+    var fade_out = smoothstep(fade_start, end, depth)
+    if last:
+        return SIMD[DType.float32, 2](ramp_in, 1 - fade_out)
+    return SIMD[DType.float32, 2](ramp_in * (1 - fade_out), 1)
 
 
 def cascade_reach(
