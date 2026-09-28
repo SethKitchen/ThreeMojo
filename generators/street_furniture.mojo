@@ -31,6 +31,7 @@ from generators.utils import (
     compose_matrix,
     meters,
     part,
+    unit_vectors_quaternion,
 )
 from geometries.box import box
 from geometries.circle import ring
@@ -135,25 +136,8 @@ def unit_vectors_turn(start: Vec3d, end: Vec3d) -> Matrix4:
     Returns:
         The turn.
     """
-    var r = start.dot(end) + 1
-    # Opposite vectors have no cross product; three.js turns a half turn
-    # about an axis across the start instead.
-    var flip = r < 1e-8
-    var across = Vec3d(-start.y, start.x, 0) if abs(start.x) > abs(
-        start.z
-    ) else Vec3d(0, -start.z, start.y)
-    var q = across if flip else start.cross(end)
-    var w = 0.0 if flip else r
-    var length = sqrt(q.x * q.x + q.y * q.y + q.z * q.z + w * w)
-    var inverse = 1 / length
-    return compose_matrix(
-        Vec3d(0, 0, 0),
-        q.x * inverse,
-        q.y * inverse,
-        q.z * inverse,
-        w * inverse,
-        Vec3d(1, 1, 1),
-    )
+    var q = unit_vectors_quaternion(start, end)
+    return compose_matrix(Vec3d(0, 0, 0), q.x, q.y, q.z, q.w, Vec3d(1, 1, 1))
 
 
 def _strut(a: Vec3d, b: Vec3d, radius: Float64) raises -> BufferGeometry:

@@ -228,6 +228,61 @@ struct Vec3d(ImplicitlyCopyable):
         return Vector3(Float32(self.x), Float32(self.y), Float32(self.z))
 
 
+@fieldwise_init
+struct Quat64(ImplicitlyCopyable):
+    """A quaternion in `Float64`, for turns three.js computes in
+    `Float64`."""
+
+    var x: Float64
+    var y: Float64
+    var z: Float64
+    var w: Float64
+
+    def apply(self, v: Vec3d) -> Vec3d:
+        """Return a vector turned by the quaternion, three.js's
+        `applyQuaternion`.
+
+        Args:
+            v: The vector.
+
+        Returns:
+            The turned vector.
+        """
+        var tx = 2 * (self.y * v.z - self.z * v.y)
+        var ty = 2 * (self.z * v.x - self.x * v.z)
+        var tz = 2 * (self.x * v.y - self.y * v.x)
+        return Vec3d(
+            v.x + self.w * tx + self.y * tz - self.z * ty,
+            v.y + self.w * ty + self.z * tx - self.x * tz,
+            v.z + self.w * tz + self.x * ty - self.y * tx,
+        )
+
+
+def unit_vectors_quaternion(start: Vec3d, end: Vec3d) -> Quat64:
+    """Return the turn that carries one unit vector onto another,
+    three.js's `Quaternion.setFromUnitVectors`.
+
+    Opposite vectors have no cross product, so three.js turns a half turn
+    about an axis across the start instead.
+
+    Args:
+        start: The unit vector to turn.
+        end: The unit vector to turn it onto.
+
+    Returns:
+        The turn, unit length.
+    """
+    var r = start.dot(end) + 1
+    var flip = r < 1e-8
+    var across = Vec3d(-start.y, start.x, 0) if abs(start.x) > abs(
+        start.z
+    ) else Vec3d(0, -start.z, start.y)
+    var q = across if flip else start.cross(end)
+    var w = 0.0 if flip else r
+    var inverse = 1 / sqrt(q.x * q.x + q.y * q.y + q.z * q.z + w * w)
+    return Quat64(q.x * inverse, q.y * inverse, q.z * inverse, w * inverse)
+
+
 def meters(length: Length) -> Float64:
     """Return a length in meters, in `Float64`.
 
