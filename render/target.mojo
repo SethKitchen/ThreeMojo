@@ -825,16 +825,35 @@ struct RenderTarget(Movable, SampleSource):
             self.depth_mode = depth_mode
         var far = cleared_depth(self.depth_mode)
         var top = rect.top(self.height)
-        for y in range(top, top + rect.height):  # pragma: no branch
-            for x in range(rect.x, rect.x + rect.width):  # pragma: no branch
-                var slot = y * self.width + x
-                if color:
-                    self.colors[slot] = self.clear
-                    self.data[slot] = False
-                if depth:
-                    self.depth[slot] = far
-                if stencil:
-                    self.stencil[slot] = 0
+        # `fits` has put every slot inside the target, so each buffer is
+        # written row by row with no bounds check: a clear touches every
+        # pixel of every frame.
+        if color:
+            var colors = self.colors.unsafe_ptr()
+            var data = self.data.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    colors[unsafe_offset=row + x] = self.clear
+                    data[unsafe_offset=row + x] = False
+        if depth:
+            var depths = self.depth.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    depths[unsafe_offset=row + x] = far
+        if stencil:
+            var stencils = self.stencil.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    stencils[unsafe_offset=row + x] = 0
         if color and self.has_normals():
             for y in range(top, top + rect.height):  # pragma: no branch
                 for x in range(
