@@ -94,11 +94,14 @@ from render.layered_target import LayeredRenderTarget
 from render.texture_copy import TexelPoint, copy_framebuffer_to_texture
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
+    ShadowShape,
+    Unshaped,
     BASIC_SHADOW_MAP,
     CENTER_TAP,
     PCF_SOFT_SHADOW_MAP,
     PCF_TAPS,
     POINT_SHADOW_TAPS,
+    SHADOW_COLORS_AT,
     SHADOW_HEADER,
     SHADOW_INTENSITY_AT,
     SHADOW_TYPE_AT,
@@ -118,6 +121,7 @@ from lights.shadow import (
     point_shadow_spread,
     point_shadow_tap,
     shadow_coordinate,
+    transmitted_shadow,
     shadow_strength,
     shadow_tap,
     shadow_texel,
@@ -177,6 +181,7 @@ from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     DRAW_TRIANGLES,
@@ -272,6 +277,8 @@ from materials.nodes import (
     NodeProgramId,
     OPACITY_NODE,
     OUTPUT_NODE,
+    RECEIVED_SHADOW_NODE,
+    ProgramShape,
     NodeContext,
     NodeInputs,
     NodeProgramStore,
@@ -720,7 +727,10 @@ comptime STATE_FACING = STATE_NORMAL_MAP_TYPE + 1
 # Which texture's red is a `PHONG` triangle's thickness, or `NO_TEXTURE`
 # for none; see `RasterVertex.scatter_map`.
 comptime STATE_SCATTER_MAP = STATE_FACING + 1
-comptime STATE_PER_TRIANGLE = STATE_SCATTER_MAP + 1
+# Where the triangle's light block starts in the light buffer: zero for
+# the frame's own lights; see `flatten_frame_lights`.
+comptime STATE_LIGHTS = STATE_SCATTER_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_LIGHTS + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -772,7 +782,11 @@ comptime LIGHTS_PROBE = 14
 # The camera's back axis in world space, `Lighting.back`: with its up
 # axis, the view rotation a normal attachment is written in.
 comptime LIGHTS_BACK = LIGHTS_PROBE + SH_COUNT * 3
-comptime LIGHTS_FIRST = LIGHTS_BACK + 3
+# How many directional, point, hemisphere and spot lights the block holds:
+# what a triangle lit by a block of its own reads in place of the kernel's
+# arguments. See `flatten_frame_lights`.
+comptime LIGHTS_COUNTS = LIGHTS_BACK + 3
+comptime LIGHTS_FIRST = LIGHTS_COUNTS + 4
 # How the depth buffer is laid out: one float of depth a pixel, then the
 # attachments a `RenderTarget` holds, each a plane of its own, so the
 # kernel leaves a whole target behind with no argument more. Metal binds
@@ -1208,7 +1222,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     under a parallel projection, three of the camera's own up axis, then
     three of ambient, one of `Lighting.scale`, one of how many rect area
     lights there are, 27 of the light probes' coefficients, three of the
-    camera's back axis, then twelve per
+    camera's back axis, four of how many directional, point, hemisphere
+    and spot lights there are, then twelve per
     directional light -- a unit
     direction, the light it carries, its shadow and its cascade -- then
     nine per point light: where
@@ -1266,7 +1281,11 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         next += 2 * LTC_FLOATS
     for slot in range(len(lighting.shadows)):
         starts.append(next)
-        next += SHADOW_HEADER + len(lighting.shadows[slot].depths)
+        next += (
+            SHADOW_HEADER
+            + len(lighting.shadows[slot].depths)
+            + len(lighting.shadows[slot].colors)
+        )
     var map_starts = List[Int]()
     for _ in range(len(lighting.spot_maps)):
         map_starts.append(next)
@@ -1290,6 +1309,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.back.x)
     flat.append(lighting.back.y)
     flat.append(lighting.back.z)
+    flat.append(Float32(lighting.count()))
+    flat.append(Float32(lighting.point_count()))
+    flat.append(Float32(lighting.hemisphere_count()))
+    flat.append(Float32(lighting.spot_count()))
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -1389,8 +1412,15 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
             flat.append(frame[element])
         flat.append(Float32(map.shadow_type.value))
         flat.append(map.intensity)
+        # Where the colors start, past the depths, or zero for none.
+        flat.append(
+            Float32(SHADOW_HEADER + len(map.depths)) if len(map.colors)
+            > 0 else 0
+        )
         for texel in range(len(map.depths)):
             flat.append(map.depths[texel])
+        for element in range(len(map.colors)):
+            flat.append(map.colors[element])
     for slot in range(len(lighting.spot_maps)):
         ref picture = lighting.spot_maps[slot]
         flat.append(Float32(picture.texture.value))
@@ -1623,19 +1653,157 @@ def _through(
     return _shadow_at(lights, Int(block), position, normal)
 
 
-def _direction_through(
+def _square_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Vector3:
+    """Return how much of a light's red, green and blue reach a surface
+    past its square map: the device counterpart of `ShadowMap.through`."""
+    var colors = Int(lights[unsafe_offset=block + SHADOW_COLORS_AT])
+    if colors == 0:
+        var through = _shadow_at(lights, block, position, normal)
+        return Vector3(through, through, through)
+    var size = Int(lights[unsafe_offset=block])
+    var frame = SIMD[DType.float32, 16](0)
+    for element in range(16):
+        frame[element] = lights[unsafe_offset=block + 4 + element]
+    var place = shadow_coordinate(
+        frame,
+        biased_position(position, normal, lights[unsafe_offset=block + 2]),
+    )
+    if not inside_shadow_map(place, lights[unsafe_offset=block + 1]):
+        return Vector3(1, 1, 1)
+    var across = place.x * Float32(size)
+    var down = place.y * Float32(size)
+    var red_green = SIMD[DType.float32, 8](0)
+    var blue_alpha = SIMD[DType.float32, 8](0)
+    var first = block + colors
+    for corner in range(4):
+        var texel = first + bilinear_texel(across, down, corner, size) * 4
+        red_green[corner] = lights[unsafe_offset=texel]
+        red_green[corner + 4] = lights[unsafe_offset=texel + 1]
+        blue_alpha[corner] = lights[unsafe_offset=texel + 2]
+        blue_alpha[corner + 4] = lights[unsafe_offset=texel + 3]
+    return transmitted_shadow(
+        _unweakened_shadow_at(lights, block, position, normal),
+        SIMD[DType.float32, 4](
+            bilinear(red_green, 0, across, down),
+            bilinear(red_green, 4, across, down),
+            bilinear(blue_alpha, 0, across, down),
+            bilinear(blue_alpha, 4, across, down),
+        ),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
+def _cube_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Vector3:
+    """Return how much of a point light's red, green and blue reach a
+    surface past its cube: the device counterpart of `ShadowMap.through`
+    on a cube."""
+    var colors = Int(lights[unsafe_offset=block + SHADOW_COLORS_AT])
+    if colors == 0:
+        var through = _cube_shadow_at(lights, block, position, normal)
+        return Vector3(through, through, through)
+    var near = lights[unsafe_offset=block + 7]
+    var far = lights[unsafe_offset=block + 8]
+    var away = biased_position(
+        position, normal, lights[unsafe_offset=block + 2]
+    )
+    var toward = Vector3(
+        away.x - lights[unsafe_offset=block + 4],
+        away.y - lights[unsafe_offset=block + 5],
+        away.z - lights[unsafe_offset=block + 6],
+    )
+    var distance = toward.length()
+    if not inside_point_shadow(distance, near, far):
+        return Vector3(1, 1, 1)
+    var texel = (
+        block
+        + colors
+        + cube_texel(
+            Vector3(
+                toward.x / distance, toward.y / distance, toward.z / distance
+            ),
+            Int(lights[unsafe_offset=block]),
+        )
+        * 4
+    )
+    return transmitted_shadow(
+        _unweakened_cube_at(lights, block, position, normal),
+        SIMD[DType.float32, 4](
+            lights[unsafe_offset=texel],
+            lights[unsafe_offset=texel + 1],
+            lights[unsafe_offset=texel + 2],
+            lights[unsafe_offset=texel + 3],
+        ),
+        lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
+    )
+
+
+def _shaped_through[
+    R: ShadowShape
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     at: Int,
     receives: Bool,
     position: Vector3,
     normal: Vector3,
-) -> Float32:
-    """Return how much of one directional light reaches a surface: the
-    device counterpart of `Lighting.direction_through`, reading the
-    light's shadow and cascade from its record at `at`."""
+    shape: R,
+) -> Vector3:
+    """Return what one light's shadow lets through to a surface once the
+    surface has shaped it: the device counterpart of
+    `Lighting.shadow_through`, reading the map's start from the light's own
+    record at `at`."""
+    var block = lights[unsafe_offset=at]
+    if block < 0 or not receives:
+        return Vector3(1, 1, 1)
+    return shape.shaped(_square_through(lights, Int(block), position, normal))
+
+
+def _point_shaped[
+    R: ShadowShape
+](
+    lights: MutPointer[Float32, MutAnyOrigin],
+    at: Int,
+    receives: Bool,
+    position: Vector3,
+    normal: Vector3,
+    shape: R,
+) -> Vector3:
+    """Return what a point light's cube lets through to a surface once the
+    surface has shaped it: `_point_through`, shaped as `_shaped_through`
+    shapes a map."""
+    var block = lights[unsafe_offset=at]
+    if block < 0 or not receives:
+        return Vector3(1, 1, 1)
+    return shape.shaped(_cube_through(lights, Int(block), position, normal))
+
+
+def _direction_through[
+    R: ShadowShape
+](
+    lights: MutPointer[Float32, MutAnyOrigin],
+    at: Int,
+    receives: Bool,
+    position: Vector3,
+    normal: Vector3,
+    shape: R,
+) -> Vector3:
+    """Return how much of one directional light reaches a surface, per
+    channel: the device counterpart of `Lighting.direction_through`,
+    reading the light's shadow and cascade from its record at `at`."""
     var span = lights[unsafe_offset=at + CASCADE_AT + 2]
     if span == 0:
-        return _through(lights, at + 6, receives, position, normal)
+        return _shaped_through(
+            lights, at + 6, receives, position, normal, shape
+        )
     var reach = cascade_reach(
         view_depth(
             position,
@@ -1657,9 +1825,14 @@ def _direction_through(
         lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
     )
     if reach[0] == 0:
-        return 0
-    return reach[0] * shadow_strength(
-        _through(lights, at + 6, receives, position, normal), reach[1]
+        return Vector3(0, 0, 0)
+    var through = _shaped_through(
+        lights, at + 6, receives, position, normal, shape
+    )
+    return Vector3(
+        reach[0] * shadow_strength(through.x, reach[1]),
+        reach[0] * shadow_strength(through.y, reach[1]),
+        reach[0] * shadow_strength(through.z, reach[1]),
     )
 
 
@@ -2005,7 +2178,9 @@ def _ambient_at(
     )
 
 
-def _arriving(
+def _arriving[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2021,6 +2196,7 @@ def _arriving(
     py: Float32,
     pz: Float32,
     receives: Bool = True,
+    shape: R = Unshaped(),
 ) -> Vector3:
     """Return the light reaching a surface at (px, py, pz) facing (nx, ny, nz).
 
@@ -2041,12 +2217,17 @@ def _arriving(
         )
         if lambert <= 0:
             continue
-        lambert *= _direction_through(
-            lights, at, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
+        var through = _direction_through(
+            lights,
+            at,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
         )
-        red += lights[unsafe_offset=at + 3] * lambert
-        green += lights[unsafe_offset=at + 4] * lambert
-        blue += lights[unsafe_offset=at + 5] * lambert
+        red += lights[unsafe_offset=at + 3] * (lambert * through.x)
+        green += lights[unsafe_offset=at + 4] * (lambert * through.y)
+        blue += lights[unsafe_offset=at + 5] * (lambert * through.z)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
@@ -2060,24 +2241,22 @@ def _arriving(
         var lambert = (nx * dx + ny * dy + nz * dz) / distance
         if lambert <= 0:
             continue
-        var reach = (
-            lambert
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 6],
-                lights[unsafe_offset=at + 7],
-            )
-            * _point_through(
-                lights,
-                at + 8,
-                receives,
-                Vector3(px, py, pz),
-                Vector3(nx, ny, nz),
-            )
+        var bare = lambert * falloff(
+            distance,
+            lights[unsafe_offset=at + 6],
+            lights[unsafe_offset=at + 7],
         )
-        red += lights[unsafe_offset=at + 3] * reach
-        green += lights[unsafe_offset=at + 4] * reach
-        blue += lights[unsafe_offset=at + 5] * reach
+        var through = _point_shaped(
+            lights,
+            at + 8,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
+        )
+        red += lights[unsafe_offset=at + 3] * (bare * through.x)
+        green += lights[unsafe_offset=at + 4] * (bare * through.y)
+        blue += lights[unsafe_offset=at + 5] * (bare * through.z)
     var first_sky = first_point + points * POINT_FLOATS
     for index in range(hemispheres):
         var at = first_sky + index * HEMISPHERE_FLOATS
@@ -2136,7 +2315,7 @@ def _arriving(
         var lambert = (nx * dx + ny * dy + nz * dz) / distance
         if lambert <= 0:
             continue
-        var reach = (
+        var bare = (
             lambert
             * rim
             * falloff(
@@ -2144,13 +2323,14 @@ def _arriving(
                 lights[unsafe_offset=at + 9],
                 lights[unsafe_offset=at + 10],
             )
-            * _through(
-                lights,
-                at + 13,
-                receives,
-                Vector3(px, py, pz),
-                Vector3(nx, ny, nz),
-            )
+        )
+        var through = _shaped_through(
+            lights,
+            at + 13,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
         )
         var tint = _spot_tint(
             lights,
@@ -2161,9 +2341,9 @@ def _arriving(
             Vector3(px, py, pz),
             Vector3(nx, ny, nz),
         )
-        red += lights[unsafe_offset=at + 6] * tint.x * reach
-        green += lights[unsafe_offset=at + 7] * tint.y * reach
-        blue += lights[unsafe_offset=at + 8] * tint.z * reach
+        red += lights[unsafe_offset=at + 6] * tint.x * (bare * through.x)
+        green += lights[unsafe_offset=at + 7] * tint.y * (bare * through.y)
+        blue += lights[unsafe_offset=at + 8] * tint.z * (bare * through.z)
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -2200,7 +2380,9 @@ def _toon_tone(
     )
 
 
-def _toon_arriving(
+def _toon_arriving[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     count: Int,
     points: Int,
@@ -2218,6 +2400,7 @@ def _toon_arriving(
     py: Float32,
     pz: Float32,
     receives: Bool = True,
+    shape: R = Unshaped(),
 ) -> Vector3:
     """Return the light reaching a `TOON` surface at (px, py, pz).
 
@@ -2242,12 +2425,17 @@ def _toon_arriving(
             + ny * lights[unsafe_offset=at + 1]
             + nz * lights[unsafe_offset=at + 2],
         )
-        tone *= _direction_through(
-            lights, at, receives, Vector3(px, py, pz), Vector3(nx, ny, nz)
+        var through = _direction_through(
+            lights,
+            at,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
         )
-        red += lights[unsafe_offset=at + 3] * tone
-        green += lights[unsafe_offset=at + 4] * tone
-        blue += lights[unsafe_offset=at + 5] * tone
+        red += lights[unsafe_offset=at + 3] * (tone * through.x)
+        green += lights[unsafe_offset=at + 4] * (tone * through.y)
+        blue += lights[unsafe_offset=at + 5] * (tone * through.z)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
@@ -2260,24 +2448,22 @@ def _toon_arriving(
         var tone = _toon_tone(
             texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
         )
-        var reach = (
-            tone
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 6],
-                lights[unsafe_offset=at + 7],
-            )
-            * _point_through(
-                lights,
-                at + 8,
-                receives,
-                Vector3(px, py, pz),
-                Vector3(nx, ny, nz),
-            )
+        var bare = tone * falloff(
+            distance,
+            lights[unsafe_offset=at + 6],
+            lights[unsafe_offset=at + 7],
         )
-        red += lights[unsafe_offset=at + 3] * reach
-        green += lights[unsafe_offset=at + 4] * reach
-        blue += lights[unsafe_offset=at + 5] * reach
+        var through = _point_shaped(
+            lights,
+            at + 8,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
+        )
+        red += lights[unsafe_offset=at + 3] * (bare * through.x)
+        green += lights[unsafe_offset=at + 4] * (bare * through.y)
+        blue += lights[unsafe_offset=at + 5] * (bare * through.z)
     var first_sky = first_point + points * POINT_FLOATS
     for index in range(hemispheres):
         var at = first_sky + index * HEMISPHERE_FLOATS
@@ -2333,7 +2519,7 @@ def _toon_arriving(
         var tone = _toon_tone(
             texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
         )
-        var reach = (
+        var bare = (
             tone
             * rim
             * falloff(
@@ -2341,13 +2527,14 @@ def _toon_arriving(
                 lights[unsafe_offset=at + 9],
                 lights[unsafe_offset=at + 10],
             )
-            * _through(
-                lights,
-                at + 13,
-                receives,
-                Vector3(px, py, pz),
-                Vector3(nx, ny, nz),
-            )
+        )
+        var through = _shaped_through(
+            lights,
+            at + 13,
+            receives,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+            shape,
         )
         var tint = _spot_tint(
             lights,
@@ -2358,14 +2545,16 @@ def _toon_arriving(
             Vector3(px, py, pz),
             Vector3(nx, ny, nz),
         )
-        red += lights[unsafe_offset=at + 6] * tint.x * reach
-        green += lights[unsafe_offset=at + 7] * tint.y * reach
-        blue += lights[unsafe_offset=at + 8] * tint.z * reach
+        red += lights[unsafe_offset=at + 6] * tint.x * (bare * through.x)
+        green += lights[unsafe_offset=at + 7] * tint.y * (bare * through.y)
+        blue += lights[unsafe_offset=at + 8] * tint.z * (bare * through.z)
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
 
-def _highlight(
+def _highlight[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2383,6 +2572,7 @@ def _highlight(
     specular: Vector3,
     shininess: Float32,
     receives: Bool = True,
+    shape: R = Unshaped(),
 ) -> Vector3:
     """Return the highlight a `PHONG` surface sends toward the camera.
 
@@ -2422,13 +2612,13 @@ def _highlight(
         var lambert = normal.dot(toward)
         if lambert <= 0:
             continue
-        lambert *= _direction_through(
-            lights, at, receives, Vector3(px, py, pz), normal
+        var through = _direction_through(
+            lights, at, receives, Vector3(px, py, pz), normal, shape
         )
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        red += lights[unsafe_offset=at + 3] * lambert * sent.x
-        green += lights[unsafe_offset=at + 4] * lambert * sent.y
-        blue += lights[unsafe_offset=at + 5] * lambert * sent.z
+        red += lights[unsafe_offset=at + 3] * (lambert * through.x) * sent.x
+        green += lights[unsafe_offset=at + 4] * (lambert * through.y) * sent.y
+        blue += lights[unsafe_offset=at + 5] * (lambert * through.z) * sent.z
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
@@ -2443,22 +2633,19 @@ def _highlight(
         var lambert = normal.dot(toward) / distance
         if lambert <= 0:
             continue
-        var reach = (
-            lambert
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 6],
-                lights[unsafe_offset=at + 7],
-            )
-            * _point_through(
-                lights, at + 8, receives, Vector3(px, py, pz), normal
-            )
+        var bare = lambert * falloff(
+            distance,
+            lights[unsafe_offset=at + 6],
+            lights[unsafe_offset=at + 7],
+        )
+        var through = _point_shaped(
+            lights, at + 8, receives, Vector3(px, py, pz), normal, shape
         )
         toward.normalize()
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        red += lights[unsafe_offset=at + 3] * reach * sent.x
-        green += lights[unsafe_offset=at + 4] * reach * sent.y
-        blue += lights[unsafe_offset=at + 5] * reach * sent.z
+        red += lights[unsafe_offset=at + 3] * (bare * through.x) * sent.x
+        green += lights[unsafe_offset=at + 4] * (bare * through.y) * sent.y
+        blue += lights[unsafe_offset=at + 5] * (bare * through.z) * sent.z
     var first_spot = (
         first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
     )
@@ -2487,7 +2674,7 @@ def _highlight(
         var lambert = normal.dot(toward) / distance
         if lambert <= 0:
             continue
-        var reach = (
+        var bare = (
             lambert
             * rim
             * falloff(
@@ -2495,21 +2682,31 @@ def _highlight(
                 lights[unsafe_offset=at + 9],
                 lights[unsafe_offset=at + 10],
             )
-            * _through(lights, at + 13, receives, Vector3(px, py, pz), normal)
+        )
+        var through = _shaped_through(
+            lights, at + 13, receives, Vector3(px, py, pz), normal, shape
         )
         toward.normalize()
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
         var tint = _spot_tint(
             lights, texels, ramp, table, at + 14, Vector3(px, py, pz), normal
         )
-        red += lights[unsafe_offset=at + 6] * tint.x * reach * sent.x
-        green += lights[unsafe_offset=at + 7] * tint.y * reach * sent.y
-        blue += lights[unsafe_offset=at + 8] * tint.z * reach * sent.z
+        red += (
+            lights[unsafe_offset=at + 6] * tint.x * (bare * through.x) * sent.x
+        )
+        green += (
+            lights[unsafe_offset=at + 7] * tint.y * (bare * through.y) * sent.y
+        )
+        blue += (
+            lights[unsafe_offset=at + 8] * tint.z * (bare * through.z) * sent.z
+        )
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
 
-def _scattered(
+def _scattered[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2529,6 +2726,7 @@ def _scattered(
     scale: Float32,
     ambient: Float32,
     receives: Bool,
+    shape: R = Unshaped(),
 ) -> Vector3:
     """Return the light that shows through a surface from behind: the
     device counterpart of `Lighting.scattered_at`, summing the kinds in the
@@ -2560,12 +2758,15 @@ def _scattered(
             lights[unsafe_offset=at + 1],
             lights[unsafe_offset=at + 2],
         )
-        var through = scattering_through(
+        var sent = scattering_through(
             toward, normal, toward_eye, distortion, power, scale, ambient
-        ) * _direction_through(lights, at, receives, place, normal)
-        red += lights[unsafe_offset=at + 3] * through
-        green += lights[unsafe_offset=at + 4] * through
-        blue += lights[unsafe_offset=at + 5] * through
+        )
+        var shadowed = _direction_through(
+            lights, at, receives, place, normal, shape
+        )
+        red += lights[unsafe_offset=at + 3] * (sent * shadowed.x)
+        green += lights[unsafe_offset=at + 4] * (sent * shadowed.y)
+        blue += lights[unsafe_offset=at + 5] * (sent * shadowed.z)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
@@ -2577,21 +2778,21 @@ def _scattered(
         var distance = toward.length()
         if distance == 0:
             continue
-        var reach = falloff(
+        var bare = falloff(
             distance,
             lights[unsafe_offset=at + 6],
             lights[unsafe_offset=at + 7],
-        ) * _point_through(lights, at + 8, receives, place, normal)
-        toward.normalize()
-        var through = (
-            scattering_through(
-                toward, normal, toward_eye, distortion, power, scale, ambient
-            )
-            * reach
         )
-        red += lights[unsafe_offset=at + 3] * through
-        green += lights[unsafe_offset=at + 4] * through
-        blue += lights[unsafe_offset=at + 5] * through
+        var shadowed = _point_shaped(
+            lights, at + 8, receives, place, normal, shape
+        )
+        toward.normalize()
+        var sent = scattering_through(
+            toward, normal, toward_eye, distortion, power, scale, ambient
+        )
+        red += lights[unsafe_offset=at + 3] * (sent * (bare * shadowed.x))
+        green += lights[unsafe_offset=at + 4] * (sent * (bare * shadowed.y))
+        blue += lights[unsafe_offset=at + 5] * (sent * (bare * shadowed.z))
     var first_spot = (
         first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
     )
@@ -2617,28 +2818,30 @@ def _scattered(
         )
         if rim <= 0:
             continue
-        var reach = (
-            rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
-            )
-            * _through(lights, at + 13, receives, place, normal)
+        var bare = rim * falloff(
+            distance,
+            lights[unsafe_offset=at + 9],
+            lights[unsafe_offset=at + 10],
+        )
+        var shadowed = _shaped_through(
+            lights, at + 13, receives, place, normal, shape
         )
         toward.normalize()
-        var through = (
-            scattering_through(
-                toward, normal, toward_eye, distortion, power, scale, ambient
-            )
-            * reach
+        var sent = scattering_through(
+            toward, normal, toward_eye, distortion, power, scale, ambient
         )
         var tint = _spot_tint(
             lights, texels, ramp, table, at + 14, place, normal
         )
-        red += lights[unsafe_offset=at + 6] * tint.x * through
-        green += lights[unsafe_offset=at + 7] * tint.y * through
-        blue += lights[unsafe_offset=at + 8] * tint.z * through
+        red += (
+            lights[unsafe_offset=at + 6] * tint.x * (sent * (bare * shadowed.x))
+        )
+        green += (
+            lights[unsafe_offset=at + 7] * tint.y * (sent * (bare * shadowed.y))
+        )
+        blue += (
+            lights[unsafe_offset=at + 8] * tint.z * (sent * (bare * shadowed.z))
+        )
     return Vector3(red, green, blue)
 
 
@@ -2870,7 +3073,9 @@ def _indirect(
     return Vector3(red * scale, green * scale, blue * scale)
 
 
-def _physical(
+def _physical[
+    R: ShadowShape = Unshaped
+](
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2888,6 +3093,7 @@ def _physical(
     clearcoat_roughness: Float32,
     receives: Bool = True,
     layers: PhysicalLayers = PhysicalLayers(),
+    shape: R = Unshaped(),
 ) -> Reflected:
     """Return what a physical surface sends toward the camera from the
     lights that have a direction: the device counterpart of
@@ -2924,13 +3130,15 @@ def _physical(
             coat_lambert = max(Float32(0), coat_normal.dot(toward))
         if lambert == 0 and coat_lambert == 0:
             continue
-        var through = _direction_through(lights, at, receives, position, normal)
+        var through = _direction_through(
+            lights, at, receives, position, normal, shape
+        )
         sum = physical_light(
             sum,
             Vector3(
-                lights[unsafe_offset=at + 3] * through,
-                lights[unsafe_offset=at + 4] * through,
-                lights[unsafe_offset=at + 5] * through,
+                lights[unsafe_offset=at + 3] * through.x,
+                lights[unsafe_offset=at + 4] * through.y,
+                lights[unsafe_offset=at + 5] * through.z,
             ),
             lambert,
             coat_lambert,
@@ -2960,16 +3168,19 @@ def _physical(
             coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
         if lambert == 0 and coat_lambert == 0:
             continue
-        var reach = falloff(
+        var bare = falloff(
             distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
-        ) * _point_through(lights, at + 8, receives, position, normal)
+        )
+        var through = _point_shaped(
+            lights, at + 8, receives, position, normal, shape
+        )
         toward.normalize()
         sum = physical_light(
             sum,
             Vector3(
-                lights[unsafe_offset=at + 3] * reach,
-                lights[unsafe_offset=at + 4] * reach,
-                lights[unsafe_offset=at + 5] * reach,
+                lights[unsafe_offset=at + 3] * (bare * through.x),
+                lights[unsafe_offset=at + 4] * (bare * through.y),
+                lights[unsafe_offset=at + 5] * (bare * through.z),
             ),
             lambert,
             coat_lambert,
@@ -3013,14 +3224,13 @@ def _physical(
             coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
         if lambert == 0 and coat_lambert == 0:
             continue
-        var reach = (
-            rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
-            )
-            * _through(lights, at + 13, receives, position, normal)
+        var bare = rim * falloff(
+            distance,
+            lights[unsafe_offset=at + 9],
+            lights[unsafe_offset=at + 10],
+        )
+        var through = _shaped_through(
+            lights, at + 13, receives, position, normal, shape
         )
         toward.normalize()
         var tint = _spot_tint(
@@ -3029,9 +3239,9 @@ def _physical(
         sum = physical_light(
             sum,
             Vector3(
-                lights[unsafe_offset=at + 6] * tint.x * reach,
-                lights[unsafe_offset=at + 7] * tint.y * reach,
-                lights[unsafe_offset=at + 8] * tint.z * reach,
+                lights[unsafe_offset=at + 6] * tint.x * (bare * through.x),
+                lights[unsafe_offset=at + 7] * tint.y * (bare * through.y),
+                lights[unsafe_offset=at + 8] * tint.z * (bare * through.z),
             ),
             lambert,
             coat_lambert,
@@ -3380,6 +3590,7 @@ def triangle_state(
     corners: List[RasterVertex],
     cube_base: Int = 0,
     starts: List[Int] = List[Int](),
+    light_starts: List[Int] = List[Int](),
 ) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
@@ -3400,6 +3611,9 @@ def triangle_state(
         starts: Where each node program starts in the fog buffer, as
             `program_starts` lays them out. A triangle naming a program
             past it, as `GpuRenderer.draw` refuses, gets -1.
+        light_starts: Where each light block starts, as
+            `flatten_frame_lights` lays them out. A triangle whose
+            `lights` is past it gets zero, the frame's own.
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
@@ -3415,7 +3629,8 @@ def triangle_state(
         node program starts or -1, then the specular intensity, specular
         color, clearcoat, clearcoat roughness and clearcoat normal map
         ids, then the normal map type's value, then its facing, then its
-        thickness map's id, per triangle, from its first corner.
+        thickness map's id, then where its light block starts, per
+        triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -3470,7 +3685,37 @@ def triangle_state(
             )
         )
         state.append(Int32(corners[triangle * 3].scatter_map.value))
+        var named = corners[triangle * 3].lights
+        state.append(
+            Int32(light_starts[named]) if named < len(light_starts) else 0
+        )
     return state^
+
+
+def flatten_frame_lights(
+    lighting: Lighting, lightings: List[Lighting]
+) -> Tuple[List[Float32], List[Int]]:
+    """Return a frame's lighting and the lightings its light masks resolve
+    to, one `flatten_lights` block after another, and where each block
+    starts: what `rasterize_frame`'s `lightings` are on the host.
+
+    Each block's own offsets, of its shadow maps and its spot light maps,
+    are from its own start, so a triangle reads its block through the
+    buffer moved to that start.
+
+    Args:
+        lighting: The frame's own lights, the first block.
+        lightings: The lights of each light mask, in order.
+
+    Returns:
+        The buffer, and the start of each block: zero for the first.
+    """
+    var flat = flatten_lights(lighting)
+    var starts: List[Int] = [0]
+    for index in range(len(lightings)):
+        starts.append(len(flat))
+        flat.extend(flatten_lights(lightings[index]))
+    return (flat^, starts^)
 
 
 def _decoded(
@@ -3951,7 +4196,7 @@ struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
         )
 
 
-struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
+struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
     """The kernel's `NodeSource`: a program in the fog buffer, and one
     triangle's own footprint for the textures it reads, as `_sample_slot`
     reads the material's map for the pixel."""
@@ -5501,6 +5746,22 @@ def rasterize_kernel(
 
             continue
         for index in range(first, past):
+            # The triangle's light block, and how many of each light it
+            # holds, in place of the frame's: a material with a light mask,
+            # three.js's `lightsNode`. The frame's own block starts at zero.
+            var lights = lights.unsafe_offset(
+                Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIGHTS
+                    ]
+                )
+            )
+            var light_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS])
+            var point_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS + 1])
+            var hemisphere_count = Int32(
+                lights[unsafe_offset=LIGHTS_COUNTS + 2]
+            )
+            var spot_count = Int32(lights[unsafe_offset=LIGHTS_COUNTS + 3])
             var base = index * FLOATS_PER_TRIANGLE
             # Derived rather than written out: every offset past the first corner
             # used to be a literal, and changing the stride meant changing all of
@@ -5639,6 +5900,9 @@ def rasterize_kernel(
             # host decides it.
             var fragmented = noded and has_output(nodes, FRAGMENT_NODE)
             tested = tested and not fragmented
+            # Whether the graph shapes the shadows the lights cast on it;
+            # see `rasterize_shaded`.
+            var received = noded and has_output(nodes, RECEIVED_SHADOW_NODE)
             if noded and has_output(nodes, DEPTH_NODE):
                 stored_z = node_depth(
                     run_nodes(nodes, DEPTH_NODE, here_inputs(nodes, textured))[
@@ -6050,6 +6314,21 @@ def rasterize_kernel(
                 nx = bent.x
                 ny = bent.y
                 nz = bent.z
+            # Each light's shadow as the graph shapes it, as the host shapes
+            # it; see `rasterize_shaded`.
+            var shape = ProgramShape(
+                nodes,
+                NodeInputs(
+                    u,
+                    v,
+                    Vector3(wx, wy, wz),
+                    Vector3(nx, ny, nz),
+                    tint,
+                    Vector3(0, 0, 0),
+                    textured,
+                ),
+                received,
+            )
             if mode != Int32(SHADE_UV.value) and (lit or looked_up):
                 if looked_up:
                     # Which way the surface is turned in the camera's frame,
@@ -6125,6 +6404,7 @@ def rasterize_kernel(
                         wy,
                         wz,
                         receives,
+                        shape,
                     )
                 elif kind == Int32(GOURAUD.value):
                     # Lit at the corners, and the direct light darkened
@@ -6182,6 +6462,7 @@ def rasterize_kernel(
                         wy,
                         wz,
                         receives,
+                        shape,
                     )
                 if kind == Int32(PHONG.value):
                     # Interpolated like the emissive, and summed over the
@@ -6221,6 +6502,7 @@ def rasterize_kernel(
                         sheen,
                         corners[unsafe_offset=base + LANE_SHININESS],
                         receives,
+                        shape,
                     )
                     var scatter_slot = maps[
                         unsafe_offset=index * STATE_PER_TRIANGLE
@@ -6267,6 +6549,7 @@ def rasterize_kernel(
                             corners[unsafe_offset=base + LANE_SCATTER + 7],
                             corners[unsafe_offset=base + LANE_SCATTER + 4],
                             receives,
+                            shape,
                         )
                         var share = (
                             thickness
@@ -7505,6 +7788,7 @@ def rasterize_kernel(
                         coat_rough,
                         receives,
                         layers,
+                        shape,
                     )
                     var around = _indirect(
                         lights,
@@ -8299,16 +8583,15 @@ struct GpuRenderer(Movable):
             )
         self.painted = False
 
-    def _upload_lights(mut self, lighting: Lighting) raises:
-        """Put `lighting` on the device.
+    def _upload_lights(mut self, flat: List[Float32]) raises:
+        """Put a frame's light blocks on the device.
 
         Args:
-            lighting: The scene's lights, resolved to world space.
+            flat: The blocks, from `flatten_frame_lights`.
 
         Raises:
             Error: If the device buffer cannot be made or written.
         """
-        var flat = flatten_lights(lighting)
         if len(flat) > self.light_room:
             # A draw still in flight may be reading the old buffer; see
             # `set_textures`, which waits for the same reason.
@@ -8393,6 +8676,7 @@ struct GpuRenderer(Movable):
         programs: NodeProgramStore = NodeProgramStore(),
         custom_tone_mapping: NodeProgramId = NO_NODES,
         output_color_space: ColorSpaceId = SRGB_COLOR_SPACE,
+        lightings: List[Lighting] = List[Lighting](),
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -8463,9 +8747,14 @@ struct GpuRenderer(Movable):
             output_color_space: The space the image is written in,
                 `Renderer.output_color_space`; sRGB by default. See
                 `render.color_spaces.output_encoding`.
+            lightings: The lights of each light mask the frame's
+                materials name, as `rasterize_frame` takes them. Each
+                goes up as a block of its own; see
+                `flatten_frame_lights`.
 
         Raises:
-            Error: If the corner count is not a multiple of three, the
+            Error: If the corner count is not a multiple of three, a
+                triangle names a lighting past `lightings`, the
                 line corner count is not a multiple of two, a segment's
                 ends disagree or its material is lit, a point is refused
                 by `check_point_state` or names a map that is not
@@ -8497,7 +8786,12 @@ struct GpuRenderer(Movable):
         if len(lines) % 2 != 0:
             raise Error("Rasterizing needs whole segments")
         if not mode.is_valid():
-            raise Error("A shading mode that is none of the three")
+            raise Error("A shading mode that is none of the four")
+        if mode == SHADE_SHADOW:
+            raise Error(
+                "A shadow map's colors are drawn on the host: the kernel"
+                " takes no SHADE_SHADOW"
+            )
         # The kernel cannot raise on a curve or a fog it does not know, so
         # the refusals `RenderTarget.resolve` and `rasterize_all` make are
         # made here, before the launch, by the same functions.
@@ -8552,6 +8846,13 @@ struct GpuRenderer(Movable):
                 corners[triangle * 3 + 1],
                 corners[triangle * 3 + 2],
             )
+            var named = corners[triangle * 3].lights
+            if named < 0 or named > len(lightings):
+                raise Error(
+                    "A triangle names a lighting the frame does not have"
+                )
+        # The frame's lights and each light mask's, a block each.
+        var lit = flatten_frame_lights(lighting, lightings)
 
         # The same per-segment check the host makes, from the same
         # function, for the reason the triangles' is made here: the kernel
@@ -8926,7 +9227,10 @@ struct GpuRenderer(Movable):
                     count=len(flat),
                 )
             var state = triangle_state(
-                corners, self.uploaded, program_starts(programs)
+                corners,
+                self.uploaded,
+                program_starts(programs),
+                lit[1],
             )
             with self.maps.map_to_host() as host:
                 unsafe_memcpy(
@@ -9008,7 +9312,7 @@ struct GpuRenderer(Movable):
                 count=len(flat_draws),
             )
 
-        self._upload_lights(lighting)
+        self._upload_lights(lit[0])
         self._upload_fog(fog, programs, curve_start, output)
         # The transmission target, flattened, and room for it made after
         # the backdrop before the backdrop is written: a new buffer holds

@@ -15,7 +15,7 @@ reads it out of a device buffer, through the `NodeSource` trait, so the two
 backends run the same arithmetic in the same order. `materials.glsl`
 compiles GLSL source to the same graphs.
 
-A graph sets up to fifteen outputs, each three.js's property of the same name:
+A graph sets up to seventeen outputs, each three.js's property of the same name:
 
 - `COLOR_NODE`, a `vec3`: the surface's diffuse color, three.js's
   `colorNode`. It replaces the material's color, its vertex colors and its
@@ -53,6 +53,16 @@ A graph sets up to fifteen outputs, each three.js's property of the same name:
 - `ROUGHNESS_NODE` and `METALNESS_NODE`, `float`s: three.js's
   `roughnessNode` and `metalnessNode`. They replace a standard or physical
   surface's roughness and metalness, their maps included.
+- `RECEIVED_SHADOW_NODE`, a `vec3`: three.js's `receivedShadowNode`. It
+  runs once for each light that casts a shadow on the surface, and the
+  `shadow` node reads what the light's shadow lets through, a `vec3`. The
+  light's color is multiplied by it in place of the shadow. See
+  `ProgramShape`.
+- `CAST_SHADOW_NODE`, a `vec4`: three.js's `castShadowNode`, the color and
+  alpha a light sees through the surface where it casts a shadow. It runs
+  in the shadow pass, under `Renderer.shadow_map_transmitted`, in place of
+  opaque black, and the map's alpha multiplies its alpha. See
+  `lights.shadow`.
 
 A graph refuses a type error as it is built: a `vec3` added to a `vec2`, a
 `float` output given a `vec3`, a swizzle of a component the value lacks. A
@@ -90,6 +100,7 @@ its image at the level the surface's own coordinates pick, where WebGPU
 measures the derivatives of the coordinate the node computes.
 """
 
+from lights.shadow import ShadowShape
 from math.arc_tangent import atan2_float32, atan_float32
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
@@ -131,11 +142,11 @@ comptime INSTRUCTION_C = 3
 comptime INSTRUCTION_IMMEDIATE = 4
 comptime INSTRUCTION_DEST = 5
 comptime INSTRUCTION_FLOATS = 6
-# How a program begins: where each of the fifteen outputs starts and how many
+# How a program begins: where each of the seventeen outputs starts and how many
 # instructions it holds, then the frame's time in seconds, then the view
 # matrix, sixteen floats, column-major. The renderer writes the last two
 # every frame, as three.js updates its `time` and `cameraViewMatrix` nodes.
-comptime NODE_OUTPUT_COUNT = 15
+comptime NODE_OUTPUT_COUNT = 17
 comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
@@ -225,7 +236,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_VIEWPORT_TEXTURE.value
+            and self.value <= NODE_SHADOW.value
         )
 
 
@@ -396,6 +407,10 @@ comptime NODE_POINT_COORD = NodeKind(104)
 # after the operations; see `screen_uv` and `viewport_texture`.
 comptime NODE_SCREEN_UV = NodeKind(105)
 comptime NODE_VIEWPORT_TEXTURE = NodeKind(106)
+# What a light's shadow lets through to the fragment, a `vec3`, one for all
+# of it: the argument of three.js's `receivedShadowNode`. A leaf numbered
+# after the operations; see `shadow`.
+comptime NODE_SHADOW = NodeKind(107)
 
 
 @fieldwise_init
@@ -406,7 +421,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the fifteen outputs there are.
+        """Return True if this is one of the seventeen outputs there are.
 
         Returns:
             Whether the value names an output.
@@ -419,8 +434,8 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             `NODE_FLOAT` for the opacity, the mask, the ambient occlusion,
             the depth, the size, the backdrop's alpha, the roughness and the
-            metalness, `NODE_VEC4` for
-            the fragment, and `NODE_VEC3` for the rest.
+            metalness, `NODE_VEC4` for the fragment and the cast shadow,
+            and `NODE_VEC3` for the rest.
         """
         return NODE_FLOAT if (
             self == OPACITY_NODE
@@ -431,7 +446,10 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
             or self == BACKDROP_ALPHA_NODE
             or self == ROUGHNESS_NODE
             or self == METALNESS_NODE
-        ) else (NODE_VEC4 if self == FRAGMENT_NODE else NODE_VEC3)
+        ) else (
+            NODE_VEC4 if self == FRAGMENT_NODE
+            or self == CAST_SHADOW_NODE else NODE_VEC3
+        )
 
 
 comptime COLOR_NODE = NodeOutput(0)
@@ -449,6 +467,8 @@ comptime BACKDROP_ALPHA_NODE = NodeOutput(11)
 comptime FRAGMENT_NODE = NodeOutput(12)
 comptime ROUGHNESS_NODE = NodeOutput(13)
 comptime METALNESS_NODE = NodeOutput(14)
+comptime RECEIVED_SHADOW_NODE = NodeOutput(15)
+comptime CAST_SHADOW_NODE = NodeOutput(16)
 
 
 @fieldwise_init
@@ -604,6 +624,7 @@ def _is_attribute(kind: NodeKind) -> Bool:
         or kind == NODE_ATTRIBUTE
         or kind == NODE_POINT_COORD
         or kind == NODE_SCREEN_UV
+        or kind == NODE_SHADOW
     )
 
 
@@ -840,16 +861,16 @@ struct NodeGraph(Copyable, Movable):
         """Return the node that feeds an output, or `NodeRef(-1)` for none.
 
         Args:
-            output: One of the fifteen outputs.
+            output: One of the seventeen outputs.
 
         Returns:
             The node's ref.
 
         Raises:
-            Error: If the output is none of the fifteen.
+            Error: If the output is none of the seventeen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the fifteen")
+            raise Error("A node output that is none of the seventeen")
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -1747,6 +1768,17 @@ struct NodeGraph(Copyable, Movable):
         self._kinds[texel.value] = NODE_TEXTURE_LEVEL
         self._inputs[texel.value * 3 + 2] = level.value
         return texel
+
+    def shadow(mut self) -> NodeRef:
+        """Return what a light's shadow lets through to the fragment, a
+        `vec3` of red, green and blue from zero to one: the argument three.js
+        hands its `receivedShadowNode`. Only a `RECEIVED_SHADOW_NODE` reads
+        it.
+
+        Returns:
+            The node.
+        """
+        return self._add(NODE_SHADOW, NODE_VEC3)
 
     def lit(mut self) -> NodeRef:
         """Return the color the material's own lighting made of the surface,
@@ -4325,17 +4357,17 @@ struct NodeGraph(Copyable, Movable):
         does.
 
         Args:
-            output: Which output: one of the fifteen.
+            output: Which output: one of the seventeen.
             node: The node, of the type the output takes: a `float` for the
                 opacity, the mask, the ambient occlusion and the depth, and
                 a `vec3` for the rest.
 
         Raises:
-            Error: If the output is none of the fifteen, the node is not in
+            Error: If the output is none of the seventeen, the node is not in
                 this graph, or its type is not the output's.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the fifteen")
+            raise Error("A node output that is none of the seventeen")
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -4475,6 +4507,11 @@ struct NodeGraph(Copyable, Movable):
             raise Error(
                 "Only an output node reads the lit color: the lights have"
                 " not run before the others"
+            )
+        if kind == NODE_SHADOW and output != RECEIVED_SHADOW_NODE:
+            raise Error(
+                "Only a received shadow node reads the shadow: the others"
+                " run once, not once a light"
             )
 
     def compile(self) raises -> NodeProgram:
@@ -4886,10 +4923,12 @@ def _children(
     var kind = graph._kinds[node]
     var corner = context >= CORNER_A.value
     var beside = context == AT_RIGHT.value or context == AT_UP.value
-    if kind == NODE_LIT and context != AT_FRAGMENT.value:
+    if (kind == NODE_LIT or kind == NODE_SHADOW) and (
+        context != AT_FRAGMENT.value
+    ):
         raise Error(
-            "A varying or a derivative cannot read the lit color: only"
-            " the fragment has it"
+            "A varying or a derivative cannot read the lit color or the"
+            " shadow: only the fragment has them"
         )
     if corner and (
         kind == NODE_TEXTURE
@@ -5130,16 +5169,16 @@ struct NodeProgram(Copyable, Movable):
         """Return True if the program sets an output.
 
         Args:
-            output: One of the fifteen outputs.
+            output: One of the seventeen outputs.
 
         Returns:
             Whether a graph node feeds it.
 
         Raises:
-            Error: If the output is none of the fifteen.
+            Error: If the output is none of the seventeen.
         """
         if not output.is_valid():
-            raise Error("A node output that is none of the fifteen")
+            raise Error("A node output that is none of the seventeen")
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:
@@ -5483,6 +5522,8 @@ struct NodeInputs(ImplicitlyCopyable):
     var textured: Bool
     # A corner's custom attributes, `MAX_ATTRIBUTE_FLOATS` floats.
     var custom: SIMD[DType.float32, 8]
+    # What a light's shadow lets through, for a received shadow node.
+    var shadow: Vector3
 
     def __init__(
         out self,
@@ -5494,6 +5535,7 @@ struct NodeInputs(ImplicitlyCopyable):
         lit: Vector3,
         textured: Bool,
         custom: SIMD[DType.float32, 8] = SIMD[DType.float32, 8](0),
+        shadow: Vector3 = Vector3(1, 1, 1),
     ):
         """Gather a fragment's, a vertex's or a corner's attributes.
 
@@ -5506,6 +5548,7 @@ struct NodeInputs(ImplicitlyCopyable):
             lit: What the standard lighting made of the fragment.
             textured: Whether texture nodes read their textures.
             custom: The custom attributes' floats; zeros by default.
+            shadow: What a light's shadow lets through; ones by default.
         """
         self.u = u
         self.v = v
@@ -5515,6 +5558,7 @@ struct NodeInputs(ImplicitlyCopyable):
         self.lit = lit
         self.textured = textured
         self.custom = custom
+        self.shadow = shadow
 
 
 trait NodeSource:
@@ -5765,7 +5809,7 @@ def perspective_shares(
     return Lanes(wa * ia * rcp, wb * ib * rcp, wc * ic * rcp, 0)
 
 
-struct ProgramSource[origin: Origin[mut=False]](NodeSource):
+struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource` for a program on its own, with no triangle:
     what the vertex stage runs a position node and a size node with, since
     neither reads a texture or a derivative. Every corner is one vertex."""
@@ -6126,6 +6170,8 @@ def _leaf[
         return source.size(Int(source.word(Int(immediate))), Int(x[0]))
     if op == NODE_LIT.value:
         return _lanes(inputs.lit)
+    if op == NODE_SHADOW.value:
+        return _lanes(inputs.shadow)
     if op == NODE_FRAG_COORD.value:
         return source.frag_coord(NodeContext(context))
     if op == NODE_POINT_COORD.value:
@@ -6745,7 +6791,7 @@ def has_output[S: NodeSource](source: S, output: NodeOutput) -> Bool:
 
     Args:
         source: The program.
-        output: One of the fifteen outputs; the caller names it by its constant.
+        output: One of the seventeen outputs; the caller names it by its constant.
 
     Returns:
         Whether any instruction computes it.
@@ -6769,7 +6815,7 @@ def run_nodes[
     Args:
         source: The program, where its textures are sampled, and its
             triangle.
-        output: One of the fifteen outputs, one `has_output` answers True for;
+        output: One of the seventeen outputs, one `has_output` answers True for;
             the caller names it by its constant.
         inputs: The fragment's or the vertex's attributes.
 
@@ -6799,6 +6845,7 @@ def run_nodes[
             or op == NODE_POINT_COORD.value
             or op == NODE_SCREEN_UV.value
             or op == NODE_VIEWPORT_TEXTURE.value
+            or op == NODE_SHADOW.value
             or op == NODE_FRONT_FACING.value
             or op == NODE_TEXTURE_LEVEL.value
             or op == NODE_TEXEL_FETCH.value
@@ -6814,6 +6861,48 @@ def run_nodes[
         else:
             registers[written] = _operation(source, op, x, y, z, immediate)
     return registers[written]
+
+
+struct ProgramShape[S: NodeSource & Copyable & Deinitable](ShadowShape):
+    """A shadow shaped by a program's `RECEIVED_SHADOW_NODE`, three.js's
+    `receivedShadowNode`: the output run on the fragment, with the `shadow`
+    node reading what one light's map lets through. Both rasterizers hand
+    the lights one, so a light that casts runs the output once."""
+
+    var source: Self.S
+    var inputs: NodeInputs
+    # Whether the program sets the output. A program that does not keeps
+    # the shadow as it is, as `Unshaped` does.
+    var active: Bool
+
+    def __init__(out self, source: Self.S, inputs: NodeInputs, active: Bool):
+        """Shape shadows by a program at one fragment.
+
+        Args:
+            source: The program, and the fragment's triangle.
+            inputs: The fragment's attributes, with no lit color.
+            active: Whether the program sets `RECEIVED_SHADOW_NODE`.
+        """
+        self.source = source.copy()
+        self.inputs = inputs
+        self.active = active
+
+    def shaped(self, shadow: Vector3) -> Vector3:
+        """Return what the output makes of a shadow, or the shadow as it is
+        for a program that does not set it.
+
+        Args:
+            shadow: What the light's shadow lets through.
+
+        Returns:
+            The red, green and blue multipliers.
+        """
+        if not self.active:
+            return shadow
+        var given = self.inputs
+        given.shadow = shadow
+        var made = run_nodes(self.source, RECEIVED_SHADOW_NODE, given)
+        return Vector3(made[0], made[1], made[2])
 
 
 def here_inputs[S: NodeSource](source: S, textured: Bool) -> NodeInputs:

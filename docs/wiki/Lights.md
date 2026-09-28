@@ -319,6 +319,10 @@ sun.shadow.blur_samples = 8
 
 Under `VSM_SHADOW_MAP`, every mesh that receives a shadow is also drawn into the maps, as three.js does. A texel where nothing was drawn holds a depth of one, as three.js clears its map to white.
 
+### Colored shadows
+
+Set the renderer's `shadow_map_transmitted` to `True` to keep what each light sees through its casters. It is three.js's `renderer.shadowMap.transmitted`, and it is `False` by default. Each map then holds a color and an alpha for each texel, as well as a depth. A caster writes opaque black, or the color of its `CAST_SHADOW_NODE`. A shadow behind a red caster is then red. See [Node materials](Node-materials#shadows-of-its-own).
+
 **Point lights.** A point light's cube reads nine taps under `PCF_SHADOW_MAP`, `PCF_SOFT_SHADOW_MAP` and `VSM_SHADOW_MAP`, and reads one tap under `BASIC_SHADOW_MAP`. This is three.js's `getPointShadow`, which has no soft or variance filter. three.js also blurs no cube.
 
 This port differs from three.js in these places:

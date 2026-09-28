@@ -115,7 +115,14 @@ from core.buffer_geometry import (
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
-from lights.light import DIRECTIONAL, POINT, SPOT, Light
+from lights.light import (
+    ALL_LIGHTS,
+    DIRECTIONAL,
+    POINT,
+    SPOT,
+    Light,
+    LightMask,
+)
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
@@ -253,6 +260,7 @@ from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     DRAW_TRIANGLES,
@@ -2105,6 +2113,38 @@ def _clip_of(matrix: Matrix4, point: Vector3) -> Vector3:
     )
 
 
+def light_masks(assets: Assets) raises -> List[LightMask]:
+    """Return the light masks the materials name, three.js's `lightsNode`,
+    each once, in the order of the first material to name it. A material
+    lit by every light names none.
+
+    Args:
+        assets: The materials.
+
+    Returns:
+        The masks. A triangle of the `i`th is lit by the frame's lighting
+        `i + 1`; see `RasterVertex.lights`.
+
+    Raises:
+        Error: Never: every id asked is in the store.
+    """
+    var masks = List[LightMask]()
+    for index in range(assets.materials.count()):
+        var mask = assets.materials.get(MaterialId(index)).lights
+        if mask != ALL_LIGHTS and mask not in masks:
+            masks.append(mask)
+    return masks^
+
+
+def _mask_place(masks: List[LightMask], mask: LightMask) -> Int:
+    """Return which of the frame's lightings a material's mask names: zero
+    for every light, and one past its place in `masks` otherwise."""
+    for index in range(len(masks)):
+        if masks[index] == mask:
+            return index + 1
+    return 0
+
+
 def _to_raster(
     vertex: ClipVertex,
     to_screen: Matrix4,
@@ -2507,6 +2547,9 @@ struct _Paint(ImplicitlyCopyable):
     # The frames the environment and the normal map are read in; see
     # `_frames_of`.
     var frames: TextureFrames
+    # Which of the frame's lightings lights the draw; see
+    # `RasterVertex.lights`.
+    var lights: Int
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -2532,6 +2575,7 @@ struct _Paint(ImplicitlyCopyable):
             shown=self.shown,
         )
         corner.frames = self.frames
+        corner.lights = self.lights
         corner.custom = vertex.custom
         corner.gouraud_direct = vertex.gouraud_direct
         corner.gouraud_indirect = vertex.gouraud_indirect
@@ -3329,6 +3373,7 @@ def _emit_sprite(
         _draw_offset(material, casters_only),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -3731,6 +3776,7 @@ def _emit_wide_line(
         _draw_offset(material, False),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var no_planes = List[Plane]()
     for segment in range(segments):
@@ -4276,6 +4322,11 @@ struct Renderer(Movable):
     # `shadowMap.type`. `PCF_SHADOW_MAP` by default, as there. See
     # `lights.shadow`.
     var shadow_map_type: ShadowMapType
+    # Whether the shadow pass keeps the color a light sees through each
+    # caster, three.js's `shadowMap.transmitted`: opaque black, or the
+    # material's `CAST_SHADOW_NODE`, thinned by its maps' alpha. False by
+    # default, as there. See `lights.shadow.transmitted_shadow`.
+    var shadow_map_transmitted: Bool
     # How a frame's depth is stored and compared: three.js's
     # `logarithmicDepthBuffer` and `reversedDepthBuffer`, as one value.
     # `STANDARD_DEPTH` by default, as there. See `set_depth_mode`.
@@ -4348,6 +4399,7 @@ struct Renderer(Movable):
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
+        self.shadow_map_transmitted = False
         self.depth_mode = STANDARD_DEPTH
         self.time = Duration(0.0, SECOND)
         self.auto_clear = True
@@ -4515,6 +4567,7 @@ struct Renderer(Movable):
         big.clipping_planes = self.clipping_planes.copy()
         big.local_clipping_enabled = self.local_clipping_enabled
         big.shadow_map_type = self.shadow_map_type
+        big.shadow_map_transmitted = self.shadow_map_transmitted
         big.depth_mode = self.depth_mode
         big.time = self.time
         big.auto_clear = self.auto_clear
@@ -4790,11 +4843,17 @@ struct Renderer(Movable):
                 coordinates as red and green instead.
 
         Raises:
-            Error: If the mode is none of those three. The type stops a bare
-                integer; it does not stop `ShadeMode(99)`.
+            Error: If the mode is none of those three: `SHADE_SHADOW` is the
+                shadow pass's. The type stops a bare integer; it does not
+                stop `ShadeMode(99)`.
         """
         if not mode.is_valid():
-            raise Error("A shading mode that is none of the three")
+            raise Error("A shading mode that is none of the four")
+        if mode == SHADE_SHADOW:
+            raise Error(
+                "SHADE_SHADOW draws a shadow map's colors, which the"
+                " renderer draws for itself"
+            )
         self.shading = mode
 
     def prepare[
@@ -4972,6 +5031,9 @@ struct Renderer(Movable):
         # space; see `uv_space_meshes`. A light's view is drawn by a
         # renderer of its own, which draws the casters as they stand.
         var in_uv_space = len(self.uv_space_meshes) > 0
+        # The light masks the materials name, each a lighting of its own;
+        # see `light_masks`.
+        var masks = light_masks(assets)
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -5501,6 +5563,7 @@ struct Renderer(Movable):
                 _draw_offset(material, casters_only),
                 _shown_of(material),
                 _frames_of(scene, material, world),
+                _mask_place(masks, material.lights),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -5886,11 +5949,10 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each segment as it shades a
             # triangle: a `ShaderMaterial` on a `Line`. A light's view
-            # draws the depth alone, so it keeps the position node and
-            # runs no fragment of the program.
+            # runs it too, for its mask and its cast shadow node.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # A dashed line is three.js's `dashed` shader, which does not
             # dither; a plain one is its `basic` shader, which does. A
             # light's view takes the default state; see `_draw_state`.
@@ -6388,11 +6450,11 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each point's square as it shades a
             # triangle, three.js's `PointsNodeMaterial` and a
-            # `ShaderMaterial` on `Points`. A light's view draws the depth
-            # alone, as it does for a line.
+            # `ShaderMaterial` on `Points`. A light's view runs it too, as
+            # it does for a line.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # three.js's `points` shader premultiplies and does not dither.
             # A light's view takes the default state; see `_draw_state`.
             var state = _draw_state(material, casters_only, False, False, True)
@@ -7167,6 +7229,9 @@ struct Renderer(Movable):
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
         var lighting = self._lighting(scene, assets, camera)
+        # And the lights of each material that names its own, three.js's
+        # `lightsNode`.
+        var lightings = self._lightings(scene, assets, camera, lighting)
         # The shadow maps are drawn, so their casters are known.
         ref state = self._state[]
         for index in range(len(state.shadow_items)):
@@ -7243,10 +7308,52 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
+
+    def _lightings[
+        C: Camera
+    ](
+        self, scene: Scene, assets: Assets, camera: C, lighting: Lighting
+    ) raises -> List[Lighting]:
+        """Return the lights each light mask the materials name resolves
+        to, in `light_masks` order: `lighting` narrowed to the mask's
+        lights, with the same shadow maps and spot light maps.
+
+        Args:
+            scene: The scene.
+            assets: The materials, whose masks are read.
+            camera: The camera the frame is drawn through.
+            lighting: The frame's own lighting, every light the camera
+                sees.
+
+        Returns:
+            One lighting a mask.
+
+        Raises:
+            Error: Everything `Lighting` raises.
+        """
+        var masks = light_masks(assets)
+        var lightings = List[Lighting]()
+        for index in range(len(masks)):
+            lightings.append(
+                Lighting(
+                    scene,
+                    visible=camera.visible_layers(),
+                    eye=camera_position(scene, camera),
+                    toward_eye=toward_camera(scene, camera),
+                    up=camera_up(scene, camera),
+                    shadows=lighting.shadows.copy(),
+                    ltc=self.ltc_tables(),
+                    spot_maps=lighting.spot_maps.copy(),
+                    back=camera_back(scene, camera),
+                    chosen=masks[index],
+                )
+            )
+        return lightings^
 
     def _lighting[
         C: Camera
@@ -7373,6 +7480,7 @@ struct Renderer(Movable):
         """
         if self.shading != SHADE_TEXTURE or not _transmits(frame):
             return TransmissionTarget()
+        var lightings = self._lightings(scene, assets, camera, lighting)
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -7405,6 +7513,7 @@ struct Renderer(Movable):
             programs=frame.programs,
             volumes=assets.data_3d_textures,
             arrays=assets.data_array_textures,
+            lightings=lightings,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -7437,6 +7546,7 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         return TransmissionTarget(drawn, view)
 
@@ -7609,6 +7719,7 @@ struct Renderer(Movable):
                     shadow.radius,
                     self.shadow_map_type,
                     shadow.intensity,
+                    self._kept_colors(target),
                 )
             )
         return maps^
@@ -7627,6 +7738,7 @@ struct Renderer(Movable):
         var near = shadow.near.to(METER)
         var far = light.shadow_far().to(METER)
         var depths = List[Float32](capacity=CUBE_FACES * size * size)
+        var colors = List[Float32]()
         for face in range(CUBE_FACES):  # pragma: no branch
             var camera = PerspectiveCamera(
                 Angle(90.0, DEGREE), 1.0, shadow.near, light.shadow_far()
@@ -7654,6 +7766,7 @@ struct Renderer(Movable):
                             far,
                         )
                     )
+            colors.extend(self._kept_colors(target))
         return ShadowMap(
             cube_of=index,
             size=size,
@@ -7666,7 +7779,23 @@ struct Renderer(Movable):
             radius=shadow.radius,
             shadow_type=self.shadow_map_type,
             intensity=shadow.intensity,
+            colors=colors^,
         )
+
+    def _kept_colors(self, target: RenderTarget) -> List[Float32]:
+        """Return what the light saw through each texel of a shadow pass,
+        four floats a texel from the top, or nothing when the renderer
+        keeps no colors; see `shadow_map_transmitted`."""
+        var colors = List[Float32]()
+        if not self.shadow_map_transmitted:
+            return colors^
+        for texel in range(len(target.colors)):  # pragma: no branch
+            ref seen = target.colors[texel]
+            colors.append(seen.r)
+            colors.append(seen.g)
+            colors.append(seen.b)
+            colors.append(seen.a)
+        return colors^
 
     def _projected(
         self, scene: Scene, assets: Assets, visible: Layers
@@ -7759,8 +7888,9 @@ struct Renderer(Movable):
         Every kind three.js's shadow map draws is drawn: the triangles of
         every mesh, skinned, instanced or batched mesh and LOD level, the
         segments of every line and wireframe, and every point, under lit
-        shading with no lights. A point light's view, `distance`, draws a
-        mesh's custom distance material.
+        shading with no lights, or under `SHADE_SHADOW` when the renderer
+        keeps the colors, `shadow_map_transmitted`. A point light's view,
+        `distance`, draws a mesh's custom distance material.
 
         Args:
             scene: The transform hierarchy, updated.
@@ -7817,17 +7947,29 @@ struct Renderer(Movable):
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
             Draw(DRAW_POINTS, 0, len(points)),
         ]
-        var target = RenderTarget(size, size, Color(0, 0, 0))
+        # With the colors kept, a texel nothing is drawn in is clear, alpha
+        # zero, as three.js clears the map to `0x000000, 0`, and each
+        # caster writes what the light sees through it; see `SHADE_SHADOW`.
+        var transmitted = self.shadow_map_transmitted
+        var target = RenderTarget(
+            size, size, Color(0, 0, 0, 0) if transmitted else Color(0, 0, 0)
+        )
         rasterize_frame(
             corners,
             segments,
             draws,
             target,
-            SHADE_LIT,
-            TextureStore(),
+            SHADE_SHADOW if transmitted else SHADE_LIT,
+            assets.textures,
             Lighting.uniform(),
             self.workers,
             points=points,
+            cubes=assets.cube_textures,
+            # A node material's mask and depth hold in the light's view
+            # as in the camera's.
+            programs=assets.programs,
+            volumes=assets.data_3d_textures,
+            arrays=assets.data_array_textures,
         )
         return target^
 

@@ -222,6 +222,7 @@ from render.raster_state import (
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from materials.nodes import NO_NODES, NodeProgramId
+from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
@@ -1096,6 +1097,10 @@ struct Material(ImplicitlyCopyable):
     # geometry's second set of coordinates; see `render.texture.UvChannel`.
     var light_map: TextureId
     var light_map_intensity: Float32
+    # Which of the scene's lights light the surface, three.js's
+    # `lightsNode`: `ALL_LIGHTS`, the default, or a mask from `lights_of`.
+    # Set it after the material is built. See `lights.light.LightMask`.
+    var lights: LightMask
     # A texture whose red channel scales how much light the surface sends
     # toward the camera, three.js's `specularMap`: the `PHONG` highlight,
     # and the env map's `reflectivity` on a `BASIC`, `LAMBERT` or `PHONG`
@@ -2289,6 +2294,7 @@ struct Material(ImplicitlyCopyable):
         self.ao_map = ao_map
         self.ao_map_intensity = ao_map_intensity
         self.light_map = light_map
+        self.lights = ALL_LIGHTS
         self.light_map_intensity = light_map_intensity
         # The specular map, read by the three kinds three.js gives one:
         # the phong highlight and the reflection of a basic, lambert or

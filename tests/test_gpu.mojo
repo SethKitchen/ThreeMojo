@@ -335,6 +335,7 @@ from render.target import (
 )
 from render.rasterizer import (
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
@@ -10143,6 +10144,128 @@ def test_both_backends_keep_the_same_metalness_and_roughness() raises:
             if want.x == 1:
                 metal += 1
     assert_true(metal > 100, "too little of the floor is metal")
+
+
+def test_both_backends_shape_received_shadows_alike() raises:
+    # A sun, a spot and a bulb cast on surfaces of each kind of lighting,
+    # which turn every shadow red: the kernel runs the graph once a light,
+    # as the host does.
+    if skipped_for_lack_of_a_gpu("both backends shape shadows alike"):
+        return
+    from test_received_shadow import a_camera as shadow_camera
+    from test_received_shadow import a_shadowed_scene as shaped_scene
+    from test_received_shadow import paints, red_shadows
+
+    for paint in paints():
+        var assets = Assets()
+        var painted = paint.copy()
+        painted.nodes = assets.programs.add(red_shadows().compile())
+        var scene = shaped_scene(assets, painted, painted)
+        var camera = shadow_camera()
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var device = GpuRenderer(48, 36)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            lighting,
+            draws=frame.draws,
+            programs=frame.programs,
+        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_read_transmitted_shadows_alike() raises:
+    # The block casts red through a sun's and a spot's squares and a
+    # bulb's cube: the kernel reads each map's colors as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read colored shadows alike"):
+        return
+    from test_cast_shadow import casting
+    from test_received_shadow import a_camera as shadow_camera
+    from test_received_shadow import a_shadowed_scene as shaped_scene
+    from test_received_shadow import paints
+
+    for paint in paints():
+        var assets = Assets()
+        var block = casting(assets, 1, 0)
+        var scene = shaped_scene(assets, paint.copy(), block^)
+        var camera = shadow_camera()
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        renderer.shadow_map_transmitted = True
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var device = GpuRenderer(48, 36)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            lighting,
+            draws=frame.draws,
+            programs=frame.programs,
+        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+        # The shadow pass's own mode is the host's alone.
+        with assert_raises(contains="drawn on the host"):
+            device.draw(frame.corners, BACKGROUND, SHADE_SHADOW)
+
+
+def test_both_backends_light_each_material_by_its_own_lights() raises:
+    # A plane lit by the red light alone beside one lit by the red and the
+    # blue: the device reads each triangle's light block.
+    if skipped_for_lack_of_a_gpu("both backends light by masks alike"):
+        return
+    from renderers.renderer import light_masks
+    from test_light_masks import a_camera as masked_camera
+    from test_light_masks import a_scene as masked_scene
+
+    var assets = Assets()
+    var scene = masked_scene(assets)
+    var camera = masked_camera()
+    var renderer = Renderer(16, 16)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var eye = camera_position(scene, camera)
+    var lightings = List[Lighting]()
+    var masks = light_masks(assets)
+    for index in range(len(masks)):
+        lightings.append(Lighting(scene, eye=eye, chosen=masks[index]))
+    var device = GpuRenderer(16, 16)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=eye),
+        draws=frame.draws,
+        programs=frame.programs,
+        lightings=lightings,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+    # A triangle that names a lighting the frame lacks is refused.
+    with assert_raises(contains="names a lighting the frame does not have"):
+        device.draw(frame.corners, BACKGROUND, SHADE_TEXTURE)
 
 
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
