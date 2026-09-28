@@ -9958,6 +9958,93 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_run_the_tsl_function_library_alike() raises:
+    # TSL's functions build nodes of the one bytecode: a triplanar texture,
+    # Voronoi cells, PCG's hash on 32-bit words, a sprite sheet turned by
+    # `rotate`, a packing and an oscillator must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends run the TSL library alike"):
+        return
+    from materials.nodes import COLOR_NODE, NodeGraph
+    from materials.tsl_bits import hash, pack_unorm_4x8, unpack_unorm_4x8
+    from materials.tsl_noise import voronoi2d
+    from materials.tsl_utils import (
+        osc_sine,
+        rotate,
+        spritesheet_uv,
+        triplanar_texture,
+    )
+
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for y in range(16):
+        for x in range(16):
+            pixels.append(UInt8((x * 16) % 256))
+            pixels.append(UInt8((y * 16) % 256))
+            pixels.append(UInt8(((x + y) * 8) % 256))
+            pixels.append(255)
+    var map = assets.textures.add(
+        Texture(16, 16, pixels^, REPEAT, NEAREST, LINEAR, False)
+    )
+    var g = NodeGraph()
+    var sampler = g.texture_uniform("map", map)
+    var projected = triplanar_texture(g, sampler, scale=g.float(2))
+    var cells = voronoi2d(g, g.mul(g.uv(), g.float(4)), g.float(0.3))
+    var grain = hash(g, g.floor(g.mul(g.swizzle(g.uv(), "x"), g.float(16))))
+    var sheet = spritesheet_uv(g, g.vec2(4, 4), frame=g.float(5))
+    var turned = rotate(g, sheet, g.float(0.4))
+    var packed = pack_unorm_4x8(
+        g, g.join([turned, grain, osc_sine(g, g.float(0.2))])
+    )
+    var unpacked = unpack_unorm_4x8(g, packed)
+    var color = g.add(
+        g.mul(g.swizzle(projected, "rgb"), g.saturate(cells)),
+        g.mul(g.swizzle(unpacked, "xyz"), g.float(0.4)),
+    )
+    g.set_output(COLOR_NODE, color)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(
+                plane(Length(1.2, METER), Length(0.9, METER), 2, 2)
+            ),
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    nodes=assets.programs.add(g.compile()),
+                )
+            ),
+            node,
+        )
+    )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 1.2), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 500)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_materialx_surface_alike() raises:
     # A MaterialX standard surface, its color and roughness from a graph,
     # on a lit sphere: the node outputs the loader sets, on both backends.

@@ -32,6 +32,7 @@
 - [Skinning](Skinning)
 - [Materials](Materials)
 - [Node materials](Node-materials)
+- [TSL functions](TSL-functions)
 - [Lights](Lights)
 - [Fog](Fog)
 - [Textures](Textures)

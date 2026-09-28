@@ -4,7 +4,7 @@
 
 ![A node graph shifts a sphere from orange to blue and back](out/nodes.png)
 
-`examples/graph.mojo` draws this picture.
+`examples/graph.mojo` draws this picture. [TSL functions](TSL-functions) builds three.js's function library on a graph.
 
 three.js: `NodeMaterial` and its outputs, from `colorNode` to `depthNode`. TSL's `uniform`, `If`, `Loop`, `Fn`, `Discard`, `varying`, `dFdx`, `dFdy` and its math. MaterialX's noise. `ShaderMaterial` and `RawShaderMaterial` in a subset of GLSL.
 
