@@ -13861,3 +13861,126 @@ def test_both_backends_cut_what_a_clipping_group_holds() raises:
         "the cube drew nothing",
     )
     assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+# --- Gaussian splats ----------------------------------------------------------
+
+from core.gaussian_splat_utils import (
+    create_gaussian_splat_geometry as _splat_geometry,
+    packed_band as _packed_band,
+)
+from objects.gaussian_splat import GaussianSplat as _GaussianSplat
+from render.gpu import GpuSplats
+from render.raster_state import DepthMode as _DepthMode
+from render.raster_state import REVERSED_DEPTH as _REVERSED_DEPTH
+from render.rect import Rect as _Rect
+from render.splatrule import ProjectedSplat as _ProjectedSplat
+from render.splat_raster import (
+    draw_gaussian_splat as _draw_gaussian_splat,
+    prepare_gaussian_splat as _prepare_gaussian_splat,
+    rasterize_splats as _rasterize_splats,
+)
+
+
+def _splat_cloud(node: NodeId) raises -> _GaussianSplat:
+    """Return a dozen overlapping splats of every shape, color and
+    opacity, with a band of spherical harmonics, at a node."""
+    var centers = List[Float32]()
+    var covariances = List[Float32]()
+    var colors = List[UInt8]()
+    for index in range(12):
+        var f = Float32(index)
+        centers.extend([f * 0.15 - 0.8, 0.5 - f * 0.08, f * 0.1 - 0.6])
+        covariances.extend(
+            [0.02 + f * 0.004, 0.01 - f * 0.002, 0.003, 0.03, 0.002, 0.01]
+        )
+        colors.extend(
+            [
+                UInt8(index * 20),
+                UInt8(255 - index * 15),
+                UInt8(90),
+                UInt8(120 + index * 10),
+            ]
+        )
+    var band = _packed_band(12, 1)
+    for at in range(len(band)):
+        band[at] = UInt8((at * 37) % 256)
+    return _GaussianSplat(
+        _splat_geometry(centers^, covariances^, colors^, band^), node
+    )
+
+
+def _splat_target(reversed: Bool) raises -> RenderTarget:
+    """Return a target with a band of nearer depth and a scissor."""
+    var target = RenderTarget(40, 30, BACKGROUND)
+    if reversed:
+        target.clear_inside(_Rect.whole(40, 30), BACKGROUND, _REVERSED_DEPTH)
+    for x in range(40):
+        for y in range(12, 16):
+            target.depth[y * 40 + x] = 0.0 if reversed else 0.9
+    target.set_scissor(_Rect(2, 1, 36, 27))
+    return target^
+
+
+def test_both_backends_draw_gaussian_splats_alike() raises:
+    # The host sorts and projects; each backend blends the same list, the
+    # CPU splat by splat and the device pixel by pixel. The device's `exp`
+    # can differ from the host's in the last bit.
+    if skipped_for_lack_of_a_gpu("both backends draw Gaussian splats alike"):
+        return
+    var device = GpuSplats()
+    for reversed in range(2):
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.update()
+        var camera = PerspectiveCamera(
+            Angle(60, DEGREE), 4.0 / 3.0, Length(0.5, METER), Length(20, METER)
+        )
+        camera.place(Vector3(0.3, 0.2, 3), Vector3(0, 0, 0))
+        var splat = _splat_cloud(node)
+        var host = _splat_target(reversed == 1)
+        var gpu = _splat_target(reversed == 1)
+        var before = _splat_target(reversed == 1)
+        var splats = _prepare_gaussian_splat(
+            scene, splat, camera, 40, 30, host.depth_mode
+        )
+        assert_true(len(splats) > 6)
+        _rasterize_splats(host, splats)
+        device.draw(gpu, splats)
+        var drawn = 0
+        for slot in range(40 * 30):
+            var want = host.colors[slot]
+            var got = gpu.colors[slot]
+            assert_almost_equal(got.r, want.r, atol=1e-5)
+            assert_almost_equal(got.g, want.g, atol=1e-5)
+            assert_almost_equal(got.b, want.b, atol=1e-5)
+            assert_almost_equal(got.a, want.a, atol=1e-5)
+            assert_equal(gpu.data[slot], host.data[slot])
+            if want != before.colors[slot]:
+                drawn += 1
+        assert_true(drawn > 100)
+
+
+def test_the_device_draws_a_splat_object_as_the_host_does() raises:
+    if skipped_for_lack_of_a_gpu("the device draws a splat object"):
+        return
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 4.0 / 3.0, Length(0.5, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var on_host = _splat_cloud(node)
+    var on_device = _splat_cloud(node)
+    var host = RenderTarget(40, 30, BACKGROUND)
+    var gpu = RenderTarget(40, 30, BACKGROUND)
+    _draw_gaussian_splat(host, scene, on_host, camera)
+    var device = GpuSplats()
+    device.draw_gaussian_splat(gpu, scene, on_device, camera)
+    for slot in range(40 * 30):
+        assert_almost_equal(gpu.colors[slot].r, host.colors[slot].r, atol=1e-5)
+        assert_almost_equal(gpu.colors[slot].a, host.colors[slot].a, atol=1e-5)
+    gpu.depth_mode = _DepthMode(7)
+    with assert_raises(contains="valid depth mode"):
+        device.draw(gpu, List[_ProjectedSplat]())

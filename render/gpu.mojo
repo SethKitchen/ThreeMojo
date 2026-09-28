@@ -443,6 +443,25 @@ from render.computation import (
     compute_texel,
 )
 from renderers.renderer import Renderer
+from objects.gaussian_splat import GaussianSplat
+from render.splat_raster import prepare_gaussian_splat
+from render.splatrule import (
+    SPLAT_A,
+    SPLAT_AXIS_X,
+    SPLAT_AXIS_Y,
+    SPLAT_B,
+    SPLAT_DEPTH,
+    SPLAT_FLOATS,
+    SPLAT_G,
+    SPLAT_R,
+    SPLAT_SCALE1,
+    SPLAT_SCALE2,
+    SPLAT_X,
+    SPLAT_Y,
+    ProjectedSplat,
+    splat_alpha,
+    splat_depth_passes,
+)
 from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
 from std.math import ceildiv, cos, floor, inf, log2, sin, sqrt
@@ -11872,3 +11891,238 @@ struct GpuComputation(Movable):
                 )
             computation.variables[at].images[next] = out^
         computation.current = next
+
+
+# --- Gaussian splats --------------------------------------------------------
+
+
+def splat_kernel(
+    colors: MutPointer[Float32, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    flags: MutPointer[Int32, MutAnyOrigin],
+    splats: MutPointer[Float32, MutAnyOrigin],
+    count: Int32,
+    width: Int32,
+    height: Int32,
+    depth_mode: Int32,
+):
+    """Blend every projected splat into one pixel, in order:
+    `render.splat_raster.rasterize_splats` turned inside out.
+
+    Each thread owns one pixel. It walks the splats in draw order, tests
+    each against the pixel's depth with `splat_depth_passes`, and blends
+    `splat_alpha` of it source over with `blend_fragment`, as
+    `RenderTarget.blend` does on the host. `flags` holds 1 for a pixel the
+    scissor lets be drawn and 0 for one it does not; a pixel a splat
+    blended into is set to 2, so the host knows it now holds light."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    if x >= w or y >= Int(height):
+        return
+    var slot = y * w + x
+    if flags[unsafe_offset=slot] == 0:
+        return
+    var at = slot * 4
+    var pixel = Rgba(
+        colors[unsafe_offset=at],
+        colors[unsafe_offset=at + 1],
+        colors[unsafe_offset=at + 2],
+        colors[unsafe_offset=at + 3],
+    )
+    var stored = depth[unsafe_offset=slot]
+    var mode = DepthMode(Int(depth_mode))
+    var blended = 0
+    for index in range(Int(count)):
+        var lane = index * SPLAT_FLOATS
+        var splat = ProjectedSplat(
+            splats[unsafe_offset=lane + SPLAT_X],
+            splats[unsafe_offset=lane + SPLAT_Y],
+            splats[unsafe_offset=lane + SPLAT_DEPTH],
+            splats[unsafe_offset=lane + SPLAT_AXIS_X],
+            splats[unsafe_offset=lane + SPLAT_AXIS_Y],
+            splats[unsafe_offset=lane + SPLAT_SCALE1],
+            splats[unsafe_offset=lane + SPLAT_SCALE2],
+            splats[unsafe_offset=lane + SPLAT_R],
+            splats[unsafe_offset=lane + SPLAT_G],
+            splats[unsafe_offset=lane + SPLAT_B],
+            splats[unsafe_offset=lane + SPLAT_A],
+        )
+        if not splat_depth_passes(mode, splat.depth, stored):
+            continue
+        var alpha = splat_alpha(splat, x, y)
+        if not alpha > 0:
+            continue
+        pixel = blend_fragment(
+            pixel,
+            Rgba(splat.r, splat.g, splat.b, alpha),
+            NORMAL_MODE,
+            False,
+            Rgba(0),
+        )
+        blended += 1
+    if blended == 0:
+        return
+    for channel in range(4):
+        colors[unsafe_offset=at + channel] = pixel[channel]
+    flags[unsafe_offset=slot] = 2
+
+
+struct GpuSplats(Movable):
+    """Draws Gaussian splats into a `RenderTarget` on the device: the
+    device half of `render.splat_raster`, one thread a pixel. The host
+    sorts and projects, and `splat_kernel` blends, so the image is the
+    one `rasterize_splats` makes."""
+
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    var colors: DeviceBuffer[DType.float32]
+    var depth: DeviceBuffer[DType.float32]
+    var flags: DeviceBuffer[DType.int32]
+    var splats: DeviceBuffer[DType.float32]
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.colors^
+        _ = self.depth^
+        _ = self.flags^
+        _ = self.splats^
+        _ = self.context^
+
+    def __init__(out self) raises:
+        """Open the device.
+
+        Raises:
+            Error: If no GPU is present.
+        """
+        if not available():
+            raise Error("No GPU available")
+        self.context = DeviceContext()
+        self.colors = self.context.enqueue_create_buffer[DType.float32](4)
+        self.depth = self.context.enqueue_create_buffer[DType.float32](4)
+        self.flags = self.context.enqueue_create_buffer[DType.int32](4)
+        self.splats = self.context.enqueue_create_buffer[DType.float32](4)
+
+    def draw(
+        mut self, mut target: RenderTarget, splats: List[ProjectedSplat]
+    ) raises:
+        """Blend projected splats into a target, as `rasterize_splats`
+        does on the host.
+
+        Args:
+            target: The target. Its depth is tested and left as it is.
+            splats: The splats, in the order to draw them.
+
+        Raises:
+            Error: If the target's depth mode is not valid.
+        """
+        if not target.depth_mode.is_valid():
+            raise Error("A Gaussian splat needs a valid depth mode")
+        var w = target.width
+        var h = target.height
+        var pixels = w * h
+        var light = List[Float32](capacity=pixels * 4)
+        var flags = List[Int32](capacity=pixels)
+        for slot in range(pixels):
+            var color = target.light_at(slot)
+            light.append(color.r)
+            light.append(color.g)
+            light.append(color.b)
+            light.append(color.a)
+            var inside = target.scissor.contains_pixel(slot % w, slot // w, h)
+            flags.append(Int32(1) if inside else Int32(0))
+        var flat = List[Float32](capacity=len(splats) * SPLAT_FLOATS)
+        for index in range(len(splats)):
+            splats[index].append_to(flat)
+        # A launch in flight may still read the old buffers.
+        self.context.synchronize()
+        self.colors = self.context.enqueue_create_buffer[DType.float32](
+            pixels * 4
+        )
+        self.depth = self.context.enqueue_create_buffer[DType.float32](pixels)
+        self.flags = self.context.enqueue_create_buffer[DType.int32](pixels)
+        self.splats = self.context.enqueue_create_buffer[DType.float32](
+            max(len(flat), 4)
+        )
+        with self.colors.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=light.unsafe_ptr(), count=pixels * 4
+            )
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=target.depth.unsafe_ptr(),
+                count=pixels,
+            )
+        with self.flags.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=flags.unsafe_ptr(), count=pixels
+            )
+        with self.splats.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=flat.unsafe_ptr(), count=len(flat)
+            )
+        self.context.enqueue_function[splat_kernel](
+            self.colors.unsafe_ptr(),
+            self.depth.unsafe_ptr(),
+            self.flags.unsafe_ptr(),
+            self.splats.unsafe_ptr(),
+            Int32(len(splats)),
+            Int32(w),
+            Int32(h),
+            Int32(target.depth_mode.value),
+            grid_dim=(ceildiv(w, TILE), ceildiv(h, TILE)),
+            block_dim=(TILE, TILE),
+        )
+        with self.colors.map_to_host() as host:
+            unsafe_memcpy(
+                dest=light.unsafe_ptr(), src=host.unsafe_ptr(), count=pixels * 4
+            )
+        with self.flags.map_to_host() as host:
+            unsafe_memcpy(
+                dest=flags.unsafe_ptr(), src=host.unsafe_ptr(), count=pixels
+            )
+        for slot in range(pixels):
+            if flags[slot] != 2:
+                continue
+            var at = slot * 4
+            target.colors[slot] = FloatColor(
+                light[at], light[at + 1], light[at + 2], light[at + 3]
+            )
+            target.data[slot] = False
+
+    def draw_gaussian_splat[
+        C: Camera
+    ](
+        mut self,
+        mut target: RenderTarget,
+        scene: Scene,
+        mut splat: GaussianSplat,
+        camera: C,
+    ) raises:
+        """Draw a splat object into a target on the device, as
+        `render.splat_raster.draw_gaussian_splat` does on the host.
+
+        Args:
+            target: The target, drawn into already or cleared.
+            scene: The scene, updated, that holds the object's node.
+            splat: The splats; see `prepare_gaussian_splat`.
+            camera: The camera to project through.
+
+        Raises:
+            Error: Everything `prepare_gaussian_splat` and `draw` raise.
+        """
+        var splats = prepare_gaussian_splat(
+            scene,
+            splat,
+            camera,
+            target.width,
+            target.height,
+            target.depth_mode,
+        )
+        self.draw(target, splats)
