@@ -272,7 +272,13 @@ def test_the_normal_moves_the_read_half_a_spacing() raises:
     assert_almost_equal(taps.weights[1], 0.75, atol=1e-6)
     # Along an axis of one probe there is no spacing and no move.
     var flat = grid_taps(
-        Vector3(0.3, 0.9, 0), UP, Vector3(-1, -0.5, -0.5), Vector3(1, 0.5, 0.5), 2, 1, 1
+        Vector3(0.3, 0.9, 0),
+        UP,
+        Vector3(-1, -0.5, -0.5),
+        Vector3(1, 0.5, 0.5),
+        2,
+        1,
+        1,
     )
     assert_equal(Int(flat.probes[1]), 1)
     assert_equal(Int(flat.probes[3]), 1)
@@ -560,9 +566,7 @@ def test_a_bake_refuses_what_three_js_refuses() raises:
     with assert_raises(contains="negative"):
         bake_light_probe_grid(grid, renderer, room, assets, bounces=-1)
     with assert_raises(contains="every probe"):
-        bake_light_probe_grid(
-            grid, renderer, room, assets, bounces=1, count=1
-        )
+        bake_light_probe_grid(grid, renderer, room, assets, bounces=1, count=1)
     with assert_raises(contains="one direction"):
         bake_light_probe_grid(grid, renderer, room, assets, sample_count=0)
     var cube = scene_cube(renderer, room, assets, size=2)

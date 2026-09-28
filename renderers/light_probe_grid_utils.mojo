@@ -73,7 +73,9 @@ def fibonacci_direction(index: Int, sample_count: Int) -> Vector3:
     return Vector3(r * cos(phi), z, r * sin(phi))
 
 
-def project_sh(cube: CubeTexture, sample_count: Int) raises -> SphericalHarmonics3:
+def project_sh(
+    cube: CubeTexture, sample_count: Int
+) raises -> SphericalHarmonics3:
     """Return the nine terms of a cube's light, three.js's `projectSHNode`:
     each of `sample_count` Fibonacci directions read from the cube at its
     full size, times `sh_basis`, summed, and scaled by `4 pi /

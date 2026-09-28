@@ -69,7 +69,11 @@ struct _AxisTap(ImplicitlyCopyable):
 
 
 def _axis_tap(
-    coordinate: Float32, normal: Float32, low: Float32, high: Float32, count: Int
+    coordinate: Float32,
+    normal: Float32,
+    low: Float32,
+    high: Float32,
+    count: Int,
 ) -> _AxisTap:
     """Return one axis's lower probe, step and fraction: the position
     moved half a spacing along the normal, clamped to the box as a clamped
@@ -298,8 +302,10 @@ struct LightProbeGrid(Copyable, Movable):
                 is negative or not finite; the falloff is negative or not
                 finite; or a probe's coefficients are not finite.
         """
-        if self.resolution_x < 1 or self.resolution_y < 1 or (
-            self.resolution_z < 1
+        if (
+            self.resolution_x < 1
+            or self.resolution_y < 1
+            or (self.resolution_z < 1)
         ):
             raise Error("A light probe grid needs one probe or more a side")
         var width = self.width.to(METER)
@@ -417,15 +423,11 @@ struct LightProbeGrid(Copyable, Movable):
         """
         _ = self.index(x, y, z)
         return Vector3(
-            _along(
-                self.position.x, self.width.to(METER), x, self.resolution_x
-            ),
+            _along(self.position.x, self.width.to(METER), x, self.resolution_x),
             _along(
                 self.position.y, self.height.to(METER), y, self.resolution_y
             ),
-            _along(
-                self.position.z, self.depth.to(METER), z, self.resolution_z
-            ),
+            _along(self.position.z, self.depth.to(METER), z, self.resolution_z),
         )
 
     def position_of(self, index: Int) raises -> Vector3:

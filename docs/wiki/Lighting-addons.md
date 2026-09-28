@@ -6,42 +6,42 @@ three.js: `SunLight` and `SunLightShadow`, `IESSpotLight`, `ProjectorLight`, `Li
 
 | Addon | Module | Builder |
 |---|---|---|
-| Sun | `lights/sun_light.mojo` | `SunLight(scene, color, intensity, direction, shadow)` |
+| Sun | `lights/sun_light.mojo` | `SunLight(scene, color, intensity)` |
 | IES spot light | `lights/ies_spot_light.mojo` | `ies_spot_light(color, node, ies_map, ...)` |
 | Projector | `lights/projector_light.mojo` | `projector_light(color, node, ..., aspect)` |
-| Light probe grid | `lights/light_probe_grid.mojo` | `LightProbeGrid(low, high, count_x, count_y, count_z)` |
+| Light probe grid | `lights/light_probe_grid.mojo` | `LightProbeGrid(width, height, depth, ...)` |
 | Grid bake | `renderers/light_probe_grid_utils.mojo` | `bake_light_probe_grid(grid, renderer, scene, assets)` |
 | Grid helper | `helpers/light_probe_grid.mojo` | `LightProbeGridHelper(grid, scene, assets)` |
 | Color environment | `environments/color_environment.mojo` | `color_environment(assets, color)` |
 
 ## Sun
 
-A `SunLight` is a directional light with a direction and no target. Its shadow camera is fit to what the camera sees, so the shadow covers the view at every position.
+A `SunLight` is a light with a position and no target. Its light travels from its position toward the world origin. Its shadow is two cascades, each fit to one slice of what the camera sees.
 
 ```mojo
-var sun = SunLight(scene, Color(255, 250, 240), 3.0, Vector3(1, -2, -1))
+var sun = SunLight(scene, Color(255, 250, 240), 3.0)
+sun.cast_shadow = True
+scene.node(sun.node).set_position(-1, 2, 1)
 # For each frame, after the camera moves:
 sun.update(scene, camera)
 var frame = renderer.render(scene, assets, camera)
 ```
 
-The constructor adds a node, a target node and a casting directional light to the scene. `direction` is the way the light travels. It is made unit length, and a zero or infinite direction is refused. `set_direction` turns the sun. Call `update` after it.
+three.js: `new SunLight( color, intensity )`. The sun's node is its `position`, and it starts at `(0, 1, 0)`, as three.js's `Object3D.DEFAULT_UP`. `cast_shadow` is off by default, as on every three.js light. `sun.shadow` is a `LightShadow` with three.js's `SunLightShadow` defaults. The map is 1024 texels, the near plane 0.5 m and the far plane 500 m.
 
-`update` fits the shadow camera to the view. `fit_sun` does the arithmetic:
+The constructor adds the node and two directional lights, one for each cascade. `update` gives both lights the sun's color, intensity, shadow and `cast_shadow`, and fits their cameras. `fit_sun` is three.js's `SunLightShadow.updateMatrices`:
 
-1. It takes the camera's view volume, from the near plane to the far plane or `max_distance`, whichever is nearer.
-2. It encloses the eight corners in a sphere. The middle is the average of the corners, and the radius is the distance to the furthest.
-3. It rounds the radius up to a sixteenth of a meter, so the size does not change as the camera turns.
-4. It snaps the middle to whole texels of the map, so the shadow does not crawl as the camera moves.
-5. It puts the light `margin` beyond the sphere, back along the direction. A caster between the sun and the view then casts.
+1. It splits the view's depth halfway between an even and a logarithmic split. The depth ends at the nearer of the two far planes.
+2. It turns the view's eight corners into the light's frame. Up is `+y`, or `+z` when the light is within about eight degrees of vertical.
+3. Each cascade reaches from the fade start of the cascade before it to its split. Its corners are enclosed in a sphere: their middle, and the distance to the furthest.
+4. It pads the radius by half a texel and rounds the middle to whole texels.
+5. It puts the camera half a near plane above the caster ceiling: the highest corner, raised by the view's depth. The far plane reaches the lowest corner of the cascade.
 
-| `SunLightShadow` | Default | Meaning |
-|---|---|---|
-| `max_distance` | `100 m` | The furthest depth in front of the camera that the shadow covers. |
-| `margin` | `50 m` | How far beyond the view's sphere the light stands. |
-| `map_size` | `2048` | How many texels a side the map is. |
+The cascades blend as three.js's `SunShadowNode` blends them. The last tenth of each cascade fades into the next. Past the last cascade the light has no shadow. Each cascade light carries a `ShadowCascade` of `SUN_BLEND`, and `sun_reach` splits the light between the two. The shares add to one light at every depth.
 
-The light is an ordinary directional light. Its `bias` and its other shadow numbers stay as you set them. `update` sets only the map size, the four edges and the two planes.
+three.js draws both cascades into one atlas, each tile inset by `ceil( radius ) + 1` texels. Here each cascade has a map of its own, the size of the tile less its inset: 1020 texels for a map of 1024.
+
+`CascadeBlend` is a type, so a bare integer does not compile. `CSM_BLEND` is the blend of a `CSM`, and `SUN_BLEND` is the blend of a sun.
 
 ## IES spot light
 
@@ -99,33 +99,56 @@ var lighting = Lighting(
 
 ## Light probe grid
 
-A `LightProbeGrid` holds a light probe at each point of a regular grid in a box. Each probe holds nine spherical harmonic colors. A surface takes the eight probes around it and catches their irradiance at its normal.
+A `LightProbeGrid` is a box around its `position`, with a light probe at each point of a regular grid in the box. Each probe holds nine spherical harmonic colors. A surface takes the probes around it and adds their irradiance at its normal to its indirect light.
 
 ```mojo
-var grid = LightProbeGrid(Vector3(-5, 0, -5), Vector3(5, 3, 5), 4, 2, 4)
+var grid = LightProbeGrid(Length(10.0, METER), Length(3.0, METER), Length(10.0, METER))
 bake_light_probe_grid(grid, renderer, scene, assets)
 renderer.set_light_probe_grid(grid^)
 ```
 
-The first probe stands at `low` and the last at `high`. A single probe on an axis stands in the middle of that axis. `index(x, y, z)` gives the place of a probe in `probes`, with x fastest. `position(index)` gives where it stands.
+three.js: `new LightProbeGrid( width, height, depth, widthProbes, heightProbes, depthProbes )`. A count left at `AUTO_PROBES` is `max( 2, round( size ) + 1 )`, as in three.js. `get_probe_position(x, y, z)` gives where a probe stands. The first and the last probe on an axis stand at the faces of the box. A single probe on an axis stands at `position`. `index(x, y, z)` gives the place of a probe in `probes`, with x fastest.
+
+| Member | three.js | Meaning |
+|---|---|---|
+| `width`, `height`, `depth` | the same | The size of the box. |
+| `resolution_x`, `resolution_y`, `resolution_z` | `resolution` | How many probes along each axis. |
+| `position` | `position` | The middle of the box. |
+| `intensity` | `intensity` | What the irradiance is multiplied by. |
+| `falloff` | `falloff` | How far outside the box the grid fades out. Zero applies the grid everywhere. |
 
 ### The bake
 
-`bake_light_probe_grid` draws the scene into a cube at each probe with `scene_cube`, and projects the cube onto the nine terms with `sh_from_cube`. This is what three.js does with a `CubeCamera`. The cube is 16 texels a side by default, because the nine terms keep only the blur of the light. The bake does not use the renderer's grid, so a grid is not baked from its own light. Bake again when the lights or the objects move.
+`bake_light_probe_grid` is three.js's `LightProbeGrid.bake`. For each probe it draws the scene into a cube with `scene_cube`. Then `project_sh` reads the cube in `sample_count` directions on an equal-area Fibonacci sphere. Each sample is multiplied by the basis, and the sum by `4 pi / sample_count`.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `cubemap_size` | `8` | How many texels a side each cube is. |
+| `near`, `far` | `0.1 m`, `100 m` | The planes of each cube. |
+| `bounces` | `0` | How many more passes to draw. Each pass is lit by the grid that the pass before left. |
+| `sample_count` | `512` | How many directions each cube is read in. |
+| `start`, `count` | `0`, `ALL_PROBES` | Which probes to bake. |
+
+The bake does not use the renderer's grid. A sun's shadow is fit to one view camera, and a cube has six. So `replace_sun_lights` draws each sun that casts as one directional light, as three.js's `LightProbeGridUtils` does. Its shadow camera is fit to the sphere around every mesh that casts. `restore_sun_lights` puts the sun back after the bake, also when the bake raises.
 
 ### The lookup
 
-`grid_taps` gives the eight probes around a position and their weights. It is a trilinear read, as three.js's linear filter reads its probe textures. A position outside the box takes the probes on its nearest face. Both rasterizers blend the coefficients lane by lane over the eight corners, then sum the irradiance in index order.
+The lookup is three.js's `LightProbeGridNode`:
 
-The grid adds to the ambient term and the light probes in `Lighting.ambient_at`. A matte surface scatters it through `BRDF_Lambert`, and a physical surface through its diffuse term. `intensity` multiplies every coefficient. `Lighting` holds the grid with the intensity already multiplied in.
+1. The surface moves half a probe spacing along its normal, so it does not read the probe behind it.
+2. The position is clamped to the box. `grid_taps` gives the eight probes around it and their weights, a trilinear read.
+3. Both rasterizers blend the coefficients lane by lane over the eight corners, then sum the irradiance in index order.
+4. The irradiance is held at zero or above and multiplied by `intensity` and by `grid_falloff`.
+
+`Lighting.ambient_at` adds the result to the ambient term and the light probes. `Lighting` holds the grid with the intensity already multiplied in. The intensity is not negative, so the order does not change the result.
 
 ### The helper
 
-`LightProbeGridHelper(grid, scene, assets, size, parent)` adds a sphere at each probe. Each sphere shows `1 / pi` times the irradiance of its probe, as `LightProbeHelper` shows one light probe. The shader is the same GLSL. Call `update(grid, assets)` after a new bake.
+`LightProbeGridHelper(grid, scene, assets, sphere_size, parent)` adds a sphere at each probe. Each sphere shows the irradiance of its probe at its normal, held at zero or above. It is not divided by pi and the intensity is not applied, as in three.js's helper. The default `sphere_size` is 0.12 m, and each sphere has sixteen segments each way. Call `update(grid, assets)` after a new bake.
 
 ## Color environment
 
-`color_environment(assets, color)` is a scene that is one color in every direction. It holds one unlit box, seen from inside. Draw it into a cube with `pmrem_from_scene` to get an even environment with no image file.
+`color_environment(assets, color)` is a scene that is one color in every direction. It holds one unlit sphere of radius one with sixteen segments each way, seen from inside: three.js's `ColorEnvironment`. Draw it into a cube with `pmrem_from_scene` to get an even environment with no image file.
 
 ```mojo
 var white = color_environment(assets, Color(255, 255, 255))
@@ -140,7 +163,7 @@ A spot light takes sixteen floats in the light buffer. The sixteenth is where it
 
 The kernel reads an IES profile from the texture buffer that it already has, through the same filter as the host. `GpuRenderer.draw` refuses a profile that names a texture it did not upload.
 
-The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two corners, the three counts and 27 floats for each probe. The header float `LIGHTS_GRID` says where the grid begins, or holds `NO_SHADOW`. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two corners, the three counts, the falloff and 27 floats for each probe. The header float `LIGHTS_GRID` says where the grid begins, or holds `NO_SHADOW`. A directional light takes fifteen floats. The last three of its cascade are its `CascadeBlend`, its fade start and where the cascade before it ends. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
 
 ## Errors
 
@@ -148,15 +171,18 @@ The grid follows the profiles, as `LightProbeGrid.flatten` lays it out: the two 
 - `Light.validate` refuses an `ies_map` on a light that is not an `IES_SPOT`. It refuses a projector's aspect that is negative or not finite.
 - `Lighting` refuses an IES spot light with a profile, or a projector, that has no `SpotProfile`. It refuses a profile that names a missing light or a light of another shape.
 - `SpotProfile` refuses a shape that is not `IES_SPOT` or `PROJECTOR_SPOT`, and an IES profile with no texture or a blank one.
-- `LightProbeGrid.validate` refuses a count below one, a corner that is not finite, and a box that is not wider than zero on each axis. It refuses an intensity that is negative or not finite, and a coefficient that is not finite.
-- `SunLightShadow.validate` refuses a distance that is not a positive length, a negative margin and a map outside one to 8192 texels.
-- `SunLight.update` refuses a scene that does not hold the sun's light.
+- `LightProbeGrid.validate` refuses a count below one, a size that is not a positive length and a position that is not finite. It refuses an intensity or a falloff that is negative or not finite, and a coefficient that is not finite.
+- `bake_light_probe_grid` refuses a range outside the grid, negative bounces, bounces over part of the grid, and a sample count below one.
+- `SunLight.update` refuses a scene that does not hold the sun's cascades, a sun at the origin, and a shadow that `LightShadow.validate` refuses.
+- `ShadowCascade.validate` refuses a `CascadeBlend` that is none of the two. It refuses a `SUN_BLEND` cascade that fades after it ends or ramps in before it starts.
 
 ## What is not ported
 
 - three.js adds a `LightProbeGrid` to the scene. Here the renderer holds the grid, as it holds the LTC tables. Call `Renderer.set_light_probe_grid`.
-- three.js keeps the probes in 3D textures and bakes them on the GPU. Here the probes are a list, and the bake draws each cube on the host.
+- three.js keeps the probes in seven 3D textures of half floats and bakes them on the GPU. Here the probes are a list of 32-bit floats, and the bake draws each cube on the host. The bake has no `pass` option for ranged indirect passes.
+- A grid with one probe on an axis reads that probe at every position. three.js divides by zero there.
+- The bake takes the casters from the meshes alone, not from instanced, skinned or batched meshes.
+- A sun's cascade cameras look along the light with this project's `up`. Their square can turn about the axis relative to three.js's, so the texels are snapped on another grid.
 - `lighting/` in three.js has no package here. The grid is in `lights/`, beside `light_probe.mojo`, and its bake is in `renderers/`, because it draws.
-- `SunLight` and its fit follow the description of three.js's addon. The three.js source was not at hand to check each setting against, so its settings can differ.
-- An IES spot light and a projector cannot be read from or written to Scene JSON.
+- An IES spot light, a projector, a sun and a grid cannot be read from or written to Scene JSON.
 - The color environment has no `dispose`, because the assets own the geometry and the material.

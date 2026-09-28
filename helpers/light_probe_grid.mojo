@@ -127,9 +127,7 @@ struct LightProbeGridHelper(Movable):
         if not sphere_size.to(METER) > 0:
             raise Error("A light probe grid helper needs a positive size")
         self.geometry = assets.geometries.add(
-            sphere(
-                sphere_size, GRID_HELPER_SEGMENTS, GRID_HELPER_SEGMENTS
-            )
+            sphere(sphere_size, GRID_HELPER_SEGMENTS, GRID_HELPER_SEGMENTS)
         )
         self.programs = List[NodeProgramId]()
         self.materials = List[MaterialId]()
@@ -137,7 +135,8 @@ struct LightProbeGridHelper(Movable):
         for index in range(grid.count()):  # pragma: no branch
             var program = assets.programs.add(
                 compile_shader_material(
-                    String(PROBE_VERTEX_SHADER), String(GRID_HELPER_FRAGMENT_SHADER)
+                    String(PROBE_VERTEX_SHADER),
+                    String(GRID_HELPER_FRAGMENT_SHADER),
                 )
             )
             var material = assets.materials.add(shader_material(program))
