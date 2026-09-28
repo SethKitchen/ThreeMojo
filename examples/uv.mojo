@@ -29,6 +29,7 @@ that +y.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
@@ -42,8 +43,8 @@ from render.rasterizer import SHADE_UV, RasterVertex, rasterize_shaded
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/uv.png"
 comptime WIDTH = 320
@@ -161,9 +162,18 @@ def main() raises:
 
     var corners = renderer.prepare(scene, assets, camera)
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     frames.append(fill(corners, background))
     frames.append(fill(flattened(corners), background))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "- frame 1 perspective correct, frame 2 affine")

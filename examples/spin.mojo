@@ -12,13 +12,15 @@ smallest thing that animates: three points on a circle and the flat
 rasterizer. `Matrix4` exists now, and everything above `cube.mojo` uses it.
 """
 
+from core.clock import Clock
 from math.vector2 import Vector2
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
 from std.math import cos, pi, sin
 from std.pathlib import Path
-from std.sys import argv
+from std.sys import argv, stderr
+from units.si import MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/spin.png"
 comptime WIDTH = 160
@@ -67,6 +69,8 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         # A third of a turn brings the triangle back onto itself, so the loop
@@ -75,5 +79,12 @@ def main() raises:
         angle = angle / (Float32(3) * Float32(FRAMES))
         frames.append(frame_at(angle))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

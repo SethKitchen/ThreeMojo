@@ -423,6 +423,31 @@ def bench_compile(mojo: Path, src: Path, binary: Path) -> dict:
 RUNS = 3
 
 
+def read_payload(output: str) -> tuple[str, float | None, float | None]:
+    """Return the backend, the frames and the import time a run printed.
+
+    three.js and every ThreeMojo example print one JSON line. The frames are
+    the draw loop alone, timed inside the process, so both sides leave out
+    starting the process, building the scene and writing a file.
+    """
+    backend = ""
+    frames_seconds = None
+    import_seconds = None
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            backend = payload.get("backend", backend)
+            if isinstance(payload.get("frames_ms"), (int, float)):
+                frames_seconds = payload["frames_ms"] / 1000.0
+            if isinstance(payload.get("import_ms"), (int, float)):
+                import_seconds = payload["import_ms"] / 1000.0
+    return backend, frames_seconds, import_seconds
+
+
 def bench_run(binary: Path, args: list[str], cwd: Path) -> dict:
     """Run a built binary `RUNS` times and return the fastest run."""
     best = None
@@ -430,6 +455,7 @@ def bench_run(binary: Path, args: list[str], cwd: Path) -> dict:
         result = measure([str(binary), *args], cwd=cwd)
         if not result["ok"]:
             return result
+        result["frames_seconds"] = read_payload(result["output"])[1]
         if best is None or (
             result["seconds"] is not None
             and (best["seconds"] is None or result["seconds"] < best["seconds"])
@@ -503,21 +529,7 @@ def bench_threejs(name: str, backend_name: str) -> dict:
             and (result["seconds"] is None or run["seconds"] < result["seconds"])
         ):
             result = run
-    backend = ""
-    frames_seconds = None
-    import_seconds = None
-    for line in result["output"].splitlines():
-        line = line.strip()
-        if line.startswith("{") and line.endswith("}"):
-            try:
-                payload = json.loads(line)
-                backend = payload.get("backend", "")
-                if isinstance(payload.get("frames_ms"), (int, float)):
-                    frames_seconds = payload["frames_ms"] / 1000.0
-                if isinstance(payload.get("import_ms"), (int, float)):
-                    import_seconds = payload["import_ms"] / 1000.0
-            except json.JSONDecodeError:
-                pass
+    backend, frames_seconds, import_seconds = read_payload(result["output"])
     result["backend"] = backend
     # The frames alone and the import of three.js, timed inside the Node
     # process, so the table can show the drawing apart from the process.
@@ -602,8 +614,8 @@ def js_cells(result: dict | None) -> tuple[str, str, str, float | None, int | No
 
 def example_table(rows: list[dict], webgl_ok: bool) -> str:
     lines = [
-        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | cpu-flat frames (s) | webgl run (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | webgl run (s) | ThreeMojo frames (s) | cpu-flat frames (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         tm = row["threemojo"]
@@ -626,6 +638,21 @@ def example_table(rows: list[dict], webgl_ok: bool) -> str:
             good_seconds(tm["run"]) if tm_run_ok else None,
             pair_seconds,
         )
+        pair_frames_cell = web_frames if webgl_ok and web.get("ok") else flat_frames
+        pair_frames = (
+            (web if webgl_ok and web.get("ok") else flat).get("frames_seconds")
+        )
+        tm_frames = tm["run"].get("frames_seconds") if tm_run_ok else None
+        frames_l, frames_r = painted_pair(
+            fmt_s(tm_frames) if tm_frames is not None else "—",
+            pair_frames_cell,
+            tm_frames,
+            pair_frames,
+        )
+        if webgl_ok and web.get("ok"):
+            web_frames = frames_r
+        else:
+            flat_frames = frames_r
         rss_l, rss_r = painted_pair(
             tm_rss,
             pair_rss,
@@ -639,13 +666,14 @@ def example_table(rows: list[dict], webgl_ok: bool) -> str:
             shown_flat_run, shown_flat_rss = run_r, rss_r
             shown_web_run, shown_web_rss = web_run, web_rss
         lines.append(
-            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {ff} | {wr} | {wf} | {m} | {fm} | {wm} |".format(
+            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {wr} | {tf} | {ff} | {wf} | {m} | {fm} | {wm} |".format(
                 name=row["name"],
                 w=row["width"],
                 h=row["height"],
                 frames=row["frames"],
                 c=fmt_s(tm["compile"]["seconds"]),
                 r=run_l,
+                tf=frames_l,
                 fr=shown_flat_run,
                 ff=flat_frames,
                 wr=shown_web_run,
@@ -671,7 +699,7 @@ def example_table(rows: list[dict], webgl_ok: bool) -> str:
             "The `webgl` columns are unavailable. The context did not load."
         )
     lines.append(
-        "Read a frames column against the ThreeMojo `run` column minus the Mojo baseline."
+        "A frames column times the draw loop inside the process. It leaves out starting the process, building the scene and writing a file."
     )
     return "\n".join(lines)
 

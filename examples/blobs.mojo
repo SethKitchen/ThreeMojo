@@ -14,6 +14,7 @@ Each ball paints its own color onto the vertices. The surface turns.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
@@ -25,8 +26,8 @@ from render.apng import encode
 from render.framebuffer import Color, FloatColor, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import DEGREE, METER, Angle, Length
+from std.sys import argv, stderr
+from units.si import DEGREE, METER, Angle, Length, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/blobs.png"
 comptime WIDTH = 240
@@ -104,9 +105,18 @@ def main() raises:
     camera.place(Vector3(0.9, 0.55, 2.4), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, node, step))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")
