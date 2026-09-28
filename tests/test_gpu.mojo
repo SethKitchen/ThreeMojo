@@ -125,6 +125,10 @@ from lights.light import (
     spot_light,
 )
 from lights.light_probe import light_probe_from_cube
+from lights.ies_spot_light import ies_spot_light
+from lights.light_probe_grid import LightProbeGrid
+from lights.projector_light import projector_light
+from lights.sun_light import SunLight
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.pmrem import pmrem_from_cube
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
@@ -4354,7 +4358,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(12)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(13)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)
@@ -9958,6 +9962,93 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_run_the_tsl_function_library_alike() raises:
+    # TSL's functions build nodes of the one bytecode: a triplanar texture,
+    # Voronoi cells, PCG's hash on 32-bit words, a sprite sheet turned by
+    # `rotate`, a packing and an oscillator must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends run the TSL library alike"):
+        return
+    from materials.nodes import COLOR_NODE, NodeGraph
+    from materials.tsl_bits import hash, pack_unorm_4x8, unpack_unorm_4x8
+    from materials.tsl_noise import voronoi2d
+    from materials.tsl_utils import (
+        osc_sine,
+        rotate,
+        spritesheet_uv,
+        triplanar_texture,
+    )
+
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for y in range(16):
+        for x in range(16):
+            pixels.append(UInt8((x * 16) % 256))
+            pixels.append(UInt8((y * 16) % 256))
+            pixels.append(UInt8(((x + y) * 8) % 256))
+            pixels.append(255)
+    var map = assets.textures.add(
+        Texture(16, 16, pixels^, REPEAT, NEAREST, LINEAR, False)
+    )
+    var g = NodeGraph()
+    var sampler = g.texture_uniform("map", map)
+    var projected = triplanar_texture(g, sampler, scale=g.float(2))
+    var cells = voronoi2d(g, g.mul(g.uv(), g.float(4)), g.float(0.3))
+    var grain = hash(g, g.floor(g.mul(g.swizzle(g.uv(), "x"), g.float(16))))
+    var sheet = spritesheet_uv(g, g.vec2(4, 4), frame=g.float(5))
+    var turned = rotate(g, sheet, g.float(0.4))
+    var packed = pack_unorm_4x8(
+        g, g.join([turned, grain, osc_sine(g, g.float(0.2))])
+    )
+    var unpacked = unpack_unorm_4x8(g, packed)
+    var color = g.add(
+        g.mul(g.swizzle(projected, "rgb"), g.saturate(cells)),
+        g.mul(g.swizzle(unpacked, "xyz"), g.float(0.4)),
+    )
+    g.set_output(COLOR_NODE, color)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(
+                plane(Length(1.2, METER), Length(0.9, METER), 2, 2)
+            ),
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    nodes=assets.programs.add(g.compile()),
+                )
+            ),
+            node,
+        )
+    )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 1.2), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 500)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
 def test_both_backends_draw_a_materialx_surface_alike() raises:
     # A MaterialX standard surface, its color and roughness from a graph,
     # on a lit sphere: the node outputs the loader sets, on both backends.
@@ -13722,3 +13813,696 @@ def test_both_backends_map_through_a_custom_curve() raises:
     renderer.custom_tone_mapping = _NO_NODES
     var plain = _flags_on_both(renderer, scene, assets)
     assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)
+
+
+from math.bounds import Plane as _ClipPlane
+from objects.clipping_group import ClippingGroup as _ClippingGroup
+from objects.group import group as _group
+
+
+def test_both_backends_cut_what_a_clipping_group_holds() raises:
+    if skipped_for_lack_of_a_gpu("both backends cut by a clipping group"):
+        return
+    # A lit cube under two nested groups: the outer cuts at x = 0.2, and
+    # the inner keeps what is above y = 0.1 or in front of z = 0.3. The
+    # cut is made on the host, before either rasterizer, so both fill the
+    # same clipped triangles.
+    var assets = Assets()
+    var scene = Scene()
+    var outer = scene.add(_group())
+    var inner = scene.attach(_group(), outer)
+    var turned = Object3D()
+    turned.rotate_y(Angle(35.0, DEGREE))
+    turned.rotate_x(Angle(20.0, DEGREE))
+    var node = scene.attach(turned^, inner)
+    scene.add_clipping_group(
+        _ClippingGroup(outer, [_ClipPlane(Vector3(-1, 0, 0), 0.2)])
+    )
+    scene.add_clipping_group(
+        _ClippingGroup(
+            inner,
+            [
+                _ClipPlane(Vector3(0, 1, 0), -0.1),
+                _ClipPlane(Vector3(0, 0, 1), -0.3),
+            ],
+            clip_intersection=True,
+        )
+    )
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    scene.add_mesh(
+        Mesh(box, assets.materials.add(Material(Color(200, 120, 60))), node)
+    )
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.3))
+    var lamp = scene.add(Object3D())
+    scene.node(lamp).set_position(1, 2, 3)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp, 1.0))
+    scene.update()
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var both = _flags_on_both(renderer, scene, assets)
+    assert_true(
+        count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+        "the cube drew nothing",
+    )
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+# --- Gaussian splats ----------------------------------------------------------
+
+from core.gaussian_splat_utils import (
+    create_gaussian_splat_geometry as _splat_geometry,
+    packed_band as _packed_band,
+)
+from objects.gaussian_splat import GaussianSplat as _GaussianSplat
+from render.gpu import GpuSplats
+from render.raster_state import DepthMode as _DepthMode
+from render.raster_state import REVERSED_DEPTH as _REVERSED_DEPTH
+from render.rect import Rect as _Rect
+from render.splatrule import ProjectedSplat as _ProjectedSplat
+from render.splat_raster import (
+    draw_gaussian_splat as _draw_gaussian_splat,
+    prepare_gaussian_splat as _prepare_gaussian_splat,
+    rasterize_splats as _rasterize_splats,
+)
+
+
+def _splat_cloud(node: NodeId) raises -> _GaussianSplat:
+    """Return a dozen overlapping splats of every shape, color and
+    opacity, with a band of spherical harmonics, at a node."""
+    var centers = List[Float32]()
+    var covariances = List[Float32]()
+    var colors = List[UInt8]()
+    for index in range(12):
+        var f = Float32(index)
+        centers.extend([f * 0.15 - 0.8, 0.5 - f * 0.08, f * 0.1 - 0.6])
+        covariances.extend(
+            [0.02 + f * 0.004, 0.01 - f * 0.002, 0.003, 0.03, 0.002, 0.01]
+        )
+        colors.extend(
+            [
+                UInt8(index * 20),
+                UInt8(255 - index * 15),
+                UInt8(90),
+                UInt8(120 + index * 10),
+            ]
+        )
+    var band = _packed_band(12, 1)
+    for at in range(len(band)):
+        band[at] = UInt8((at * 37) % 256)
+    return _GaussianSplat(
+        _splat_geometry(centers^, covariances^, colors^, band^), node
+    )
+
+
+def _splat_target(reversed: Bool) raises -> RenderTarget:
+    """Return a target with a band of nearer depth and a scissor."""
+    var target = RenderTarget(40, 30, BACKGROUND)
+    if reversed:
+        target.clear_inside(_Rect.whole(40, 30), BACKGROUND, _REVERSED_DEPTH)
+    for x in range(40):
+        for y in range(12, 16):
+            target.depth[y * 40 + x] = 0.0 if reversed else 0.9
+    target.set_scissor(_Rect(2, 1, 36, 27))
+    return target^
+
+
+def test_both_backends_draw_gaussian_splats_alike() raises:
+    # The host sorts and projects; each backend blends the same list, the
+    # CPU splat by splat and the device pixel by pixel. The device's `exp`
+    # can differ from the host's in the last bit.
+    if skipped_for_lack_of_a_gpu("both backends draw Gaussian splats alike"):
+        return
+    var device = GpuSplats()
+    for reversed in range(2):
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        scene.update()
+        var camera = PerspectiveCamera(
+            Angle(60, DEGREE), 4.0 / 3.0, Length(0.5, METER), Length(20, METER)
+        )
+        camera.place(Vector3(0.3, 0.2, 3), Vector3(0, 0, 0))
+        var splat = _splat_cloud(node)
+        var host = _splat_target(reversed == 1)
+        var gpu = _splat_target(reversed == 1)
+        var before = _splat_target(reversed == 1)
+        var splats = _prepare_gaussian_splat(
+            scene, splat, camera, 40, 30, host.depth_mode
+        )
+        assert_true(len(splats) > 6)
+        _rasterize_splats(host, splats)
+        device.draw(gpu, splats)
+        var drawn = 0
+        for slot in range(40 * 30):
+            var want = host.colors[slot]
+            var got = gpu.colors[slot]
+            assert_almost_equal(got.r, want.r, atol=1e-5)
+            assert_almost_equal(got.g, want.g, atol=1e-5)
+            assert_almost_equal(got.b, want.b, atol=1e-5)
+            assert_almost_equal(got.a, want.a, atol=1e-5)
+            assert_equal(gpu.data[slot], host.data[slot])
+            if want != before.colors[slot]:
+                drawn += 1
+        assert_true(drawn > 100)
+
+
+def test_the_device_draws_a_splat_object_as_the_host_does() raises:
+    if skipped_for_lack_of_a_gpu("the device draws a splat object"):
+        return
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 4.0 / 3.0, Length(0.5, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var on_host = _splat_cloud(node)
+    var on_device = _splat_cloud(node)
+    var host = RenderTarget(40, 30, BACKGROUND)
+    var gpu = RenderTarget(40, 30, BACKGROUND)
+    _draw_gaussian_splat(host, scene, on_host, camera)
+    var device = GpuSplats()
+    device.draw_gaussian_splat(gpu, scene, on_device, camera)
+    for slot in range(40 * 30):
+        assert_almost_equal(gpu.colors[slot].r, host.colors[slot].r, atol=1e-5)
+        assert_almost_equal(gpu.colors[slot].a, host.colors[slot].a, atol=1e-5)
+    gpu.depth_mode = _DepthMode(7)
+    with assert_raises(contains="valid depth mode"):
+        device.draw(gpu, List[_ProjectedSplat]())
+
+
+# --- IES spot lights, projectors, probe grids and suns ------------------------
+
+
+def a_ramp_profile() raises -> Texture:
+    """Return an IES profile 180 texels wide and two high, as
+    `loaders.ies.ies_texture` lays one out: the first row rises from zero
+    on the axis to one straight back, and the second row is a half, so a
+    read of the wrong row shows."""
+    var data = List[Float32]()
+    for row in range(2):
+        for column in range(180):
+            var red = Float32(column) / 179 if row == 0 else Float32(0.5)
+            data.append(red)
+            data.append(0)
+            data.append(0)
+            data.append(1)
+    return float_texture(180, 2, data^)
+
+
+def a_wide_slide() raises -> Texture:
+    """Return a picture twice as wide as high, in four colored columns."""
+    var pixels = List[UInt8]()
+    for _ in range(8):
+        for column in range(16):
+            var band = column // 4
+            pixels.append(UInt8(250 if band == 0 else 60 * band))
+            pixels.append(UInt8(200 if band % 2 == 0 else 40))
+            pixels.append(UInt8(40 + 50 * band))
+            pixels.append(255)
+    return Texture(16, 8, pixels^)
+
+
+def a_shaped_spot_scene(mut assets: Assets) raises -> Scene:
+    """Return a floor under a phong block and a standard and a toon ball,
+    all casting, with an IES spot light over one side that casts, and a
+    projector over the other that projects a wide picture."""
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var lift = Object3D()
+    lift.set_position(0, 0.5, 0)
+    var lift_node = scene.add(lift^)
+    var left = Object3D()
+    left.set_position(-1.5, 0.6, 1)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.4, 0.5, -1)
+    var right_node = scene.add(right^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+    var block = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    var red = assets.materials.add(
+        phong_material(Color(200, 60, 60), specular=Color(80, 80, 80))
+    )
+    var metal = assets.materials.add(
+        standard_material(Color(180, 200, 220), roughness=0.4, metalness=0.3)
+    )
+    var cartoon = assets.materials.add(toon_material(Color(90, 200, 120)))
+    scene.add_mesh(Mesh(floor, paint, ground_node, receive_shadow=True))
+    scene.add_mesh(
+        Mesh(block, red, lift_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, metal, left_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, cartoon, right_node, cast_shadow=True, receive_shadow=True)
+    )
+    var lamp = Object3D()
+    lamp.set_position(-1, 3, 0.5)
+    var lamp_node = scene.add(lamp^)
+    var profile = assets.textures.add(a_ramp_profile())
+    var ies = ies_spot_light(
+        Color(255, 240, 220),
+        lamp_node,
+        profile,
+        60.0,
+        angle=Angle(70.0, DEGREE),
+    )
+    ies.cast_shadow = True
+    ies.shadow.map_size = 16
+    ies.shadow.normal_bias = 0.02
+    scene.add_light(ies)
+    var beam_at = Object3D()
+    beam_at.set_position(2, 4, 1)
+    var beam_node = scene.add(beam_at^)
+    var projector = projector_light(
+        Color(255, 255, 255),
+        beam_node,
+        40.0,
+        angle=Angle(35.0, DEGREE),
+        penumbra=0.4,
+    )
+    projector.map = assets.textures.add(a_wide_slide())
+    scene.add_light(projector)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+    return scene^
+
+
+def shaped_camera() raises -> PerspectiveCamera:
+    """Return the camera the shaped spot lights are seen through."""
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    return camera^
+
+
+def test_both_backends_agree_on_ies_spot_lights_and_projectors() raises:
+    # A profile read through the texture table and a projector's fade
+    # through its frame, on a lambert floor, a phong block, a standard
+    # ball and a toon ball, with a shadow and a wide picture: the kernel
+    # calls the host's own functions and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on IES spot lights and projectors"
+    ):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = shaped_camera()
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+        spot_maps=renderer.spot_light_maps(scene, assets),
+        profiles=renderer.spot_profiles(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36,
+        "the scene drew nothing",
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the profile is there: as a cone, the picture changes.
+    scene.lights[0].ies_map = NO_TEXTURE
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "the IES profile shaped nothing",
+    )
+
+
+def test_an_ies_profile_must_be_uploaded() raises:
+    # The kernel reads the profile through the texture table, so one past
+    # what was uploaded is refused before the launch.
+    if skipped_for_lack_of_a_gpu("an IES profile must be uploaded"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(24, 18)
+    var lighting = Lighting(
+        scene, profiles=renderer.spot_profiles(scene, assets)
+    )
+    var device = GpuRenderer(24, 18)
+    with assert_raises(contains="IES"):
+        device.draw(data_pair(LAMBERT), BACKGROUND, SHADE_LIT, lighting)
+
+
+def a_probe_grid() raises -> LightProbeGrid:
+    """Return a grid of two probes a side over the scene, each with its own
+    colors in band zero and band one."""
+    var grid = LightProbeGrid(
+        Length(6.0, METER),
+        Length(3.0, METER),
+        Length(6.0, METER),
+        2,
+        2,
+        2,
+        Vector3(0, 1.5, 0),
+    )
+    grid.intensity = 1.5
+    grid.falloff = Length(1.0, METER)
+    for index in range(grid.count()):
+        var sh = SphericalHarmonics3()
+        var shade = Float32(index) / 8
+        sh.set_coefficient(0, Vector3(0.2 + shade, 0.3, 0.5 - shade * 0.5))
+        sh.set_coefficient(1, Vector3(0.1, 0.05 * shade, 0.0))
+        sh.set_coefficient(3, Vector3(0.0, 0.1, 0.05))
+        grid.probes[index] = sh
+    return grid^
+
+
+def test_both_backends_agree_on_a_light_probe_grid() raises:
+    # The eight probes from `grid_taps`, blended lane by lane, and their
+    # irradiance in index order, on every lit kind: the kernel reads the
+    # block the host lays out and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on a light probe grid"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_light_probe_grid(a_probe_grid())
+    var camera = shaped_camera()
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+        spot_maps=renderer.spot_light_maps(scene, assets),
+        profiles=renderer.spot_profiles(scene, assets),
+        probe_grid=a_probe_grid(),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the grid is there: without it the picture changes.
+    renderer.set_light_probe_grid(LightProbeGrid.none())
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "the grid lit nothing",
+    )
+
+
+def test_both_backends_agree_under_a_sun_fit_to_the_view() raises:
+    # A sun is two directional cascades fit to the view each frame, which
+    # share its light and blend its shadows by `sun_reach` on both
+    # backends.
+    if skipped_for_lack_of_a_gpu("both backends agree under a sun"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    scene.lights.clear()
+    var sun = SunLight(scene, Color(255, 250, 240), 3.0)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 64
+    sun.shadow.far = Length(12.0, METER)
+    sun.shadow.bias = -0.002
+    scene.node(sun.node).set_position(-1, 2, 1)
+    scene.update()
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = shaped_camera()
+    sun.update(scene, camera)
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36,
+        "the scene drew nothing",
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- Voxel global illumination -----------------------------------------------
+
+
+def _vxgi_disagreements(
+    want: List[Float32], got: List[Float32], tolerance: Float32
+) raises -> Int:
+    """Return how many floats of two lists differ by more than a
+    tolerance, the lists being of one length."""
+    assert_equal(len(got), len(want))
+    var count = 0
+    for at in range(len(want)):
+        if abs(want[at] - got[at]) > tolerance:
+            count += 1
+    return count
+
+
+def test_both_backends_voxelize_and_light_a_corner_alike() raises:
+    # The kernel asks every triangle of each voxel what the host's walk
+    # sets, and lights and bounces each voxel with the host's functions.
+    # A cone's steps can end a hair apart where a device's `pow`, `cos` or
+    # `log2` differs in the last bit, so a few texels may differ.
+    if skipped_for_lack_of_a_gpu("both backends voxelize a corner alike"):
+        return
+    from lights.vxgi_volume import VXGIVolume
+    from render.gpu_vxgi import GpuVxgi
+    from test_vxgi_node import a_corner
+
+    var assets = Assets()
+    var scene = a_corner(assets)
+    var host = VXGIVolume(8)
+    host.update(scene, assets)
+    var on_device = VXGIVolume(8)
+    var device = GpuVxgi()
+    device.update(on_device, scene, assets)
+    assert_equal(len(on_device.occupancy), len(host.occupancy))
+    var bits = 0
+    var ids = 0
+    for at in range(len(host.occupancy)):
+        if host.occupancy[at] != on_device.occupancy[at]:
+            bits += 1
+        if host.triangle_ids[at] != on_device.triangle_ids[at]:
+            ids += 1
+    assert_equal(bits, 0)
+    assert_equal(ids, 0)
+    assert_equal(_vxgi_disagreements(host.opacity, on_device.opacity, 1e-6), 0)
+    var loose = len(host.radiance) // 100
+    assert_true(
+        _vxgi_disagreements(host.direct, on_device.direct, 1e-3) <= loose
+    )
+    assert_true(
+        _vxgi_disagreements(host.radiance, on_device.radiance, 1e-3) <= loose
+    )
+
+
+def test_both_backends_gather_a_corner_alike() raises:
+    # Every pixel runs `vxgi_pixel` on the device, over the volume the
+    # host built.
+    if skipped_for_lack_of_a_gpu("both backends gather a corner alike"):
+        return
+    from postprocessing.vxgi_node import VXGINode
+    from render.gpu_vxgi import GpuVxgi
+    from test_vxgi_node import a_corner, drawn, view_of, world_of
+
+    var assets = Assets()
+    var scene = a_corner(assets)
+    var target = drawn(scene, assets)
+    var host = VXGINode(8)
+    var want = host.render(view_of(target), world_of(), scene, assets, 3)
+    var on_device = VXGINode(8)
+    var device = GpuVxgi()
+    var got = device.render(
+        on_device, view_of(target), world_of(), scene, assets, 3
+    )
+    var loose = len(want.ao) // 100
+    var ao = 0
+    var gi = 0
+    for slot in range(len(want.ao)):
+        if abs(want.ao[slot] - got.ao[slot]) > 1e-3:
+            ao += 1
+        var a = want.gi[slot]
+        var b = got.gi[slot]
+        if (
+            abs(a.r - b.r) > 1e-3
+            or abs(a.g - b.g) > 1e-3
+            or abs(a.b - b.b) > 1e-3
+        ):
+            gi += 1
+    assert_true(ao <= loose)
+    assert_true(gi <= loose)
+
+
+# --- node lighting models: MeshSSSNodeMaterial and VolumeNodeMaterial ------
+
+from materials.nodes import (
+    NodeGraph,
+    OFFSET_NODE,
+    SCATTERING_NODE,
+    THICKNESS_COLOR_NODE,
+    THICKNESS_POWER_NODE,
+)
+from materials.volume_node_material import volume_node_material
+
+
+def _models_on_both(
+    scene: Scene, assets: Assets, eye: Vector3
+) raises -> Tuple[Framebuffer, Framebuffer]:
+    """Return the scene drawn by the renderer and by the device from one
+    prepared frame, seen from `eye` toward the origin."""
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(eye, Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    return (cpu^, device.read_back())
+
+
+def test_both_backends_let_light_through_a_sss_node_material_alike() raises:
+    # A physical sphere with a thickness color and power, lit from behind
+    # and aside by a sun and a bulb: the light through joins the direct
+    # diffuse light on both.
+    if skipped_for_lack_of_a_gpu("both backends scatter a sss material"):
+        return
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        THICKNESS_COLOR_NODE,
+        graph.mul(graph.vertex_color(), graph.vec3(1, 0.5, 0.25)),
+    )
+    graph.set_output(THICKNESS_POWER_NODE, graph.float(1.5))
+    var program = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.8, METER), 18, 12)),
+            assets.materials.add(
+                Material(
+                    Color(200, 180, 160),
+                    kind=PHYSICAL,
+                    roughness=0.6,
+                    nodes=program,
+                )
+            ),
+            node,
+        )
+    )
+    var sun = scene.add(Object3D())
+    scene.node(sun).set_position(0.3, 0.2, -1)
+    scene.add_light(directional_light(Color(255, 240, 220), sun, 1.5))
+    var bulb = scene.add(Object3D())
+    scene.node(bulb).set_position(-1.2, 0.4, -0.8)
+    scene.add_light(point_light(Color(200, 220, 255), bulb, 3.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+    var both = _models_on_both(scene, assets, Vector3(0.2, 0.3, 3))
+    assert_true(
+        count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+        "the sphere drew nothing",
+    )
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_march_a_volume_node_material_alike() raises:
+    # A box of light around a bulb and under a spot, with a scattering
+    # node that reads each step's position and an offset: from outside,
+    # and from inside, where the ray starts at the surface.
+    if skipped_for_lack_of_a_gpu("both backends march a volume alike"):
+        return
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        SCATTERING_NODE,
+        graph.add(
+            graph.float(0.6),
+            graph.mul(
+                graph.float(0.4),
+                graph.sin(
+                    graph.mul(
+                        graph.swizzle(graph.position_world(), "x"),
+                        graph.float(4),
+                    )
+                ),
+            ),
+        ),
+    )
+    graph.set_output(OFFSET_NODE, graph.float(0.3))
+    var program = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(cube(Length(2.0, METER))),
+            assets.materials.add(volume_node_material(steps=12, nodes=program)),
+            node,
+        )
+    )
+    var bulb = scene.add(Object3D())
+    scene.node(bulb).set_position(0.3, -0.2, 0.1)
+    scene.add_light(point_light(Color(255, 200, 150), bulb, 2.0))
+    var lamp = scene.add(Object3D())
+    scene.node(lamp).set_position(0, 2.5, 0)
+    scene.add_light(
+        spot_light(
+            Color(150, 200, 255),
+            lamp,
+            4.0,
+            angle=Angle(25.0, DEGREE),
+            penumbra=0.3,
+        )
+    )
+    scene.update()
+    for eye in [Vector3(0.4, 0.3, 4), Vector3(0.1, 0.1, 0.5)]:
+        var both = _models_on_both(scene, assets, eye)
+        assert_true(
+            count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+            "the volume drew nothing",
+        )
+        assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)

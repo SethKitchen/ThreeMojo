@@ -223,6 +223,8 @@ from lights.light import (
 )
 from loaders.gltf import decode_base64, decode_image
 from materials.node_json import read_node_program
+from loaders.node_loader import NodeLoader, plain_material_type
+from materials.nodes import NodeProgramId
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -382,8 +384,8 @@ def material_type_names() -> List[String]:
     value.
 
     Returns:
-        Twelve names: `MeshBasicMaterial` for `BASIC` at zero through
-        `MeshGouraudMaterial` for `GOURAUD` at eleven.
+        Thirteen names: `MeshBasicMaterial` for `BASIC` at zero through
+        `VolumeNodeMaterial` for `VOLUME` at twelve.
     """
     return [
         "MeshBasicMaterial",
@@ -398,6 +400,7 @@ def material_type_names() -> List[String]:
         "ShadowMaterial",
         "MeshDistanceMaterial",
         "MeshGouraudMaterial",
+        "VolumeNodeMaterial",
     ]
 
 
@@ -1627,7 +1630,8 @@ struct _Loader(Movable):
 
     def material(mut self, item: Int, mut assets: Assets) raises -> Material:
         """Build one material entry."""
-        var name = self.text(item, "type", "")
+        # A node material is read as the plain class it extends.
+        var name = plain_material_type(self.text(item, "type", ""))
         var at = _position_of(material_type_names(), name)
         var shape = _position_of(_shape_type_names(), name)
         if at < 0 and shape < 0:
@@ -1858,9 +1862,12 @@ struct _Loader(Movable):
         self.flags(item, built)
         self.raster(item, built)
         self.clipping(item, built)
-        # A node material's program, with the ids its textures get here.
+        # A node material's program, with the ids its textures get here:
+        # this port's compiled program, or three.js's graph of nodes.
         var nodes = self.document.get(item, "nodes")
-        if nodes != NO_NODE:
+        if self.document.has(item, "inputNodes"):
+            built.nodes = self.node_graph(item, assets)
+        elif nodes != NO_NODE:
             var read = read_node_program(self.document, nodes)
             for index in range(len(read.texture_offsets)):
                 if read.texture_uuids[index] != "":
@@ -1877,6 +1884,37 @@ struct _Loader(Movable):
             read.program.list_maps()
             built.nodes = assets.programs.add(read.program.copy())
         return built^
+
+    def node_graph(
+        mut self, item: Int, mut assets: Assets
+    ) raises -> NodeProgramId:
+        """Compile a node material written as three.js's graph of nodes,
+        three.js's `NodeObjectLoader`, and set the textures it reads.
+
+        The nodes are the document's `nodes`, and the material's own
+        where it has them. Each texture uniform gets the id its texture
+        gets here, and its transform uniform the texture's transform.
+        """
+        var loader = NodeLoader()
+        var library = self.library("nodes")
+        if library != NO_NODE:
+            loader.parse_nodes(self.document, library)
+        var read = loader.material(self.document, item)
+        var program = read.graph.compile()
+        for index in range(len(read.textures)):
+            ref texture = read.textures[index]
+            if texture.cube:
+                program.set_cube(
+                    texture.uniform, self.cube(texture.texture, False, assets)
+                )
+                continue
+            var id = self.texture(texture.texture, COVERAGE, assets)
+            program.set_texture(texture.uniform, id)
+            if texture.matrix != "":
+                program.set_uniform(
+                    texture.matrix, assets.textures.get(id).uv_transform()
+                )
+        return assets.programs.add(program^)
 
     def flags(self, item: Int, mut material: Material) raises:
         """Set a material's fragment flags, its blend constant, its shadow

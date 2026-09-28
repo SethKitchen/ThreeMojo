@@ -18,6 +18,8 @@ from core.scene import Scene
 from lights.shadow import LightShadow, ShadowCascade
 from lights.light import (
     AMBIENT,
+    ASPECT_FROM_MAP,
+    CONE_SPOT,
     DEFAULT_SPOT_ANGLE,
     DIRECTIONAL,
     HEMISPHERE,
@@ -558,6 +560,9 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
             NO_TEXTURE,
             SphericalHarmonics3(),
             ShadowCascade.none(),
+            CONE_SPOT,
+            NO_TEXTURE,
+            ASPECT_FROM_MAP,
         )
     )
     with assert_raises():
@@ -2063,7 +2068,7 @@ def test_the_indirect_light_is_the_ambient_and_the_hemispheres() raises:
     scene.update()
     var lighting = Lighting(scene)
     for normal in [UP_Z, Vector3(0, 1, 0), Vector3(0, -1, 0)]:
-        var indirect = lighting.indirect_at(normal)
+        var indirect = lighting.indirect_at(normal, ORIGIN)
         var arriving = lighting.intensity_at(normal, ORIGIN)
         assert_equal(indirect.r, arriving.r)
         assert_equal(indirect.g, arriving.g)
@@ -2072,7 +2077,7 @@ def test_the_indirect_light_is_the_ambient_and_the_hemispheres() raises:
     # A directional light adds to what arrives and not to the indirect.
     var lit = lit_from(0, 0, 1)
     var direct = Lighting(lit)
-    assert_equal(direct.indirect_at(UP_Z).r, Float32(0))
+    assert_equal(direct.indirect_at(UP_Z, ORIGIN).r, Float32(0))
     assert_true(direct.intensity_at(UP_Z, ORIGIN).r > 0, "the lamp was lost")
 
 

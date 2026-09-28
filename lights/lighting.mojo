@@ -47,7 +47,9 @@ from lights.shadow import (
     ShadowShape,
     SpotLightMap,
     Unshaped,
+    SUN_BLEND,
     cascade_reach,
+    sun_reach,
     shadow_strength,
     view_depth,
 )
@@ -63,7 +65,9 @@ from lights.light import (
     Light,
     LightMask,
 )
+from lights.light_probe_grid import LightProbeGrid
 from lights.ltc import LtcTables, ltc_lookup, ltc_uv, rect_area_light
+from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
@@ -965,6 +969,29 @@ def scattering_through(
     return lit * scale + ambient
 
 
+def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
+    """Return one light's color at a step of a volume's ray: three.js's
+    `VolumetricLightingModel.direct`, which multiplies a light's color,
+    shadow and all, by the light's shadow once more. Shared by both
+    rasterizers.
+
+    Args:
+        light: The light's color, linear, times any spot light map.
+        reach: Its falloff with the distance, times the cone of a spot
+            light.
+        through: What its shadow lets through at the step; ones for a light
+            that casts none.
+
+    Returns:
+        The color, linear.
+    """
+    return Vector3(
+        light.x * reach * through.x * through.x,
+        light.y * reach * through.y * through.y,
+        light.z * reach * through.z * through.z,
+    )
+
+
 def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     """Return a Gouraud surface's arriving light at a fragment: the direct
     light interpolated from its corners, darkened by the shadows there, and
@@ -1212,6 +1239,15 @@ struct Lighting(Movable):
     # each spot light carries, or -1 for none. See `lights.shadow`.
     var spot_maps: List[SpotLightMap]
     var spot_map_slots: List[Int]
+    # The beams of the IES spot lights and the projectors this frame, and
+    # which of them each spot light takes, or -1 for a cone. See
+    # `lights.spot_profile`.
+    var spot_profiles: List[SpotProfile]
+    var spot_profile_slots: List[Int]
+    # The box of light probes that adds to the ambient term, its
+    # intensity already multiplied in, or an empty grid. See
+    # `lights.light_probe_grid`.
+    var grid: LightProbeGrid
     # One entry per rect area light, parallel lists: where its center is,
     # from the center to the middle of a side and of the other side, in
     # world space, and what it carries. Read only by a physical surface;
@@ -1236,6 +1272,8 @@ struct Lighting(Movable):
         var spot_maps: List[SpotLightMap] = List[SpotLightMap](),
         back: Vector3 = Vector3(0, 0, 1),
         chosen: LightMask = ALL_LIGHTS,
+        var profiles: List[SpotProfile] = List[SpotProfile](),
+        probe_grid: LightProbeGrid = LightProbeGrid.none(),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -1282,6 +1320,13 @@ struct Lighting(Movable):
             chosen: Which of the scene's lights to take, by their places:
                 a material's `lights`, three.js's `lightsNode`. Every
                 light, the default.
+            profiles: The beams of the IES spot lights and the
+                projectors, each naming its light;
+                `Renderer.spot_profiles` builds them. None by default,
+                which is refused only when the scene holds such a light.
+            probe_grid: A box of light probes, three.js's
+                `LightProbeGrid`, added to the ambient term at each
+                surface. Empty by default, which adds nothing.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -1293,7 +1338,11 @@ struct Lighting(Movable):
                 spot, or a point light's map is not a cube or another
                 light's is; a spot light map names a light that is not
                 there or is not a spot light; or the scene holds a rect
-                area light and no LTC tables were given.
+                area light and no LTC tables were given; a spot profile
+                names a light that is not there or that is not a spot of
+                its shape; an IES spot light with a map or a projector
+                has no profile; or the probe grid is not empty and is
+                refused by `LightProbeGrid.validate`.
         """
         self.eye = eye
         # Normalized here rather than at every fragment, and left alone when
@@ -1343,6 +1392,24 @@ struct Lighting(Movable):
         self.rect_half_heights = List[Vector3]()
         self.rect_radiances = List[FloatColor]()
         self.ltc = ltc^
+        self.spot_profiles = profiles^
+        self.spot_profile_slots = List[Int]()
+        if not probe_grid.is_empty():
+            probe_grid.validate()
+        self.grid = probe_grid.scaled()
+        for slot in range(len(self.spot_profiles)):
+            var owner = self.spot_profiles[slot].light
+            if owner < 0 or owner >= len(scene.lights):
+                raise Error("A spot profile names a light that is not there")
+            ref shaped = scene.lights[owner]
+            if (
+                shaped.kind != SPOT
+                or shaped.spot_shape != self.spot_profiles[slot].shape
+            ):
+                raise Error(
+                    "A spot profile names a light that is not a spot of its"
+                    " shape"
+                )
         for slot in range(len(self.shadows)):
             var owner = self.shadows[slot].light
             if owner < 0 or owner >= len(scene.lights):
@@ -1443,6 +1510,13 @@ struct Lighting(Movable):
                 # the fragment compares a dot product and takes no arc.
                 self.spot_shadows.append(self._shadow_of(index))
                 self.spot_map_slots.append(self._map_of(index))
+                var profile = self._profile_of(index)
+                if profile < 0 and needs_profile(light):
+                    raise Error(
+                        "An IES spot light or a projector needs its profile:"
+                        " pass Renderer.spot_profiles as `profiles`"
+                    )
+                self.spot_profile_slots.append(profile)
                 self.cone_cosines.append(cos(light.angle.value))
                 self.penumbra_cosines.append(
                     cos(light.angle.value * (1 - light.penumbra))
@@ -1521,6 +1595,9 @@ struct Lighting(Movable):
         self.rect_half_heights = List[Vector3]()
         self.rect_radiances = List[FloatColor]()
         self.ltc = LtcTables()
+        self.spot_profiles = List[SpotProfile]()
+        self.spot_profile_slots = List[Int]()
+        self.grid = LightProbeGrid.none()
 
     def rect_count(self) -> Int:
         """Return how many rect area lights there are."""
@@ -1539,6 +1616,43 @@ struct Lighting(Movable):
             if self.spot_maps[slot].light == light:
                 return slot
         return -1
+
+    def _profile_of(self, light: Int) -> Int:
+        """Return which of the spot profiles shapes `light`, or -1."""
+        for slot in range(len(self.spot_profiles)):
+            if self.spot_profiles[slot].light == light:
+                return slot
+        return -1
+
+    def spot_attenuation(
+        self, index: Int, angle_cos: Float32, position: Vector3
+    ) -> Float32:
+        """Return how much of one spot light's beam reaches a surface:
+        three.js's `getSpotAttenuation`.
+
+        `smoothstep` of the cone's two cosines for a plain spot light;
+        the IES profile at the angle for an `IES_SPOT`; the rectangle's
+        fade for a `PROJECTOR_SPOT`. See `lights.spot_profile`.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            angle_cos: The cosine of the angle between the way to the
+                light and its axis.
+            position: Where the surface is, in world space.
+
+        Returns:
+            From zero, outside the beam, to one.
+        """
+        var slot = self.spot_profile_slots[index]
+        if slot < 0:
+            return smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+        return self.spot_profiles[slot].attenuation(
+            angle_cos, position, self.penumbra_cosines[index]
+        )
 
     def spot_tint(
         self, index: Int, position: Vector3, normal: Vector3
@@ -1647,13 +1761,21 @@ struct Lighting(Movable):
         ref band = self.cascades[index]
         if not band.is_cascade():
             return self.shadow_through(slot, position, normal, receives, shape)
-        var reach = cascade_reach(
-            view_depth(position, self.eye, self.back) / band.span.to(METER),
-            band.start,
-            band.end,
-            band.last,
-            band.fade,
+        var depth = view_depth(position, self.eye, self.back) / band.span.to(
+            METER
         )
+        var reach = cascade_reach(
+            depth, band.start, band.end, band.last, band.fade
+        )
+        if band.blend == SUN_BLEND:
+            reach = sun_reach(
+                depth,
+                band.start,
+                band.ramp_end,
+                band.fade_start,
+                band.end,
+                band.last,
+            )
         if reach[0] == 0:
             return Vector3(0, 0, 0)
         var through = self.shadow_through(
@@ -1773,7 +1895,7 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient_at(normal)
+        var total = self.ambient_at(normal, position)
         for index in range(len(self.directions)):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
@@ -1838,11 +1960,7 @@ struct Lighting(Movable):
             # cone's axis, and from it how far inside the cone this is:
             # three.js's `getSpotAttenuation`.
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert = normal.dot(toward) / distance
@@ -1913,7 +2031,7 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient_at(normal)
+        var total = self.ambient_at(normal, position)
         for index in range(len(self.directions)):
             var tone = toon_tone(normal.dot(self.directions[index]), ramp)
             var through = self.direction_through(
@@ -1966,11 +2084,7 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / distance, ramp)
@@ -2092,11 +2206,7 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert = normal.dot(toward) / distance
@@ -2123,28 +2233,38 @@ struct Lighting(Movable):
             blue += bulb.b * tint.z * (bare * through.z) * sent.z
         return FloatColor(red, green, blue, 1.0).scaled(self.scale)
 
-    def ambient_at(self, normal: Vector3) -> FloatColor:
-        """Return the ambient term and the light probes' irradiance at a
-        normal, before the scale: three.js's `getAmbientLightIrradiance`
-        plus `getLightProbeIrradiance`.
+    def ambient_at(self, normal: Vector3, position: Vector3) -> FloatColor:
+        """Return the ambient term, the light probes' irradiance and the
+        probe grid's at a surface, before the scale: three.js's
+        `getAmbientLightIrradiance` plus `getLightProbeIrradiance`, plus
+        its `LightProbeGrid`.
 
         The first thing each sum here starts from, and the kernel's
         `_ambient_at` starts from the same numbers: the probes' nine terms
         summed in index order by `SphericalHarmonics3.get_irradiance_at`,
-        then added to the ambient color.
+        added to the ambient color, and then the grid's blend at the
+        position, taken the same way.
 
         Args:
             normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space. Only the
+                probe grid reads it.
 
         Returns:
             The light, linear and unscaled. Alpha is one.
         """
         var lift = self.probe.get_irradiance_at(normal)
-        return FloatColor(
+        var total = FloatColor(
             self.ambient.r + lift.x,
             self.ambient.g + lift.y,
             self.ambient.b + lift.z,
             1.0,
+        )
+        if self.grid.is_empty():
+            return total
+        var grid = self.grid.irradiance_at(position, normal)
+        return FloatColor(
+            total.r + grid.x, total.g + grid.y, total.b + grid.z, 1.0
         )
 
     def scattered_at[
@@ -2236,11 +2356,7 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var bare = rim * falloff(
@@ -2265,6 +2381,62 @@ struct Lighting(Movable):
             green += bulb.g * tint.y * (sent * (bare * shadowed.y))
             blue += bulb.b * tint.z * (sent * (bare * shadowed.z))
         return FloatColor(red, green, blue, 1.0)
+
+    def volume_light_at(
+        self, position: Vector3, normal: Vector3, receives: Bool
+    ) -> Vector3:
+        """Return the light that one step of a volume's ray gathers:
+        three.js's `VolumetricLightingModel.scatteringLight`, summed over
+        the point lights and then the spot lights. A directional light has
+        no distance and adds nothing, as three.js skips it. A spot light
+        adds nothing at its own position, where it has no direction. Each
+        light is `shadowed_twice`, not scaled.
+
+        Args:
+            position: Where the step is, in world space.
+            normal: The unit normal of the surface the ray starts from, for
+                the shadow maps' normal bias.
+            receives: Whether the lights' shadows fall on the volume.
+
+        Returns:
+            The light, linear.
+        """
+        var total = Vector3(0, 0, 0)
+        for index in range(len(self.positions)):
+            # A step on the bulb is lit by `falloff`'s floor, as three.js's
+            # `getDistanceAttenuation` lights it: no direction is read.
+            var distance = (self.positions[index] - position).length()
+            ref bulb = self.point_radiances[index]
+            total = total + shadowed_twice(
+                Vector3(bulb.r, bulb.g, bulb.b),
+                falloff(distance, self.decays[index], self.cutoffs[index]),
+                self.shadow_through(
+                    self.point_shadows[index], position, normal, receives
+                ),
+            )
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                toward.dot(self.spot_directions[index]) / distance,
+            )
+            ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
+            total = total + shadowed_twice(
+                Vector3(bulb.r * tint.x, bulb.g * tint.y, bulb.b * tint.z),
+                rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                ),
+                self.shadow_through(
+                    self.spot_shadows[index], position, normal, receives
+                ),
+            )
+        return total
 
     def direct_at(self, normal: Vector3, position: Vector3) -> FloatColor:
         """Return the light with a direction reaching a surface here, with
@@ -2306,11 +2478,7 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             var lambert = normal.dot(toward) / distance
             if rim <= 0 or lambert <= 0:
                 continue
@@ -2339,7 +2507,7 @@ struct Lighting(Movable):
             )
         return total.scaled(self.scale)
 
-    def indirect_at(self, normal: Vector3) -> FloatColor:
+    def indirect_at(self, normal: Vector3, position: Vector3) -> FloatColor:
         """Return the light with no direction reaching a surface here: the
         ambient term, the light probes and the hemisphere lights, three.js's
         `irradiance` in `lights_fragment_begin`.
@@ -2352,11 +2520,13 @@ struct Lighting(Movable):
 
         Args:
             normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space. Only the
+                probe grid reads it.
 
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient_at(normal)
+        var total = self.ambient_at(normal, position)
         for index in range(len(self.sky_directions)):
             var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
             ref sky = self.skies[index]
@@ -2503,11 +2673,7 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var angle_cos = toward.dot(self.spot_directions[index]) / distance
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                angle_cos,
-            )
+            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var lambert = max(Float32(0), normal.dot(toward) / distance)

@@ -90,6 +90,7 @@ from render.cube_texture import check_rotation
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from std.math import isfinite
 from units.si import RADIAN, Angle, Length, METER
+from objects.clipping_group import Clipping, ClippingGroup
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
 from objects.line_segments2 import LineSegments2
@@ -184,6 +185,10 @@ struct Scene(Movable):
     # for them, where a `Line` is drawn by the line pass. See
     # `objects.line_segments2`.
     var wide_lines: List[LineSegments2]
+    # The clipping planes nodes hold, each naming a node here: what is
+    # drawn at the node and under it is cut. Public and assignable for
+    # the reason `meshes` is. See `objects.clipping_group`.
+    var clipping_groups: List[ClippingGroup]
     # What veils the scene with distance, three.js's `scene.fog`. Public
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
@@ -236,6 +241,7 @@ struct Scene(Movable):
         self.points = List[Points]()
         self.sprites = List[Sprite]()
         self.wide_lines = List[LineSegments2]()
+        self.clipping_groups = List[ClippingGroup]()
         self.fog = no_fog()
         self.background = no_background()
         self.environment = NO_CUBE_TEXTURE
@@ -530,6 +536,62 @@ struct Scene(Movable):
         if line.node.value >= len(self._nodes):
             raise Error("A wide line must name a node that is in the scene")
         self.wide_lines.append(line)
+
+    def add_clipping_group(mut self, var group: ClippingGroup) raises:
+        """Give a node clipping planes that cut what is drawn at it and
+        under it, three.js's `scene.add(clippingGroup)`.
+
+        Does not make the scene stale, for the reason `add_mesh` does not.
+
+        Args:
+            group: The planes and the node that holds them. The node must
+                already be in the scene. `group()` builds a node for it.
+
+        Raises:
+            Error: If the group names a node the scene does not have, or a
+                node that already holds a clipping group.
+        """
+        if group.node.value >= len(self._nodes):
+            raise Error(
+                "A clipping group must name a node that is in the scene"
+            )
+        for index in range(len(self.clipping_groups)):
+            if self.clipping_groups[index].node == group.node:
+                raise Error("A node holds one clipping group at most")
+        self.clipping_groups.append(group^)
+
+    def clipping(self, index: NodeId, shadow_pass: Bool) raises -> Clipping:
+        """Return the planes the clipping groups at a node and above it
+        give it, three.js's `ClippingContext` for the node.
+
+        The groups are added from the top of the tree down, so the
+        planes of an outer group come before those of an inner one.
+
+        Args:
+            index: The node.
+            shadow_pass: Whether this is a light's view for a shadow map,
+                where only a group with `clip_shadows` cuts.
+
+        Returns:
+            The planes, in world space. Empty when no group is at the node
+            or above it.
+
+        Raises:
+            Error: If the node is not in the scene, or a parent link names
+                no node or loops.
+        """
+        var found = Clipping()
+        if len(self.clipping_groups) == 0:
+            return found^
+        var chain = self.traverse_ancestors(index)
+        chain.insert(0, index)
+        # The chain holds the node at least, and there is a group at
+        # least: both loops run.
+        for step in range(len(chain) - 1, -1, -1):  # pragma: no branch
+            for group in range(len(self.clipping_groups)):  # pragma: no branch
+                if self.clipping_groups[group].node == chain[step]:
+                    found.add_group(self.clipping_groups[group], shadow_pass)
+        return found^
 
     def node(
         mut self, index: NodeId
@@ -1615,10 +1677,10 @@ struct Scene(Movable):
         with `add` or `attach`. Its children are copies of the children of
         `source`, in their order, and so on down. What each copied node
         carries is copied onto its copy: meshes, instanced and batched
-        meshes, LODs, skinned meshes, lines, points, sprites, wide lines
-        and lights. A light whose target is copied aims at the copy, and
-        one whose target is not keeps it. A skinned mesh keeps its
-        skeleton, as three.js's clone shares it.
+        meshes, LODs, skinned meshes, lines, points, sprites, wide lines,
+        clipping groups and lights. A light whose target is copied aims
+        at the copy, and one whose target is not keeps it. A skinned mesh
+        keeps its skeleton, as three.js's clone shares it.
 
         Args:
             source: The node to copy.
@@ -1746,6 +1808,12 @@ struct Scene(Movable):
                 var line = self.wide_lines[index]
                 line.node = NodeId(copy)
                 self.wide_lines.append(line)
+        for index in range(len(self.clipping_groups)):
+            var copy = _copy_of(copies, self.clipping_groups[index].node)
+            if copy >= 0:
+                var group = self.clipping_groups[index].copy()
+                group.node = NodeId(copy)
+                self.clipping_groups.append(group^)
         for index in range(len(self.lights)):
             var copy = _copy_of(copies, self.lights[index].node)
             if copy >= 0:
