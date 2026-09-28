@@ -477,6 +477,10 @@ struct Instances(Movable):
     var matrices: List[Matrix4]
     var values: List[Float32]
     var item_size: Int
+    # Whether the instances are drawn into shadow maps, and whether
+    # shadows fall on them, three.js's `castShadow` and `receiveShadow`.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(out self, name: String, var geometry: BufferGeometry):
         """Create an empty set of instances of one geometry.
@@ -490,6 +494,8 @@ struct Instances(Movable):
         self.matrices = List[Matrix4]()
         self.values = List[Float32]()
         self.item_size = 0
+        self.cast_shadow = False
+        self.receive_shadow = False
 
     def count(self) -> Int:
         """Return how many instances there are, three.js's `count`.
