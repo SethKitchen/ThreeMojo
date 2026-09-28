@@ -1650,6 +1650,7 @@ def test_the_light_buffer_carries_the_spot_profiles_and_the_grid() raises:
     assert_equal(len(flat), grid_at + GRID_HEADER + 27 * 8)
     assert_equal(flat[grid_at], Float32(-3))
     assert_equal(flat[grid_at + 6], Float32(2))
+    assert_equal(flat[grid_at + 9], Float32(1))
     # The grid rides with its intensity multiplied in.
     assert_almost_equal(
         flat[grid_at + GRID_HEADER],

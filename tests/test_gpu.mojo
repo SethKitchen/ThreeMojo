@@ -128,7 +128,7 @@ from lights.light_probe import light_probe_from_cube
 from lights.ies_spot_light import ies_spot_light
 from lights.light_probe_grid import LightProbeGrid
 from lights.projector_light import projector_light
-from lights.sun_light import SunLight, SunLightShadow
+from lights.sun_light import SunLight
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.pmrem import pmrem_from_cube
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
@@ -13909,8 +13909,16 @@ def a_probe_grid() raises -> LightProbeGrid:
     """Return a grid of two probes a side over the scene, each with its own
     colors in band zero and band one."""
     var grid = LightProbeGrid(
-        Vector3(-3, 0, -3), Vector3(3, 3, 3), 2, 2, 2, intensity=1.5
+        Length(6.0, METER),
+        Length(3.0, METER),
+        Length(6.0, METER),
+        2,
+        2,
+        2,
+        Vector3(0, 1.5, 0),
     )
+    grid.intensity = 1.5
+    grid.falloff = Length(1.0, METER)
     for index in range(grid.count()):
         var sh = SphericalHarmonics3()
         var shade = Float32(index) / 8
@@ -13952,7 +13960,7 @@ def test_both_backends_agree_on_a_light_probe_grid() raises:
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
     # And the grid is there: without it the picture changes.
-    renderer.set_light_probe_grid(LightProbeGrid())
+    renderer.set_light_probe_grid(LightProbeGrid.none())
     assert_true(
         count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
         "the grid lit nothing",
@@ -13960,21 +13968,21 @@ def test_both_backends_agree_on_a_light_probe_grid() raises:
 
 
 def test_both_backends_agree_under_a_sun_fit_to_the_view() raises:
-    # A sun is a directional light placed each frame: its shadow camera,
-    # fit to the view, is read by both backends as any other.
+    # A sun is two directional cascades fit to the view each frame, which
+    # share its light and blend its shadows by `sun_reach` on both
+    # backends.
     if skipped_for_lack_of_a_gpu("both backends agree under a sun"):
         return
     var assets = Assets()
     var scene = a_shaped_spot_scene(assets)
     scene.lights.clear()
-    var sun = SunLight(
-        scene,
-        Color(255, 250, 240),
-        3.0,
-        Vector3(1, -2, -1),
-        SunLightShadow(max_distance=Length(12.0, METER), map_size=64),
-    )
-    scene.lights[sun.light].shadow.bias = -0.002
+    var sun = SunLight(scene, Color(255, 250, 240), 3.0)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 64
+    sun.shadow.far = Length(12.0, METER)
+    sun.shadow.bias = -0.002
+    scene.node(sun.node).set_position(-1, 2, 1)
+    scene.update()
     var renderer = Renderer(48, 36)
     renderer.set_background(BACKGROUND)
     var camera = shaped_camera()
