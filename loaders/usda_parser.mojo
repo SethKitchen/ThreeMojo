@@ -54,13 +54,11 @@ from loaders.json import (
     JsonDocument,
     NULL,
     NUMBER,
-    OBJECT,
     STRING,
     parse_json,
 )
 from loaders.three_mf import js_key_order
 from loaders.usd_specs import (
-    NO_VALUE,
     SPEC_ATTRIBUTE,
     SPEC_PRIM,
     SPEC_RELATIONSHIP,
@@ -499,7 +497,7 @@ def preprocess_usda(text: String) -> String:
     var brackets = 0
     var parentheses = 0
     var joined = String()
-    for raw in cleaned.split("\n"):
+    for raw in cleaned.split("\n"):  # pragma: no branch
         var trimmed = _trim(_strip_inline_comment(String(raw)))
         if multiline:
             joined += " " + trimmed
@@ -712,7 +710,7 @@ def usda_tree(text: String) raises -> UsdaTree:
     var named: Optional[String] = None
     var target = 0
     var stack: List[Int] = [0]
-    for raw in preprocess_usda(text).split("\n"):
+    for raw in preprocess_usda(text).split("\n"):  # pragma: no branch
         var line = String(raw)
         if line.find("=") >= 0:
             var equals = find_assignment(line)
@@ -844,7 +842,7 @@ def _float_list(text: String) -> List[Float64]:
         The numbers, NaN where a part is not one.
     """
     var out = List[Float64]()
-    for part in text.replace("(", "").replace(")", "").split(","):
+    for part in text.replace("(", "").replace(")", "").split(","):  # pragma: no branch
         out.append(js_parse_float(_trim(String(part))))
     return out^
 
@@ -1027,7 +1025,7 @@ struct _Reader(Movable):
         var numbers = List[Float64]()
         var strings = List[String]()
         var is_number = List[Bool]()
-        for raw in parts:
+        for raw in parts:  # pragma: no branch
             var part = _trim(String(raw))
             var number = js_parse_float(part)
             is_number.append(number == number)
@@ -1202,10 +1200,10 @@ struct _Reader(Movable):
             _ = self.layer.put(path, fields^)
             if kid >= 0:
                 self.walk(kid, path)
-        var at = self.layer.spec(parent)
-        if len(children) > 0 and at >= 0:
+        # The parent's spec is put before its prims are walked.
+        if len(children) > 0:
             var id = self.layer.add(usd_strings(children^))
-            self.layer.specs[at].set("primChildren", id)
+            self.layer.specs[self.layer.spec(parent)].set("primChildren", id)
 
     def extract(mut self, group: Int, path: String, mut fields: UsdSpec) raises:
         """Read a prim's fields, attributes and relationships, three.js's
@@ -1242,7 +1240,7 @@ struct _Reader(Movable):
             if key.find("xformOpOrder") >= 0:
                 var text = self.text_of(group, slot, key)
                 var ops = List[String]()
-                for part in text.replace("[", "").replace("]", "").split(","):
+                for part in text.replace("[", "").replace("]", "").split(","):  # pragma: no branch
                     ops.append(_trim(String(part)).replace('"', ""))
                 fields.set("xformOpOrder", self.layer.add(usd_strings(ops^)))
                 continue
@@ -1419,6 +1417,7 @@ struct _Reader(Movable):
         for k in range(len(self.layer.paths)):
             if self.layer.specs[k].spec_type != SPEC_PRIM:
                 continue
+            # The root has no `typeName`; every other prim has a string.
             var type_name = self.layer.specs[k].field("typeName")
             var is_mesh = (
                 self.layer.is_string(type_name)
@@ -1456,9 +1455,10 @@ struct _Reader(Movable):
         var at = self.layer.spec(path)
         if at < 0:
             return
-        var has_size = self.layer.specs[at].field("elementSize") != NO_VALUE
+        # three.js keeps an `elementSize` that is there, which USDA text
+        # never writes.
         var value = self.layer.specs[at].field("default")
-        if has_size or not self.layer.truthy(value):
+        if not self.layer.truthy(value):
             return
         var count = Float64(self.layer.length(value))
         if count > 0 and count % vertices == 0:
