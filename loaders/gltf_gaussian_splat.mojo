@@ -65,7 +65,7 @@ from loaders.gltf import decode_base64, split_glb
 from loaders.json import OBJECT, JsonDocument, parse_json
 from loaders.splat import le_u32
 from std.memory import bitcast
-from std.math import max
+from std.math import max, nan
 from std.pathlib import Path
 
 comptime KHR_GAUSSIAN_SPLATTING = "KHR_gaussian_splatting"
@@ -221,7 +221,7 @@ def _element_size(kind: String) raises -> Int:
         Error: If the type is not a scalar or a vector.
     """
     var kinds: List[String] = ["SCALAR", "VEC2", "VEC3", "VEC4"]
-    for at in range(4):
+    for at in range(4):  # pragma: no branch
         if kinds[at] == kind:
             return at + 1
     raise Error("glTF: a splat attribute cannot be " + kind)
@@ -249,7 +249,7 @@ def _component(
     var width = _component_bytes(component)
     var bits = width * 8
     var value = 0
-    for byte in range(width):
+    for byte in range(width):  # pragma: no branch
         value |= Int(bytes[at + byte]) << (byte * 8)
     var signed = component == 5120 or component == 5122
     var largest = (1 << bits) - 1
@@ -279,7 +279,9 @@ def _read_accessor(
         Error: If the accessor is sparse, of an unknown type, or reaches
             past its buffer view or its buffer.
     """
-    var accessor = document.at(document.get(document.root(), "accessors"), index)
+    var accessor = document.at(
+        document.get(document.root(), "accessors"), index
+    )
     if document.has(accessor, "sparse"):
         raise Error("glTF: a sparse splat accessor is not read")
     var component = document.integer(document.get(accessor, "componentType"))
@@ -302,15 +304,20 @@ def _read_accessor(
     if document.has(view, "byteStride"):
         stride = document.integer(document.get(view, "byteStride"))
     var length = document.integer(document.get(view, "byteLength"))
-    var reach = _offset(document, accessor) + stride * (count - 1) + size * width
+    var reach = (
+        _offset(document, accessor) + stride * (count - 1) + size * width
+    )
     var outside = _offset(document, view) + length > len(buffer)
     if count > 0:
         if reach > length or outside:
             raise Error("glTF: a splat accessor reaches past its data")
     for element in range(count):
-        for lane in range(size):
+        for lane in range(size):  # pragma: no branch
             values[element * size + lane] = _component(
-                buffer, start + element * stride + lane * width, component, normalized
+                buffer,
+                start + element * stride + lane * width,
+                component,
+                normalized,
             )
     return _Accessor(values^, count, size)
 
@@ -362,9 +369,9 @@ def _buffers(
         var uri = document.string(document.get(buffer, "uri"))
         if uri.startswith("data:"):
             var comma = uri.find(",")
-            if comma < 0 or not uri[:comma].endswith(";base64"):
+            if comma < 0 or not uri[byte=:comma].endswith(";base64"):
                 raise Error("glTF: a data URI that is not base64")
-            out.append(decode_base64(String(uri[comma + 1 :])))
+            out.append(decode_base64(String(uri[byte = comma + 1 :])))
         else:
             out.append(Path(directory + uri).read_bytes())
     return out^
@@ -393,9 +400,7 @@ def _attribute(
             refused.
     """
     if not document.has(attributes, semantic):
-        raise Error(
-            "glTF: KHR_gaussian_splatting requires " + semantic
-        )
+        raise Error("glTF: KHR_gaussian_splatting requires " + semantic)
     return _read_accessor(
         document, buffers, document.integer(document.get(attributes, semantic))
     )
@@ -470,7 +475,7 @@ def load_gltf_gaussian_splats(
             var extras = document.get(mesh, "extras")
             if document.kind(extras) == OBJECT:
                 found.extras = user_data_of(document, extras)
-        for at in range(document.length(primitives)):
+        for at in range(document.length(primitives)):  # pragma: no branch
             var splat = GltfGaussianSplatPrimitive(names.unique(base), at)
             _read_primitive(
                 document, buffers, document.at(primitives, at), splat
@@ -540,7 +545,9 @@ def _read_primitive(
     var prefix = String(KHR_GAUSSIAN_SPLATTING) + ":"
     var position = _attribute(document, buffers, attributes, "POSITION")
     var scale = _attribute(document, buffers, attributes, prefix + "SCALE")
-    var rotation = _attribute(document, buffers, attributes, prefix + "ROTATION")
+    var rotation = _attribute(
+        document, buffers, attributes, prefix + "ROTATION"
+    )
     var opacity = _attribute(document, buffers, attributes, prefix + "OPACITY")
     var sh0 = _attribute(
         document, buffers, attributes, prefix + "SH_DEGREE_0_COEF_0"
@@ -554,14 +561,13 @@ def _read_primitive(
     )
     if not same:
         raise Error(
-            "glTF: KHR_gaussian_splatting attribute counts must match"
-            " POSITION"
+            "glTF: KHR_gaussian_splatting attribute counts must match POSITION"
         )
     var centers = List[Float32](capacity=count * 3)
     var covariances = List[Float32](length=count * 6, fill=0)
     var colors = List[UInt8](length=count * 4, fill=0)
     for index in range(count):
-        for lane in range(3):
+        for lane in range(3):  # pragma: no branch
             centers.append(Float32(_get(position, index, lane)))
         write_covariance(
             covariances,
@@ -594,8 +600,9 @@ def _read_primitive(
 
 
 def _get(accessor: _Accessor, element: Int, lane: Int) -> Float64:
-    """Return one number of an accessor, zero past its element's size, as
-    three.js's `getY` and the rest read an attribute of fewer numbers.
+    """Return one number of an accessor, as three.js's `getX` and the rest
+    read an attribute: `element * size + lane` of its numbers, whatever the
+    element's size.
 
     Args:
         accessor: The accessor.
@@ -603,11 +610,14 @@ def _get(accessor: _Accessor, element: Int, lane: Int) -> Float64:
         lane: Which number of it.
 
     Returns:
-        The number.
+        The number, the next element's when the lane is past this one's
+        size, and not a number past the last, as a typed array reads
+        `undefined` there.
     """
-    if lane >= accessor.size:
-        return 0
-    return accessor.values[element * accessor.size + lane]
+    var at = element * accessor.size + lane
+    if at >= len(accessor.values):
+        return nan[DType.float64]()
+    return accessor.values[at]
 
 
 def _bands(
@@ -634,13 +644,13 @@ def _bands(
     """
     var out = List[List[UInt8]]()
     var stop = False
-    for degree in range(1, 4):
+    for degree in range(1, 4):  # pragma: no branch
         if stop:
             out.append(List[UInt8]())
             continue
         var found = List[_Accessor]()
         var missing = 0
-        for coefficient in range(2 * degree + 1):
+        for coefficient in range(2 * degree + 1):  # pragma: no branch
             var semantic = (
                 String(KHR_GAUSSIAN_SPLATTING)
                 + ":SH_DEGREE_"
@@ -693,8 +703,8 @@ def _band_bytes(
     var band = packed_band(count, degree)
     var words = sh_band_words(degree) * 4
     for index in range(count):
-        for coefficient in range(len(found)):
-            for lane in range(3):
+        for coefficient in range(len(found)):  # pragma: no branch
+            for lane in range(3):  # pragma: no branch
                 band[index * words + coefficient * 3 + lane] = clamped_byte(
                     found[coefficient].values[index * 3 + lane] * 128 + 128
                 )
@@ -716,15 +726,16 @@ def _check_contiguous(
         Error: If an attribute names band 1, 2 or 3 and that band is empty.
     """
     var prefix = String(KHR_GAUSSIAN_SPLATTING) + ":SH_DEGREE_"
-    for at in range(document.length(attributes)):
+    for at in range(document.length(attributes)):  # pragma: no branch
         var semantic = document.key(attributes, at)
         if not semantic.startswith(prefix):
             continue
-        var rest = String(semantic[len(prefix) :])
-        for degree in range(1, 4):
-            if rest.startswith(String(degree) + "_COEF_") and len(
-                bands[degree - 1]
-            ) == 0:
+        var rest = String(semantic[byte = prefix.byte_length() :])
+        for degree in range(1, 4):  # pragma: no branch
+            if (
+                rest.startswith(String(degree) + "_COEF_")
+                and len(bands[degree - 1]) == 0
+            ):
                 raise Error(
                     "glTF: KHR_gaussian_splatting spherical harmonics"
                     " attributes must be contiguous"
@@ -747,7 +758,7 @@ def read_gltf_gaussian_splats(
             anything `load_gltf_gaussian_splats` raises.
     """
     var bytes = Path(path).read_bytes()
-    var directory = String(path[: path.rfind("/") + 1])
+    var directory = String(path[byte = : path.rfind("/") + 1])
     if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splats(parts[0], parts[1], directory)

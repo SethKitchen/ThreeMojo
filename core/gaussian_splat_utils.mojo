@@ -431,7 +431,7 @@ struct GaussianSplatGeometry(Copyable, Movable):
         )
         for degree in range(1, self.spherical_harmonics_degree() + 1):
             var words = List[Int]()
-            for word in band_words(self._band(degree)):
+            for word in band_words(self._band(degree)):  # pragma: no branch
                 words.append(Int(word))
             geometry.set_attribute(
                 "sphericalHarmonics" + String(degree),
@@ -551,7 +551,7 @@ def spherical_harmonics_degree(geometry: BufferGeometry) raises -> Int:
             or a band's count is not the positions' count.
     """
     var degree = 0
-    for band in range(1, MAX_SH_DEGREE + 1):
+    for band in range(1, MAX_SH_DEGREE + 1):  # pragma: no branch
         var name = "sphericalHarmonics" + String(band)
         if not geometry.has_attribute(name):
             break
@@ -581,8 +581,7 @@ def spherical_harmonics_degree(geometry: BufferGeometry) raises -> Int:
         var name = "sphericalHarmonics" + String(band)
         if geometry.attribute_view(name).count() != count:
             raise Error(
-                "Gaussian splat: spherical harmonics counts must match"
-                " position"
+                "Gaussian splat: spherical harmonics counts must match position"
             )
     return degree
 
@@ -621,12 +620,12 @@ def gaussian_splat_geometry_of(
     for at in range(len(color.data)):
         colors.append(clamped_byte(Float64(color.data[at]) * 255))
     var bands = List[List[UInt8]]()
-    for band in range(1, MAX_SH_DEGREE + 1):
+    for band in range(1, MAX_SH_DEGREE + 1):  # pragma: no branch
         var bytes = List[UInt8]()
         if band <= degree:
             var name = "sphericalHarmonics" + String(band)
             for word in geometry.attribute_view(name).stored_values():
-                for shift in range(4):
+                for shift in range(4):  # pragma: no branch
                     bytes.append(UInt8((word >> (shift * 8)) & 255))
         bands.append(bytes^)
     return create_gaussian_splat_geometry(

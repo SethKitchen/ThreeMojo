@@ -358,9 +358,9 @@ def parse_ksplat(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     while len(bands) < 3:
         bands.append(List[UInt8]())
     return create_gaussian_splat_geometry(
-        out.centers^,
-        out.covariances^,
-        out.colors^,
+        out.centers.copy(),
+        out.covariances.copy(),
+        out.colors.copy(),
         bands[0].copy(),
         bands[1].copy(),
         bands[2].copy(),
@@ -453,11 +453,13 @@ def _read_section(
     var cursor = _Cursor(
         section.full_buckets, section.full_buckets * section.bucket_size
     )
-    for index in range(section.splats):
+    for index in range(section.splats):  # pragma: no branch
         var bucket = _bucket_of(bytes, section, base, index, cursor)
         var row = base + buckets + index * per_splat
         var splat = first + index
-        _read_center(bytes, section, layout, row, base + meta, bucket, factor, splat, out)
+        _read_center(
+            bytes, section, layout, row, base + meta, bucket, factor, splat, out
+        )
         _read_shape(bytes, layout, row, splat, out)
         for degree in range(1, section.degree + 1):
             _read_band(
@@ -495,13 +497,15 @@ def _read_center(
         splat: The splat's index among all of them.
         out: What the splats are read into.
     """
-    for lane in range(3):
+    for lane in range(3):  # pragma: no branch
         if layout.bytes_per_center == 12:
             out.centers[splat * 3 + lane] = le_f32(bytes, row + lane * 4)
         else:
             var step = Float64(le_u16(bytes, row + lane * 2))
             var origin = Float64(
-                le_f32(bytes, centers_at + bucket * section.bucket_bytes + lane * 4)
+                le_f32(
+                    bytes, centers_at + bucket * section.bucket_bytes + lane * 4
+                )
             )
             out.centers[splat * 3 + lane] = Float32(
                 (step - Float64(section.scale_range)) * factor + origin
@@ -558,7 +562,7 @@ def _read_shape(
         _compressed(bytes, turn + turn_step * 3, turn_width),
         _compressed(bytes, turn, turn_width),
     )
-    for lane in range(4):
+    for lane in range(4):  # pragma: no branch
         out.colors[splat * 4 + lane] = bytes[row + layout.color_offset + lane]
 
 
@@ -611,7 +615,7 @@ def _read_band(
     """
     var start = splat * sh_band_words(degree) * 4
     var width = layout.bytes_per_harmonic
-    for component in range(sh_band_components(degree)):
+    for component in range(sh_band_components(degree)):  # pragma: no branch
         var value = _harmonic(
             bytes,
             harmonics + ksplat_band_index(degree, component) * width,

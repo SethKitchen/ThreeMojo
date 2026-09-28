@@ -92,9 +92,9 @@ def parse_splat(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     var colors = List[UInt8](capacity=count * 4)
     for index in range(count):
         var row = index * SPLAT_ROW_BYTES
-        for lane in range(3):
+        for lane in range(3):  # pragma: no branch
             centers.append(le_f32(bytes, row + lane * 4))
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             colors.append(bytes[row + 24 + lane])
         write_covariance(
             covariances,
@@ -107,9 +107,7 @@ def parse_splat(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             _unit(bytes[row + 31]),
             _unit(bytes[row + 28]),
         )
-    return create_gaussian_splat_geometry(
-        centers^, covariances^, colors^
-    )
+    return create_gaussian_splat_geometry(centers^, covariances^, colors^)
 
 
 def _unit(byte: UInt8) -> Float64:

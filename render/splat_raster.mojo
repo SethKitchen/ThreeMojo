@@ -88,7 +88,9 @@ def prepare_gaussian_splat[
     var world = scene.world_matrix(splat.node)
     var view = camera.view_matrix_in(scene)
     if splat.auto_sort:
-        _ = splat.update_sort(world, view, Length(camera.near_distance(), METER))
+        _ = splat.update_sort(
+            world, view, Length(camera.near_distance(), METER)
+        )
     var camera_world = view
     camera_world.invert()
     var local = world

@@ -307,8 +307,8 @@ def project_splat(
     var j02 = fx * vx * inv_z2
     var j12 = fy * vy * inv_z2
     var a_base = j00 * j00 * c00 + j00 * j02 * c02 * 2 + j02 * j02 * c22
-    var b = j00 * j11 * c01 + j00 * j12 * c02 + j02 * j11 * c12 + (
-        j02 * j12 * c22
+    var b = (
+        j00 * j11 * c01 + j00 * j12 * c02 + j02 * j11 * c12 + (j02 * j12 * c22)
     )
     var c_base = j11 * j11 * c11 + j11 * j12 * c12 * 2 + j12 * j12 * c22
     var a = a_base + KERNEL_2D_SIZE
@@ -321,12 +321,11 @@ def project_splat(
     var radius = sqrt(max(half_gap * half_gap + b * b, 0.0000001))
     var lambda1 = max(half_trace + radius, 0.0000001)
     var lambda2 = max(half_trace - radius, 0.0000001)
-    var axis_x = Float32(1)
-    var axis_y = Float32(0)
-    if radius > 0.00001:
-        var angle = atan2(b * 2, a - c) * 0.5
-        axis_x = cos(angle)
-        axis_y = sin(angle)
+    # three.js keeps the axis at (1, 0) for a radius of 0.00001 or less,
+    # which the floor above never lets it be.
+    var angle = atan2(b * 2, a - c) * 0.5
+    var axis_x = cos(angle)
+    var axis_y = sin(angle)
     return ProjectedSplat(
         (cx / cw + 1) * 0.5 * Float32(view.width),
         (1 - cy / cw) * 0.5 * Float32(view.height),

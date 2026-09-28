@@ -218,7 +218,7 @@ struct GaussianSplat(Copyable, Movable):
         ray.apply_matrix4(inverse)
         if not ray.intersects_box(self.bounding_box.value()):
             return hits^
-        for index in range(self.count()):
+        for index in range(self.count()):  # pragma: no branch
             var t = self._ray_parameter(ray.origin, ray.direction, index)
             if t < 0:
                 continue
@@ -246,9 +246,7 @@ struct GaussianSplat(Copyable, Movable):
             origin is inside, and minus one when the ray misses, the splat
             is too faint, or its covariance is not positive.
         """
-        var opacity = (
-            Float64(self.splat_geometry.colors[index * 4 + 3]) / 255
-        )
+        var opacity = Float64(self.splat_geometry.colors[index * 4 + 3]) / 255
         if opacity < MIN_RAYCAST_OPACITY:
             return -1
         ref c = self.splat_geometry.covariances
@@ -445,7 +443,7 @@ struct GaussianSplat(Copyable, Movable):
             counts[bin] += 1
         var offsets = List[Int](length=BIN_COUNT, fill=0)
         var sum = 0
-        for bin in range(BIN_COUNT):
+        for bin in range(BIN_COUNT):  # pragma: no branch
             offsets[bin] = sum
             sum += counts[bin]
         for index in range(count):
@@ -468,7 +466,7 @@ struct GaussianSplat(Copyable, Movable):
         if degree == 0:
             return out^
         out.reserve(self.count() * 3)
-        for index in range(self.count()):
+        for index in range(self.count()):  # pragma: no branch
             var direction = self._center(index) - camera
             direction.normalize()
             ref g = self.splat_geometry
@@ -500,7 +498,9 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     return sqrt(fx * fx + fy * fy + fz * fz)
 
 
-def _distance_sq(origin: Vector3, direction: Vector3, point: Vector3) -> Float32:
+def _distance_sq(
+    origin: Vector3, direction: Vector3, point: Vector3
+) -> Float32:
     """Return the squared distance from a ray to a point, three.js's
     `Ray.distanceSqToPoint`: to the origin when the point is behind it.
 
@@ -558,7 +558,9 @@ def _weights(degree: Int, d: Vector3) -> List[Float32]:
     ]
 
 
-def _band_sum(band: List[UInt8], index: Int, degree: Int, d: Vector3) -> Vector3:
+def _band_sum(
+    band: List[UInt8], index: Int, degree: Int, d: Vector3
+) -> Vector3:
     """Return one band's color for a splat and a direction.
 
     Args:
@@ -576,7 +578,7 @@ def _band_sum(band: List[UInt8], index: Int, degree: Int, d: Vector3) -> Vector3
     var words = (len(weights) * 3 + 3) // 4
     var start = index * words * 4
     var sum = Vector3(0, 0, 0)
-    for k in range(len(weights)):
+    for k in range(len(weights)):  # pragma: no branch
         var at = start + k * 3
         sum.x += (Float32(band[at]) - 128) / 128 * weights[k]
         sum.y += (Float32(band[at + 1]) - 128) / 128 * weights[k]

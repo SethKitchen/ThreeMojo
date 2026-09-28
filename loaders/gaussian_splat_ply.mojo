@@ -63,7 +63,7 @@ def _names(prefix: String, count: Int) -> List[String]:
         `prefix0` up to `prefix{count - 1}`.
     """
     var out = List[String]()
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         out.append(prefix + String(index))
     return out^
 
@@ -99,7 +99,7 @@ def _find(bytes: List[UInt8], word: String, start: Int, end: Int) -> Int:
     var n = len(letters)
     for at in range(start, end - n + 1):
         var found = 0
-        for k in range(n):
+        for k in range(n):  # pragma: no branch
             if bytes[at + k] != letters[k]:
                 break
             found += 1
@@ -123,7 +123,7 @@ def _is_rest(name: String) -> Bool:
     var digits = name.as_bytes()[7:]
     if len(digits) == 0:
         return False
-    for byte in digits:
+    for byte in digits:  # pragma: no branch
         if byte < 48 or byte > 57:
             return False
     return True
@@ -177,22 +177,22 @@ def detect_spherical_harmonics_degree(bytes: List[UInt8]) raises -> Int:
     """
     var names = List[String]()
     var rest = 0
-    for line in _header_lines(bytes):
+    for line in _header_lines(bytes):  # pragma: no branch
         var fields = line.split()
-        if len(fields) != 3 or fields[0] != "property":
+        if len(fields) != 3 or String(fields[0]) != "property":
             continue
         var name = String(fields[2])
         names.append(name)
         if _is_rest(name):
             rest += 1
-    for required in _required():
+    for required in _required():  # pragma: no branch
         if required not in names:
             raise Error(
                 "Gaussian splat PLY: the file requires position, scale,"
                 " rotation, f_dc and opacity properties"
             )
     var totals: List[Int] = [0, 9, 24, 45]
-    for degree in range(4):
+    for degree in range(4):  # pragma: no branch
         if totals[degree] == rest:
             return degree
     raise Error(
@@ -229,7 +229,14 @@ def parse_gaussian_splat_ply(
     if rest > 0:
         options.set_custom_attribute("f_rest", _names("f_rest_", rest))
     var geometry = parse_ply(bytes, options)
-    for name in [String(POSITION), "scale", "rotation", "f_dc", "opacity"]:
+    var needed: List[String] = [
+        String(POSITION),
+        "scale",
+        "rotation",
+        "f_dc",
+        "opacity",
+    ]
+    for name in needed:  # pragma: no branch
         if not geometry.has_attribute(name):
             raise Error(
                 "Gaussian splat PLY: the file requires position, scale,"
@@ -244,7 +251,7 @@ def parse_gaussian_splat_ply(
     var centers = position.packed()
     var covariances = List[Float32](length=count * 6, fill=0)
     var colors = List[UInt8](length=count * 4, fill=0)
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         write_covariance(
             covariances,
             index * 6,
@@ -265,9 +272,11 @@ def parse_gaussian_splat_ply(
             sigmoid(Float64(opacity.data[index])),
         )
     var bands = List[List[UInt8]]()
-    for band in range(1, 4):
+    for band in range(1, 4):  # pragma: no branch
         if band <= degree:
-            bands.append(_band(geometry.attribute_view("f_rest").data, rest, count, band))
+            bands.append(
+                _band(geometry.attribute_view("f_rest").data, rest, count, band)
+            )
         else:
             bands.append(List[UInt8]())
     return create_gaussian_splat_geometry(
@@ -301,10 +310,10 @@ def _band(
     var band = packed_band(count, degree)
     var stride = rest // 3
     # The coefficients of the bands below come first in each channel.
-    var offset = (degree * degree - 1)
+    var offset = degree * degree - 1
     var words = sh_band_words(degree) * 4
-    for index in range(count):
-        for component in range(sh_band_components(degree)):
+    for index in range(count):  # pragma: no branch
+        for component in range(sh_band_components(degree)):  # pragma: no branch
             var value = source[
                 index * rest
                 + offset

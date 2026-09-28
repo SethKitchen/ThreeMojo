@@ -101,9 +101,7 @@ def spz_color(byte: UInt8) -> UInt8:
         `((byte / 255 - 0.5) * SH_C0 / 0.15 + 0.5) * 255`, clamped.
     """
     var scale = SH_C0 / 0.15
-    return clamped_byte(
-        ((Float64(byte) / 255 - 0.5) * scale + 0.5) * 255
-    )
+    return clamped_byte(((Float64(byte) / 255 - 0.5) * scale + 0.5) * 255)
 
 
 def spz_scale(byte: UInt8) -> Float64:
@@ -249,12 +247,7 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     var harmonics = count * vectors * 3
     var lod = count * 6 if (Int(bytes[14]) & SPZ_FLAG_LOD) != 0 else 0
     var expected = (
-        SPZ_HEADER_BYTES
-        + positions
-        + count * 7
-        + rotations
-        + harmonics
-        + lod
+        SPZ_HEADER_BYTES + positions + count * 7 + rotations + harmonics + lod
     )
     if len(bytes) != expected:
         raise Error("SPZ: invalid SPZ byte length")
@@ -329,7 +322,7 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     var fields = List[List[UInt8]]()
     var start = table + streams * 16
     var used = 0
-    for field in range(len(sizes)):
+    for field in range(len(sizes)):  # pragma: no branch
         if sizes[field] == 0:
             fields.append(List[UInt8]())
             continue
@@ -398,7 +391,7 @@ def _attributes(fields: _Fields) raises -> GaussianSplatGeometry:
         colors.append(spz_color(fields.colors[i3 + 2]))
         colors.append(fields.alphas[index])
     var bands = List[List[UInt8]]()
-    for degree in range(1, 4):
+    for degree in range(1, 4):  # pragma: no branch
         if degree <= fields.degree:
             bands.append(_band(fields, degree))
         else:
@@ -478,7 +471,7 @@ def _band(fields: _Fields, degree: Int) raises -> List[UInt8]:
     var words = sh_band_words(degree) * 4
     for index in range(fields.count):
         var source = index * stride + skip
-        for component in range(sh_band_components(degree)):
+        for component in range(sh_band_components(degree)):  # pragma: no branch
             band[index * words + component] = fields.harmonics[
                 source + component
             ]

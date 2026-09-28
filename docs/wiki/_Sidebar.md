@@ -42,6 +42,7 @@
 - [Post-processing](Post-processing)
 - [GPU computation](GPU-computation)
 - [Progressive light map](Progressive-light-map)
+- [Gaussian splats](Gaussian-splats)
 - [SVG renderer](SVG-renderer)
 - [Image files](Image-files)
 - [Model files](Model-files)
