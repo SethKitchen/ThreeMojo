@@ -469,7 +469,7 @@ struct _Attrs(Copyable, Movable):
             value: The place of its value.
         """
         var found = self.index.get(name)
-        if found:
+        if Bool(found):
             self.values[found.value()] = value
             return
         self.index[name] = len(self.names)
@@ -950,7 +950,7 @@ struct _Composer(Movable):
         if self.layer.truthy(connections):
             for k in range(self.layer.length(connections)):
                 var target = self.layer.element_string(connections, k)
-                if target:
+                if Bool(target):
                     var value = self.resolve_value(target.value(), next)
                     if self.layer.defined(value):
                         return value
