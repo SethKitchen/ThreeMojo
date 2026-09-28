@@ -125,6 +125,10 @@ from lights.light import (
     spot_light,
 )
 from lights.light_probe import light_probe_from_cube
+from lights.ies_spot_light import ies_spot_light
+from lights.light_probe_grid import LightProbeGrid
+from lights.projector_light import projector_light
+from lights.sun_light import SunLight, SunLightShadow
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.pmrem import pmrem_from_cube
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
@@ -13984,3 +13988,275 @@ def test_the_device_draws_a_splat_object_as_the_host_does() raises:
     gpu.depth_mode = _DepthMode(7)
     with assert_raises(contains="valid depth mode"):
         device.draw(gpu, List[_ProjectedSplat]())
+
+
+# --- IES spot lights, projectors, probe grids and suns ------------------------
+
+
+def a_ramp_profile() raises -> Texture:
+    """Return an IES profile 180 texels wide and two high, as
+    `loaders.ies.ies_texture` lays one out: the first row rises from zero
+    on the axis to one straight back, and the second row is a half, so a
+    read of the wrong row shows."""
+    var data = List[Float32]()
+    for row in range(2):
+        for column in range(180):
+            var red = Float32(column) / 179 if row == 0 else Float32(0.5)
+            data.append(red)
+            data.append(0)
+            data.append(0)
+            data.append(1)
+    return float_texture(180, 2, data^)
+
+
+def a_wide_slide() raises -> Texture:
+    """Return a picture twice as wide as high, in four colored columns."""
+    var pixels = List[UInt8]()
+    for _ in range(8):
+        for column in range(16):
+            var band = column // 4
+            pixels.append(UInt8(250 if band == 0 else 60 * band))
+            pixels.append(UInt8(200 if band % 2 == 0 else 40))
+            pixels.append(UInt8(40 + 50 * band))
+            pixels.append(255)
+    return Texture(16, 8, pixels^)
+
+
+def a_shaped_spot_scene(mut assets: Assets) raises -> Scene:
+    """Return a floor under a phong block and a standard and a toon ball,
+    all casting, with an IES spot light over one side that casts, and a
+    projector over the other that projects a wide picture."""
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var lift = Object3D()
+    lift.set_position(0, 0.5, 0)
+    var lift_node = scene.add(lift^)
+    var left = Object3D()
+    left.set_position(-1.5, 0.6, 1)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.4, 0.5, -1)
+    var right_node = scene.add(right^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+    var block = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    var red = assets.materials.add(
+        phong_material(Color(200, 60, 60), specular=Color(80, 80, 80))
+    )
+    var metal = assets.materials.add(
+        standard_material(Color(180, 200, 220), roughness=0.4, metalness=0.3)
+    )
+    var cartoon = assets.materials.add(toon_material(Color(90, 200, 120)))
+    scene.add_mesh(Mesh(floor, paint, ground_node, receive_shadow=True))
+    scene.add_mesh(
+        Mesh(block, red, lift_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, metal, left_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, cartoon, right_node, cast_shadow=True, receive_shadow=True)
+    )
+    var lamp = Object3D()
+    lamp.set_position(-1, 3, 0.5)
+    var lamp_node = scene.add(lamp^)
+    var profile = assets.textures.add(a_ramp_profile())
+    var ies = ies_spot_light(
+        Color(255, 240, 220),
+        lamp_node,
+        profile,
+        60.0,
+        angle=Angle(70.0, DEGREE),
+    )
+    ies.cast_shadow = True
+    ies.shadow.map_size = 16
+    ies.shadow.normal_bias = 0.02
+    scene.add_light(ies)
+    var beam_at = Object3D()
+    beam_at.set_position(2, 4, 1)
+    var beam_node = scene.add(beam_at^)
+    var projector = projector_light(
+        Color(255, 255, 255),
+        beam_node,
+        40.0,
+        angle=Angle(35.0, DEGREE),
+        penumbra=0.4,
+    )
+    projector.map = assets.textures.add(a_wide_slide())
+    scene.add_light(projector)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+    return scene^
+
+
+def shaped_camera() raises -> PerspectiveCamera:
+    """Return the camera the shaped spot lights are seen through."""
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    return camera^
+
+
+def test_both_backends_agree_on_ies_spot_lights_and_projectors() raises:
+    # A profile read through the texture table and a projector's fade
+    # through its frame, on a lambert floor, a phong block, a standard
+    # ball and a toon ball, with a shadow and a wide picture: the kernel
+    # calls the host's own functions and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on IES spot lights and projectors"
+    ):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = shaped_camera()
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+        spot_maps=renderer.spot_light_maps(scene, assets),
+        profiles=renderer.spot_profiles(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36,
+        "the scene drew nothing",
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the profile is there: as a cone, the picture changes.
+    scene.lights[0].ies_map = NO_TEXTURE
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "the IES profile shaped nothing",
+    )
+
+
+def test_an_ies_profile_must_be_uploaded() raises:
+    # The kernel reads the profile through the texture table, so one past
+    # what was uploaded is refused before the launch.
+    if skipped_for_lack_of_a_gpu("an IES profile must be uploaded"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(24, 18)
+    var lighting = Lighting(
+        scene, profiles=renderer.spot_profiles(scene, assets)
+    )
+    var device = GpuRenderer(24, 18)
+    with assert_raises(contains="IES"):
+        device.draw(data_pair(LAMBERT), BACKGROUND, SHADE_LIT, lighting)
+
+
+def a_probe_grid() raises -> LightProbeGrid:
+    """Return a grid of two probes a side over the scene, each with its own
+    colors in band zero and band one."""
+    var grid = LightProbeGrid(
+        Vector3(-3, 0, -3), Vector3(3, 3, 3), 2, 2, 2, intensity=1.5
+    )
+    for index in range(grid.count()):
+        var sh = SphericalHarmonics3()
+        var shade = Float32(index) / 8
+        sh.set_coefficient(0, Vector3(0.2 + shade, 0.3, 0.5 - shade * 0.5))
+        sh.set_coefficient(1, Vector3(0.1, 0.05 * shade, 0.0))
+        sh.set_coefficient(3, Vector3(0.0, 0.1, 0.05))
+        grid.probes[index] = sh
+    return grid^
+
+
+def test_both_backends_agree_on_a_light_probe_grid() raises:
+    # The eight probes from `grid_taps`, blended lane by lane, and their
+    # irradiance in index order, on every lit kind: the kernel reads the
+    # block the host lays out and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on a light probe grid"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_light_probe_grid(a_probe_grid())
+    var camera = shaped_camera()
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+        spot_maps=renderer.spot_light_maps(scene, assets),
+        profiles=renderer.spot_profiles(scene, assets),
+        probe_grid=a_probe_grid(),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the grid is there: without it the picture changes.
+    renderer.set_light_probe_grid(LightProbeGrid())
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "the grid lit nothing",
+    )
+
+
+def test_both_backends_agree_under_a_sun_fit_to_the_view() raises:
+    # A sun is a directional light placed each frame: its shadow camera,
+    # fit to the view, is read by both backends as any other.
+    if skipped_for_lack_of_a_gpu("both backends agree under a sun"):
+        return
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    scene.lights.clear()
+    var sun = SunLight(
+        scene,
+        Color(255, 250, 240),
+        3.0,
+        Vector3(1, -2, -1),
+        SunLightShadow(max_distance=Length(12.0, METER), map_size=64),
+    )
+    scene.lights[sun.light].shadow.bias = -0.002
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = shaped_camera()
+    sun.update(scene, camera)
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36,
+        "the scene drew nothing",
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)

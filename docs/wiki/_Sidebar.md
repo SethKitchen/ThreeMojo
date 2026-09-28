@@ -34,6 +34,7 @@
 - [Node materials](Node-materials)
 - [TSL functions](TSL-functions)
 - [Lights](Lights)
+- [Lighting addons](Lighting-addons)
 - [Fog](Fog)
 - [Textures](Textures)
 - [Renderer](Renderer)
