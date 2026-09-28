@@ -99,7 +99,7 @@ from render.raster_state import (
     test_fragment,
     window_depth,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.rect import Rect
 from render.texture import (
     BILINEAR,
@@ -558,6 +558,7 @@ def _encode_run(
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
     output: OutputEncoding,
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
 ):
     """Encode the pixels in `[first, past)` from linear light to bytes.
 
@@ -593,9 +594,9 @@ def _encode_run(
             # and depth materials skip `linearToOutputTexel`: it is stored
             # so that sRGB's curve gives back its bytes.
             if data[unsafe_offset=slot]:
-                shown = mapped.encode()
+                shown = mapped.encode_with(bytes[])
             else:
-                shown = output.encode(mapped)
+                shown = output.encode_with(mapped, bytes[])
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -615,6 +616,7 @@ async def _encode_band(
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
     output: OutputEncoding,
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
     _encode_run(
@@ -629,6 +631,7 @@ async def _encode_band(
         clear_shown,
         program,
         output,
+        bytes,
     )
 
 
@@ -1528,6 +1531,13 @@ struct RenderTarget(Movable, SampleSource):
                 ProgramCurve(words),
             )
         )
+        # Read by every band, and alive until the last one has finished.
+        var srgb_bytes = SrgbBytes()
+        var table = (
+            Pointer(to=srgb_bytes)
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin]()
+        )
         var bands = min(workers, count)
         if bands == 1:
             _encode_run(
@@ -1542,6 +1552,7 @@ struct RenderTarget(Movable, SampleSource):
                 clear_shown,
                 words,
                 output,
+                table,
             )
         else:
             var group = TaskGroup()
@@ -1564,9 +1575,11 @@ struct RenderTarget(Movable, SampleSource):
                         clear_shown,
                         words,
                         output,
+                        table,
                     )
                 )
             group.wait()
+        _ = len(srgb_bytes.thresholds)
         return Framebuffer(self.width, self.height, pixels^, self.depth.copy())
 
     def texture(
