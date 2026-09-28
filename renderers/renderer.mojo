@@ -2439,6 +2439,38 @@ def _clip_sets(
             cut.append(seen)
 
 
+def _group_clip_sets(
+    scene: Scene,
+    node: NodeId,
+    view: Matrix4,
+    casters_only: Bool,
+    mut cut: List[Plane],
+    mut any_of: List[Plane],
+) raises:
+    """Add the planes of the clipping groups at a draw's node and above it,
+    in camera space, three.js's `ClippingGroup`.
+
+    A group's union planes each cut, so they join `cut`. Its intersection
+    planes join `any_of`, with the material's own. See
+    `objects.clipping_group`.
+
+    Args:
+        scene: The scene, which holds the groups.
+        node: The draw's node.
+        view: The world-to-camera transform.
+        casters_only: Whether this is a light's view for a shadow map.
+        cut: The planes that each cut, added to.
+        any_of: The planes of which one is enough, added to.
+
+    Raises:
+        Error: If the node is not in the scene, or the view cannot be
+            inverted.
+    """
+    var groups = scene.clipping(node, casters_only)
+    cut.extend(Span(_planes_in_view(groups.union_planes, view)))
+    any_of.extend(Span(_planes_in_view(groups.intersection_planes, view)))
+
+
 def _planes_in_view(planes: List[Plane], view: Matrix4) raises -> List[Plane]:
     """Return world-space planes carried into camera space.
 
@@ -5055,6 +5087,9 @@ struct Renderer(Movable):
                     wide_cut,
                     wide_any,
                 )
+                _group_clip_sets(
+                    scene, draws[slot].node, view, casters_only, wide_cut, wide_any
+                )
                 _emit_wide_line(
                     corners,
                     assets,
@@ -5097,6 +5132,9 @@ struct Renderer(Movable):
                     casters_only,
                     sprite_cut,
                     sprite_any,
+                )
+                _group_clip_sets(
+                    scene, draws[slot].node, view, casters_only, sprite_cut, sprite_any
                 )
                 _emit_sprite(
                     corners,
@@ -5176,6 +5214,9 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
+            )
+            _group_clip_sets(
+                scene, draws[slot].node, view, casters_only, cut, any_of
             )
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
@@ -5972,6 +6013,9 @@ struct Renderer(Movable):
                 cut,
                 any_of,
             )
+            _group_clip_sets(
+                scene, line.node, view, casters_only, cut, any_of
+            )
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
@@ -6470,6 +6514,9 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
+            )
+            _group_clip_sets(
+                scene, points.node, view, casters_only, cut, any_of
             )
             # A point is unlit, and refuses a lit kind rather than being
             # shaded by a normal it does not have. See `objects.points`.
