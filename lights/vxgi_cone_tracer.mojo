@@ -463,9 +463,7 @@ def intersect_volume(
     var bx = (high.x - origin.x) * ix
     var by = (high.y - origin.y) * iy
     var bz = (high.z - origin.z) * iz
-    var enter = max(
-        max(min(ax, bx), min(ay, by)), max(min(az, bz), Float32(0))
-    )
+    var enter = max(max(min(ax, bx), min(ay, by)), max(min(az, bz), Float32(0)))
     var leave = min(min(max(ax, bx), max(ay, by)), max(az, bz))
     return (enter, leave)
 

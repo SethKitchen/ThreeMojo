@@ -203,9 +203,10 @@ struct _Edge(ImplicitlyCopyable):
 
     def reaches(self, cx: Float32, cy: Float32) -> Bool:
         """Return True if a point is within half a sub-voxel inside."""
-        return self.nx * (cx - self.ax) + self.ny * (cy - self.ay) + (
-            self.bias
-        ) >= 0
+        return (
+            self.nx * (cx - self.ax) + self.ny * (cy - self.ay) + (self.bias)
+            >= 0
+        )
 
 
 def _edge(
@@ -371,12 +372,11 @@ struct VoxelTriangle(ImplicitlyCopyable):
             and self.e1.reaches(cx, cy)
             and self.e2.reaches(cx, cy)
         )
-        var depth = self.q0z - (
-            self.nx * (cx - self.q0x) + self.ny * (cy - self.q0y)
-        ) / self.nz
-        var k0 = max(
-            Int(floor(max(depth - self.half_extent, self.low_k))), 0
+        var depth = (
+            self.q0z
+            - (self.nx * (cx - self.q0x) + self.ny * (cy - self.q0y)) / self.nz
         )
+        var k0 = max(Int(floor(max(depth - self.half_extent, self.low_k))), 0)
         var k1 = min(
             Int(floor(min(depth + self.half_extent, self.high_k))), self.top_k
         )
@@ -476,7 +476,7 @@ def voxel_bits(
     for triangle in range(triangle_count):
         var setup = VoxelTriangle(triangles, triangle, grid)
         var mine = 0
-        for child in range(8):
+        for child in range(8):  # pragma: no branch
             var sx = 2 * x + (child & 1)
             var sy = 2 * y + ((child >> 1) & 1)
             var sz = 2 * z + ((child >> 2) & 1)
@@ -1185,7 +1185,7 @@ struct VXGIVolume(Movable):
             var setup = VoxelTriangle(records, triangle, self.grid)
             if setup.usable:
                 self._rasterize(setup, triangle)
-        for index in range(self.grid.level_count(0)):
+        for index in range(self.grid.level_count(0)):  # pragma: no branch
             var texel = resolve_voxel(Int(self.occupancy[index]))
             _store(self.opacity, index, texel)
         for level in range(1, self.grid.levels):
@@ -1200,14 +1200,19 @@ struct VXGIVolume(Movable):
                     self._fill_column(setup, triangle, i, j, found[1], found[2])
 
     def _fill_column(
-        mut self, setup: VoxelTriangle, triangle: Int, i: Int, j: Int, k0: Int, k1: Int
+        mut self,
+        setup: VoxelTriangle,
+        triangle: Int,
+        i: Int,
+        j: Int,
+        k0: Int,
+        k1: Int,
     ):
         """Set the bits of one covered column's sub-voxels."""
         for k in range(k0, k1 + 1):
             var s = setup.sub_voxel(i, j, k)
-            var voxel = (
-                s[0] // 2
-                + self.grid.size_x * (s[1] // 2 + self.grid.size_y * (s[2] // 2))
+            var voxel = s[0] // 2 + self.grid.size_x * (
+                s[1] // 2 + self.grid.size_y * (s[2] // 2)
             )
             self.occupancy[voxel] = self.occupancy[voxel] | Int32(
                 sub_voxel_bit(s[0], s[1], s[2])
@@ -1323,7 +1328,8 @@ struct VXGIVolume(Movable):
         var wide = self.grid.size_x
         var tall = self.grid.size_y
         var shadow = self.shadow_tan()
-        for index in range(count):
+        # Every grid has voxels, so the loop runs.
+        for index in range(count):  # pragma: no branch
             var at = voxel_coordinates(index, wide, tall)
             var texel = inject_voxel(
                 self.grid,
@@ -1354,7 +1360,7 @@ struct VXGIVolume(Movable):
         var tall = self.grid.size_y
         var tan_half = self.bounce_tan()
         var reach = self.trace_distance()
-        for index in range(count):
+        for index in range(count):  # pragma: no branch
             var at = voxel_coordinates(index, wide, tall)
             var texel = bounce_voxel(
                 self.grid,
@@ -1410,7 +1416,9 @@ struct VXGIVolume(Movable):
         Returns:
             The opacity along x, y and z, and the occupancy.
         """
-        return voxel_at(floats_of(self.opacity), self.grid.index(level, x, y, z))
+        return voxel_at(
+            floats_of(self.opacity), self.grid.index(level, x, y, z)
+        )
 
     def radiance_at(self, level: Int, x: Int, y: Int, z: Int) -> Lanes:
         """Return one radiance texel, unchecked.
@@ -1434,8 +1442,9 @@ def _check_aperture(angle: Angle, what: String) raises:
     var degrees = angle.to(DEGREE)
     if not (isfinite(angle.value) and degrees > 0 and degrees < 180):
         raise Error(
-            "A VXGI volume's " + what + " cone must open between 0 and 180"
-            " degrees"
+            "A VXGI volume's "
+            + what
+            + " cone must open between 0 and 180 degrees"
         )
 
 

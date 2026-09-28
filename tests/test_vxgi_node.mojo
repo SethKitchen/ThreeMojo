@@ -173,9 +173,7 @@ def flat_view(depth: Float32) raises -> DepthView:
     )
 
 
-def gathered_corner(
-    mut node: VXGINode, frame_id: Int = 0
-) raises -> VxgiFrame:
+def gathered_corner(mut node: VXGINode, frame_id: Int = 0) raises -> VxgiFrame:
     """Return the pass over the corner."""
     var assets = Assets()
     var scene = a_corner(assets)
@@ -360,6 +358,7 @@ def test_a_pixel_through_a_flat_matrix_keeps_its_point() raises:
     )
     assert_equal(pixel[3], 1)
     _ = params^
+    _ = node^
 
 
 def test_a_pass_needs_one_normal_a_pixel() raises:

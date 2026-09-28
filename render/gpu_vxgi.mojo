@@ -57,9 +57,9 @@ from std.memory import unsafe_memcpy
 comptime BLOCK = 256
 
 
-def _read(pointer: MutPointer[Float32, MutAnyOrigin]) -> Pointer[
-    Float32, Untracked
-]:
+def _read(
+    pointer: MutPointer[Float32, MutAnyOrigin]
+) -> Pointer[Float32, Untracked]:
     """Return a device buffer's floats as the host's functions read them."""
     return pointer.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked]()
 

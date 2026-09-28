@@ -128,16 +128,12 @@ def at(mut scene: Scene, x: Float32, y: Float32, z: Float32) raises -> NodeId:
     return scene.add(node^)
 
 
-def a_floor(
-    mut assets: Assets, mut scene: Scene, side: Side = Side(0)
-) raises:
+def a_floor(mut assets: Assets, mut scene: Scene, side: Side = Side(0)) raises:
     """Add the white floor."""
     add_mesh(assets, scene, facing_up(), Material(WHITE, side=side))
 
 
-def a_sun(
-    mut scene: Scene, y: Float32 = 5, intensity: Float32 = 1
-) raises:
+def a_sun(mut scene: Scene, y: Float32 = 5, intensity: Float32 = 1) raises:
     """Add a white sun straight above the origin, or below it."""
     scene.add_light(directional_light(WHITE, at(scene, 0, y, 0), intensity))
 
@@ -195,9 +191,7 @@ def test_a_record_holds_what_three_js_writes() raises:
     assert_equal(record[8], 2)
     assert_equal(record[11], 1)
     assert_almost_equal(record[12], cos(Float32(0.5235987755982988)), atol=1e-6)
-    assert_almost_equal(
-        record[13], cos(Float32(0.2617993877991494)), atol=1e-6
-    )
+    assert_almost_equal(record[13], cos(Float32(0.2617993877991494)), atol=1e-6)
     # A directional light has no distance, and three.js's decay of two.
     var sun = directional_light(WHITE, at(scene, 0, 1, 0))
     record = light_record(
@@ -353,6 +347,16 @@ def test_the_host_walk_and_the_voxel_query_agree() raises:
         ),
         Material(WHITE),
     )
+    add_mesh(
+        assets,
+        scene,
+        triangle(
+            Vector3(0.2, 0.1, 0.4),
+            Vector3(0.7, 0.3, 0.45),
+            Vector3(0.3, 0.8, 0.5),
+        ),
+        Material(WHITE),
+    )
     var volume = lit(scene, assets, resolution=8)
     var grid = volume.grid
     var records = floats_of(volume.triangles)
@@ -371,6 +375,7 @@ def test_the_host_walk_and_the_voxel_query_agree() raises:
     var none = voxel_bits(records, 0, grid, 1, 1, 1)
     assert_equal(none[0], 0)
     assert_equal(none[1], 0)
+    _ = volume^
 
 
 def test_a_triangle_touching_the_far_faces_fills_nothing() raises:
@@ -429,6 +434,7 @@ def test_a_triangle_touching_the_far_faces_fills_nothing() raises:
         0,
     )
     assert_equal(found[0], 0)
+    _ = volume^
 
 
 def test_a_sun_overhead_lights_the_floor() raises:

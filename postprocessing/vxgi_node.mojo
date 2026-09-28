@@ -221,21 +221,35 @@ def _debug_view(
             break
         var point = eye + toward * t
         var uvw = Vector3(
-            (floor((point.x - grid.bounds_min.x) / grid.volume_size.x * cells.x)
-            + 0.5)
+            (
+                floor(
+                    (point.x - grid.bounds_min.x) / grid.volume_size.x * cells.x
+                )
+                + 0.5
+            )
             / cells.x,
-            (floor((point.y - grid.bounds_min.y) / grid.volume_size.y * cells.y)
-            + 0.5)
+            (
+                floor(
+                    (point.y - grid.bounds_min.y) / grid.volume_size.y * cells.y
+                )
+                + 0.5
+            )
             / cells.y,
-            (floor((point.z - grid.bounds_min.z) / grid.volume_size.z * cells.z)
-            + 0.5)
+            (
+                floor(
+                    (point.z - grid.bounds_min.z) / grid.volume_size.z * cells.z
+                )
+                + 0.5
+            )
             / cells.z,
         )
         if shows_radiance:
             var light = sample_volume(radiance, grid, uvw, level)
             if light[3] > DEBUG_THRESHOLD:
                 return Vector3(
-                    light[0] / light[3], light[1] / light[3], light[2] / light[3]
+                    light[0] / light[3],
+                    light[1] / light[3],
+                    light[2] / light[3],
                 )
         else:
             var seen = sample_volume(opacity, grid, uvw, level)
@@ -333,11 +347,11 @@ def vxgi_pixel(
     red = red / Float32(count) * scale
     green = green / Float32(count) * scale
     blue = blue / Float32(count) * scale
-    var open = max(
-        Float32(0), min(Float32(1), 1 - occlusion / Float32(count))
-    )
+    var open = max(Float32(0), min(Float32(1), 1 - occlusion / Float32(count)))
     var low = params[unsafe_offset=PARAM_AO_MIN]
-    var ao = low + (1 - low) * pow(open, params[unsafe_offset=PARAM_AO_INTENSITY])
+    var ao = low + (1 - low) * pow(
+        open, params[unsafe_offset=PARAM_AO_INTENSITY]
+    )
     return Lanes(red, green, blue, ao)
 
 

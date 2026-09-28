@@ -42,9 +42,7 @@ from std.testing import (
 
 def a_grid(levels: Int = 1) -> VxgiGrid:
     """Return a grid of four voxels a side, a meter each, from the origin."""
-    return VxgiGrid(
-        Vector3(0, 0, 0), Vector3(4, 4, 4), 1, 4, 4, 4, levels, 0.5
-    )
+    return VxgiGrid(Vector3(0, 0, 0), Vector3(4, 4, 4), 1, 4, 4, 4, levels, 0.5)
 
 
 def filled(grid: VxgiGrid, texel: Lanes) -> List[Float32]:
@@ -97,7 +95,9 @@ def test_a_level_is_read_trilinear_and_held_at_the_edge() raises:
     var volume = floats_of(values)
     assert_equal(voxel_at(volume, 1)[0], 1)
     # At its center, the voxel alone.
-    assert_equal(sample_level(volume, grid, Vector3(0.375, 0.125, 0.125), 0)[0], 1)
+    assert_equal(
+        sample_level(volume, grid, Vector3(0.375, 0.125, 0.125), 0)[0], 1
+    )
     # Half way to its neighbor across, half of it.
     assert_almost_equal(
         sample_level(volume, grid, Vector3(0.25, 0.125, 0.125), 0)[0],
@@ -126,7 +126,9 @@ def test_a_level_of_detail_mixes_the_two_levels_around_it() raises:
     var volume = floats_of(values)
     var middle = Vector3(0.5, 0.5, 0.5)
     assert_equal(sample_volume(volume, grid, middle, 0)[0], 1)
-    assert_almost_equal(sample_volume(volume, grid, middle, 0.5)[0], 2, atol=1e-6)
+    assert_almost_equal(
+        sample_volume(volume, grid, middle, 0.5)[0], 2, atol=1e-6
+    )
     assert_equal(sample_volume(volume, grid, middle, 1)[0], 3)
     # Held inside the chain.
     assert_equal(sample_volume(volume, grid, middle, 7)[0], 3)

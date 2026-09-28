@@ -377,7 +377,8 @@ def _add_geometry(
     if Bool(geometry.draw_range.count):
         range_end = min(count, range_start + geometry.draw_range.count.value())
     var runs = 1 if whole else len(geometry.groups)
-    for run in range(runs):
+    # A whole geometry is one run, and any other has groups.
+    for run in range(runs):  # pragma: no branch
         var group_start = 0
         var group_end = count
         if not whole:
@@ -418,7 +419,8 @@ def _mesh_materials(
     if len(geometry.groups) == 0:
         worn.append(Optional[MaterialId](mesh.materials[0]))
         return worn^
-    for group in geometry.groups:
+    # The geometry has groups here, so the loop runs.
+    for group in geometry.groups:  # pragma: no branch
         worn.append(mesh.group_material(group.material_index))
     return worn^
 
@@ -472,7 +474,9 @@ def _grow(mut bounds: Box3, geometry: BufferGeometry, matrix: Matrix4) raises:
     `expandByObject` with `precise`."""
     ref positions = geometry.attribute_view(POSITION)
     for vertex in range(positions.count()):
-        bounds.expand_by_point(matrix.transform_point(positions.vector3(vertex)))
+        bounds.expand_by_point(
+            matrix.transform_point(positions.vector3(vertex))
+        )
 
 
 def compute_scene_bounds(

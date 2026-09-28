@@ -144,10 +144,22 @@ def quadrants() raises -> Texture:
     stored from the top left."""
     return a_texture(
         [
-            255, 0, 0, 255,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            255, 255, 255, 128,
+            255,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255,
+            255,
+            128,
         ]
     )
 
@@ -216,9 +228,7 @@ def test_a_lit_material_glows_with_its_emissive_times_its_intensity() raises:
             assets,
             scene,
             small(),
-            Material(
-                WHITE, kind=kind, emissive=WHITE, emissive_intensity=2.0
-            ),
+            Material(WHITE, kind=kind, emissive=WHITE, emissive_intensity=2.0),
         )
         scene.update()
         assert_equal(collect(scene, assets)[16], 2)
@@ -277,7 +287,9 @@ def test_a_map_colors_the_albedo_at_the_centroid() raises:
     _ = placed(
         assets,
         scene,
-        one_triangle(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True),
+        one_triangle(
+            Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True
+        ),
         Material(WHITE, map=map),
     )
     scene.update()
@@ -293,17 +305,31 @@ def test_a_map_s_alpha_can_drop_a_triangle() raises:
     var scene = Scene()
     var faint = a_texture(
         [
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
         ]
     )
     var map = assets.textures.add(faint^)
     _ = placed(
         assets,
         scene,
-        one_triangle(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True),
+        one_triangle(
+            Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True
+        ),
         Material(WHITE, map=map),
     )
     scene.update()
@@ -323,13 +349,17 @@ def test_an_alpha_test_drops_a_fainter_triangle() raises:
     geometry.set_attribute(
         UV, BufferAttribute([0.75, 0.25, 0.75, 0.25, 0.75, 0.25], 2)
     )
-    _ = placed(assets, scene, geometry^, Material(WHITE, map=map, alpha_test=0.6))
+    _ = placed(
+        assets, scene, geometry^, Material(WHITE, map=map, alpha_test=0.6)
+    )
     scene.update()
     assert_equal(len(collect(scene, assets)), 0)
     var passing = Assets()
     var kept = Scene()
     var again = passing.textures.add(quadrants())
-    var twin = one_triangle(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0))
+    var twin = one_triangle(
+        Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0)
+    )
     twin.set_attribute(
         UV, BufferAttribute([0.75, 0.25, 0.75, 0.25, 0.75, 0.25], 2)
     )
@@ -372,7 +402,9 @@ def test_an_emissive_map_colors_the_glow() raises:
     _ = placed(
         assets,
         scene,
-        one_triangle(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True),
+        one_triangle(
+            Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True
+        ),
         Material(WHITE, emissive=WHITE, emissive_map=glow),
     )
     # An unlit material ignores its emissive map.
@@ -382,7 +414,9 @@ def test_an_emissive_map_colors_the_glow() raises:
     _ = placed(
         assets,
         scene,
-        one_triangle(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True),
+        one_triangle(
+            Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), True
+        ),
         unlit,
     )
     scene.update()
@@ -395,10 +429,22 @@ def test_an_emissive_map_colors_the_glow() raises:
 def test_a_texture_is_read_where_its_wrap_puts_the_coordinate() raises:
     var repeat = a_texture(
         [
-            255, 0, 0, 255,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            255, 255, 255, 255,
+            255,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
         ],
         REPEAT,
     )
@@ -410,10 +456,22 @@ def test_a_texture_is_read_where_its_wrap_puts_the_coordinate() raises:
     assert_equal(sample_texture(clamp, 3, -2).a, Float32(128) / 255)
     var mirror = a_texture(
         [
-            255, 0, 0, 255,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            255, 255, 255, 255,
+            255,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
         ],
         MIRROR,
     )
@@ -469,7 +527,9 @@ def test_a_long_triangle_is_split_along_its_longest_edge() raises:
             assets,
             scene,
             one_triangle(
-                corners[first * 3], corners[first * 3 + 1], corners[first * 3 + 2]
+                corners[first * 3],
+                corners[first * 3 + 1],
+                corners[first * 3 + 2],
             ),
             Material(WHITE),
         )
@@ -505,7 +565,9 @@ def test_a_mesh_on_a_hidden_node_or_another_layer_is_skipped() raises:
     three.set(3)
     assert_equal(
         len(
-            collect_scene_triangles(scene, assets, EVERYWHERE, three, 1, 1000, 0.1)
+            collect_scene_triangles(
+                scene, assets, EVERYWHERE, three, 1, 1000, 0.1
+            )
         ),
         TRIANGLE_STRIDE,
     )
@@ -521,9 +583,33 @@ def test_groups_wear_their_own_materials() raises:
         POSITION,
         BufferAttribute(
             [
-                0, 0, 0, 1, 0, 0, 0, 1, 0,
-                0, 0, 1, 1, 0, 1, 0, 1, 1,
-                0, 0, 2, 1, 0, 2, 0, 1, 2,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                1,
+                1,
+                0,
+                1,
+                0,
+                1,
+                1,
+                0,
+                0,
+                2,
+                1,
+                0,
+                2,
+                0,
+                1,
+                2,
             ],
             3,
         ),
