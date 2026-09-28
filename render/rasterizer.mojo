@@ -5051,7 +5051,7 @@ def _code_of(
     if program < 0 or program >= len(programs.programs):
         return (
             programs.programs.unsafe_ptr()
-            .bitcast[Float32]()
+            .unsafe_bitcast[Float32]()
             .unsafe_mut_cast[False]()
             .unsafe_origin_cast[_Untracked]()
         )
