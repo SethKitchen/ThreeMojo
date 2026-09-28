@@ -139,6 +139,7 @@ def track_target(
         Error: If the root is not in the scene, or the name is refused by
             `parse_track_name` or `property_kind`.
     """
+    _ = scene.get(root)
     var path = parse_track_name(name)
     var kind = property_kind(path)
     var node = _find_node(scene, root, path.node_name)

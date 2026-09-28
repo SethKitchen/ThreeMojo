@@ -2035,7 +2035,7 @@ def test_a_zero_normal_becomes_x() raises:
     assert_equal(n.x, 1)
     assert_equal(n.y, 0)
     n = _unit_or_x(Point3(0, 3, 4))
-    assert_equal(n.y, 0.6)
+    assert_almost_equal(n.y, 0.6, atol=1e-12)
 
 
 def test_a_split_edge_splits_the_face_across_it() raises:

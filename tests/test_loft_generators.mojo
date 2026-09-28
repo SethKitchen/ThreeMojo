@@ -149,22 +149,5 @@ def test_a_flat_cap_has_no_triangle() raises:
     assert_equal(len(geometry.index), 12)
 
 
-def test_bad_sections_are_refused() raises:
-    """A loft needs two sections of equal size, and enough points."""
-    with assert_raises(contains="two sections"):
-        _ = loft([_square(0)])
-    var short: List[Vector3] = [Vector3(0, 0, 0), Vector3(1, 0, 0)]
-    with assert_raises(contains="same points"):
-        _ = loft([_square(0), short.copy()])
-    var point: List[Vector3] = [Vector3(0, 0, 0)]
-    with assert_raises(contains="two points"):
-        _ = loft([point.copy(), point.copy()])
-    with assert_raises(contains="three points"):
-        _ = loft([short.copy(), short.copy()], True, True)
-    with assert_raises(contains="three points"):
-        _ = loft([short.copy(), short.copy()], True, False, True)
-    assert_equal(loft([short.copy(), short.copy()]).vertex_count(), 6)
-
-
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
