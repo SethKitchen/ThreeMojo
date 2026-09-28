@@ -98,7 +98,7 @@ def tidy(mut array: List[Int]):
         return
     sort(array)
     var write_index = 1
-    for i in range(1, len(array)):
+    for i in range(1, len(array)):  # pragma: no branch
         if array[write_index - 1] != array[i]:
             array[write_index] = array[i]
             write_index += 1

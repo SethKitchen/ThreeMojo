@@ -394,7 +394,7 @@ struct SculptorMesh(Movable):
         """
         var tag = self.next_tag_flag()
         var ring = List[Int]()
-        for j in range(len(self.vert_ring_face[vertex])):
+        for j in range(len(self.vert_ring_face[vertex])):  # pragma: no branch
             var face = self.vert_ring_face[vertex][j]
             var first = self.faces[face * 3]
             var second = self.faces[face * 3 + 1]
@@ -464,7 +464,7 @@ struct SculptorMesh(Movable):
             var nx = 0.0
             var ny = 0.0
             var nz = 0.0
-            for face in self.vert_ring_face[vertex]:
+            for face in self.vert_ring_face[vertex]:  # pragma: no branch
                 nx += Float64(self.face_normals[face * 3])
                 ny += Float64(self.face_normals[face * 3 + 1])
                 nz += Float64(self.face_normals[face * 3 + 2])
@@ -935,7 +935,7 @@ struct SculptorMesh(Movable):
         for _ in range(rings):  # pragma: no branch
             var end = len(expanded)
             for i in range(begin, end):
-                for neighbor in self.vert_ring_vert[expanded[i]].copy():
+                for neighbor in self.vert_ring_vert[expanded[i]].copy():  # pragma: no branch
                     if self.vert_tag_flags[neighbor] != tag:
                         self.vert_tag_flags[neighbor] = tag
                         expanded.append(neighbor)

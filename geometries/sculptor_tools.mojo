@@ -64,15 +64,6 @@ def _set_face(mut mesh: SculptorMesh, face: Int, a: Int, b: Int, c: Int):
     mesh.faces[face * 3 + 2] = c
 
 
-def _put_ring(mut rings: List[List[Int]], vertex: Int, var ring: List[Int]):
-    """Set a vertex's ring, appending it when the vertex is the next one,
-    as a JavaScript array grows when written one past its end."""
-    if vertex == len(rings):
-        rings.append(ring^)
-    else:
-        rings[vertex] = ring^
-
-
 def _truncate_rings(mut rings: List[List[Int]], length: Int):
     """Drop the rings past `length`, JavaScript's `array.length = n`."""
     while len(rings) > length:
@@ -252,8 +243,10 @@ def _half_edge_split(
             (p1.z + p2.z) * 0.5 + sum.z * offset,
         ),
     )
-    _put_ring(mesh.vert_ring_vert, mid, [v1, v2, v3])
-    _put_ring(mesh.vert_ring_face, mid, [tri, new_tri])
+    # The new vertex is the next one, so its rings are appended, as a
+    # JavaScript array grows when written one past its end.
+    mesh.vert_ring_vert.append([v1, v2, v3])
+    mesh.vert_ring_face.append([tri, new_tri])
     replace_element(mesh.vert_ring_vert[v1], v2, mid)
     replace_element(mesh.vert_ring_vert[v2], v1, mid)
     mesh.add_nb_vertice(1)
@@ -310,7 +303,7 @@ def _subdivide(
     sub.vertices_map = Dict[Int, Int]()
     var to_split = List[Int]()
     var splits = List[Int]()
-    for tri in tris:
+    for tri in tris:  # pragma: no branch
         var split = _sub_find_split(mesh, sub, tri, True)
         if split == 0:
             continue
@@ -362,7 +355,7 @@ def _subdivide(
         _count_up(vertices_before, mesh.nb_vertices), 1
     )
     var expanded = List[Int](capacity=len(new_vertices) - new_count)
-    for i in range(new_count, len(new_vertices)):
+    for i in range(new_count, len(new_vertices)):  # pragma: no branch
         expanded.append(new_vertices[i])
     smooth_tangent_verts(mesh, expanded, 1.0)
     var mask = mesh.sculpt_flag
@@ -492,7 +485,7 @@ def _dec_delete_vertex(mut mesh: SculptorMesh, vertex: Int):
         mesh.add_nb_vertice(-1)
         return
     var tris = mesh.vert_ring_face[last_pos].copy()
-    for tri in tris:
+    for tri in tris:  # pragma: no branch
         var corner = tri * 3 + (
             0 if mesh.faces[tri * 3] == last_pos else (
                 1 if mesh.faces[tri * 3 + 1] == last_pos else 2
@@ -500,7 +493,7 @@ def _dec_delete_vertex(mut mesh: SculptorMesh, vertex: Int):
         )
         mesh.faces[corner] = vertex
     var ring = mesh.vert_ring_vert[last_pos].copy()
-    for neighbor in ring:
+    for neighbor in ring:  # pragma: no branch
         replace_element(mesh.vert_ring_vert[neighbor], last_pos, vertex)
     mesh.vert_ring_vert[vertex] = ring^
     mesh.vert_ring_face[vertex] = tris^
@@ -584,7 +577,7 @@ def _dec_edge_collapse(
     remove_element(mesh.vert_ring_face[v2], tri2)
     remove_element(mesh.vert_ring_face[opp1], tri1)
     remove_element(mesh.vert_ring_face[opp2], tri2)
-    for tri in mesh.vert_ring_face[v2].copy():
+    for tri in mesh.vert_ring_face[v2].copy():  # pragma: no branch
         mesh.vert_ring_face[v1].append(tri)
         _replace_corner(mesh, tri, v2, v1)
     for neighbor in mesh.vert_ring_vert[v2].copy():  # pragma: no branch

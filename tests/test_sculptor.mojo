@@ -29,11 +29,13 @@ from controls.input import PointerButton, SECONDARY
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.geometry_store import GeometryId
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import box
 from geometries.plane import plane
 from geometries.sculptor import (
+    _compact_dirty_vertices,
     SCULPT_BRUSH,
     SCULPT_CHANGE,
     SCULPT_CLAY,
@@ -64,6 +66,8 @@ from geometries.sculptor_tools import (
     has_at_least_three_common_elements,
     laplacian_smooth,
     smooth_tangent_verts,
+    tool_crease,
+    tool_flatten,
     tool_inflate,
 )
 from geometries.sculptor_utils import (
@@ -1671,6 +1675,118 @@ def test_positions_in_one_place_do_not_weld_to_a_triangle() raises:
         mesh.init_from_geometry(
             _triangles([0, 0, 0, 0, 0, 1e30, 1e30, 0, 0], [])
         )
+
+
+def test_a_position_welds_to_the_nearest_within_the_tolerance() raises:
+    # The widest extent is 4, so positions weld within 4e-7. Along x from
+    # 1, the second position is 4 steps of a `Float32` on, too far to weld;
+    # the third is 2 steps on, as near the first as the second, and welds
+    # to the second, found first.
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(
+        _triangles(
+            [
+                0, 0, 0, 1, 0, 0, 0, 1, 0,
+                1.000000476837158203125, 0, 0, 4, 0, 0, 3, 1, 0,
+                1.0000002384185791015625, 0, 0, 2, 2, 0, 1, 3, 0,
+            ],
+            [],
+        )
+    )
+    assert_equal(mesh.nb_vertices, 8)
+    assert_equal(mesh.faces[3], 3)
+    assert_equal(mesh.faces[6], 3)
+
+
+def test_the_dirty_vertices_are_sorted_once_and_in_range() raises:
+    var vertices: List[Int] = [5, 1, 1, 9, 3]
+    assert_true(_compact_dirty_vertices(vertices, 6))
+    assert_equal(len(vertices), 3)
+    assert_equal(vertices[0], 1)
+    assert_equal(vertices[2], 5)
+    var none = List[Int]()
+    assert_false(_compact_dirty_vertices(none, 6))
+
+
+def test_empty_lists_change_nothing() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_bumpy())
+    assert_equal(len(mesh.expands_faces([], 1)), 0)
+    assert_equal(len(mesh.expands_vertices([], 1)), 0)
+    mesh.update_topology([], [])
+    mesh.update_geometry([], [])
+    assert_equal(len(laplacian_smooth(mesh, [])), 0)
+    smooth_tangent_verts(mesh, [], 1.0)
+    var empty = List[Int]()
+    replace_element(empty, 1, 2)
+    remove_element(empty, 1)
+    assert_equal(len(empty), 0)
+    assert_equal(mesh.topology_version, 0)
+    # A sphere query that queues nothing.
+    _ = mesh.intersect_sphere(Point3(0, 0, 0), 0.25, False)
+    assert_equal(len(mesh.leaves_to_update), 0)
+    # With every leaf pruned, the root is an empty leaf.
+    for child in mesh.cells[mesh.octree].children:
+        mesh.cells[child].faces = List[Int]()
+    mesh._prune_if_possible(mesh.cells[mesh.octree].children[0])
+    assert_equal(
+        len(mesh.intersect_ray(Point3(0, 0, 3), Point3(0, 0, -1))), 0
+    )
+
+
+def test_a_vertex_with_one_edge_neighbor_smooths_to_all() raises:
+    # Two tetrahedra, and a triangle between them given twice. Vertex 0
+    # is on an open edge, but of its neighbors only vertex 1 is, so it
+    # smooths toward all four.
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(
+        _triangles(
+            [
+                0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+                2, 2, 2, 3, 2, 2, 2, 3, 2, 2, 2, 3,
+            ],
+            [
+                0, 2, 1, 0, 1, 3, 1, 2, 3, 0, 3, 2,
+                4, 6, 5, 4, 5, 7, 5, 6, 7, 4, 7, 6,
+                0, 1, 4, 0, 1, 4,
+            ],
+        )
+    )
+    assert_equal(mesh.vert_on_edge[0], 1)
+    assert_equal(mesh.vert_on_edge[1], 1)
+    assert_equal(mesh.vert_on_edge[4], 0)
+    var smooth = laplacian_smooth(mesh, [0])
+    assert_equal(smooth[0], 0.75)
+    assert_equal(smooth[1], 0.75)
+    assert_equal(smooth[2], 0.75)
+
+
+def test_tools_leave_a_vertex_outside_the_brush() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_bumpy())
+    var before = mesh.vertices[0]
+    var far = Point3(1, -1, 0)
+    var up = Point3(0, 0, 1)
+    tool_flatten(mesh, [0], up, Point3(0, 0, 1), far, 0.25, 1, False)
+    tool_crease(mesh, [0], up, far, 0.25, 1, False)
+    assert_equal(mesh.vertices[0], before)
+
+
+def test_a_brush_whose_edges_fit_changes_no_topology() raises:
+    var assets = Assets()
+    var scene = _scene(_bumpy(), assets, Object3D())
+    var sculptor = Sculptor(scene, assets, 0)
+    sculptor.set_tool(SCULPT_BRUSH)
+    sculptor.set_detail(0.01)
+    assert_true(
+        sculptor.stroke_from_ray(scene, assets, _down(), Length(1.0, METER))
+    )
+    assert_equal(sculptor.sculpt_mesh().nb_faces, 128)
+    assert_equal(sculptor.sculpt_mesh().topology_version, 0)
+    # A geometry id no store hands out is refused.
+    sculptor.geometry = GeometryId(-1)
+    with assert_raises(contains="not in the assets"):
+        _ = sculptor.stroke_from_ray(scene, assets, _down(), Length(1.0, METER))
 
 
 def main() raises:

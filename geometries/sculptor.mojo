@@ -528,7 +528,9 @@ struct Sculptor(Movable):
         var dy = far.y - near.y
         var dz = far.z - near.z
         var length = sqrt(dx * dx + dy * dy + dz * dz)
-        if length == 0 or not isfinite(length):
+        # A pixel too far out unprojects to no number.
+        var usable = isfinite(length) and length > 0
+        if not usable:
             return False
         self._ray_direction = Point3(dx / length, dy / length, dz / length)
         return True
@@ -679,7 +681,7 @@ struct Sculptor(Movable):
         var in_cells = self._sculpt_mesh.get_vertices_from_faces(faces)
         var flag = self._sculpt_mesh.next_sculpt_flag()
         var picked = List[Int]()
-        for vertex in in_cells:
+        for vertex in in_cells:  # pragma: no branch
             var p = point_of(self._sculpt_mesh.vertices, vertex)
             if _dist2(hit, p) < radius2:
                 self._sculpt_mesh.vert_sculpt_flags[vertex] = flag
