@@ -84,8 +84,7 @@ void main() {
 
     gl_FragColor = vec4( max( shGetIrradianceAt( worldNormal ), vec3( 0.0 ) ), 1.0 );
 
-}
-"""
+}"""
 
 
 struct LightProbeGridHelper(Movable):

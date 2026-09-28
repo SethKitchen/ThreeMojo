@@ -132,7 +132,7 @@ def prepare_gaussian_splat[
             color,
             place,
         )
-        if projected:
+        if Bool(projected):
             out.append(projected.value())
     return out^
 
