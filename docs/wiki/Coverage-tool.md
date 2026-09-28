@@ -71,4 +71,8 @@ A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrume
 
 ## Capture storage
 
-The Makefile compresses each suite's stderr as it arrives. Compression preserves every probe record and its order. The reporter reads the original bytes through named pipes, one suite at a time. Uncompressed captures do not occupy disk. Python uses bounded buffers for both capture and replay.
+The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct evaluation once, rebuilt from its pending conditions when its decision closes. The report then sees the same payloads and the same evaluations, in the same order of first closing.
+
+`test_rasterizer` writes 9.9 million records. The reduced capture holds 3,477 lines, and the report reads it in 0.02 s instead of 8 s, with an identical result. The reduction runs on the capture runners, in parallel, and the report reads the captures on one core.
+
+The reporter reads the captures through named pipes, one suite at a time. Other output from a suite passes through unchanged, for the summary of a failed suite.
