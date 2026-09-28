@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 203 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 203 features are ported and 12 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -79,6 +79,10 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 </details>
 
 ### Geometry
+
+- [ ] Procedural generators: city, forest, terrain and tree [#254](https://github.com/SethKitchen/ThreeMojo/issues/254)
+- [ ] Sculptor: sculpting tools on a mesh [#255](https://github.com/SethKitchen/ThreeMojo/issues/255)
+- [ ] LoftGeometry, WireframeGeometry2, ClippingGroup and other small addons [#256](https://github.com/SethKitchen/ThreeMojo/issues/256)
 
 <details>
 <summary>Ported: 23</summary>
@@ -111,6 +115,7 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 
 ### Objects
 
+- [ ] Gaussian splats: the GaussianSplat object and the SPLAT, KSPLAT, SPZ and splat PLY loaders [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
 
 <details>
 <summary>Ported: 14</summary>
@@ -134,6 +139,8 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 
 ### Materials
 
+- [ ] The TSL function library: triplanar, sprite sheets, oscillators, noises and raymarching [#252](https://github.com/SethKitchen/ThreeMojo/issues/252)
+- [ ] Node material models: MeshSSSNodeMaterial and VolumeNodeMaterial [#258](https://github.com/SethKitchen/ThreeMojo/issues/258)
 
 <details>
 <summary>Ported: 33</summary>
@@ -176,6 +183,7 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 
 ### Lights
 
+- [ ] SunLight, LightProbeGrid, IESSpotLight, ProjectorLight and ColorEnvironment [#249](https://github.com/SethKitchen/ThreeMojo/issues/249)
 
 <details>
 <summary>Ported: 14</summary>
@@ -227,6 +235,8 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 
 ### Loaders and exporters
 
+- [ ] USD import: USDZLoader with the USDA and USDC parsers [#248](https://github.com/SethKitchen/ThreeMojo/issues/248)
+- [ ] Three.js's node JSON: NodeLoader, NodeMaterialLoader and NodeObjectLoader [#257](https://github.com/SethKitchen/ThreeMojo/issues/257)
 - [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 
 <details>
@@ -258,6 +268,9 @@ The port is not at parity with three.js yet. 203 features are ported and 0 are o
 
 ### Rendering
 
+- [ ] Voxel global illumination (VXGI) [#250](https://github.com/SethKitchen/ThreeMojo/issues/250)
+- [ ] Upscaling, SSGI, screen-space shadows, OIT and the other r186 display nodes [#251](https://github.com/SethKitchen/ThreeMojo/issues/251)
+- [ ] Compute nodes: storage buffers and textures, atomics and GPU sorts [#253](https://github.com/SethKitchen/ThreeMojo/issues/253)
 
 <details>
 <summary>Ported: 32</summary>
@@ -367,6 +380,10 @@ These addons are out of scope too. Each line gives the reason.
 - The transpiler's `TSLEncoder` and `WGSLEncoder`: they write JavaScript and WGSL source. This port compiles its shaders to node programs and writes no source.
 - `TiledLightsNode`, `TileShadowNode` and the `*GPU` helpers, such as `LightProbeHelperGPU`: they exist only for the WebGPU renderer.
 - `EXT_texture_avif`: it needs an AV1 decoder, and this port has none.
+- `ClusteredLighting` and `DynamicLighting`: they manage the WebGPU renderer's lights, as `TiledLightsNode` does.
+- The `Inspector`, its color-grading and TSL-graph extensions, and `InteractionManager`: they are browser user interfaces, or place DOM elements over the canvas.
+- `TileCreasedNormalsPlugin`: it is a plugin for the `3d-tiles-renderer` package, and runs in a web worker.
+- The transpiler's `GLSLDecoder`, `Linker` and `Transpiler`: they turn GLSL into TSL source. This port compiles GLSL to node programs directly.
 
 ## Contributing
 
