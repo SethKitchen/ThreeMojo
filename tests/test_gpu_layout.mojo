@@ -153,6 +153,7 @@ from render.gpu import (
     LANE_ATTENUATION_DISTANCE,
     LANE_ATTENUATION_R,
     LANE_BUMP_SCALE,
+    LANE_VOLUME,
     LANE_CLEARCOAT,
     LANE_CLEARCOAT_NORMAL_SCALE_X,
     LANE_CLEARCOAT_NORMAL_SCALE_Y,
@@ -400,8 +401,15 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 125)
+    assert_equal(len(flat), 127)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
+    # A volume's ray rides last: its steps, then the mesh's radius.
+    var marched = corners.copy()
+    marched[0].steps = 25
+    marched[0].model_radius = 1.5
+    var volume = flatten(marched)
+    assert_equal(volume[LANE_VOLUME], Float32(25))
+    assert_equal(volume[LANE_VOLUME + 1], Float32(1.5))
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
