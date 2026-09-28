@@ -172,7 +172,7 @@ ifneq ($(strip $(SHARD)),)
 TEST_SUITES := $(shell python3 tools/shard.py $(SHARD) $(CPU_TESTS) \
                  || echo SHARD_ERROR)
 ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
-$(error SHARD must be I/N with 1 <= I <= N, not '$(SHARD)')
+$(error tools/shard.py could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
 endif
 endif
 COVERAGE_SUITES := $(filter $(TEST_SUITES),$(COVERAGE_TESTS))
