@@ -102,7 +102,7 @@ The kernel calls `volume_refraction`, the host's own function, over a source tha
 
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.
 
-The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The light probes' 27 coefficients follow at `LIGHTS_PROBE`; see [Lights](Lights#light-probes). The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
+The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The light probes' 27 coefficients follow at `LIGHTS_PROBE`; see [Lights](Lights#light-probes). The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. The spot profiles and the probe grid follow, and `LIGHTS_GRID` says where the grid begins. See [Lights](Lights#rect-area), [Lights](Lights#shadows), [Lights](Lights#spot-light-maps) and [Lighting addons](Lighting-addons#the-gpu).
 
 ### Texture table
 
