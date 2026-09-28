@@ -4358,7 +4358,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(12)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(13)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)
@@ -14351,3 +14351,150 @@ def test_both_backends_gather_a_corner_alike() raises:
             gi += 1
     assert_true(ao <= loose)
     assert_true(gi <= loose)
+
+
+# --- node lighting models: MeshSSSNodeMaterial and VolumeNodeMaterial ------
+
+from materials.nodes import (
+    NodeGraph,
+    OFFSET_NODE,
+    SCATTERING_NODE,
+    THICKNESS_COLOR_NODE,
+    THICKNESS_POWER_NODE,
+)
+from materials.volume_node_material import volume_node_material
+
+
+def _models_on_both(
+    scene: Scene, assets: Assets, eye: Vector3
+) raises -> Tuple[Framebuffer, Framebuffer]:
+    """Return the scene drawn by the renderer and by the device from one
+    prepared frame, seen from `eye` toward the origin."""
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(eye, Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    return (cpu^, device.read_back())
+
+
+def test_both_backends_let_light_through_a_sss_node_material_alike() raises:
+    # A physical sphere with a thickness color and power, lit from behind
+    # and aside by a sun and a bulb: the light through joins the direct
+    # diffuse light on both.
+    if skipped_for_lack_of_a_gpu("both backends scatter a sss material"):
+        return
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        THICKNESS_COLOR_NODE,
+        graph.mul(graph.vertex_color(), graph.vec3(1, 0.5, 0.25)),
+    )
+    graph.set_output(THICKNESS_POWER_NODE, graph.float(1.5))
+    var program = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.8, METER), 18, 12)),
+            assets.materials.add(
+                Material(
+                    Color(200, 180, 160),
+                    kind=PHYSICAL,
+                    roughness=0.6,
+                    nodes=program,
+                )
+            ),
+            node,
+        )
+    )
+    var sun = scene.add(Object3D())
+    scene.node(sun).set_position(0.3, 0.2, -1)
+    scene.add_light(directional_light(Color(255, 240, 220), sun, 1.5))
+    var bulb = scene.add(Object3D())
+    scene.node(bulb).set_position(-1.2, 0.4, -0.8)
+    scene.add_light(point_light(Color(200, 220, 255), bulb, 3.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+    var both = _models_on_both(scene, assets, Vector3(0.2, 0.3, 3))
+    assert_true(
+        count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+        "the sphere drew nothing",
+    )
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_march_a_volume_node_material_alike() raises:
+    # A box of light around a bulb and under a spot, with a scattering
+    # node that reads each step's position and an offset: from outside,
+    # and from inside, where the ray starts at the surface.
+    if skipped_for_lack_of_a_gpu("both backends march a volume alike"):
+        return
+    var assets = Assets()
+    var graph = NodeGraph()
+    graph.set_output(
+        SCATTERING_NODE,
+        graph.add(
+            graph.float(0.6),
+            graph.mul(
+                graph.float(0.4),
+                graph.sin(
+                    graph.mul(
+                        graph.swizzle(graph.position_world(), "x"),
+                        graph.float(4),
+                    )
+                ),
+            ),
+        ),
+    )
+    graph.set_output(OFFSET_NODE, graph.float(0.3))
+    var program = assets.programs.add(graph.compile())
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(cube(Length(2.0, METER))),
+            assets.materials.add(volume_node_material(steps=12, nodes=program)),
+            node,
+        )
+    )
+    var bulb = scene.add(Object3D())
+    scene.node(bulb).set_position(0.3, -0.2, 0.1)
+    scene.add_light(point_light(Color(255, 200, 150), bulb, 2.0))
+    var lamp = scene.add(Object3D())
+    scene.node(lamp).set_position(0, 2.5, 0)
+    scene.add_light(
+        spot_light(
+            Color(150, 200, 255),
+            lamp,
+            4.0,
+            angle=Angle(25.0, DEGREE),
+            penumbra=0.3,
+        )
+    )
+    scene.update()
+    for eye in [Vector3(0.4, 0.3, 4), Vector3(0.1, 0.1, 0.5)]:
+        var both = _models_on_both(scene, assets, eye)
+        assert_true(
+            count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+            "the volume drew nothing",
+        )
+        assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)

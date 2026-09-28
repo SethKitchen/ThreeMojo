@@ -150,8 +150,8 @@ def node_material_properties() -> List[String]:
     its value.
 
     Returns:
-        Seventeen names: `colorNode` for `COLOR_NODE` at zero through
-        `castShadowNode` for `CAST_SHADOW_NODE` at sixteen.
+        Twenty-five names: `colorNode` for `COLOR_NODE` at zero through
+        `offsetNode` for `OFFSET_NODE` at twenty-four.
     """
     return [
         "colorNode",
@@ -171,6 +171,14 @@ def node_material_properties() -> List[String]:
         "metalnessNode",
         "receivedShadowNode",
         "castShadowNode",
+        "thicknessColorNode",
+        "thicknessDistortionNode",
+        "thicknessAmbientNode",
+        "thicknessAttenuationNode",
+        "thicknessPowerNode",
+        "thicknessScaleNode",
+        "scatteringNode",
+        "offsetNode",
     ]
 
 
@@ -223,6 +231,12 @@ def plain_material_type(name: String) -> String:
     """
     if name == "NodeMaterial":
         return "MeshBasicMaterial"
+    # `MeshSSSNodeMaterial` extends `MeshPhysicalNodeMaterial`, and
+    # `VolumeNodeMaterial` has no plain class: it is its own kind.
+    if name == "MeshSSSNodeMaterial":
+        return "MeshPhysicalMaterial"
+    if name == "VolumeNodeMaterial":
+        return name
     if name.endswith("NodeMaterial"):
         return String(name[byte = 0 : name.byte_length() - 12]) + "Material"
     return name

@@ -703,6 +703,19 @@ def subsurface_scattering(
     return scattering
 
 
+def check_steps(steps: Int) raises:
+    """Refuse a number of ray steps that marches nothing.
+
+    Args:
+        steps: How many steps a `VOLUME` surface's ray takes.
+
+    Raises:
+        Error: If `steps` is below one: three.js divides the ray by it.
+    """
+    if steps < 1:
+        raise Error("A volume's ray takes at least one step")
+
+
 @fieldwise_init
 struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface is lit, as a type rather than a bare int.
@@ -715,11 +728,12 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the twelve kinds there are."""
+        """Return True if this is one of the thirteen kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
             or self == GOURAUD
+            or self == VOLUME
             or self == NORMALS
             or self == DEPTH
             or self == PHONG
@@ -805,14 +819,20 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def displaces(self) -> Bool:
         """Return True if a surface of this kind can carry a displacement
-        map: every kind but `BASIC` and `SHADOW`.
+        map: every kind but `BASIC`, `SHADOW`, `GOURAUD` and `VOLUME`.
 
         The kinds three.js gives a `displacementMap`: the lit five,
         `MATCAP`, `NORMALS` and `DEPTH`. three.js's basic and shadow
         materials have none, and a wireframe is `BASIC` here. three.js's
-        `MeshGouraudMaterial` has none either.
+        `MeshGouraudMaterial` has none either, and nor has
+        `VolumeNodeMaterial`.
         """
-        return self != BASIC and self != SHADOW and self != GOURAUD
+        return (
+            self != BASIC
+            and self != SHADOW
+            and self != GOURAUD
+            and self != VOLUME
+        )
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -914,6 +934,13 @@ comptime DISTANCE = MaterialKind(10)
 # `MeshGouraudMaterial`, a `LAMBERT` surface lit per vertex. The shadows
 # darken the direct light per fragment, as three.js's `getShadowMask` does.
 comptime GOURAUD = MaterialKind(11)
+# A ray marched through the mesh from the camera, lit at each step by the
+# point and spot lights: three.js's `VolumeNodeMaterial` and its
+# `VolumetricLightingModel`. The standard lights do not reach its surface.
+# See `materials.volume_node_material`.
+comptime VOLUME = MaterialKind(12)
+# three.js's `VolumeNodeMaterial.steps`: how many steps a ray takes.
+comptime DEFAULT_STEPS = 25
 # three.js's `MeshDistanceMaterial` uniform defaults: one meter and a
 # thousand meters, measured from the origin.
 comptime DEFAULT_NEAR_DISTANCE = Length(1.0, METER)
@@ -1205,6 +1232,10 @@ struct Material(ImplicitlyCopyable):
     # `SubsurfaceScatteringShader`, or `NO_SCATTERING`. Set with
     # `set_scattering`.
     var scattering: Scattering
+    # How many steps a `VOLUME` surface's ray takes, three.js's
+    # `VolumeNodeMaterial.steps`. `DEFAULT_STEPS` on every kind; set with
+    # `set_steps`.
+    var steps: Int
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -1734,8 +1765,8 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE or"
-                " GOURAUD"
+                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE,"
+                " GOURAUD or VOLUME"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -1766,14 +1797,15 @@ struct Material(ImplicitlyCopyable):
             )
         if emissive_intensity < 0:
             raise Error("An emissive intensity cannot be negative")
-        if kind.is_unlit() and (
+        if (kind.is_unlit() or kind == VOLUME) and (
             emissive_map != NO_TEXTURE
             or _gives_off_light(emissive, emissive_intensity)
         ):
             raise Error(
                 "An unlit material has no emissive term: a basic one shows"
-                " its color whatever the lights do, and a matcap one shows"
-                " an image that is light already"
+                " its color whatever the lights do, a matcap one shows an"
+                " image that is light already, and a volume one has only its"
+                " graph's emissive node"
             )
         if kind.is_data():
             # Neither shader reads a color, an emissive term or the vertex
@@ -2210,6 +2242,7 @@ struct Material(ImplicitlyCopyable):
         self.refraction_ratio = refraction_ratio
         self.normal_map_type = normal_map_type
         self.scattering = NO_SCATTERING
+        self.steps = DEFAULT_STEPS
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -2695,6 +2728,25 @@ struct Material(ImplicitlyCopyable):
                 " builds SubsurfaceScatteringShader on the phong shader"
             )
         self.scattering = scattering
+
+    def set_steps(mut self, steps: Int) raises:
+        """Set how many steps a `VOLUME` surface's ray takes, three.js's
+        `VolumeNodeMaterial.steps`.
+
+        Args:
+            steps: The number of steps, from one.
+
+        Raises:
+            Error: If the material is not `VOLUME`, or `steps` is below one;
+                see `check_steps`.
+        """
+        if self.kind != VOLUME:
+            raise Error(
+                "Only a VOLUME material marches a ray: three.js's steps are"
+                " VolumeNodeMaterial's"
+            )
+        check_steps(steps)
+        self.steps = steps
 
     def set_clipping_planes(
         mut self,
