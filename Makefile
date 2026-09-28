@@ -642,7 +642,11 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/animated.png $(OUT_DIR)/computation.png \
            $(OUT_DIR)/lightmap.png $(OUT_DIR)/svg.png \
            $(OUT_DIR)/models.png $(OUT_DIR)/mathaddons.png \
-           $(OUT_DIR)/hooks.png
+           $(OUT_DIR)/hooks.png $(OUT_DIR)/sculptor.png \
+           $(OUT_DIR)/tslfunctions.png $(OUT_DIR)/gaussian.png \
+           $(OUT_DIR)/vxgi.png $(OUT_DIR)/lighting.png \
+           $(OUT_DIR)/lofts.png $(OUT_DIR)/generators.png \
+           $(OUT_DIR)/computenodes.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -1019,6 +1023,54 @@ $(OUT_DIR)/mathaddons.png: $(LIB_SOURCES) examples/terrain.mojo
 $(OUT_DIR)/hooks.png: $(LIB_SOURCES) examples/override.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/override.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# An inflated knob on a turning sphere.
+$(OUT_DIR)/sculptor.png: $(LIB_SOURCES) examples/clay.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clay.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Voronoi cells on a turning sphere.
+$(OUT_DIR)/tslfunctions.png: $(LIB_SOURCES) examples/cells.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cells.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A cloud of Gaussian splats.
+$(OUT_DIR)/gaussian.png: $(LIB_SOURCES) examples/cloud.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cloud.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Bounced light in a colored corner.
+$(OUT_DIR)/vxgi.png: $(LIB_SOURCES) examples/bounce.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/bounce.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A low sun and its two shadow cascades.
+$(OUT_DIR)/lighting.png: $(LIB_SOURCES) examples/sunlight.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sunlight.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A vase skinned through loft sections.
+$(OUT_DIR)/lofts.png: $(LIB_SOURCES) examples/vase.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vase.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A tree grown from a seed.
+$(OUT_DIR)/generators.png: $(LIB_SOURCES) examples/sapling.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sapling.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Points stepped by a compute kernel.
+$(OUT_DIR)/computenodes.png: $(LIB_SOURCES) examples/particles.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/particles.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

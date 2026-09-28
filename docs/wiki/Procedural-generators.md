@@ -2,6 +2,10 @@
 
 The procedural generators of three.js's `examples/jsm/generators/`: a city, a forest, a terrain and a tree. The same seed and parameters give the same geometry and the same placements as three.js r186. The materials are not ported.
 
+![A procedural tree turns under a lamp](out/generators.png)
+
+`examples/sapling.mojo` draws this picture.
+
 | Module | three.js |
 |---|---|
 | `generators/utils.mojo` | `createRandom`, `part` and `place` of the city, and the shared instanced lifecycle |

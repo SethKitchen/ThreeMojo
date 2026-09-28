@@ -79,6 +79,14 @@ mkdir -p out
 | `bricks.mojo` | `models.png` | [More model files](More-model-files) |
 | `terrain.mojo` | `mathaddons.png` | [Math addons](Math-addons) |
 | `override.mojo` | `hooks.png` | [Renderer hooks and material flags](Renderer-hooks-and-material-flags) |
+| `clay.mojo` | `sculptor.png` | [Sculptor](Sculptor) |
+| `cells.mojo` | `tslfunctions.png` | [TSL functions](TSL-functions) |
+| `cloud.mojo` | `gaussian.png` | [Gaussian splats](Gaussian-splats) |
+| `bounce.mojo` | `vxgi.png` | [Voxel global illumination](Voxel-global-illumination) |
+| `sunlight.mojo` | `lighting.png` | [Lighting addons](Lighting-addons) |
+| `vase.mojo` | `lofts.png` | [Lofts and clipping groups](Lofts-and-clipping-groups) |
+| `sapling.mojo` | `generators.png` | [Procedural generators](Procedural-generators) |
+| `particles.mojo` | `computenodes.png` | [Compute nodes](Compute-nodes) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

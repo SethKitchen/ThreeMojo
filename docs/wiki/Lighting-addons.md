@@ -2,6 +2,10 @@
 
 This page describes five lighting addons from three.js. They are a sun, an IES spot light, a projector, a grid of light probes and an environment of one color. Each one lights a surface on both rasterizers, and the parity tests hold the two to the same pixels.
 
+![A low sun walks around a cube and throws a long shadow](out/lighting.png)
+
+`examples/sunlight.mojo` draws this picture.
+
 three.js: `SunLight` and `SunLightShadow`, `IESSpotLight`, `ProjectorLight`, `LightProbeGrid` with `LightProbeGridUtils` and `LightProbeGridHelper`, and `ColorEnvironment`.
 
 | Addon | Module | Builder |

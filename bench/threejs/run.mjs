@@ -942,6 +942,195 @@ function build(spec) {
     return { scene, camera, subject, extra };
   }
 
+  if (kind === "clay") {
+    subject = new THREE.Mesh(
+      new THREE.SphereGeometry(0.9, 32, 20),
+      new THREE.MeshLambertMaterial({ color: 0xba8e6c }),
+    );
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 38);
+    camera.position.set(1.75, 0.85, 3.1);
+    camera.lookAt(0, 0.05, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "cells") {
+    subject = new THREE.Mesh(
+      new THREE.SphereGeometry(0.9, 36, 24),
+      new THREE.MeshStandardMaterial({ color: 0xf4d6aa, roughness: 0.55 }),
+    );
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 40);
+    camera.position.set(0.15, 0.2, 2.85);
+    camera.lookAt(0, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "cloud") {
+    const geometry = new THREE.BufferGeometry();
+    const positions = [];
+    const colors = [];
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let index = 0; index < 48; index++) {
+      const t = index / 47;
+      const y = (1 - 2 * t) * 0.55;
+      const ring = Math.sqrt(Math.max(0, 1 - (1 - 2 * t) ** 2));
+      const theta = index * golden;
+      const reach = 0.35 + 0.4 * Math.sin(index * 0.7);
+      positions.push(Math.cos(theta) * ring * reach, y, Math.sin(theta) * ring * reach);
+      const band = index % 6;
+      colors.push(band === 2 || band === 3 ? 0.3 : 1, band === 2 ? 0.65 : 0.35, band === 3 || band === 4 ? 0.85 : 0.25);
+    }
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    subject = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({ size: 0.12, vertexColors: true }),
+    );
+    scene.add(subject);
+    camera = perspective(width, height, 40);
+    camera.position.set(0.35, 0.28, 2.55);
+    camera.lookAt(0, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "bounce") {
+    const group = new THREE.Group();
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.MeshLambertMaterial({ color: 0xecece8 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    const left = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.MeshLambertMaterial({ color: 0xbe2a24 }),
+    );
+    left.rotation.y = Math.PI / 2;
+    left.position.set(-1, 1, 0);
+    const back = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.MeshLambertMaterial({ color: 0x2e9640 }),
+    );
+    back.position.set(0, 1, -1);
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 0.5),
+      new THREE.MeshLambertMaterial({ color: 0xecece8 }),
+    );
+    box.position.set(-0.28, 0.25, -0.22);
+    group.add(floor, left, back, box);
+    scene.add(group);
+    subject = box;
+    const lamp = new THREE.DirectionalLight(0xfffaf0, 1.35);
+    lamp.position.set(0.15, 4.2, 0.35);
+    scene.add(lamp, new THREE.AmbientLight(0xd2d6dc, 0.12));
+    camera = perspective(width, height, 42);
+    camera.position.set(0.15, 0.9, 1.55);
+    camera.lookAt(-0.45, 0.5, -0.35);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "sunlight") {
+    const sun = new THREE.DirectionalLight(0xffd6a0, 2.6);
+    sun.position.set(2.8, 2.1, 0);
+    sun.castShadow = true;
+    scene.add(sun, new THREE.AmbientLight(0xb4bccc, 0.22));
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(5, 5),
+      new THREE.MeshLambertMaterial({ color: 0xa8acb4 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.9, 0.9),
+      new THREE.MeshLambertMaterial({ color: 0xe68c32 }),
+    );
+    box.position.y = 0.45;
+    box.castShadow = true;
+    box.receiveShadow = true;
+    scene.add(floor, box);
+    camera = perspective(width, height, 38);
+    camera.position.set(2.5, 1.7, 2.9);
+    camera.lookAt(0, 0.2, 0);
+    extra = { lamp: sun };
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "vase") {
+    const points = [];
+    for (let step = 0; step < 12; step++) {
+      const t = step / 11;
+      const radius = 0.18 + Math.sin(t * Math.PI) * 0.28 + Math.sin(t * Math.PI * 2) * 0.06;
+      points.push(new THREE.Vector2(Math.max(0.04, radius), -0.9 + t * 1.8));
+    }
+    subject = new THREE.Mesh(
+      new THREE.LatheGeometry(points, 28),
+      new THREE.MeshLambertMaterial({ color: 0xd69460 }),
+    );
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 38);
+    camera.position.set(1.15, 0.35, 2.7);
+    camera.lookAt(0, 0.05, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "sapling") {
+    const group = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.1, 1.1, 6),
+      new THREE.MeshLambertMaterial({ color: 0x6e5430 }),
+    );
+    trunk.position.y = 0.55;
+    const crown = new THREE.Mesh(
+      new THREE.ConeGeometry(0.7, 1.7, 7),
+      new THREE.MeshLambertMaterial({ color: 0x487634 }),
+    );
+    crown.position.y = 1.7;
+    group.add(trunk, crown);
+    subject = group;
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 40);
+    camera.position.set(2.75, 1.7, 4.15);
+    camera.lookAt(0, 1.32, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "particles") {
+    const group = new THREE.Group();
+    group.add(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 24, 16),
+        new THREE.MeshLambertMaterial({ color: 0x566896 }),
+      ),
+    );
+    const geometry = new THREE.BufferGeometry();
+    const positions = [];
+    for (let index = 0; index < 72; index++) {
+      const band = index % 3;
+      const radius = [0.52, 0.7, 0.9][band];
+      const y = [-0.12, 0.1, 0.28][band];
+      const turn = ((index - band) / 3) / 24 * Math.PI * 2;
+      positions.push(Math.cos(turn) * radius, y, Math.sin(turn) * radius);
+    }
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    group.add(
+      new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({ color: 0xffb040, size: 0.08 }),
+      ),
+    );
+    subject = group;
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 40);
+    camera.position.set(0.2, 0.95, 3.15);
+    camera.lookAt(0, 0.08, 0);
+    return { scene, camera, subject, extra };
+  }
+
   if (kind === "basis") {
     const group = new THREE.Group();
     for (let index = 0; index < 3; index++) {
@@ -1035,6 +1224,10 @@ function step(world, spec, frame) {
   }
   if ((spec.kind === "shadows" || spec.kind === "baked") && extra?.lamp) {
     extra.lamp.position.set(Math.cos(turn) * 2.2, 2.6, Math.sin(turn) * 2.2);
+    return;
+  }
+  if (spec.kind === "sunlight" && extra?.lamp) {
+    extra.lamp.position.set(Math.cos(turn) * 2.8, 2.1, Math.sin(turn) * 2.8);
     return;
   }
   if (spec.kind === "daylight" && extra?.sun) {

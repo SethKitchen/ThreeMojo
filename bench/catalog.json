@@ -66,5 +66,13 @@
   {"name": "diagram", "src": "examples/diagram.mojo", "width": 240, "height": 180, "frames": 36, "kind": "diagram"},
   {"name": "bricks", "src": "examples/bricks.mojo", "width": 240, "height": 180, "frames": 36, "kind": "bricks"},
   {"name": "terrain", "src": "examples/terrain.mojo", "width": 240, "height": 180, "frames": 36, "kind": "terrain"},
-  {"name": "override", "src": "examples/override.mojo", "width": 240, "height": 180, "frames": 36, "kind": "override"}
+  {"name": "override", "src": "examples/override.mojo", "width": 240, "height": 180, "frames": 36, "kind": "override"},
+  {"name": "clay", "src": "examples/clay.mojo", "width": 240, "height": 180, "frames": 36, "kind": "clay"},
+  {"name": "cells", "src": "examples/cells.mojo", "width": 240, "height": 180, "frames": 36, "kind": "cells"},
+  {"name": "cloud", "src": "examples/cloud.mojo", "width": 240, "height": 180, "frames": 36, "kind": "cloud"},
+  {"name": "bounce", "src": "examples/bounce.mojo", "width": 240, "height": 180, "frames": 36, "kind": "bounce"},
+  {"name": "sunlight", "src": "examples/sunlight.mojo", "width": 240, "height": 180, "frames": 36, "kind": "sunlight"},
+  {"name": "vase", "src": "examples/vase.mojo", "width": 240, "height": 180, "frames": 36, "kind": "vase"},
+  {"name": "sapling", "src": "examples/sapling.mojo", "width": 240, "height": 180, "frames": 36, "kind": "sapling"},
+  {"name": "particles", "src": "examples/particles.mojo", "width": 240, "height": 180, "frames": 36, "kind": "particles"}
 ]
