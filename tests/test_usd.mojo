@@ -81,7 +81,9 @@ def _reference() raises -> JsonDocument:
     return parse_json(Path(_DIR + "usd.json").read_text())
 
 
-def _same_number(got: Float64, doc: JsonDocument, node: Int, what: String) raises:
+def _same_number(
+    got: Float64, doc: JsonDocument, node: Int, what: String
+) raises:
     """Assert a number is three.js's, a non-finite one as its text.
 
     Args:
@@ -142,7 +144,9 @@ def _same_value(
             if got == USD_NUMBERS:
                 _same_number(layer.values[id].numbers[k], doc, item, name)
             elif got == USD_STRINGS:
-                assert_equal(layer.values[id].strings[k], doc.string(item), name)
+                assert_equal(
+                    layer.values[id].strings[k], doc.string(item), name
+                )
             else:
                 _same_value(layer, layer.values[id].items[k], doc, item, name)
     else:
@@ -345,8 +349,12 @@ def _same_map(
     )
     var repeat = doc.get(node, "repeat")
     var offset = doc.get(node, "offset")
-    assert_almost_equal(Float64(texture.repeat.x), doc.number(doc.at(repeat, 0)))
-    assert_almost_equal(Float64(texture.repeat.y), doc.number(doc.at(repeat, 1)))
+    assert_almost_equal(
+        Float64(texture.repeat.x), doc.number(doc.at(repeat, 0))
+    )
+    assert_almost_equal(
+        Float64(texture.repeat.y), doc.number(doc.at(repeat, 1))
+    )
     assert_almost_equal(
         Float64(texture.offset.x), doc.number(doc.at(offset, 0)), atol=1e-5
     )
@@ -387,7 +395,10 @@ def _same_material(
     _near_color(m.color, doc, doc.get(node, "color"), what + " color")
     _near_color(m.emissive, doc, doc.get(node, "emissive"), what + " emissive")
     _near_color(
-        m.specular_color, doc, doc.get(node, "specularColor"), what + " specular"
+        m.specular_color,
+        doc,
+        doc.get(node, "specularColor"),
+        what + " specular",
     )
     var numbers: List[Float32] = [
         m.roughness,
@@ -440,7 +451,12 @@ def _same_material(
     ]
     for k in range(len(names)):  # pragma: no branch
         _same_map(
-            assets, model, maps[k], doc, doc.get(node, names[k]), what + " " + names[k]
+            assets,
+            model,
+            maps[k],
+            doc,
+            doc.get(node, names[k]),
+            what + " " + names[k],
         )
 
 
@@ -516,8 +532,12 @@ def _same_object(
         assert_equal(len(geometry.groups), doc.length(groups), name + " groups")
         for g in range(doc.length(groups)):
             var group = doc.at(groups, g)
-            assert_equal(geometry.groups[g].start, doc.integer(doc.at(group, 0)))
-            assert_equal(geometry.groups[g].count, doc.integer(doc.at(group, 1)))
+            assert_equal(
+                geometry.groups[g].start, doc.integer(doc.at(group, 0))
+            )
+            assert_equal(
+                geometry.groups[g].count, doc.integer(doc.at(group, 1))
+            )
             assert_equal(
                 geometry.groups[g].material_index.value,
                 doc.integer(doc.at(group, 2)),
@@ -545,7 +565,11 @@ def _same_object(
 
 
 def _same_scene(
-    scene: Scene, assets: Assets, model: UsdModel, doc: JsonDocument, key: String
+    scene: Scene,
+    assets: Assets,
+    model: UsdModel,
+    doc: JsonDocument,
+    key: String,
 ) raises:
     """Assert a model is three.js's reading of a fixture.
 
@@ -558,7 +582,13 @@ def _same_scene(
     """
     var at = 0
     _same_object(
-        scene, assets, model, at, doc, doc.get(doc.get(doc.root(), "scenes"), key), key
+        scene,
+        assets,
+        model,
+        at,
+        doc,
+        doc.get(doc.get(doc.root(), "scenes"), key),
+        key,
     )
     assert_equal(at, len(model.objects), key + " has no other objects")
 
@@ -748,7 +778,11 @@ def test_archives() raises:
     model = parse_usd(_zip(["a.usdc"], [_bytes(layer)]), scene, assets)
     assert_equal(scene.get(model.objects[1].node).name, "A")
     with assert_raises(contains="first file must be a USD layer"):
-        _ = parse_usd(_zip(["a.png", "b.usda"], [_bytes("x"), _bytes(layer)]), scene, assets)
+        _ = parse_usd(
+            _zip(["a.png", "b.usda"], [_bytes("x"), _bytes(layer)]),
+            scene,
+            assets,
+        )
     with assert_raises(contains="first file must be a USD layer"):
         _ = parse_usd(_zip(List[String](), List[List[UInt8]]()), scene, assets)
 

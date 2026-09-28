@@ -500,7 +500,9 @@ def test_lz4_long_runs() raises:
     assert_equal(lz4_decompress_block(cut, 0, 2, short, 0, 4), 0)
     var cut_match: List[UInt8] = [0x1F, 0x41, 0x01, 0x00, 255]
     var small = List[UInt8](length=300, fill=0)
-    assert_equal(lz4_decompress_block(cut_match, 0, 5, small, 0, 300), 1 + 19 + 255)
+    assert_equal(
+        lz4_decompress_block(cut_match, 0, 5, small, 0, 300), 1 + 19 + 255
+    )
 
 
 def test_lz4_stops() raises:
@@ -703,19 +705,28 @@ def test_values_of_each_type() raises:
         assert_equal(layer.number(layer.field("/", "int64")), -9000000000)
         assert_equal(layer.number(layer.field("/", "uint64")), 9000000000)
         assert_equal(layer.number(layer.field("/", "half")), 1)
-        assert_equal(layer.number(layer.field("/", "float")), Float64(Float32(0.1)))
+        assert_equal(
+            layer.number(layer.field("/", "float")), Float64(Float32(0.1))
+        )
         assert_equal(layer.number(layer.field("/", "double")), 0.1)
         for type in [CRATE_STRING, CRATE_TOKEN, CRATE_ASSET_PATH]:
             # A string is read as a token, as three.js reads it.
-            assert_equal(layer.text(layer.field("/", "text" + String(type.value))), "word")
+            assert_equal(
+                layer.text(layer.field("/", "text" + String(type.value))),
+                "word",
+            )
         _same(_numbers(layer, layer.field("/", "f20")), [0.5, 1.5])
         _same(_numbers(layer, layer.field("/", "f24")), [0.5, 1.5, 2.5])
         _same(_numbers(layer, layer.field("/", "f28")), [0.5, 1.5, 2.5, 3.5])
         _same(_numbers(layer, layer.field("/", "f17")), [0.5, 1.5, 2.5, 3.5])
         _same(_numbers(layer, layer.field("/", "d19")), [0.25, 1.25])
         _same(_numbers(layer, layer.field("/", "d23")), [0.25, 1.25, 2.25])
-        _same(_numbers(layer, layer.field("/", "d27")), [0.25, 1.25, 2.25, 3.25])
-        _same(_numbers(layer, layer.field("/", "d16")), [0.25, 1.25, 2.25, 3.25])
+        _same(
+            _numbers(layer, layer.field("/", "d27")), [0.25, 1.25, 2.25, 3.25]
+        )
+        _same(
+            _numbers(layer, layer.field("/", "d16")), [0.25, 1.25, 2.25, 3.25]
+        )
         assert_equal(len(_numbers(layer, layer.field("/", "matrix"))), 16)
         _same(_numbers(layer, layer.field("/", "i22")), [0, -1])
         _same(_numbers(layer, layer.field("/", "i26")), [0, -1, -2])
@@ -842,7 +853,9 @@ def test_arrays() raises:
             body = List[UInt8]()
             for k in range(4):
                 _f32(body, Float64(k))
-            fields.append(b.field("f" + String(type.value), _array(b, type, 1, body^)))
+            fields.append(
+                b.field("f" + String(type.value), _array(b, type, 1, body^))
+            )
         body = List[UInt8]()
         for k in range(16):
             _f64(body, Float64(k))
@@ -851,12 +864,16 @@ def test_arrays() raises:
             body = List[UInt8]()
             for _ in range(4):
                 _put(body, 0x3C00, 2)
-            fields.append(b.field("h" + String(type.value), _array(b, type, 1, body^)))
+            fields.append(
+                b.field("h" + String(type.value), _array(b, type, 1, body^))
+            )
         var word = b.token("word")
         body = List[UInt8]()
         _put(body, word, 4)
         fields.append(b.field("tokens", _array(b, CRATE_TOKEN, 1, body^)))
-        fields.append(b.field("strings", _array(b, CRATE_STRING, 1, List[UInt8]())))
+        fields.append(
+            b.field("strings", _array(b, CRATE_STRING, 1, List[UInt8]()))
+        )
         fields.append(b.field("empty", _array(b, CRATE_INT, 0, List[UInt8]())))
         fields.append(b.field("zero", _rep(CRATE_INT, 0, array=True)))
         fields.append(b.field("origin", _rep(CRATE_INT, 0)))
@@ -907,7 +924,9 @@ def test_compressed_arrays() raises:
     body = List[UInt8]()
     body.append(0x00)
     fields.append(b.field("other", _array(b, CRATE_FLOAT, 2, body^, True)))
-    fields.append(b.field("double", _array(b, CRATE_DOUBLE, 2, List[UInt8](), True)))
+    fields.append(
+        b.field("double", _array(b, CRATE_DOUBLE, 2, List[UInt8](), True))
+    )
     b.root(fields^)
     var layer = parse_usdc(b.build())
     _same(_numbers(layer, layer.field("/", "int")), [3, -4])
@@ -924,7 +943,9 @@ def test_path_list_operations() raises:
     var b = _Builder()
     var fields = List[Int]()
     # Explicit, add, prepend, append, delete and reorder, in that order.
-    fields.append(b.field("prepend", op(b, 0x7E, [[0], [0], [0], [0], [0], [0]])))
+    fields.append(
+        b.field("prepend", op(b, 0x7E, [[0], [0], [0], [0], [0], [0]]))
+    )
     fields.append(b.field("explicit", op(b, 0x42, [[0], [0]])))
     fields.append(b.field("append", op(b, 0x44, [List[Int](), [0]])))
     fields.append(b.field("add", op(b, 0x24, [[0], List[Int]()])))
@@ -979,7 +1000,9 @@ def test_time_samples() raises:
     assert_equal(layer.number(layer.values[id].items[0]), 7)
 
 
-def _samples(times: Tuple[Int, Int], depth_loop: Bool = False) raises -> List[UInt8]:
+def _samples(
+    times: Tuple[Int, Int], depth_loop: Bool = False
+) raises -> List[UInt8]:
     """Return a crate whose root's `v` is time samples with these times
     and no values.
 
@@ -1006,7 +1029,9 @@ def _samples(times: Tuple[Int, Int], depth_loop: Bool = False) raises -> List[UI
 
 
 def test_time_samples_of_one_time_and_refusals() raises:
-    var layer = parse_usdc(_samples(_rep(CRATE_FLOAT, 0x3F800000, inlined=True)))
+    var layer = parse_usdc(
+        _samples(_rep(CRATE_FLOAT, 0x3F800000, inlined=True))
+    )
     var id = _v(layer)
     _same(layer.values[id].numbers, [1])
     assert_equal(len(layer.values[id].items), 0)

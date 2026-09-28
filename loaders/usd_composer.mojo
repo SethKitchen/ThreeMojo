@@ -1091,7 +1091,9 @@ struct _Composer(Movable):
                 var chosen = value.items[k]
                 sets.append(value.strings[k])
                 choices.append(
-                    self.layer.text(chosen) if self.layer.is_string(chosen) else ""
+                    self.layer.text(chosen) if self.layer.is_string(
+                        chosen
+                    ) else ""
                 )
         return (sets^, choices^)
 
@@ -1184,7 +1186,9 @@ struct _Composer(Movable):
         if len(built.objects[child].children) != 1:
             return -1
         var grandchild = built.objects[child].children[0]
-        if built.objects[grandchild].is_mesh and not moved(built.objects[child].node):
+        if built.objects[grandchild].is_mesh and not moved(
+            built.objects[child].node
+        ):
             built.detach(grandchild)
             return grandchild
         return -1
@@ -1216,12 +1220,18 @@ struct _Composer(Movable):
                 built.objects[group].node.set_scale(scale, scale, scale)
         if self.string_field("/", "upAxis") == "Z":
             built.objects[group].node.set_euler(
-                Angle(Float32(-pi / 2), RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN)
+                Angle(Float32(-pi / 2), RADIAN),
+                Angle(0.0, RADIAN),
+                Angle(0.0, RADIAN),
             )
         return group
 
     def build_hierarchy(
-        mut self, parent: Int, parent_path: String, assets: UsdAssets, mut built: _Built
+        mut self,
+        parent: Int,
+        parent_path: String,
+        assets: UsdAssets,
+        mut built: _Built,
     ) raises:
         """Build the prims under a path, three.js's `_buildHierarchy`.
 
@@ -1244,7 +1254,9 @@ struct _Composer(Movable):
             var spec = self.layer.spec(path)
             var name = _last_part(path)
             var type_name = self.type_name(spec)
-            if self.build_references(parent, path, spec, type_name, assets, built):
+            if self.build_references(
+                parent, path, spec, type_name, assets, built
+            ):
                 continue
             if type_name == "Skeleton":
                 # The skeleton is not built; its children still are.
@@ -1262,7 +1274,9 @@ struct _Composer(Movable):
             if type_name == "Mesh":
                 object = self.build_mesh(path, spec, assets, built)
             elif _is_primitive(type_name):
-                object = self.build_primitive(path, spec, type_name, assets, built)
+                object = self.build_primitive(
+                    path, spec, type_name, assets, built
+                )
             else:
                 object = built.add(_Object(name))
                 if type_name == "SkelRoot":
@@ -1370,7 +1384,11 @@ struct _Composer(Movable):
         ]
 
     def operation(
-        self, op: String, spec: Int, attrs: _Attrs, mut scale: Optional[List[Float64]]
+        self,
+        op: String,
+        spec: Int,
+        attrs: _Attrs,
+        mut scale: Optional[List[Float64]],
     ) raises -> Optional[Matrix4]:
         """Return one operation of `xformOpOrder` as a matrix.
 
@@ -1392,7 +1410,9 @@ struct _Composer(Movable):
                 return None
             var matrix = Matrix4()
             for k in range(16):  # pragma: no branch
-                matrix.elements[k] = Float32(self.layer.element_number(value, k))
+                matrix.elements[k] = Float32(
+                    self.layer.element_number(value, k)
+                )
             return matrix
         if op == "xformOp:translate" or op == "xformOp:translate:pivot":
             if not self.layer.truthy(value):
@@ -1426,7 +1446,11 @@ struct _Composer(Movable):
                     ZYX,
                 )
             )
-        if op == "xformOp:rotateX" or op == "xformOp:rotateY" or op == "xformOp:rotateZ":
+        if (
+            op == "xformOp:rotateX"
+            or op == "xformOp:rotateY"
+            or op == "xformOp:rotateZ"
+        ):
             if not self.layer.defined(value):
                 return None
             var angle = Angle(Float32(self.layer.to_number(value)), DEGREE)
@@ -1480,7 +1504,9 @@ struct _Composer(Movable):
                 raise Error("USD: an xformOpOrder that is not a list of names")
             var matrix = Matrix4()
             var scale: Optional[List[Float64]] = None
-            for op in self.layer.values[order].strings.copy():  # pragma: no branch
+            for op in self.layer.values[
+                order
+            ].strings.copy():  # pragma: no branch
                 var inverse = op.startswith("!invert!")
                 var name = String(op[byte=8:]) if inverse else op
                 var step = self.operation(name, spec, attrs, scale)
@@ -1654,7 +1680,9 @@ struct _Composer(Movable):
             var indices = self.array(attrs, "indices")
             if not indices.filled():
                 continue
-            out.append(_Subset(indices.values.copy(), self.binding_target(subset)))
+            out.append(
+                _Subset(indices.values.copy(), self.binding_target(subset))
+            )
         return out^
 
     def binding_spec(self, prim: String) raises -> Int:
@@ -1677,7 +1705,10 @@ struct _Composer(Movable):
             var ancestor = String("/").join(parts[: i + 1])
             var relative = String("/").join(parts[i + 1 :])
             for variant in self.variant_paths(ancestor):
-                var override = variant + "/" + relative + "." + name if relative != "" else variant + "." + name
+                var override = (
+                    variant + "/" + relative + "." + name if relative
+                    != "" else variant + "." + name
+                )
                 var at = self.layer.spec(override)
                 if at >= 0 and self.targets(at) > 0:
                     found = at
@@ -1804,9 +1835,9 @@ struct _Composer(Movable):
         if bound == "":
             var root = "/" + _split(path)[1]
             for candidate in self.materials_by_root.get(root):
-                var looks = candidate.startswith(root + "/Looks/") or candidate.startswith(
-                    root + "/Materials/"
-                )
+                var looks = candidate.startswith(
+                    root + "/Looks/"
+                ) or candidate.startswith(root + "/Materials/")
                 if looks:
                     bound = candidate
                     break
@@ -1831,9 +1862,10 @@ struct _Composer(Movable):
             for shader in self.shaders_by_material.get(path):
                 var attrs = self.attributes(shader)
                 var id = attrs.get("info:id")
-                var is_texture = self.layer.is_string(id) and self.layer.text(
-                    id
-                ) == "UsdUVTexture"
+                var is_texture = (
+                    self.layer.is_string(id)
+                    and self.layer.text(id) == "UsdUVTexture"
+                )
                 if is_texture and self.layer.truthy(attrs.get("inputs:file")):
                     return path
         return paths[0]
@@ -1868,7 +1900,11 @@ struct _Composer(Movable):
         built.objects[mesh].material_list = False
 
     def apply_material(
-        mut self, material: Int, path: String, assets: UsdAssets, mut built: _Built
+        mut self,
+        material: Int,
+        path: String,
+        assets: UsdAssets,
+        mut built: _Built,
     ) raises:
         """Apply each `UsdPreviewSurface` of a material, three.js's
         `_applyMaterial`.
@@ -1891,7 +1927,10 @@ struct _Composer(Movable):
             if not self.layer.truthy(id):
                 id = self.layer.specs[spec].field("info:id")
             var info = self.layer.text(id) if self.layer.is_string(id) else ""
-            if info == "UsdPreviewSurface" or info == "ND_UsdPreviewSurface_surfaceshader":
+            if (
+                info == "UsdPreviewSurface"
+                or info == "ND_UsdPreviewSurface_surfaceshader"
+            ):
                 self.preview_surface(material, shader, assets, built)
 
     def connected_texture(
@@ -1918,8 +1957,13 @@ struct _Composer(Movable):
         Raises:
             Error: For anything the module docstring lists.
         """
-        var connections = self.layer.field(shader + "." + input, "connectionPaths")
-        if not self.layer.truthy(connections) or self.layer.length(connections) <= 0:
+        var connections = self.layer.field(
+            shader + "." + input, "connectionPaths"
+        )
+        if (
+            not self.layer.truthy(connections)
+            or self.layer.length(connections) <= 0
+        ):
             return -1
         var first = self.layer.element_string(connections, 0)
         if not first:
@@ -1984,7 +2028,11 @@ struct _Composer(Movable):
         return built.images[image].scale.copy()
 
     def preview_surface(
-        mut self, material: Int, shader: String, assets: UsdAssets, mut built: _Built
+        mut self,
+        material: Int,
+        shader: String,
+        assets: UsdAssets,
+        mut built: _Built,
     ) raises:
         """Read a `UsdPreviewSurface` into a material, three.js's
         `_applyPreviewSurface`.
@@ -1999,24 +2047,32 @@ struct _Composer(Movable):
             Error: For anything the module docstring lists.
         """
         var fields = self.attributes(shader)
-        var map = self.connected_texture(shader, "inputs:diffuseColor", SRGB, assets, built)
+        var map = self.connected_texture(
+            shader, "inputs:diffuseColor", SRGB, assets, built
+        )
         if map >= 0:
             built.materials[material].map = TextureId(map)
         elif self.layer.defined(fields.get("inputs:diffuseColor")):
-            var c = self.color(fields.get("inputs:diffuseColor"), "diffuseColor")
+            var c = self.color(
+                fields.get("inputs:diffuseColor"), "diffuseColor"
+            )
             if c:
                 built.materials[material].color = c.value()
         var map_scale = self.scaled(built.materials[material].map.value, built)
         if map_scale and len(map_scale.value()) >= 3:
             var s = map_scale.value().copy()
-            built.materials[material].color = authored_color(s[0], s[1], s[2], "USD scale")
+            built.materials[material].color = authored_color(
+                s[0], s[1], s[2], "USD scale"
+            )
         var emissive = self.connected_texture(
             shader, "inputs:emissiveColor", SRGB, assets, built
         )
         if emissive >= 0:
             built.materials[material].emissive_map = TextureId(emissive)
         elif self.layer.defined(fields.get("inputs:emissiveColor")):
-            var c = self.color(fields.get("inputs:emissiveColor"), "emissiveColor")
+            var c = self.color(
+                fields.get("inputs:emissiveColor"), "emissiveColor"
+            )
             if c:
                 built.materials[material].emissive = c.value()
         var emissive_map = built.materials[material].emissive_map.value
@@ -2030,7 +2086,9 @@ struct _Composer(Movable):
                     )
             else:
                 built.materials[material].emissive = _WHITE
-        var normal = self.connected_texture(shader, "inputs:normal", LINEAR, assets, built)
+        var normal = self.connected_texture(
+            shader, "inputs:normal", LINEAR, assets, built
+        )
         if normal >= 0:
             built.materials[material].normal_map = TextureId(normal)
         var normal_map = built.materials[material].normal_map.value
@@ -2040,8 +2098,12 @@ struct _Composer(Movable):
                 var v = s.value().copy()
                 var x = v[0] if len(v) > 0 else nan[DType.float64]()
                 var y = v[1] if len(v) > 1 else nan[DType.float64]()
-                built.materials[material].normal_scale = Vector2(Float32(x), Float32(y))
-        var roughness = self.connected_texture(shader, "inputs:roughness", LINEAR, assets, built)
+                built.materials[material].normal_scale = Vector2(
+                    Float32(x), Float32(y)
+                )
+        var roughness = self.connected_texture(
+            shader, "inputs:roughness", LINEAR, assets, built
+        )
         if roughness >= 0:
             built.materials[material].roughness_map = TextureId(roughness)
             built.materials[material].roughness = 1
@@ -2049,7 +2111,9 @@ struct _Composer(Movable):
             built.materials[material].roughness = self.scalar(
                 fields.get("inputs:roughness"), "roughness"
             )
-        var metallic = self.connected_texture(shader, "inputs:metallic", LINEAR, assets, built)
+        var metallic = self.connected_texture(
+            shader, "inputs:metallic", LINEAR, assets, built
+        )
         if metallic >= 0:
             built.materials[material].metalness_map = TextureId(metallic)
             built.materials[material].metalness = 1
@@ -2057,18 +2121,24 @@ struct _Composer(Movable):
             built.materials[material].metalness = self.scalar(
                 fields.get("inputs:metallic"), "metallic"
             )
-        var occlusion = self.connected_texture(shader, "inputs:occlusion", LINEAR, assets, built)
+        var occlusion = self.connected_texture(
+            shader, "inputs:occlusion", LINEAR, assets, built
+        )
         if occlusion >= 0:
             built.materials[material].ao_map = TextureId(occlusion)
         if self.layer.defined(fields.get("inputs:ior")):
-            built.materials[material].ior = self.scalar(fields.get("inputs:ior"), "ior")
+            built.materials[material].ior = self.scalar(
+                fields.get("inputs:ior"), "ior"
+            )
         var specular = self.connected_texture(
             shader, "inputs:specularColor", SRGB, assets, built
         )
         if specular >= 0:
             built.materials[material].specular_color_map = TextureId(specular)
         elif self.layer.defined(fields.get("inputs:specularColor")):
-            var c = self.color(fields.get("inputs:specularColor"), "specularColor")
+            var c = self.color(
+                fields.get("inputs:specularColor"), "specularColor"
+            )
             if c:
                 built.materials[material].specular_color = c.value()
         var specular_scale = self.scaled(
@@ -2089,8 +2159,12 @@ struct _Composer(Movable):
             )
         var threshold = Float32(0)
         if self.layer.defined(fields.get("inputs:opacityThreshold")):
-            threshold = self.scalar(fields.get("inputs:opacityThreshold"), "opacityThreshold")
-        var opacity_links = self.layer.field(shader + ".inputs:opacity", "connectionPaths")
+            threshold = self.scalar(
+                fields.get("inputs:opacityThreshold"), "opacityThreshold"
+            )
+        var opacity_links = self.layer.field(
+            shader + ".inputs:opacity", "connectionPaths"
+        )
         if self.layer.length(opacity_links) > 0:
             if threshold > 0:
                 built.materials[material].alpha_test = threshold
@@ -2231,7 +2305,9 @@ struct _Composer(Movable):
         for k in range(len(self.cache_keys)):
             if self.cache_keys[k] == key:
                 return self.cache_images[k]
-        var image = self.load_texture(self.layer.text(file), attrs, transform, assets, built)
+        var image = self.load_texture(
+            self.layer.text(file), attrs, transform, assets, built
+        )
         if image < 0:
             return -1
         if self.layer.truthy(scale):
@@ -2284,9 +2360,13 @@ struct _Composer(Movable):
                 # three.js also asks `endsWith( '/' + baseName )`, which
                 # `endsWith( baseName )` answers.
                 if name.endswith(base):
-                    return self.create_texture(k, "", attrs, transform, assets, built)
+                    return self.create_texture(
+                        k, "", attrs, transform, assets, built
+                    )
             if self.base_path != "":
-                return self.create_texture(-1, resolved, attrs, transform, assets, built)
+                return self.create_texture(
+                    -1, resolved, attrs, transform, assets, built
+                )
             return -1
         return self.create_texture(asset, "", attrs, transform, assets, built)
 
@@ -2376,7 +2456,10 @@ struct _Composer(Movable):
                 Float32(self.layer.element_number(scale, 1)),
             )
         var translation = attrs.get("inputs:translation")
-        if self.layer.is_array(translation) and self.layer.length(translation) >= 2:
+        if (
+            self.layer.is_array(translation)
+            and self.layer.length(translation) >= 2
+        ):
             image.offset = Vector2(
                 Float32(self.layer.element_number(translation, 0)),
                 Float32(self.layer.element_number(translation, 1)),
@@ -2411,7 +2494,9 @@ struct _Composer(Movable):
             var faces = List[List[Float64]]()
             for subset in subsets:  # pragma: no branch
                 faces.append(subset.indices.copy())
-            built.geometries.append(build_usd_geometry_with_subsets(arrays, faces))
+            built.geometries.append(
+                build_usd_geometry_with_subsets(arrays, faces)
+            )
             var own = self.material_path(path, spec)
             for subset in subsets:  # pragma: no branch
                 var material = built.new_material()
@@ -2422,7 +2507,9 @@ struct _Composer(Movable):
             object.material_list = True
         else:
             built.geometries.append(build_usd_geometry(arrays))
-            object.materials.append(self.build_material(path, spec, assets, built))
+            object.materials.append(
+                self.build_material(path, spec, assets, built)
+            )
         object.geometry = len(built.geometries) - 1
         var tint = attrs.get("primvars:displayColor")
         if self.layer.truthy(tint) and self.layer.length(tint) >= 3:
@@ -2450,7 +2537,9 @@ struct _Composer(Movable):
         self.apply_transform(at, spec, attrs, built)
         return at
 
-    def size(self, attrs: _Attrs, name: String, fallback: Float64) raises -> Float64:
+    def size(
+        self, attrs: _Attrs, name: String, fallback: Float64
+    ) raises -> Float64:
         """Return `attrs[ name ] || fallback`.
 
         Args:
@@ -2502,7 +2591,9 @@ struct _Composer(Movable):
             var edge = Length(Float32(self.size(attrs, "size", 2)), METER)
             geometry = box(edge, edge, edge)
         elif type_name == "Sphere":
-            geometry = sphere(Length(Float32(self.size(attrs, "radius", 1)), METER), 32, 16)
+            geometry = sphere(
+                Length(Float32(self.size(attrs, "radius", 1)), METER), 32, 16
+            )
         elif type_name == "Cylinder":
             var height = Length(Float32(self.size(attrs, "height", 2)), METER)
             var radius = Length(Float32(self.size(attrs, "radius", 1)), METER)
@@ -2630,7 +2721,9 @@ def _store_texture(
             alpha,
         )
     else:
-        texture = Texture(1, 1, [0, 0, 0, 255], CLAMP, NEAREST, image.space, False, alpha)
+        texture = Texture(
+            1, 1, [0, 0, 0, 255], CLAMP, NEAREST, image.space, False, alpha
+        )
         model.missing_textures.append(image.source)
     texture.wrap_s = image.wrap_s
     texture.wrap_t = image.wrap_t
@@ -2675,10 +2768,14 @@ def _emit(
         Error: If the scene or the store refuses an item.
     """
     var texture_ids = List[TextureId](length=len(built.images), fill=NO_TEXTURE)
-    var root_node = scene.attach(Object3D(copy=built.objects[root].node), parent)
+    var root_node = scene.attach(
+        Object3D(copy=built.objects[root].node), parent
+    )
     var model = UsdModel(root_node)
     model.objects.append(
-        UsdObject(root_node, -1, False, GeometryId(0), List[MaterialId](), False)
+        UsdObject(
+            root_node, -1, False, GeometryId(0), List[MaterialId](), False
+        )
     )
     var stack: List[Tuple[Int, Int]] = []
     for child in reversed(built.objects[root].children):
@@ -2697,7 +2794,9 @@ def _emit(
             geometry = store.geometries.add(
                 built.geometries[built.objects[object].geometry].clone()
             )
-            for material in built.objects[object].materials:  # pragma: no branch
+            for material in built.objects[
+                object
+            ].materials:  # pragma: no branch
                 var m = built.materials[material]
                 var textures: List[TextureId] = [
                     m.map,
@@ -2709,7 +2808,10 @@ def _emit(
                     m.specular_color_map,
                 ]
                 for texture in textures:  # pragma: no branch
-                    var ok = texture != NO_TEXTURE and texture_ids[texture.value] == NO_TEXTURE
+                    var ok = (
+                        texture != NO_TEXTURE
+                        and texture_ids[texture.value] == NO_TEXTURE
+                    )
                     if ok:
                         texture_ids[texture.value] = _store_texture(
                             built.images[texture.value], store, model
@@ -2770,7 +2872,8 @@ def compose_usd(
         Error: For anything the module docstring lists.
     """
     var built = _Built()
-    var composer = _Composer(layer^, base_path, List[String](), List[String](), 0)
+    var composer = _Composer(
+        layer^, base_path, List[String](), List[String](), 0
+    )
     var root = composer.compose(assets, built)
     return _emit(built, root, scene, store, parent)
-

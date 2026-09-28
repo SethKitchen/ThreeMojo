@@ -66,7 +66,9 @@ struct _Out(Movable):
     var store: Assets
     var model: UsdModel
 
-    def __init__(out self, var scene: Scene, var store: Assets, var model: UsdModel):
+    def __init__(
+        out self, var scene: Scene, var store: Assets, var model: UsdModel
+    ):
         self.scene = scene^
         self.store = store^
         self.model = model^
@@ -92,7 +94,9 @@ struct _Out(Movable):
 
     def material(self, name: String, at: Int = 0) raises -> Material:
         """Return a mesh's material."""
-        return self.store.materials.get(self.model.objects[self.find(name)].materials[at])
+        return self.store.materials.get(
+            self.model.objects[self.find(name)].materials[at]
+        )
 
 
 def _compose(
@@ -105,19 +109,25 @@ def _compose(
     return _Out(scene^, store^, model^)
 
 
-def _text(text: String, assets: UsdAssets = UsdAssets(), base: String = "") raises -> _Out:
+def _text(
+    text: String, assets: UsdAssets = UsdAssets(), base: String = ""
+) raises -> _Out:
     """Compose USDA text."""
     return _compose(parse_usda_layer("#usda 1.0\n" + text), assets, base)
 
 
 def _layer_asset(mut assets: UsdAssets, name: String, text: String) raises:
     """Add a layer of USDA text to an archive."""
-    assets.add(name, USD_LAYER, List[UInt8](), parse_usda_layer("#usda 1.0\n" + text))
+    assets.add(
+        name, USD_LAYER, List[UInt8](), parse_usda_layer("#usda 1.0\n" + text)
+    )
 
 
 def _image_asset(mut assets: UsdAssets, name: String) raises:
     """Add the brick PNG to an archive."""
-    assets.add(name, USD_IMAGE, Path("assets/brick.png").read_bytes(), UsdLayer())
+    assets.add(
+        name, USD_IMAGE, Path("assets/brick.png").read_bytes(), UsdLayer()
+    )
 
 
 def _near(got: Float32, want: Float64, what: String = "") raises:
@@ -226,17 +236,20 @@ def test_moved() raises:
 def test_ordered_transforms() raises:
     var out = _text(
         'def Xform "A"\n{\n    float3 xformOp:scale = (-1, -1, -1)\n'
-        + '    uniform token[] xformOpOrder = ["xformOp:scale", "xformOp:unknown", "xformOp:rotateX"]\n}\n'
+        + '    uniform token[] xformOpOrder = ["xformOp:scale",'
+        ' "xformOp:unknown", "xformOp:rotateX"]\n}\n'
         + 'def Xform "B"\n{\n    float3 xformOp:scale = (-1, 1, 1)\n'
         + '    uniform token[] xformOpOrder = ["xformOp:scale"]\n}\n'
         + 'def Xform "C"\n{\n    float3 xformOp:scale = (-1, -1, 1)\n'
         + '    uniform token[] xformOpOrder = ["xformOp:scale"]\n}\n'
         + 'def Xform "D"\n{\n    float3 xformOp:translate = (1, 2, 3)\n'
-        + '    float xformOp:rotateY = 90\n    float xformOp:rotateZ = 90\n'
-        + '    matrix4d xformOp:transform = ((1, 0), (0, 1))\n'
-        + '    float3 xformOp:orient = (1, 0, 0)\n'
-        + '    uniform token[] xformOpOrder = ["!invert!xformOp:translate", "xformOp:rotateY", '
-        + '"xformOp:transform", "xformOp:orient", "xformOp:rotateXYZ", "xformOp:translate:pivot", "xformOp:rotateZ"]\n}\n'
+        + "    float xformOp:rotateY = 90\n    float xformOp:rotateZ = 90\n"
+        + "    matrix4d xformOp:transform = ((1, 0), (0, 1))\n"
+        + "    float3 xformOp:orient = (1, 0, 0)\n"
+        + '    uniform token[] xformOpOrder = ["!invert!xformOp:translate",'
+        ' "xformOp:rotateY", '
+        + '"xformOp:transform", "xformOp:orient", "xformOp:rotateXYZ",'
+        ' "xformOp:translate:pivot", "xformOp:rotateZ"]\n}\n'
         + 'def Xform "E"\n{\n    float xformOp:scale = 2\n'
         + '    uniform token[] xformOpOrder = ["xformOp:scale"]\n}\n'
     )
@@ -258,10 +271,12 @@ def test_ordered_transforms() raises:
 def test_unordered_transforms() raises:
     var out = _text(
         'def Xform "A"\n{\n    float3 xformOp:scale = (1, 2, 3)\n'
-        + '    float3 xformOp:orient = (1, 0, 0)\n}\n'
+        + "    float3 xformOp:orient = (1, 0, 0)\n}\n"
         + 'def Xform "B"\n{\n    float3 xformOp:rotateXYZ = (0, 0, 90)\n}\n'
-        + 'def Xform "C"\n{\n    uniform token[] xformOpOrder = []\n    float xformOp:scale = 2\n}\n'
-        + 'def Xform "D"\n{\n    quatf xformOp:orient = (0.5, 0.5, 0.5, 0.5)\n}\n'
+        + 'def Xform "C"\n{\n    uniform token[] xformOpOrder = []\n    float'
+        " xformOp:scale = 2\n}\n"
+        + 'def Xform "D"\n{\n    quatf xformOp:orient = (0.5, 0.5, 0.5,'
+        " 0.5)\n}\n"
     )
     _near(out.node("A").scale.z, 3)
     _near(out.node("A").quaternion.w, 1)
@@ -291,14 +306,16 @@ def test_transform_refusals() raises:
     layer.specs[layer.spec("/A")].set("xformOpOrder", order)
     with assert_raises(contains="not a list of names"):
         _ = _compose(layer^)
-    var empty = parse_usda_layer('#usda 1.0\ndef Xform "A"\n{\n    float xformOp:scale = 2\n}\n')
+    var empty = parse_usda_layer(
+        '#usda 1.0\ndef Xform "A"\n{\n    float xformOp:scale = 2\n}\n'
+    )
     var none = empty.add(usd_strings(List[String]()))
     empty.specs[empty.spec("/A")].set("xformOpOrder", none)
     _near(_compose(empty^).node("A").scale.x, 2)
 
 
 def test_units_and_axis() raises:
-    var out = _text("(\n    metersPerUnit = 1\n    upAxis = \"Y\"\n)\n")
+    var out = _text('(\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n')
     _near(out.scene.get(out.model.root).scale.x, 1)
     _near(out.scene.get(out.model.root).quaternion.w, 1)
     var layer = parse_usda_layer("#usda 1.0\n")
@@ -311,14 +328,17 @@ def test_units_and_axis() raises:
 
 def test_prim_types() raises:
     var out = _text(
-        'def SkelRoot "R"\n{\n    def Skeleton "S"\n    {\n        def Xform "Under"\n        {\n        }\n'
+        'def SkelRoot "R"\n{\n    def Skeleton "S"\n    {\n        def Xform'
+        ' "Under"\n        {\n        }\n'
         + '        def SkelAnimation "Anim"\n        {\n        }\n    }\n}\n'
         + 'def Material "M"\n{\n    def Shader "Sh"\n    {\n    }\n}\n'
         + 'def Mesh "Me"\n{\n    def GeomSubset "G"\n    {\n    }\n}\n'
         + 'def Camera "Cam"\n{\n}\n'
         + 'def Cube "Box"\n{\n    token axis = "Y"\n}\n'
-        + 'def Sphere "Ball"\n{\n    token axis = "X"\n    double radius = 2\n}\n'
-        + 'def Cylinder "Can"\n{\n}\ndef Cone "Tip"\n{\n}\ndef Capsule "Pill"\n{\n}\n'
+        + 'def Sphere "Ball"\n{\n    token axis = "X"\n    double radius ='
+        " 2\n}\n"
+        + 'def Cylinder "Can"\n{\n}\ndef Cone "Tip"\n{\n}\ndef Capsule'
+        ' "Pill"\n{\n}\n'
     )
     assert_true(out.node("R").user_data.has("isSkelRoot"))
     # The skeleton is not a node; what is under it goes under its parent.
@@ -338,7 +358,9 @@ def test_prim_types() raises:
     _ = layer.put("/Box.size", spec^)
     with assert_raises(contains="size that is not a number"):
         _ = _compose(layer^)
-    var weird = parse_usda_layer('#usda 1.0\ndef Cube "Box"\n{\n}\ndef "X"\n{\n}\n')
+    var weird = parse_usda_layer(
+        '#usda 1.0\ndef Cube "Box"\n{\n}\ndef "X"\n{\n}\n'
+    )
     var axis = weird.add(usd_number(5))
     var axis_spec = UsdSpec(SPEC_ATTRIBUTE)
     axis_spec.set("default", axis)
@@ -352,7 +374,9 @@ def test_prim_types() raises:
 def _mesh(name: String, extra: String = "") -> String:
     """Return a triangle mesh prim's text."""
     return (
-        'def Mesh "' + name + '"\n{\n    int[] faceVertexCounts = [3]\n'
+        'def Mesh "'
+        + name
+        + '"\n{\n    int[] faceVertexCounts = [3]\n'
         + "    int[] faceVertexIndices = [0, 1, 2]\n"
         + "    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
         + extra
@@ -366,10 +390,15 @@ def _archive() raises -> UsdAssets:
     _layer_asset(
         assets,
         "geo.usda",
-        'def Xform "Shape"\n{\n' + _mesh("M") + "}\n"
-        + 'def Xform "Nested"\n{\n    def Xform "Inner"\n    {\n' + _mesh("Deep") + "    }\n}\n"
+        'def Xform "Shape"\n{\n'
+        + _mesh("M")
+        + "}\n"
+        + 'def Xform "Nested"\n{\n    def Xform "Inner"\n    {\n'
+        + _mesh("Deep")
+        + "    }\n}\n"
         + 'def Xform "Moved"\n{\n    double3 xformOp:translate = (1, 0, 0)\n'
-        + _mesh("Deep") + "}\n",
+        + _mesh("Deep")
+        + "}\n",
     )
     _layer_asset(assets, "flat.usda", _mesh("Flat"))
     _layer_asset(assets, "empty.usda", "")
@@ -379,21 +408,31 @@ def _archive() raises -> UsdAssets:
 
 def test_references() raises:
     var out = _text(
-        'def Xform "One" (\n    prepend references = @geo.usda@</Shape>\n)\n{\n}\n'
-        + 'def "Typeless" (\n    prepend references = @geo.usda@</Shape>\n)\n{\n}\n'
-        + 'def Scope "Scoped" (\n    prepend references = @geo.usda@</Shape>\n)\n{\n}\n'
+        'def Xform "One" (\n    prepend references ='
+        " @geo.usda@</Shape>\n)\n{\n}\n"
+        + 'def "Typeless" (\n    prepend references ='
+        " @geo.usda@</Shape>\n)\n{\n}\n"
+        + 'def Scope "Scoped" (\n    prepend references ='
+        " @geo.usda@</Shape>\n)\n{\n}\n"
         + 'def Xform "Whole" (\n    prepend references = @geo.usda@\n)\n{\n}\n'
-        + 'def Xform "Nest" (\n    prepend references = @geo.usda@</Nested>\n)\n{\n}\n'
-        + 'def Xform "Mov" (\n    prepend references = @geo.usda@</Moved>\n)\n{\n}\n'
-        + 'def Xform "Two" (\n    prepend references = [@geo.usda@</Shape>, @flat.usda@]\n)\n{\n}\n'
-        + 'def Xform "Nope" (\n    prepend references = @geo.usda@</Missing>\n)\n{\n}\n'
+        + 'def Xform "Nest" (\n    prepend references ='
+        " @geo.usda@</Nested>\n)\n{\n}\n"
+        + 'def Xform "Mov" (\n    prepend references ='
+        " @geo.usda@</Moved>\n)\n{\n}\n"
+        + 'def Xform "Two" (\n    prepend references = [@geo.usda@</Shape>,'
+        " @flat.usda@]\n)\n{\n}\n"
+        + 'def Xform "Nope" (\n    prepend references ='
+        " @geo.usda@</Missing>\n)\n{\n}\n"
         + 'def Xform "Img" (\n    prepend references = @brick.png@\n)\n{\n}\n'
         + 'def Xform "Gone" (\n    prepend references = @gone.usda@\n)\n{\n}\n'
         + 'def Xform "Load" (\n    payload = @flat.usda@\n)\n{\n}\n'
         + 'def Xform "Text" (\n    payload = "abc"\n)\n{\n}\n'
-        + 'def Xform "Blank" (\n    payload =\n    prepend references = {\n    }\n)\n{\n}\n'
-        + 'def Xform "Void" (\n    prepend references = @empty.usda@</X>\n)\n{\n}\n'
-        + 'def Xform "Both" (\n    prepend references = @flat.usda@\n    payload = @geo.usda@\n)\n{\n}\n',
+        + 'def Xform "Blank" (\n    payload =\n    prepend references = {\n   '
+        " }\n)\n{\n}\n"
+        + 'def Xform "Void" (\n    prepend references ='
+        " @empty.usda@</X>\n)\n{\n}\n"
+        + 'def Xform "Both" (\n    prepend references = @flat.usda@\n   '
+        " payload = @geo.usda@\n)\n{\n}\n",
         _archive(),
     )
     assert_true(out.model.objects[out.find("One")].is_mesh)
@@ -425,7 +464,8 @@ def test_references_nest_at_most_64_deep() raises:
     )
     with assert_raises(contains="64 deep"):
         _ = _text(
-            'def Xform "A" (\n    prepend references = @self.usda@\n)\n{\n}\n', assets
+            'def Xform "A" (\n    prepend references = @self.usda@\n)\n{\n}\n',
+            assets,
         )
     assert_equal(MAX_REFERENCE_DEPTH, 64)
 
@@ -433,7 +473,9 @@ def test_references_nest_at_most_64_deep() raises:
 def _variant_layer() raises -> UsdLayer:
     """Return a layer whose `/Toy` has three variant sets."""
     var layer = parse_usda_layer(
-        '#usda 1.0\ndef Xform "Toy"\n{\n' + _mesh("Body") + "}\n"
+        '#usda 1.0\ndef Xform "Toy"\n{\n'
+        + _mesh("Body")
+        + "}\n"
         + 'def Scope "Looks"\n{\n    def Material "Red"\n    {\n    }\n}\n'
     )
     var toy = layer.spec("/Toy")
@@ -449,7 +491,11 @@ def _variant_layer() raises -> UsdLayer:
     var set_spec = UsdSpec(SPEC_ATTRIBUTE)
     set_spec.set("variantChildren", layer.add(usd_strings(["round"])))
     _ = layer.put("/Toy/{shape=}", set_spec^)
-    for variant in ["/Toy/{color=red}", "/Toy/{color=blue}", "/Toy/{shape=round}"]:
+    for variant in [
+        "/Toy/{color=red}",
+        "/Toy/{color=blue}",
+        "/Toy/{shape=round}",
+    ]:
         _ = layer.put(variant, UsdSpec(SPEC_VARIANT))
     for prim in [
         "/Toy/{color=red}/Badge",
@@ -500,7 +546,8 @@ def test_variants() raises:
     var assets = UsdAssets()
     assets.add("toy.usda", USD_LAYER, List[UInt8](), _variant_layer())
     var picked = _text(
-        'def Xform "P" (\n    prepend references = @toy.usda@\n    variants = {\n'
+        'def Xform "P" (\n    prepend references = @toy.usda@\n    variants'
+        " = {\n"
         + '        string color = "blue"\n    }\n)\n{\n}\n',
         assets,
     )
@@ -528,13 +575,16 @@ def test_nested_variant_selections() raises:
     _layer_asset(
         assets,
         "outer.usda",
-        'def Xform "O" (\n    prepend references = @toy.usda@\n    variants = {\n'
+        'def Xform "O" (\n    prepend references = @toy.usda@\n    variants'
+        " = {\n"
         + '        string color = "red"\n    }\n)\n{\n}\n',
     )
     # The outer file's selection wins over the inner prim's own.
     var out = _text(
-        'def Xform "P" (\n    prepend references = @outer.usda@\n    variants = {\n'
-        + '        string color = "blue"\n        string size = "big"\n    }\n)\n{\n}\n',
+        'def Xform "P" (\n    prepend references = @outer.usda@\n    variants'
+        " = {\n"
+        + '        string color = "blue"\n        string size = "big"\n   '
+        " }\n)\n{\n}\n",
         assets,
     )
     assert_equal(out.count("Tag"), 1)
@@ -546,13 +596,16 @@ def _looks() -> String:
         'def Scope "Looks"\n{\n'
         + '    def Material "A"\n    {\n        def Shader "S"\n        {\n'
         + '            uniform token info:id = "UsdPreviewSurface"\n'
-        + "            color3f inputs:diffuseColor = (1, 0, 0)\n        }\n    }\n"
+        + "            color3f inputs:diffuseColor = (1, 0, 0)\n        }\n  "
+        "  }\n"
         + '    def Material "B"\n    {\n        def Shader "S"\n        {\n'
-        + '            uniform token info:id = "ND_UsdPreviewSurface_surfaceshader"\n'
+        + "            uniform token info:id ="
+        ' "ND_UsdPreviewSurface_surfaceshader"\n'
         + "            color3f inputs:diffuseColor = (0, 0, 1)\n        }\n"
         + '        def Shader "Bare"\n        {\n        }\n'
         + '        def Shader "NoFile"\n        {\n'
-        + '            uniform token info:id = "UsdUVTexture"\n        }\n    }\n'
+        + '            uniform token info:id = "UsdUVTexture"\n        }\n  '
+        "  }\n"
         + '    def Material "Tex"\n    {\n        def Shader "T"\n        {\n'
         + '            uniform token info:id = "UsdUVTexture"\n'
         + "            asset inputs:file = @x.png@\n        }\n    }\n}\n"
@@ -563,22 +616,29 @@ def test_bindings() raises:
     var out = _text(
         'def Xform "Root"\n{\n'
         + _mesh("Own", "    rel material:binding = </Root/Looks/A>\n")
-        + 'def Xform "Strong"\n{\n    rel material:binding = </Root/Looks/A> (\n'
+        + 'def Xform "Strong"\n{\n    rel material:binding ='
+        " </Root/Looks/A> (\n"
         + '        bindMaterialAs = "strongerThanDescendants"\n    )\n'
         + _mesh("Weak", "    rel material:binding = </Root/Looks/B>\n")
         + "}\n"
-        + 'def Xform "Normal"\n{\n    rel material:binding = </Root/Looks/A> (\n'
+        + 'def Xform "Normal"\n{\n    rel material:binding ='
+        " </Root/Looks/A> (\n"
         + '        bindMaterialAs = "weakerThanDescendants"\n    )\n'
         + _mesh("Near", "    rel material:binding = </Root/Looks/B>\n")
         + "}\n"
         + _mesh(
             "Scan",
-            '    def GeomSubset "S"\n    {\n        rel material:binding = </Root/Looks/B>\n    }\n'
-            + '    def GeomSubset "T"\n    {\n        rel material:binding = </Root/Looks/Tex>\n    }\n',
+            '    def GeomSubset "S"\n    {\n        rel material:binding ='
+            " </Root/Looks/B>\n    }\n"
+            + '    def GeomSubset "T"\n    {\n        rel material:binding ='
+            " </Root/Looks/Tex>\n    }\n",
         )
         + _mesh(
             "Scan2",
-            '    def GeomSubset "S"\n    {\n        rel material:binding = </Root/Looks/B>\n    }\n',
+            (
+                '    def GeomSubset "S"\n    {\n        rel material:binding ='
+                " </Root/Looks/B>\n    }\n"
+            ),
         )
         + _mesh("Fallback")
         + _looks()
@@ -586,8 +646,10 @@ def test_bindings() raises:
         + 'def Xform "Other"\n{\n'
         + _mesh("M2")
         + 'def Scope "Materials"\n{\n    def Material "Z"\n    {\n'
-        + '        def Shader "S"\n        {\n            uniform token info:id = "UsdPreviewSurface"\n'
-        + "            color3f inputs:diffuseColor = (0, 1, 0)\n        }\n    }\n}\n}\n"
+        + '        def Shader "S"\n        {\n            uniform token info:id'
+        ' = "UsdPreviewSurface"\n'
+        + "            color3f inputs:diffuseColor = (0, 1, 0)\n        }\n   "
+        " }\n}\n}\n"
         + 'def Xform "Third"\n{\n'
         + _mesh("M3")
         + 'def Material "Loose"\n{\n}\n}\n'
@@ -633,10 +695,11 @@ def test_own_bindings() raises:
         assert_equal(Int(r), 0 if kind < 2 else 255)
 
 
-
 def _shader(name: String, body: String) -> String:
     """Return a shader prim's text."""
-    return '        def Shader "' + name + '"\n        {\n' + body + "        }\n"
+    return (
+        '        def Shader "' + name + '"\n        {\n' + body + "        }\n"
+    )
 
 
 def _texture(name: String, file: String, extra: String = "") -> String:
@@ -644,13 +707,18 @@ def _texture(name: String, file: String, extra: String = "") -> String:
     return _shader(
         name,
         '            uniform token info:id = "UsdUVTexture"\n'
-        + "            asset inputs:file = @" + file + "@\n" + extra,
+        + "            asset inputs:file = @"
+        + file
+        + "@\n"
+        + extra,
     )
 
 
 def _surface(name: String, body: String) -> String:
     """Return a `UsdPreviewSurface` shader's text."""
-    return _shader(name, '            uniform token info:id = "UsdPreviewSurface"\n' + body)
+    return _shader(
+        name, '            uniform token info:id = "UsdPreviewSurface"\n' + body
+    )
 
 
 def _material(name: String, shaders: String) -> String:
@@ -672,7 +740,8 @@ def _map(result: _Out, name: String, at: Int = 0) raises -> Tuple[Int, Int]:
 
 def test_surface_values() raises:
     var out = _text(
-        _bound("Full", "Full") + _bound("Short", "Short")
+        _bound("Full", "Full")
+        + _bound("Short", "Short")
         + 'def Scope "L"\n{\n'
         + _material(
             "Full",
@@ -722,14 +791,24 @@ def test_surface_values() raises:
 def test_surface_refusals() raises:
     with assert_raises(contains="roughness is not a number"):
         _ = _text(
-            _bound("M", "A") + 'def Scope "L"\n{\n'
-            + _material("A", _surface("S", '            string inputs:roughness = "x"\n'))
+            _bound("M", "A")
+            + 'def Scope "L"\n{\n'
+            + _material(
+                "A",
+                _surface("S", '            string inputs:roughness = "x"\n'),
+            )
             + "}\n"
         )
     with assert_raises(contains="zero to one"):
         _ = _text(
-            _bound("M", "A") + 'def Scope "L"\n{\n'
-            + _material("A", _surface("S", "            color3f inputs:diffuseColor = (2, 0, 0)\n"))
+            _bound("M", "A")
+            + 'def Scope "L"\n{\n'
+            + _material(
+                "A",
+                _surface(
+                    "S", "            color3f inputs:diffuseColor = (2, 0, 0)\n"
+                ),
+            )
             + "}\n"
         )
 
@@ -740,14 +819,22 @@ def _maps() -> String:
         "Maps",
         _surface(
             "PS",
-            "            color3f inputs:diffuseColor.connect = </L/Maps/C.outputs:rgb>\n"
-            + "            color3f inputs:emissiveColor.connect = </L/Maps/E.outputs:rgb>\n"
-            + "            normal3f inputs:normal.connect = </L/Maps/N.outputs:rgb>\n"
-            + "            float inputs:roughness.connect = </L/Maps/C.outputs:r>\n"
-            + "            float inputs:metallic.connect = </L/Maps/Me.outputs:r>\n"
-            + "            float inputs:occlusion.connect = </L/Maps/O.outputs:r>\n"
-            + "            color3f inputs:specularColor.connect = </L/Maps/Sp.outputs:rgb>\n"
-            + "            float inputs:opacity.connect = </L/Maps/C.outputs:a>\n"
+            "            color3f inputs:diffuseColor.connect ="
+            " </L/Maps/C.outputs:rgb>\n"
+            + "            color3f inputs:emissiveColor.connect ="
+            " </L/Maps/E.outputs:rgb>\n"
+            + "            normal3f inputs:normal.connect ="
+            " </L/Maps/N.outputs:rgb>\n"
+            + "            float inputs:roughness.connect ="
+            " </L/Maps/C.outputs:r>\n"
+            + "            float inputs:metallic.connect ="
+            " </L/Maps/Me.outputs:r>\n"
+            + "            float inputs:occlusion.connect ="
+            " </L/Maps/O.outputs:r>\n"
+            + "            color3f inputs:specularColor.connect ="
+            " </L/Maps/Sp.outputs:rgb>\n"
+            + "            float inputs:opacity.connect ="
+            " </L/Maps/C.outputs:a>\n"
             + "            float inputs:opacityThreshold = 0.5\n",
         )
         + _surface("PS3", "")
@@ -755,15 +842,17 @@ def _maps() -> String:
             "C",
             "brick.png",
             "            float4 inputs:scale = (0.5, 0.5, 0.5, 1)\n"
-            + "            token[] inputs:bias = [\"x\", \"y\"]\n"
+            + '            token[] inputs:bias = ["x", "y"]\n'
             + '            token inputs:wrapS = "mirror"\n'
             + '            token inputs:wrapT = "clamp"\n'
-            + "            float2 inputs:st.connect = </L/Maps/P.outputs:result>\n",
+            + "            float2 inputs:st.connect ="
+            " </L/Maps/P.outputs:result>\n",
         )
         + _shader(
             "P",
             '            uniform token info:id = "UsdTransform2d"\n'
-            + "            float2 inputs:in.connect = </L/Maps/R.outputs:result>\n"
+            + "            float2 inputs:in.connect ="
+            " </L/Maps/R.outputs:result>\n"
             + "            float2 inputs:scale = (2, 3)\n"
             + "            float2 inputs:translation = (0.25, 0.5)\n"
             + "            float inputs:rotation = 45\n",
@@ -778,7 +867,8 @@ def _maps() -> String:
             "textures/brick.png",
             '            token inputs:wrapS = "repeat"\n'
             + "            int inputs:wrapT = 5\n"
-            + "            float2 inputs:st.connect = </L/Maps/R2.outputs:result>\n",
+            + "            float2 inputs:st.connect ="
+            " </L/Maps/R2.outputs:result>\n",
         )
         + _shader(
             "R2",
@@ -789,7 +879,8 @@ def _maps() -> String:
             "N",
             "brick.png",
             "            float4 inputs:scale = (2, 3, 1, 1)\n"
-            + "            float2 inputs:st.connect = </L/Maps/P2.outputs:result>\n",
+            + "            float2 inputs:st.connect ="
+            " </L/Maps/P2.outputs:result>\n",
         )
         + _shader(
             "P2",
@@ -801,33 +892,51 @@ def _maps() -> String:
             "Me",
             "brick.png",
             "            float4 inputs:scale = (1, 1, 1, 1)\n"
-            + "            float2 inputs:st.connect = </Nowhere.outputs:result>\n",
+            + "            float2 inputs:st.connect ="
+            " </Nowhere.outputs:result>\n",
         )
         + _texture("O", "missing.png")
         + _texture(
             "Sp",
             "brick.png",
             "            float4 inputs:scale = (0.25, 0.25, 0.25, 1)\n"
-            + "            float2 inputs:st.connect = </L/Maps/PS3.outputs:surface>\n",
+            + "            float2 inputs:st.connect ="
+            " </L/Maps/PS3.outputs:surface>\n",
         ),
     )
     var maps2 = _material(
         "Maps2",
         _surface(
             "PS",
-            "            color3f inputs:diffuseColor.connect = </L/Maps2/C.outputs:rgb>\n"
-            + "            color3f inputs:emissiveColor.connect = </L/Maps2/C2.outputs:rgb>\n"
-            + "            normal3f inputs:normal.connect = </L/Maps2/N.outputs:rgb>\n"
-            + "            float inputs:opacity.connect = </L/Maps2/C.outputs:a>\n",
+            "            color3f inputs:diffuseColor.connect ="
+            " </L/Maps2/C.outputs:rgb>\n"
+            + "            color3f inputs:emissiveColor.connect ="
+            " </L/Maps2/C2.outputs:rgb>\n"
+            + "            normal3f inputs:normal.connect ="
+            " </L/Maps2/N.outputs:rgb>\n"
+            + "            float inputs:opacity.connect ="
+            " </L/Maps2/C.outputs:a>\n",
         )
-        + _texture("C", "brick.png", "            float2 inputs:scale = (1, 1)\n")
-        + _texture("C2", "brick.png", "            float2 inputs:scale = (1, 1)\n")
+        + _texture(
+            "C", "brick.png", "            float2 inputs:scale = (1, 1)\n"
+        )
+        + _texture(
+            "C2", "brick.png", "            float2 inputs:scale = (1, 1)\n"
+        )
         + _texture("N", "brick.png", "            float[] inputs:scale = []\n"),
     )
     var maps3 = _material(
         "Maps3",
-        _surface("PS", "            normal3f inputs:normal.connect = </L/Maps3/N.outputs:rgb>\n")
-        + _texture("N", "brick.png", "            float[] inputs:scale = [2]\n"),
+        _surface(
+            "PS",
+            (
+                "            normal3f inputs:normal.connect ="
+                " </L/Maps3/N.outputs:rgb>\n"
+            ),
+        )
+        + _texture(
+            "N", "brick.png", "            float[] inputs:scale = [2]\n"
+        ),
     )
     return 'def Scope "L"\n{\n' + maps + maps2 + maps3 + "}\n"
 
@@ -836,7 +945,10 @@ def test_texture_maps() raises:
     var assets = UsdAssets()
     _image_asset(assets, "brick.png")
     var out = _text(
-        _bound("A", "Maps") + _bound("B", "Maps2") + _bound("C", "Maps3") + _maps(),
+        _bound("A", "Maps")
+        + _bound("B", "Maps2")
+        + _bound("C", "Maps3")
+        + _maps(),
         assets,
     )
     var a = out.material("A")
@@ -896,11 +1008,25 @@ def test_texture_refusals() raises:
             start
             + _material(
                 "A",
-                _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
-                + _texture("T", "brick.png", "            float2 inputs:st.connect = </L/A/R.outputs:result>\n")
+                _surface(
+                    "S",
+                    (
+                        "            color3f inputs:diffuseColor.connect ="
+                        " </L/A/T.outputs:rgb>\n"
+                    ),
+                )
+                + _texture(
+                    "T",
+                    "brick.png",
+                    (
+                        "            float2 inputs:st.connect ="
+                        " </L/A/R.outputs:result>\n"
+                    ),
+                )
                 + _shader(
                     "R",
-                    '            uniform token info:id = "UsdPrimvarReader_float2"\n'
+                    "            uniform token info:id ="
+                    ' "UsdPrimvarReader_float2"\n'
                     + '            string inputs:varname = "st2"\n',
                 ),
             )
@@ -912,8 +1038,16 @@ def test_texture_refusals() raises:
             start
             + _material(
                 "A",
-                _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
-                + _texture("T", "brick.png", "            float inputs:scale = 2\n"),
+                _surface(
+                    "S",
+                    (
+                        "            color3f inputs:diffuseColor.connect ="
+                        " </L/A/T.outputs:rgb>\n"
+                    ),
+                )
+                + _texture(
+                    "T", "brick.png", "            float inputs:scale = 2\n"
+                ),
             )
             + "}\n",
             assets,
@@ -925,14 +1059,24 @@ def _one_texture(
 ) raises -> _Out:
     """Compose a mesh whose color map reads one file."""
     return _text(
-        _bound("M", "A") + 'def Scope "L"\n{\n'
+        _bound("M", "A")
+        + 'def Scope "L"\n{\n'
         + _material(
             "A",
-            _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
+            _surface(
+                "S",
+                (
+                    "            color3f inputs:diffuseColor.connect ="
+                    " </L/A/T.outputs:rgb>\n"
+                ),
+            )
             + _shader(
                 "T",
                 '            uniform token info:id = "UsdUVTexture"\n'
-                + "            asset inputs:file = @" + file + "@\n" + extra,
+                + "            asset inputs:file = @"
+                + file
+                + "@\n"
+                + extra,
             ),
         )
         + "}\n",
@@ -986,30 +1130,55 @@ def test_texture_connections() raises:
     # A file with its `@`s, a file that is not a path, a connection list
     # that is empty, and one whose first entry is not a path.
     var layer = parse_usda_layer(
-        "#usda 1.0\n" + _bound("M", "A") + _bound("N", "B") + 'def Scope "L"\n{\n'
+        "#usda 1.0\n"
+        + _bound("M", "A")
+        + _bound("N", "B")
+        + 'def Scope "L"\n{\n'
         + _material(
             "A",
-            _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
+            _surface(
+                "S",
+                (
+                    "            color3f inputs:diffuseColor.connect ="
+                    " </L/A/T.outputs:rgb>\n"
+                ),
+            )
             + _texture("T", "brick.png"),
         )
         + _material(
             "B",
-            _surface("S", "            color3f inputs:diffuseColor.connect = </L/B/T.outputs:rgb>\n"),
+            _surface(
+                "S",
+                (
+                    "            color3f inputs:diffuseColor.connect ="
+                    " </L/B/T.outputs:rgb>\n"
+                ),
+            ),
         )
         + "}\n"
     )
     var file = layer.add(usd_string("@brick.png@"))
     layer.specs[layer.spec("/L/A/T.inputs:file")].set("default", file)
     var empty = layer.add(usd_strings(List[String]()))
-    layer.specs[layer.spec("/L/B/S.inputs:diffuseColor")].set("connectionPaths", empty)
+    layer.specs[layer.spec("/L/B/S.inputs:diffuseColor")].set(
+        "connectionPaths", empty
+    )
     var out = _compose(layer^, assets)
     assert_true(out.material("M").map != NO_TEXTURE)
     assert_true(out.material("N").map == NO_TEXTURE)
     var numbers = parse_usda_layer(
-        "#usda 1.0\n" + _bound("M", "A") + 'def Scope "L"\n{\n'
+        "#usda 1.0\n"
+        + _bound("M", "A")
+        + 'def Scope "L"\n{\n'
         + _material(
             "A",
-            _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
+            _surface(
+                "S",
+                (
+                    "            color3f inputs:diffuseColor.connect ="
+                    " </L/A/T.outputs:rgb>\n"
+                ),
+            )
             + _texture("T", "brick.png"),
         )
         + "}\n"
@@ -1017,14 +1186,24 @@ def test_texture_connections() raises:
     var odd = UsdValue(USD_ARRAY)
     odd.items = [numbers.add(usd_number(1))]
     var links = numbers.add(odd^)
-    numbers.specs[numbers.spec("/L/A/S.inputs:diffuseColor")].set("connectionPaths", links)
+    numbers.specs[numbers.spec("/L/A/S.inputs:diffuseColor")].set(
+        "connectionPaths", links
+    )
     out = _compose(numbers^, assets)
     assert_true(out.material("M").map == NO_TEXTURE)
     var wrong = parse_usda_layer(
-        "#usda 1.0\n" + _bound("M", "A") + 'def Scope "L"\n{\n'
+        "#usda 1.0\n"
+        + _bound("M", "A")
+        + 'def Scope "L"\n{\n'
         + _material(
             "A",
-            _surface("S", "            color3f inputs:diffuseColor.connect = </L/A/T.outputs:rgb>\n")
+            _surface(
+                "S",
+                (
+                    "            color3f inputs:diffuseColor.connect ="
+                    " </L/A/T.outputs:rgb>\n"
+                ),
+            )
             + _texture("T", "brick.png"),
         )
         + "}\n"
@@ -1040,15 +1219,22 @@ def test_shader_ids() raises:
     # string; a connection to what is not a texture; a material that is
     # not there.
     var layer = parse_usda_layer(
-        "#usda 1.0\n" + _bound("M", "A") + _bound("N", "Gone") + 'def Scope "L"\n{\n'
+        "#usda 1.0\n"
+        + _bound("M", "A")
+        + _bound("N", "Gone")
+        + 'def Scope "L"\n{\n'
         + _material(
             "A",
-            _shader("S", "            color3f inputs:diffuseColor = (0, 1, 0)\n")
+            _shader(
+                "S", "            color3f inputs:diffuseColor = (0, 1, 0)\n"
+            )
             + _shader(
                 "Q",
                 '            uniform token info:id = "UsdPreviewSurface"\n'
-                + "            color3f inputs:diffuseColor.connect = </L/A/S.outputs:rgb>\n"
-                + "            color3f inputs:emissiveColor.connect = </L/A/Z.outputs:rgb>\n",
+                + "            color3f inputs:diffuseColor.connect ="
+                " </L/A/S.outputs:rgb>\n"
+                + "            color3f inputs:emissiveColor.connect ="
+                " </L/A/Z.outputs:rgb>\n",
             )
             + _shader("Z", "            int info:id = 5\n"),
         )
@@ -1096,7 +1282,13 @@ def test_display_colors() raises:
         )
         + _material(
             "Clear",
-            _surface("S", "            float inputs:opacity.connect = </L/Clear/S.outputs:a>\n"),
+            _surface(
+                "S",
+                (
+                    "            float inputs:opacity.connect ="
+                    " </L/Clear/S.outputs:a>\n"
+                ),
+            ),
         )
         + "}\n"
     )
@@ -1121,19 +1313,32 @@ def test_subset_materials() raises:
     var out = _text(
         'def Mesh "Parts"\n{\n    int[] faceVertexCounts = [3, 3]\n'
         + "    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]\n"
-        + "    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]\n"
+        + "    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1,"
+        " 0)]\n"
         + "    rel material:binding = </L/Blue>\n"
         + "    float[] primvars:displayOpacity = [0.5]\n"
         + '    def GeomSubset "A"\n    {\n        int[] indices = [0]\n'
         + "        rel material:binding = </L/Red>\n    }\n"
-        + '    def GeomSubset "B"\n    {\n        int[] indices = [1]\n    }\n}\n'
+        + '    def GeomSubset "B"\n    {\n        int[] indices = [1]\n   '
+        " }\n}\n"
         + 'def Mesh "Loose"\n{\n    int[] faceVertexCounts = [3]\n'
         + "    int[] faceVertexIndices = [0, 1, 2]\n"
         + "    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]\n"
-        + '    def GeomSubset "A"\n    {\n        int[] indices = [0]\n    }\n}\n'
+        + '    def GeomSubset "A"\n    {\n        int[] indices = [0]\n   '
+        " }\n}\n"
         + 'def Scope "L"\n{\n'
-        + _material("Red", _surface("S", "            color3f inputs:diffuseColor = (1, 0, 0)\n"))
-        + _material("Blue", _surface("S", "            color3f inputs:diffuseColor = (0, 0, 1)\n"))
+        + _material(
+            "Red",
+            _surface(
+                "S", "            color3f inputs:diffuseColor = (1, 0, 0)\n"
+            ),
+        )
+        + _material(
+            "Blue",
+            _surface(
+                "S", "            color3f inputs:diffuseColor = (0, 0, 1)\n"
+            ),
+        )
         + "}\n"
     )
     var parts = out.model.objects[out.find("Parts")].copy()
@@ -1160,7 +1365,9 @@ def test_coordinates_found() raises:
     plain.set("default", layer.add(usd_numbers([0, 0, 1, 1, 0, 1])))
     _ = layer.put("/M.primvars:baz", plain^)
     var out = _compose(layer^)
-    ref geometry = out.store.geometries.get(out.model.objects[out.find("M")].geometry)
+    ref geometry = out.store.geometries.get(
+        out.model.objects[out.find("M")].geometry
+    )
     assert_true(geometry.has_attribute("uv"))
     with assert_raises(contains="points is not an array"):
         _ = _text('def Mesh "M"\n{\n    point3f[] points = 5\n}\n')
@@ -1193,7 +1400,9 @@ def test_resolved_values() raises:
     translate.set("timeSamples", _samples(layer, [1, 0], [a, b]))
     _ = layer.put("/S.xformOp:translate", translate^)
     var scale = UsdSpec(SPEC_ATTRIBUTE)
-    scale.set("timeSamples", _samples(layer, [2], [layer.add(usd_numbers([2, 2, 2]))]))
+    scale.set(
+        "timeSamples", _samples(layer, [2], [layer.add(usd_numbers([2, 2, 2]))])
+    )
     _ = layer.put("/S.xformOp:scale", scale^)
     var rotate = UsdSpec(SPEC_ATTRIBUTE)
     rotate.set("timeSamples", _samples(layer, [0], List[Int]()))

@@ -156,8 +156,30 @@ def test_ngons() raises:
 
 def test_faces_with_holes() raises:
     var points: List[Float64] = [
-        0, 0, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0,
-        1, 1, 0, 1, 3, 0, 3, 3, 0, 3, 1, 0,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        4,
+        4,
+        0,
+        0,
+        4,
+        0,
+        1,
+        1,
+        0,
+        1,
+        3,
+        0,
+        3,
+        3,
+        0,
+        3,
+        1,
+        0,
     ]
     var holes = build_hole_map(UsdArray([1, 0]))
     var cut = triangulate_with_pattern(
@@ -185,7 +207,10 @@ def test_faces_with_holes() raises:
     # points does not matter here.
     try:
         _ = triangulate_with_pattern(
-            [0, 1, 2, _NAN, 4, 5, 6], [4, 3], points, build_hole_map(UsdArray([1, 0]))
+            [0, 1, 2, _NAN, 4, 5, 6],
+            [4, 3],
+            points,
+            build_hole_map(UsdArray([1, 0])),
         )
     except:
         pass
@@ -195,10 +220,31 @@ def test_faces_with_holes() raises:
         _ = triangulate_with_pattern(
             [0, 1, 2, 3], [4], points, build_hole_map(UsdArray([9, 0]))
         )
-    var direct = triangulate_ngon_with_holes([0, 1, 2, 3], [[4, 5, 6, 7]], points)
+    var direct = triangulate_ngon_with_holes(
+        [0, 1, 2, 3], [[4, 5, 6, 7]], points
+    )
     assert_equal(len(direct), 24)
     # A face whose corners lie on a line has no triangles.
-    var line: List[Float64] = [0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 0.5, 0, 0, 1.5, 0, 0]
+    var line: List[Float64] = [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        2,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0.5,
+        0,
+        0,
+        1.5,
+        0,
+        0,
+    ]
     var flat = triangulate_with_pattern(
         [0, 1, 2, 3, 4, 5], [4, 2], line, build_hole_map(UsdArray([1, 0]))
     )
@@ -220,7 +266,9 @@ def test_vertex_normals() raises:
     var odd = compute_vertex_normals(_square(), [0, 1, 2, -1, 0.5, 9, 0])
     assert_equal(odd[9], 0)
     assert_true(isnan(odd[0]))
-    assert_equal(len(compute_vertex_normals(List[Float64](), List[Float64]())), 0)
+    assert_equal(
+        len(compute_vertex_normals(List[Float64](), List[Float64]())), 0
+    )
     with assert_raises(contains="whole vertices"):
         _ = compute_vertex_normals([0, 1], List[Float64]())
 
@@ -356,11 +404,16 @@ def test_subsets() raises:
     _same(_slice(_attribute(geometry, String(NORMAL)), 3, 6), [1, 1, 0])
     assert_false(geometry.has_attribute(String(UV1)))
     assert_equal(
-        build_usd_geometry_with_subsets(UsdMeshArrays(), [[0]]).attribute_count(), 0
+        build_usd_geometry_with_subsets(
+            UsdMeshArrays(), [[0]]
+        ).attribute_count(),
+        0,
     )
     var no_faces = UsdMeshArrays()
     no_faces.points = UsdArray(_square())
-    assert_equal(build_usd_geometry_with_subsets(no_faces, [[0]]).attribute_count(), 0)
+    assert_equal(
+        build_usd_geometry_with_subsets(no_faces, [[0]]).attribute_count(), 0
+    )
 
 
 def test_subset_groups() raises:
@@ -422,7 +475,9 @@ def test_subset_holes() raises:
     nan_mesh.indices = UsdArray([0, 1, 2])
     nan_mesh.counts = UsdArray([_NAN, 3])
     nan_mesh.normals = UsdArray(_square())
-    var unassigned = build_usd_geometry_with_subsets(nan_mesh, [[_NAN, -1, 0.5]])
+    var unassigned = build_usd_geometry_with_subsets(
+        nan_mesh, [[_NAN, -1, 0.5]]
+    )
     assert_equal(len(_attribute(unassigned, String(POSITION))), 9)
     assert_equal(len(unassigned.groups), 0)
 

@@ -439,7 +439,9 @@ struct _CornerMap(Movable):
             Its place, or -1.
         """
         for k in range(len(self.keys)):
-            if self.keys[k] == key or (self.keys[k] != self.keys[k] and key != key):
+            if self.keys[k] == key or (
+                self.keys[k] != self.keys[k] and key != key
+            ):
                 return k
         return -1
 
@@ -523,11 +525,20 @@ def triangulate_with_pattern(
             # A face of no corners has no triangles: earcut finds no
             # outline.
             if len(face) > 0:
-                for vertex in triangulate_ngon_with_holes(face, contours, points):
+                for vertex in triangulate_ngon_with_holes(
+                    face, contours, points
+                ):
                     out.indices.append(vertex)
                     out.pattern.append(corners.get(vertex))
         elif count == 3 or count == 4:
-            var order: List[Int] = [0, 1, 2] if count == 3 else [0, 1, 2, 0, 2, 3]
+            var order: List[Int] = [0, 1, 2] if count == 3 else [
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+            ]
             for k in order:  # pragma: no branch
                 out.indices.append(value_at(indices, offset + Float64(k)))
                 out.pattern.append(offset + Float64(k))
@@ -543,7 +554,9 @@ def triangulate_with_pattern(
             else:
                 for j in range(1, corners - 1):  # pragma: no branch
                     for k in [0, j, j + 1]:  # pragma: no branch
-                        out.indices.append(value_at(indices, offset + Float64(k)))
+                        out.indices.append(
+                            value_at(indices, offset + Float64(k))
+                        )
                         out.pattern.append(offset + Float64(k))
         offset += count
     return out^
@@ -777,10 +790,13 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
             )
         elif len(mesh.normals.values) == len(points):
             if indices.filled():
-                normals = expand_attribute(mesh.normals.values, indices.values, 3)
+                normals = expand_attribute(
+                    mesh.normals.values, indices.values, 3
+                )
         elif pattern:
             var corners = apply_pattern(
-                _identity(Float64(len(mesh.normals.values)) / 3), pattern.value()
+                _identity(Float64(len(mesh.normals.values)) / 3),
+                pattern.value(),
             )
             normals = expand_attribute(mesh.normals.values, corners, 3)
         geometry.set_attribute(String(NORMAL), _attribute(normals, 3))
@@ -795,18 +811,30 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
     var face_vertices = len(mesh.indices.values) if mesh.indices.present else 0
     if mesh.uvs.filled():
         var uvs = _coordinates(
-            mesh.uvs, mesh.uv_indices, pattern, indices, len(points), face_vertices
+            mesh.uvs,
+            mesh.uv_indices,
+            pattern,
+            indices,
+            len(points),
+            face_vertices,
         )
         geometry.set_attribute(String(UV), _attribute(uvs, 2))
     if mesh.uvs2.filled():
         var uvs = _coordinates(
-            mesh.uvs2, mesh.uv2_indices, pattern, indices, len(points), face_vertices
+            mesh.uvs2,
+            mesh.uv2_indices,
+            pattern,
+            indices,
+            len(points),
+            face_vertices,
         )
         geometry.set_attribute(String(UV1), _attribute(uvs, 2))
     return geometry^
 
 
-def _triangle_count(counts: List[Float64], hole_map: HoleMap) raises -> Tuple[Int, List[Float64]]:
+def _triangle_count(
+    counts: List[Float64], hole_map: HoleMap
+) raises -> Tuple[Int, List[Float64]]:
     """Count the triangles of each face as `_buildGeometryWithSubsets`
     does: a face of `n` corners and its holes' corners gives `n - 2`.
 
@@ -896,7 +924,9 @@ def build_usd_geometry_with_subsets(
         for i in range(len(order)):  # pragma: no branch
             if owner[order[i]] != current:
                 if current >= 0:
-                    geometry.add_group(start * 3, (i - start) * 3, MaterialIndex(current))
+                    geometry.add_group(
+                        start * 3, (i - start) * 3, MaterialIndex(current)
+                    )
                 current = owner[order[i]]
                 start = i
         if current >= 0:
@@ -905,7 +935,9 @@ def build_usd_geometry_with_subsets(
             )
     if not mesh.indices.present:
         raise Error("USD: faces with no corner indices")
-    var cut = triangulate_with_pattern(mesh.indices.values, counts, points, hole_map)
+    var cut = triangulate_with_pattern(
+        mesh.indices.values, counts, points, hole_map
+    )
     var face_vertices = Float64(0)
     for count in counts:  # pragma: no branch
         face_vertices += count
@@ -921,12 +953,19 @@ def build_usd_geometry_with_subsets(
     )
     if uv_identity:
         identity = apply_pattern(_identity(face_vertices), cut.pattern)
-    var uv_corners = _subset_corners(mesh.uvs, mesh.uv_indices, cut.pattern, identity, face_vertices)
-    var uv2_corners = _subset_corners(mesh.uvs2, mesh.uv2_indices, cut.pattern, identity, face_vertices)
+    var uv_corners = _subset_corners(
+        mesh.uvs, mesh.uv_indices, cut.pattern, identity, face_vertices
+    )
+    var uv2_corners = _subset_corners(
+        mesh.uvs2, mesh.uv2_indices, cut.pattern, identity, face_vertices
+    )
     var normal_corners: Optional[List[Float64]] = None
     if mesh.normals.present and mesh.normal_indices.filled():
         normal_corners = apply_pattern(mesh.normal_indices.values, cut.pattern)
-    elif mesh.normals.present and Float64(len(mesh.normals.values)) / 3 == face_vertices:
+    elif (
+        mesh.normals.present
+        and Float64(len(mesh.normals.values)) / 3 == face_vertices
+    ):
         normal_corners = apply_pattern(_identity(face_vertices), cut.pattern)
     var computed = List[Float64]()
     var has_computed = not mesh.normals.present and len(cut.indices) > 0
@@ -939,8 +978,12 @@ def build_usd_geometry_with_subsets(
     var uvs = List[Float64](length=count * 2, fill=0)
     var uvs2 = List[Float64](length=count * 2, fill=0)
     var normals = List[Float64](length=count * 3, fill=0)
-    var per_point_uvs = Float64(len(mesh.uvs.values)) / 2 == Float64(len(points)) / 3
-    var per_point_uvs2 = Float64(len(mesh.uvs2.values)) / 2 == Float64(len(points)) / 3
+    var per_point_uvs = (
+        Float64(len(mesh.uvs.values)) / 2 == Float64(len(points)) / 3
+    )
+    var per_point_uvs2 = (
+        Float64(len(mesh.uvs2.values)) / 2 == Float64(len(points)) / 3
+    )
     var per_point_normals = len(mesh.normals.values) == len(points)
     var normal_data = (
         mesh.normals.values.copy() if mesh.normals.present else computed.copy()
@@ -951,9 +994,27 @@ def build_usd_geometry_with_subsets(
             var vertex = i * 3 + v
             var point = value_at(cut.indices, original)
             for k in range(3):  # pragma: no branch
-                positions[vertex * 3 + k] = value_at(points, point * 3 + Float64(k))
-            _corner_pair(uvs, vertex, mesh.uvs, uv_corners, per_point_uvs, original, point)
-            _corner_pair(uvs2, vertex, mesh.uvs2, uv2_corners, per_point_uvs2, original, point)
+                positions[vertex * 3 + k] = value_at(
+                    points, point * 3 + Float64(k)
+                )
+            _corner_pair(
+                uvs,
+                vertex,
+                mesh.uvs,
+                uv_corners,
+                per_point_uvs,
+                original,
+                point,
+            )
+            _corner_pair(
+                uvs2,
+                vertex,
+                mesh.uvs2,
+                uv2_corners,
+                per_point_uvs2,
+                original,
+                point,
+            )
             var source = point
             if mesh.normals.present and normal_corners:
                 source = value_at(normal_corners.value(), original)

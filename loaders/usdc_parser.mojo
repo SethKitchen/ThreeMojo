@@ -299,7 +299,9 @@ def decompress_lz4(input: List[UInt8], size: Int) raises -> List[UInt8]:
         if sizes[k] > 0 and at + sizes[k] > len(input):
             raise Error("USDC: an LZ4 chunk runs past the end of its input")
         var produced = min(_CHUNK, size - out)
-        _ = lz4_decompress_block(input, at, at + sizes[k], output, out, out + produced)
+        _ = lz4_decompress_block(
+            input, at, at + sizes[k], output, out, out + produced
+        )
         at += sizes[k]
         out += produced
     return output^
@@ -382,7 +384,9 @@ def decode_integers32(data: List[UInt8], count: Int) -> List[Int]:
     return out^
 
 
-def decompress_integers32(compressed: List[UInt8], count: Int) raises -> List[Int]:
+def decompress_integers32(
+    compressed: List[UInt8], count: Int
+) raises -> List[Int]:
     """Expand and sum OpenUSD's compressed integers, three.js's
     `decompressIntegers32`.
 
@@ -437,10 +441,10 @@ def _two_to(power: Int) -> Float64:
     Returns:
         The number.
     """
-    var out = Float64(1)
+    var result = Float64(1)
     for _ in range(abs(power)):
-        out = out * 2 if power > 0 else out / 2
-    return out
+        result = result * 2 if power > 0 else result / 2
+    return result
 
 
 def _decode(data: List[UInt8], start: Int, end: Int) -> String:
@@ -1033,14 +1037,18 @@ struct _Crate(Movable):
                 parent = path
             else:
                 var element = elements[this]
-                path = _child_path(parent, self.token(abs(element)), element < 0)
+                path = _child_path(
+                    parent, self.token(abs(element)), element < 0
+                )
             self.set_path(indices[this], path)
             var jump = jumps[this]
             var has_child = jump > 0 or jump == -1
             var has_sibling = jump >= 0
             if has_child:
                 if has_sibling:
-                    self.build_paths(indices, elements, jumps, this + jump, parent, budget)
+                    self.build_paths(
+                        indices, elements, jumps, this + jump, parent, budget
+                    )
                 parent = path
             elif not has_sibling:
                 break
@@ -1149,9 +1157,7 @@ struct _Crate(Movable):
         if type == CRATE_MATRIX2D:
             return usd_numbers([bytes[0], 0, 0, bytes[1]])
         if type == CRATE_MATRIX3D:
-            return usd_numbers(
-                [bytes[0], 0, 0, 0, bytes[1], 0, 0, 0, bytes[2]]
-            )
+            return usd_numbers([bytes[0], 0, 0, 0, bytes[1], 0, 0, 0, bytes[2]])
         if type == CRATE_MATRIX4D:
             var m = List[Float64](length=16, fill=0)
             for k in range(4):  # pragma: no branch
@@ -1477,7 +1483,9 @@ struct _Crate(Movable):
             return usd_strings(strings^)
         return UsdValue(USD_NUMBERS)
 
-    def compressed_array(mut self, type: CrateType, size: Int) raises -> UsdValue:
+    def compressed_array(
+        mut self, type: CrateType, size: Int
+    ) raises -> UsdValue:
         """Read a compressed array, three.js's `_readCompressedArray`.
 
         Args:
@@ -1537,7 +1545,9 @@ struct _Crate(Movable):
         """
         var spec_type = SpecType(spec.spec_type)
         if not spec_type.is_valid():
-            raise Error("USDC: a spec of no known type: " + String(spec.spec_type))
+            raise Error(
+                "USDC: a spec of no known type: " + String(spec.spec_type)
+            )
         var out = UsdSpec(spec_type)
         var at = spec.field_set
         var steps = 0
@@ -1644,4 +1654,3 @@ def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
     var layer = UsdLayer()
     swap(layer, crate.layer)
     return layer^
-

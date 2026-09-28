@@ -54,7 +54,7 @@ def _lines(text: String) -> List[String]:
 
 def test_comments() raises:
     var lines = _lines(
-        "#usda 1.0 # kept\na = 1 # dropped\nb = \"#\" # x\n/* one\ntwo */c\n"
+        '#usda 1.0 # kept\na = 1 # dropped\nb = "#" # x\n/* one\ntwo */c\n'
         + "d /* e * / f */ g\n   # only\nh = '\\\"' # y\n"
     )
     assert_equal(lines[0], "#usda 1.0 # kept")
@@ -97,7 +97,7 @@ def test_multiline_arrays() raises:
 def test_assignment() raises:
     assert_equal(find_assignment('a "=" = b'), 6)
     assert_equal(find_assignment("a '=' \\= = b"), 9)
-    assert_equal(find_assignment("\"it's\" = x"), 7)
+    assert_equal(find_assignment('"it\'s" = x'), 7)
     assert_equal(find_assignment('"a" "b"'), -1)
     assert_equal(find_assignment(""), -1)
 
@@ -167,7 +167,9 @@ def test_attribute_match() raises:
 
 
 def test_parse_string() raises:
-    assert_equal(parse_string('"a\\nb\\tc\\rd\\\\e\\"f\\qg"'), 'a\nb\tc\rd\\e"fqg')
+    assert_equal(
+        parse_string('"a\\nb\\tc\\rd\\\\e\\"f\\qg"'), 'a\nb\tc\rd\\e"fqg'
+    )
     assert_equal(parse_string("'x'"), "x")
     assert_equal(parse_string('"'), "")
     assert_equal(parse_string(""), "")
@@ -179,9 +181,10 @@ def test_parse_string() raises:
 
 def test_tree() raises:
     var tree = usda_tree(
-        '#usda 1.0\n(\n    upAxis = "Y"\n)\ndef Xform "A" (\n    kind = "k"\n)\n'
+        '#usda 1.0\n(\n    upAxis = "Y"\n)\ndef Xform "A" (\n    kind ='
+        ' "k"\n)\n'
         + '{\n    float x = 1 (\n        doc = "d"\n    )\n    float x = 2 (\n'
-        + "        doc = \"e\"\n    )\n    y.timeSamples = {\n        1: 2\n"
+        + '        doc = "e"\n    )\n    y.timeSamples = {\n        1: 2\n'
         + "        b: 3\n    }\n}\n}\n}\nname\n{\n}\n"
     )
     var a = tree.kid(0, 'def Xform "A"')
@@ -264,7 +267,8 @@ def _one(text: String) raises -> UsdLayer:
 
 def test_header() raises:
     var layer = parse_usda_layer(
-        '#usda 1.0\n(\n    upAxis = "Z"\n    defaultPrim =\n    metersPerUnit = 0.01\n'
+        '#usda 1.0\n(\n    upAxis = "Z"\n    defaultPrim =\n    metersPerUnit ='
+        " 0.01\n"
         + "    framesPerSecond = 24\n    timeCodesPerSecond = {\n    }\n)\n"
     )
     assert_equal(layer.text(layer.field("/", "upAxis")), "Z")
@@ -302,11 +306,14 @@ def test_prims() raises:
 
 def test_prim_fields() raises:
     var layer = parse_usda_layer(
-        'def "A" (\n    prepend references = @a.usda@</B>\n    payload = @p.usda@\n'
-        + '    variants = {\n        string color = "red"\n        string  color = "blue"\n'
+        'def "A" (\n    prepend references = @a.usda@</B>\n    payload ='
+        " @p.usda@\n"
+        + '    variants = {\n        string color = "red"\n        string '
+        ' color = "blue"\n'
         + '        string size = "big"\n        other = 1\n    }\n)\n{\n'
         + '    uniform token[] xformOpOrder = ["xformOp:translate", "b"]\n}\n'
-        + 'def "B" (\n    prepend references = {\n    }\n    payload = {\n    }\n'
+        + 'def "B" (\n    prepend references = {\n    }\n    payload = {\n  '
+        "  }\n"
         + "    variants = 3\n)\n{\n}\n"
         + 'def "C" (\n    variants = {\n        other = 1\n    }\n)\n{\n}\n'
     )
@@ -329,14 +336,17 @@ def test_prim_fields() raises:
         _ = _one("uniform token[] xformOpOrder = {\n}")
     with assert_raises(contains="is a group"):
         _ = parse_usda_layer(
-            'def "A" (\n    variants = {\n        string c = {\n        }\n    }\n)\n{\n}\n'
+            'def "A" (\n    variants = {\n        string c = {\n        }\n   '
+            " }\n)\n{\n}\n"
         )
 
 
 def test_relationships() raises:
     var layer = _one(
-        "rel material:binding = </M> (\n    bindMaterialAs = \"strongerThanDescendants\"\n)\n"
-        + "rel a = </X>\nrel b = <Y> (\n    doc = 1\n)\nrel c = </Z> (\n    bindMaterialAs = {\n    }\n)"
+        "rel material:binding = </M> (\n    bindMaterialAs ="
+        ' "strongerThanDescendants"\n)\n'
+        + "rel a = </X>\nrel b = <Y> (\n    doc = 1\n)\nrel c = </Z> (\n   "
+        " bindMaterialAs = {\n    }\n)"
     )
     var binding = layer.spec("/P.material:binding")
     assert_true(layer.specs[binding].spec_type == SPEC_RELATIONSHIP)
@@ -348,16 +358,20 @@ def test_relationships() raises:
     )
     assert_equal(layer.field("/P.a", "bindMaterialAs"), -1)
     assert_equal(layer.field("/P.b", "bindMaterialAs"), -1)
-    assert_equal(layer.text(layer.field("/P.c", "bindMaterialAs")), "[object Object]")
+    assert_equal(
+        layer.text(layer.field("/P.c", "bindMaterialAs")), "[object Object]"
+    )
     with assert_raises(contains="is a group"):
         _ = _one("rel a = {\n}")
 
 
 def test_connections_and_samples() raises:
     var layer = _one(
-        "float a.connect = </X.y>\nfloat a = 2\nfloat b = 1\nfloat b.connect = Z\n"
+        "float a.connect = </X.y>\nfloat a = 2\nfloat b = 1\nfloat b.connect"
+        " = Z\n"
         + "float3 c.timeSamples = {\n    2: (1, 2, 3),\n    0: (4, 5, 6)\n"
-        + "    1.5: (7, 8, 9)\n    x = 1\n    0 {\n    }\n}\nfloat d.timeSamples = 5\n"
+        + "    1.5: (7, 8, 9)\n    x = 1\n    0 {\n    }\n}\nfloat"
+        " d.timeSamples = 5\n"
         + "float a = 3"
     )
     var a = layer.spec("/P.a")
@@ -385,9 +399,11 @@ def test_connections_and_samples() raises:
 
 def test_values_by_type() raises:
     var layer = _one(
-        "float3 v = (1, 2, 3)\nint2 w = (1, x)\nhalf4 u = (4)\nmatrix m = ((1, 2))\n"
-        + "quatf q = (1, 2, 3, 4)\nquath r = (5)\nfloat f = 1.5\ndouble d = 2e3x\n"
-        + "int i = -3\nasset s = @\"a.png\"@\nstring t = \"x\\ty\"\nbool b = 1\n"
+        "float3 v = (1, 2, 3)\nint2 w = (1, x)\nhalf4 u = (4)\nmatrix m = ((1,"
+        " 2))\n"
+        + "quatf q = (1, 2, 3, 4)\nquath r = (5)\nfloat f = 1.5\ndouble d ="
+        " 2e3x\n"
+        + 'int i = -3\nasset s = @"a.png"@\nstring t = "x\\ty"\nbool b = 1\n'
     )
     var v = _numbers(layer, _default(layer, "/P.v"))
     assert_equal(v[2], 3)
@@ -413,10 +429,11 @@ def test_values_by_type() raises:
 
 def test_array_values() raises:
     var layer = _one(
-        "int[] a = [1],\nint[] b = [(1, 2), (3, 4)]\ntoken[] c = [\"x\", \"y\"]\n"
-        + "int[] d = []\nint[] e = [1, \"x\", true, null, {\"k\": 2, \"1\": 3}, [], {}]\n"
+        'int[] a = [1],\nint[] b = [(1, 2), (3, 4)]\ntoken[] c = ["x", "y"]\n'
+        + 'int[] d = []\nint[] e = [1, "x", true, null, {"k": 2, "1": 3}, [],'
+        " {}]\n"
         + "int[] f = [[1], 2, []]\nint[] g = 5\nasset[] h = [@a@, @b@]\n"
-        + "int[] i = [nan, 1]\nint[] j = [+1, 2]\nint[] k = [\"s\", false]\n"
+        + 'int[] i = [nan, 1]\nint[] j = [+1, 2]\nint[] k = ["s", false]\n'
         + "int[] l = [2, false]"
     )
     _ = _numbers(layer, _default(layer, "/P.a"))
@@ -454,8 +471,8 @@ def test_array_values() raises:
 
 def test_quaternion_arrays() raises:
     var layer = _one(
-        "quatf[] a = [(1, 2, 3, 4)]\nquath[] b = [\"w\", \"x\", \"y\", \"z\"]\n"
-        + "quatd[] c = [1, \"x\", 3, 4]\nquatf[] d = []\nquatf[] e = 7"
+        'quatf[] a = [(1, 2, 3, 4)]\nquath[] b = ["w", "x", "y", "z"]\n'
+        + 'quatd[] c = [1, "x", 3, 4]\nquatf[] d = []\nquatf[] e = 7'
     )
     var a = _numbers(layer, _default(layer, "/P.a"))
     assert_equal(a[0], 2)
@@ -485,11 +502,24 @@ def test_element_sizes() raises:
         + "    int[] primvars:skel:jointWeights = []\n}\n"
         + 'def Mesh "R"\n{\n}\ndef Xform "S"\n{\n}\n'
     )
-    assert_equal(layer.number(layer.field("/M.primvars:skel:jointIndices", "elementSize")), 2)
-    assert_equal(layer.field("/M.primvars:skel:jointWeights", "elementSize"), -1)
-    assert_equal(layer.field("/O.primvars:skel:jointIndices", "elementSize"), -1)
-    assert_equal(layer.field("/Q.primvars:skel:jointIndices", "elementSize"), -1)
-    assert_equal(layer.field("/Q.primvars:skel:jointWeights", "elementSize"), -1)
+    assert_equal(
+        layer.number(
+            layer.field("/M.primvars:skel:jointIndices", "elementSize")
+        ),
+        2,
+    )
+    assert_equal(
+        layer.field("/M.primvars:skel:jointWeights", "elementSize"), -1
+    )
+    assert_equal(
+        layer.field("/O.primvars:skel:jointIndices", "elementSize"), -1
+    )
+    assert_equal(
+        layer.field("/Q.primvars:skel:jointIndices", "elementSize"), -1
+    )
+    assert_equal(
+        layer.field("/Q.primvars:skel:jointWeights", "elementSize"), -1
+    )
 
 
 def main() raises:

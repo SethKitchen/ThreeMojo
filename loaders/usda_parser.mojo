@@ -135,7 +135,9 @@ def _trim(text: String) -> String:
         start += 1
     while end > start and _is_space(bytes[end - 1]):
         end -= 1
-    var ascii = (start == end) or (bytes[start] < 0x80 and bytes[end - 1] < 0x80)
+    var ascii = (start == end) or (
+        bytes[start] < 0x80 and bytes[end - 1] < 0x80
+    )
     if ascii:
         return String(text[byte=start:end])
     var units = js_trim(js_units(text))
@@ -352,7 +354,9 @@ def _is_triple(bytes: Span[UInt8, _], at: Int, quote: UInt8) -> Bool:
     Returns:
         Whether they are three of that quote.
     """
-    return bytes[at] == quote and bytes[at + 1] == quote and bytes[at + 2] == quote
+    return (
+        bytes[at] == quote and bytes[at + 1] == quote and bytes[at + 2] == quote
+    )
 
 
 def _collapse_triple_quotes(text: String) -> String:
@@ -741,7 +745,9 @@ def usda_tree(text: String) raises -> UsdaTree:
             var key = _trim(String(line[byte=:colon]))
             if _is_frame(key):
                 _write(target)
-                tree.set(target, key, _trim(String(line[byte = colon + 1 :])), -1)
+                tree.set(
+                    target, key, _trim(String(line[byte = colon + 1 :])), -1
+                )
         elif line.endswith("{"):
             var head = _trim(String(line[byte = : line.byte_length() - 1]))
             if head != "":
@@ -842,7 +848,9 @@ def _float_list(text: String) -> List[Float64]:
         The numbers, NaN where a part is not one.
     """
     var out = List[Float64]()
-    for part in text.replace("(", "").replace(")", "").split(","):  # pragma: no branch
+    for part in (
+        text.replace("(", "").replace(")", "").split(",")
+    ):  # pragma: no branch
         out.append(js_parse_float(_trim(String(part))))
     return out^
 
@@ -1091,7 +1099,9 @@ struct _Reader(Movable):
                 t[i + 2] = t[i + 3]
                 t[i + 3] = w
 
-    def attribute_value(mut self, value_type: String, raw: String) raises -> Int:
+    def attribute_value(
+        mut self, value_type: String, raw: String
+    ) raises -> Int:
         """Read a value by its type, three.js's `_parseAttributeValue`.
 
         Args:
@@ -1131,10 +1141,16 @@ struct _Reader(Movable):
                 else:
                     out.items.append(self.layer.add(UsdValue(USD_UNDEFINED)))
             return self.layer.add(out^)
-        if value_type == "float" or value_type == "double" or value_type == "int":
+        if (
+            value_type == "float"
+            or value_type == "double"
+            or value_type == "int"
+        ):
             return self.layer.add(usd_number(js_parse_float(text)))
         if value_type == "asset":
-            return self.layer.add(usd_string(text.replace("@", "").replace('"', "")))
+            return self.layer.add(
+                usd_string(text.replace("@", "").replace('"', ""))
+            )
         return self.layer.add(usd_string(parse_string(text)))
 
     def header(mut self) raises -> UsdSpec:
@@ -1240,7 +1256,9 @@ struct _Reader(Movable):
             if key.find("xformOpOrder") >= 0:
                 var text = self.text_of(group, slot, key)
                 var ops = List[String]()
-                for part in text.replace("[", "").replace("]", "").split(","):  # pragma: no branch
+                for part in (
+                    text.replace("[", "").replace("]", "").split(",")
+                ):  # pragma: no branch
                     ops.append(_trim(String(part)).replace('"', ""))
                 fields.set("xformOpOrder", self.layer.add(usd_strings(ops^)))
                 continue
@@ -1262,7 +1280,9 @@ struct _Reader(Movable):
                     value_type,
                 )
             else:
-                var value = self.attribute_value(value_type, self.raw(group, slot))
+                var value = self.attribute_value(
+                    value_type, self.raw(group, slot)
+                )
                 var type_id = self.layer.add(usd_string(value_type))
                 var attribute = path + "." + name
                 var at = self.layer.spec(attribute)
@@ -1337,7 +1357,9 @@ struct _Reader(Movable):
             Error: If the key holds a group.
         """
         var key = self.tree.groups[group].keys[slot]
-        var target = self.text_of(group, slot, key).replace("<", "").replace(">", "")
+        var target = (
+            self.text_of(group, slot, key).replace("<", "").replace(">", "")
+        )
         var spec = UsdSpec(SPEC_RELATIONSHIP)
         spec.set("targetPaths", self.layer.add(usd_strings([target])))
         var meta = self.tree.meta(group, key)
@@ -1348,7 +1370,9 @@ struct _Reader(Movable):
                 spec.set("bindMaterialAs", self.layer.add(usd_string(text)))
         _ = self.layer.put(path + "." + String(key[byte=4:]), spec^)
 
-    def connection(mut self, attribute: String, value_type: String, raw: String) raises:
+    def connection(
+        mut self, attribute: String, value_type: String, raw: String
+    ) raises:
         """Read a `.connect` key into its attribute's `connectionPaths`.
 
         Args:
@@ -1374,7 +1398,9 @@ struct _Reader(Movable):
         var id = self.layer.add(usd_strings([target]))
         self.layer.specs[at].set("connectionPaths", id)
 
-    def time_samples(mut self, group: Int, attribute: String, value_type: String) raises:
+    def time_samples(
+        mut self, group: Int, attribute: String, value_type: String
+    ) raises:
         """Read a `.timeSamples` group into its attribute's samples, sorted
         by time.
 

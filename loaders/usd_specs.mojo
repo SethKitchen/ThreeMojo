@@ -589,4 +589,3 @@ struct UsdLayer(Copyable, Movable):
             if value.strings[k] == key:
                 return value.items[k]
         return NO_VALUE
-

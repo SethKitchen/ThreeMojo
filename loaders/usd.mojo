@@ -129,7 +129,9 @@ def parse_usda(
     Raises:
         Error: For anything the parser and the composer refuse.
     """
-    return compose_usd(parse_usda_layer(text), UsdAssets(), path, scene, assets, parent)
+    return compose_usd(
+        parse_usda_layer(text), UsdAssets(), path, scene, assets, parent
+    )
 
 
 def _archive(
@@ -163,7 +165,9 @@ def _archive(
     for k in zip.order():
         var name = zip.names[k]
         var ext = lowercase_extension(name)
-        var image = ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "avif"
+        var image = (
+            ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "avif"
+        )
         if image:
             files.add(name, USD_IMAGE, zip.images[k].copy(), UsdLayer())
         elif ext == "usd" or ext == "usda" or ext == "usdc":
@@ -208,11 +212,18 @@ def parse_usd(
         Error: For anything the module docstring lists.
     """
     if is_crate(bytes):
-        return compose_usd(parse_usdc(bytes.copy()), UsdAssets(), path, scene, assets, parent)
+        return compose_usd(
+            parse_usdc(bytes.copy()), UsdAssets(), path, scene, assets, parent
+        )
     if len(bytes) >= 2 and bytes[0] == 0x50 and bytes[1] == 0x4B:
         return _archive(bytes, scene, assets, parent)
     return compose_usd(
-        parse_usda_layer(decode_text(bytes)), UsdAssets(), path, scene, assets, parent
+        parse_usda_layer(decode_text(bytes)),
+        UsdAssets(),
+        path,
+        scene,
+        assets,
+        parent,
     )
 
 
@@ -253,7 +264,9 @@ def read_usd(
         Error: If the file cannot be read, and for anything `parse_usd`
             refuses.
     """
-    return parse_usd(Path(path).read_bytes(), scene, assets, parent, url_base(path))
+    return parse_usd(
+        Path(path).read_bytes(), scene, assets, parent, url_base(path)
+    )
 
 
 def read_usdz(
