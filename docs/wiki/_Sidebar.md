@@ -79,6 +79,7 @@
 - [Leg](Leg)
 - [Foot](Foot)
 - [Pelvis](Pelvis)
+- [Torso](Torso)
 - [Segment inertia](Segment-inertia)
 
 **Explanation**

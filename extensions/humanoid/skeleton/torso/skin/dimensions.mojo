@@ -1,0 +1,264 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Skin envelope derived from the modeled anatomy of the torso.
+
+Transverse sections run from below the waist to the top of the chest.
+Each one slices the vertebrae, the ribs, the sternum, the costal
+cartilages and the torso's muscles on both sides, closes the outline as
+a convex hull, and adds the subcutaneous fat and the dermis. See
+`extensions.humanoid.skeleton.loft`. The fat is thicker over the
+abdomen than over the chest. A female template carries breast tissue
+over the pectoralis major. A separate shell represents the dermis for
+occupancy and mass.
+
+The arm, the shoulder and the neck are not modeled, so the skin ends
+in a cut at the top of the chest.
+
+    var dims = torso_muscle_dimensions(person)
+    var d = torso_skin_distance(dims, Vector3(0, 0.3, 0.15))
+"""
+
+from extensions.humanoid.sex import MALE, Sex
+from extensions.humanoid.side import LEFT, RIGHT
+from extensions.humanoid.skeleton.field import (
+    DistanceField,
+    field_gradient,
+    flip_x,
+    mix_point,
+)
+from extensions.humanoid.skeleton.loft import (
+    AXIS_Y,
+    Loft,
+    LoftSample,
+    fit_loft,
+    loft_distance,
+)
+from extensions.humanoid.skeleton.torso.bones.dimensions import (
+    is_paired_bone,
+    named_torso_bones,
+    torso_bone_field,
+)
+from extensions.humanoid.skeleton.torso.ligaments.dimensions import (
+    COSTAL_CARTILAGES,
+    torso_ligament_field,
+)
+from extensions.humanoid.skeleton.torso.muscles.dimensions import (
+    TorsoMuscleDimensions,
+    is_paired_muscle,
+    named_torso_muscles,
+    torso_muscle_field,
+)
+from extensions.humanoid.skeleton.torso.sweep import SweepField
+from math.vector3 import Vector3
+from std.math import max, min
+
+# Sections from below the waist to the top of the chest: about nine
+# millimeters apart on a six-foot torso.
+comptime TORSO_SKIN_SECTIONS = 50
+# Subcutaneous fat over the abdomen and over the chest, in meters.
+# Authored adult template values.
+comptime MALE_BELLY_FAT = Float32(0.0140)
+comptime MALE_CHEST_FAT = Float32(0.0080)
+comptime FEMALE_BELLY_FAT = Float32(0.0240)
+comptime FEMALE_CHEST_FAT = Float32(0.0150)
+comptime TORSO_DERMIS = Float32(0.0018)
+
+
+struct TorsoSkinField(Copyable, DistanceField, Movable):
+    """The outer skin surface around the modeled torso anatomy."""
+
+    var belly: Float32
+    var chest: Float32
+    var dermis: Float32
+    var loft: Loft
+    var epsilon: Float32
+    var low: Vector3
+    var high: Vector3
+
+    def __init__(out self, dimensions: TorsoMuscleDimensions) raises:
+        """Build skin around the actual modeled structures.
+
+        Args:
+            dimensions: Torso landmarks and the muscles' radius scale.
+
+        Raises:
+            Error: If any underlying anatomical field refuses its inputs.
+        """
+        dimensions.validate()
+        var t = dimensions.torso.copy()
+        var f = t.frame
+        self.belly = torso_fat(t.sex, True)
+        self.chest = torso_fat(t.sex, False)
+        self.dermis = TORSO_DERMIS
+        self.epsilon = f.cm(0.15)
+        var points = List[LoftSample]()
+        var bones = named_torso_bones()
+        for index in range(len(bones)):
+            _append_field(points, torso_bone_field(t, bones[index], RIGHT))
+            if is_paired_bone(bones[index]):
+                _append_field(points, torso_bone_field(t, bones[index], LEFT))
+        _append_field(points, torso_ligament_field(t, COSTAL_CARTILAGES, RIGHT))
+        _append_field(points, torso_ligament_field(t, COSTAL_CARTILAGES, LEFT))
+        var muscles = named_torso_muscles()
+        for index in range(len(muscles)):
+            var part = muscles[index]
+            _append_field(points, torso_muscle_field(dimensions, part, RIGHT))
+            if is_paired_muscle(part):
+                _append_field(
+                    points, torso_muscle_field(dimensions, part, LEFT)
+                )
+        if t.sex != MALE:
+            # Breast tissue over the pectoralis major, on either side.
+            var center = f.at(9.8, 38.5, 10.8)
+            var ml = f.cm(6.2) * f.wide
+            var ap = f.cm(4.0)
+            var tall = f.cm(5.6)
+            points.append(LoftSample(center, ml, ap, tall, False))
+            points.append(LoftSample(flip_x(center), ml, ap, tall, False))
+        var bottom = f.at(0, 10.0, 0).y
+        var top = f.at(0, 53.5, 0).y
+        var waist = f.at(0, 30.0, 0).y
+        var ribs = f.at(0, 36.0, 0).y
+        var covers = List[Float32]()
+        var spacing = (top - bottom) / Float32(TORSO_SKIN_SECTIONS - 1)
+        for section in range(TORSO_SKIN_SECTIONS):
+            var y = bottom + spacing * Float32(section)
+            var t_up = min(max((y - waist) / (ribs - waist), 0), 1)
+            covers.append(
+                self.belly + (self.chest - self.belly) * t_up + self.dermis
+            )
+        self.loft = fit_loft(
+            points, AXIS_Y, bottom, top, TORSO_SKIN_SECTIONS, covers, 3
+        )
+        self.low = self.loft.low
+        self.high = self.loft.high
+
+    def distance(self, point: Vector3) -> Float32:
+        """Return distance to the anatomy-derived outer surface.
+
+        Negative is inside. Zero is the surface.
+        """
+        return loft_distance(self.loft, point)
+
+    def gradient(self, point: Vector3) -> Vector3:
+        """Return the unit outward normal of the field at `point`."""
+        return field_gradient(self, point, self.epsilon)
+
+
+struct TorsoSkinLayerField(Copyable, DistanceField, Movable):
+    """The dermal shell immediately inside a `TorsoSkinField`."""
+
+    var outer: TorsoSkinField
+    var thickness: Float32
+    var low: Vector3
+    var high: Vector3
+
+    def __init__(out self, dimensions: TorsoMuscleDimensions) raises:
+        """Build the dermal shell around the modeled anatomy.
+
+        Args:
+            dimensions: Torso landmarks and the muscles' radius scale.
+
+        Raises:
+            Error: If the outer field refuses an anatomical input.
+        """
+        self.outer = TorsoSkinField(dimensions)
+        self.thickness = self.outer.dermis
+        self.low = self.outer.low
+        self.high = self.outer.high
+
+    def distance(self, point: Vector3) -> Float32:
+        """Return distance to the dermal shell, in meters.
+
+        Negative is inside the dermis. Deep anatomy and exterior space
+        are both outside this shell.
+        """
+        var d = self.outer.distance(point)
+        return max(d, -d - self.thickness)
+
+
+def torso_fat(sex: Sex, belly: Bool) -> Float32:
+    """Return the subcutaneous fat over the torso, in meters.
+
+    Args:
+        sex: `MALE` or `FEMALE`. Any other value gets the female cover.
+        belly: True for the abdomen, False for the chest.
+
+    Returns:
+        The authored template thickness.
+    """
+    if sex == MALE:
+        if belly:
+            return MALE_BELLY_FAT
+        return MALE_CHEST_FAT
+    if belly:
+        return FEMALE_BELLY_FAT
+    return FEMALE_CHEST_FAT
+
+
+def torso_skin_distance(
+    dimensions: TorsoMuscleDimensions, point: Vector3
+) raises -> Float32:
+    """Return how far `point` lies outside the torso's skin, in meters.
+
+    Negative is inside.
+
+    Args:
+        dimensions: Landmarks from `torso_muscle_dimensions`.
+        point: A point in the pelvis frame, in meters.
+
+    Returns:
+        The signed distance, in meters.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy.
+    """
+    return TorsoSkinField(dimensions).distance(point)
+
+
+def _append_field(mut points: List[LoftSample], field: SweepField):
+    """Append every station of a field's sweeps, placed on its side.
+
+    A sheet that lies thin across the body wall is sliced as a round
+    section of its thickness; its breadth comes from the run of its
+    stations.
+    """
+    for s in range(len(field.sweeps)):
+        var sweep = field.sweeps[s].copy()
+        var flat = sweep.hint.z > 0.5
+        var first = len(points)
+        for index in range(len(sweep.stations)):
+            var station = sweep.stations[index]
+            var p = station.p
+            if field.mirror:
+                p = flip_x(p)
+            var ml = station.ml
+            var ap = station.ap
+            if flat:
+                ap = station.ml
+            if len(sweep.stations) < 2:
+                points.append(LoftSample(p, ml, ap, ap, False))
+                continue
+            points.append(LoftSample(p, ml, ap, 0, index > 0))
+            if index + 1 < len(sweep.stations):
+                var next = sweep.stations[index + 1]
+                var q = next.p
+                if field.mirror:
+                    q = flip_x(q)
+                var next_ap = next.ap
+                if flat:
+                    next_ap = next.ml
+                points.append(
+                    LoftSample(
+                        mix_point(p, q, 0.5),
+                        0.5 * (ml + next.ml),
+                        0.5 * (ap + next_ap),
+                        0,
+                        True,
+                    )
+                )
+        if len(points) > first:
+            points[first].joins = False
