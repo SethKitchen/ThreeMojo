@@ -190,6 +190,7 @@ from render.gpu import (
     LIGHTS_AMBIENT,
     LIGHTS_BACK,
     LIGHTS_EYE,
+    LIGHTS_COUNTS,
     LIGHTS_FIRST,
     LIGHTS_PROBE,
     LIGHTS_RECT_COUNT,
@@ -205,6 +206,8 @@ from render.gpu import (
     PLANE_COLOR,
     PLANE_DATA,
     PLANE_FLOATS,
+    PLANE_METAL_ROUGH,
+    PLANE_VELOCITY,
     PLANE_NORMAL,
     POINT_FLOATS,
     point_state,
@@ -386,7 +389,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 119)
+    assert_equal(len(flat), 125)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -1168,7 +1171,9 @@ def test_the_light_buffer_carries_the_camera_s_back_axis() raises:
     assert_equal(PLANE_COLOR, 1)
     assert_equal(PLANE_NORMAL, PLANE_COLOR + 4)
     assert_equal(PLANE_DATA, PLANE_NORMAL + 3)
-    assert_equal(PLANE_FLOATS, PLANE_DATA + 1)
+    assert_equal(PLANE_VELOCITY, PLANE_DATA + 1)
+    assert_equal(PLANE_METAL_ROUGH, PLANE_VELOCITY + 2)
+    assert_equal(PLANE_FLOATS, PLANE_METAL_ROUGH + 2)
 
 
 def test_flattening_lays_a_pmrem_row_after_the_faces() raises:
@@ -1200,7 +1205,8 @@ def test_flattening_the_lights_carries_the_probes() raises:
     var lighting = probe_lighting()
     var flat = flatten_lights(lighting)
     assert_equal(LIGHTS_BACK, LIGHTS_PROBE + 27)
-    assert_equal(LIGHTS_FIRST, LIGHTS_BACK + 3)
+    assert_equal(LIGHTS_COUNTS, LIGHTS_BACK + 3)
+    assert_equal(LIGHTS_FIRST, LIGHTS_COUNTS + 4)
     for lane in range(27):
         assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
     # Band zero is the average light, which is not black.

@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 199 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 203 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -134,11 +134,11 @@ The port is not at parity with three.js yet. 199 features are ported and 4 are o
 
 ### Materials
 
-- [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 
 <details>
-<summary>Ported: 32</summary>
+<summary>Ported: 33</summary>
 
+- [x] [Node material leftovers, and the Wood and MeshPostProcessing materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shadows-of-its-own): node control flow, JSON, light masks and shadow nodes [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 - [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): more types, loops, samplers and built-ins, and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shaders-from-threejss-examples) [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
@@ -227,7 +227,7 @@ The port is not at parity with three.js yet. 199 features are ported and 4 are o
 
 ### Loaders and exporters
 
-- [ ] TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
+- [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 
 <details>
 <summary>Ported: 21</summary>
@@ -258,13 +258,13 @@ The port is not at parity with three.js yet. 199 features are ported and 4 are o
 
 ### Rendering
 
-- [ ] GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
-- [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 
 <details>
-<summary>Ported: 30</summary>
+<summary>Ported: 32</summary>
 
+- [x] [Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#traa) [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 - [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
+- [x] [GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort](https://github.com/SethKitchen/ThreeMojo/wiki/Progressive-light-map): shader steps over float images, a light map baked in texture space, and batched meshes [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
 - [x] [SVGRenderer and Projector](https://github.com/SethKitchen/ThreeMojo/wiki/SVG-renderer): a scene drawn as SVG paths, faces lit flat, lines and sprites, matching three.js's output [#205](https://github.com/SethKitchen/ThreeMojo/issues/205)
 - [x] [TSL display nodes as passes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#display-nodes): Gaussian, box and hash blurs, chromatic aberration, the anamorphic streak, the lens flare and bayer16 [#190](https://github.com/SethKitchen/ThreeMojo/issues/190)
 - [x] [Render-target features](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#multisampled-render-targets): per-target MSAA, 3D, array and cube targets, drawing into a layer or mip level, and texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)

@@ -37,6 +37,7 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `smaa_pass()` | `SMAAPass` | Smooth jagged edges by their shape, in three stages. |
 | `ssaa_render_pass(sample_level=4, unbiased=True)` | `SSAARenderPass` | Draw the scene once per jittered sample and average the samples. |
 | `taa_render_pass(sample_level=0, accumulate=False)` | `TAARenderPass` | Draw jittered samples, and accumulate 32 of them over frames when `accumulate` is on. |
+| `traa_pass(depth_threshold=0.0005, edge_depth_diff=0.001, max_velocity_length=128)` | `TRAANode` | Draw the scene jittered, and mix it into the last frames where each pixel was. |
 | `ssao_pass(kernel_radius=8 m, min_distance=0.005, max_distance=0.1)` | `SSAOPass` | Draw the scene, and darken it where its surfaces are hemmed in. |
 | `sao_pass(intensity=0.18, scale=1, kernel_radius=100, blur=True)` | `SAOPass` | Darken the frame by scalable ambient occlusion. |
 | `ssr_pass(opacity=0.5, max_distance=180 m, thickness=0.018 m)` | `SSRPass` | Draw the scene, and lay what each surface reflects over it. |
@@ -112,7 +113,7 @@ The bloom's five levels are halved as three.js halves them, rounded up, never be
 
 ## Anti-aliasing
 
-`postprocessing/antialiasing.mojo`. Four passes smooth jagged edges. FXAA and SMAA work on the finished frame. SSAA and TAA draw the scene more than once, each time moved by a fraction of a pixel.
+`postprocessing/antialiasing.mojo` and `postprocessing/traa.mojo`. Five passes smooth jagged edges. FXAA and SMAA work on the finished frame. SSAA and TAA draw the scene more than once, each time moved by a fraction of a pixel. TRAA draws it once a frame and reuses the frames before.
 
 ```mojo
 var composer = EffectComposer()
@@ -122,7 +123,7 @@ composer.add_pass(smaa_pass())
 var image = composer.render(renderer, scene, assets, camera)
 ```
 
-Put `fxaa_pass` and `smaa_pass` after the `output_pass`, as the three.js examples do. Then they see the light that the curve leaves. Put `ssaa_render_pass` and `taa_render_pass` where a `render_pass` goes. They replace the frame.
+Put `fxaa_pass` and `smaa_pass` after the `output_pass`, as the three.js examples do. Then they see the light that the curve leaves. Put `ssaa_render_pass`, `taa_render_pass` and `traa_pass` where a `render_pass` goes. They replace the frame.
 
 ### FXAA
 
@@ -149,6 +150,22 @@ Set `accumulate_index` to minus one, or call `reset`, when the scene or the came
 `JitteredCamera` does the jitter. It wraps any camera and moves its projection, as three.js's `setViewOffset` moves it. An offset of one pixel right moves the picture one pixel left. `jitter_offsets(level)` returns three.js's patterns in pixels.
 
 A pixel of an SSAA frame is data only if it is data in every sample. Its depth is the nearest. A TAA frame keeps the data flags and the depths of its held frame.
+
+### TRAA
+
+`traa_pass` is three.js r186's `TRAANode`, with the scene pass that it reads. Each frame, the pass moves the camera by the next of 32 Halton offsets, less a half pixel. It draws the scene with a [velocity attachment](Render-target-and-framebuffer#velocity). The velocity is measured with the projection before the move, through `Renderer.set_velocity_projection`, so the move is not motion.
+
+Then each pixel mixes the frame into the history, the pass's last result, as `traa_pixel` does:
+
+1. The 3 by 3 neighbors give the closest depth and the farthest depth. The velocity is read at the closest.
+2. The history is read where the velocity says that the pixel was. The last frame's depth there is moved into this frame's view.
+3. The history is kept if its place is on the image and the surface was not uncovered. A surface is uncovered when it is more than `depth_threshold` behind the last frame's depth. An edge keeps the history too. At an edge, the neighbors' depths differ by more than `edge_depth_diff`.
+4. The history is clipped to the box of the neighbors' mean and deviation. This is three.js's variance clipping.
+5. The new frame takes at least 5 percent. It takes more for a velocity that is a fraction of a pixel and for a fast one. It takes all where the history is not kept. `flicker_reduction` weighs each side down by its brightness.
+
+The first frame's history is the frame itself. A renderer of another size starts the history again. The pass keeps its history in `traa`, a `TraaSettings`.
+
+TRAA differs from three.js in two ways. A neighbor past the edge of the image is the edge pixel, as WebGPU's robust `textureLoad` gives it. The first frame's last depth is zero, as a fresh WebGPU depth texture holds.
 
 ### How SMAA differs from three.js
 
@@ -579,7 +596,7 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 
 ## Display nodes
 
-`postprocessing/display_nodes.mojo`. Six of three.js's TSL display nodes run as composer passes, with three.js's defaults.
+`postprocessing/display_nodes.mojo`. Seven of three.js's TSL display nodes run as composer passes, with three.js's defaults.
 
 | Builder | three.js | What it does |
 |---|---|---|
@@ -589,6 +606,10 @@ composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
 | `chromatic_aberration_pass(strength=1, center_u=0.5, center_v=0.5, scale=1.1)` | `chromaticAberration` | Read red further out and blue further in. |
 | `anamorphic_pass(threshold=0.9, scale=3, samples=32)` | `anamorphic` | Add a blue streak of the bright light along each row. |
 | `lensflare_pass(threshold=0.5, ghost_samples=4)` | `lensflare` | Add ghosts of the bright light, mirrored through the center. |
+| `dof_pass(focus_distance=1 m, focal_length=1 m, bokeh_scale=1)` | `dof` | Blur the near field and the far field apart, with a bokeh. |
+| `denoise_pass(luma_phi=5, depth_phi=5, normal_phi=5, radius=5)` | `denoise` | Average each pixel with the taps around it that are like it. |
+| `ssr_node_pass(max_distance=1 m, thickness=0.1 m, intensity=1, quality=0.5)` | `ssr` | Add what each metallic surface reflects. See [SSR node](#ssr-node). |
+| `motion_blur_pass(amount=1, samples=16)` | `motionBlur` | Blur each pixel along its velocity. |
 
 Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's names.
 
@@ -599,9 +620,37 @@ Each pass keeps its settings in `display`, a `DisplaySettings`, with three.js's 
 
 `GaussianBlurNode`'s weights are not normalized, as three.js leaves them. So a blur of an even frame is a little darker than the frame. `hashBlur` turns each tap's angle into degrees and takes the cosine of that, as the node does.
 
+`dof_pass` is three.js r186's `DepthOfFieldNode`, in its five stages. Each pixel's circle of confusion is `smoothstep(0, focal_length, abs(distance - focus_distance))`, from its view distance. The circle is kept apart for the near field and the far field.
+
+The near field's circle is blurred by `gaussianBlur(coc, 1, 2)` and halved in size. Then each field blurs the frame at half size with 64 taps on a golden-angle spiral, spread by its circle. It spreads the brightest of 16 more taps of that. The composite mixes the far blur over the frame and the near blur over that, each by twice its circle, at most one.
+
+`denoise_pass` is three.js r186's `DenoiseNode` over the frame. The composer draws its frame with a normal attachment while the pass is on. Each pixel that holds a surface averages 16 taps on a disk, which a noise texture turns. Each tap weighs by how like the pixel it is in luminance, in depth along the normal, and in normal.
+
+The node's texture coordinate grows down the image, so its disk is upside down against the WebGL `PoissonDenoiseShader`. The node reads the noise as the angle itself, where the shader multiplies it by two pi. This port does both as the node does. The noise is seeded, as the [GTAO pass's](#gtao) is.
+
+The DoF and denoise passes, like the other display passes, run on the host in a `GpuComposer` frame.
+
+### SSR node
+
+`ssr_node_pass` is three.js r186's `SSRNode` in its default mode, in `postprocessing/ssr_node.mojo`. It adds the reflections to the frame, as three.js's SSR example adds them. The composer draws its frame with a normal attachment and a [metalness attachment](Render-target-and-framebuffer#metalness-and-roughness) while the pass is on.
+
+Each pixel with a surface and some metalness sends a ray along its reflection. The ray is `max_distance` long along the view and stops at the near plane. The march crosses the image one pixel at a time, times `quality`. The ray hits where it passes behind the depth, within `thickness` of the surface there. A surface that faces away from the ray is passed over. A hit farther from the pixel's plane than `max_distance` ends the march.
+
+A hit reads the frame's color there. The color is scaled by the metalness, by the square of the part of `max_distance` that is left, and by three.js's Fresnel term, `(dot(incident, reflected) + 1) / 2`. The light is capped at `max_luminance` and scaled by `intensity`.
+
+With `use_roughness` on, the reflections go into a chain of five levels. Each level after the first is a box blur, a level's number of pixels apart. The frame reads the chain at the level that its roughness squared, times four, gives. This is how the example reads the node through its `roughnessNode`.
+
+The node's stochastic mode, its environment sampling, its history and its binary refinement are not ported. The example leaves all four off. The pass runs on the host in a `GpuComposer` frame.
+
 `bayer16(x, y)` is three.js's `bayer16`: the 16 by 16 Bayer matrix, zero to one, from the node's own image.
 
-These passes run on the host in a `GpuComposer` frame.
+The motion blur reads the frame's [velocity attachment](Render-target-and-framebuffer#velocity). The composer draws its frame with one while a motion blur pass is on. The pass scales each velocity by `amount`, three.js's example's `blurAmount`.
+
+Then it sums the taps as three.js's node sums them. The first tap is the pixel. Each other tap is `i / (samples - 1) - 0.5` of the velocity along, for `i` from one to `samples`. The sum is divided by `samples`, one less than the taps, as three.js divides it. The node adds the velocity to a texture coordinate that grows down the image, so the vertical taps go against the velocity, as three.js's do.
+
+The camera and the objects move between two calls to `render`. So the first frame is sharp.
+
+The motion blur runs on the device in a `GpuComposer` frame, with the velocities of the host frame. `motion_blur_pixel` does the work on both sides. The other display passes run on the host in a `GpuComposer` frame.
 
 ## Renderer effects
 

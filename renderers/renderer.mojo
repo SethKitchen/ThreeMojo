@@ -115,7 +115,14 @@ from core.buffer_geometry import (
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
-from lights.light import DIRECTIONAL, POINT, SPOT, Light
+from lights.light import (
+    ALL_LIGHTS,
+    DIRECTIONAL,
+    POINT,
+    SPOT,
+    Light,
+    LightMask,
+)
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
@@ -253,6 +260,7 @@ from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     DRAW_TRIANGLES,
@@ -947,12 +955,116 @@ struct _RendererState(Movable):
     var info: RenderInfo
     var shadow_items: List[RenderItem]
     var shadow_lights: List[Int]
+    # What a velocity attachment reads, three.js's `VelocityNode`: whether
+    # the frame being drawn keeps velocities, the camera's view and
+    # projection the frame before and this frame, and each object's world
+    # matrix when a frame last drew it, by its node. `drawn_worlds` holds
+    # this frame's until the frame is done.
+    var tracks_velocity: Bool
+    var knows_camera: Bool
+    # The projection velocities are measured with in the place of the
+    # camera's, or `None`: three.js's `VelocityNode.setProjectionMatrix`,
+    # which TRAA sets to the camera's projection before its jitter.
+    var velocity_projection: Optional[Matrix4]
+    var previous_view: Matrix4
+    var previous_projection: Matrix4
+    var current_view: Matrix4
+    var current_projection: Matrix4
+    var previous_worlds: Dict[Int, Matrix4]
+    var drawn_worlds: Dict[Int, Matrix4]
 
     def __init__(out self):
         """Count nothing yet."""
         self.info = RenderInfo(0, 0, 0, 0, 0)
         self.shadow_items = List[RenderItem]()
         self.shadow_lights = List[Int]()
+        self.tracks_velocity = False
+        self.knows_camera = False
+        self.velocity_projection = None
+        self.previous_view = Matrix4()
+        self.previous_projection = Matrix4()
+        self.current_view = Matrix4()
+        self.current_projection = Matrix4()
+        self.previous_worlds = Dict[Int, Matrix4]()
+        self.drawn_worlds = Dict[Int, Matrix4]()
+
+    def advance_camera(mut self, view: Matrix4, projection: Matrix4):
+        """Begin a frame that keeps velocities: the camera's matrices of the
+        last such frame become the previous ones, and these the current.
+        The first frame's previous matrices are its own, so nothing has
+        moved yet, as three.js's first frame.
+
+        Args:
+            view: The camera's view matrix this frame.
+            projection: Its projection matrix this frame, which
+                `velocity_projection` takes the place of when it is set.
+        """
+        var measured = projection
+        if Bool(self.velocity_projection):
+            measured = self.velocity_projection.value()
+        if self.knows_camera:
+            self.previous_view = self.current_view
+            self.previous_projection = self.current_projection
+        else:
+            self.previous_view = view
+            self.previous_projection = measured
+            self.knows_camera = True
+        self.current_view = view
+        self.current_projection = measured
+
+    def current_clip(self, world: Matrix4) -> Matrix4:
+        """Return the matrix that puts a draw's vertex where this frame has
+        it, in clip space, for a velocity: three.js's
+        `clipPositionCurrent`.
+
+        Args:
+            world: The draw's world matrix this frame.
+
+        Returns:
+            The projection, view and model, in one.
+        """
+        return self.current_projection * self.current_view * world
+
+    def previous_clip(
+        mut self, node: NodeId, node_world: Matrix4, world: Matrix4
+    ) raises -> Matrix4:
+        """Return the matrix that puts a draw's vertex where the last frame
+        had it, in clip space, and note the object's world matrix for the
+        next frame: three.js's `previousProjectionMatrix`,
+        `previousCameraViewMatrix` and `previousModelWorldMatrix`.
+
+        An object first drawn now has not moved. One that moved carries
+        what its node's matrix does not, an instance's own matrix, from
+        this frame.
+
+        Args:
+            node: The draw's node.
+            node_world: The node's world matrix this frame.
+            world: The draw's world matrix this frame.
+
+        Returns:
+            The last frame's projection, view and model, in one.
+
+        Raises:
+            Error: Never: the node is looked up after it is known.
+        """
+        self.drawn_worlds[node.value] = node_world
+        var model = world
+        if node.value in self.previous_worlds:
+            var then = self.previous_worlds[node.value]
+            if then != node_world:
+                var undo = node_world
+                undo.invert()
+                model = then * undo * world
+        return self.previous_projection * self.previous_view * model
+
+    def commit_worlds(mut self):
+        """End a frame that keeps velocities: each object it drew keeps its
+        world matrix for the next, three.js's `updateAfter`."""
+        for entry in self.drawn_worlds.items():
+            self.previous_worlds[entry.key] = entry.value
+        self.drawn_worlds = Dict[Int, Matrix4]()
+        self.tracks_velocity = False
 
     def begin_frame(mut self, auto_reset: Bool):
         """Count one more frame, and forget the last one's draws unless
@@ -1469,6 +1581,7 @@ def _draws(
     receivers_cast: Bool = False,
     distance_casters: Bool = False,
     override: Optional[MaterialId] = None,
+    uv_meshes: List[Int] = List[Int](),
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -1537,6 +1650,9 @@ def _draws(
         override: The material that takes the place of every object's,
             `Renderer.drawn_override`: the renderer's or the scene's, or
             none.
+        uv_meshes: `Renderer.uv_space_meshes`: the meshes a light map's
+            frame draws, none culled, and nothing else. Empty for a frame
+            seen through the camera.
 
     Returns:
         The draws the camera makes, in the order to make them. A frame's
@@ -1557,8 +1673,13 @@ def _draws(
     )
     var known = List[Bool](length=assets.geometries.count(), fill=False)
     var one: List[Matrix4] = [Matrix4()]
+    # In texture space, only the meshes named, and none culled: the
+    # camera does not frame them.
+    var uv_space = len(uv_meshes) > 0
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
+        if uv_space and index not in uv_meshes:
+            continue
         if casters_only and not _casts(
             mesh.cast_shadow, mesh.receive_shadow, receivers_cast
         ):
@@ -1606,7 +1727,7 @@ def _draws(
                 wears[run],
                 geometry,
                 placing[0],
-                mesh.frustum_culled and not mesh.is_morphed(),
+                mesh.frustum_culled and not mesh.is_morphed() and not uv_space,
                 view,
                 visible,
                 frustum,
@@ -1631,7 +1752,7 @@ def _draws(
     # A light's view holds every other kind that casts, as three.js's
     # `renderObject` draws any mesh, line or points object whose
     # `castShadow` is set: a skinned mesh posed, each instance placed.
-    for index in range(len(scene.skinned_meshes)):
+    for index in range(0 if uv_space else len(scene.skinned_meshes)):
         ref skinned = scene.skinned_meshes[index]
         if casters_only and not _casts(
             skinned.cast_shadow, skinned.receive_shadow, receivers_cast
@@ -1660,7 +1781,7 @@ def _draws(
             len(skins) - 1,
             receive_shadow=skinned.receive_shadow,
         )
-    for index in range(len(scene.instanced_meshes)):
+    for index in range(0 if uv_space else len(scene.instanced_meshes)):
         ref group = scene.instanced_meshes[index]
         if casters_only and not _casts(
             group.cast_shadow, group.receive_shadow, receivers_cast
@@ -1687,7 +1808,7 @@ def _draws(
             colors=group.colors,
             morphs=group.morphs,
         )
-    for index in range(len(scene.batched_meshes)):
+    for index in range(0 if uv_space else len(scene.batched_meshes)):
         ref batch = scene.batched_meshes[index]
         if casters_only and not _casts(
             batch.cast_shadow, batch.receive_shadow, receivers_cast
@@ -1714,7 +1835,7 @@ def _draws(
     # translucent sprite falls between the translucent surfaces either
     # side of it. Culled by the sphere around the unit square carried by
     # the world matrix, three.js's `Sprite` geometry bound.
-    for index in range(len(scene.sprites)):
+    for index in range(0 if uv_space else len(scene.sprites)):
         if casters_only:
             continue
         ref sprite = scene.sprites[index]
@@ -1978,6 +2099,50 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
             -corner.layers.clearcoat_normal_scale.y,
         )
     return turned
+
+
+def _clip_of(matrix: Matrix4, point: Vector3) -> Vector3:
+    """Return a point's clip-space x, y and w under `matrix`, which takes
+    it as a position: what a velocity attachment interpolates. See
+    `render.rasterizer.fragment_velocity`."""
+    ref e = matrix.elements
+    return Vector3(
+        e[0] * point.x + e[4] * point.y + e[8] * point.z + e[12],
+        e[1] * point.x + e[5] * point.y + e[9] * point.z + e[13],
+        e[3] * point.x + e[7] * point.y + e[11] * point.z + e[15],
+    )
+
+
+def light_masks(assets: Assets) raises -> List[LightMask]:
+    """Return the light masks the materials name, three.js's `lightsNode`,
+    each once, in the order of the first material to name it. A material
+    lit by every light names none.
+
+    Args:
+        assets: The materials.
+
+    Returns:
+        The masks. A triangle of the `i`th is lit by the frame's lighting
+        `i + 1`; see `RasterVertex.lights`.
+
+    Raises:
+        Error: Never: every id asked is in the store.
+    """
+    var masks = List[LightMask]()
+    for index in range(assets.materials.count()):
+        var mask = assets.materials.get(MaterialId(index)).lights
+        if mask != ALL_LIGHTS and mask not in masks:
+            masks.append(mask)
+    return masks^
+
+
+def _mask_place(masks: List[LightMask], mask: LightMask) -> Int:
+    """Return which of the frame's lightings a material's mask names: zero
+    for every light, and one past its place in `masks` otherwise."""
+    for index in range(len(masks)):
+        if masks[index] == mask:
+            return index + 1
+    return 0
 
 
 def _to_raster(
@@ -2382,6 +2547,9 @@ struct _Paint(ImplicitlyCopyable):
     # The frames the environment and the normal map are read in; see
     # `_frames_of`.
     var frames: TextureFrames
+    # Which of the frame's lightings lights the draw; see
+    # `RasterVertex.lights`.
+    var lights: Int
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -2407,6 +2575,7 @@ struct _Paint(ImplicitlyCopyable):
             shown=self.shown,
         )
         corner.frames = self.frames
+        corner.lights = self.lights
         corner.custom = vertex.custom
         corner.gouraud_direct = vertex.gouraud_direct
         corner.gouraud_indirect = vertex.gouraud_indirect
@@ -2421,7 +2590,47 @@ struct _Paint(ImplicitlyCopyable):
             corner.scatter_attenuation = scattering.attenuation
             corner.scatter_power = scattering.power
             corner.scatter_scale = scattering.scale
+        corner.current = vertex.current
+        corner.previous = vertex.previous
         return corner^
+
+    def emit_in_uv_space(
+        self,
+        mut corners: List[RasterVertex],
+        a: ClipVertex,
+        b: ClipVertex,
+        c: ClipVertex,
+        viewport: Rect,
+        height: Int,
+    ):
+        """Append one triangle placed by its second texture coordinates
+        across the viewport, `u1` from its left edge and `v1` up from its
+        bottom one, at the middle depth with no perspective: three.js's
+        `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. It is lit as it
+        stands in the world, from both sides, unfogged.
+
+        Args:
+            corners: The frame's raster vertices, appended to.
+            a: The first corner, in camera space.
+            b: The second.
+            c: The third.
+            viewport: Where the texture's square is on the target.
+            height: The target's height, which the viewport's rows count
+                down from.
+        """
+        var left = Float32(viewport.x)
+        var top = Float32(viewport.top(height))
+        var wide = Float32(viewport.width)
+        var tall = Float32(viewport.height)
+        # Three corners, so the loop runs.
+        for vertex in [a, b, c]:  # pragma: no branch
+            var corner = self.raster(vertex)
+            corner.x = left + vertex.u1 * wide
+            corner.y = top + (1 - vertex.v1) * tall
+            corner.z = 0
+            corner.inv_w = 1
+            corner.fog = False
+            corners.append(corner^)
 
     def emit(
         self,
@@ -3164,6 +3373,7 @@ def _emit_sprite(
         _draw_offset(material, casters_only),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -3566,6 +3776,7 @@ def _emit_wide_line(
         _draw_offset(material, False),
         _shown_of(material),
         TextureFrames(),
+        0,
     )
     var no_planes = List[Plane]()
     for segment in range(segments):
@@ -4111,6 +4322,11 @@ struct Renderer(Movable):
     # `shadowMap.type`. `PCF_SHADOW_MAP` by default, as there. See
     # `lights.shadow`.
     var shadow_map_type: ShadowMapType
+    # Whether the shadow pass keeps the color a light sees through each
+    # caster, three.js's `shadowMap.transmitted`: opaque black, or the
+    # material's `CAST_SHADOW_NODE`, thinned by its maps' alpha. False by
+    # default, as there. See `lights.shadow.transmitted_shadow`.
+    var shadow_map_transmitted: Bool
     # How a frame's depth is stored and compared: three.js's
     # `logarithmicDepthBuffer` and `reversedDepthBuffer`, as one value.
     # `STANDARD_DEPTH` by default, as there. See `set_depth_mode`.
@@ -4125,6 +4341,13 @@ struct Renderer(Movable):
     # Off, the frame draws over what the target holds; `clear` clears it
     # by hand.
     var auto_clear: Bool
+    # The scene's meshes, by their place in `scene.meshes`, to draw in the
+    # space of their second texture coordinates and nothing else: what
+    # `ProgressiveLightMap` draws its light map with, three.js's
+    # `gl_Position = vec4((uv1 - 0.5) * 2.0, 1.0, 1.0)`. No background,
+    # line or point is drawn. Empty, the default, draws the scene through
+    # the camera.
+    var uv_space_meshes: List[Int]
     var auto_clear_color: Bool
     var auto_clear_depth: Bool
     var auto_clear_stencil: Bool
@@ -4176,9 +4399,11 @@ struct Renderer(Movable):
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
+        self.shadow_map_transmitted = False
         self.depth_mode = STANDARD_DEPTH
         self.time = Duration(0.0, SECOND)
         self.auto_clear = True
+        self.uv_space_meshes = List[Int]()
         self.auto_clear_color = True
         self.auto_clear_depth = True
         self.auto_clear_stencil = True
@@ -4342,6 +4567,7 @@ struct Renderer(Movable):
         big.clipping_planes = self.clipping_planes.copy()
         big.local_clipping_enabled = self.local_clipping_enabled
         big.shadow_map_type = self.shadow_map_type
+        big.shadow_map_transmitted = self.shadow_map_transmitted
         big.depth_mode = self.depth_mode
         big.time = self.time
         big.auto_clear = self.auto_clear
@@ -4412,6 +4638,20 @@ struct Renderer(Movable):
             enabled: Whether the scissor is enforced.
         """
         self.scissor_test = enabled
+
+    def set_velocity_projection(self, projection: Optional[Matrix4]):
+        """Measure velocities with a projection in the place of the
+        camera's, or with the camera's again: three.js's
+        `VelocityNode.setProjectionMatrix`. TRAA sets the camera's
+        projection before its jitter, so the jitter is not motion.
+
+        Kept with the renderer's history, which every copy that shares it
+        sees; see `_RendererState`.
+
+        Args:
+            projection: The projection, or `None` for the camera's own.
+        """
+        self._state[].velocity_projection = projection
 
     def _to_screen[C: Camera](self, camera: C) raises -> Matrix4:
         """Return the transform from camera space to the viewport's pixels.
@@ -4603,11 +4843,17 @@ struct Renderer(Movable):
                 coordinates as red and green instead.
 
         Raises:
-            Error: If the mode is none of those three. The type stops a bare
-                integer; it does not stop `ShadeMode(99)`.
+            Error: If the mode is none of those three: `SHADE_SHADOW` is the
+                shadow pass's. The type stops a bare integer; it does not
+                stop `ShadeMode(99)`.
         """
         if not mode.is_valid():
-            raise Error("A shading mode that is none of the three")
+            raise Error("A shading mode that is none of the four")
+        if mode == SHADE_SHADOW:
+            raise Error(
+                "SHADE_SHADOW draws a shadow map's colors, which the"
+                " renderer draws for itself"
+            )
         self.shading = mode
 
     def prepare[
@@ -4772,6 +5018,7 @@ struct Renderer(Movable):
             receivers_cast,
             distance_casters,
             self.drawn_override(scene),
+            self.uv_space_meshes.copy(),
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -4780,6 +5027,13 @@ struct Renderer(Movable):
         # corners: resolved once, when the first one is met.
         var gouraud_lights = Lighting.uniform()
         var gouraud_ready = False
+        # A light map's frame: the meshes named, in their own texture
+        # space; see `uv_space_meshes`. A light's view is drawn by a
+        # renderer of its own, which draws the casters as they stand.
+        var in_uv_space = len(self.uv_space_meshes) > 0
+        # The light masks the materials name, each a lighting of its own;
+        # see `light_masks`.
+        var masks = light_masks(assets)
         for slot in range(len(draws)):
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
@@ -4871,6 +5125,21 @@ struct Renderer(Movable):
                 )
                 continue
             var world = draws[slot].world
+            # For a frame that keeps velocities, the matrix that puts a
+            # vertex where the last frame had it. A light map's frame is
+            # not seen through the camera, and keeps none.
+            var tracks = self._state[].tracks_velocity and not in_uv_space
+            var front = Matrix4()
+            var back = Matrix4()
+            if tracks:
+                front = self._state[].current_clip(world)
+                back = self._state[].previous_clip(
+                    draws[slot].node,
+                    scene.world_matrix(draws[slot].node),
+                    world,
+                )
+            var current_points = List[Vector3]()
+            var previous_points = List[Vector3]()
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
             # geometric-normal fallback upside down. Asked once per draw, of
@@ -5147,6 +5416,9 @@ struct Renderer(Movable):
                 var point = world.transform_point(local)
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
+                if tracks:
+                    current_points.append(_clip_of(front, local))
+                    previous_points.append(_clip_of(back, local))
 
             # Texture coordinates do not go through the world transform:
             # they name a place in an image, not a place in the world. Nor
@@ -5291,6 +5563,7 @@ struct Renderer(Movable):
                 _draw_offset(material, casters_only),
                 _shown_of(material),
                 _frames_of(scene, material, world),
+                _mask_place(masks, material.lights),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -5439,6 +5712,26 @@ struct Renderer(Movable):
                     _light_at_corner(
                         corner_c, gouraud_lights, normal_c, world_points[third]
                     )
+                if tracks:
+                    corner_a.current = current_points[first]
+                    corner_b.current = current_points[second]
+                    corner_c.current = current_points[third]
+                    corner_a.previous = previous_points[first]
+                    corner_b.previous = previous_points[second]
+                    corner_c.previous = previous_points[third]
+                # In texture space the triangle is placed by its second
+                # coordinates, whole: nothing clips it and neither side
+                # is culled.
+                if in_uv_space:
+                    paint.emit_in_uv_space(
+                        corners,
+                        corner_a,
+                        corner_b,
+                        corner_c,
+                        self.viewport,
+                        self.height,
+                    )
+                    continue
                 # A triangle wholly between the two planes is what the
                 # clipper would hand back untouched, so it is not sent
                 # through: the clipper builds four lists for every triangle
@@ -5575,6 +5868,8 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_lines` raises.
         """
+        if len(self.uv_space_meshes) > 0:
+            return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
@@ -5654,11 +5949,10 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each segment as it shades a
             # triangle: a `ShaderMaterial` on a `Line`. A light's view
-            # draws the depth alone, so it keeps the position node and
-            # runs no fragment of the program.
+            # runs it too, for its mask and its cast shadow node.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # A dashed line is three.js's `dashed` shader, which does not
             # dither; a plain one is its `basic` shader, which does. A
             # light's view takes the default state; see `_draw_state`.
@@ -6077,6 +6371,8 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `prepare_points` raises.
         """
+        if len(self.uv_space_meshes) > 0:
+            return List[RasterVertex]()
         var view = camera.view_matrix_in(scene)
         var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
@@ -6154,11 +6450,11 @@ struct Renderer(Movable):
             var material = assets.materials.get(drawn)
             # A node material shades each point's square as it shades a
             # triangle, three.js's `PointsNodeMaterial` and a
-            # `ShaderMaterial` on `Points`. A light's view draws the depth
-            # alone, as it does for a line.
+            # `ShaderMaterial` on `Points`. A light's view runs it too, as
+            # it does for a line.
             var program = _checked_nodes(assets, material.nodes)
             var physics = _Physics()
-            physics.nodes = NO_NODES if casters_only else program
+            physics.nodes = program
             # three.js's `points` shader premultiplies and does not dither.
             # A light's view takes the default state; see `_draw_state`.
             var state = _draw_state(material, casters_only, False, False, True)
@@ -6389,7 +6685,13 @@ struct Renderer(Movable):
 
     def prepare_frame[
         C: Camera
-    ](self, scene: Scene, assets: Assets, camera: C,) raises -> Frame:
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        keeps_velocity: Bool = False,
+    ) raises -> Frame:
         """Turn a scene into a frame: its triangles, its segments, its
         points, and the one order all three are drawn in.
 
@@ -6412,6 +6714,11 @@ struct Renderer(Movable):
                 and lights in it.
             assets: The geometry, materials and textures they name.
             camera: The camera to project through.
+            keeps_velocity: Whether the frame is drawn into a target with
+                a velocity attachment. The camera's matrices move on, as
+                three.js's `VelocityNode` moves them once a frame, and
+                each mesh's corners carry where the last such frame had
+                them. See `render.rasterizer.fragment_velocity`.
 
         Returns:
             The frame. `Renderer.render` fills it with `rasterize_frame`
@@ -6423,7 +6730,19 @@ struct Renderer(Movable):
                 its view.
         """
         var corner_spans = List[_Span]()
-        var corners = self._prepared(scene, assets, camera, False, corner_spans)
+        self._state[].tracks_velocity = keeps_velocity
+        if keeps_velocity:
+            self._state[].advance_camera(
+                camera.view_matrix_in(scene), camera.projection_matrix()
+            )
+        var corners: List[RasterVertex]
+        try:
+            corners = self._prepared(scene, assets, camera, False, corner_spans)
+        finally:
+            # Each object drawn keeps its matrix for the next frame, even
+            # when this one is refused, and no later frame keeps
+            # velocities it did not ask for.
+            self._state[].commit_worlds()
         var segment_spans = List[_Span]()
         var segments = self._prepared_lines(
             scene, assets, camera, segment_spans
@@ -6883,7 +7202,11 @@ struct Renderer(Movable):
         hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
-        var frame = self.prepare_frame(scene, assets, camera)
+        # A target with a velocity attachment makes a frame that keeps
+        # velocities.
+        var frame = self.prepare_frame(
+            scene, assets, camera, target.has_velocities()
+        )
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
         # asks it before a launch. The uv view is data throughout and is
@@ -6906,6 +7229,9 @@ struct Renderer(Movable):
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
         var lighting = self._lighting(scene, assets, camera)
+        # And the lights of each material that names its own, three.js's
+        # `lightsNode`.
+        var lightings = self._lightings(scene, assets, camera, lighting)
         # The shadow maps are drawn, so their casters are known.
         ref state = self._state[]
         for index in range(len(state.shadow_items)):
@@ -6957,8 +7283,9 @@ struct Renderer(Movable):
             )
         # Spelled as a Bool rather than testing the Optional directly,
         # because the coverage instrumenter wraps every condition in a
-        # probe that takes a Bool; see `materials.material`.
-        var painted = Bool(backdrop)
+        # probe that takes a Bool; see `materials.material`. A frame in
+        # texture space has no background: it is not seen through a camera.
+        var painted = Bool(backdrop) and len(self.uv_space_meshes) == 0
         if painted:
             _paint_backdrop(target, kept, backdrop.value())
         # Triangles, segments and points in the frame's one order, which
@@ -6981,10 +7308,52 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
+
+    def _lightings[
+        C: Camera
+    ](
+        self, scene: Scene, assets: Assets, camera: C, lighting: Lighting
+    ) raises -> List[Lighting]:
+        """Return the lights each light mask the materials name resolves
+        to, in `light_masks` order: `lighting` narrowed to the mask's
+        lights, with the same shadow maps and spot light maps.
+
+        Args:
+            scene: The scene.
+            assets: The materials, whose masks are read.
+            camera: The camera the frame is drawn through.
+            lighting: The frame's own lighting, every light the camera
+                sees.
+
+        Returns:
+            One lighting a mask.
+
+        Raises:
+            Error: Everything `Lighting` raises.
+        """
+        var masks = light_masks(assets)
+        var lightings = List[Lighting]()
+        for index in range(len(masks)):
+            lightings.append(
+                Lighting(
+                    scene,
+                    visible=camera.visible_layers(),
+                    eye=camera_position(scene, camera),
+                    toward_eye=toward_camera(scene, camera),
+                    up=camera_up(scene, camera),
+                    shadows=lighting.shadows.copy(),
+                    ltc=self.ltc_tables(),
+                    spot_maps=lighting.spot_maps.copy(),
+                    back=camera_back(scene, camera),
+                    chosen=masks[index],
+                )
+            )
+        return lightings^
 
     def _lighting[
         C: Camera
@@ -7111,6 +7480,7 @@ struct Renderer(Movable):
         """
         if self.shading != SHADE_TEXTURE or not _transmits(frame):
             return TransmissionTarget()
+        var lightings = self._lightings(scene, assets, camera, lighting)
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -7143,6 +7513,7 @@ struct Renderer(Movable):
             programs=frame.programs,
             volumes=assets.data_3d_textures,
             arrays=assets.data_array_textures,
+            lightings=lightings,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -7175,6 +7546,7 @@ struct Renderer(Movable):
             frame.programs,
             assets.data_3d_textures,
             assets.data_array_textures,
+            lightings,
         )
         return TransmissionTarget(drawn, view)
 
@@ -7347,6 +7719,7 @@ struct Renderer(Movable):
                     shadow.radius,
                     self.shadow_map_type,
                     shadow.intensity,
+                    self._kept_colors(target),
                 )
             )
         return maps^
@@ -7365,6 +7738,7 @@ struct Renderer(Movable):
         var near = shadow.near.to(METER)
         var far = light.shadow_far().to(METER)
         var depths = List[Float32](capacity=CUBE_FACES * size * size)
+        var colors = List[Float32]()
         for face in range(CUBE_FACES):  # pragma: no branch
             var camera = PerspectiveCamera(
                 Angle(90.0, DEGREE), 1.0, shadow.near, light.shadow_far()
@@ -7392,6 +7766,7 @@ struct Renderer(Movable):
                             far,
                         )
                     )
+            colors.extend(self._kept_colors(target))
         return ShadowMap(
             cube_of=index,
             size=size,
@@ -7404,7 +7779,23 @@ struct Renderer(Movable):
             radius=shadow.radius,
             shadow_type=self.shadow_map_type,
             intensity=shadow.intensity,
+            colors=colors^,
         )
+
+    def _kept_colors(self, target: RenderTarget) -> List[Float32]:
+        """Return what the light saw through each texel of a shadow pass,
+        four floats a texel from the top, or nothing when the renderer
+        keeps no colors; see `shadow_map_transmitted`."""
+        var colors = List[Float32]()
+        if not self.shadow_map_transmitted:
+            return colors^
+        for texel in range(len(target.colors)):  # pragma: no branch
+            ref seen = target.colors[texel]
+            colors.append(seen.r)
+            colors.append(seen.g)
+            colors.append(seen.b)
+            colors.append(seen.a)
+        return colors^
 
     def _projected(
         self, scene: Scene, assets: Assets, visible: Layers
@@ -7497,8 +7888,9 @@ struct Renderer(Movable):
         Every kind three.js's shadow map draws is drawn: the triangles of
         every mesh, skinned, instanced or batched mesh and LOD level, the
         segments of every line and wireframe, and every point, under lit
-        shading with no lights. A point light's view, `distance`, draws a
-        mesh's custom distance material.
+        shading with no lights, or under `SHADE_SHADOW` when the renderer
+        keeps the colors, `shadow_map_transmitted`. A point light's view,
+        `distance`, draws a mesh's custom distance material.
 
         Args:
             scene: The transform hierarchy, updated.
@@ -7555,17 +7947,29 @@ struct Renderer(Movable):
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
             Draw(DRAW_POINTS, 0, len(points)),
         ]
-        var target = RenderTarget(size, size, Color(0, 0, 0))
+        # With the colors kept, a texel nothing is drawn in is clear, alpha
+        # zero, as three.js clears the map to `0x000000, 0`, and each
+        # caster writes what the light sees through it; see `SHADE_SHADOW`.
+        var transmitted = self.shadow_map_transmitted
+        var target = RenderTarget(
+            size, size, Color(0, 0, 0, 0) if transmitted else Color(0, 0, 0)
+        )
         rasterize_frame(
             corners,
             segments,
             draws,
             target,
-            SHADE_LIT,
-            TextureStore(),
+            SHADE_SHADOW if transmitted else SHADE_LIT,
+            assets.textures,
             Lighting.uniform(),
             self.workers,
             points=points,
+            cubes=assets.cube_textures,
+            # A node material's mask and depth hold in the light's view
+            # as in the camera's.
+            programs=assets.programs,
+            volumes=assets.data_3d_textures,
+            arrays=assets.data_array_textures,
         )
         return target^
 

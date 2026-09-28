@@ -335,12 +335,14 @@ from materials.material import (
 from render.target import (
     FLOAT_TARGET,
     OUTPUT_COLOR,
+    OUTPUT_METAL_ROUGH,
     OUTPUT_NORMAL,
     RenderTarget,
     TargetOutput,
 )
 from render.rasterizer import (
     SHADE_LIT,
+    SHADE_SHADOW,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
@@ -7711,6 +7713,42 @@ def test_both_backends_agree_on_a_physical_lobe() raises:
     assert_true(count_mismatches(shiny, flat) > 50, "the lobe changed nothing")
 
 
+def test_both_backends_take_a_graphs_roughness_and_metalness_alike() raises:
+    # The graph's roughness and metalness in place of the material's, from
+    # the coordinates, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends take a graph's roughness"):
+        return
+    from materials.nodes import METALNESS_NODE, ROUGHNESS_NODE
+
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    graph.set_output(ROUGHNESS_NODE, graph.swizzle(uv, "x"))
+    graph.set_output(METALNESS_NODE, graph.swizzle(uv, "y"))
+    var store = NodeProgramStore()
+    var id = store.add(graph.compile())
+    var corners = with_nodes(
+        physical_pair(PHYSICAL, 0.5, 0.5, 1.0, 0.3), id.value
+    )
+    var lighting = phong_lighting()
+    for mode in [SHADE_LIT, SHADE_TEXTURE]:
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, mode, TextureStore(), lighting, 1, programs=store
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            mode,
+            TextureStore(),
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_reflect_a_physical_environment_alike() raises:
     # The split sum, the multiple scattering and the rough reflection read
     # down the cube's chain, on a metal, a dielectric and a coated
@@ -9945,6 +9983,316 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
+def test_both_backends_draw_a_materialx_surface_alike() raises:
+    # A MaterialX standard surface, its color and roughness from a graph,
+    # on a lit sphere: the node outputs the loader sets, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends draw a materialx surface"):
+        return
+    from loaders.materialx import read_materialx
+    from test_materialx import SURFACE
+
+    var assets = Assets()
+    var read = read_materialx(SURFACE, assets)
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.8, METER), 18, 12)),
+            read.ids[0],
+            node,
+        )
+    )
+    var lamp = Object3D()
+    lamp.set_position(0.3, 0.8, 2)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.0))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 2.6), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    var capture = renderer.transmission_target(scene, assets, camera)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        transmission=capture,
+        programs=frame.programs,
+    )
+    assert_true(48 * 36 - count_background(cpu, BACKGROUND) > 300)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_draw_a_light_map_in_texture_space_alike() raises:
+    # Two planes drawn where their uv1 puts them, with the light map's
+    # material mixing their light into a map one update has filled.
+    if skipped_for_lack_of_a_gpu("both backends draw a light map alike"):
+        return
+    from renderers.progressive_light_map import ProgressiveLightMap
+    from test_progressive_light_map import a_camera, two_planes
+
+    var assets = Assets()
+    var scene = Scene()
+    two_planes(assets, scene)
+    var light_map = ProgressiveLightMap(assets, 48)
+    light_map.add_objects_to_light_map(scene, assets, [0, 1])
+    var renderer = Renderer(48, 48)
+    renderer.set_background(BACKGROUND)
+    light_map.update(renderer, scene, assets, a_camera(), 2)
+    ref program = assets.programs.get(light_map.program)
+    program.set_texture("previousShadowMap", light_map.maps[1])
+    for index in range(2):
+        scene.meshes[index].material = light_map.uv_material
+    renderer.uv_space_meshes = light_map.meshes.copy()
+    var camera = a_camera()
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 48)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_true(48 * 48 - count_background(cpu, BACKGROUND) > 1000)
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_keep_the_same_velocities() raises:
+    # A square that moves and turns between two frames, seen in
+    # perspective, so the last frame's place is interpolated as a varying
+    # and divided at each fragment on both backends.
+    if skipped_for_lack_of_a_gpu("both backends keep velocities alike"):
+        return
+    from test_velocity import a_square, moving
+
+    var assets = Assets()
+    var scene = Scene()
+    a_square(assets, scene)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 1, Length(0.1, METER), Length(20.0, METER)
+    )
+    camera.place(Vector3(0.3, 0.4, 2.5), Vector3(0, 0, 0))
+    # The host draws into a target; the device's frames are prepared by a
+    # renderer of their own, with its own history.
+    var host = Renderer(32, 32)
+    var prepares = Renderer(32, 32)
+    var first = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, moving())
+    host.render_into(first, scene, assets, camera)
+    _ = prepares.prepare_frame(scene, assets, camera, True)
+    var id = scene.meshes[0].node
+    var held = scene.get(id)
+    held.set_position(0.2, -0.1, 0.3)
+    held.set_euler(Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    scene.set(id, held^)
+    scene.update()
+    var cpu = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, moving())
+    host.render_into(cpu, scene, assets, camera)
+    var frame = prepares.prepare_frame(scene, assets, camera, True)
+    var gpu = GpuRenderer(32, 32)
+    gpu.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        draws=frame.draws,
+        programs=frame.programs,
+    )
+    var device = gpu.read_back_target(FLOAT_TARGET, moving())
+    var moved = 0
+    for y in range(32):
+        for x in range(32):
+            var want = cpu.velocity_at(x, y)
+            var got = device.velocity_at(x, y)
+            assert_true(
+                abs(want.x - got.x) <= 1e-5 and abs(want.y - got.y) <= 1e-5,
+                "the backends' velocities differ",
+            )
+            if want.length() > 0.01:
+                moved += 1
+    assert_true(moved > 100, "too little of the square moved")
+
+
+def test_both_backends_keep_the_same_metalness_and_roughness() raises:
+    # A rough metal floor and a basic box: the floor keeps its metalness
+    # and its roughness after the floor and the geometry roughness, the
+    # box keeps zeros, on both backends.
+    if skipped_for_lack_of_a_gpu("both backends keep metalness alike"):
+        return
+    from test_ssr_node import a_camera as ssr_camera, a_scene as ssr_scene
+
+    var assets = Assets()
+    var scene = ssr_scene(assets, 0.6)
+    var camera = ssr_camera()
+    var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_METAL_ROUGH]
+    var renderer = Renderer(32, 32)
+    var cpu = RenderTarget(32, 32, BACKGROUND, FLOAT_TARGET, outputs)
+    renderer.render_into(cpu, scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var gpu = GpuRenderer(32, 32)
+    gpu.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        draws=frame.draws,
+        programs=frame.programs,
+    )
+    var device = gpu.read_back_target(FLOAT_TARGET, outputs)
+    var metal = 0
+    for y in range(32):
+        for x in range(32):
+            var want = cpu.metal_rough_at(x, y)
+            var got = device.metal_rough_at(x, y)
+            assert_true(
+                abs(want.x - got.x) <= 1e-5 and abs(want.y - got.y) <= 1e-5,
+                "the backends' metalness and roughness differ",
+            )
+            if want.x == 1:
+                metal += 1
+    assert_true(metal > 100, "too little of the floor is metal")
+
+
+def test_both_backends_shape_received_shadows_alike() raises:
+    # A sun, a spot and a bulb cast on surfaces of each kind of lighting,
+    # which turn every shadow red: the kernel runs the graph once a light,
+    # as the host does.
+    if skipped_for_lack_of_a_gpu("both backends shape shadows alike"):
+        return
+    from test_received_shadow import a_camera as shadow_camera
+    from test_received_shadow import a_shadowed_scene as shaped_scene
+    from test_received_shadow import paints, red_shadows
+
+    for paint in paints():
+        var assets = Assets()
+        var painted = paint.copy()
+        painted.nodes = assets.programs.add(red_shadows().compile())
+        var scene = shaped_scene(assets, painted, painted)
+        var camera = shadow_camera()
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var device = GpuRenderer(48, 36)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            lighting,
+            draws=frame.draws,
+            programs=frame.programs,
+        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_both_backends_read_transmitted_shadows_alike() raises:
+    # The block casts red through a sun's and a spot's squares and a
+    # bulb's cube: the kernel reads each map's colors as the host does.
+    if skipped_for_lack_of_a_gpu("both backends read colored shadows alike"):
+        return
+    from test_cast_shadow import casting
+    from test_received_shadow import a_camera as shadow_camera
+    from test_received_shadow import a_shadowed_scene as shaped_scene
+    from test_received_shadow import paints
+
+    for paint in paints():
+        var assets = Assets()
+        var block = casting(assets, 1, 0)
+        var scene = shaped_scene(assets, paint.copy(), block^)
+        var camera = shadow_camera()
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        renderer.shadow_map_transmitted = True
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var device = GpuRenderer(48, 36)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            lighting,
+            draws=frame.draws,
+            programs=frame.programs,
+        )
+        assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+        # The shadow pass's own mode is the host's alone.
+        with assert_raises(contains="drawn on the host"):
+            device.draw(frame.corners, BACKGROUND, SHADE_SHADOW)
+
+
+def test_both_backends_light_each_material_by_its_own_lights() raises:
+    # A plane lit by the red light alone beside one lit by the red and the
+    # blue: the device reads each triangle's light block.
+    if skipped_for_lack_of_a_gpu("both backends light by masks alike"):
+        return
+    from renderers.renderer import light_masks
+    from test_light_masks import a_camera as masked_camera
+    from test_light_masks import a_scene as masked_scene
+
+    var assets = Assets()
+    var scene = masked_scene(assets)
+    var camera = masked_camera()
+    var renderer = Renderer(16, 16)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var eye = camera_position(scene, camera)
+    var lightings = List[Lighting]()
+    var masks = light_masks(assets)
+    for index in range(len(masks)):
+        lightings.append(Lighting(scene, eye=eye, chosen=masks[index]))
+    var device = GpuRenderer(16, 16)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=eye),
+        draws=frame.draws,
+        programs=frame.programs,
+        lightings=lightings,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+    # A triangle that names a lighting the frame lacks is refused.
+    with assert_raises(contains="names a lighting the frame does not have"):
+        device.draw(frame.corners, BACKGROUND, SHADE_TEXTURE)
+
+
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     # The host draws the transmission pass, and both backends draw the
     # frame looking through it.
@@ -10220,6 +10568,45 @@ def test_the_gpu_composer_matches_the_host_on_a_render_alone() raises:
     if skipped_for_lack_of_a_gpu("post render"):
         return
     assert_equal(compare_post(List[Pass]()), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_motion_blur() raises:
+    # The camera slides between frames, so the second frame's velocities
+    # blur it. Each composer draws with a renderer of its own, which keeps
+    # its own history.
+    if skipped_for_lack_of_a_gpu("post motion blur"):
+        return
+    var assets = Assets()
+    var scene = post_scene(assets)
+    var host_renderer = post_renderer()
+    var device_renderer = post_renderer()
+    var host = EffectComposer()
+    var device_side = EffectComposer()
+    from postprocessing.composer import motion_blur_pass
+
+    host.add_pass(render_pass())
+    host.add_pass(motion_blur_pass(2, 8))
+    device_side.add_pass(render_pass())
+    device_side.add_pass(motion_blur_pass(2, 8))
+    var device = GpuComposer(POST_WIDTH, POST_HEIGHT)
+    var still = EffectComposer()
+    still.add_pass(render_pass())
+    for frame in range(2):
+        var camera = post_camera()
+        camera.place(
+            Vector3(Float32(frame) * 0.2, 0.3, 3.0),
+            Vector3(Float32(frame) * 0.2, 0, 0),
+        )
+        var cpu = host.render(host_renderer, scene, assets, camera, 0.25)
+        var gpu = device.render(
+            device_side, device_renderer, scene, assets, camera, 0.25
+        )
+        assert_equal(count_mismatches(cpu, gpu, 1), 0)
+        if frame == 1:
+            var sharp = still.render(
+                post_renderer(), scene, assets, camera, 0.25
+            )
+            assert_true(count_mismatches(cpu, sharp, 2) > 20)
 
 
 def test_the_gpu_composer_matches_the_host_on_a_copy() raises:

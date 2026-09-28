@@ -146,6 +146,70 @@ comptime RECT_AREA = LightKind(5)
 # three.js's `LightProbe`. It adds to every surface as the ambient term does,
 # weighted by which way the surface faces. No node.
 comptime LIGHT_PROBE = LightKind(6)
+
+
+@fieldwise_init
+struct LightMask(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the scene's lights light a material, by their places in
+    `scene.lights`: three.js's `material.lightsNode = lights( [ ... ] )`,
+    as a type rather than an int.
+
+    A bit a light, for the first 64. `ALL_LIGHTS`, the default, is every
+    light, however many the scene holds. Build a mask with `lights_of`.
+    """
+
+    var bits: UInt64
+
+    def is_valid(self) -> Bool:
+        """Return True: every set of the first 64 lights is a mask.
+
+        Returns:
+            Always True. The method is here so the mask checks as the other
+            kinds of the port do.
+        """
+        return True
+
+    def includes(self, index: Int) -> Bool:
+        """Return True if the light at a place in `scene.lights` lights a
+        material with this mask.
+
+        Args:
+            index: The light's place.
+
+        Returns:
+            Whether its bit is set. A light past the 64th is lit only by
+            `ALL_LIGHTS`.
+        """
+        if index >= 64:
+            return self == ALL_LIGHTS
+        return (self.bits >> UInt64(index)) & 1 == 1
+
+
+# Every light of the scene: three.js's material with no `lightsNode`.
+comptime ALL_LIGHTS = LightMask(~UInt64(0))
+
+
+def lights_of(indices: List[Int]) raises -> LightMask:
+    """Return the mask of some of the scene's lights, three.js's
+    `lights( [ light1, light2 ] )`.
+
+    Args:
+        indices: The lights' places in `scene.lights`.
+
+    Returns:
+        The mask.
+
+    Raises:
+        Error: If a place is negative or past the 64th light.
+    """
+    var bits = UInt64(0)
+    for index in indices:
+        if index < 0 or index >= 64:
+            raise Error("A light mask names the first 64 lights alone")
+        bits |= UInt64(1) << UInt64(index)
+    return LightMask(bits)
+
+
 # three.js's default `width` and `height` for a rectangle of light.
 comptime DEFAULT_RECT_SIZE = Length(10.0, METER)
 

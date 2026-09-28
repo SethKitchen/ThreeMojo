@@ -87,9 +87,58 @@ var screen = assets.materials.add(shader_material(assets.programs.add(toy^)))
 
 `fragCoord` is the pixel's center, in pixels from the bottom left. `iTime` is `Renderer.time`. Set the other inputs yourself: `iResolution`, `iTimeDelta`, `iFrameRate`, `iFrame`, `iMouse`, `iDate`, `iSampleRate`, `iChannelResolution[i]` and `iChannelTime[i]` with `set_uniform`. Set `iChannel0` to `iChannel3` with `set_texture`. The source must fit the [subset](#the-subset), and an error names the line of the source.
 
+## Lights of its own
+
+A material can be lit by some of the scene's lights alone. This is three.js's `material.lightsNode = lights( [ light1, light2 ] )`. Set the material's `lights` to a `LightMask` from `lights_of`, with the lights' places in `scene.lights`:
+
+```mojo
+var red_only = Material(Color(255, 255, 255))
+red_only.lights = lights_of([0])
+```
+
+`ALL_LIGHTS`, the default, is every light. A mask names the first 64 lights. The mask works on any material, with a node graph or without one.
+
+The renderer resolves the lights of each mask that a material names, as a `Lighting` of its own. The lights keep their shadows. `light_masks(assets)` lists the masks in the order the renderer uses. On the GPU, each mask's lights go up as a block of their own, and each triangle reads its block. `GpuRenderer.draw` takes the lightings as `lightings`.
+
+## Shadows of its own
+
+A material can change the shadows that fall on it and the shadows that it casts. These are three.js's `receivedShadowNode` and `castShadowNode`.
+
+### The shadows it receives
+
+Set `RECEIVED_SHADOW_NODE`, a `vec3`. The graph runs once for each light that casts a shadow on the surface. The `shadow` node is a `vec3`: what that light's shadow lets through, one for all of it. The light's color is multiplied by the output in place of the shadow. This graph turns each shadow red, as three.js's `shadow.mix( color( 0xff0000 ), 1 )` does:
+
+```mojo
+var graph = NodeGraph()
+graph.set_output(
+    RECEIVED_SHADOW_NODE,
+    graph.mix(graph.vec3(1, 0, 0), graph.float(1), graph.shadow()),
+)
+```
+
+TSL's `a.mix( b, t )` is `mix( b, t, a )`, so the example is `mix( red, 1, shadow )`. A graph that sets `vec3(1, 1, 1)` takes the shadows away. A light that casts no shadow on the surface does not run the graph. Only `RECEIVED_SHADOW_NODE` can read `shadow`.
+
+### The shadows it casts
+
+Set the renderer's `shadow_map_transmitted` to `True`. This is three.js's `renderer.shadowMap.transmitted`. The shadow pass then keeps a color for each texel: what the light sees through the nearest caster there. By default that color is opaque black. Set `CAST_SHADOW_NODE`, a `vec4`, to give a caster a color and an alpha of its own:
+
+```mojo
+var graph = NodeGraph()
+graph.set_output(
+    CAST_SHADOW_NODE, graph.join([graph.vec3(1, 0, 0), graph.float(1)])
+)
+renderer.shadow_map_transmitted = True
+```
+
+The map's alpha and the alpha map's green multiply the alpha. The caster's alpha test, mask and depth node apply. A texel that no caster covers is clear, with an alpha of zero.
+
+A surface in the shadow then gets `mix( 1, mix( color, 1, shadow ), intensity * alpha )` of the light, per channel. The color is the texel's, read with a linear filter. So an opaque red caster lets red through, and a caster with no alpha casts no shadow. An opaque black caster casts the shadow that the depths alone cast. See `lights.shadow.transmitted_shadow`.
+
+The shadow pass runs on the host, under its own shading mode, `SHADE_SHADOW`. `set_shading` and `GpuRenderer.draw` refuse that mode. The GPU reads the colors of each map from the light buffer, as it reads the depths.
+
 ## Outputs
 
-A graph sets one to thirteen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
+A graph sets one to seventeen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
 
 | Output | Type | three.js | What it replaces |
 |---|---|---|---|
@@ -105,7 +154,11 @@ A graph sets one to thirteen outputs. Each output replaces one part of the mater
 | `BACKDROP_NODE` | `vec3` | `backdropNode` | The diffuse light, mixed by `BACKDROP_ALPHA_NODE` where that is set. The specular light and the glow are added after it. See [The scene behind](#the-scene-behind). |
 | `BACKDROP_ALPHA_NODE` | `float` | `backdropAlphaNode` | Nothing. It is how much of the backdrop replaces the diffuse light, zero to one. |
 | `FRAGMENT_NODE` | `vec4` | `fragmentNode` | All of the material's shading: the color and the alpha. The fog veils it. The alpha test, the alpha hash and the output node do not run. |
+| `ROUGHNESS_NODE` | `float` | `roughnessNode` | A standard or physical surface's roughness, its map included. |
+| `METALNESS_NODE` | `float` | `metalnessNode` | A standard or physical surface's metalness, its map included. |
 | `SIZE_NODE` | `float` | `sizeNode` | A point's width in pixels: the material's size and its attenuation. Only a point reads it. See [Points and lines](#points-and-lines). |
+| `RECEIVED_SHADOW_NODE` | `vec3` | `receivedShadowNode` | Each light's shadow on the surface. The `shadow` node reads it. See [Shadows of its own](#shadows-of-its-own). |
+| `CAST_SHADOW_NODE` | `vec4` | `castShadowNode` | The opaque black that a light sees through a caster, under `shadow_map_transmitted`. |
 
 The alpha of the finished color stays what the fragment had. An output node changes only its color.
 
@@ -461,6 +514,29 @@ var wall = assets.materials.add(Material(Color(200, 200, 200), kind=PHYSICAL, no
 
 The program reads the target's texel at `gl_FragCoord.xy * aoPassMapScale`. With an ambient occlusion map, it takes the lower of the two values and applies `aoMapIntensity`, as three.js does. The result is the `AO_NODE`, so the physical shading dims the indirect light with it.
 
+## MaterialX
+
+`loaders.materialx` is three.js's `MaterialXLoader`. It reads a MaterialX document's materials into the store as node materials.
+
+```mojo
+var read = load_materialx("standard_surface_brass_tiled.mtlx", assets)
+var brass = read.ids[0]
+```
+
+- A `surfacematerial` whose shader is a `standard_surface` becomes a `PHYSICAL` material. A document with no surface material makes a `BASIC` material of each `nodegraph`, with its `out` output as the color.
+- An image path is read after the document's folder and the element's `fileprefix`. An image in the `srgb_texture` color space is decoded from sRGB. Each image repeats, as three.js sets it.
+- `read.names[i]` is the name of material `read.ids[i]`.
+
+A surface input that is a value sets the material's own number. An input that a graph drives becomes a node output: the color, the opacity, the roughness, the metalness, the glow or the normal. The loader refuses a graph that drives any other input, because this port has no node output for it.
+
+The library is three.js's: the math, the adjustments, the mix, the channels, the ramps, the splits and the noises. It also has `place2d`, `rotate2d`, `rotate3d`, the geometry nodes, `image` and `tiledimage`. The loader differs from three.js here:
+
+- `position` and `normal` in object space read the world ones. A fragment here has no object space, and for a mesh at the origin the two are the same.
+- `smoothstep`, `splitlr` and `splittb` take their inputs as the MaterialX specification names them. three.js passes them in another order.
+- `emission_color` multiplies `emission`, as the specification says. three.js reads `emissionColor`, which no document names.
+- A `gltf_pbr` surface is left as a plain physical material, as three.js leaves it.
+- `normalmap`, `heighttonormal`, `tangent`, `frame`, the unified noises and the matrix nodes are refused. The program has no tangents, no frame count and no matrices of those types.
+
 ## In a file
 
 `object_to_json` writes a node material's program in the material's `nodes` field, and `read_object_json` reads it back into `assets.programs`. three.js's loaders read the other fields of the material and ignore this one.
@@ -582,11 +658,11 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 - A texture node reads its image at the mip level that the surface's own coordinates select. WebGPU measures the derivatives of the coordinate that the node computes.
 - A GLSL uniform starts at zero until the caller sets it. three.js starts it at the value in `uniforms`.
 - `normalMatrix * normal` is made unit length, and a varying reads the world position of the moved vertex.
-- The shadow pass runs no mask, no discard and no depth node. A fragment that the mask throws away still casts a shadow.
+- A point light's cube reads the color of its nearest texel. three.js reads the cube with a linear filter.
+- A `SHADOW` material's mask reads the depths alone. The colors of a transmitted shadow do not change it.
 - The raycaster picks the geometry without the position node, as three.js's raycaster does.
 
 ## What is not ported
 
 - Compute nodes, storage buffers and `instancedArray`.
-- Other outputs: `lightsNode`, `receivedShadowNode` and `castShadowNode`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).

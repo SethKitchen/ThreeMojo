@@ -249,12 +249,12 @@ def test_lighting_weighs_a_cascade_by_the_depth() raises:
     assert_equal(len(lighting.cascades), 2)
     # Two meters in front: the near slice alone.
     var at = Vector3(0, 0, -2)
-    assert_equal(lighting.direction_through(0, at, UP, True), 1)
-    assert_equal(lighting.direction_through(1, at, UP, True), 0)
+    assert_equal(lighting.direction_through(0, at, UP, True).x, 1)
+    assert_equal(lighting.direction_through(1, at, UP, True).x, 0)
     # Eight meters: the far slice alone; the sum is one light either way.
     var further = Vector3(0, 0, -8)
-    assert_equal(lighting.direction_through(0, further, UP, True), 0)
-    assert_equal(lighting.direction_through(1, further, UP, True), 1)
+    assert_equal(lighting.direction_through(0, further, UP, True).x, 0)
+    assert_equal(lighting.direction_through(1, further, UP, True).x, 1)
     var single = Scene()
     var lone = single.add(Object3D())
     single.node(lone).set_position(0, 1, 0)

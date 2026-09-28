@@ -181,7 +181,7 @@ def test_the_types_say_which_values_they_can_hold() raises:
     assert_true(NODE_ADD.is_valid())
     assert_true(NODE_SWIZZLE.is_valid())
     assert_false(NodeKind(-1).is_valid())
-    assert_false(NodeKind(107).is_valid())
+    assert_false(NodeKind(108).is_valid())
     assert_true(NodeKind(103).is_valid())
     assert_true(COLOR_NODE.is_valid())
     assert_true(OUTPUT_NODE.is_valid())
@@ -801,8 +801,8 @@ def test_an_output_takes_its_own_type_only() raises:
         graph.set_output(OPACITY_NODE, three)
     with assert_raises(contains="takes a vec3, not a float"):
         graph.set_output(NORMAL_NODE, graph.float(1))
-    with assert_raises(contains="none of the thirteen"):
-        graph.set_output(NodeOutput(13), three)
+    with assert_raises(contains="none of the seventeen"):
+        graph.set_output(NodeOutput(17), three)
     with assert_raises(contains="no node with that ref"):
         graph.set_output(COLOR_NODE, NodeRef(99))
 
@@ -858,8 +858,8 @@ def test_a_program_is_laid_out_header_instructions_then_values() raises:
     assert_equal(program.uniform_offsets[0], len(program.code) - 4)
     assert_true(program.has(COLOR_NODE))
     assert_false(program.has(OPACITY_NODE))
-    with assert_raises(contains="none of the thirteen"):
-        _ = program.has(NodeOutput(13))
+    with assert_raises(contains="none of the seventeen"):
+        _ = program.has(NodeOutput(17))
     var source = ProgramSource(Pointer(to=program))
     assert_true(has_output(source, EMISSIVE_NODE))
     assert_false(has_output(source, NORMAL_NODE))
@@ -986,7 +986,7 @@ def test_compiling_refuses_an_edited_graph() raises:
     with assert_raises(contains="names a node the graph does not hold"):
         _ = nowhere.compile()
     var strange = graph.copy()
-    strange._kinds[a.value] = NodeKind(107)
+    strange._kinds[a.value] = NodeKind(108)
     with assert_raises(contains="a kind or a type there is not"):
         _ = strange.compile()
     var shapeless = graph.copy()
@@ -2382,7 +2382,7 @@ def test_the_new_outputs_take_floats() raises:
     graph.set_output(DEPTH_NODE, graph.float(0.25))
     assert_equal(graph.output(AO_NODE).value, 1)
     assert_equal(graph.output(COLOR_NODE).value, -1)
-    with assert_raises(contains="none of the thirteen"):
+    with assert_raises(contains="none of the seventeen"):
         _ = graph.output(NodeOutput(-1))
     var program = graph.compile()
     var source = Corners(program)

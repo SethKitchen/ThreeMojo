@@ -109,11 +109,16 @@ from materials.nodes import (
     DEPTH_NODE,
     EMISSIVE_NODE,
     FRAGMENT_NODE,
+    METALNESS_NODE,
+    ROUGHNESS_NODE,
     MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
     OUTPUT_NODE,
+    RECEIVED_SHADOW_NODE,
+    CAST_SHADOW_NODE,
+    ProgramShape,
     NodeContext,
     NodeInputs,
     NodeProgram,
@@ -1116,6 +1121,19 @@ struct RasterVertex(ImplicitlyCopyable):
     var scatter_attenuation: Float32
     var scatter_power: Float32
     var scatter_scale: Float32
+    # Where this frame's and the last frame's matrices put the corner in
+    # clip space, as x, y and w: what a velocity attachment reads,
+    # three.js's `clipPositionCurrent` and `clipPositionPrevious`. Set
+    # after construction, by `Renderer.prepare`, for a frame that keeps
+    # velocities; zeros by default, which is no motion. See
+    # `fragment_velocity`.
+    var current: Vector3
+    var previous: Vector3
+    # Which of the frame's lightings lights the triangle, read from the
+    # first corner: zero for the frame's own, every light the camera sees,
+    # and one past that for each `LightMask` a material names, in
+    # `Renderer.light_masks` order. See `rasterize_frame`'s `lightings`.
+    var lights: Int
 
     def __init__(
         out self,
@@ -1292,16 +1310,25 @@ struct RasterVertex(ImplicitlyCopyable):
         self.scatter_attenuation = 0.1
         self.scatter_power = 2
         self.scatter_scale = 10
+        self.current = Vector3(0, 0, 0)
+        self.previous = Vector3(0, 0, 0)
+        self.lights = 0
 
 
 @fieldwise_init
 struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
     """What a fragment's color is taken from, as a type rather than an int.
 
-    The three cases differ in which numbers they read, not in what the
+    The first three cases differ in which numbers they read, not in what the
     rasterizer does around them. `SHADE_TEXTURE` multiplies the sampled texel
     by the interpolated lighting, so a white texture shades exactly as
     `SHADE_LIT` does and an unlit white mesh shows the image unchanged.
+    `SHADE_SHADOW` is the shadow pass's own: each fragment writes what a
+    light sees through it, its `CAST_SHADOW_NODE` or opaque black, times
+    its maps' alpha, three.js's shadow material under
+    `shadowMap.transmitted`. It writes the depth whatever the draw's state
+    says, as that material does. Only the host draws a shadow map, so only the
+    host rasterizer takes it.
 
     A type because an unrecognized integer here was once read in opposite
     directions by the two backends: the CPU's last branch treated it as
@@ -1315,13 +1342,19 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the three modes there are."""
-        return self == SHADE_LIT or self == SHADE_UV or self == SHADE_TEXTURE
+        """Return True if this is one of the four modes there are."""
+        return (
+            self == SHADE_LIT
+            or self == SHADE_UV
+            or self == SHADE_TEXTURE
+            or self == SHADE_SHADOW
+        )
 
 
 comptime SHADE_LIT = ShadeMode(0)
 comptime SHADE_UV = ShadeMode(1)
 comptime SHADE_TEXTURE = ShadeMode(2)
+comptime SHADE_SHADOW = ShadeMode(3)
 
 
 def _coordinates_at(
@@ -1864,6 +1897,57 @@ def _kept_normal(
     if kind == NORMALS:
         return facing
     return view_direction(facing, lighting.up, lighting.back)
+
+
+def _place(
+    a: Vector3, b: Vector3, c: Vector3, shares: SIMD[DType.float32, 4]
+) -> Vector3:
+    """Return three clip positions interpolated as a varying: x, y and w,
+    each by the fragment's weights corrected for perspective."""
+    return Vector3(
+        a.x * shares[0] + b.x * shares[1] + c.x * shares[2],
+        a.y * shares[0] + b.y * shares[1] + c.y * shares[2],
+        a.z * shares[0] + b.z * shares[1] + c.z * shares[2],
+    )
+
+
+def fragment_velocity(
+    current_a: Vector3,
+    current_b: Vector3,
+    current_c: Vector3,
+    previous_a: Vector3,
+    previous_b: Vector3,
+    previous_c: Vector3,
+    shares: SIMD[DType.float32, 4],
+) -> Vector2:
+    """Return how far a fragment moved since the frame before, in
+    normalized device coordinates: three.js's `VelocityNode`.
+
+    Each place is the corners' clip position, interpolated as a varying
+    and divided by its own w: `current` for this frame, `previous` for the
+    last. The velocity is the first less the second. Both rasterizers call
+    this.
+
+    Args:
+        current_a: The first corner's `current`.
+        current_b: The second corner's.
+        current_c: The third corner's.
+        previous_a: The first corner's `previous`.
+        previous_b: The second corner's.
+        previous_c: The third corner's.
+        shares: The fragment's weights, one a corner, corrected for
+            perspective.
+
+    Returns:
+        The velocity, or zero where the corners have no places.
+    """
+    var now = _place(current_a, current_b, current_c, shares)
+    var then = _place(previous_a, previous_b, previous_c, shares)
+    if now.z == 0 or then.z == 0:
+        return Vector2(0, 0)
+    return Vector2(
+        now.x / now.z - then.x / then.z, now.y / now.z - then.y / then.z
+    )
 
 
 def interpolate_alpha(
@@ -3244,7 +3328,7 @@ def rasterize_shaded(
             write lands out of bounds — the last of which the loop prevents.
     """
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     check_triangle_state(a, b, c)
     # A view of the fog can be built by hand, and its fields are open:
     # refused here, before a fragment reads it, as the GPU refuses it
@@ -3340,6 +3424,9 @@ def rasterize_shaded(
     # a G-buffer's second attachment. Every triangle interpolates its
     # normal then, whatever it is shaded by; see `RenderTarget.write`.
     var keeps_normals = target.has_normals()
+    # Whether the target keeps each opaque fragment's velocity, a pass's
+    # velocity attachment; see `fragment_velocity`.
+    var keeps_velocities = target.has_velocities()
     # Whether a node graph replaces parts of the shading: under every mode
     # but the uv view, which shades nothing. It reads the normal, the
     # position and the coordinates whatever the kind, so it opens all three.
@@ -3366,7 +3453,9 @@ def rasterize_shaded(
         target.width,
         Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
     )
-    var textured = mode == SHADE_TEXTURE
+    # The shadow pass reads the maps' alpha and the graph's textures as the
+    # textured view does.
+    var textured = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     # Whether the graph can throw a fragment away, as an alpha test can:
     # its mask, which every `Discard` joins. And whether it sets the depth
     # itself, before the tests read it.
@@ -3377,6 +3466,9 @@ def rasterize_shaded(
     var fragmented = noded and has_output(nodes, FRAGMENT_NODE)
     tested = tested and not fragmented
     hashed = hashed and not fragmented
+    # Whether the graph shapes the shadows the lights cast on it, three.js's
+    # `receivedShadowNode`; see `ProgramShape`.
+    var received = noded and has_output(nodes, RECEIVED_SHADOW_NODE)
     var reversed = a.state.depth_mode == REVERSED_DEPTH
     # Where each map is sampled: its own channel and matrix, three.js's
     # `vMapUv`, `vNormalMapUv` and the rest. The corners carry the two raw
@@ -3450,6 +3542,20 @@ def rasterize_shaded(
                 share_a = wa * a.inv_w * rcp
                 share_b = wb * b.inv_w * rcp
                 share_c = wc * c.inv_w * rcp
+            var moved = Vector2(0, 0)
+            if keeps_velocities:
+                moved = fragment_velocity(
+                    a.current,
+                    b.current,
+                    c.current,
+                    a.previous,
+                    b.previous,
+                    c.previous,
+                    SIMD[DType.float32, 4](share_a, share_b, share_c, 0),
+                )
+            # The metalness and roughness a physical surface settles on,
+            # for a target that keeps them; zero for every other surface.
+            var metal_rough = Vector2(0, 0)
 
             var base = FloatColor(
                 a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
@@ -3541,6 +3647,59 @@ def rasterize_shaded(
             # The normal before any map perturbs it: what a clear coat lies
             # on, three.js's `nonPerturbedNormal`.
             var coat_facing = facing
+            # The shadow pass's color, three.js's transmitted shadow: what
+            # the light sees through the surface, its alpha thinned by the
+            # map and the alpha map, then tested against the alpha test, the
+            # two things three.js's shadow material copies from the
+            # caster's. Written as it is, alpha and all, as `NoBlending`
+            # writes it, with the depth, as that material writes it.
+            if mode == SHADE_SHADOW:
+                var given = NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                )
+                var cast = cast_shadow_color(nodes, noded, given)
+                if a.texture != NO_TEXTURE:
+                    cast.a *= _sample_placed(
+                        textures.get(a.texture),
+                        placed[MAP_SLOT],
+                        uv,
+                        uv1,
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                    ).a
+                if a.alpha_map != NO_TEXTURE:
+                    cast.a *= _sample_placed(
+                        textures.get(a.alpha_map),
+                        placed[ALPHA_MAP_SLOT],
+                        uv,
+                        uv1,
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                    ).g
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
+                if tested and cast.a < a.alpha_test:
+                    continue
+                target.keep_stencil(x, y, test)
+                if not test.passes:
+                    continue
+                target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
+                continue
             # `check_triangle_state` has refused a map on any kind that is
             # not lit or a matcap, so a perturbed triangle has a normal
             # above to perturb.
@@ -3647,6 +3806,21 @@ def rasterize_shaded(
                         ),
                     ),
                 )
+            # Each light's shadow as the graph shapes it, at this fragment
+            # and its bent normal, before the lights read it.
+            var shape = ProgramShape(
+                nodes,
+                NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                ),
+                received,
+            )
             if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 if a.kind == MATCAP:
                     # Looked up by which way the surface is turned in the
@@ -3676,7 +3850,7 @@ def rasterize_shaded(
                     # Every cosine read off the ramp rather than faded, and
                     # never clamped at zero: see `Lighting.toon_at`.
                     arriving = lighting.toon_at(
-                        facing, spot, ramp, a.receives_shadow
+                        facing, spot, ramp, a.receives_shadow, shape
                     )
                 elif a.kind == GOURAUD:
                     # Lit at the corners, and the direct light darkened
@@ -3708,7 +3882,7 @@ def rasterize_shaded(
                     # A physical surface is lit below, once its maps have
                     # had their say over the color the lobe is tinted by.
                     arriving = lighting.intensity_at(
-                        facing, spot, a.receives_shadow
+                        facing, spot, a.receives_shadow, shape
                     )
                 if a.kind == PHONG:
                     # Interpolated like the emissive, and summed over the
@@ -3731,6 +3905,7 @@ def rasterize_shaded(
                         Vector3(sheen.r, sheen.g, sheen.b),
                         a.shininess,
                         a.receives_shadow,
+                        shape,
                     )
                     # The light through, where a thickness map says how
                     # thick the surface is: three.js reads its red at the
@@ -3755,6 +3930,7 @@ def rasterize_shaded(
                             a.scatter_scale,
                             a.scatter_ambient,
                             a.receives_shadow,
+                            shape,
                         )
                         var share = thickness * a.scatter_attenuation
                         scatter = FloatColor(
@@ -3878,6 +4054,12 @@ def rasterize_shaded(
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
             var metal_factor = Float32(1)
+            # A node graph's roughness and metalness, in place of the
+            # material's and its maps', where it sets them.
+            var roughness = a.roughness
+            var metalness = a.metalness
+            var roughened = False
+            var metallized = False
             # What the highlight and the reflectivity are scaled by: the
             # specular map's red, or one for none.
             var specular_strength = Float32(1)
@@ -3923,6 +4105,8 @@ def rasterize_shaded(
                             _kept_normal(
                                 facing, a.kind, lighting, keeps_normals
                             ),
+                            moved,
+                            metal_rough,
                         )
                     continue
                 else:
@@ -4253,6 +4437,12 @@ def rasterize_shaded(
                     glow = FloatColor(
                         given_off[0], given_off[1], given_off[2], 1.0
                     )
+                if has_output(nodes, ROUGHNESS_NODE):
+                    roughness = run_nodes(nodes, ROUGHNESS_NODE, given)[0]
+                    roughened = True
+                if has_output(nodes, METALNESS_NODE):
+                    metalness = run_nodes(nodes, METALNESS_NODE, given)[0]
+                    metallized = True
                 # The backdrop in place of the diffuse light, mixed by its
                 # alpha where that is set: three.js's `backdropNode`. The
                 # specular light and the glow are added to it after.
@@ -4347,7 +4537,7 @@ def rasterize_shaded(
                 var surface = physical_surface(
                     Vector3(shaded.r, shaded.g, shaded.b),
                     head_on,
-                    a.metalness * metal_factor,
+                    metalness if metallized else metalness * metal_factor,
                     intensity,
                 )
                 # How fast the normal before any map turns across the
@@ -4370,7 +4560,13 @@ def rasterize_shaded(
                         lighting.back,
                     ),
                 )
-                var rough = floored_roughness(a.roughness * rough_factor, curve)
+                var rough = floored_roughness(
+                    roughness if roughened else roughness * rough_factor, curve
+                )
+                metal_rough = Vector2(
+                    metalness if metallized else metalness * metal_factor,
+                    rough,
+                )
                 # The coat times its map's red, and its roughness times its
                 # map's green, before the floor, in three.js's order.
                 var coat = clearcoat_of(a.clearcoat, coat_factor)
@@ -4487,6 +4683,7 @@ def rasterize_shaded(
                     coat_rough,
                     a.receives_shadow,
                     layers,
+                    shape,
                 )
                 # The light map's light joins the indirect light here, as
                 # three.js adds it to `irradiance`; zero adds nothing.
@@ -4734,11 +4931,13 @@ def rasterize_shaded(
                     shaded,
                     untoned,
                     _kept_normal(facing, a.kind, lighting, keeps_normals),
+                    moved,
+                    metal_rough,
                 )
         row = row + down
 
 
-struct _HostNodes[origin: Origin[mut=False]](NodeSource):
+struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
     material's map. `x` and `y` move with the fragment."""
@@ -5343,7 +5542,7 @@ def rasterize_line(
         a.nodes, mode, textures, cubes, programs, volumes, arrays
     )
     var noded = a.nodes != NO_NODES and mode != SHADE_UV
-    var textured = mode == SHADE_TEXTURE
+    var textured = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     var nodes = _HostLineNodes(
         Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
         max(a.nodes.value, 0),
@@ -5477,6 +5676,16 @@ def rasterize_line(
                     shaded.a = run_nodes(nodes, OPACITY_NODE, given)[0]
                 if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
                     continue
+            # The shadow pass's color; see `rasterize_shaded`.
+            if mode == SHADE_SHADOW:
+                var cast = cast_shadow_color(nodes, noded, given)
+                var shadowed = target.test_fragment(x, y, stored_z, a.state)
+                target.keep_stencil(x, y, shadowed)
+                if not shadowed.passes:
+                    continue
+                target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
+                continue
             if fogged:
                 shaded = fog_mix(shaded, fog.color, veil)
             # The output last, reading the finished color.
@@ -5522,6 +5731,27 @@ def rasterize_line(
                 # is.
                 drawn.a = 1
                 target.write(x, y, drawn, not a.state.tone_mapped)
+
+
+def cast_shadow_color[
+    S: NodeSource
+](source: S, noded: Bool, given: NodeInputs) -> FloatColor:
+    """Return what a light sees through a fragment in the shadow pass,
+    before the maps thin its alpha: the program's `CAST_SHADOW_NODE`, or
+    opaque black, three.js's shadow material's `vec4( 0, 0, 0, 1 )`.
+
+    Args:
+        source: The fragment's program.
+        noded: Whether the fragment runs a program.
+        given: The fragment's attributes.
+
+    Returns:
+        The color and alpha, linear and straight.
+    """
+    if noded and has_output(source, CAST_SHADOW_NODE):
+        var made = run_nodes(source, CAST_SHADOW_NODE, given)
+        return FloatColor(made[0], made[1], made[2], made[3])
+    return FloatColor(0.0, 0.0, 0.0, 1.0)
 
 
 # --- points -----------------------------------------------------------------
@@ -5672,7 +5902,7 @@ def rasterize_point(
             texture the store does not have.
     """
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     check_point_state(point)
     fog.validate()
     check_point_maps(point, mode, textures, cubes, programs, volumes, arrays)
@@ -5684,7 +5914,7 @@ def rasterize_point(
     var covered = point.state.alpha_to_coverage and mode != SHADE_UV
     var may_discard = tested or covered
     var writes_depth = point.state.writes_depth()
-    var sampled = mode == SHADE_TEXTURE
+    var sampled = mode == SHADE_TEXTURE or mode == SHADE_SHADOW
     var center = Vector2(point.x, point.y)
     var size = point.point_size
     # The rows this call owns, held inside the image, and the square held
@@ -5747,6 +5977,31 @@ def rasterize_point(
             var test = target.test_fragment(x, y, stored_z, point.state)
             if not shades(test, may_discard or masked):
                 target.keep_stencil(x, y, test)
+                continue
+            # The shadow pass's color; see `rasterize_shaded`.
+            if mode == SHADE_SHADOW:
+                nodes.x = x
+                nodes.y = y
+                nodes.depth = point.z
+                var place = point_coord(center, size, x, y)
+                var cast = cast_shadow_color(nodes, noded, given)
+                if point.texture != NO_TEXTURE:
+                    cast.a *= _sample_point_map(
+                        textures.get(point.texture), place, level
+                    ).a
+                if point.alpha_map != NO_TEXTURE:
+                    cast.a *= _sample_point_map(
+                        textures.get(point.alpha_map), place, mask_level
+                    ).g
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
+                if tested and cast.a < point.alpha_test:
+                    continue
+                target.keep_stencil(x, y, test)
+                if not test.passes:
+                    continue
+                target.claim_depth(x, y, stored_z)
+                target.write(x, y, cast, True)
                 continue
             var shaded = point.color
             if mode != SHADE_LIT:
@@ -5997,6 +6252,21 @@ def _point_rows(points: List[RasterVertex]) -> List[Int]:
     return rows^
 
 
+def _lit_by(
+    named: Int,
+    lighting: Pointer[Lighting, ImmutAnyOrigin],
+    lightings: Pointer[Lighting, ImmutAnyOrigin],
+) -> Pointer[Lighting, ImmutAnyOrigin]:
+    """Return the lighting a triangle names: the frame's own for zero, and
+    the `named - 1`th of `lightings` otherwise. `rasterize_frame` has
+    checked the number."""
+    if named == 0:
+        return lighting
+    return Pointer(to=lightings[unsafe_offset=named - 1]).unsafe_origin_cast[
+        ImmutAnyOrigin
+    ]()
+
+
 async def _frame_band(
     corners: Pointer[RasterVertex, ImmutAnyOrigin],
     triangle_rows: MutPointer[Int, MutAnyOrigin],
@@ -6010,6 +6280,7 @@ async def _frame_band(
     mode: ShadeMode,
     textures: Pointer[TextureStore, ImmutAnyOrigin],
     lighting: Pointer[Lighting, ImmutAnyOrigin],
+    lightings: Pointer[Lighting, ImmutAnyOrigin],
     errors: MutPointer[String, MutAnyOrigin],
     band: Int,
     first_row: Int,
@@ -6062,7 +6333,11 @@ async def _frame_band(
                         target[],
                         mode,
                         textures[],
-                        lighting[],
+                        _lit_by(
+                            corners[unsafe_offset=triangle * 3].lights,
+                            lighting,
+                            lightings,
+                        )[],
                         first_row,
                         last_row,
                         fog,
@@ -6161,6 +6436,7 @@ def rasterize_frame(
     programs: NodeProgramStore = NodeProgramStore(),
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    lightings: List[Lighting] = List[Lighting](),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -6215,6 +6491,10 @@ def rasterize_frame(
             `rasterize_shaded`.
         volumes: Where the node programs' 3D textures live.
         arrays: Where the node programs' array textures live.
+        lightings: The lights each `LightMask` the frame's materials name
+            resolves to, in `Renderer.light_masks` order: a triangle whose
+            `lights` is `i` above zero is lit by `lightings[i - 1]`, and
+            one whose `lights` is zero by `lighting`.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -6235,7 +6515,7 @@ def rasterize_frame(
     if workers < 1:
         raise Error("Rasterizing needs at least one worker")
     if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
+        raise Error("A shading mode that is none of the four")
     # Refused here, before any band starts, for the reason the triangle
     # state is: whether or not a triangle is visible, and however many
     # workers there are.
@@ -6261,6 +6541,9 @@ def rasterize_frame(
             volumes,
             arrays,
         )
+        var named = corners[triangle * 3].lights
+        if named < 0 or named > len(lightings):
+            raise Error("A triangle names a lighting the frame does not have")
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
         check_program_maps(
@@ -6304,7 +6587,15 @@ def rasterize_frame(
                         target,
                         mode,
                         textures,
-                        lighting,
+                        _lit_by(
+                            corners[triangle * 3].lights,
+                            Pointer(to=lighting).unsafe_origin_cast[
+                                ImmutAnyOrigin
+                            ](),
+                            lightings.unsafe_ptr().unsafe_origin_cast[
+                                ImmutAnyOrigin
+                            ](),
+                        )[],
                         fog=fog,
                         cubes=cubes,
                         transmission=transmission,
@@ -6367,6 +6658,7 @@ def rasterize_frame(
                 mode,
                 Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+                lightings.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 band,
                 band * target.height // bands,
