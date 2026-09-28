@@ -25,7 +25,7 @@ from core.scene_optimizer import (
 )
 from geometries.box import box
 from geometries.sphere import sphere
-from lights.light import point_light
+from lights.light import lights_of, point_light
 from loaders.json import JsonDocument, parse_json
 from materials.material import (
     LAMBERT,
@@ -180,6 +180,12 @@ def test_the_signatures_leave_out_the_color() raises:
     blue.opacity = 0.5
     assert_true(
         material_signature(assets, red) != material_signature(assets, blue)
+    )
+    # Two materials lit by different lights are not one batch.
+    var masked = Material(Color(255, 0, 0), kind=LAMBERT)
+    masked.lights = lights_of([0])
+    assert_true(
+        material_signature(assets, red) != material_signature(assets, masked)
     )
     var side = Length(1.0, METER)
     assert_equal(

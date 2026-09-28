@@ -248,6 +248,7 @@ def material_signature(assets: Assets, material: Material) raises -> String:
     parts.append(String(bitcast[DType.uint32](material.scattering.attenuation)))
     parts.append(String(bitcast[DType.uint32](material.scattering.power)))
     parts.append(String(bitcast[DType.uint32](material.scattering.scale)))
+    parts.append(String(material.lights.bits))
     # Clipping storage is a fixed, nonempty SIMD, even with no active planes.
     for lane in range(len(material._clip_planes)):  # pragma: no branch
         parts.append(String(bitcast[DType.uint32](material._clip_planes[lane])))

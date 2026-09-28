@@ -50,6 +50,12 @@ from core.buffer_geometry import (
 from core.interleaved_buffer import InterleavedBuffer
 from core.morph import MorphInfluences
 from math.matrix4 import Matrix4
+from math.utils import (
+    INT8_COMPONENT,
+    INT16_COMPONENT,
+    UINT8_COMPONENT,
+    UINT16_COMPONENT,
+)
 
 # three.js's index needs four bytes an entry, not two, from this value up:
 # `arrayNeedsUint32`.
@@ -288,11 +294,11 @@ def estimate_bytes_used(geometry: BufferGeometry) -> Int:
     var total = 0
     for slot in range(len(geometry.values)):
         ref attribute = geometry.values[slot]
-        var component = attribute.component_type().value
+        var component = attribute.component_type()
         var bytes = FLOAT_BYTES
-        if component == 2 or component == 5:
+        if component == UINT16_COMPONENT or component == INT16_COMPONENT:
             bytes = 2
-        elif component == 3 or component == 6:
+        elif component == UINT8_COMPONENT or component == INT8_COMPONENT:
             bytes = 1
         total += attribute.count() * attribute.item_size * bytes
     var entry = 2
