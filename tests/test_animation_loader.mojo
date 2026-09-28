@@ -142,6 +142,7 @@ def test_a_morph_track_finds_the_mesh_at_its_node() raises:
     )
     assert_equal(target(rig, "Hips.morphTargetInfluences").value().slot, -1)
     assert_false(Bool(target(rig, "Hips.morphTargetInfluences[frown]")))
+    assert_false(Bool(target(rig, "Hips.morphTargetInfluences[-1]")))
     assert_false(Bool(target(rig, "Hand.morphTargetInfluences[0]")))
 
 
@@ -212,6 +213,8 @@ def test_the_loader_refuses_what_is_not_an_array_of_clips() raises:
     with assert_raises():
         _ = read_animations("assets/animation/none.json", rig.scene, rig.root)
     assert_equal(len(parse_animations("[]", rig.scene, rig.root)), 0)
+    var empty = '[{"name": "empty", "tracks": []}]'
+    assert_equal(len(parse_animations(empty, rig.scene, rig.root)), 0)
 
 
 def moving_clip(node: NodeId, other: NodeId) raises -> AnimationClip:

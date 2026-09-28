@@ -143,9 +143,7 @@ def test_a_clone_carries_its_clipping_group() raises:
     var copy = scene.clone(held)
     assert_equal(len(scene.clipping_groups), 3)
     assert_equal(scene.clipping_groups[2].node, copy)
-    assert_almost_equal(
-        scene.clipping_groups[2].clipping_planes[0].normal.x, 1
-    )
+    assert_almost_equal(scene.clipping_groups[2].clipping_planes[0].normal.x, 1)
 
 
 def camera() raises -> PerspectiveCamera:
@@ -215,7 +213,9 @@ def test_a_groups_intersection_keeps_what_is_in_front_of_any_plane() raises:
     quad_under(
         assets,
         scene,
-        ClippingGroup(holder, [keep_right(), keep_up()], clip_intersection=True),
+        ClippingGroup(
+            holder, [keep_right(), keep_up()], clip_intersection=True
+        ),
     )
     var image = Renderer(SIZE, SIZE).render(scene, assets, camera())
     # Cut only in the lower left, behind both planes.

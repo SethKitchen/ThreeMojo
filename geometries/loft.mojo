@@ -67,7 +67,9 @@ def _check_sections(sections: List[List[Vector3]]) raises -> Int:
         raise Error("A loft section needs two points at least")
     for row in range(len(sections)):  # pragma: no branch
         if len(sections[row]) != columns:
-            raise Error("Every loft section must hold the same number of points")
+            raise Error(
+                "Every loft section must hold the same number of points"
+            )
         for point in sections[row]:  # pragma: no branch
             if not (
                 isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
@@ -103,6 +105,16 @@ def _column_v(section: List[Vector3], per_row: Int) -> List[Float32]:
             )
         )
     return column_v^
+
+
+def _fraction(
+    distance: Float32, total: Float32, index: Int, count: Int
+) -> Float32:
+    """Return how far along a run a point is: by distance, or by count when
+    the run has no length, three.js's `i / ( rows - 1 )`."""
+    if total > 0:
+        return distance / total
+    return Float32(index) / Float32(count - 1)
 
 
 def _cap(
@@ -236,14 +248,8 @@ def loft(
             vertices.append(point.x)
             vertices.append(point.y)
             vertices.append(point.z)
-            uvs.append(
-                row_u[row] / total_u if total_u > 0 else Float32(row)
-                / Float32(rows - 1)
-            )
-            uvs.append(
-                column_v[column] / total_v if total_v > 0 else Float32(column)
-                / Float32(per_row - 1)
-            )
+            uvs.append(_fraction(row_u[row], total_u, row, rows))
+            uvs.append(_fraction(column_v[column], total_v, column, per_row))
     var indices = List[Int]()
     for row in range(rows - 1):  # pragma: no branch
         for column in range(per_row - 1):  # pragma: no branch

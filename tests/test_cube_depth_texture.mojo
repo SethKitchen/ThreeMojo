@@ -88,6 +88,7 @@ def test_a_cube_depth_texture_refuses_what_is_not_six_square_faces() raises:
     with assert_raises(contains="one size"):
         _ = cube_depth_texture_of(five_and(Framebuffer(2, 3, Color(0, 0, 0))))
 
+
 def test_a_cube_camera_render_keeps_the_depth_of_each_face() raises:
     # A box two meters along +x: its near side, a meter and a half away,
     # is in the +x face, and nothing is in the -x face.
@@ -105,7 +106,9 @@ def test_a_cube_camera_render_keeps_the_depth_of_each_face() raises:
     var renderer = Renderer(8, 8)
     var faces = List[Framebuffer]()
     for face in range(FACE_COUNT):
-        faces.append(renderer.render(scene, assets, eye.face_camera(face, scene)))
+        faces.append(
+            renderer.render(scene, assets, eye.face_camera(face, scene))
+        )
     var cube_map = cube_depth_texture_of(faces)
     # z = -1.5 with planes at 0.1 and 10: a window depth of about 0.943.
     var near = cube_map.sample(Vector3(1, 0, 0)).r

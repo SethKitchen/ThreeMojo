@@ -138,9 +138,7 @@ struct AnimationPathHelper(Copyable, Movable):
     # The markers at the keys, or None when they are not shown.
     var points: Optional[Points]
 
-    def __init__(
-        out self, node: NodeId, line: Line, points: Optional[Points]
-    ):
+    def __init__(out self, node: NodeId, line: Line, points: Optional[Points]):
         """Hold what was added.
 
         Args:

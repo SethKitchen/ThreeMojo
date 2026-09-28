@@ -87,6 +87,8 @@ def cube_depth_texture_of(
     var depths = List[Float32]()
     for face in range(FACE_COUNT):  # pragma: no branch
         if images[face].width != size or images[face].height != size:
-            raise Error("A cube depth texture needs six square images of one size")
+            raise Error(
+                "A cube depth texture needs six square images of one size"
+            )
         depths.extend(Span(images[face].depth))
     return cube_depth_texture(size, depths, mode)

@@ -5088,7 +5088,12 @@ struct Renderer(Movable):
                     wide_any,
                 )
                 _group_clip_sets(
-                    scene, draws[slot].node, view, casters_only, wide_cut, wide_any
+                    scene,
+                    draws[slot].node,
+                    view,
+                    casters_only,
+                    wide_cut,
+                    wide_any,
                 )
                 _emit_wide_line(
                     corners,
@@ -5134,7 +5139,12 @@ struct Renderer(Movable):
                     sprite_any,
                 )
                 _group_clip_sets(
-                    scene, draws[slot].node, view, casters_only, sprite_cut, sprite_any
+                    scene,
+                    draws[slot].node,
+                    view,
+                    casters_only,
+                    sprite_cut,
+                    sprite_any,
                 )
                 _emit_sprite(
                     corners,
@@ -6013,9 +6023,7 @@ struct Renderer(Movable):
                 cut,
                 any_of,
             )
-            _group_clip_sets(
-                scene, line.node, view, casters_only, cut, any_of
-            )
+            _group_clip_sets(scene, line.node, view, casters_only, cut, any_of)
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
