@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 214 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 215 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -270,8 +270,9 @@ The port is not at parity with three.js yet. 214 features are ported and 0 are o
 
 
 <details>
-<summary>Ported: 33</summary>
+<summary>Ported: 34</summary>
 
+- [x] [More display nodes: FSR1, TAAU, SSGI, SSS, OIT, retro and filters](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#more-display-nodes): upscaling, screen-space light and shadow, unsorted transparency and filters [#251](https://github.com/SethKitchen/ThreeMojo/issues/251)
 - [x] [Gaussian splats](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats): the GaussianSplat object drawn alike by both rasterizers, and the SPLAT, KSPLAT, SPZ, splat PLY and KHR_gaussian_splatting glTF loaders [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
 - [x] [Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#traa) [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 - [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
