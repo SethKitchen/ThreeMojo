@@ -545,6 +545,64 @@ three.js writes each node of the graph with its type and its inputs. This port w
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
+### three.js's node JSON
+
+`loaders.node_loader` reads the node graph that three.js writes, and compiles it here. A node material that you make in three.js can load in this port. The module is three.js's `NodeLoader`, `NodeMaterialLoader` and `NodeObjectLoader`.
+
+`read_object_json` and `read_material_json` read a three.js node material without more work:
+
+- A type such as `MeshStandardNodeMaterial` is read as the class that it extends, here `MeshStandardMaterial`. `NodeMaterial` is read as `MeshBasicMaterial`.
+- The nodes are the file's `nodes` list, and the material's own `nodes` list where it has one.
+- Each texture node reads the texture that the file names. The loader sets the id that the texture gets in `assets.textures`, and the transform of the texture.
+
+Read a material that `NodeMaterial.toJSON()` wrote alone into a graph:
+
+```mojo
+var read = read_node_material(text)
+var program = read.graph.compile()
+for i in range(len(read.textures)):
+    program.set_texture(read.textures[i].uniform, my_textures[read.textures[i].texture])
+var id = assets.programs.add(program^)
+```
+
+Use a `NodeLoader` to read one node, or a list of nodes. `parse(document, item)` reads what `Node.toJSON()` writes, and returns the node's `NodeRef` in `loader.graph`. `parse_nodes(document, list)` indexes a list by uuid. `node(document, uuid)` builds one node and the nodes that it reads.
+
+The loader reads these node classes:
+
+| Class | Node here |
+|---|---|
+| `VarNode`, `SubBuild` | The input node. |
+| `VaryingNode` | `varying` of the input. A varying of an attribute is the attribute. |
+| `ConstNode` | A constant: a `float`, a `bool` (one or zero), a vector, a `color` or a matrix. |
+| `UniformNode` | A uniform of the same type, named by the node's uuid. |
+| `AttributeNode` | `uv()`, `position_local()`, `normal_local()` or `vertex_color()` for `uv`, `position`, `normal` and `color`. Another name is a custom attribute. |
+| `VertexColorNode` | `vertex_color()`. |
+| `OperatorNode` | Each `op` of TSL, from `+` to `>>`. |
+| `MathNode` | Each `method` of TSL that has a node here. `sinh` to `atanh` are made from `exp` and `log`. `transformDirection` is the matrix times the direction, made unit length. |
+| `ConditionalNode` | `select`. |
+| `SplitNode`, `JoinNode` | `swizzle` and `join`. A join of three `vec3` columns is a `mat3`, and a join of four `vec4` columns is a `mat4`. |
+| `ConvertNode` | The conversion that three.js's node builder makes. |
+| `FrontFacingNode`, `ScreenNode`, `PointUVNode` | `front_facing()`, `screen_uv()` and `point_coord()`. |
+| `TextureNode` | A texture uniform named by the node's uuid, read with `texture`, `texture_level` or `texture_load`. |
+| `CubeTextureNode` | A cube uniform named by the node's uuid, read with `texture_cube`. With no coordinate, it reads in the view ray reflected by the normal, three.js's `reflectVector`. |
+
+`loader.textures` lists each texture node. Each entry has the name of its uniform, the uuid of the texture that it reads, and whether it is a cube. A texture node with no coordinate reads `uv()` through the texture's transform, as three.js does. That transform is a `mat3` uniform named after the node's uuid and `.matrix`. The object loader sets it from the texture's `offset`, `repeat`, `rotation` and `center`.
+
+Each property of the material's `inputNodes` sets one output. The property has the name of the output in three.js, from `colorNode` to `castShadowNode`. The loader converts each node to the type of its output, as three.js does. It also makes these changes:
+
+- `normalNode` is the normal in view space in three.js. The loader turns it into world space, and subtracts the normal. The sum is then three.js's normal.
+- `positionNode` is the local position in three.js. The loader subtracts the local position.
+- A `colorNode` of type `vec4` or `float` has an alpha. The alpha multiplies the opacity node, or the material's `opacity`, as three.js's `vec4(colorNode)` does.
+
+The loader refuses these things:
+
+- A node class that is not in the table, when an output reads it. The error gives the class.
+- A `Node` with no class of its own. three.js writes each TSL function, such as `positionWorld`, `normalWorld` or `cameraPosition`, as a `Node` with no body. three.js's own loader cannot build these nodes again.
+- A custom attribute whose type the caller did not declare with `set_attribute`. three.js does not write the type of an attribute.
+- A material property that has no output here, such as `clearcoatNode`.
+- A texture node with a bias, a comparison, a depth, a gradient or an offset. A cube node with a level.
+- A uuid that no node has, and nodes that read each other in a cycle.
+
 ## Shaders from three.js's examples
 
 Five of the shaders in three.js's `examples/jsm/shaders` come as programs. Each compiles three.js's own GLSL through the subset, with three.js's default uniforms. Give the program's id to `shader_material`.
@@ -664,5 +722,7 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 
 ## What is not ported
 
+- three.js's node JSON does not keep the name of a uniform, the update of a uniform or the type of an attribute. So `time` is a plain uniform named by its uuid. Set it with `set_uniform` before each frame.
+- The node classes of three.js that are TSL functions, and the classes that have no node here, such as `ModelNode`, `MaterialNode` and `PropertyNode`. A material that uses them cannot load.
 - Compute nodes, storage buffers and `instancedArray`.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).
