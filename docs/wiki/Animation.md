@@ -231,7 +231,7 @@ These are three.js's methods. They change the track in place.
 | `optimize()` | `optimize` | Removes each key that holds the same value as the keys on both sides of it. |
 | `validate() -> Bool` | `validate` | True if the constructors would build the track. |
 
-`optimize` keeps the first and the last key, and every key of a `SMOOTH` track. A `CUBIC_SPLINE` or `BEZIER` key stays unless its tangents also match.
+`optimize` keeps the first and the last key, and every key of a `SMOOTH` or `BEZIER` track. A constant `CUBIC_SPLINE` key can be removed only when its neighboring values match and all their tangents are zero. Equal nonzero tangents can still bend the curve.
 
 A Bezier track's control points move with `shift`, and `trim` and `optimize` keep the control points of the keys they keep. `scale` multiplies the times of the control points, as three.js does. It divides the tangents of a `CUBIC_SPLINE` track by the factor, because a tangent is a value per second.
 

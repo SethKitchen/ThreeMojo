@@ -1423,6 +1423,9 @@ struct KeyframeTrack(Copyable, Movable):
                 return False
             if self.out_tangents[here] != self.out_tangents[there]:
                 return False
+            # Equal nonzero slopes do not make a constant Hermite segment.
+            if self.in_tangents[here] != 0 or self.out_tangents[here] != 0:
+                return False
         return True
 
     def optimize(mut self) raises:
@@ -1432,10 +1435,10 @@ struct KeyframeTrack(Copyable, Movable):
 
         The first and the last key are always kept. A `SMOOTH` track keeps
         every key, as in three.js, since each key bends the curve on either
-        side of it. A `CUBIC_SPLINE` or `BEZIER` key is dropped only if its
-        tangents match too. three.js compares a Bezier key's value alone
-        and does not drop its control points, which leaves them out of line
-        with the keys.
+        side of it. A `BEZIER` track also keeps every key. A constant
+        `CUBIC_SPLINE` key is dropped only when its neighboring values
+        match and all their tangents are zero. Equal nonzero tangents do
+        not define a constant curve.
 
         three.js also drops a key at the same time as the one after it.
         Here the times of a track rise, so there is none.
@@ -1446,7 +1449,9 @@ struct KeyframeTrack(Copyable, Movable):
         self._check_lists()
         var last = len(self.times) - 1
         var kept: List[Int] = [0]
-        var smooth = self.interpolation == SMOOTH
+        var smooth = (
+            self.interpolation == SMOOTH or self.interpolation == BEZIER
+        )
         for key in range(1, last):
             if (
                 smooth
@@ -1771,11 +1776,13 @@ struct KeyframeTrack(Copyable, Movable):
             The value as a vector.
 
         Raises:
-            Error: If this is a `QUATERNION` track, whose value is not a
-                vector, or as `sample` does.
+            Error: If the track does not have three components, or as
+                `sample` does.
         """
         if self.target.kind == QUATERNION:
             raise Error("A rotation track's value is not a vector")
+        if self.target.kind.component_count() != 3:
+            raise Error("A vector track must have three components")
         var numbers = self.sample(at, start, end)
         return Vector3(numbers[0], numbers[1], numbers[2])
 

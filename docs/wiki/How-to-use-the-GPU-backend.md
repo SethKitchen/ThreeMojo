@@ -21,14 +21,18 @@ The same message also comes when Apple's Metal linker, `air-lld`, crashes. Mojo 
 ## Check that a GPU is visible
 
 ```bash
-.venv/bin/mojo run -I . tools/gpu_status.mojo
+.venv/bin/python tools/gpu_status.py
 ```
+
+The status command checks physical devices through MAX. A compiler target alone does not establish device availability.
 
 ## Run the GPU checks
 
 ```bash
 make check-gpu
 ```
+
+Without a physical device, the command reports the device tests as skipped and runs the host layout tests. With a device, it also compiles and runs the GPU parity suite. A detection error fails the check.
 
 The suite runs under a time budget of 300 seconds. A hang fails the run instead of looking slow. Raise the budget on a machine with a slow first kernel compile:
 

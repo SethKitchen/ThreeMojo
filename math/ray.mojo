@@ -186,6 +186,10 @@ struct Ray(ImplicitlyCopyable):
         in whichever region of the parameter plane it lies. A segment
         parallel to the ray takes the end the ray runs toward.
 
+        The squared gap is measured between the two nearest points. The
+        expanded squared-distance formula loses small gaps at long range
+        in Float32, and can report zero or a negative distance.
+
         Args:
             start: One end of the segment.
             end: The other end.
@@ -201,11 +205,9 @@ struct Ray(ImplicitlyCopyable):
         var a01 = -self.direction.dot(along)
         var b0 = diff.dot(self.direction)
         var b1 = -diff.dot(along)
-        var c = diff.dot(diff)
         var det = abs(1 - a01 * a01)
         var s0: Float32
         var s1: Float32
-        var gap: Float32
         if det > 0:
             s0 = a01 * b1 - b0
             s1 = a01 * b0 - b1
@@ -217,37 +219,29 @@ struct Ray(ImplicitlyCopyable):
                         var inv_det = 1 / det
                         s0 *= inv_det
                         s1 *= inv_det
-                        gap = (
-                            s0 * (s0 + a01 * s1 + 2 * b0)
-                            + s1 * (a01 * s0 + s1 + 2 * b1)
-                            + c
-                        )
                     else:
                         s1 = extent
                         s0 = max(Float32(0), -(a01 * s1 + b0))
-                        gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
                 else:
                     s1 = -extent
                     s0 = max(Float32(0), -(a01 * s1 + b0))
-                    gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
             elif s1 <= -ext_det:
                 s0 = max(Float32(0), -(-a01 * extent + b0))
                 s1 = -extent if s0 > 0 else min(max(-extent, -b1), extent)
-                gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
             elif s1 <= ext_det:
                 s0 = 0
                 s1 = min(max(-extent, -b1), extent)
-                gap = s1 * (s1 + 2 * b1) + c
             else:
                 s0 = max(Float32(0), -(a01 * extent + b0))
                 s1 = extent if s0 > 0 else min(max(-extent, -b1), extent)
-                gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
         else:
             # Parallel: the end the ray runs toward.
             s1 = -extent if a01 > 0 else extent
             s0 = max(Float32(0), -(a01 * s1 + b0))
-            gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
-        return SegmentApproach(gap, self.at(s0), center + along * s1)
+        var on_ray = self.at(s0)
+        var on_segment = center + along * s1
+        var gap = on_ray - on_segment
+        return SegmentApproach(gap.dot(gap), on_ray, on_segment)
 
     def distance_to_point(self, point: Vector3) -> Float32:
         """Return how far `point` is from this ray, three.js's

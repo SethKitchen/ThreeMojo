@@ -65,7 +65,7 @@ GPU_LIB_SOURCES  := render/gpu.mojo
 # assertions among two hundred device failures were not seen.
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo
 GPU_TESTS        := tests/test_gpu.mojo $(GPU_HOST_TESTS)
-GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo tools/gpu_status.mojo
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
@@ -165,20 +165,24 @@ COV_BUDGET := $(shell n=$(words $(COVERAGE_TESTS)); \
                 [ $$n -lt 60 ] && n=60; echo $$n)
 
 CACHE_DIR := .cache
-HASHER    := $(shell command -v shasum > /dev/null 2>&1 \
-               && echo "shasum -a 256" || echo "sha256sum")
-INPUTS    := $(SOURCES) $(COMPILE_FAIL) Makefile
-# The compiler is an input too. Hashing only the sources meant that upgrading
-# Mojo left every success stamp eligible for reuse, so `make check` could pass
-# without having compiled a line against the new toolchain. Costs one process
-# launch (about 40ms) per make invocation, which is worth not lying about what
-# has been checked.
+# Shell quoting also protects flags that contain spaces or shell punctuation.
+quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
-# An AFFECTED run checks a part, so its stamps are keyed on the change as
-# well: a partial run must never stand in for a whole one.
-HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; \
-                echo "$(AFFECTED) $(AFFECTED_CHANGE)"; } \
-               | $(HASHER) | cut -c1-12)
+HASH := $(shell python3 tools/cache_key.py \
+          --setting=$(call quote,$(MOJO)) \
+          --setting=$(call quote,$(MOJOFLAGS)) \
+          --setting=$(call quote,$(TOOLCHAIN)) \
+          --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
+          --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
+          --setting=$(call quote,cpu-entries:$(CPU_ENTRY_POINTS)) \
+          --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
+          --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
+          --setting=$(call quote,format:$(FORMATTED)) \
+          --setting=$(call quote,covered:$(COVERED)) \
+          --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
+ifeq ($(strip $(HASH)),)
+$(error Cannot read build inputs for the cache key)
+endif
 
 # What the cache key cannot include is whether a GPU is plugged in, which is
 # why `test-gpu` is not cached at all. Hardware-dependent tests skip when there
@@ -202,8 +206,8 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
-        docs-check wiki-publish \
+.PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
+        docs-check wiki-publish test-tools \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
         clean clean-images draco-export-check
@@ -243,12 +247,15 @@ check: check-cpu check-gpu
 # The half that needs nothing but the Mojo toolchain. This is what to run when
 # MAX is not installed, and what proves the no-dependencies claim is still
 # true.
-check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check
+check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools
 
 # The half that needs MAX and, to be worth anything, a GPU. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
 # for one that ran them.
-check-gpu: gpu-status lint-gpu test-gpu
+check-gpu: gpu-status test-gpu-host
+	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
+	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
 # For CI, where a cache hit from a previous commit is exactly what you do not
 # want. `-B` forces every recipe to run regardless of its stamp.
@@ -289,8 +296,13 @@ $(TEST_CPU_STAMP):
 # something is stuck rather than slow. Override with `make test-gpu
 # GPU_BUDGET=600` on a machine whose first kernel compile is genuinely slow.
 GPU_BUDGET := 300
-test-gpu:
-	@printf '%s\n' $(GPU_TESTS) \
+test-gpu: gpu-status test-gpu-host
+	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	  if [ $$rc -eq 0 ]; then $(MAKE) test-gpu-device; \
+	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
+
+test-gpu-device:
+	@printf '%s\n' $(filter-out $(GPU_HOST_TESTS),$(GPU_TESTS)) \
 	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
@@ -304,7 +316,7 @@ test-gpu:
 	       else \
 	         echo "Some GPU suites FAILED."; \
 	       fi; exit 1; }
-	@echo "All $(words $(GPU_TESTS)) GPU suites passed."
+	@echo "GPU device suites passed."
 
 # The GPU suites that open no device. Cached, unlike test-gpu: nothing they
 # do depends on the hardware, so a stamp from another machine is as good.
@@ -319,8 +331,7 @@ $(TEST_GPU_HOST_STAMP):
 	@$(call stamp,test-gpu-host)
 
 gpu-status:
-	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/gpu_status.mojo); \
-	[ $$rc -eq 0 ] || exit 1
+	@.venv/bin/python tools/gpu_status.py
 
 lint: lint-cpu lint-gpu
 
@@ -359,19 +370,27 @@ $(LINT_GPU_STAMP):
 	@echo "No warnings (GPU)."
 	@$(call stamp,lint-gpu)
 
-# mojo format has no --check flag, so format a scratch copy and diff it.
+# mojo format has no --check flag, so format scratch copies and diff them.
+# One invocation avoids paying compiler startup once for every source file.
 fmt-check: $(FMT_STAMP)
 $(FMT_STAMP):
-	@fail=0; tmp=$$(mktemp -d); \
+	@fail=0; tmp=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$tmp"' 0; \
+	set --; \
 	for f in $(FORMATTED); do \
-	  cp "$$f" "$$tmp/candidate.mojo"; \
-	  $(call run,$(MOJO) format -q "$$tmp/candidate.mojo"); \
-	  if [ $$rc -ne 0 ]; then fail=1; continue; fi; \
-	  if ! diff -q "$$f" "$$tmp/candidate.mojo" > /dev/null; then \
+	  mkdir -p "$$tmp/$$(dirname "$$f")" || exit 1; \
+	  cp "$$f" "$$tmp/$$f" || exit 1; \
+	  set -- "$$@" "$$tmp/$$f"; \
+	done; \
+	if [ $$# -gt 0 ]; then \
+	  $(call run,$(MOJO) format -q "$$@"); \
+	  [ $$rc -eq 0 ] || exit $$rc; \
+	fi; \
+	for f in $(FORMATTED); do \
+	  if ! diff -q "$$f" "$$tmp/$$f" > /dev/null; then \
 	    echo "needs formatting: $$f"; fail=1; \
 	  fi; \
 	done; \
-	rm -rf "$$tmp"; \
 	if [ $$fail -ne 0 ]; then echo "Run 'make fmt'."; exit 1; fi; \
 	echo "All files formatted."
 	@$(call stamp,fmt)
@@ -414,18 +433,16 @@ else
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
-	@# One file per suite rather than a shared append: probe records must not
-	@# interleave mid-line, and MC-DC needs each decision's records in order.
+	@# Exact streams are compressed as they arrive. MC-DC record order stays
+	@# intact, without keeping tens of gigabytes of repeated probes on disk.
 	@printf '%s\n' $(COVERAGE_TESTS) \
 	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
-	             $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo" \
-	               2> $(COV_DIR)/hits/$$name.txt > $(COV_DIR)/hits/$$name.out \
-	             || { echo "$$name failed under instrumentation:"; \
-	                  tail -n 30 $(COV_DIR)/hits/$$name.out; \
-	                  grep -v "^COV" $(COV_DIR)/hits/$$name.txt | tail -n 30; \
-	                  exit 1; }' _ {} \
+	             python3 tools/coverage_io.py capture \
+	               --out "$(COV_DIR)/hits/$$name.out" \
+	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
+	               $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
@@ -438,11 +455,10 @@ else
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
-	@# Each suite's capture is handed over on its own. Concatenated they
-	@# pass two gigabytes, and one read of that fails on macOS.
-	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
-	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits/*.txt); \
-	[ $$rc -eq 0 ] || exit 1
+	@# FIFOs feed the original bytes to the reporter one suite at a time.
+	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits -- \
+	  $(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo $(COV_DIR)/manifest.txt
+
 endif
 	@$(call stamp,coverage)
 
@@ -917,3 +933,7 @@ clean:
 clean-images:
 	@rm -rf $(OUT_DIR)
 	@echo "Removed $(OUT_DIR)."
+
+# Parser and cache regressions run without the Mojo compiler.
+test-tools:
+	@python3 -m unittest discover -s tools -p 'test_*.py'

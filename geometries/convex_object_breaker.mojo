@@ -163,8 +163,8 @@ struct ConvexObjectBreaker(Movable):
     ) raises -> Tuple[Optional[BreakableObject], Optional[BreakableObject]]:
         """Cut an object by a plane in the world, given in doubles."""
         ref geometry = object.geometry
-        ref coords = geometry.attribute_view(String(POSITION)).data
-        ref normals = geometry.attribute_view(String(NORMAL)).data
+        var coords = geometry.attribute_view(String(POSITION)).packed()
+        var normals = geometry.attribute_view(String(NORMAL)).packed()
         var point_count = len(coords) // 3
         var indexed = len(geometry.index) > 0
         var face_count = (

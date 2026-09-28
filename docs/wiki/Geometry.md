@@ -629,7 +629,9 @@ creased.center()
 
 ### Merge
 
-`merge_geometries` joins the attributes end to end, in the first part's order. It moves each part's index entries past the vertices of the parts before it. It joins morph targets target by target. All parts must be indexed, or none. They must carry the same attributes, with the same item sizes, and the same morph targets.
+`merge_geometries` joins the attributes end to end, in the first part's order. It moves each part's index entries past the vertices of the parts before it. It joins morph targets target by target.
+
+All parts must be indexed, or none. They must carry the same attributes and morph targets. Matching attributes must have the same item size, component type, normalization flag, and instance divisor. Merging keeps integer storage exact, including UInt32 values above 2^24.
 
 With `use_groups`, the result gets one group per part, and part `i` wears material index `i`. The parts' own groups are not kept, as in three.js.
 

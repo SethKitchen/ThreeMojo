@@ -232,6 +232,25 @@ def test_hits_nearer_than_near_are_dropped() raises:
     assert_equal(len(caster.intersect_sprite(card[0], card[1], 0)), 0)
 
 
+def test_a_distant_line_keeps_its_pick_threshold() raises:
+    # The bounding sphere reaches the ray, but the line is two meters
+    # away. At ten kilometers the old squared-distance formula gave zero.
+    var depths: List[Float32] = [0, -10000]
+    for depth in depths:
+        var made = _with_line([Float32(-5), 2, depth, 5, 2, depth])
+        var caster = Raycaster(Vector3(0, 0, 0), Vector3(0, 0, -1))
+        caster.line_threshold = Length(1.0, METER)
+        assert_equal(len(caster.intersect_line(made[0], made[1], 0)), 0)
+        # A gap exactly on the threshold counts, as in three.js.
+        caster.line_threshold = Length(2.0, METER)
+        var hits = caster.intersect_line(made[0], made[1], 0)
+        assert_equal(len(hits), 1)
+        assert_almost_equal(hits[0].distance, -depth, atol=TOLERANCE)
+        assert_almost_equal(hits[0].point.x, 0, atol=TOLERANCE)
+        assert_almost_equal(hits[0].point.y, 2, atol=TOLERANCE)
+        assert_almost_equal(hits[0].point.z, depth, atol=TOLERANCE)
+
+
 def test_a_strip_of_one_point_has_no_segment_to_meet() raises:
     var made = _with_line([Float32(0), 0, 0])
     assert_equal(len(_down(0, 0).intersect_line(made[0], made[1], 0)), 0)
@@ -330,6 +349,31 @@ def test_a_point_is_met_within_its_threshold() raises:
     hidden[0].node(NodeId(0)).layers.set(3)
     hidden[0].update()
     assert_equal(len(_down(0, 0).intersect_points(hidden[0], hidden[1], 0)), 0)
+
+
+def test_dense_point_picks_sort_nearest_first_and_keep_ties_stable() raises:
+    # Reverse depth order with pairs at each distance, then all at zero.
+    # The triangle field identifies each original point after sorting.
+    for repetitions in [2, 256]:
+        var points = List[Float32]()
+        for index in range(256):
+            var depth = Float32((255 - index) // repetitions) * 0.25
+            points.append(0)
+            points.append(0)
+            points.append(-depth)
+        var made = _with_points(points^)
+        var ray = Raycaster(Vector3(0, 0, 0), Vector3(0, 0, -1))
+        var hits = ray.intersect_scene(made[0], made[1])
+        assert_equal(len(hits), 256)
+        for index in range(len(hits)):
+            var depth = Float32(index // repetitions) * 0.25
+            var original = (
+                255 // repetitions - index // repetitions
+            ) * repetitions + index % repetitions
+            assert_almost_equal(hits[index].distance, depth, atol=TOLERANCE)
+            assert_equal(hits[index].triangle, original)
+            assert_true(hits[index].kind == POINTS_HIT)
+            assert_almost_equal(hits[index].point.z, -depth, atol=TOLERANCE)
 
 
 def test_a_points_pick_refuses_what_it_cannot_measure() raises:

@@ -68,3 +68,7 @@ See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run) for the numbers.
 ## Compiler hang
 
 A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrumenter emits an `Int` counter instead. See [The Mojo compiler hang](The-Mojo-compiler-hang).
+
+## Capture storage
+
+The Makefile compresses each suite's stderr as it arrives. Compression preserves every probe record and its order. The reporter reads the original bytes through named pipes, one suite at a time. Uncompressed captures do not occupy disk. Python uses bounded buffers for both capture and replay.

@@ -334,6 +334,8 @@ var camera_node = model.nodes[2]
 
 A `.glb` is told by its magic. Anything else is read as JSON. A buffer or an image named by a relative URI is read from the file's own directory. A `data:` URI must be base64.
 
+Accessor offsets and strides must stay inside their buffer views and meet alignment rules. Matrix columns include their required padding. The final column can omit trailing padding. Integer attributes, indices, and sparse indices keep their exact values; they do not pass through Float32 storage.
+
 | Function | Meaning |
 |---|---|
 | `read_gltf(path, scene, assets) -> GltfModel` | Read a file. |
