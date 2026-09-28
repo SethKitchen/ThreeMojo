@@ -783,6 +783,165 @@ function build(spec) {
     return { scene, camera, subject, extra };
   }
 
+  if (kind === "flipbook") {
+    const group = new THREE.Group();
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.62, 16, 12),
+      new THREE.MeshLambertMaterial({ color: 0xe87040 }),
+    );
+    ball.position.set(0.95, 0.05, 0);
+    group.add(ball);
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(1.55, 0.08, 0.08),
+      new THREE.MeshLambertMaterial({ color: 0x969ca8 }),
+    );
+    bar.position.x = -0.95;
+    group.add(bar);
+    for (const x of [0.72, -0.72]) {
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(0.36, 0.36, 0.36),
+        new THREE.MeshLambertMaterial({ color: x > 0 ? 0xc4403a : 0x4682d2 }),
+      );
+      box.position.set(x, 0, 0);
+      group.add(box);
+    }
+    subject = group;
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 38);
+    camera.position.set(0.05, 0.55, 3.35);
+    camera.lookAt(0, 0.05, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "ripples") {
+    subject = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 28, 18),
+      new THREE.MeshBasicMaterial({ color: 0x66aadd }),
+    );
+    scene.add(subject);
+    camera = perspective(width, height, 38);
+    camera.position.set(0.15, 0.35, 2.55);
+    camera.lookAt(0, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "baked") {
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(4, 4),
+      new THREE.MeshLambertMaterial({ color: 0x969aa4 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    subject = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.9, 0.9),
+      new THREE.MeshLambertMaterial({ color: 0xe68c32 }),
+    );
+    subject.position.y = 0.45;
+    subject.castShadow = true;
+    subject.receiveShadow = true;
+    scene.add(subject);
+    const lamp = new THREE.DirectionalLight(0xfff8ec, 1.6);
+    lamp.position.set(2.2, 2.6, 0);
+    lamp.castShadow = true;
+    scene.add(lamp, new THREE.AmbientLight(0xb4bec8, 0.22));
+    camera = perspective(width, height, 38);
+    camera.position.set(2.4, 1.8, 2.6);
+    camera.lookAt(0, 0.2, 0);
+    extra = { lamp };
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "diagram") {
+    const group = new THREE.Group();
+    const gem = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.72),
+      new THREE.MeshLambertMaterial({ color: 0xd67a42 }),
+    );
+    gem.position.x = -0.38;
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.7, 0.7),
+      new THREE.MeshLambertMaterial({ color: 0x407ac4 }),
+    );
+    block.position.set(0.72, -0.18, 0.12);
+    group.add(gem, block);
+    subject = group;
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 38);
+    camera.position.set(0.2, 0.7, 2.7);
+    camera.lookAt(0.1, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "bricks") {
+    const group = new THREE.Group();
+    const colors = [0xc91a09, 0xfcfcfc, 0xbba53d, 0x767676];
+    colors.forEach((color, index) => {
+      const brick = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.7, 0.6),
+        new THREE.MeshStandardMaterial({ color, roughness: 0.45 }),
+      );
+      brick.position.set((index - 1.5) * 1.5, 0, (index % 2) * 0.8);
+      group.add(brick);
+    });
+    subject = group;
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 40);
+    camera.position.set(4, 2.2, 5);
+    camera.lookAt(0, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "terrain") {
+    const geometry = new THREE.PlaneGeometry(2.8, 2.8, 27, 27);
+    geometry.rotateX(-Math.PI / 2);
+    const position = geometry.attributes.position;
+    const colors = [];
+    for (let i = 0; i < position.count; i++) {
+      const h = Math.sin(position.getX(i) * 3) * Math.cos(position.getZ(i) * 3);
+      position.setY(i, h * 0.2);
+      const t = h * 0.5 + 0.5;
+      colors.push(0.12 + 0.76 * t, 0.28 + 0.4 * t, 0.62 - 0.38 * t);
+    }
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    subject = new THREE.Mesh(
+      geometry,
+      new THREE.MeshLambertMaterial({ vertexColors: true }),
+    );
+    scene.add(subject);
+    lights(scene, kind);
+    camera = perspective(width, height, 40);
+    camera.position.set(1.7, 1.25, 2.15);
+    camera.lookAt(0, 0, 0);
+    return { scene, camera, subject, extra };
+  }
+
+  if (kind === "override") {
+    const group = new THREE.Group();
+    [-1.05, 0, 1.05].forEach((x, index) => {
+      group.add(
+        new THREE.Mesh(
+          new THREE.SphereGeometry(0.42, 24, 16),
+          index === 1
+            ? new THREE.MeshLambertMaterial({ color: 0xe87840 })
+            : new THREE.MeshNormalMaterial(),
+        ),
+      );
+      group.children[index].position.x = x;
+    });
+    subject = group;
+    scene.add(subject);
+    camera = perspective(width, height, 40);
+    camera.position.set(0, 0.35, 3.15);
+    camera.lookAt(0, 0, 0);
+    extra = { orbit: true };
+    return { scene, camera, subject, extra };
+  }
+
   if (kind === "basis") {
     const group = new THREE.Group();
     for (let index = 0; index < 3; index++) {
@@ -874,7 +1033,7 @@ function step(world, spec, frame) {
   if (spec.kind === "culling") {
     subject.position.z = 4 - t * 6;
   }
-  if (spec.kind === "shadows" && extra?.lamp) {
+  if ((spec.kind === "shadows" || spec.kind === "baked") && extra?.lamp) {
     extra.lamp.position.set(Math.cos(turn) * 2.2, 2.6, Math.sin(turn) * 2.2);
     return;
   }

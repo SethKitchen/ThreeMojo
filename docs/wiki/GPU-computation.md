@@ -2,6 +2,10 @@
 
 `render/computation.mojo` steps float images with GLSL fragment shaders. It is three.js's `GPUComputationRenderer` from `examples/jsm/misc/`. A simulation keeps its state in the images, for example the positions and velocities of a flock, and runs one step a frame.
 
+![A ripple field steps across a turning sphere](out/computation.png)
+
+`examples/ripples.mojo` draws this picture.
+
 ```mojo
 var computation = GPUComputationRenderer(64, 64)
 var position = computation.add_variable("position", MOVE, start^)

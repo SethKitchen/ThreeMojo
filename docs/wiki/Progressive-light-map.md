@@ -2,6 +2,10 @@
 
 `renderers/progressive_light_map.mojo` bakes the light on a set of meshes into one texture, a little each frame. It is three.js's `ProgressiveLightMap` from `examples/jsm/misc/`. Move the lights a small random distance each frame, and the shadows soften into an average.
 
+![A cube's shadow softens on the floor as the lamp walks a circle](out/lightmap.png)
+
+`examples/baked.mojo` draws this picture.
+
 ```mojo
 var light_map = ProgressiveLightMap(assets, 1024)
 light_map.add_objects_to_light_map(scene, assets, [ground, box])

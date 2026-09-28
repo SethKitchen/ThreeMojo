@@ -59,5 +59,12 @@
   {"name": "daylight", "src": "examples/daylight.mojo", "width": 240, "height": 180, "frames": 36, "kind": "daylight"},
   {"name": "faces", "src": "examples/faces.mojo", "width": 240, "height": 180, "frames": 36, "kind": "faces"},
   {"name": "utah", "src": "examples/utah.mojo", "width": 240, "height": 180, "frames": 36, "kind": "utah"},
-  {"name": "blobs", "src": "examples/blobs.mojo", "width": 240, "height": 180, "frames": 36, "kind": "blobs"}
+  {"name": "blobs", "src": "examples/blobs.mojo", "width": 240, "height": 180, "frames": 36, "kind": "blobs"},
+  {"name": "flipbook", "src": "examples/flipbook.mojo", "width": 240, "height": 180, "frames": 36, "kind": "flipbook"},
+  {"name": "ripples", "src": "examples/ripples.mojo", "width": 240, "height": 180, "frames": 36, "kind": "ripples"},
+  {"name": "baked", "src": "examples/baked.mojo", "width": 240, "height": 180, "frames": 36, "kind": "baked"},
+  {"name": "diagram", "src": "examples/diagram.mojo", "width": 240, "height": 180, "frames": 36, "kind": "diagram"},
+  {"name": "bricks", "src": "examples/bricks.mojo", "width": 240, "height": 180, "frames": 36, "kind": "bricks"},
+  {"name": "terrain", "src": "examples/terrain.mojo", "width": 240, "height": 180, "frames": 36, "kind": "terrain"},
+  {"name": "override", "src": "examples/override.mojo", "width": 240, "height": 180, "frames": 36, "kind": "override"}
 ]

@@ -2,6 +2,10 @@
 
 These loaders read the less common model formats of three.js's `examples/jsm/loaders/`. Each one has its own module in `loaders/`. [Model files](Model-files) has the common formats: OBJ, STL, PLY, glTF, Collada and FBX.
 
+![An LDraw model of bricks turns under a lamp](out/models.png)
+
+`examples/bricks.mojo` draws this picture.
+
 | Format | Module | Read a file | three.js |
 |---|---|---|---|
 | [PCD](#pcd) | `loaders/pcd.mojo` | `read_pcd(path) -> PcdModel` | `PCDLoader` |
