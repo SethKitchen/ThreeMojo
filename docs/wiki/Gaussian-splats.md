@@ -2,6 +2,10 @@
 
 A Gaussian splat is a small 3D Gaussian with a color and an opacity. Many of them make a scene that a 3D Gaussian Splatting trainer made from photos. This port reads the four splat file formats and the glTF extension, and draws the splats on both rasterizers. It follows three.js r186: `examples/jsm/objects/GaussianSplat.js`, the splat loaders and `utils/GaussianSplatUtils.js`.
 
+![Colored splats turn in a loose cloud](out/gaussian.png)
+
+`examples/cloud.mojo` draws this picture.
+
 ```mojo
 var scene = Scene()
 var node = scene.add(Object3D())

@@ -2,6 +2,10 @@
 
 The renderer runs hooks around a frame and draws a scene with an override material. It sorts by your functions, clears by its `auto_clear` flags and counts what it draws. A material turns dithering, alpha hash, alpha to coverage, premultiplied alpha and tone mapping on or off, and sets a blend constant. Both rasterizers read every flag.
 
+![Two spheres show their normals, and the middle one keeps its color](out/hooks.png)
+
+`examples/override.mojo` draws this picture.
+
 three.js: `scene.overrideMaterial`, `onBeforeRender`, `onAfterRender`, `onBeforeShadow`, `customDepthMaterial`, `customDistanceMaterial`, `setOpaqueSort`, `setTransparentSort`, `autoClear`, `renderer.info` and `CustomToneMapping`. The `Material` fields are `visible`, `shadowSide`, `dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage`, `premultipliedAlpha`, `blendColor` and `blendAlpha`.
 
 ## Hooks

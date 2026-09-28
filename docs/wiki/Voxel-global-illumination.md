@@ -2,6 +2,10 @@
 
 `lights/vxgi_volume.mojo` voxelizes a scene into a lit volume, and `postprocessing/vxgi_node.mojo` gathers indirect light from it for each pixel. They are three.js's `VXGIVolume` and `VXGINode` from `examples/jsm/lighting/vxgi/`. The cones follow Crassin et al., "Interactive Indirect Illumination Using Voxel Cone Tracing".
 
+![Red and green walls bounce light onto a white floor](out/vxgi.png)
+
+`examples/bounce.mojo` draws this picture.
+
 ```mojo
 var node = VXGINode(resolution=64)
 node.volume.bounces = 1

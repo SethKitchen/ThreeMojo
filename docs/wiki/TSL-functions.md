@@ -2,6 +2,10 @@
 
 Four modules give three.js's TSL function library as functions on a `NodeGraph`. Each function builds nodes that [Node materials](Node-materials) already has. So both rasterizers run it with the one interpreter, and no function adds an instruction to the bytecode.
 
+![Voronoi cells drift over a turning sphere](out/tslfunctions.png)
+
+`examples/cells.mojo` draws this picture.
+
 | Module | three.js |
 |---|---|
 | `materials/tsl_utils.mojo` | `src/nodes/utils`: triplanar mapping, sprite sheets, oscillators, `remapClamp`, `rotate`, `equirectUV`, `matcapUV` and the normal packings |

@@ -2,6 +2,10 @@
 
 `renderers/svg_renderer.mojo` draws a scene as SVG paths. It is three.js's `SVGRenderer` from `examples/jsm/renderers/`. `renderers/projector.mojo` flattens the scene into faces, lines and sprites first. It is three.js's `Projector`.
 
+![An icosahedron and a box turn, drawn flat as SVG paths](out/svg.png)
+
+`examples/diagram.mojo` draws this picture.
+
 ```mojo
 from renderers.svg_renderer import SVGRenderer
 

@@ -2,6 +2,10 @@
 
 `geometries/sculptor.mojo` sculpts a mesh with brush strokes. It is three.js's `Sculptor` from `examples/jsm/misc/`, with its helpers `SculptorMesh`, `SculptorTools` and `SculptorUtils`. three.js adapts all four from SculptGL by Stéphane Ginier.
 
+![A brush raises a knob on a sphere, and the sphere turns](out/sculptor.png)
+
+`examples/clay.mojo` draws this picture.
+
 ```mojo
 var sculptor = Sculptor(scene, assets, 0)
 sculptor.set_tool(SCULPT_INFLATE)

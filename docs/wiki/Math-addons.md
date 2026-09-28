@@ -2,6 +2,10 @@
 
 These are the math addons of three.js's `examples/jsm/math/`. They are noise, an oriented box, a capsule, a collision octree, a surface sampler, color maps, color spaces and HSV colors. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated.
 
+![Hills from simplex noise turn under a lamp](out/mathaddons.png)
+
+`examples/terrain.mojo` draws this picture.
+
 | Module | three.js |
 |---|---|
 | `math/noise.mojo` | `ImprovedNoise`, `SimplexNoise` |

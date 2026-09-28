@@ -241,7 +241,7 @@ from materials.nodes import (
 )
 from render.pointrule import attenuated_size
 from render.texture import IGNORED, Texture
-from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
 from render.target import RenderTarget, check_samples, sample_grid
@@ -8178,7 +8178,9 @@ struct Renderer(Movable):
         every mesh, skinned, instanced or batched mesh and LOD level, the
         segments of every line and wireframe, and every point, under lit
         shading with no lights, or under `SHADE_SHADOW` when the renderer
-        keeps the colors, `shadow_map_transmitted`. A point light's view,
+        keeps the colors, `shadow_map_transmitted`. A mesh whose material
+        names a node program runs that program, so the program and the
+        textures it reads are the scene's. A point light's view,
         `distance`, draws a mesh's custom distance material.
 
         Args:
@@ -8230,7 +8232,8 @@ struct Renderer(Movable):
             state.shadow_lights.append(light)
         # Every fragment writes its depth under the default state, so the
         # nearest wins whatever the order: the three kinds go one after
-        # the other.
+        # the other. Lit shading reads no material map. A node program
+        # still runs, and it reads the scene's textures.
         var draws: List[Draw] = [
             Draw(DRAW_TRIANGLES, 0, len(corners) // 3),
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),

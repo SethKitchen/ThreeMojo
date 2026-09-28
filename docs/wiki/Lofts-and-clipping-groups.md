@@ -2,6 +2,10 @@
 
 This page lists seven small parts of three.js that have no other page. The first two are geometries: a loft and a wide wireframe. Then come a clipping group, an animation path helper, a color from a temperature, an animation loader and a cube depth texture.
 
+![A lofted vase turns under a lamp](out/lofts.png)
+
+`examples/vase.mojo` draws this picture.
+
 ## Loft geometry
 
 `geometries/loft.mojo` skins a surface through a list of cross sections. It is three.js's `LoftGeometry` from `examples/jsm/geometries/`.

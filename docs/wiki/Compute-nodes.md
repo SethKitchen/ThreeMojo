@@ -2,6 +2,10 @@
 
 `materials/compute_nodes.mojo` runs compute programs over storage buffers, on the host and on the GPU. It ports three.js's compute nodes from `src/nodes/gpgpu/`: `ComputeNode`, `AtomicFunctionNode`, `BarrierNode`, `WorkgroupInfoNode` and `SubgroupFunctionNode`. It also ports the storage buffers and textures that they read and write. `render/gpgpu_sort.mojo` ports `BitonicSort` and `CountingSort` from `examples/jsm/gpgpu/`.
 
+![A compute kernel walks points around a sphere](out/computenodes.png)
+
+`examples/particles.mojo` draws this picture.
+
 ```mojo
 var store = StorageBufferStore()
 var positions = store.instanced_array(count, NODE_VEC3)

@@ -279,6 +279,58 @@ def test_the_padding_takes_the_color_beside_it() raises:
     assert_true(texel(assets, light_map.maps[1], 16, 24) > 0.05)
 
 
+def test_a_casting_light_shades_the_map() raises:
+    # The bake draws the meshes with a node material, and the shadow pass
+    # draws that material too. The pass must find the program.
+    var assets = Assets()
+    var scene = Scene()
+    two_planes(assets, scene)
+    var light_map = ProgressiveLightMap(assets, SIZE)
+    light_map.add_objects_to_light_map(scene, assets, [0])
+    light_map.update(Renderer(8, 8), scene, assets, a_camera(), 1, False)
+    var open = texel(assets, light_map.maps[1], 16, 16)
+
+    var shaded = Assets()
+    var blocked = Scene()
+    two_planes(shaded, blocked)
+    blocked.lights[0].cast_shadow = True
+    blocked.lights[0].shadow.map_size = SIZE
+    blocked.lights[0].shadow.bias = -0.001
+    var blocker = Object3D()
+    blocker.set_position(0, 0, 2)
+    blocked.add_mesh(
+        Mesh(
+            shaded.geometries.add(
+                box(Length(0.7, METER), Length(0.7, METER), Length(0.4, METER))
+            ),
+            shaded.materials.add(Material(Color(255, 255, 255))),
+            blocked.add(blocker^),
+            cast_shadow=True,
+        )
+    )
+    blocked.update()
+    var shadow_map = ProgressiveLightMap(shaded, SIZE)
+    shadow_map.add_objects_to_light_map(blocked, shaded, [0])
+    shadow_map.update(Renderer(8, 8), blocked, shaded, a_camera(), 1, False)
+    var shut = texel(shaded, shadow_map.maps[1], 16, 16)
+    var darkest = shut
+    for row in range(SIZE):
+        for col in range(SIZE):
+            var value = texel(shaded, shadow_map.maps[1], col, row)
+            if value < darkest:
+                darkest = value
+    assert_true(open > 0.2)
+    if darkest >= open * 0.25:
+        raise Error(
+            "The caster left the map lit: open "
+            + String(open)
+            + ", center "
+            + String(shut)
+            + ", darkest "
+            + String(darkest)
+        )
+
+
 def test_the_map_draws_no_background_line_point_or_other_mesh() raises:
     var assets = Assets()
     var scene = Scene()

@@ -2,6 +2,10 @@
 
 This page covers the animated objects of three.js's `examples/jsm/misc/`. They are two morph target players, two Quake II characters and a gyroscope. Each one drives meshes and nodes that are already in the scene.
 
+![A sphere pulses through morph targets while one box stays level](out/animated.png)
+
+`examples/flipbook.mojo` draws this picture.
+
 | Module | three.js |
 |---|---|
 | `objects/morph_anim_mesh.mojo` | `MorphAnimMesh` |
