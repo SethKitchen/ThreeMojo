@@ -1259,8 +1259,9 @@ struct BufferGeometry(Movable):
         Morph targets move too, which three.js leaves as they are: a
         target of finished positions is moved as the positions are, a
         target of offsets is turned without the translation, and a morph
-        normal is turned as a normal is. So a worn target lands where it
-        did relative to the shape, as `center` keeps it.
+        normal uses the same linear map and base-normal scale as its base.
+        It is not normalized on its own. This preserves the direction
+        of the blended normal, including relative deltas.
 
         Args:
             matrix: The transform.
@@ -1285,10 +1286,25 @@ struct BufferGeometry(Movable):
         var normal_slot = self._slot(String(NORMAL))
         if normal_slot >= 0 or len(self.morph_normals) > 0:
             var turn = Matrix3.normal_matrix(matrix)
+            # Apply the same linear map and base-normal scale to each target.
+            # Normalizing a delta on its own changes the blended direction.
+            var scales = List[Float32]()
             if normal_slot >= 0:
-                self.values[normal_slot].apply_normal_matrix(turn)
+                ref normals = self.values[normal_slot]
+                for vertex in range(normals.count()):
+                    var normal = turn.transform(normals.vector3(vertex))
+                    var length = normal.length()
+                    var scale = 1 / length if length > 0 else Float32(1)
+                    if len(self.morph_normals) > 0:
+                        scales.append(scale)
+                    normals._put3(vertex, normal * scale)
             for target in range(len(self.morph_normals)):
-                self.morph_normals[target].apply_normal_matrix(turn)
+                ref normals = self.morph_normals[target]
+                for vertex in range(normals.count()):
+                    var normal = turn.transform(normals.vector3(vertex))
+                    if vertex < len(scales):
+                        normal = normal * scales[vertex]
+                    normals._put3(vertex, normal)
         var tangent_slot = self._slot(String(TANGENT))
         if tangent_slot >= 0:
             self.values[tangent_slot].transform_direction(matrix)

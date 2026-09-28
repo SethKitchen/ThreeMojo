@@ -80,12 +80,13 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 
 ### Geometry
 
+
 <details>
 <summary>Ported: 26</summary>
 
-- [x] [LoftGeometry, WireframeGeometry2, ClippingGroup and more](https://github.com/SethKitchen/ThreeMojo/wiki/Lofts-and-clipping-groups): lofts, wide wireframes, clipping groups on both backends, path helpers, kelvin colors, clip files and cube depth [#256](https://github.com/SethKitchen/ThreeMojo/issues/256)
-- [x] [Sculptor, SculptorMesh, SculptorTools and SculptorUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor): brush, inflate, smooth, flatten and the other strokes, from a ray or a pointer, with adaptive topology [#255](https://github.com/SethKitchen/ThreeMojo/issues/255)
 - [x] [Procedural generators](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-generators): seeded city with skyscrapers, sidewalks, street furniture, cars and pedestrians, forest, terrain and tree generators [#254](https://github.com/SethKitchen/ThreeMojo/issues/254)
+- [x] [Sculptor, SculptorMesh, SculptorTools and SculptorUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor): brush, inflate, smooth, flatten and the other strokes, from a ray or a pointer, with adaptive topology [#255](https://github.com/SethKitchen/ThreeMojo/issues/255)
+- [x] [LoftGeometry, WireframeGeometry2, ClippingGroup and more](https://github.com/SethKitchen/ThreeMojo/wiki/Lofts-and-clipping-groups): lofts, wide wireframes, clipping groups on both backends, path helpers, kelvin colors, clip files and cube depth [#256](https://github.com/SethKitchen/ThreeMojo/issues/256)
 - [x] [RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry-addons#roller-coaster): track geometry, tube strokes, convex breaking, space-filling curves and UV images [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
 - [x] [Shapes and extrusions in three.js's order](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#how-it-is-cut-up): earcut with holes, and three.js's vertex and triangle order for ShapeGeometry and ExtrudeGeometry [#215](https://github.com/SethKitchen/ThreeMojo/issues/215)
 - [x] [Box segments, partial spheres, shape arrays and UVGenerator](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box): segmented boxes, sphere parts, shape lists and custom UV generators [#184](https://github.com/SethKitchen/ThreeMojo/issues/184)
@@ -116,8 +117,9 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 
 
 <details>
-<summary>Ported: 14</summary>
+<summary>Ported: 15</summary>
 
+- [x] [Gaussian splats](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats): the GaussianSplat object drawn alike by both rasterizers, and the SPLAT, KSPLAT, SPZ, splat PLY and KHR_gaussian_splatting glTF loaders [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
 - [x] [MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope](https://github.com/SethKitchen/ThreeMojo/wiki/Animated-objects): blended morph flip-books, Quake II characters, and a node that keeps its turn [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [x] [Skeleton, morph, batch and LOD tools](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#skeleton-tools): clone and retarget, CCD IK, uncapped morphs, batch deletion and sorting, any node as a level [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
@@ -139,12 +141,10 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 
 
 <details>
-<summary>Ported: 37</summary>
+<summary>Ported: 35</summary>
 
-- [x] [three.js's node JSON: NodeLoader, NodeMaterialLoader and NodeObjectLoader](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#threejss-node-json): node materials saved by three.js read into a node graph and compiled [#257](https://github.com/SethKitchen/ThreeMojo/issues/257)
 - [x] [TSL function library](https://github.com/SethKitchen/ThreeMojo/wiki/TSL-functions): triplanar maps, sprite sheets, oscillators, noises, hashes, bit packing, raymarching and GGX helpers on the node graph [#252](https://github.com/SethKitchen/ThreeMojo/issues/252)
 - [x] [MeshSSSNodeMaterial and VolumeNodeMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#lighting-models): light through a surface from behind, and light marched through a volume, on both rasterizers [#258](https://github.com/SethKitchen/ThreeMojo/issues/258)
-- [x] [Compute nodes, storage buffers, atomics and GPU sorts](https://github.com/SethKitchen/ThreeMojo/wiki/Compute-nodes): node programs on storage buffers, run on the host or a kernel [#253](https://github.com/SethKitchen/ThreeMojo/issues/253)
 - [x] [Node material leftovers, and the Wood and MeshPostProcessing materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shadows-of-its-own): node control flow, JSON, light masks and shadow nodes [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
 - [x] [A wider GLSL subset, and shader materials on points, lines and sprites](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#glsl-source): more types, loops, samplers and built-ins, and ShaderToy [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 - [x] [Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#shaders-from-threejss-examples) [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
@@ -185,10 +185,9 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 
 
 <details>
-<summary>Ported: 16</summary>
+<summary>Ported: 15</summary>
 
 - [x] [Lighting addons: SunLight, LightProbeGrid, IESSpotLight, ProjectorLight and ColorEnvironment](https://github.com/SethKitchen/ThreeMojo/wiki/Lighting-addons): a fitted sun, IES and projector beams, a probe grid and a one-color environment [#249](https://github.com/SethKitchen/ThreeMojo/issues/249)
-- [x] [Voxel global illumination (VXGI)](https://github.com/SethKitchen/ThreeMojo/wiki/Voxel-global-illumination): a lit voxel volume, and occlusion and indirect light by cone tracing, on both backends [#250](https://github.com/SethKitchen/ThreeMojo/issues/250)
 - [x] [Shadows from skinned, instanced, batched, LOD, line, point and translucent objects](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#what-casts-and-what-receives): every kind casts and receives, and translucent surfaces write depth [#187](https://github.com/SethKitchen/ThreeMojo/issues/187)
 - [x] [Shadow camera frustum, light power, CSM and room environments](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#cascaded-shadow-maps): shadow camera edges and intensity, light power, cascades, and PMREM from a scene [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
@@ -239,9 +238,10 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 - [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 
 <details>
-<summary>Ported: 22</summary>
+<summary>Ported: 23</summary>
 
 - [x] [USD import: USDZLoader with the USDA and USDC parsers](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files#usd): USDA text, USDC crates and USDZ archives composed as three.js r186 reads them [#248](https://github.com/SethKitchen/ThreeMojo/issues/248)
+- [x] [three.js's node JSON: NodeLoader, NodeMaterialLoader and NodeObjectLoader](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#threejss-node-json): node materials saved by three.js read into a node graph and compiled [#257](https://github.com/SethKitchen/ThreeMojo/issues/257)
 - [x] [glTF meshopt compression, WebP textures and material variants](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf-extensions): `EXT_meshopt_compression`, `EXT_texture_webp` and `KHR_materials_variants`, bit-exact against the decoders three.js uses. [#201](https://github.com/SethKitchen/ThreeMojo/issues/201)
 - [x] [LWO and LDraw loaders](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files): LWO2 and LWO3 objects with node materials, and LDraw models from a parts library, with conditional edges [#202](https://github.com/SethKitchen/ThreeMojo/issues/202)
 - [x] [USD, KMZ, NRRD, VTK, PDB, G-code and MDD loaders](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files#usd): seven more model and volume formats, read as three.js reads them [#203](https://github.com/SethKitchen/ThreeMojo/issues/203)
@@ -270,10 +270,11 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 
 
 <details>
-<summary>Ported: 34</summary>
+<summary>Ported: 35</summary>
 
+- [x] [Voxel global illumination (VXGI)](https://github.com/SethKitchen/ThreeMojo/wiki/Voxel-global-illumination): a lit voxel volume, and occlusion and indirect light by cone tracing, on both backends [#250](https://github.com/SethKitchen/ThreeMojo/issues/250)
 - [x] [More display nodes: FSR1, TAAU, SSGI, SSS, OIT, retro and filters](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#more-display-nodes): upscaling, screen-space light and shadow, unsorted transparency and filters [#251](https://github.com/SethKitchen/ThreeMojo/issues/251)
-- [x] [Gaussian splats](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats): the GaussianSplat object drawn alike by both rasterizers, and the SPLAT, KSPLAT, SPZ, splat PLY and KHR_gaussian_splatting glTF loaders [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
+- [x] [Compute nodes, storage buffers, atomics and GPU sorts](https://github.com/SethKitchen/ThreeMojo/wiki/Compute-nodes): node programs on storage buffers, run on the host or a kernel [#253](https://github.com/SethKitchen/ThreeMojo/issues/253)
 - [x] [Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#traa) [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
 - [x] [Output color space and post-processing leftovers](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#a-ground-mirror) [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
 - [x] [GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort](https://github.com/SethKitchen/ThreeMojo/wiki/Progressive-light-map): shader steps over float images, a light map baked in texture space, and batched meshes [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
@@ -379,6 +380,10 @@ These addons are out of scope too. Each line gives the reason.
 - The transpiler's `TSLEncoder` and `WGSLEncoder`: they write JavaScript and WGSL source. This port compiles its shaders to node programs and writes no source.
 - `TiledLightsNode`, `TileShadowNode` and the `*GPU` helpers, such as `LightProbeHelperGPU`: they exist only for the WebGPU renderer.
 - `EXT_texture_avif`: it needs an AV1 decoder, and this port has none.
+- `ClusteredLighting` and `DynamicLighting`: they manage the WebGPU renderer's lights, as `TiledLightsNode` does.
+- The `Inspector`, its color-grading and TSL-graph extensions, and `InteractionManager`: they are browser user interfaces, or place DOM elements over the canvas.
+- `TileCreasedNormalsPlugin`: it is a plugin for the `3d-tiles-renderer` package, and runs in a web worker.
+- The transpiler's `GLSLDecoder`, `Linker` and `Transpiler`: they turn GLSL into TSL source. This port compiles GLSL to node programs directly.
 
 ## Contributing
 

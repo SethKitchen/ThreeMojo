@@ -14,7 +14,10 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 | `make lint` | Compile the examples, the benchmarks, the tools and the library documentation with warnings as errors. `make test` builds each suite with warnings as errors, and that build is the suite's lint. |
 | `make fmt` | Reformat every source in place. |
 | `make fmt-check` | Verify the formatting. Changes nothing. |
-| `make coverage` | Line, branch, condition and MC/DC coverage. Fails on any gap. |
+| `make coverage` | Line, branch, condition and MC/DC coverage. Fails on any gap. It runs the three steps below in order. |
+| `make coverage-instrument` | Build the instrumented tree in `coverage/build/`. |
+| `make coverage-capture` | Run the suites in the instrumented tree and keep their captures. |
+| `make coverage-report` | Report on the captures. Fails on any gap, and on a suite with no capture. |
 | `make compile-fail` | Assert that every file in `tests/compile_fail/` fails to compile. |
 | `make docstrings` | Audit every public symbol for `Args`, `Returns` and `Raises`. Not part of `check`. |
 | `make docs-check` | Check the documentation against the writing rules. |

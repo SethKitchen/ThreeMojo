@@ -29,6 +29,8 @@ The two distances are lengths. A bare number does not compile. `near` must not b
 
 Both thresholds are a meter by default, as in three.js. That is wide for a small scene. Set them to what a pointer must reach. A negative threshold, or one that is not a number, raises when it is used.
 
+Line picking measures the gap between the nearest points on the ray and the segment. This keeps small gaps at long range in `Float32`. For example, a line two meters from the ray is outside a one-meter threshold, even ten kilometers away. A gap exactly on the line threshold counts as a hit.
+
 `caster.layers` is a `Layers`, on layer zero by default. An object whose node shares no layer with it is not tested. See [Scene graph](Scene-graph#layers).
 
 ## Aim it
@@ -155,5 +157,7 @@ caster.set_from_pixel(160.5, 120.5, 320, 240, camera, scene)
 for hit in caster.intersect_scene(scene, assets):
     print(hit.index, hit.distance)
 ```
+
+Hits are sorted by distance. Equal distances keep their discovery order. A result with more than 32 hits uses the shared radix sorter. This keeps sorting work linear for dense point clouds and overlapping meshes. Smaller results use insertion sort without a second buffer.
 
 See [Math](Math#ray) for the `Ray` the raycaster carries.

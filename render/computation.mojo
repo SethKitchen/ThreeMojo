@@ -562,13 +562,15 @@ struct GPUComputationRenderer(Movable):
         for y in range(self.size_y - 1, -1, -1):  # pragma: no branch
             var start = y * self.size_x * 4
             rows.extend(image[start : start + self.size_x * 4])
-        return float_texture(
+        var texture = float_texture(
             self.size_x,
             self.size_y,
             rows^,
             wrap=self.variables[variable].wrap_s,
             filter=NEAREST,
         )
+        texture.wrap_t = self.variables[variable].wrap_t
+        return texture^
 
 
 def step_image(

@@ -15,9 +15,8 @@ puts attributes side by side in one shared buffer, and
 `deinterleave_attribute` and `deinterleave_geometry` take them out again.
 `estimate_bytes_used` says how much memory a geometry's arrays take.
 
-Every attribute in this port holds floats, and none is normalized, so
-three.js's checks that the array types and the `normalized` flags agree
-have nothing to check.
+Merging preserves integer storage and normalization. Inputs must agree
+on component type, item size, normalization, and instance divisor.
 
 ## Draw modes
 
@@ -51,6 +50,12 @@ from core.buffer_geometry import (
 from core.interleaved_buffer import InterleavedBuffer
 from core.morph import MorphInfluences
 from math.matrix4 import Matrix4
+from math.utils import (
+    INT8_COMPONENT,
+    INT16_COMPONENT,
+    UINT8_COMPONENT,
+    UINT16_COMPONENT,
+)
 
 # three.js's index needs four bytes an entry, not two, from this value up:
 # `arrayNeedsUint32`.
@@ -92,8 +97,8 @@ def merge_attributes(
     """Return attributes joined end to end, three.js's `mergeAttributes`.
 
     An interleaved attribute gives its own numbers, not the whole shared
-    array. The result is a plain attribute that advances per vertex, as in
-    three.js.
+    array. The result keeps the component type, normalization, and instance
+    divisor of its inputs.
 
     Args:
         attributes: The attributes, one or more, all with one item size.
@@ -102,18 +107,42 @@ def merge_attributes(
         One attribute holding every item, in order.
 
     Raises:
-        Error: If no attribute is given, or the item sizes differ.
+        Error: If no attribute is given, or the item sizes, component types,
+            normalization flags, or instance divisors differ.
     """
     if len(attributes) == 0:
         raise Error("Merging needs at least one attribute")
-    var size = attributes[0].item_size
+    ref first = attributes[0]
+    var size = first.item_size
     var data = List[Float32]()
+    var stored = List[Int]()
     for index in range(len(attributes)):  # pragma: no branch
-        # One attribute at least, so this runs.
-        if attributes[index].item_size != size:
+        ref attribute = attributes[index]
+        if attribute.item_size != size:
             raise Error("Merged attributes must share an item size")
-        data.extend(attributes[index].packed())
-    return BufferAttribute(data^, size)
+        if attribute.component_type() != first.component_type():
+            raise Error("Merged attributes must share a component type")
+        if attribute.is_normalized() != first.is_normalized():
+            raise Error("Merged attributes must share normalization")
+        if attribute.mesh_per_attribute() != first.mesh_per_attribute():
+            raise Error("Merged attributes must share an instance divisor")
+        if first.is_integer():
+            stored.extend(attribute.stored_values())
+        else:
+            data.extend(attribute.packed())
+    if first.is_integer():
+        return BufferAttribute(
+            stored^, size, first.component_type(), first.is_normalized()
+        )
+    var result: BufferAttribute
+    if first.is_instanced():
+        result = BufferAttribute(
+            data^, size, mesh_per_attribute=first.mesh_per_attribute()
+        )
+    else:
+        result = BufferAttribute(data^, size)
+    result.set_normalized(first.is_normalized())
+    return result^
 
 
 def interleave_attributes(
@@ -251,7 +280,8 @@ def estimate_bytes_used(geometry: BufferGeometry) -> Int:
     """Return how many bytes a geometry's attributes and index take,
     three.js's `estimateBytesUsed`.
 
-    Each attribute takes four bytes a number, for its own items only. The
+    Each attribute uses its component type's byte width, for its own items
+    only. The
     index takes two bytes an entry, or four if an entry is 65535 or more,
     as three.js's `setIndex` of a plain array chooses.
 
@@ -264,7 +294,13 @@ def estimate_bytes_used(geometry: BufferGeometry) -> Int:
     var total = 0
     for slot in range(len(geometry.values)):
         ref attribute = geometry.values[slot]
-        total += attribute.count() * attribute.item_size * FLOAT_BYTES
+        var component = attribute.component_type()
+        var bytes = FLOAT_BYTES
+        if component == UINT16_COMPONENT or component == INT16_COMPONENT:
+            bytes = 2
+        elif component == UINT8_COMPONENT or component == INT8_COMPONENT:
+            bytes = 1
+        total += attribute.count() * attribute.item_size * bytes
     var entry = 2
     for index in range(len(geometry.index)):
         if geometry.index[index] >= UINT16_LIMIT:

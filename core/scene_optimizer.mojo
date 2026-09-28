@@ -14,20 +14,26 @@ white. Each mesh becomes one instance: its geometry, its place relative to
 the batch, and its material's color. The meshes are taken out of the
 scene, and every node left carrying nothing and holding nothing goes too.
 
-**What counts as the same.** A material's signature is three.js's: its
-kind, the flags and numbers three.js lists, each map and how it is laid,
-and its emissive, attenuation and sheen colors. Two geometries are one
-when their index, their positions and their attributes are the same,
-which is what three.js's hash of them stands for.
+**What counts as the same.** Material keys include every rendering field
+except RGB, which is supplied per instance. Float fields use their exact
+bits. Geometry equality compares every attribute, including integer
+storage and interleaved values, and the index.
 
-**Where this differs.** three.js batches every object that is a mesh,
-skinned and instanced ones and batches among them. Here only plain meshes
-of one material are batched. A node a camera rides carries nothing the
-scene knows of, so it is kept only when listed in `keep`.
+**Supported inputs.** Only static plain meshes with one material are
+batched. A batch shares its parent, visibility, layers, render order,
+culling, and shadow settings. Meshes with children, co-located objects,
+user data, morphs, custom shadow materials, instanced attributes, or a
+restricted draw range stay in place. Nodes in `keep` also stay in place.
+Use `keep` for camera nodes and for nodes that animation or application
+code must continue to address. Optimization captures each eligible mesh's
+current local transform; later changes to that original node do not move
+the batch instance. Later changes to the shared parent do.
 `to_instancing_mesh` raises, as three.js's throws: it is not written
 there either.
 """
 
+from std.collections import Dict
+from std.memory import bitcast
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.geometry_store import GeometryId
@@ -71,7 +77,7 @@ def _texture_key(assets: Assets, id: TextureId) raises -> String:
     """Return three.js's key of a map: which texture and how it is laid."""
     if id == NO_TEXTURE:
         return "0"
-    ref laid = assets.textures.textures[id.value]
+    ref laid = assets.textures.get(id)
     return (
         String(id.value)
         + "_"
@@ -89,12 +95,22 @@ def _texture_key(assets: Assets, id: TextureId) raises -> String:
 
 def _color_key(color: Color) -> String:
     """Return a color as three.js's `getHexString` spells it."""
-    return String(color.r) + "," + String(color.g) + "," + String(color.b)
+    return (
+        String(color.r)
+        + ","
+        + String(color.g)
+        + ","
+        + String(color.b)
+        + ","
+        + String(color.a)
+    )
 
 
 def material_signature(assets: Assets, material: Material) raises -> String:
-    """Return what two materials must share to be drawn as one, three.js's
-    `_getMaterialPropertiesHash`: everything it lists, and not the color.
+    """Return the complete material state needed to share a batch.
+
+    RGB is supplied per instance. All other fields participate. Float
+    values use exact bits so formatting cannot merge distinct values.
 
     Args:
         assets: Where the textures are.
@@ -107,60 +123,174 @@ def material_signature(assets: Assets, material: Material) raises -> String:
         Error: If a map names a texture the assets do not have.
     """
     var parts = List[String]()
-    parts.append(String(material.kind))
-    for flag in [  # pragma: no branch
-        material.transparent,
-        material.alpha_to_coverage,
-        material.vertex_colors,
-        material.visible,
-        material.wireframe,
-        material.flat_shading,
-        material.premultiplied_alpha,
-        material.dithering,
-        material.tone_mapped,
-        material.depth_test,
-        material.depth_write,
-    ]:
-        parts.append(String(flag))
-    for number in [  # pragma: no branch
-        material.opacity,
-        material.alpha_test,
-        material.metalness,
-        material.roughness,
-        material.clearcoat,
-        material.clearcoat_roughness,
-        material.sheen,
-        material.sheen_roughness,
-        material.transmission,
-        material.ior,
-        material.iridescence,
-        material.iridescence_ior,
-        material.reflectivity,
-    ]:
-        parts.append(String(number))
-    parts.append(String(material.side))
-    parts.append(String(material.blending))
-    parts.append(String(material.thickness.value))
-    parts.append(String(material.attenuation_distance.value))
-    parts.append(String(material.iridescence_thickness_minimum.value))
-    parts.append(String(material.iridescence_thickness_maximum.value))
-    for map in [  # pragma: no branch
-        material.map,
-        material.alpha_map,
-        material.ao_map,
-        material.bump_map,
-        material.displacement_map,
-        material.emissive_map,
-        material.light_map,
-        material.metalness_map,
-        material.normal_map,
-        material.roughness_map,
-    ]:
-        parts.append(_texture_key(assets, map))
-    parts.append(String(material.env_map.value))
+    # RGB is supplied per instance. Every other field participates.
+    parts.append(String(material.color.a))
+    parts.append(_texture_key(assets, material.map))
+    parts.append(String(material.side.value))
+    parts.append(String(bitcast[DType.uint32](material.opacity)))
+    parts.append(String(material.blending.value))
+    parts.append(String(material.kind.value))
     parts.append(_color_key(material.emissive))
+    parts.append(String(bitcast[DType.uint32](material.emissive_intensity)))
+    parts.append(_texture_key(assets, material.emissive_map))
+    parts.append(String(material.vertex_colors))
+    parts.append(_texture_key(assets, material.alpha_map))
+    parts.append(String(bitcast[DType.uint32](material.alpha_test)))
+    parts.append(_texture_key(assets, material.matcap))
+    parts.append(_texture_key(assets, material.gradient_map))
+    parts.append(_color_key(material.specular))
+    parts.append(String(bitcast[DType.uint32](material.shininess)))
+    parts.append(String(material.wireframe))
+    parts.append(String(bitcast[DType.uint32](material.dash_size.value)))
+    parts.append(String(bitcast[DType.uint32](material.gap_size.value)))
+    parts.append(String(bitcast[DType.uint32](material.dash_scale)))
+    parts.append(String(bitcast[DType.uint32](material.dash_offset.value)))
+    parts.append(String(bitcast[DType.uint32](material.line_width.size)))
+    parts.append(String(material.line_width.world_units))
+    parts.append(String(material.transparent))
+    parts.append(String(bitcast[DType.uint32](material.point_size.pixels)))
+    parts.append(String(material.size_attenuation))
+    parts.append(String(bitcast[DType.uint32](material.rotation.value)))
+    parts.append(String(material.env_map.value))
+    parts.append(String(bitcast[DType.uint32](material.reflectivity)))
+    parts.append(String(material.combine.value))
+    parts.append(String(bitcast[DType.uint32](material.roughness)))
+    parts.append(String(bitcast[DType.uint32](material.metalness)))
+    parts.append(_texture_key(assets, material.roughness_map))
+    parts.append(_texture_key(assets, material.metalness_map))
+    parts.append(String(bitcast[DType.uint32](material.env_map_intensity)))
+    parts.append(
+        String(bitcast[DType.uint32](material.env_map_rotation.x.value))
+    )
+    parts.append(
+        String(bitcast[DType.uint32](material.env_map_rotation.y.value))
+    )
+    parts.append(
+        String(bitcast[DType.uint32](material.env_map_rotation.z.value))
+    )
+    parts.append(String(material.env_map_rotation.order.first))
+    parts.append(String(material.env_map_rotation.order.second))
+    parts.append(String(material.env_map_rotation.order.third))
+    parts.append(String(bitcast[DType.uint32](material.refraction_ratio)))
+    parts.append(String(material.normal_map_type.value))
+    parts.append(_texture_key(assets, material.normal_map))
+    parts.append(String(bitcast[DType.uint32](material.normal_scale.x)))
+    parts.append(String(bitcast[DType.uint32](material.normal_scale.y)))
+    parts.append(_texture_key(assets, material.bump_map))
+    parts.append(String(bitcast[DType.uint32](material.bump_scale)))
+    parts.append(_texture_key(assets, material.ao_map))
+    parts.append(String(bitcast[DType.uint32](material.ao_map_intensity)))
+    parts.append(_texture_key(assets, material.light_map))
+    parts.append(String(bitcast[DType.uint32](material.light_map_intensity)))
+    parts.append(_texture_key(assets, material.specular_map))
+    parts.append(String(material.flat_shading))
+    parts.append(_texture_key(assets, material.displacement_map))
+    parts.append(
+        String(bitcast[DType.uint32](material.displacement_scale.value))
+    )
+    parts.append(
+        String(bitcast[DType.uint32](material.displacement_bias.value))
+    )
+    parts.append(String(bitcast[DType.uint32](material.ior)))
+    parts.append(_color_key(material.specular_color))
+    parts.append(String(bitcast[DType.uint32](material.specular_intensity)))
+    parts.append(String(bitcast[DType.uint32](material.clearcoat)))
+    parts.append(String(bitcast[DType.uint32](material.clearcoat_roughness)))
+    parts.append(_texture_key(assets, material.specular_intensity_map))
+    parts.append(_texture_key(assets, material.specular_color_map))
+    parts.append(_texture_key(assets, material.clearcoat_map))
+    parts.append(_texture_key(assets, material.clearcoat_roughness_map))
+    parts.append(_texture_key(assets, material.clearcoat_normal_map))
+    parts.append(
+        String(bitcast[DType.uint32](material.clearcoat_normal_scale.x))
+    )
+    parts.append(
+        String(bitcast[DType.uint32](material.clearcoat_normal_scale.y))
+    )
+    parts.append(String(bitcast[DType.uint32](material.transmission)))
+    parts.append(_texture_key(assets, material.transmission_map))
+    parts.append(String(bitcast[DType.uint32](material.thickness.value)))
+    parts.append(_texture_key(assets, material.thickness_map))
     parts.append(_color_key(material.attenuation_color))
+    parts.append(
+        String(bitcast[DType.uint32](material.attenuation_distance.value))
+    )
+    parts.append(String(bitcast[DType.uint32](material.dispersion)))
+    parts.append(String(bitcast[DType.uint32](material.sheen)))
     parts.append(_color_key(material.sheen_color))
+    parts.append(_texture_key(assets, material.sheen_color_map))
+    parts.append(String(bitcast[DType.uint32](material.sheen_roughness)))
+    parts.append(_texture_key(assets, material.sheen_roughness_map))
+    parts.append(String(bitcast[DType.uint32](material.iridescence)))
+    parts.append(String(bitcast[DType.uint32](material.iridescence_ior)))
+    parts.append(
+        String(
+            bitcast[DType.uint32](material.iridescence_thickness_minimum.value)
+        )
+    )
+    parts.append(
+        String(
+            bitcast[DType.uint32](material.iridescence_thickness_maximum.value)
+        )
+    )
+    parts.append(_texture_key(assets, material.iridescence_map))
+    parts.append(_texture_key(assets, material.iridescence_thickness_map))
+    parts.append(String(bitcast[DType.uint32](material.anisotropy)))
+    parts.append(
+        String(bitcast[DType.uint32](material.anisotropy_rotation.value))
+    )
+    parts.append(_texture_key(assets, material.anisotropy_map))
+    parts.append(String(material.nodes.value))
+    parts.append(_texture_key(assets, material.scattering.map))
+    parts.append(_color_key(material.scattering.color))
+    parts.append(String(bitcast[DType.uint32](material.scattering.distortion)))
+    parts.append(String(bitcast[DType.uint32](material.scattering.ambient)))
+    parts.append(String(bitcast[DType.uint32](material.scattering.attenuation)))
+    parts.append(String(bitcast[DType.uint32](material.scattering.power)))
+    parts.append(String(bitcast[DType.uint32](material.scattering.scale)))
+    parts.append(String(material.lights.bits))
+    # Clipping storage is a fixed, nonempty SIMD, even with no active planes.
+    for lane in range(len(material._clip_planes)):  # pragma: no branch
+        parts.append(String(bitcast[DType.uint32](material._clip_planes[lane])))
+    parts.append(String(material.clip_plane_count))
+    parts.append(String(material.clip_intersection))
+    parts.append(String(material.clip_shadows))
+    parts.append(String(material.depth_test))
+    parts.append(String(material.depth_write))
+    parts.append(String(material.depth_func.value))
+    parts.append(String(material.color_write))
+    parts.append(String(material.polygon_offset))
+    parts.append(String(bitcast[DType.uint32](material.polygon_offset_factor)))
+    parts.append(String(bitcast[DType.uint32](material.polygon_offset_units)))
+    parts.append(String(material.stencil_write))
+    parts.append(String(material.stencil_write_mask))
+    parts.append(String(material.stencil_func.value))
+    parts.append(String(material.stencil_ref))
+    parts.append(String(material.stencil_func_mask))
+    parts.append(String(material.stencil_fail.value))
+    parts.append(String(material.stencil_z_fail.value))
+    parts.append(String(material.stencil_z_pass.value))
+    parts.append(String(material.depth_packing.value))
+    parts.append(String(bitcast[DType.uint32](material.reference_position.x)))
+    parts.append(String(bitcast[DType.uint32](material.reference_position.y)))
+    parts.append(String(bitcast[DType.uint32](material.reference_position.z)))
+    parts.append(String(bitcast[DType.uint32](material.near_distance.value)))
+    parts.append(String(bitcast[DType.uint32](material.far_distance.value)))
+    parts.append(String(material.fog))
+    parts.append(String(material.visible))
+    parts.append(String(material.allow_override))
+    parts.append(
+        String(
+            material.shadow_side.value().value if material.shadow_side else -1
+        )
+    )
+    parts.append(String(material.dithering))
+    parts.append(String(material.tone_mapped))
+    parts.append(String(material.alpha_hash))
+    parts.append(String(material.alpha_to_coverage))
+    parts.append(String(material.premultiplied_alpha))
+    parts.append(_color_key(material.blend_color))
+    parts.append(String(bitcast[DType.uint32](material.blend_alpha)))
     var out = String()
     for at in range(len(parts)):  # pragma: no branch
         if at > 0:
@@ -196,6 +326,10 @@ def attributes_signature(geometry: BufferGeometry) -> String:
                 + String(attribute.item_size)
                 + "_"
                 + String(attribute.is_normalized())
+                + "_"
+                + String(attribute.component_type().value)
+                + "_"
+                + String(attribute.mesh_per_attribute())
             )
     return out^
 
@@ -207,16 +341,21 @@ def _same_geometry(one: BufferGeometry, two: BufferGeometry) raises -> Bool:
         return False
     if attributes_signature(one) != attributes_signature(two):
         return False
-    return (
-        one.attribute_view(String(POSITION)).data
-        == two.attribute_view(String(POSITION)).data
-    )
+    for slot in range(len(one.names)):
+        ref first = one.values[slot]
+        ref second = two.attribute_view(one.names[slot])
+        if first.is_integer():
+            if first.stored_values() != second.stored_values():
+                return False
+        elif first.packed() != second.packed():
+            return False
+    return True
 
 
-def _carries(scene: Scene, node: NodeId) -> Bool:
+def _carries(scene: Scene, node: NodeId, except_mesh: Int = -1) -> Bool:
     """Return whether anything the scene holds rides a node."""
     for at in range(len(scene.meshes)):
-        if scene.meshes[at].node == node:
+        if at != except_mesh and scene.meshes[at].node == node:
             return True
     for at in range(len(scene.skinned_meshes)):
         if scene.skinned_meshes[at].node == node:
@@ -283,29 +422,56 @@ struct SceneOptimizer(Movable):
         """
         scene.update()
         var groups = List[_Group]()
+        var group_index = Dict[String, Int]()
+        var by_node = Dict[Int, List[Int]]()
+        for at in range(len(scene.meshes)):
+            var node = scene.meshes[at].node.value
+            if node not in by_node:
+                by_node[node] = List[Int]()
+            by_node[node].append(at)
         var unique = List[Int]()
         var order = scene.traverse()
         for step in range(len(order)):
             var node = order[step]
-            for at in range(len(scene.meshes)):
+            if node.value not in by_node:
+                continue
+            # A bucket is inserted only when its first mesh is appended.
+            for slot in range(len(by_node[node.value])):  # pragma: no branch
+                var at = by_node[node.value][slot]
                 ref mesh = scene.meshes[at]
-                if mesh.node != node or len(mesh.materials) > 0:
+                if len(mesh.materials) > 0:
                     continue
                 ref geometry = assets.geometries.get(mesh.geometry)
+                if not self._eligible(scene, assets, at):
+                    continue
+                var object = scene.get(node)
                 var key = (
                     material_signature(
                         assets, assets.materials.get(mesh.material)
                     )
                     + "_"
                     + attributes_signature(geometry)
+                    + "|"
+                    + String(geometry.is_indexed())
+                    + "|"
+                    + String(object.parent.value)
+                    + "|"
+                    + String(object.visible)
+                    + "|"
+                    + String(object.layers.mask)
+                    + "|"
+                    + String(object.render_order)
+                    + "|"
+                    + String(mesh.frustum_culled)
+                    + "|"
+                    + String(mesh.cast_shadow)
+                    + "|"
+                    + String(mesh.receive_shadow)
                 )
-                var found = -1
-                for index in range(len(groups)):
-                    if groups[index].key == key:
-                        found = index
-                if found < 0:
+                if key not in group_index:
+                    group_index[key] = len(groups)
                     groups.append(_Group(key))
-                    found = len(groups) - 1
+                var found = group_index[key]
                 groups[found].meshes.append(at)
                 if not _listed(scene, assets, groups[found].geometries, at):
                     groups[found].geometries.append(at)
@@ -327,6 +493,39 @@ struct SceneOptimizer(Movable):
             batched + singles, batches, singles, batches + singles, len(unique)
         )
 
+    def _eligible(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> Bool:
+        """Keep dynamic state and nodes that carry other scene content."""
+        ref mesh = scene.meshes[index]
+        for kept in self.keep:
+            if kept == mesh.node:
+                return False
+        if len(scene.children(mesh.node)) > 0 or _carries(
+            scene, mesh.node, index
+        ):
+            return False
+        if Bool(mesh.custom_depth_material) or Bool(
+            mesh.custom_distance_material
+        ):
+            return False
+        if scene.get(mesh.node).user_data.count() > 0:
+            return False
+        if len(mesh.morph_influences) > 0:
+            return False
+        ref geometry = assets.geometries.get(mesh.geometry)
+        if not geometry.has_attribute(POSITION):
+            return False
+        if geometry.instanced or geometry.morph_count() > 0:
+            return False
+        if geometry.draw_range.start != 0 or Bool(geometry.draw_range.count):
+            return False
+        # POSITION guarantees that this attribute list is not empty.
+        for slot in range(len(geometry.values)):  # pragma: no branch
+            if geometry.values[slot].is_instanced():
+                return False
+        return True
+
     def _batch(
         self, mut scene: Scene, mut assets: Assets, group: _Group
     ) raises:
@@ -342,11 +541,15 @@ struct SceneOptimizer(Movable):
             vertices += geometry.attribute_view(String(POSITION)).count()
             indices += len(geometry.index)
         var material = assets.materials.get(first.material)
-        material.color = Color(255, 255, 255)
+        material.color = Color(255, 255, 255, material.color.a)
         var paint = assets.materials.add(material^)
         var parent = scene.get(first.node).parent
         var holder = Object3D()
-        holder.name = scene.get(first.node).name + "_batch"
+        var source = scene.get(first.node)
+        holder.name = source.name + "_batch"
+        holder.visible = source.visible
+        holder.layers = source.layers
+        holder.render_order = source.render_order
         var node = scene.add(holder^)
         if parent != NO_PARENT:
             scene.add(node, parent=parent)
@@ -354,6 +557,10 @@ struct SceneOptimizer(Movable):
         var batch = BatchedMesh(
             paint,
             node,
+            frustum_culled=first.frustum_culled,
+            per_object_frustum_culled=first.frustum_culled,
+            cast_shadow=first.cast_shadow,
+            receive_shadow=first.receive_shadow,
             max_instance_count=len(group.meshes),
             max_vertex_count=vertices,
             max_index_count=indices,
@@ -421,6 +628,7 @@ struct SceneOptimizer(Movable):
                 plain
                 and not kept
                 and not _carries(scene, child)
+                and scene.get(child).user_data.count() == 0
                 and len(scene.children(child)) == 0
             ):
                 scene.remove_from_parent(child)

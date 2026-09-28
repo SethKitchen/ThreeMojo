@@ -93,5 +93,5 @@ The recorded tables live on [Benchmarks](Benchmarks). The refresh command is in 
 
 | Program | Shows |
 |---|---|
-| `tools/gpu_status.mojo` | Whether an accelerator is present. |
+| `tools/gpu_status.py` | Whether an accelerator is present. |
 | `tools/doc_lint.mojo` | Whether the documentation follows the writing rules. |

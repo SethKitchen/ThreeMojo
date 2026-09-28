@@ -13,9 +13,9 @@
 # job installs MAX and runs them, since on a runner with no GPU they still
 # test everything they were written to test.
 #
-# Everything runs through `make ci`, which forces every recipe regardless of
-# the build cache. A cache hit from a previous commit is precisely what CI must
-# not honor.
+# Every make runs with `-B`, which forces each recipe regardless of the build
+# cache. A cache hit from a previous commit is precisely what CI must not
+# honor.
 
 name: check
 
@@ -36,17 +36,49 @@ env:
   AFFECTED: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
 
 jobs:
-  cpu:
-    name: check-cpu (standard library only)
+  # A check waits for its slowest job, and a job's time is almost all
+  # compilation on a four-core runner. So the suites are split over runners
+  # that work at once, `make ... SHARD=i/n`, each group balanced by the
+  # source its suites import; see tools/shard.py. Everything that is not a
+  # suite runs whole, in the lint job. The splits are sized so that no group
+  # outlasts the lint job by much.
+  lint:
+    name: lint (standard library only)
     runs-on: ubuntu-latest
-    # The CPU suites took about 35 minutes once the library passed 150
-    # modules, and 87 of the 90 allowed at 273: lint alone is an hour.
-    # The next suites ran past it with every step still progressing.
-    # This is a hang detector, not a speed target.
-    timeout-minutes: 150
+    # A hang detector, not a speed target: lint alone once ran an hour.
+    timeout-minutes: 120
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # Formatting, lint, the compile-fail cases, the documentation and the
+      # build tools. No MAX, which is what proves the no-dependencies claim
+      # still holds.
+      - name: lint
+        run: make -B fmt-check lint-cpu compile-fail docs-check test-tools AFFECTED="$AFFECTED"
+
+  cpu:
+    name: test-cpu ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -65,10 +97,8 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # Formatting, linting, the CPU suites, and the compile-fail cases. No
-      # MAX, which is what proves the no-dependencies claim still holds.
-      - name: check-cpu
-        run: make -B check-cpu AFFECTED="$AFFECTED"
+      - name: test-cpu
+        run: make -B test-cpu SHARD=${{ matrix.shard }}/3 AFFECTED="$AFFECTED"
 
   # The same check on Apple Silicon. Months of work on Linux alone let three
   # suites break on a Mac without a sign: a pseudo-terminal there holds far
@@ -77,11 +107,22 @@ jobs:
   #
   # `macos-latest` is a standard runner, which GitHub runs free for a public
   # repository. A larger one (`-large`, `-xlarge`) is billed even here, so
-  # this job must not move to one.
+  # these jobs must not move to one. A free account runs five macOS jobs at
+  # once, so the Mac takes three: lint, and the suites in two groups.
   cpu-macos:
-    name: check-cpu (macOS, Apple Silicon)
+    name: check-cpu (macOS, Apple Silicon) ${{ matrix.part }}
     runs-on: macos-latest
     timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: lint
+            target: fmt-check lint-cpu compile-fail docs-check test-tools
+          - part: suites 1/2
+            target: test-cpu SHARD=1/2
+          - part: suites 2/2
+            target: test-cpu SHARD=2/2
 
     steps:
       - uses: actions/checkout@v4
@@ -102,18 +143,31 @@ jobs:
         run: brew install xorg-server
 
       - name: check-cpu
-        run: make -B check-cpu AFFECTED="$AFFECTED"
+        run: make -B ${{ matrix.target }} AFFECTED="$AFFECTED"
 
-  # Coverage runs beside the CPU suites rather than after them: each takes
-  # half an hour or more on a hosted runner, and one after the other ran
-  # past every timeout the check job was given.
-  coverage:
-    name: coverage
+  # Coverage runs beside the suites rather than after them, and is split the
+  # same way: each runner instruments the tree and captures its group of
+  # suites, and the `coverage` job gathers every capture and reports. The
+  # report gates on line, branch, condition and MC/DC, and on a capture from
+  # every suite.
+  #
+  # COV_BUDGET is raised well above its local default of one second per
+  # suite, which was tuned on a fast many-core machine to catch the
+  # instrumenter sending the compiler superlinear. A four-core hosted runner
+  # exceeds that while behaving perfectly. Here it is only a hang detector:
+  # 300, 900 and 3600 each became the ceiling as the library grew, with
+  # every suite still progressing, and a genuine hang blows through any of
+  # them.
+  coverage-capture:
+    name: coverage capture ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
-      # The whole history, so that the merge base with the base branch exists.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -131,29 +185,54 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # Line, branch, condition and MC/DC, all gating: the report exits
-      # non-zero if anything is uncovered.
-      #
-      # COV_BUDGET is raised well above its local default. That default is one
-      # second per suite, tuned on a fast many-core machine to catch the
-      # instrumenter sending the compiler superlinear; a 2-core hosted runner
-      # exceeds it while behaving perfectly. Here it is only a hang detector.
-      #
-      # It was 300, and three new suites walked the run into the alarm at
-      # 8053 items covered. Nothing was slow: each of them compiled and ran
-      # in about two seconds under instrumentation, the same as every other
-      # small suite. The number was simply a flat one against a total that
-      # grows with the library, and 300 had quietly become the ceiling
-      # rather than the outlier. A genuine hang is minutes of no progress
-      # and blows through any of these numbers, so the detector loses
-      # nothing by being generous.
-      #
-      # 900 then went the same way at 149 instrumented modules: the run was
-      # stopped at fifteen minutes with every suite still progressing.
-      # 3600 went the same way at 273: the run for 0e0b997 was stopped at
-      # the hour, and the next passed with minutes to spare.
-      - name: coverage
-        run: make -B coverage COV_BUDGET=6000 AFFECTED="$AFFECTED"
+      - name: capture
+        run: |
+          make -B coverage-instrument AFFECTED="$AFFECTED"
+          make -B coverage-capture SHARD=${{ matrix.shard }}/4 COV_BUDGET=6000 AFFECTED="$AFFECTED"
+
+      # Compressed as captured, so a group's streams are megabytes, not the
+      # gigabytes the raw probes would be. Nothing to upload when no measured
+      # module is affected.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-hits-${{ matrix.shard }}
+          path: coverage/build/hits/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  coverage:
+    name: coverage
+    needs: coverage-capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # The same tree the groups instrumented, then every group's captures
+      # in it, then the report.
+      - name: instrument
+        run: make -B coverage-instrument AFFECTED="$AFFECTED"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-hits-*
+          path: coverage/build/hits/
+          merge-multiple: true
+
+      - name: report
+        run: make -B coverage-report AFFECTED="$AFFECTED"
 
   # The GPU backend's host side: the suites that import render/gpu.mojo but
   # open no device. They lay out the vertex lanes, the state tables, the
@@ -187,7 +266,7 @@ jobs:
   wiki:
     name: publish wiki
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [cpu, coverage, gpu-host]
+    needs: [lint, cpu, cpu-macos, coverage, gpu-host]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
