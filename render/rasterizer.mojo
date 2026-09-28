@@ -546,6 +546,10 @@ def rasterize_depth(
 
 # What a thin film is, in nanometers, when a material names no range:
 # three.js's `iridescenceThicknessRange` of `[ 100, 400 ]`.
+# An origin the borrow checker does not track, for a view that reads a
+# store it knows outlives it; `postprocessing.sampling` names the same.
+comptime _Untracked = UntrackedOrigin[mut=False]
+
 comptime DEFAULT_THICKNESS_MINIMUM = Float32(100)
 comptime DEFAULT_THICKNESS_MAXIMUM = Float32(400)
 # The film's index of refraction when a material names none: three.js's
@@ -5030,6 +5034,35 @@ def rasterize_shaded(
         row = row + down
 
 
+def _code_of(
+    programs: NodeProgramStore, program: Int
+) -> Pointer[Float32, _Untracked]:
+    """Return where a program's code starts, for a view that reads it word
+    by word. With no program there is no code to read, and a fragment
+    without one asks for none, so the store's own storage stands in.
+
+    Args:
+        programs: The store, which outlives the view.
+        program: The program's index, or one outside the store for none.
+
+    Returns:
+        The first word of the code.
+    """
+    if program < 0 or program >= len(programs.programs):
+        return (
+            programs.programs.unsafe_ptr()
+            .bitcast[Float32]()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[_Untracked]()
+        )
+    return (
+        programs.programs[program]
+        .code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[_Untracked]()
+    )
+
+
 struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
@@ -5037,6 +5070,10 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5075,6 +5112,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         pixels, at the pixel (0, 0), and the opaque scene behind it."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5092,7 +5130,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) for this fragment, as
@@ -5216,6 +5254,10 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5245,6 +5287,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5258,7 +5301,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) at the level the point's size
@@ -5373,6 +5416,10 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5404,6 +5451,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5418,7 +5466,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) from its full-size level: a line
