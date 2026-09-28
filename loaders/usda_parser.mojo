@@ -856,7 +856,8 @@ def _float_list(text: String) -> List[Float64]:
 
 
 struct _Reader(Movable):
-    """three.js's `USDAParser.parseData` as it reads one text."""
+    """The counterpart of three.js's `USDAParser.parseData` as it reads one text.
+    """
 
     var tree: UsdaTree
     var layer: UsdLayer

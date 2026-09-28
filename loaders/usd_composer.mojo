@@ -158,7 +158,7 @@ comptime USD_LAYER = UsdAssetKind(1)
 
 
 struct UsdAssets(Movable):
-    """three.js's `assets`: each image and layer of an archive by its
+    """The counterpart of three.js's `assets`: each image and layer of an archive by its
     name, in JavaScript's key order."""
 
     var names: List[String]
@@ -739,7 +739,7 @@ def _wrap_of(value: String) -> Wrap:
 
 
 struct _Composer(Movable):
-    """three.js's `USDComposer` as it composes one layer."""
+    """The counterpart of three.js's `USDComposer` as it composes one layer."""
 
     var layer: UsdLayer
     var base_path: String

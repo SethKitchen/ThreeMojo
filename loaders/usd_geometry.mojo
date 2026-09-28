@@ -164,7 +164,7 @@ def _identity(length: Float64) raises -> List[Float64]:
 
 
 struct HoleMap(Copyable, Movable):
-    """three.js's `_buildHoleMap`: the holes of each parent face, and
+    """The counterpart of three.js's `_buildHoleMap`: the holes of each parent face, and
     which faces are holes."""
 
     var parents: List[Float64]

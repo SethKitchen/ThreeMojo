@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""glTF meshes of Gaussian splats, `KHR_gaussian_splatting`, from three.js
+"""Gaussian splats in glTF meshes, `KHR_gaussian_splatting`, from three.js
 `examples/jsm/loaders/GLTFGaussianSplatLoaderExtension.js`.
 
 A glTF primitive with the extension is a point cloud whose points are

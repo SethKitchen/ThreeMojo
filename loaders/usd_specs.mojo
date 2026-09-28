@@ -264,7 +264,7 @@ struct UsdSpec(Copyable, Movable):
 
 
 struct UsdLayer(Copyable, Movable):
-    """three.js's `{ specsByPath }`: each path's spec, in the order the
+    """The counterpart of three.js's `{ specsByPath }`: each path's spec, in the order the
     paths were first set, and every value the specs hold."""
 
     var paths: List[String]

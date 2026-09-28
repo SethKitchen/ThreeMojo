@@ -514,7 +514,7 @@ struct _CrateSpec(ImplicitlyCopyable):
 
 
 struct _Crate(Movable):
-    """three.js's `USDCParser` as it reads one file."""
+    """The counterpart of three.js's `USDCParser` as it reads one file."""
 
     var bytes: List[UInt8]
     var at: Int
