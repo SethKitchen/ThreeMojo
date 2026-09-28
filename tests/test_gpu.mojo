@@ -10692,6 +10692,69 @@ def test_the_gpu_composer_matches_the_host_on_a_motion_blur() raises:
             assert_true(count_mismatches(cpu, sharp, 2) > 20)
 
 
+def test_the_gpu_composer_matches_the_host_on_a_sharpen() raises:
+    # RCAS runs on the device through `rcas_pixel`, with and without its
+    # noise attenuation.
+    if skipped_for_lack_of_a_gpu("post sharpen"):
+        return
+    from postprocessing.composer import sharpen_pass
+
+    assert_equal(compare_post(one_pass(sharpen_pass())), 1)
+    assert_equal(compare_post(one_pass(sharpen_pass(0, True))), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_crt() raises:
+    # The CRT runs on the device through `crt_pixel`; its clock moves on
+    # alike over two frames.
+    if skipped_for_lack_of_a_gpu("post crt"):
+        return
+    from postprocessing.composer import crt_pass
+
+    assert_equal(
+        compare_post(one_pass(crt_pass(scanline_speed=0.5)), frames=2), 1
+    )
+
+
+def test_the_gpu_composer_matches_the_host_on_a_radial_blur() raises:
+    # The radial blur runs on the device through `radial_blur_pixel`,
+    # straight and premultiplied.
+    if skipped_for_lack_of_a_gpu("post radial blur"):
+        return
+    from postprocessing.composer import radial_blur_pass
+
+    assert_equal(compare_post(one_pass(radial_blur_pass())), 1)
+    assert_equal(
+        compare_post(
+            one_pass(radial_blur_pass(0.3, 0.6, premultiplied_alpha=True))
+        ),
+        1,
+    )
+
+
+def test_the_gpu_composer_runs_the_other_display_nodes_on_the_host() raises:
+    # The upsampling, the bilateral and depth-aware filters, the SSGI and
+    # the SSS read the frame on the host, and agree with it.
+    if skipped_for_lack_of_a_gpu("post display nodes on the host"):
+        return
+    from postprocessing.composer import (
+        bilateral_blur_pass,
+        depth_aware_blur_pass,
+        fsr1_pass,
+        ssgi_pass,
+        sss_pass,
+    )
+    from animation.keyframe_track import LightIndex
+
+    var steps = List[Pass]()
+    steps.append(fsr1_pass(resolution_scale=0.5))
+    steps.append(bilateral_blur_pass())
+    steps.append(depth_aware_blur_pass())
+    steps.append(ssgi_pass())
+    # The scene's second light is its sun.
+    steps.append(sss_pass(LightIndex(1)))
+    assert_equal(compare_post(steps), 6)
+
+
 def test_the_gpu_composer_matches_the_host_on_a_copy() raises:
     if skipped_for_lack_of_a_gpu("post copy"):
         return

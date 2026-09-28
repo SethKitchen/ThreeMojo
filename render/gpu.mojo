@@ -372,6 +372,9 @@ from postprocessing.composer import (
     HALFTONE,
     LUT,
     MOTION_BLUR,
+    SHARPEN,
+    CRT,
+    RADIAL_BLUR,
     TEXTURE,
     CUBE_TEXTURE,
     GOD_RAYS,
@@ -404,6 +407,12 @@ from postprocessing.composer import (
     vignette_pixel,
 )
 from postprocessing.display_nodes import motion_blur_pixel
+from postprocessing.filter_nodes import (
+    FilterSettings,
+    crt_pixel,
+    radial_blur_pixel,
+)
+from postprocessing.upscaling import rcas_pixel
 from postprocessing.effects import (
     GlitchUniforms,
     HalftoneBlending,
@@ -10759,6 +10768,100 @@ def motion_blur_kernel(
     data[unsafe_offset=slot] = 0
 
 
+def sharpen_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    sharpness: Float32,
+    denoise: Int32,
+):
+    """Sharpen each pixel by RCAS: `rcas_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, rcas_pixel(view, x, y, sharpness, denoise != 0))
+    data[unsafe_offset=slot] = 0
+
+
+def crt_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    curvature: Float32,
+    bleeding: Float32,
+    scanline_intensity: Float32,
+    scanline_count: Float32,
+    scanline_speed: Float32,
+    vignette_intensity: Float32,
+    vignette_smoothness: Float32,
+    time: Float32,
+):
+    """Show each pixel as a cathode-ray tube would: `crt_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = FilterSettings()
+    settings.curvature = curvature
+    settings.bleeding = bleeding
+    settings.scanline_intensity = scanline_intensity
+    settings.scanline_count = scanline_count
+    settings.scanline_speed = scanline_speed
+    settings.vignette_intensity = vignette_intensity
+    settings.vignette_smoothness = vignette_smoothness
+    settings.time = time
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, crt_pixel(view, x, y, settings))
+    data[unsafe_offset=slot] = 0
+
+
+def radial_blur_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    center_u: Float32,
+    center_v: Float32,
+    weight: Float32,
+    decay: Float32,
+    count: Int32,
+    exposure: Float32,
+    premultiplied: Int32,
+):
+    """Blur each pixel toward a center: `radial_blur_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = FilterSettings()
+    settings.center_u = center_u
+    settings.center_v = center_v
+    settings.weight = weight
+    settings.decay = decay
+    settings.count = Int(count)
+    settings.exposure = exposure
+    settings.premultiplied_alpha = premultiplied != 0
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, radial_blur_pixel(view, x, y, settings))
+    data[unsafe_offset=slot] = 0
+
+
 def glitch_kernel(
     light: MutPointer[Float32, MutAnyOrigin],
     source: MutPointer[Float32, MutAnyOrigin],
@@ -11142,7 +11245,10 @@ def runs_on_device(kind: PassKind) -> Bool:
     the device. The pixelated, GTAO and transition passes draw the scene,
     so the host runs them. A shader pass whose program reads a texture in
     the assets also runs on the host; see `GpuComposer.render`. A motion
-    blur runs on the device with the velocities the host frame holds.
+    blur runs on the device with the velocities the host frame holds. The
+    sharpen, CRT and radial blur passes run on the device; the other
+    display node passes of issue 251 draw the scene or read the depth, and
+    run on the host.
 
     Args:
         kind: The pass's kind.
@@ -11174,6 +11280,9 @@ def runs_on_device(kind: PassKind) -> Bool:
         or kind == TEXTURE
         or kind == LUT
         or kind == MOTION_BLUR
+        or kind == SHARPEN
+        or kind == CRT
+        or kind == RADIAL_BLUR
     )
 
 
@@ -11886,6 +11995,61 @@ struct GpuComposer(Movable):
                 Int32(self.height),
                 Int32(settings.motion_samples),
                 settings.motion_amount,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == SHARPEN:
+            self._take_source()
+            ref settings = composer.passes[index].upscale
+            self.context.enqueue_function[sharpen_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.sharpness,
+                Int32(1 if settings.denoise else 0),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == CRT:
+            # The clock moves on as the host's does.
+            composer.passes[index].filters.time += delta_time
+            self._take_source()
+            ref settings = composer.passes[index].filters
+            self.context.enqueue_function[crt_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.curvature,
+                settings.bleeding,
+                settings.scanline_intensity,
+                settings.scanline_count,
+                settings.scanline_speed,
+                settings.vignette_intensity,
+                settings.vignette_smoothness,
+                settings.time,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == RADIAL_BLUR:
+            self._take_source()
+            ref settings = composer.passes[index].filters
+            self.context.enqueue_function[radial_blur_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.center_u,
+                settings.center_v,
+                settings.weight,
+                settings.decay,
+                Int32(settings.count),
+                settings.exposure,
+                Int32(1 if settings.premultiplied_alpha else 0),
                 grid_dim=grid,
                 block_dim=(TILE, TILE),
             )

@@ -85,6 +85,46 @@ from postprocessing.ssr_node import (
     ssr_node_light,
 )
 from postprocessing.traa import TraaSettings, check_traa, traa_render
+from postprocessing.upscaling import (
+    UpscaleSettings,
+    check_upscale,
+    fsr1_light,
+    sharpen_light,
+)
+from postprocessing.taau import (
+    TaauSettings,
+    check_taau,
+    taau_input_size,
+    taau_render,
+)
+from postprocessing.filter_nodes import (
+    FilterSettings,
+    bilateral_blur_light,
+    check_filters,
+    crt_light,
+    depth_aware_blend_light,
+    depth_aware_blur_light,
+    radial_blur_light,
+)
+from postprocessing.ssgi import (
+    ScreenInputs,
+    SsgiSettings,
+    SssSettings,
+    check_ssgi,
+    check_sss,
+    ssgi_composite,
+    ssgi_signal,
+    sss_light,
+    sss_light_direction,
+)
+from postprocessing.temporal_denoise import (
+    TemporalDenoiseSettings,
+    check_temporal_denoise,
+    temporal_denoise,
+)
+from postprocessing.oit import oit_render
+from postprocessing.retro import RetroSettings, check_retro, retro_render
+from animation.keyframe_track import LightIndex
 from postprocessing.effects import (
     BokehSettings,
     Bokeh2Settings,
@@ -263,6 +303,18 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == DENOISE
             or self == DOF
             or self == SSR_NODE
+            or self == SHARPEN
+            or self == FSR1
+            or self == TAAU
+            or self == CRT
+            or self == RADIAL_BLUR
+            or self == BILATERAL_BLUR
+            or self == DEPTH_AWARE_BLUR
+            or self == DEPTH_AWARE_BLEND
+            or self == SSGI
+            or self == SSS
+            or self == OIT
+            or self == RETRO
         )
 
 
@@ -379,6 +431,42 @@ comptime DOF = PassKind(47)
 # Add what each metallic surface reflects, marched across the frame and
 # blurred by its roughness: three.js's `SSRNode`.
 comptime SSR_NODE = PassKind(48)
+# The display nodes of issue 251, from 70 so that 60 stays a kind no pass
+# has. Sharpen the frame by robust contrast-adaptive sharpening: three.js's
+# `SharpenNode`.
+comptime SHARPEN = PassKind(70)
+# Upsample the frame by edge-adaptive spatial upsampling and sharpen it:
+# three.js's `FSR1Node`.
+comptime FSR1 = PassKind(71)
+# Draw the scene jittered at a smaller size and resolve it into a history
+# at the frame's size: three.js's `TAAUNode`.
+comptime TAAU = PassKind(72)
+# Bend, smear, line and darken the frame as a cathode-ray tube shows it:
+# three.js's `CRT.js`.
+comptime CRT = PassKind(73)
+# Blur the frame toward a center: three.js's `radialBlur`.
+comptime RADIAL_BLUR = PassKind(74)
+# Blur the frame across and down, sparing its edges: three.js's
+# `BilateralBlurNode`.
+comptime BILATERAL_BLUR = PassKind(75)
+# Blur the frame across and down, sparing its depth's edges: three.js's
+# `depthAwareBlur`.
+comptime DEPTH_AWARE_BLUR = PassKind(76)
+# Mix a color over the frame by a texture's red, pushed off the depth's
+# edges: three.js's `depthAwareBlend`.
+comptime DEPTH_AWARE_BLEND = PassKind(77)
+# Add the light the frame's surfaces bounce onto each other, and darken
+# their creases: three.js's `SSGINode`.
+comptime SSGI = PassKind(78)
+# Shadow each pixel the frame's depth hides from the main light: three.js's
+# `SSSNode`.
+comptime SSS = PassKind(79)
+# Draw the scene, weighing its transparent objects in any order: three.js's
+# `OITPassNode`.
+comptime OIT = PassKind(80)
+# Draw the scene small, with its corners snapped to its pixels: three.js's
+# `RetroPassNode`.
+comptime RETRO = PassKind(81)
 # `BloomPass.blurX` and `blurY`: how far apart the convolution's taps are,
 # in texture widths or heights, whatever the frame's size.
 comptime CONVOLUTION_STEP = Float32(0.001953125)
@@ -518,6 +606,18 @@ struct Pass(Copyable, Movable):
     var denoise: DenoiseSettings
     # What an SSR node pass reads; see `postprocessing.ssr_node`.
     var ssr_node: SsrNodeSettings
+    # What a sharpen, an FSR1, a TAAU, a filter, an SSGI, an SSS and a
+    # retro pass read, and what the TAAU and the SSGI's denoiser keep; see
+    # `postprocessing.upscaling`, `postprocessing.taau`,
+    # `postprocessing.filter_nodes`, `postprocessing.ssgi`,
+    # `postprocessing.temporal_denoise` and `postprocessing.retro`.
+    var upscale: UpscaleSettings
+    var taau: TaauSettings
+    var filters: FilterSettings
+    var ssgi: SsgiSettings
+    var temporal_denoise: TemporalDenoiseSettings
+    var sss: SssSettings
+    var retro: RetroSettings
     # A render pass's `overrideMaterial`, `clearColor` and `clearAlpha`,
     # each none by default, and three.js's `clear` and `clearDepth`:
     # whether a pass clears the frame before it draws, true for a render
@@ -579,6 +679,13 @@ struct Pass(Copyable, Movable):
         self.traa = TraaSettings()
         self.denoise = DenoiseSettings()
         self.ssr_node = SsrNodeSettings()
+        self.upscale = UpscaleSettings()
+        self.taau = TaauSettings()
+        self.filters = FilterSettings()
+        self.ssgi = SsgiSettings()
+        self.temporal_denoise = TemporalDenoiseSettings()
+        self.sss = SssSettings()
+        self.retro = RetroSettings()
         self.override_material = None
         self.render_clear_color = None
         self.render_clear_alpha = None
@@ -666,6 +773,15 @@ def check_pass(step: Pass) raises:
     check_traa(step.traa)
     check_denoise(step.denoise)
     check_ssr_node(step.ssr_node)
+    check_upscale(step.upscale)
+    check_taau(step.taau)
+    check_filters(step.filters)
+    check_ssgi(step.ssgi)
+    check_temporal_denoise(step.temporal_denoise)
+    check_sss(step.sss)
+    check_retro(step.retro)
+    if step.kind == DEPTH_AWARE_BLEND and step.texture.value < 0:
+        raise Error("A depth-aware blend pass must name a blend texture")
     var alpha = Bool(step.render_clear_alpha)
     if alpha:
         var value = step.render_clear_alpha.value()
@@ -2111,6 +2227,365 @@ def traa_pass(
     return step^
 
 
+def sharpen_pass(
+    sharpness: Float32 = 0.2, denoise: Bool = False
+) raises -> Pass:
+    """Return a pass of three.js's `sharpen`, robust contrast-adaptive
+    sharpening over the frame.
+
+    Args:
+        sharpness: Zero sharpens most, two hardly at all, `sharpness`.
+        denoise: Whether the sharpening is weighed down where the frame is
+            noisy, `denoise`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_upscale` raises.
+    """
+    var step = Pass(SHARPEN)
+    step.upscale.sharpness = sharpness
+    step.upscale.denoise = denoise
+    check_pass(step)
+    return step^
+
+
+def fsr1_pass(
+    sharpness: Float32 = 0.2,
+    denoise: Bool = False,
+    resolution_scale: Float32 = 1,
+) raises -> Pass:
+    """Return a pass of three.js's `fsr1`: the frame read at a resolution
+    scale, upsampled to its size by EASU, and sharpened by RCAS.
+
+    Args:
+        sharpness: RCAS's `sharpness`.
+        denoise: RCAS's `denoise`.
+        resolution_scale: The share of the frame's size the input is read
+            at, as the scene pass before it would draw it.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_upscale` raises.
+    """
+    var step = Pass(FSR1)
+    step.upscale.sharpness = sharpness
+    step.upscale.denoise = denoise
+    step.upscale.resolution_scale = resolution_scale
+    check_pass(step)
+    return step^
+
+
+def taau_pass(
+    resolution_scale: Float32 = 0.5,
+    depth_threshold: Float32 = 0.0005,
+    edge_depth_diff: Float32 = 0.001,
+    max_velocity_length: Float32 = 128,
+    current_frame_weight: Float32 = 0.025,
+) raises -> Pass:
+    """Return a pass of three.js's `TAAUNode` with the scene pass it reads:
+    it draws the scene at the resolution scale itself. Put it where a
+    render pass would go.
+
+    Args:
+        resolution_scale: The share of the frame's size the scene is drawn
+            at.
+        depth_threshold: `depthThreshold`.
+        edge_depth_diff: `edgeDepthDiff`.
+        max_velocity_length: `maxVelocityLength`.
+        current_frame_weight: `currentFrameWeight`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_taau` raises.
+    """
+    var step = Pass(TAAU)
+    step.taau.resolution_scale = resolution_scale
+    step.taau.depth_threshold = depth_threshold
+    step.taau.edge_depth_diff = edge_depth_diff
+    step.taau.max_velocity_length = max_velocity_length
+    step.taau.current_frame_weight = current_frame_weight
+    check_pass(step)
+    return step^
+
+
+def crt_pass(
+    curvature: Float32 = 0.1,
+    bleeding: Float32 = 0.002,
+    scanline_intensity: Float32 = 0.3,
+    scanline_count: Float32 = 240,
+    scanline_speed: Float32 = 0,
+    vignette_intensity: Float32 = 0.4,
+    vignette_smoothness: Float32 = 0.5,
+) raises -> Pass:
+    """Return a pass of three.js's `CRT.js`: `barrelUV`, `colorBleeding`,
+    `scanlines`, `vignette` and `barrelMask` over the frame. The composer
+    moves its clock on by each frame's time.
+
+    Args:
+        curvature: `barrelUV`'s `curvature`.
+        bleeding: `colorBleeding`'s `amount`.
+        scanline_intensity: `scanlines`' `intensity`.
+        scanline_count: `scanlines`' `count`.
+        scanline_speed: `scanlines`' `speed`.
+        vignette_intensity: `vignette`'s `intensity`.
+        vignette_smoothness: `vignette`'s `smoothness`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_filters` raises.
+    """
+    var step = Pass(CRT)
+    step.filters.curvature = curvature
+    step.filters.bleeding = bleeding
+    step.filters.scanline_intensity = scanline_intensity
+    step.filters.scanline_count = scanline_count
+    step.filters.scanline_speed = scanline_speed
+    step.filters.vignette_intensity = vignette_intensity
+    step.filters.vignette_smoothness = vignette_smoothness
+    check_pass(step)
+    return step^
+
+
+def radial_blur_pass(
+    center_u: Float32 = 0.5,
+    center_v: Float32 = 0.5,
+    weight: Float32 = 0.9,
+    decay: Float32 = 0.95,
+    count: Int = 32,
+    exposure: Float32 = 5,
+    premultiplied_alpha: Bool = False,
+) raises -> Pass:
+    """Return a pass of three.js's `radialBlur` over the frame.
+
+    Args:
+        center_u: The center across, `center.x`.
+        center_v: The center down from the top, `center.y`.
+        weight: The first tap's weight, `weight`.
+        decay: What each tap's weight is scaled by, `decay`.
+        count: How many taps, `count`.
+        exposure: What the blur is scaled by, `exposure`.
+        premultiplied_alpha: Whether the blur works on premultiplied
+            light, `premultipliedAlpha`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_filters` raises.
+    """
+    var step = Pass(RADIAL_BLUR)
+    step.filters.center_u = center_u
+    step.filters.center_v = center_v
+    step.filters.weight = weight
+    step.filters.decay = decay
+    step.filters.count = count
+    step.filters.exposure = exposure
+    step.filters.premultiplied_alpha = premultiplied_alpha
+    check_pass(step)
+    return step^
+
+
+def bilateral_blur_pass(
+    direction: Float32 = 1, sigma: Float32 = 4, sigma_color: Float32 = 0.1
+) raises -> Pass:
+    """Return a pass of three.js's `bilateralBlur` over the frame.
+
+    Args:
+        direction: What each pass's step is scaled by, `directionNode`.
+        sigma: The spatial Gaussian's `sigma`.
+        sigma_color: The luminance Gaussian's `sigmaColor`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_filters` raises.
+    """
+    var step = Pass(BILATERAL_BLUR)
+    step.filters.direction = direction
+    step.filters.sigma = sigma
+    step.filters.sigma_color = sigma_color
+    check_pass(step)
+    return step^
+
+
+def depth_aware_blur_pass(
+    sharpness: Float32 = 2, radius: Length = Length(1, METER)
+) raises -> Pass:
+    """Return a pass of three.js's `depthAwareBlur`, across and then down,
+    over the frame's red, green and blue.
+
+    Args:
+        sharpness: How strongly a depth step stops the blur, `sharpness`.
+        radius: The depth the step is measured against, `radius`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_filters` raises.
+    """
+    var step = Pass(DEPTH_AWARE_BLUR)
+    step.filters.sharpness = sharpness
+    step.filters.radius = radius
+    check_pass(step)
+    return step^
+
+
+def depth_aware_blend_pass(
+    texture: TextureId,
+    blend_color: Color = Color(255, 255, 255),
+    edge_radius: Int = 2,
+    edge_strength: Float32 = 2,
+) raises -> Pass:
+    """Return a pass of three.js's `depthAwareBlend`: a color mixed over the
+    frame by a blend texture's red.
+
+    Args:
+        texture: The blend texture, in the assets `render` is given.
+        blend_color: The color, in sRGB, `blendColor`.
+        edge_radius: How far the edge search reaches, in pixels,
+            `edgeRadius`.
+        edge_strength: How far the read is pushed off an edge,
+            `edgeStrength`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the texture is `NO_TEXTURE`, and everything
+            `check_filters` raises.
+    """
+    var step = Pass(DEPTH_AWARE_BLEND)
+    var linear = FloatColor(srgb=blend_color)
+    step.texture = texture
+    step.filters.blend_r = linear.r
+    step.filters.blend_g = linear.g
+    step.filters.blend_b = linear.b
+    step.filters.edge_radius = edge_radius
+    step.filters.edge_strength = edge_strength
+    check_pass(step)
+    return step^
+
+
+def ssgi_pass(
+    slice_count: Int = 1,
+    step_count: Int = 12,
+    ao_intensity: Float32 = 1,
+    gi_intensity: Float32 = 10,
+    radius: Float32 = 12,
+    thickness: Length = Length(1, METER),
+    denoise: Bool = False,
+) raises -> Pass:
+    """Return a pass of three.js's `ssgi`, mixed into the frame. The
+    composer draws its frame with a normal attachment while the pass is
+    on, and with a velocity attachment too when it denoises.
+
+    Args:
+        slice_count: `sliceCount`.
+        step_count: `stepCount`.
+        ao_intensity: `aoIntensity`.
+        gi_intensity: `giIntensity`.
+        radius: `radius`.
+        thickness: `thickness`.
+        denoise: Whether the raw signal runs through
+            `TemporalReprojectNode` and `RecurrentDenoiseNode` first.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_ssgi` raises.
+    """
+    var step = Pass(SSGI)
+    step.ssgi.slice_count = slice_count
+    step.ssgi.step_count = step_count
+    step.ssgi.ao_intensity = ao_intensity
+    step.ssgi.gi_intensity = gi_intensity
+    step.ssgi.radius = radius
+    step.ssgi.thickness = thickness
+    step.ssgi.denoise = denoise
+    check_pass(step)
+    return step^
+
+
+def sss_pass(
+    light: LightIndex = LightIndex(0),
+    max_distance: Length = Length(0.1, METER),
+    thickness: Length = Length(0.01, METER),
+    shadow_intensity: Float32 = 1,
+    quality: Float32 = 0.5,
+) raises -> Pass:
+    """Return a pass of three.js's `sss`, multiplied into the frame.
+
+    Args:
+        light: The main light, one of the scene's `lights`.
+        max_distance: How far the ray walks, `maxDistance`.
+        thickness: How far behind the depth a hit may be, `thickness`.
+        shadow_intensity: How dark a shadow is, `shadowIntensity`.
+        quality: The share of a pixel's steps the walk takes, `quality`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_sss` raises.
+    """
+    var step = Pass(SSS)
+    step.sss.light = light
+    step.sss.max_distance = max_distance
+    step.sss.thickness = thickness
+    step.sss.shadow_intensity = shadow_intensity
+    step.sss.quality = quality
+    check_pass(step)
+    return step^
+
+
+def oit_pass() raises -> Pass:
+    """Return a pass of three.js's `oitPass`: the scene drawn with its
+    transparent objects weighed in any order. Put it where a render pass
+    would go.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never for this kind; `check_pass` runs as for every pass.
+    """
+    var step = Pass(OIT)
+    check_pass(step)
+    return step^
+
+
+def retro_pass(resolution_scale: Float32 = 0.25) raises -> Pass:
+    """Return a pass of three.js's `retroPass`: the scene drawn small with
+    its corners snapped to its pixels. Put it where a render pass would
+    go.
+
+    Args:
+        resolution_scale: The share of the frame's size the scene is drawn
+            at.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_retro` raises.
+    """
+    var step = Pass(RETRO)
+    step.retro.resolution_scale = resolution_scale
+    check_pass(step)
+    return step^
+
+
 def box_blur_pass(
     size: Int = 1, separation: Int = 1, premultiplied_alpha: Bool = False
 ) raises -> Pass:
@@ -2732,6 +3207,51 @@ struct EffectComposer(Movable):
                 assets,
                 camera,
             )
+        elif step.kind == SHARPEN:
+            sharpen_light(frame, step.upscale)
+        elif step.kind == FSR1:
+            fsr1_light(frame, step.upscale)
+        elif step.kind == TAAU:
+            var small = renderer.resized(
+                taau_input_size(renderer.width, step.taau.resolution_scale),
+                taau_input_size(renderer.height, step.taau.resolution_scale),
+            )
+            taau_render(
+                frame, self.passes[index].taau, small, scene, assets, camera
+            )
+        elif step.kind == CRT:
+            self.passes[index].filters.time += delta_time
+            crt_light(frame, self.passes[index].filters)
+        elif step.kind == RADIAL_BLUR:
+            radial_blur_light(frame, step.filters)
+        elif step.kind == BILATERAL_BLUR:
+            bilateral_blur_light(frame, step.filters)
+        elif step.kind == DEPTH_AWARE_BLUR:
+            depth_aware_blur_light(
+                frame, _depth_view(frame, camera), step.filters
+            )
+        elif step.kind == DEPTH_AWARE_BLEND:
+            depth_aware_blend_light(
+                frame,
+                _depth_view(frame, camera),
+                texture_overlay(
+                    assets.textures.get(step.texture), frame.width, frame.height
+                ),
+                step.filters,
+            )
+        elif step.kind == SSGI:
+            _ssgi(frame, self.passes[index], scene, camera)
+        elif step.kind == SSS:
+            var toward = sss_light_direction(
+                scene, step.sss.light, camera.view_matrix_in(scene)
+            )
+            var inputs = ScreenInputs(frame, _depth_view(frame, camera))
+            sss_light(frame, inputs, toward, step.sss)
+            self.passes[index].sss.frame_id += 1
+        elif step.kind == OIT:
+            oit_render(frame, renderer, scene, assets, camera)
+        elif step.kind == RETRO:
+            retro_render(frame, renderer, scene, assets, camera, step.retro)
         elif step.kind == BOKEH2:
             bokeh2_light(
                 frame, depth_view(renderer, scene, assets, camera), step.bokeh2
@@ -2841,8 +3361,9 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
     zero keeps no color through the two.
 
     The passes that leave the frame's color alone or draw it new do not:
-    a mask, a clear mask, a render, the SSAA, TAA, TRAA, pixelated and
-    transition passes, which store their data straight themselves. Nor
+    a mask, a clear mask, a render, the SSAA, TAA, TRAA, TAAU, OIT,
+    retro, pixelated and transition passes, which store their data
+    straight themselves. Nor
     does the output pass, which leaves every data pixel as it is.
 
     Args:
@@ -2858,6 +3379,9 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
         or kind == SSAA_RENDER
         or kind == TAA_RENDER
         or kind == TRAA
+        or kind == TAAU
+        or kind == OIT
+        or kind == RETRO
         or kind == OUTPUT
         or kind == RENDER_PIXELATED
         or kind == RENDER_TRANSITION
@@ -3039,9 +3563,12 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
             or step.kind == GTAO
             or step.kind == DENOISE
             or step.kind == SSR_NODE
+            or step.kind == SSGI
         )
         if step.enabled and reads:
             normals = True
+        if step.enabled and step.kind == SSGI and step.ssgi.denoise:
+            velocities = True
         if step.enabled and step.kind == SSR_NODE:
             surfaces = True
         if step.enabled and step.kind == MOTION_BLUR:
@@ -3054,6 +3581,31 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     if surfaces:
         outputs.append(OUTPUT_METAL_ROUGH)
     return outputs^
+
+
+def _ssgi[
+    C: Camera
+](mut frame: RenderTarget, mut step: Pass, scene: Scene, camera: C) raises:
+    """Run an SSGI pass: the raw signal, through the denoiser when the pass
+    asks, mixed into the frame."""
+    var inputs = ScreenInputs(frame, _depth_view(frame, camera))
+    var signal = ssgi_signal(inputs, step.ssgi)
+    if step.ssgi.denoise:
+        # The frame has velocities while the pass denoises; see
+        # `frame_outputs`.
+        var denoised = temporal_denoise(
+            signal,
+            _depth_view(frame, camera),
+            frame.normals,
+            frame.velocities,
+            camera.view_matrix_in(scene),
+            step.temporal_denoise,
+        )
+        for slot in range(len(signal)):  # pragma: no branch
+            var d = denoised[slot]
+            signal[slot] = FloatColor(d.r, d.g, d.b, signal[slot].a)
+    ssgi_composite(frame, signal)
+    step.ssgi.frame_id += 1
 
 
 def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:
