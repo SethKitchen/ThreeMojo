@@ -43,10 +43,16 @@ at the payload's offset. `CrateType` names the type.
 with `PXR-USDC`, a read past the end of the file, a payload offset past
 the end, and an array of more than 2^31 - 1 elements. And where this
 port holds less than three.js: a missing `TOKENS`, `FIELDS`, `FIELDSETS`,
-`PATHS` or `SPECS` section; a type or a spec type outside the known
-ones; a path index outside the path count; time samples whose times
-are not numbers; an LZ4 chunk past the end of its input; and a count
-past `MAX_COUNT` or past what the file can hold.
+`PATHS` or `SPECS` section; a spec type outside the known ones; time
+samples whose times are not numbers; an LZ4 chunk past the end of its
+input; a path tree that does not end; and a count past `MAX_COUNT` or
+past what the file can hold.
+
+A value of a type outside the known ones reads as three.js reads a type
+it does not support: its payload when it is inlined, and `null` or an
+empty array when it is not. A file of a version before 0.4.0 has path
+headers that three.js reads one padding byte short, so its paths are
+the wrong ones; this port reads them as three.js does.
 """
 
 from loaders.usd_specs import (
@@ -463,8 +469,11 @@ struct _Rep(ImplicitlyCopyable):
     var hi: Int
 
     def type(self) -> CrateType:
-        """Return the value's type."""
-        return CrateType((self.hi >> 16) & 0xFF)
+        """Return the value's type: `CRATE_INVALID` for one outside the
+        known ones, which three.js reads as it reads a type it does not
+        support."""
+        var type = CrateType((self.hi >> 16) & 0xFF)
+        return type if type.is_valid() else CRATE_INVALID
 
     def is_array(self) -> Bool:
         """Return True for an array."""
@@ -516,7 +525,9 @@ struct _Crate(Movable):
     var field_tokens: List[Int]
     var field_reps: List[_Rep]
     var field_sets: List[Int]
-    var paths: List[String]
+    # Each path by its index: three.js's array, which an index past its
+    # length grows, and a negative one sets as a property.
+    var paths: Dict[Int, String]
     var specs: List[_CrateSpec]
     var layer: UsdLayer
 
@@ -539,7 +550,7 @@ struct _Crate(Movable):
         self.field_tokens = List[Int]()
         self.field_reps = List[_Rep]()
         self.field_sets = List[Int]()
-        self.paths = List[String]()
+        self.paths = Dict[Int, String]()
         self.specs = List[_CrateSpec]()
         self.layer = UsdLayer()
 
@@ -918,36 +929,27 @@ struct _Crate(Movable):
             index: The path.
 
         Returns:
-            It, or the empty string past the list.
+            It, or the empty string when it is not set.
         """
-        if index < 0 or index >= len(self.paths):
-            return ""
-        return self.paths[index]
+        return self.paths.get(index).or_else("")
 
-    def set_path(mut self, index: Int, path: String) raises:
+    def set_path(mut self, index: Int, path: String):
         """Set a path, three.js's `this.paths[ index ] = path`.
 
         Args:
             index: The path's index.
             path: The path.
-
-        Raises:
-            Error: If the index is outside the path count.
         """
-        if index < 0 or index >= len(self.paths):
-            raise Error("USDC: a path index outside the path count")
         self.paths[index] = path
 
     def read_paths(mut self) raises:
         """Read `PATHS`, three.js's `_readPaths`.
 
         Raises:
-            Error: If the section is missing, passes the end, or holds a
-                path index outside its count.
+            Error: If the section is missing or passes the end.
         """
         self.at = self.required("PATHS").start
         var count = self.count()
-        self.paths = List[String](length=count, fill="")
         if not self.compressed():
             self.walk_paths("", 0)
             return
@@ -968,7 +970,7 @@ struct _Crate(Movable):
                 three.js.
 
         Raises:
-            Error: If it passes the end or sets a path outside the count.
+            Error: If it passes the end.
         """
         if depth > 1000:
             return
@@ -1015,7 +1017,7 @@ struct _Crate(Movable):
                 visits more, where three.js would not end.
 
         Raises:
-            Error: If an index is outside the count, or the budget runs out.
+            Error: If the budget runs out.
         """
         var parent = parent_path
         var at = start
@@ -1082,12 +1084,10 @@ struct _Crate(Movable):
             Its place in the layer.
 
         Raises:
-            Error: For a type outside the known ones, a payload past the
-                end, and anything a read refuses.
+            Error: For a payload past the end, and anything a read
+                refuses.
         """
         var type = rep.type()
-        if not type.is_valid():
-            raise Error("USDC: a value of no known type: " + String(type.value))
         if type == CRATE_TIME_SAMPLES:
             return self.time_samples(rep, depth)
         if rep.is_inlined():
