@@ -1668,9 +1668,7 @@ def _spot_attenuation(
     var frame = SIMD[DType.float32, 16](0)
     for element in range(16):
         frame[element] = lights[unsafe_offset=start + 2 + element]
-    return projector_attenuation(
-        frame, position, lights[unsafe_offset=at + 12]
-    )
+    return projector_attenuation(frame, position, lights[unsafe_offset=at + 12])
 
 
 def _spot_tint(

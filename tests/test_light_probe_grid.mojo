@@ -57,7 +57,9 @@ def assert_at(point: Vector3, x: Float32, y: Float32, z: Float32) raises:
     assert_almost_equal(point.z, z, atol=1e-6)
 
 
-def uniform_sh(red: Float32, green: Float32, blue: Float32) raises -> SphericalHarmonics3:
+def uniform_sh(
+    red: Float32, green: Float32, blue: Float32
+) raises -> SphericalHarmonics3:
     """Return coefficients of band zero alone."""
     var sh = SphericalHarmonics3()
     sh.set_coefficient(0, Vector3(red, green, blue))
@@ -206,7 +208,9 @@ def test_the_blend_is_the_lerp_of_the_eight_probes() raises:
     blend = grid.sh_at(Vector3(0.25, 0.5, 0.5))
     assert_almost_equal(blend.lanes[0], 0.25 + 1.5 + 3, atol=1e-5)
     assert_equal(blend.lanes[1], 0)
-    assert_equal(LightProbeGrid().sh_at(Vector3(0, 0, 0)), SphericalHarmonics3())
+    assert_equal(
+        LightProbeGrid().sh_at(Vector3(0, 0, 0)), SphericalHarmonics3()
+    )
 
 
 def test_the_irradiance_carries_the_intensity() raises:
@@ -390,7 +394,9 @@ def draw_helper(scene: Scene, assets: Assets) raises -> Framebuffer:
     return Renderer(SIDE, SIDE).render(scene, assets, camera)
 
 
-def helper_color(red: Float32, green: Float32, blue: Float32, intensity: Float32) -> Color:
+def helper_color(
+    red: Float32, green: Float32, blue: Float32, intensity: Float32
+) -> Color:
     """Return what a helper's sphere shows for band zero alone: three.js's
     shader, `RECIPROCAL_PI * irradiance * intensity`, encoded."""
     var scale = Float32(0.886227) * Float32(0.318309886) * intensity

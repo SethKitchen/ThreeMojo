@@ -7390,9 +7390,7 @@ struct Renderer(Movable):
             ltc=self.ltc_tables(),
             spot_maps=self._projected(scene, assets, camera.visible_layers()),
             back=camera_back(scene, camera),
-            profiles=self.spot_profiles(
-                scene, assets, camera.visible_layers()
-            ),
+            profiles=self.spot_profiles(scene, assets, camera.visible_layers()),
             probe_grid=self.probe_grid,
         )
 

@@ -96,9 +96,7 @@ struct SunLightShadow(ImplicitlyCopyable):
             raise Error("A sun's shadow distance must be a positive length")
         var margin = self.margin.to(METER)
         if not isfinite(margin) or margin < 0:
-            raise Error(
-                "A sun's shadow margin must be finite and not negative"
-            )
+            raise Error("A sun's shadow margin must be finite and not negative")
         if self.map_size < 1 or self.map_size > 8192:
             raise Error("A shadow map must be one to 8192 texels a side")
 

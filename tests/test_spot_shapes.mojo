@@ -205,9 +205,7 @@ def test_an_ies_profile_reads_its_first_row_linearly() raises:
     )
     # At sixty degrees, u is a third: texel 59.5, halfway between 59 and
     # 60 of 180. The second row's nines are never read.
-    var sixty = profile.attenuation(
-        Float32(cos(pi / 3)), Vector3(0, 0, 0), 0.5
-    )
+    var sixty = profile.attenuation(Float32(cos(pi / 3)), Vector3(0, 0, 0), 0.5)
     assert_almost_equal(sixty, Float32(59.5 / 180), atol=1e-4)
     # On the axis the read is clamped to the first texel.
     assert_almost_equal(
@@ -276,9 +274,7 @@ def test_a_projectors_beam_is_three_js_fade() raises:
     # A narrow cone saturates: the factor passes one.
     var narrow = a_frame(Angle(20.0, DEGREE), 1)
     assert_equal(
-        projector_attenuation(
-            narrow, Vector3(0, 0, -5), Float32(cos(pi / 9))
-        ),
+        projector_attenuation(narrow, Vector3(0, 0, -5), Float32(cos(pi / 9))),
         1,
     )
 
@@ -293,9 +289,7 @@ def test_a_projectors_penumbra_cosine_is_capped() raises:
         frame, Vector3(edge * 0.9999, 0, -5), 1
     )
     assert_almost_equal(near_edge, 0.0001 * 0.5 * 2 * factor, atol=2e-3)
-    assert_equal(
-        projector_attenuation(frame, Vector3(edge * 0.5, 0, -5), 1), 1
-    )
+    assert_equal(projector_attenuation(frame, Vector3(edge * 0.5, 0, -5), 1), 1)
 
 
 def test_a_projectors_aspect_comes_from_it_or_its_map() raises:
@@ -305,9 +299,7 @@ def test_a_projectors_aspect_comes_from_it_or_its_map() raises:
     assert_equal(projector_aspect(projector, textures), 1.5)
     projector.aspect = ASPECT_FROM_MAP
     assert_equal(projector_aspect(projector, textures), 1)
-    var slide = Texture(
-        4, 2, List[UInt8](length=4 * 2 * 4, fill=UInt8(255))
-    )
+    var slide = Texture(4, 2, List[UInt8](length=4 * 2 * 4, fill=UInt8(255)))
     projector.map = textures.add(slide^)
     assert_equal(projector_aspect(projector, textures), 2)
     # Every other spot light is square, whatever it holds.
@@ -329,7 +321,9 @@ def a_shaped_scene(mut assets: Assets) raises -> Scene:
     var scene = Scene()
     var profile = assets.textures.add(a_ramp_profile())
     scene.add_light(
-        spot_light(WHITE, a_lamp(scene, 0, 2, 0), 3.0, angle=Angle(60.0, DEGREE))
+        spot_light(
+            WHITE, a_lamp(scene, 0, 2, 0), 3.0, angle=Angle(60.0, DEGREE)
+        )
     )
     scene.add_light(
         ies_spot_light(
@@ -405,9 +399,7 @@ def test_an_ies_profile_shapes_the_light_in_the_lighting() raises:
     var projected = lighting.spot_attenuation(2, angle_cos, at)
     var radiance = scene.lights[0].radiance().r
     var expected = (radiance * bare * (1 + shaped + projected)) * RECIPROCAL_PI
-    assert_almost_equal(
-        lighting.intensity_at(UP, at).r, expected, atol=1e-5
-    )
+    assert_almost_equal(lighting.intensity_at(UP, at).r, expected, atol=1e-5)
 
 
 def test_a_projector_shapes_the_light_in_the_lighting() raises:
@@ -450,9 +442,7 @@ def test_the_lighting_refuses_a_missing_or_wrong_profile() raises:
     with assert_raises(contains="not a spot of its shape"):
         _ = Lighting(bulb, profiles=one^)
     var crossed = List[SpotProfile]()
-    crossed.append(
-        SpotProfile(1, PROJECTOR_SPOT, NO_TEXTURE, Texture(), frame)
-    )
+    crossed.append(SpotProfile(1, PROJECTOR_SPOT, NO_TEXTURE, Texture(), frame))
     with assert_raises(contains="not a spot of its shape"):
         _ = Lighting(scene, profiles=crossed^)
     # An IES light with no profile keeps its cone and needs none.
@@ -548,7 +538,11 @@ def test_an_ies_light_draws_in_every_shading_mode() raises:
     var profile = assets.textures.add(a_ramp_profile())
     scene.add_light(
         ies_spot_light(
-            WHITE, a_lamp(scene, 0, 2, 0), profile, 40.0, angle=Angle(80.0, DEGREE)
+            WHITE,
+            a_lamp(scene, 0, 2, 0),
+            profile,
+            40.0,
+            angle=Angle(80.0, DEGREE),
         )
     )
     scene = a_floor_under(assets, scene^)

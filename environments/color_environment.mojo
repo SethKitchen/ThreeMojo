@@ -57,7 +57,9 @@ def color_environment(
         Error: If the material or the mesh is refused.
     """
     var scene = Scene()
-    var geometry = assets.geometries.add(cube(COLOR_ENVIRONMENT_EXTENT.scaled(2)))
+    var geometry = assets.geometries.add(
+        cube(COLOR_ENVIRONMENT_EXTENT.scaled(2))
+    )
     var paint = assets.materials.add(
         Material(color, side=BACK_SIDE, kind=BASIC)
     )

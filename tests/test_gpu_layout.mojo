@@ -1632,12 +1632,8 @@ def test_the_light_buffer_carries_the_spot_profiles_and_the_grid() raises:
     assert_equal(flat[ies_at + 1], Float32(0))
     assert_equal(flat[projector_at], Float32(PROJECTOR_SPOT.value))
     assert_equal(flat[projector_at + 1], Float32(-1))
-    assert_equal(
-        flat[projector_at + 2], lighting.spot_profiles[1].frame[0]
-    )
-    assert_equal(
-        flat[projector_at + 17], lighting.spot_profiles[1].frame[15]
-    )
+    assert_equal(flat[projector_at + 2], lighting.spot_profiles[1].frame[0])
+    assert_equal(flat[projector_at + 17], lighting.spot_profiles[1].frame[15])
     assert_equal(flat[LIGHTS_GRID], Float32(grid_at))
     assert_equal(len(flat), grid_at + GRID_HEADER + 27 * 8)
     assert_equal(flat[grid_at], Float32(-3))

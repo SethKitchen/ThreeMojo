@@ -141,14 +141,20 @@ def test_a_probe_adds_to_the_ambient_term() raises:
     var lighting = Lighting(scene)
     var up = Vector3(0, 1, 0)
     var expected = 0.25 + 0.886227 + 2 * 0.511664 * 0.5
-    assert_almost_equal(lighting.ambient_at(up, Vector3(0, 0, 0)).r, Float32(expected), atol=1e-5)
+    assert_almost_equal(
+        lighting.ambient_at(up, Vector3(0, 0, 0)).r,
+        Float32(expected),
+        atol=1e-5,
+    )
     # Scaled once, by the reciprocal of pi, on every path a matte or a
     # physical surface takes.
     var scaled = Float32(expected) * RECIPROCAL_PI
     assert_almost_equal(
         lighting.intensity_at(up, Vector3(0, 0, 0)).g, scaled, atol=1e-5
     )
-    assert_almost_equal(lighting.indirect_at(up, Vector3(0, 0, 0)).b, scaled, atol=1e-5)
+    assert_almost_equal(
+        lighting.indirect_at(up, Vector3(0, 0, 0)).b, scaled, atol=1e-5
+    )
     assert_almost_equal(
         lighting.toon_at(up, Vector3(0, 0, 0), List[Float32]()).r,
         scaled,
