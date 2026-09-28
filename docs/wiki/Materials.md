@@ -101,12 +101,13 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
 | `STANDARD` | `MeshStandardMaterial` | Lit by a roughness and a metalness, with a GGX lobe. See [Standard and physical](#standard-and-physical). |
 | `PHYSICAL` | `MeshPhysicalMaterial` | `STANDARD` with an index of refraction and a clear coat. |
+| `VOLUME` | `VolumeNodeMaterial` | The light that a ray through the mesh gathers from the point and spot lights. See [Volumetric light](Node-materials#volumetric-light). |
 | `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial`, `PointsMaterial`, `SpriteMaterial` | The color and texture show as they are. The kind a [line](Lines), a [point or a sprite](Points-and-sprites) is drawn with. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray or packed. |
 | `DISTANCE` | `MeshDistanceMaterial` | How far the surface is from a reference point, packed. |
 
-`is_lit()` is true for the first five. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first five. `VOLUME` is not lit: its ray reads the lights, and its surface does not. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
 
 ## Gouraud
 

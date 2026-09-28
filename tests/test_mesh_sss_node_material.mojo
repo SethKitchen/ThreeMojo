@@ -132,7 +132,6 @@ def middle_of(mut assets: Assets, scene: Scene) raises -> Color:
     )
 
 
-
 def test_a_sun_behind_a_physical_surface_shows_through() raises:
     # With no graph the sun behind the square leaves it dark. With the
     # thickness color alone, the way to the sun, bent a tenth along the

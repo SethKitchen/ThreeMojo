@@ -74,9 +74,7 @@ struct Thickness(ImplicitlyCopyable):
     var scale: Float32
 
 
-def scatters[
-    S: NodeSource
-](source: S, noded: Bool, kind: MaterialKind) -> Bool:
+def scatters[S: NodeSource](source: S, noded: Bool, kind: MaterialKind) -> Bool:
     """Return True if a fragment lets light through from behind: three.js's
     `useSSS`, a `thicknessColorNode` on a `MeshSSSNodeMaterial`.
 
@@ -90,7 +88,9 @@ def scatters[
         Whether the program sets `THICKNESS_COLOR_NODE` on a `PHYSICAL`
         surface.
     """
-    return noded and kind == PHYSICAL and has_output(source, THICKNESS_COLOR_NODE)
+    return (
+        noded and kind == PHYSICAL and has_output(source, THICKNESS_COLOR_NODE)
+    )
 
 
 def _number[

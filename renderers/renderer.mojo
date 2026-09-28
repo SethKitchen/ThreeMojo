@@ -5835,9 +5835,7 @@ struct Renderer(Movable):
                         pieces[piece * 3 + 2],
                     )
             if kind == VOLUME:
-                _march_volume(
-                    corners, begin, material.steps, geometry, world
-                )
+                _march_volume(corners, begin, material.steps, geometry, world)
             _note_span(
                 spans,
                 DRAW_TRIANGLES,

@@ -254,9 +254,7 @@ def box_of_light(
         )
     )
     var lamp = Object3D()
-    scene.add_light(
-        point_light(Color(255, 255, 255), scene.add(lamp^), bulb)
-    )
+    scene.add_light(point_light(Color(255, 255, 255), scene.add(lamp^), bulb))
     scene.update()
     return scene^
 
@@ -355,6 +353,20 @@ def test_a_graph_scatters_offsets_and_glows() raises:
         assets, box_of_light(assets, volume_node_material(nodes=moved)), 4
     )
     assert_true(Int(lit.g) > 0)
+    # A graph with only a scattering node of one starts at the surface's
+    # end, as no graph does.
+    var plain = NodeGraph()
+    plain.set_output(SCATTERING_NODE, plain.float(1))
+    var once = assets.programs.add(plain.compile())
+    var same = middle_of(
+        assets,
+        box_of_light(assets, volume_node_material(steps=5, nodes=once)),
+        4,
+    )
+    var bare = middle_of(
+        assets, box_of_light(assets, volume_node_material(steps=5)), 4
+    )
+    assert_equal(Int(same.g), Int(bare.g))
 
 
 def test_the_uv_view_shows_no_ray() raises:

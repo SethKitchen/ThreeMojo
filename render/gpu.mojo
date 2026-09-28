@@ -2930,7 +2930,9 @@ def _volume_light(
             )
             / distance,
         )
-        var tint = _spot_tint(lights, texels, ramp, table, at + 14, place, normal)
+        var tint = _spot_tint(
+            lights, texels, ramp, table, at + 14, place, normal
+        )
         total = total + shadowed_twice(
             Vector3(
                 lights[unsafe_offset=at + 6] * tint.x,
@@ -2943,19 +2945,21 @@ def _volume_light(
                 lights[unsafe_offset=at + 9],
                 lights[unsafe_offset=at + 10],
             ),
-            _shaped_through(lights, at + 13, receives, place, normal, Unshaped()),
+            _shaped_through(
+                lights, at + 13, receives, place, normal, Unshaped()
+            ),
         )
     return total
 
 
-struct _DeviceRay(ImplicitlyCopyable, RayLights):
+struct _DeviceRay[origin: Origin[mut=True]](ImplicitlyCopyable, RayLights):
     """The kernel's `RayLights`: its light buffer, as `LitRay` is the
     host's over a `Lighting`."""
 
-    var lights: MutPointer[Float32, MutAnyOrigin]
-    var texels: MutPointer[UInt8, MutAnyOrigin]
-    var ramp: MutPointer[Float32, MutAnyOrigin]
-    var table: MutPointer[Int32, MutAnyOrigin]
+    var lights: MutPointer[Float32, Self.origin]
+    var texels: MutPointer[UInt8, Self.origin]
+    var ramp: MutPointer[Float32, Self.origin]
+    var table: MutPointer[Int32, Self.origin]
     var count: Int
     var points: Int
     var hemispheres: Int
@@ -2965,10 +2969,10 @@ struct _DeviceRay(ImplicitlyCopyable, RayLights):
 
     def __init__(
         out self,
-        lights: MutPointer[Float32, MutAnyOrigin],
-        texels: MutPointer[UInt8, MutAnyOrigin],
-        ramp: MutPointer[Float32, MutAnyOrigin],
-        table: MutPointer[Int32, MutAnyOrigin],
+        lights: MutPointer[Float32, Self.origin],
+        texels: MutPointer[UInt8, Self.origin],
+        ramp: MutPointer[Float32, Self.origin],
+        table: MutPointer[Int32, Self.origin],
         count: Int,
         points: Int,
         hemispheres: Int,
@@ -2999,10 +3003,10 @@ struct _DeviceRay(ImplicitlyCopyable, RayLights):
             The light, linear.
         """
         return _volume_light(
-            self.lights,
-            self.texels,
-            self.ramp,
-            self.table,
+            self.lights.unsafe_origin_cast[MutAnyOrigin](),
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
             self.count,
             self.points,
             self.hemispheres,
