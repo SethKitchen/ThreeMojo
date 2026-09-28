@@ -191,6 +191,7 @@ from render.gpu import (
     LIGHTS_BACK,
     LIGHTS_EYE,
     LIGHTS_COUNTS,
+    LIGHTS_GRID,
     LIGHTS_FIRST,
     LIGHTS_PROBE,
     LIGHTS_RECT_COUNT,
@@ -581,7 +582,7 @@ def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
     )
     var lighting = Lighting(scene)
     var flat = flatten_lights(lighting)
-    assert_equal(len(flat), LIGHTS_FIRST + 9 + 15)
+    assert_equal(len(flat), LIGHTS_FIRST + 9 + 16)
     assert_almost_equal(flat[LIGHTS_AMBIENT], Float32(0.5), atol=Float64(1e-6))
     # The sky is straight up, white at a quarter, over a black ground.
     var sky = LIGHTS_FIRST
@@ -892,7 +893,7 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     assert_equal(len(maps), 2)
     var lighting = Lighting(scene, shadows=maps^)
     var flat = flatten_lights(lighting)
-    var lights_end = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var lights_end = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var first_map = lights_end
     var second_map = first_map + SHADOW_HEADER + 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
@@ -950,7 +951,7 @@ def test_the_light_buffer_carries_a_cube_and_a_spot_lights_map() raises:
     var lighting = Lighting(scene, shadows=shadows^, spot_maps=slides^)
     var flat = flatten_lights(lighting)
     assert_equal(POINT_FLOATS, 9)
-    assert_equal(SPOT_FLOATS, 15)
+    assert_equal(SPOT_FLOATS, 16)
     var first_map = LIGHTS_FIRST + POINT_FLOATS + SPOT_FLOATS
     var second_map = first_map + SHADOW_HEADER + 6 * 16 * 16
     var slide_at = second_map + SHADOW_HEADER + 8 * 8
@@ -988,7 +989,7 @@ def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() r
     renderer.shadow_map_type = VSM_SHADOW_MAP
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
     var flat = flatten_lights(lighting)
-    var first_map = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var first_map = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var second_map = first_map + SHADOW_HEADER + 2 * 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 2 * 32 * 32)
     assert_equal(
@@ -1056,7 +1057,7 @@ def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
     assert_equal(flat[LIGHTS_RECT_COUNT], Float32(1))
     assert_equal(LIGHTS_RECT_COUNT, LIGHTS_PROBE - 1)
     assert_equal(RECT_FLOATS, 12)
-    var first_rect = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var first_rect = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var first_table = first_rect + RECT_FLOATS
     var first_map = first_table + 2 * LTC_FLOATS
     assert_equal(flat[first_rect + 1], Float32(3))
@@ -1206,7 +1207,8 @@ def test_flattening_the_lights_carries_the_probes() raises:
     var flat = flatten_lights(lighting)
     assert_equal(LIGHTS_BACK, LIGHTS_PROBE + 27)
     assert_equal(LIGHTS_COUNTS, LIGHTS_BACK + 3)
-    assert_equal(LIGHTS_FIRST, LIGHTS_COUNTS + 4)
+    assert_equal(LIGHTS_GRID, LIGHTS_COUNTS + 4)
+    assert_equal(LIGHTS_FIRST, LIGHTS_GRID + 1)
     for lane in range(27):
         assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
     # Band zero is the average light, which is not black.

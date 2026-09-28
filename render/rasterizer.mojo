@@ -4020,7 +4020,7 @@ def rasterize_shaded(
                         share_c,
                     )
                 elif a.kind.is_lit():
-                    var around = lighting.indirect_at(facing)
+                    var around = lighting.indirect_at(facing, spot)
                     indirect = Vector3(around.r, around.g, around.b)
                 var occluded = occluded_light(
                     Vector3(arriving.r, arriving.g, arriving.b),
@@ -4687,7 +4687,7 @@ def rasterize_shaded(
                 )
                 # The light map's light joins the indirect light here, as
                 # three.js adds it to `irradiance`; zero adds nothing.
-                var around = lighting.indirect_at(facing)
+                var around = lighting.indirect_at(facing, spot)
                 var indirect = Vector3(
                     around.r + baked.x, around.g + baked.y, around.b + baked.z
                 )

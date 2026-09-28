@@ -131,6 +131,10 @@ from lights.shadow import (
     view_depth,
     vsm_shadow,
 )
+from lights.ies_spot_light import ies_coordinate
+from lights.light import IES_SPOT, SpotShape
+from lights.light_probe_grid import GRID_HEADER, grid_taps
+from lights.projector_light import projector_attenuation
 from lights.ltc import (
     LTC_FLOATS,
     ltc_blend,
@@ -786,7 +790,11 @@ comptime LIGHTS_BACK = LIGHTS_PROBE + SH_COUNT * 3
 # what a triangle lit by a block of its own reads in place of the kernel's
 # arguments. See `flatten_frame_lights`.
 comptime LIGHTS_COUNTS = LIGHTS_BACK + 3
-comptime LIGHTS_FIRST = LIGHTS_COUNTS + 4
+# Where the probe grid's block begins in this same buffer, or `NO_SHADOW`
+# for none: `LightProbeGrid.flatten`, after the spot profiles. See
+# `lights.light_probe_grid`.
+comptime LIGHTS_GRID = LIGHTS_COUNTS + 4
+comptime LIGHTS_FIRST = LIGHTS_GRID + 1
 # How the depth buffer is laid out: one float of depth a pixel, then the
 # attachments a `RenderTarget` holds, each a plane of its own, so the
 # kernel leaves a whole target behind with no argument more. Metal binds
@@ -824,7 +832,12 @@ comptime DIRECTIONAL_FLOATS = 12
 comptime CASCADE_AT = 7
 comptime POINT_FLOATS = 9
 comptime HEMISPHERE_FLOATS = 9
-comptime SPOT_FLOATS = 15
+comptime SPOT_FLOATS = 16
+# A spot light's sixteenth float is where its `SpotProfile` begins, after
+# the spot light maps, or -1 for a cone: its `SpotShape`, the IES
+# profile's slot in the texture table or -1, and the sixteen-float frame.
+# See `lights.spot_profile`.
+comptime SPOT_PROFILE_FLOATS = 18
 # A rect area light: its center, its half width and its half height in
 # world space, and its radiance. When there is at least one, the two LTC
 # tables follow the last, `LTC_FLOATS` each; see `lights.ltc`.
@@ -1230,7 +1243,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     it is, the light it carries, its decay, its cutoff and its shadow. Then
     nine per
     hemisphere light: which way the sky is, what the sky carries and what
-    the ground carries. Then fifteen per spot light: where it is, which way
+    the ground carries. Then sixteen per spot light: where it is, which way
     it points, what it carries, its decay, its cutoff, the cosines of its
     cone and of its penumbra, its shadow and its map. Already decoded and scaled by `Lighting`,
     so the device does no color-space work and both backends sum exactly
@@ -1257,13 +1270,20 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     and six faces of depths. Each spot light carries a fifteenth float:
     where its map begins, or `NO_SHADOW`. The maps follow the shadow maps,
     each the texture's slot in the texture table, the normal bias and the
-    sixteen-float frame; see `lights.shadow.SpotLightMap`.
+    sixteen-float frame; see `lights.shadow.SpotLightMap`. Each spot light
+    carries a sixteenth float: where its `SpotProfile` begins, or
+    `NO_SHADOW` for a cone. The profiles follow the spot light maps, each
+    its shape, the IES profile's slot and the frame; see
+    `lights.spot_profile`. The probe grid follows them, as
+    `LightProbeGrid.flatten` lays it out, and the header's `LIGHTS_GRID`
+    says where it begins.
 
     Returns:
         `LIGHTS_FIRST + 12 * count + 9 * point_count + 9 * hemisphere_count
-        + 15 * spot_count + 12 * rect_count` floats, then the two LTC
+        + 16 * spot_count + 12 * rect_count` floats, then the two LTC
         tables when `rect_count` is not zero, then the shadow maps, then
-        the spot light maps.
+        the spot light maps, then the spot profiles, then the probe
+        grid.
     """
     var flat = List[Float32]()
     # Where each shadow map will begin, worked out before the lights that
@@ -1290,6 +1310,13 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     for _ in range(len(lighting.spot_maps)):
         map_starts.append(next)
         next += SPOT_MAP_FLOATS
+    var profile_starts = List[Int]()
+    for _ in range(len(lighting.spot_profiles)):
+        profile_starts.append(next)
+        next += SPOT_PROFILE_FLOATS
+    var grid_start = NO_SHADOW
+    if not lighting.grid.is_empty():
+        grid_start = Float32(next)
     flat.append(lighting.eye.x)
     flat.append(lighting.eye.y)
     flat.append(lighting.eye.z)
@@ -1313,6 +1340,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(Float32(lighting.point_count()))
     flat.append(Float32(lighting.hemisphere_count()))
     flat.append(Float32(lighting.spot_count()))
+    flat.append(grid_start)
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -1373,6 +1401,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(lighting.penumbra_cosines[index])
         flat.append(_shadow_start(starts, lighting.spot_shadows[index]))
         flat.append(_shadow_start(map_starts, lighting.spot_map_slots[index]))
+        flat.append(
+            _shadow_start(profile_starts, lighting.spot_profile_slots[index])
+        )
     for index in range(lighting.rect_count()):
         ref center = lighting.rect_positions[index]
         flat.append(center.x)
@@ -1427,6 +1458,13 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(picture.normal_bias)
         for element in range(16):  # pragma: no branch
             flat.append(picture.frame[element])
+    for slot in range(len(lighting.spot_profiles)):
+        ref profile = lighting.spot_profiles[slot]
+        flat.append(Float32(profile.shape.value))
+        flat.append(Float32(profile.texture.value))
+        for element in range(16):  # pragma: no branch
+            flat.append(profile.frame[element])
+    flat.extend(lighting.grid.flatten())
     return flat^
 
 
@@ -1598,6 +1636,41 @@ def _point_through(
     if block < 0 or not receives:
         return 1
     return _cube_shadow_at(lights, Int(block), position, normal)
+
+
+def _spot_attenuation(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    at: Int,
+    angle_cos: Float32,
+    position: Vector3,
+) -> Float32:
+    """Return how much of one spot light's beam reaches a surface: the
+    device counterpart of `Lighting.spot_attenuation`, reading the light's
+    record at `at` and its profile, when it has one, after the spot light
+    maps. The cone's `smoothstep`, the IES profile read through the
+    texture table as the host reads it, or the projector's fade, from the
+    functions the host calls."""
+    var block = lights[unsafe_offset=at + 15]
+    if block < 0:
+        return smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+    var start = Int(block)
+    if SpotShape(Int(lights[unsafe_offset=start])) == IES_SPOT:
+        var image = _describe(table, Int(lights[unsafe_offset=start + 1]))
+        var place = ies_coordinate(angle_cos, image.flip_y)
+        return _sample_at(texels, ramp, image, place.u, place.v, 0).r
+    var frame = SIMD[DType.float32, 16](0)
+    for element in range(16):
+        frame[element] = lights[unsafe_offset=start + 2 + element]
+    return projector_attenuation(
+        frame, position, lights[unsafe_offset=at + 12]
+    )
 
 
 def _spot_tint(
@@ -2157,10 +2230,14 @@ def _ambient_at(
     nx: Float32,
     ny: Float32,
     nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
 ) -> Vector3:
-    """Return the ambient term and the light probes' irradiance at a
-    normal: the device counterpart of `Lighting.ambient_at`, summed in its
-    order, the probes' nine terms first and then the ambient color."""
+    """Return the ambient term, the light probes' irradiance and the probe
+    grid's at a surface: the device counterpart of `Lighting.ambient_at`,
+    summed in its order, the probes' nine terms first, then the ambient
+    color, then the grid's blend at the position."""
     var normal = Vector3(nx, ny, nz)
     var red = Float32(0)
     var green = Float32(0)
@@ -2171,11 +2248,62 @@ def _ambient_at(
         red = red + lights[unsafe_offset=at] * weight
         green = green + lights[unsafe_offset=at + 1] * weight
         blue = blue + lights[unsafe_offset=at + 2] * weight
-    return Vector3(
+    var total = Vector3(
         lights[unsafe_offset=LIGHTS_AMBIENT] + red,
         lights[unsafe_offset=LIGHTS_AMBIENT + 1] + green,
         lights[unsafe_offset=LIGHTS_AMBIENT + 2] + blue,
     )
+    var block = lights[unsafe_offset=LIGHTS_GRID]
+    if block < 0:
+        return total
+    var grid = _grid_irradiance(lights, Int(block), normal, Vector3(px, py, pz))
+    return Vector3(total.x + grid.x, total.y + grid.y, total.z + grid.z)
+
+
+def _grid_irradiance(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    start: Int,
+    normal: Vector3,
+    position: Vector3,
+) -> Vector3:
+    """Return the probe grid's irradiance at a surface: the device
+    counterpart of `LightProbeGrid.sh_at` and `get_irradiance_at`, the
+    eight probes from `grid_taps`, each lane blended over the corners in
+    their order, then the nine terms summed in index order."""
+    var taps = grid_taps(
+        position,
+        Vector3(
+            lights[unsafe_offset=start],
+            lights[unsafe_offset=start + 1],
+            lights[unsafe_offset=start + 2],
+        ),
+        Vector3(
+            lights[unsafe_offset=start + 3],
+            lights[unsafe_offset=start + 4],
+            lights[unsafe_offset=start + 5],
+        ),
+        Int(lights[unsafe_offset=start + 6]),
+        Int(lights[unsafe_offset=start + 7]),
+        Int(lights[unsafe_offset=start + 8]),
+    )
+    var first = start + GRID_HEADER
+    var red = Float32(0)
+    var green = Float32(0)
+    var blue = Float32(0)
+    for index in range(SH_COUNT):
+        var weight = sh_irradiance_weight(index, normal)
+        var r = Float32(0)
+        var g = Float32(0)
+        var b = Float32(0)
+        for corner in range(8):
+            var at = first + Int(taps.probes[corner]) * SH_COUNT * 3 + index * 3
+            r = r + lights[unsafe_offset=at] * taps.weights[corner]
+            g = g + lights[unsafe_offset=at + 1] * taps.weights[corner]
+            b = b + lights[unsafe_offset=at + 2] * taps.weights[corner]
+        red = red + r * weight
+        green = green + g * weight
+        blue = blue + b * weight
+    return Vector3(red, green, blue)
 
 
 def _arriving[
@@ -2204,7 +2332,7 @@ def _arriving[
     answer by the parity tests. A `Vector3` only because the kernel has no
     color type; the three components are red, green and blue.
     """
-    var base = _ambient_at(lights, nx, ny, nz)
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -2305,10 +2433,8 @@ def _arriving[
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2411,7 +2537,7 @@ def _toon_arriving[
     term and the hemisphere lights are not stepped, because three.js
     reflects those through `RE_IndirectDiffuse`.
     """
-    var base = _ambient_at(lights, nx, ny, nz)
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -2509,10 +2635,8 @@ def _toon_arriving[
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2664,10 +2788,8 @@ def _highlight[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2811,10 +2933,8 @@ def _scattered[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -3030,10 +3150,14 @@ def _indirect(
     nx: Float32,
     ny: Float32,
     nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
 ) -> Vector3:
-    """Return the light with no direction reaching a surface facing
-    (nx, ny, nz): the device counterpart of `Lighting.indirect_at`."""
-    var base = _ambient_at(lights, nx, ny, nz)
+    """Return the light with no direction reaching a surface at
+    (px, py, pz) facing (nx, ny, nz): the device counterpart of
+    `Lighting.indirect_at`."""
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -3211,10 +3335,8 @@ def _physical[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, position
         )
         if rim <= 0:
             continue
@@ -6684,6 +6806,9 @@ def rasterize_kernel(
                         nx,
                         ny,
                         nz,
+                        wx,
+                        wy,
+                        wz,
                     )
                 arriving = occluded_light(arriving, indirect, baked, occlusion)
             # What a physical surface's roughness and metalness are
@@ -7798,6 +7923,9 @@ def rasterize_kernel(
                         nx,
                         ny,
                         nz,
+                        wx,
+                        wy,
+                        wz,
                     )
                     var indirect = Vector3(
                         around.x + baked.x,
@@ -9001,6 +9129,17 @@ struct GpuRenderer(Movable):
                 raise Error(
                     "A spot light's map names a texture that has not been"
                     " uploaded; call set_textures() first"
+                )
+        # An IES spot light's profile, checked the same way: the kernel
+        # reads it through the same table.
+        for slot in range(len(lighting.spot_profiles)):
+            ref profile = lighting.spot_profiles[slot]
+            if profile.shape != IES_SPOT:
+                continue
+            if profile.texture.value >= self.uploaded:
+                raise Error(
+                    "An IES spot light's profile names a texture that has"
+                    " not been uploaded; call set_textures() first"
                 )
         # A point's two maps, checked the same way and for the same
         # reason, and its alpha map for holding data as a triangle's is.
