@@ -34,6 +34,9 @@ from materials.material import (
     MIN_IOR,
     DISTANCE,
     GOURAUD,
+    VOLUME,
+    DEFAULT_STEPS,
+    check_steps,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -117,6 +120,8 @@ from materials.nodes import (
     OPACITY_NODE,
     OUTPUT_NODE,
     RECEIVED_SHADOW_NODE,
+    OFFSET_NODE,
+    SCATTERING_NODE,
     CAST_SHADOW_NODE,
     ProgramShape,
     NodeContext,
@@ -152,6 +157,12 @@ from lights.lighting import (
     toward_eye_at,
     view_direction,
 )
+from materials.mesh_sss_node_material import (
+    scatters,
+    subsurface_diffuse,
+    thickness_of,
+)
+from materials.volume_node_material import LitRay, volumetric_light
 from lights.physical_layers import (
     NO_ANISOTROPY_TEXEL,
     bent_normal,
@@ -1134,6 +1145,13 @@ struct RasterVertex(ImplicitlyCopyable):
     # and one past that for each `LightMask` a material names, in
     # `Renderer.light_masks` order. See `rasterize_frame`'s `lightings`.
     var lights: Int
+    # A `VOLUME` triangle's ray: how many steps it takes, three.js's
+    # `steps`, and the mesh's bounding radius in world space, three.js's
+    # `modelRadius`. Per-triangle, read from the first corner. Set after
+    # construction, by `Renderer.prepare`; see
+    # `materials.volume_node_material`.
+    var steps: Int
+    var model_radius: Float32
 
     def __init__(
         out self,
@@ -1313,6 +1331,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.current = Vector3(0, 0, 0)
         self.previous = Vector3(0, 0, 0)
         self.lights = 0
+        self.steps = DEFAULT_STEPS
+        self.model_radius = 0
 
 
 @fieldwise_init
@@ -2144,7 +2164,11 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the twelve")
+        raise Error("A triangle's material kind is none of the thirteen")
+    if a.kind == VOLUME:
+        check_steps(a.steps)
+        if not (a.model_radius >= 0):
+            raise Error("A volume's bounding radius cannot be negative")
     if b.receives_shadow != a.receives_shadow or (
         c.receives_shadow != a.receives_shadow
     ):
@@ -3581,6 +3605,7 @@ def rasterize_shaded(
                 a.kind.is_lit()
                 or a.kind == NORMALS
                 or a.kind == MATCAP
+                or a.kind == VOLUME
                 or reflects
                 or catches
                 or keeps_normals
@@ -3611,7 +3636,12 @@ def rasterize_shaded(
             var spot = Vector3(0, 0, 0)
             if (
                 (
-                    (a.kind.is_lit() or a.kind == MATCAP or a.kind == DISTANCE)
+                    (
+                        a.kind.is_lit()
+                        or a.kind == MATCAP
+                        or a.kind == DISTANCE
+                        or a.kind == VOLUME
+                    )
                     and mode != SHADE_UV
                 )
                 or reflects
@@ -4685,6 +4715,36 @@ def rasterize_shaded(
                     layers,
                     shape,
                 )
+                # The light through from behind, three.js's
+                # `MeshSSSNodeMaterial`: added to the direct diffuse light.
+                if scatters(nodes, noded, a.kind):
+                    var thickness = thickness_of(
+                        nodes,
+                        NodeInputs(
+                            u,
+                            v,
+                            spot,
+                            facing,
+                            Vector3(base.r, base.g, base.b),
+                            Vector3(0, 0, 0),
+                            textured,
+                        ),
+                    )
+                    var through = lighting.scattered_at(
+                        facing,
+                        spot,
+                        thickness.distortion,
+                        thickness.power,
+                        thickness.scale,
+                        thickness.ambient,
+                        a.receives_shadow,
+                        shape,
+                    )
+                    direct = subsurface_diffuse(
+                        direct,
+                        Vector3(through.r, through.g, through.b),
+                        thickness,
+                    )
                 # The light map's light joins the indirect light here, as
                 # three.js adds it to `irradiance`; zero adds nothing.
                 var around = lighting.indirect_at(facing)
@@ -4848,6 +4908,38 @@ def rasterize_shaded(
             # kernel interpolates the same lane and mixes with the same
             # function. A fragment node's color is veiled in place of the
             # material's, as three.js's `setupOutput` veils it.
+            # A volume's color is the light its ray gathers, and its glow;
+            # see `materials.volume_node_material`.
+            if a.kind == VOLUME and mode != SHADE_UV:
+                var given = NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                )
+                var offset = Float32(0)
+                if noded and has_output(nodes, OFFSET_NODE):
+                    offset = run_nodes(nodes, OFFSET_NODE, given)[0]
+                var ray = volumetric_light(
+                    LitRay(
+                        Pointer(to=lighting),
+                        facing,
+                        a.receives_shadow,
+                    ),
+                    nodes,
+                    noded and has_output(nodes, SCATTERING_NODE),
+                    given,
+                    lighting.eye,
+                    a.model_radius,
+                    a.steps,
+                    offset,
+                )
+                shaded = FloatColor(
+                    ray.x + glow.r, ray.y + glow.g, ray.z + glow.b, shaded.a
+                )
             if fragmented:
                 var own = run_nodes(
                     nodes,

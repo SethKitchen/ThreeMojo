@@ -965,6 +965,29 @@ def scattering_through(
     return lit * scale + ambient
 
 
+def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
+    """Return one light's color at a step of a volume's ray: three.js's
+    `VolumetricLightingModel.direct`, which multiplies a light's color,
+    shadow and all, by the light's shadow once more. Shared by both
+    rasterizers.
+
+    Args:
+        light: The light's color, linear, times any spot light map.
+        reach: Its falloff with the distance, times the cone of a spot
+            light.
+        through: What its shadow lets through at the step; ones for a light
+            that casts none.
+
+    Returns:
+        The color, linear.
+    """
+    return Vector3(
+        light.x * reach * through.x * through.x,
+        light.y * reach * through.y * through.y,
+        light.z * reach * through.z * through.z,
+    )
+
+
 def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     """Return a Gouraud surface's arriving light at a fragment: the direct
     light interpolated from its corners, darkened by the shadows there, and
@@ -2265,6 +2288,62 @@ struct Lighting(Movable):
             green += bulb.g * tint.y * (sent * (bare * shadowed.y))
             blue += bulb.b * tint.z * (sent * (bare * shadowed.z))
         return FloatColor(red, green, blue, 1.0)
+
+    def volume_light_at(
+        self, position: Vector3, normal: Vector3, receives: Bool
+    ) -> Vector3:
+        """Return the light that one step of a volume's ray gathers:
+        three.js's `VolumetricLightingModel.scatteringLight`, summed over
+        the point lights and then the spot lights. A directional light has
+        no distance and adds nothing, as three.js skips it. A spot light
+        adds nothing at its own position, where it has no direction. Each
+        light is `shadowed_twice`, not scaled.
+
+        Args:
+            position: Where the step is, in world space.
+            normal: The unit normal of the surface the ray starts from, for
+                the shadow maps' normal bias.
+            receives: Whether the lights' shadows fall on the volume.
+
+        Returns:
+            The light, linear.
+        """
+        var total = Vector3(0, 0, 0)
+        for index in range(len(self.positions)):
+            # A step on the bulb is lit by `falloff`'s floor, as three.js's
+            # `getDistanceAttenuation` lights it: no direction is read.
+            var distance = (self.positions[index] - position).length()
+            ref bulb = self.point_radiances[index]
+            total = total + shadowed_twice(
+                Vector3(bulb.r, bulb.g, bulb.b),
+                falloff(distance, self.decays[index], self.cutoffs[index]),
+                self.shadow_through(
+                    self.point_shadows[index], position, normal, receives
+                ),
+            )
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                toward.dot(self.spot_directions[index]) / distance,
+            )
+            ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
+            total = total + shadowed_twice(
+                Vector3(bulb.r * tint.x, bulb.g * tint.y, bulb.b * tint.z),
+                rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                ),
+                self.shadow_through(
+                    self.spot_shadows[index], position, normal, receives
+                ),
+            )
+        return total
 
     def direct_at(self, normal: Vector3, position: Vector3) -> FloatColor:
         """Return the light with a direction reaching a surface here, with

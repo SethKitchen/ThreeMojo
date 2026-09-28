@@ -179,6 +179,8 @@ from materials.material import (
     DOUBLE_SIDE,
     FRONT_SIDE,
     GOURAUD,
+    VOLUME,
+    check_steps,
     DEFAULT_IOR,
     MULTIPLY_OPERATION,
     NO_ATTENUATION,
@@ -673,6 +675,35 @@ def _light_at_corner(
     corner.gouraud_back_indirect = Vector3(
         back_indirect.r, back_indirect.g, back_indirect.b
     )
+
+
+def _march_volume(
+    mut corners: List[RasterVertex],
+    begin: Int,
+    steps: Int,
+    geometry: BufferGeometry,
+    world: Matrix4,
+) raises:
+    """Give a `VOLUME` draw's corners their ray: the material's steps, and
+    the mesh's bounding radius carried to world space, three.js's
+    `modelRadius`.
+
+    Args:
+        corners: The frame's raster vertices.
+        begin: Where the draw's corners start.
+        steps: The material's `steps`.
+        geometry: The draw's geometry.
+        world: The draw's world matrix.
+
+    Raises:
+        Error: If `steps` is below one, or the geometry has no positions.
+    """
+    check_steps(steps)
+    var bound = geometry.bounding_sphere()
+    bound.apply_matrix4(world)
+    for index in range(begin, len(corners)):
+        corners[index].steps = steps
+        corners[index].model_radius = bound.radius
 
 
 def _customs(
@@ -5803,6 +5834,10 @@ struct Renderer(Movable):
                         pieces[piece * 3 + 1],
                         pieces[piece * 3 + 2],
                     )
+            if kind == VOLUME:
+                _march_volume(
+                    corners, begin, material.steps, geometry, world
+                )
             _note_span(
                 spans,
                 DRAW_TRIANGLES,

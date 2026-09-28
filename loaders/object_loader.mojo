@@ -384,8 +384,8 @@ def material_type_names() -> List[String]:
     value.
 
     Returns:
-        Twelve names: `MeshBasicMaterial` for `BASIC` at zero through
-        `MeshGouraudMaterial` for `GOURAUD` at eleven.
+        Thirteen names: `MeshBasicMaterial` for `BASIC` at zero through
+        `VolumeNodeMaterial` for `VOLUME` at twelve.
     """
     return [
         "MeshBasicMaterial",
@@ -400,6 +400,7 @@ def material_type_names() -> List[String]:
         "ShadowMaterial",
         "MeshDistanceMaterial",
         "MeshGouraudMaterial",
+        "VolumeNodeMaterial",
     ]
 
 

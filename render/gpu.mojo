@@ -163,6 +163,7 @@ from lights.lighting import (
     occluded_light,
     physical_light,
     scattering_through,
+    shadowed_twice,
     physical_outgoing,
     physical_surface,
     toon_coord,
@@ -218,8 +219,10 @@ from materials.material import (
     GOURAUD,
     LAMBERT,
     MATCAP,
+    MaterialKind,
     NORMALS,
     OBJECT_SPACE_NORMAL_MAP,
+    VOLUME,
     PHONG,
     PHYSICAL,
     SHADOW,
@@ -229,6 +232,12 @@ from materials.material import (
     Combine,
     combine_light,
 )
+from materials.mesh_sss_node_material import (
+    scatters,
+    subsurface_diffuse,
+    thickness_of,
+)
+from materials.volume_node_material import RayLights, volumetric_light
 from render.cube_texture import (
     FACE_COUNT,
     Basis3,
@@ -278,6 +287,8 @@ from materials.nodes import (
     OPACITY_NODE,
     OUTPUT_NODE,
     RECEIVED_SHADOW_NODE,
+    OFFSET_NODE,
+    SCATTERING_NODE,
     ProgramShape,
     NodeContext,
     NodeInputs,
@@ -612,7 +623,10 @@ comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
 # velocity attachment reads.
 comptime LANE_CURRENT = LANE_SCATTER + 8
 comptime LANE_PREVIOUS = LANE_CURRENT + 3
-comptime FLOATS_PER_VERTEX = LANE_PREVIOUS + 3
+# A `VOLUME` triangle's ray: its steps and the mesh's bounding radius in
+# world space; see `RasterVertex.steps`.
+comptime LANE_VOLUME = LANE_PREVIOUS + 3
+comptime FLOATS_PER_VERTEX = LANE_VOLUME + 2
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -1136,6 +1150,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.previous.x)
         flat.append(corner.previous.y)
         flat.append(corner.previous.z)
+        flat.append(Float32(corner.steps))
+        flat.append(corner.model_radius)
     return flat^
 
 
@@ -2843,6 +2859,158 @@ def _scattered[
             lights[unsafe_offset=at + 8] * tint.z * (sent * (bare * shadowed.z))
         )
     return Vector3(red, green, blue)
+
+
+def _volume_light(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    place: Vector3,
+    normal: Vector3,
+    receives: Bool,
+) -> Vector3:
+    """Return the light that one step of a volume's ray gathers: the device
+    counterpart of `Lighting.volume_light_at`, the point lights and then
+    the spot lights, each by `shadowed_twice`."""
+    var total = Vector3(0, 0, 0)
+    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
+    for index in range(points):
+        var at = first_point + index * POINT_FLOATS
+        var distance = (
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            )
+            - place
+        ).length()
+        total = total + shadowed_twice(
+            Vector3(
+                lights[unsafe_offset=at + 3],
+                lights[unsafe_offset=at + 4],
+                lights[unsafe_offset=at + 5],
+            ),
+            falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            ),
+            _point_shaped(lights, at + 8, receives, place, normal, Unshaped()),
+        )
+    var first_spot = (
+        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
+    )
+    for index in range(spots):
+        var at = first_spot + index * SPOT_FLOATS
+        var toward = (
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            )
+            - place
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            toward.dot(
+                Vector3(
+                    lights[unsafe_offset=at + 3],
+                    lights[unsafe_offset=at + 4],
+                    lights[unsafe_offset=at + 5],
+                )
+            )
+            / distance,
+        )
+        var tint = _spot_tint(lights, texels, ramp, table, at + 14, place, normal)
+        total = total + shadowed_twice(
+            Vector3(
+                lights[unsafe_offset=at + 6] * tint.x,
+                lights[unsafe_offset=at + 7] * tint.y,
+                lights[unsafe_offset=at + 8] * tint.z,
+            ),
+            rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            ),
+            _shaped_through(lights, at + 13, receives, place, normal, Unshaped()),
+        )
+    return total
+
+
+struct _DeviceRay(ImplicitlyCopyable, RayLights):
+    """The kernel's `RayLights`: its light buffer, as `LitRay` is the
+    host's over a `Lighting`."""
+
+    var lights: MutPointer[Float32, MutAnyOrigin]
+    var texels: MutPointer[UInt8, MutAnyOrigin]
+    var ramp: MutPointer[Float32, MutAnyOrigin]
+    var table: MutPointer[Int32, MutAnyOrigin]
+    var count: Int
+    var points: Int
+    var hemispheres: Int
+    var spots: Int
+    var normal: Vector3
+    var receives: Bool
+
+    def __init__(
+        out self,
+        lights: MutPointer[Float32, MutAnyOrigin],
+        texels: MutPointer[UInt8, MutAnyOrigin],
+        ramp: MutPointer[Float32, MutAnyOrigin],
+        table: MutPointer[Int32, MutAnyOrigin],
+        count: Int,
+        points: Int,
+        hemispheres: Int,
+        spots: Int,
+        normal: Vector3,
+        receives: Bool,
+    ):
+        """Read the lights of the light buffer, for a ray that starts at a
+        fragment with this normal."""
+        self.lights = lights
+        self.texels = texels
+        self.ramp = ramp
+        self.table = table
+        self.count = count
+        self.points = points
+        self.hemispheres = hemispheres
+        self.spots = spots
+        self.normal = normal
+        self.receives = receives
+
+    def light_at(self, position: Vector3) -> Vector3:
+        """Return `_volume_light` at one step.
+
+        Args:
+            position: Where the step is, in world space.
+
+        Returns:
+            The light, linear.
+        """
+        return _volume_light(
+            self.lights,
+            self.texels,
+            self.ramp,
+            self.table,
+            self.count,
+            self.points,
+            self.hemispheres,
+            self.spots,
+            position,
+            self.normal,
+            self.receives,
+        )
 
 
 def _world_at(
@@ -6021,7 +6189,13 @@ def rasterize_kernel(
             var wy = Float32(0)
             var wz = Float32(0)
             if mode != Int32(SHADE_UV.value) and (
-                lit or looked_up or reflects or catches or measures or noded
+                lit
+                or looked_up
+                or reflects
+                or catches
+                or measures
+                or noded
+                or kind == Int32(VOLUME.value)
             ):
                 wx = (
                     corners[unsafe_offset=base + LANE_WX] * share_a
@@ -7790,6 +7964,47 @@ def rasterize_kernel(
                         layers,
                         shape,
                     )
+                    # The light through from behind, as `rasterize_shaded`
+                    # adds it; see `materials.mesh_sss_node_material`.
+                    if scatters(nodes, noded, MaterialKind(Int(kind))):
+                        var thickness = thickness_of(
+                            nodes,
+                            NodeInputs(
+                                u,
+                                v,
+                                spot,
+                                facing,
+                                tint,
+                                Vector3(0, 0, 0),
+                                textured,
+                            ),
+                        )
+                        direct = subsurface_diffuse(
+                            direct,
+                            _scattered(
+                                lights,
+                                texels,
+                                ramp,
+                                table,
+                                Int(light_count),
+                                Int(point_count),
+                                Int(hemisphere_count),
+                                Int(spot_count),
+                                facing.x,
+                                facing.y,
+                                facing.z,
+                                spot.x,
+                                spot.y,
+                                spot.z,
+                                thickness.distortion,
+                                thickness.power,
+                                thickness.scale,
+                                thickness.ambient,
+                                receives,
+                                shape,
+                            ),
+                            thickness,
+                        )
                     var around = _indirect(
                         lights,
                         Int(light_count),
@@ -8011,6 +8226,51 @@ def rasterize_kernel(
                         red = joined.r
                         green = joined.g
                         blue = joined.b
+                # A volume's color is the light its ray gathers, and its
+                # glow, as the host takes it.
+                if kind == Int32(VOLUME.value) and mode != Int32(
+                    SHADE_UV.value
+                ):
+                    var given = NodeInputs(
+                        u,
+                        v,
+                        Vector3(wx, wy, wz),
+                        Vector3(nx, ny, nz),
+                        tint,
+                        Vector3(0, 0, 0),
+                        textured,
+                    )
+                    var offset = Float32(0)
+                    if noded and has_output(nodes, OFFSET_NODE):
+                        offset = run_nodes(nodes, OFFSET_NODE, given)[0]
+                    var ray = volumetric_light(
+                        _DeviceRay(
+                            lights,
+                            texels,
+                            ramp,
+                            table,
+                            Int(light_count),
+                            Int(point_count),
+                            Int(hemisphere_count),
+                            Int(spot_count),
+                            Vector3(nx, ny, nz),
+                            receives,
+                        ),
+                        nodes,
+                        noded and has_output(nodes, SCATTERING_NODE),
+                        given,
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_EYE],
+                            lights[unsafe_offset=LIGHTS_EYE + 1],
+                            lights[unsafe_offset=LIGHTS_EYE + 2],
+                        ),
+                        corners[unsafe_offset=base + LANE_VOLUME + 1],
+                        Int(corners[unsafe_offset=base + LANE_VOLUME]),
+                        offset,
+                    )
+                    red = ray.x + glow_r
+                    green = ray.y + glow_g
+                    blue = ray.z + glow_b
                 # A fragment node's color in place of the material's, as the
                 # host takes it.
                 if fragmented:
