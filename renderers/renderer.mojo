@@ -4469,7 +4469,7 @@ struct Renderer(Movable):
         self.antialias = False
         self.render_scale = 1
         self.ltc = LtcTables()
-        self.probe_grid = LightProbeGrid()
+        self.probe_grid = LightProbeGrid.none()
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
@@ -8054,7 +8054,7 @@ struct Renderer(Movable):
 
         Bake it first, with
         `renderers.light_probe_grid_utils.bake_light_probe_grid`. An empty
-        grid, `LightProbeGrid()`, takes it away.
+        grid, `LightProbeGrid.none()`, takes it away.
 
         Args:
             grid: The grid.

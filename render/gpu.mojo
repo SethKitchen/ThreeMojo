@@ -111,7 +111,9 @@ from lights.shadow import (
     biased_position,
     bilinear,
     bilinear_texel,
+    SUN_BLEND,
     cascade_reach,
+    sun_reach,
     cube_tap,
     cube_texel,
     inside_point_shadow,
@@ -133,7 +135,7 @@ from lights.shadow import (
 )
 from lights.ies_spot_light import ies_coordinate
 from lights.light import IES_SPOT, SpotShape
-from lights.light_probe_grid import GRID_HEADER, grid_taps
+from lights.light_probe_grid import GRID_HEADER, grid_falloff, grid_taps
 from lights.projector_light import projector_attenuation
 from lights.ltc import (
     LTC_FLOATS,
@@ -852,15 +854,16 @@ comptime PLANE_FLOATS = PLANE_METAL_ROUGH + 2
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
 # where its shadow map begins in the same buffer, or -1 for none. A
-# directional light's last five are its `ShadowCascade`: its start, its
-# end, its span in meters, zero for no cascade, and whether it is the
-# last and whether it fades, as one or zero. The maps
+# directional light's last eight are its `ShadowCascade`: its start, its
+# end, its span in meters, zero for no cascade, whether it is the last
+# and whether it fades, as one or zero, its `CascadeBlend`, and under
+# `SUN_BLEND` its fade start and where the cascade before it ends. The maps
 # ride after the lights, each `SHADOW_HEADER` floats and then its depths,
 # rather than in a buffer of their own, because Metal binds at most
 # thirty-one arguments to a kernel and this one has thirty-one. A spot
 # light's fifteenth is where its map's `SPOT_MAP_FLOATS` begin, after the
 # shadow maps, or -1 for none.
-comptime DIRECTIONAL_FLOATS = 12
+comptime DIRECTIONAL_FLOATS = 15
 # Where a directional light's cascade begins in its record.
 comptime CASCADE_AT = 7
 comptime POINT_FLOATS = 9
@@ -1271,7 +1274,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     three of ambient, one of `Lighting.scale`, one of how many rect area
     lights there are, 27 of the light probes' coefficients, three of the
     camera's back axis, four of how many directional, point, hemisphere
-    and spot lights there are, then twelve per
+    and spot lights there are, then fifteen per
     directional light -- a unit
     direction, the light it carries, its shadow and its cascade -- then
     nine per point light: where
@@ -1314,7 +1317,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     says where it begins.
 
     Returns:
-        `LIGHTS_FIRST + 12 * count + 9 * point_count + 9 * hemisphere_count
+        `LIGHTS_FIRST + 15 * count + 9 * point_count + 9 * hemisphere_count
         + 16 * spot_count + 12 * rect_count` floats, then the two LTC
         tables when `rect_count` is not zero, then the shadow maps, then
         the spot light maps, then the spot profiles, then the probe
@@ -1392,6 +1395,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(band.span.to(METER))
         flat.append(Float32(1) if band.last else Float32(0))
         flat.append(Float32(1) if band.fade else Float32(0))
+        flat.append(Float32(band.blend.value))
+        flat.append(band.fade_start)
+        flat.append(band.ramp_end)
     for index in range(lighting.point_count()):
         ref position = lighting.positions[index]
         flat.append(position.x)
@@ -1910,7 +1916,7 @@ def _direction_through[
         return _shaped_through(
             lights, at + 6, receives, position, normal, shape
         )
-    var reach = cascade_reach(
+    var depth = (
         view_depth(
             position,
             Vector3(
@@ -1924,12 +1930,24 @@ def _direction_through[
                 lights[unsafe_offset=LIGHTS_BACK + 2],
             ),
         )
-        / span,
+        / span
+    )
+    var reach = cascade_reach(
+        depth,
         lights[unsafe_offset=at + CASCADE_AT],
         lights[unsafe_offset=at + CASCADE_AT + 1],
         lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
         lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
     )
+    if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(SUN_BLEND.value):
+        reach = sun_reach(
+            depth,
+            lights[unsafe_offset=at + CASCADE_AT],
+            lights[unsafe_offset=at + CASCADE_AT + 7],
+            lights[unsafe_offset=at + CASCADE_AT + 6],
+            lights[unsafe_offset=at + CASCADE_AT + 1],
+            lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+        )
     if reach[0] == 0:
         return Vector3(0, 0, 0)
     var through = _shaped_through(
@@ -2300,21 +2318,25 @@ def _grid_irradiance(
     position: Vector3,
 ) -> Vector3:
     """Return the probe grid's irradiance at a surface: the device
-    counterpart of `LightProbeGrid.sh_at` and `get_irradiance_at`, the
-    eight probes from `grid_taps`, each lane blended over the corners in
-    their order, then the nine terms summed in index order."""
+    counterpart of `LightProbeGrid.irradiance_at`: the eight probes from
+    `grid_taps`, each lane blended over the corners in their order, the
+    nine terms summed in index order, held at zero or above and weighed
+    by `grid_falloff`."""
+    var low = Vector3(
+        lights[unsafe_offset=start],
+        lights[unsafe_offset=start + 1],
+        lights[unsafe_offset=start + 2],
+    )
+    var high = Vector3(
+        lights[unsafe_offset=start + 3],
+        lights[unsafe_offset=start + 4],
+        lights[unsafe_offset=start + 5],
+    )
     var taps = grid_taps(
         position,
-        Vector3(
-            lights[unsafe_offset=start],
-            lights[unsafe_offset=start + 1],
-            lights[unsafe_offset=start + 2],
-        ),
-        Vector3(
-            lights[unsafe_offset=start + 3],
-            lights[unsafe_offset=start + 4],
-            lights[unsafe_offset=start + 5],
-        ),
+        normal,
+        low,
+        high,
         Int(lights[unsafe_offset=start + 6]),
         Int(lights[unsafe_offset=start + 7]),
         Int(lights[unsafe_offset=start + 8]),
@@ -2336,7 +2358,14 @@ def _grid_irradiance(
         red = red + r * weight
         green = green + g * weight
         blue = blue + b * weight
-    return Vector3(red, green, blue)
+    var fade = grid_falloff(
+        position, low, high, lights[unsafe_offset=start + 9]
+    )
+    return Vector3(
+        max(red, Float32(0)) * fade,
+        max(green, Float32(0)) * fade,
+        max(blue, Float32(0)) * fade,
+    )
 
 
 def _arriving[

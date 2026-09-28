@@ -6,8 +6,9 @@
 """An environment of one color, from three.js
 `examples/jsm/environments/ColorEnvironment.js`.
 
-`color_environment` is a scene that holds one unlit box, seen from
-inside, in one color. Drawn into a cube by
+`color_environment` is a scene that holds one unlit sphere, seen from
+inside, in one color: three.js's `SphereGeometry( 1, 16, 16 )` with a
+`MeshBasicMaterial` on its `BackSide`. Drawn into a cube by
 `renderers.environment.pmrem_from_scene`, it gives an environment that is
 the same in every direction. A physical surface then reflects the color
 and is lit by it evenly, with no image file and no light.
@@ -17,9 +18,9 @@ and is lit by it evenly, with no image file and no light.
         pmrem_from_scene(renderer, white, assets)
     )
 
-The box is `BASIC`, so no light changes its color. Its color is decoded
-from sRGB to linear light, as every color of a material is. The box is
-two meters across, between the default near and far planes of
+The sphere is `BASIC`, so no light changes its color. Its color is
+decoded from sRGB to linear light, as every color of a material is. Its
+radius is one meter, between the default near and far planes of
 `pmrem_from_scene`, and it hides the background in every direction.
 
 **Where this differs from three.js.** `dispose` has no counterpart, as
@@ -29,14 +30,15 @@ the assets own the geometry and the material.
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from geometries.box import cube
+from geometries.sphere import sphere
 from materials.material import BACK_SIDE, BASIC, Material
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from units.si import Length, METER
 
-# How far each face of the box is from its middle.
-comptime COLOR_ENVIRONMENT_EXTENT = Length(1.0, METER)
+# three.js's sphere: a radius of one, and sixteen segments each way.
+comptime COLOR_ENVIRONMENT_RADIUS = Length(1.0, METER)
+comptime COLOR_ENVIRONMENT_SEGMENTS = 16
 
 
 def color_environment(
@@ -58,7 +60,11 @@ def color_environment(
     """
     var scene = Scene()
     var geometry = assets.geometries.add(
-        cube(COLOR_ENVIRONMENT_EXTENT.scaled(2))
+        sphere(
+            COLOR_ENVIRONMENT_RADIUS,
+            COLOR_ENVIRONMENT_SEGMENTS,
+            COLOR_ENVIRONMENT_SEGMENTS,
+        )
     )
     var paint = assets.materials.add(
         Material(color, side=BACK_SIDE, kind=BASIC)
