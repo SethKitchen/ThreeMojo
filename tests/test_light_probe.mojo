@@ -141,22 +141,28 @@ def test_a_probe_adds_to_the_ambient_term() raises:
     var lighting = Lighting(scene)
     var up = Vector3(0, 1, 0)
     var expected = 0.25 + 0.886227 + 2 * 0.511664 * 0.5
-    assert_almost_equal(lighting.ambient_at(up).r, Float32(expected), atol=1e-5)
+    assert_almost_equal(
+        lighting.ambient_at(up, Vector3(0, 0, 0)).r,
+        Float32(expected),
+        atol=1e-5,
+    )
     # Scaled once, by the reciprocal of pi, on every path a matte or a
     # physical surface takes.
     var scaled = Float32(expected) * RECIPROCAL_PI
     assert_almost_equal(
         lighting.intensity_at(up, Vector3(0, 0, 0)).g, scaled, atol=1e-5
     )
-    assert_almost_equal(lighting.indirect_at(up).b, scaled, atol=1e-5)
+    assert_almost_equal(
+        lighting.indirect_at(up, Vector3(0, 0, 0)).b, scaled, atol=1e-5
+    )
     assert_almost_equal(
         lighting.toon_at(up, Vector3(0, 0, 0), List[Float32]()).r,
         scaled,
         atol=1e-5,
     )
     # A surface facing down catches less: band one leans the light up.
-    var down = lighting.indirect_at(Vector3(0, -1, 0)).r
-    assert_true(down < lighting.indirect_at(up).r)
+    var down = lighting.indirect_at(Vector3(0, -1, 0), Vector3(0, 0, 0)).r
+    assert_true(down < lighting.indirect_at(up, Vector3(0, 0, 0)).r)
 
 
 def test_a_uniform_sky_projects_to_band_zero() raises:
@@ -209,7 +215,7 @@ def test_a_probe_from_a_cube_is_a_light() raises:
     scene.update()
     # Two times radiance one times pi, over pi.
     assert_almost_equal(
-        Lighting(scene).indirect_at(Vector3(0, 1, 0)).g,
+        Lighting(scene).indirect_at(Vector3(0, 1, 0), Vector3(0, 0, 0)).g,
         Float32(2),
         atol=1e-2,
     )

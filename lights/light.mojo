@@ -210,6 +210,45 @@ def lights_of(indices: List[Int]) raises -> LightMask:
     return LightMask(bits)
 
 
+@fieldwise_init
+struct SpotShape(Equatable, ImplicitlyCopyable, Writable):
+    """What shapes a spot light's beam, as a type rather than an int.
+
+    A spot light is three.js's `SpotLight` with a cone, its
+    `IESSpotLight` with a measured profile, or its `ProjectorLight` with
+    the square of its shadow camera. `Light.validate` refuses a shape
+    that is none of the three, and a shape other than `CONE_SPOT` on a
+    light that is not a spot light.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `CONE_SPOT`, `IES_SPOT` or
+        `PROJECTOR_SPOT`.
+
+        Returns:
+            Whether the shape is one of the three.
+        """
+        return self.value >= CONE_SPOT.value and (
+            self.value <= PROJECTOR_SPOT.value
+        )
+
+
+# three.js's `SpotLight`: a cone with a soft rim, `smoothstep` of the
+# cosines of the rim and the penumbra. What every other kind carries.
+comptime CONE_SPOT = SpotShape(0)
+# three.js's `IESSpotLight`: the beam is read off the profile in
+# `ies_map` at the angle from the axis. See `lights.ies_spot_light`.
+comptime IES_SPOT = SpotShape(1)
+# three.js's `ProjectorLight`: the beam is the rectangle its shadow
+# camera sees, with `aspect`. See `lights.projector_light`.
+comptime PROJECTOR_SPOT = SpotShape(2)
+
+# A projector's `aspect` that says "take it from the map": three.js's
+# `aspect = null`. The map's width over its height then, or one.
+comptime ASPECT_FROM_MAP = Float32(0)
+
 # three.js's default `width` and `height` for a rectangle of light.
 comptime DEFAULT_RECT_SIZE = Length(10.0, METER)
 
@@ -315,6 +354,16 @@ struct Light(ImplicitlyCopyable):
     # it is one cascade of a `lights.csm.CSM`. `ShadowCascade.none()`
     # everywhere else, which lights every depth.
     var cascade: ShadowCascade
+    # What shapes a spot light's beam: a cone, an IES profile or a
+    # projector's rectangle. `CONE_SPOT` on every other kind.
+    var spot_shape: SpotShape
+    # The profile an `IES_SPOT` light reads, three.js's `iesMap`: a
+    # texture `loaders.ies.ies_texture` made, in the store. `NO_TEXTURE`
+    # for none, where the light keeps its cone, as three.js does.
+    var ies_map: TextureId
+    # A `PROJECTOR_SPOT` light's width over its height, three.js's
+    # `ProjectorLight.aspect`, or `ASPECT_FROM_MAP`. Read only there.
+    var aspect: Float32
 
     def _power_share(self) raises -> Float32:
         """Return what the intensity is multiplied by to give the power."""
@@ -402,7 +451,11 @@ struct Light(ImplicitlyCopyable):
                 near plane, where three.js puts the far plane; a light
                 probe's coefficients are not all finite; or the light's
                 `cascade` is refused by `ShadowCascade.validate`, or is a
-                cascade on a light that is not directional.
+                cascade on a light that is not directional; the spot
+                shape is none of the three, or not `CONE_SPOT` on a light
+                that is not a spot light; an IES map is named by a light
+                that is not an `IES_SPOT`; or a projector's aspect is
+                negative or not finite.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
@@ -427,6 +480,19 @@ struct Light(ImplicitlyCopyable):
         var mapped = self.map != NO_TEXTURE
         if mapped and self.kind != SPOT:
             raise Error("Only a spot light projects a map")
+        if not self.spot_shape.is_valid():
+            raise Error("A spot shape that is none of the three")
+        if self.spot_shape != CONE_SPOT and self.kind != SPOT:
+            raise Error("Only a spot light has an IES profile or a projector")
+        if self.ies_map != NO_TEXTURE and self.spot_shape != IES_SPOT:
+            raise Error("Only an IES spot light reads an IES map")
+        if self.spot_shape == PROJECTOR_SPOT and (
+            not isfinite(self.aspect) or self.aspect < 0
+        ):
+            raise Error(
+                "A projector's aspect must be a positive finite number, or"
+                " ASPECT_FROM_MAP"
+            )
         if self.cast_shadow:
             if (
                 self.kind != DIRECTIONAL
@@ -534,6 +600,9 @@ def _bare(
         NO_TEXTURE,
         SphericalHarmonics3(),
         ShadowCascade.none(),
+        CONE_SPOT,
+        NO_TEXTURE,
+        ASPECT_FROM_MAP,
     )
 
 

@@ -118,7 +118,9 @@ from core.fog import FogView
 from lights.light import (
     ALL_LIGHTS,
     DIRECTIONAL,
+    IES_SPOT,
     POINT,
+    PROJECTOR_SPOT,
     SPOT,
     Light,
     LightMask,
@@ -137,6 +139,9 @@ from lights.shadow import (
     vsm_moments,
 )
 from lights.ltc import LtcTables
+from lights.light_probe_grid import LightProbeGrid
+from lights.projector_light import projector_aspect
+from lights.spot_profile import SpotProfile, needs_profile
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
@@ -179,6 +184,8 @@ from materials.material import (
     DOUBLE_SIDE,
     FRONT_SIDE,
     GOURAUD,
+    VOLUME,
+    check_steps,
     DEFAULT_IOR,
     MULTIPLY_OPERATION,
     NO_ATTENUATION,
@@ -671,9 +678,9 @@ def _light_at_corner(
     `GouraudShader` vertex does: the direct and the indirect light for its
     normal, and for the normal turned round."""
     var direct = lighting.direct_at(normal, position)
-    var indirect = lighting.indirect_at(normal)
+    var indirect = lighting.indirect_at(normal, position)
     var back_direct = lighting.direct_at(-normal, position)
-    var back_indirect = lighting.indirect_at(-normal)
+    var back_indirect = lighting.indirect_at(-normal, position)
     corner.gouraud_direct = Vector3(direct.r, direct.g, direct.b)
     corner.gouraud_indirect = Vector3(indirect.r, indirect.g, indirect.b)
     corner.gouraud_back_direct = Vector3(
@@ -682,6 +689,35 @@ def _light_at_corner(
     corner.gouraud_back_indirect = Vector3(
         back_indirect.r, back_indirect.g, back_indirect.b
     )
+
+
+def _march_volume(
+    mut corners: List[RasterVertex],
+    begin: Int,
+    steps: Int,
+    geometry: BufferGeometry,
+    world: Matrix4,
+) raises:
+    """Give a `VOLUME` draw's corners their ray: the material's steps, and
+    the mesh's bounding radius carried to world space, three.js's
+    `modelRadius`.
+
+    Args:
+        corners: The frame's raster vertices.
+        begin: Where the draw's corners start.
+        steps: The material's `steps`.
+        geometry: The draw's geometry.
+        world: The draw's world matrix.
+
+    Raises:
+        Error: If `steps` is below one, or the geometry has no positions.
+    """
+    check_steps(steps)
+    var bound = geometry.bounding_sphere()
+    bound.apply_matrix4(world)
+    for index in range(begin, len(corners)):
+        corners[index].steps = steps
+        corners[index].model_radius = bound.radius
 
 
 def _customs(
@@ -2448,6 +2484,38 @@ def _clip_sets(
             cut.append(seen)
 
 
+def _group_clip_sets(
+    scene: Scene,
+    node: NodeId,
+    view: Matrix4,
+    casters_only: Bool,
+    mut cut: List[Plane],
+    mut any_of: List[Plane],
+) raises:
+    """Add the planes of the clipping groups at a draw's node and above it,
+    in camera space, three.js's `ClippingGroup`.
+
+    A group's union planes each cut, so they join `cut`. Its intersection
+    planes join `any_of`, with the material's own. See
+    `objects.clipping_group`.
+
+    Args:
+        scene: The scene, which holds the groups.
+        node: The draw's node.
+        view: The world-to-camera transform.
+        casters_only: Whether this is a light's view for a shadow map.
+        cut: The planes that each cut, added to.
+        any_of: The planes of which one is enough, added to.
+
+    Raises:
+        Error: If the node is not in the scene, or the view cannot be
+            inverted.
+    """
+    var groups = scene.clipping(node, casters_only)
+    cut.extend(Span(_planes_in_view(groups.union_planes, view)))
+    any_of.extend(Span(_planes_in_view(groups.intersection_planes, view)))
+
+
 def _planes_in_view(planes: List[Plane], view: Matrix4) raises -> List[Plane]:
     """Return world-space planes carried into camera space.
 
@@ -4081,19 +4149,21 @@ def _light_aim(scene: Scene, light: Light) raises -> Vector3:
 
 
 def _spot_camera(
-    light: Light, at: Vector3, aimed: Vector3
+    light: Light, at: Vector3, aimed: Vector3, aspect: Float32
 ) raises -> PerspectiveCamera:
     """Return a spot light's shadow camera, three.js's `SpotLightShadow`:
-    twice the cone's angle times the shadow's `focus` wide, square, from
-    the shadow's near plane to `Light.shadow_far`, at `at` looking at
-    `aimed`.
+    twice the cone's angle times the shadow's `focus` high, `aspect`
+    times as wide, from the shadow's near plane to `Light.shadow_far`, at
+    `at` looking at `aimed`. The aspect is one but for a projector; see
+    `lights.projector_light.projector_aspect`.
 
     Raises:
-        Error: If `PerspectiveCamera` refuses the planes or the angle.
+        Error: If `PerspectiveCamera` refuses the planes, the angle or the
+            aspect.
     """
     var camera = PerspectiveCamera(
         light.shadow.spot_field_of_view(light.angle),
-        1.0,
+        aspect,
         light.shadow.near,
         light.shadow_far(),
     )
@@ -4319,6 +4389,9 @@ struct Renderer(Movable):
     # The tables a rect area light is evaluated with, or none until
     # `set_ltc_tables`.
     var ltc: LtcTables
+    # The box of light probes every lit surface adds, three.js's
+    # `LightProbeGrid`, or an empty grid until `set_light_probe_grid`.
+    var probe_grid: LightProbeGrid
     # Planes in world space that cut away what lies behind any of them,
     # from every mesh, line, point and sprite, three.js's
     # `clippingPlanes`. None by default. They do not cut shadows, as
@@ -4415,6 +4488,7 @@ struct Renderer(Movable):
         self.antialias = False
         self.render_scale = 1
         self.ltc = LtcTables()
+        self.probe_grid = LightProbeGrid()
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
@@ -4603,6 +4677,7 @@ struct Renderer(Movable):
         # Counted into this renderer's info, not a copy of it.
         big._state = self._state
         big.ltc = self.ltc.copy()
+        big.probe_grid = self.probe_grid.copy()
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this
@@ -5115,6 +5190,14 @@ struct Renderer(Movable):
                     wide_cut,
                     wide_any,
                 )
+                _group_clip_sets(
+                    scene,
+                    draws[slot].node,
+                    view,
+                    casters_only,
+                    wide_cut,
+                    wide_any,
+                )
                 _emit_wide_line(
                     corners,
                     assets,
@@ -5154,6 +5237,14 @@ struct Renderer(Movable):
                     sides,
                     global_planes,
                     self.local_clipping_enabled,
+                    casters_only,
+                    sprite_cut,
+                    sprite_any,
+                )
+                _group_clip_sets(
+                    scene,
+                    draws[slot].node,
+                    view,
                     casters_only,
                     sprite_cut,
                     sprite_any,
@@ -5236,6 +5327,9 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
+            )
+            _group_clip_sets(
+                scene, draws[slot].node, view, casters_only, cut, any_of
             )
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
@@ -5502,7 +5596,12 @@ struct Renderer(Movable):
             var customs = _customs(assets, material, geometry, vertex_count)
             if kind == GOURAUD and not gouraud_ready:
                 gouraud_lights = Lighting(
-                    scene, visible=camera.visible_layers()
+                    scene,
+                    visible=camera.visible_layers(),
+                    profiles=self.spot_profiles(
+                        scene, assets, camera.visible_layers()
+                    ),
+                    probe_grid=self.probe_grid,
                 )
                 gouraud_ready = True
 
@@ -5812,6 +5911,8 @@ struct Renderer(Movable):
                         pieces[piece * 3 + 1],
                         pieces[piece * 3 + 2],
                     )
+            if kind == VOLUME:
+                _march_volume(corners, begin, material.steps, geometry, world)
             _note_span(
                 spans,
                 DRAW_TRIANGLES,
@@ -6032,6 +6133,7 @@ struct Renderer(Movable):
                 cut,
                 any_of,
             )
+            _group_clip_sets(scene, line.node, view, casters_only, cut, any_of)
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
@@ -6530,6 +6632,9 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
+            )
+            _group_clip_sets(
+                scene, points.node, view, casters_only, cut, any_of
             )
             # A point is unlit, and refuses a lit kind rather than being
             # shaded by a normal it does not have. See `objects.points`.
@@ -7441,6 +7546,8 @@ struct Renderer(Movable):
                     spot_maps=lighting.spot_maps.copy(),
                     back=camera_back(scene, camera),
                     chosen=masks[index],
+                    profiles=lighting.spot_profiles.copy(),
+                    probe_grid=self.probe_grid,
                 )
             )
         return lightings^
@@ -7461,6 +7568,8 @@ struct Renderer(Movable):
             ltc=self.ltc_tables(),
             spot_maps=self._projected(scene, assets, camera.visible_layers()),
             back=camera_back(scene, camera),
+            profiles=self.spot_profiles(scene, assets, camera.visible_layers()),
+            probe_grid=self.probe_grid,
         )
 
     def to_target[C: Camera](self, scene: Scene, camera: C) raises -> Matrix4:
@@ -7776,7 +7885,9 @@ struct Renderer(Movable):
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             else:
-                var camera = _spot_camera(light, at, aimed)
+                var camera = _spot_camera(
+                    light, at, aimed, projector_aspect(light, assets.textures)
+                )
                 target = self._casters(
                     scene,
                     assets,
@@ -7938,7 +8049,12 @@ struct Renderer(Movable):
             if not scene.light_shown(light):
                 continue
             var at = scene.world_position(light.node)
-            var camera = _spot_camera(light, at, _light_aim(scene, light))
+            var camera = _spot_camera(
+                light,
+                at,
+                _light_aim(scene, light),
+                projector_aspect(light, assets.textures),
+            )
             var frame = camera.projection_matrix()
             frame.multiply(camera.view_matrix_in(scene))
             var held = SIMD[DType.float32, 16](0)
@@ -7957,6 +8073,89 @@ struct Renderer(Movable):
                 )
             )
         return maps^
+
+    def spot_profiles(
+        self, scene: Scene, assets: Assets, visible: Layers = Layers.all()
+    ) raises -> List[SpotProfile]:
+        """Return the beam of every IES spot light and every projector,
+        for `Lighting` to shape the lights with.
+
+        One per spot light on the camera's layers that `needs_profile`:
+        an `IES_SPOT` with its profile's texture, three.js's `iesMap`, and
+        a `PROJECTOR_SPOT` with the frame of the camera its shadow would
+        be drawn through, at its aspect. `render_into` builds these itself
+        in every shading mode, as the beam is not a surface's texture.
+        Call this to hand the same profiles to `GpuRenderer.draw`,
+        through `Lighting`.
+
+        Args:
+            scene: The transform hierarchy, updated, with its lights.
+            assets: The textures the profiles and the maps name.
+            visible: The camera's layers; a light on none of them is
+                left out, as `Lighting` leaves it out.
+
+        Returns:
+            The profiles, each naming its light by index.
+
+        Raises:
+            Error: If a light is refused by `Light.validate`; such a light
+                names a node or a target the scene lacks; or it names a
+                profile or a map that is not in the store, or a blank
+                profile.
+        """
+        var profiles = List[SpotProfile]()
+        for index in range(len(scene.lights)):
+            ref light = scene.lights[index]
+            light.validate()
+            if not needs_profile(light) or not light.layers.test(visible):
+                continue
+            if not scene.light_shown(light):
+                continue
+            var held = SIMD[DType.float32, 16](0)
+            if light.spot_shape == IES_SPOT:
+                profiles.append(
+                    SpotProfile(
+                        index,
+                        IES_SPOT,
+                        light.ies_map,
+                        Texture(copy=assets.textures.get(light.ies_map)),
+                        held,
+                    )
+                )
+                continue
+            var camera = _spot_camera(
+                light,
+                scene.world_position(light.node),
+                _light_aim(scene, light),
+                projector_aspect(light, assets.textures),
+            )
+            var frame = camera.projection_matrix()
+            frame.multiply(camera.view_matrix_in(scene))
+            for element in range(16):  # pragma: no branch
+                held[element] = frame.elements[element]
+            profiles.append(
+                SpotProfile(index, PROJECTOR_SPOT, NO_TEXTURE, Texture(), held)
+            )
+        return profiles^
+
+    def set_light_probe_grid(mut self, var grid: LightProbeGrid) raises:
+        """Hold a box of light probes that every lit surface adds, as
+        three.js adds a `LightProbeGrid` to a scene.
+
+        Bake it first, with
+        `renderers.light_probe_grid_utils.bake_light_probe_grid`. An empty
+        grid, `LightProbeGrid()`, takes it away.
+
+        Args:
+            grid: The grid.
+
+        Raises:
+            Error: If the grid is not empty and is refused by
+                `LightProbeGrid.validate`.
+        """
+        if not grid.is_empty():
+            grid.validate()
+        self.probe_grid = grid^
 
     def _casters[
         C: Camera
