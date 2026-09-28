@@ -45,6 +45,8 @@ from geometries.plane import (
     plane,
 )
 from lights.light import (
+    IES_SPOT,
+    PROJECTOR_SPOT,
     ambient_light,
     directional_light,
     hemisphere_light,
@@ -53,6 +55,9 @@ from lights.light import (
 from lights.lighting import (
     Lighting,
     PERSPECTIVE_VIEW,
+)
+from lights.light_probe_grid import (
+    GRID_HEADER,
 )
 from lights.ltc import (
     load_ltc_tables,
@@ -223,6 +228,7 @@ from render.gpu import (
     RECT_FLOATS,
     runs_on_device,
     SPOT_FLOATS,
+    SPOT_PROFILE_FLOATS,
     STATE_ANISOTROPY_MAP,
     STATE_AO_MAP,
     STATE_BUMP_MAP,
@@ -342,7 +348,9 @@ from test_gpu import (
     a_pmrem_store,
     a_point,
     a_scene_behind,
+    a_probe_grid,
     a_shadowed_scene,
+    a_shaped_spot_scene,
     a_varying_line,
     baked_pair,
     corner,
@@ -1580,6 +1588,70 @@ def test_flattening_carries_the_blend_constant() raises:
     assert_equal(flat[LANE_BLEND_CONSTANT + 1], Float32(0.5))
     assert_equal(flat[LANE_BLEND_CONSTANT + 2], Float32(0.75))
     assert_equal(flat[LANE_BLEND_CONSTANT + 3], Float32(1))
+
+
+def test_the_light_buffer_carries_the_spot_profiles_and_the_grid() raises:
+    # A spot light's sixteenth float says where its profile begins, after
+    # the spot light maps: its shape, the IES profile's slot and the
+    # frame. The probe grid follows the profiles, and the header says
+    # where it begins.
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(24, 18)
+    var shadows = renderer.shadow_maps(scene, assets)
+    var slides = renderer.spot_light_maps(scene, assets)
+    var profiles = renderer.spot_profiles(scene, assets)
+    assert_equal(len(shadows), 1)
+    assert_equal(len(slides), 1)
+    assert_equal(len(profiles), 2)
+    var grid = a_probe_grid()
+    var lighting = Lighting(
+        scene,
+        shadows=shadows^,
+        spot_maps=slides^,
+        profiles=profiles^,
+        probe_grid=grid,
+    )
+    var flat = flatten_lights(lighting)
+    assert_equal(SPOT_FLOATS, 16)
+    assert_equal(SPOT_PROFILE_FLOATS, 18)
+    var first_spot = LIGHTS_FIRST
+    var second_spot = first_spot + SPOT_FLOATS
+    var shadow_at = second_spot + SPOT_FLOATS
+    var slide_at = shadow_at + SHADOW_HEADER + 16 * 16
+    var ies_at = slide_at + SPOT_MAP_FLOATS
+    var projector_at = ies_at + SPOT_PROFILE_FLOATS
+    var grid_at = projector_at + SPOT_PROFILE_FLOATS
+    assert_equal(flat[first_spot + 13], Float32(shadow_at))
+    assert_equal(flat[first_spot + 14], NO_SHADOW)
+    assert_equal(flat[first_spot + 15], Float32(ies_at))
+    assert_equal(flat[second_spot + 13], NO_SHADOW)
+    assert_equal(flat[second_spot + 14], Float32(slide_at))
+    assert_equal(flat[second_spot + 15], Float32(projector_at))
+    assert_equal(flat[ies_at], Float32(IES_SPOT.value))
+    assert_equal(flat[ies_at + 1], Float32(0))
+    assert_equal(flat[projector_at], Float32(PROJECTOR_SPOT.value))
+    assert_equal(flat[projector_at + 1], Float32(-1))
+    assert_equal(
+        flat[projector_at + 2], lighting.spot_profiles[1].frame[0]
+    )
+    assert_equal(
+        flat[projector_at + 17], lighting.spot_profiles[1].frame[15]
+    )
+    assert_equal(flat[LIGHTS_GRID], Float32(grid_at))
+    assert_equal(len(flat), grid_at + GRID_HEADER + 27 * 8)
+    assert_equal(flat[grid_at], Float32(-3))
+    assert_equal(flat[grid_at + 6], Float32(2))
+    # The grid rides with its intensity multiplied in.
+    assert_almost_equal(
+        flat[grid_at + GRID_HEADER],
+        grid.probes[0].lanes[0] * 1.5,
+        atol=Float64(1e-6),
+    )
+    # Without them, the lights carry `NO_SHADOW`, and so does the header.
+    var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
+    assert_equal(bare[LIGHTS_GRID], NO_SHADOW)
+    assert_equal(bare[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15], NO_SHADOW)
 
 
 def main() raises:

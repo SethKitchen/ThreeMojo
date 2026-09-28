@@ -32,6 +32,7 @@
 - [Materials](Materials)
 - [Node materials](Node-materials)
 - [Lights](Lights)
+- [Lighting addons](Lighting-addons)
 - [Fog](Fog)
 - [Textures](Textures)
 - [Renderer](Renderer)

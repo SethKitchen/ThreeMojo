@@ -390,7 +390,8 @@ struct LightProbeGrid(Copyable, Movable):
         flat.append(Float32(self.count_x))
         flat.append(Float32(self.count_y))
         flat.append(Float32(self.count_z))
-        for index in range(len(self.probes)):
+        # Not empty, as checked above.
+        for index in range(len(self.probes)):  # pragma: no branch
             for lane in range(SH_COUNT * 3):  # pragma: no branch
                 flat.append(self.probes[index].lanes[lane])
         return flat^
