@@ -1490,19 +1490,22 @@ struct Texture(Movable):
         Color through the ramp; alpha is not color and never decoded, and
         is not read at all when the texture ignores it.
         """
+        # Every caller wraps its coordinates into the level first, and a
+        # byte indexes a ramp of 256, so the reads skip their bounds checks:
+        # this is the innermost read of every textured fragment.
         if self.texel_type == FLOAT_TYPE:
             return float_texel(
-                self.data[offset],
-                self.data[offset + 1],
-                self.data[offset + 2],
-                self.data[offset + 3],
+                self.data.unsafe_get(offset),
+                self.data.unsafe_get(offset + 1),
+                self.data.unsafe_get(offset + 2),
+                self.data.unsafe_get(offset + 3),
                 self.alpha,
             )
         return FloatColor(
-            self.ramp[Int(self.pixels[offset])],
-            self.ramp[Int(self.pixels[offset + 1])],
-            self.ramp[Int(self.pixels[offset + 2])],
-            self._alpha_of(self.pixels[offset + 3]),
+            self.ramp.unsafe_get(Int(self.pixels.unsafe_get(offset))),
+            self.ramp.unsafe_get(Int(self.pixels.unsafe_get(offset + 1))),
+            self.ramp.unsafe_get(Int(self.pixels.unsafe_get(offset + 2))),
+            self._alpha_of(self.pixels.unsafe_get(offset + 3)),
         )
 
     def _has_level(self, level: Int) -> Bool:

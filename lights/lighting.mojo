@@ -1193,6 +1193,9 @@ struct Lighting(Movable):
     # intensity, as three.js's `WebGLLights` sums them into `probe`.
     # Darkness when there is no probe.
     var probe: SphericalHarmonics3
+    # Whether any probe was added to `probe`. Without one every coefficient
+    # is zero and so is the irradiance, which `ambient_at` then skips.
+    var has_probe: Bool
     # What each sum of arriving light is multiplied by before it is
     # returned: `RECIPROCAL_PI` for a scene's lights, as three.js's BRDF
     # has it, and one for `uniform`, the identity. Crosses to the kernel
@@ -1363,6 +1366,7 @@ struct Lighting(Movable):
             self.back.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.probe = SphericalHarmonics3()
+        self.has_probe = False
         self.scale = RECIPROCAL_PI
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -1460,6 +1464,7 @@ struct Lighting(Movable):
                 # Summed as three.js sums them: each coefficient times the
                 # probe's intensity, the color unread.
                 self.probe.add_scaled(light.sh, light.intensity)
+                self.has_probe = True
             elif light.kind == DIRECTIONAL:
                 # Where the node ended up after every transform above it,
                 # seen from what it shines at.
@@ -1566,6 +1571,7 @@ struct Lighting(Movable):
         self.back = Vector3(0, 0, 1)
         self.ambient = ambient
         self.probe = SphericalHarmonics3()
+        self.has_probe = False
         self.scale = 1
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -2253,13 +2259,17 @@ struct Lighting(Movable):
         Returns:
             The light, linear and unscaled. Alpha is one.
         """
-        var lift = self.probe.get_irradiance_at(normal)
         var total = FloatColor(
-            self.ambient.r + lift.x,
-            self.ambient.g + lift.y,
-            self.ambient.b + lift.z,
-            1.0,
+            self.ambient.r, self.ambient.g, self.ambient.b, 1.0
         )
+        if self.has_probe:
+            var lift = self.probe.get_irradiance_at(normal)
+            total = FloatColor(
+                self.ambient.r + lift.x,
+                self.ambient.g + lift.y,
+                self.ambient.b + lift.z,
+                1.0,
+            )
         if self.grid.is_empty():
             return total
         var grid = self.grid.irradiance_at(position, normal)
