@@ -652,6 +652,128 @@ The camera and the objects move between two calls to `render`. So the first fram
 
 The motion blur runs on the device in a `GpuComposer` frame, with the velocities of the host frame. `motion_blur_pixel` does the work on both sides. The other display passes run on the host in a `GpuComposer` frame.
 
+## More display nodes
+
+Twelve more of three.js r186's TSL display nodes run as composer passes, with three.js's defaults. They are in `postprocessing/upscaling.mojo`, `taau.mojo`, `filter_nodes.mojo`, `ssgi.mojo`, `temporal_denoise.mojo`, `oit.mojo`, `retro.mojo` and `importance_sampled_environment.mojo`.
+
+| Builder | three.js | What it does |
+|---|---|---|
+| `sharpen_pass(sharpness=0.2, denoise=False)` | `sharpen` | Sharpen the frame by robust contrast-adaptive sharpening. |
+| `fsr1_pass(sharpness=0.2, denoise=False, resolution_scale=1)` | `fsr1` | Upsample the frame by EASU, then sharpen it by RCAS. |
+| `taau_pass(resolution_scale=0.5)` | `TAAUNode` | Draw the scene jittered at a smaller size, and resolve it into a history at the frame's size. |
+| `crt_pass(curvature=0.1, bleeding=0.002, scanline_intensity=0.3)` | `CRT.js` | Bend, smear, line and darken the frame as a cathode-ray tube shows it. |
+| `radial_blur_pass(center_u=0.5, center_v=0.5, count=32, exposure=5)` | `radialBlur` | Blur the frame toward a center. |
+| `bilateral_blur_pass(direction=1, sigma=4, sigma_color=0.1)` | `bilateralBlur` | Blur the frame across and down, and keep its edges. |
+| `depth_aware_blur_pass(sharpness=2, radius=1 m)` | `depthAwareBlur` | Blur the frame across and down, and stop at steps in the depth. |
+| `depth_aware_blend_pass(texture, blend_color=white)` | `depthAwareBlend` | Mix a color over the frame by a texture's red, pushed off the depth's edges. |
+| `ssgi_pass(slice_count=1, step_count=12, gi_intensity=10, denoise=False)` | `ssgi` | Add the light that surfaces bounce onto each other, and darken the creases. |
+| `sss_pass(light=LightIndex(0), max_distance=0.1 m, thickness=0.01 m)` | `sss` | Shadow each pixel that the depth hides from the main light. |
+| `oit_pass()` | `oitPass` | Draw the scene, and weigh its transparent objects in any order. |
+| `retro_pass(resolution_scale=0.25)` | `retroPass` | Draw the scene small, with its corners snapped to its pixels. |
+
+The passes keep their settings in `upscale`, `taau`, `filters`, `ssgi`, `temporal_denoise`, `sss` and `retro`. Their kinds start at 70, so 60 stays a kind that no pass has. Put `taau_pass`, `oit_pass` and `retro_pass` where a `render_pass` goes. They draw the scene themselves.
+
+Each node reads the texture coordinate of three.js's WebGPU `uv()`, which grows down the image. The functions take `v` in that sense, so the arithmetic is three.js's as written.
+
+### Sharpen and FSR1
+
+`sharpen_pass` is three.js's `SharpenNode`, RCAS from AMD FidelityFX. Each pixel reads itself and its four neighbors in a cross. The darkest and the brightest channel of the ring limit a negative lobe, which is scaled by `2^-sharpness`. With `denoise` on, the lobe is weighed down where the ring's luminance is noisy.
+
+`fsr1_pass` is three.js's `FSR1Node`. The pass reads the frame at `resolution_scale` of its size, as a scene pass with that scale gives it. EASU finds the direction of the edge from twelve input texels. It weighs them by a Lanczos kernel stretched along the edge, and clamps the result to the four nearest texels. Then RCAS sharpens the result.
+
+Two things differ from three.js. A texel past the edge of the image is the edge texel, as WebGPU's robust `textureLoad` gives it. RCAS divides zero by zero on a black ring. `max_num` and `min_num` then take the operand that is a number, as a GPU's `max` does.
+
+### TAAU
+
+`taau_pass` is three.js's `TAAUNode`, with the scene pass that it reads. Each frame, the pass draws the scene at `resolution_scale` of the frame's size. The camera moves by the next of 32 Halton offsets, less a half, in input pixels. The pass draws with `Renderer.resized`, which shares the velocity history of the composer's renderer.
+
+Each output pixel finds the nearest jittered input sample. The 3 by 3 taps round it give the depths and the velocity, as [TRAA](#traa) reads them. The same nine taps rebuild the color, each weighed by `exp(-2.29 d^2)` of its distance. They also give the box that the history is clipped to.
+
+A thin feature locks the history against the clip where the depth did not change. three.js writes the lock to a target with one attachment. So the lock history stays at the seed's zero, and this port keeps that. The history is seeded with the input read bilinear at the output's pixels.
+
+### CRT
+
+`crt_pass` runs the five functions of three.js's `CRT.js` in the order of three.js's documentation:
+
+1. `barrel_uv` bends the texture coordinate outward from the center, and keeps the corners in place.
+2. `color_bleeding` reads the color there and smears the three taps to its left into it. Red goes furthest and blue least.
+3. `scanlines` darkens the lines. The composer moves the clock on by each frame's time, for `scanline_speed`.
+4. `crt_vignette` darkens the edge through `circle`.
+5. `barrel_mask` makes the pixels that bend off the screen black.
+
+### Radial, bilateral and depth-aware blurs
+
+`radial_blur_pass` is three.js's `radialBlur`. Each pixel walks `count` taps toward the center. Each tap weighs `weight` times `decay` to the power of its number. The walk starts a share of a step along, from `interleaved_gradient_noise`. The sum over `count`, times `exposure`, is mixed with twice the pixel. An alpha above one is shown as one.
+
+`bilateral_blur_pass` is three.js's `BilateralBlurNode`: the Gaussian taps of `gaussian_coefficients`, across and then down. Each tap is weighed down by how unlike the center its luminance is, by `sigma_color`.
+
+`depth_aware_blur_pass` is three.js's `depthAwareBlur`: five Gaussian taps along a step. Each tap is weighed down by its distance in depth from the center, relative to `radius`. three.js filters the red channel alone. The pass runs it across and then down over red, green and blue alike.
+
+`depth_aware_blend_pass` is three.js's `depthAwareBlend`. It reads its blend texture from the assets, as a texture pass does. Eight Poisson taps find the neighbors that share the pixel's depth. Their mean offset pushes the read of the blend texture. three.js calls `normalize` on the mean and does not keep the result. So the push is the mean offset, and this port keeps that.
+
+### SSGI
+
+`ssgi_pass` is three.js's `SSGINode`. The composer draws its frame with a normal attachment while the pass is on. Each pixel with a surface cuts the hemisphere over it into `slice_count` slices. It walks `step_count` taps each way along each slice.
+
+The angles to each tap's front and back cover some of 32 sectors. The sectors that a tap covers first occlude the pixel and send it the tap's light. The AO is the share of the sectors covered, to the power of `ao_intensity`. The light is scaled by `gi_intensity` and held at a luminance of seven. The temporal filter turns the slices and offsets the taps each frame, as three.js's `frameId` does.
+
+three.js's example mixes the AO and the light with the scene and its diffuse color. The frame has no diffuse color attachment, so the pass takes the frame's own color for it: `frame * ao + frame * gi`. The AO is kept in eight bits, as three.js's `RedFormat` target keeps it.
+
+### The SSGI denoiser
+
+`ssgi_pass(denoise=True)` runs the raw signal through three.js's `TemporalReprojectNode` and then its `RecurrentDenoiseNode`, in their diffuse mode. The composer draws its frame with a velocity attachment too. The denoised result is the next frame's history, as the example's `setHistoryTexture` makes it. The AO stays the raw signal's.
+
+1. The reprojection reads the history where the velocity says that the pixel was, from four texels. Each texel weighs by how well its surface matches the pixel's plane and normal.
+2. It clips the history toward the neighbors' box in YCoCg. The confidence falls with the clip, with motion and where the reprojection stretches the image. Its alpha is one over the frames that it holds.
+3. The denoise takes eight taps on a Vogel disk in the plane of the surface. An analytic noise turns the disk. Each tap weighs by its luminance, its AO, its distance from the plane and its normal.
+4. Karis's weights mix the denoised history and the denoised raw signal.
+
+The derivatives of the history's coordinate are the differences across each 2 by 2 quad, as a GPU's fine derivatives are. A normalized zero vector is zero here, where a GPU gives a NaN. `AlphaSource` says what the raw signal's alpha holds: `AO_ALPHA` for the SSGI, `RAY_LENGTH_ALPHA` or `NO_ALPHA`.
+
+### SSS
+
+`sss_pass` is three.js's `SSSNode`. `light` is the main light, one of the scene's `lights`. Each pixel with a surface walks a ray toward the light, `max_distance` long. The walk crosses the image a pixel apart, times `quality`. A step where the ray is behind the depth by less than `thickness` shadows the pixel by `shadow_intensity`. The pass multiplies the frame's light by the result.
+
+### OIT
+
+`oit_pass` is three.js's `OITPassNode`. A renderer's `draw_filter` draws the scene without its order-independent objects first. An object is order-independent when its material is transparent, has normal blending and has no transmission. Then the pass weighs each transparent fragment in front of that frame's depth, in any order:
+
+- The accumulation adds `(rgb * a, a)` times `oit_weight`, three.js's default weight of the alpha and the view distance.
+- The revealage multiplies `1 - a`.
+- The composite is `mix(accum.rgb / accum.a, frame.rgb, revealage)`, with the frame's alpha.
+
+three.js blends every fragment of an object into its targets. This port draws each order-independent draw alone, with `ONE_OIT_DRAW`. It weighs what the draw leaves at each pixel, at its nearest depth. For an object that does not cover itself, such as a pane, that is each fragment.
+
+### Retro
+
+`retro_pass` is three.js's `RetroPassNode`. It draws the scene at a quarter of the frame's size, with the renderer's `snap_vertices` on. Each corner is then rounded to a whole pixel from the center of the screen, as three.js's vertex node rounds it. The small image is kept in eight bits and shown with nearest filtering.
+
+### Importance-sampled environment
+
+`EquirectEnvironment` is three.js's `ImportanceSampledEnvironment` and its `EnvMapCDFGenerator`. It keeps an equirectangular map in half floats, flipped as `flipY` asks. With importance sampling on, it builds three.js's tables of the rows' and the texels' distributions by luminance. `sample_reflect`, `sample_environment_brdf` and `sample_environment_mis` are three.js's three samples, with the GGX helpers of `SpecularHelpers.js`.
+
+three.js gives the drawn texture coordinate to `equirectUV`, which takes a direction. This port turns the coordinate into its direction with `equirect_uv_to_dir`, which is what the code means. No pass reads the environment, because the SSR node's environment mode is not ported.
+
+### Validation of the more display nodes
+
+- `check_upscale` refuses a negative sharpness and a resolution scale outside zero to one.
+- `check_taau` refuses a negative threshold, a velocity length that is not positive, and a frame weight or a resolution scale outside zero to one.
+- `check_filters` refuses a number that is not finite, a curvature of a half or more, and a radial blur of no taps. It also refuses sigmas and a radius that are not positive, and a negative edge radius. A depth-aware blend pass must name a texture.
+- `check_ssgi` and `check_sss` refuse counts below one, numbers that are not finite and a negative light index. `sss_light_direction` refuses a light that the scene does not have.
+- `check_temporal_denoise` refuses an `AlphaSource` that is none of the three. `check_draw_filter` refuses a `DrawFilter` that is none of the three. `tests/compile_fail/` proves that a bare number is not either type.
+
+### The more display nodes on the GPU
+
+The sharpen, CRT and radial blur passes run on the device in a `GpuComposer` frame. `rcas_pixel`, `crt_pixel` and `radial_blur_pixel` do the work on both sides. The other passes draw the scene or read the depth, so they run on the host in a `GpuComposer` frame.
+
+### What is not ported
+
+- **The specular denoiser.** `TemporalReprojectNode`'s specular mode reprojects the hit point along a ray length in alpha. `RecurrentDenoiseNode`'s specular mode reads the roughness. The SSR node's stochastic mode, which makes that signal, is not ported.
+- **The retro materials.** three.js swaps each material for a Phong one unless it is basic. It mixes a standard material's environment into its color, and can map textures without the perspective divide. This port draws each material as it is.
+- **The packed targets.** three.js packs the SSGI's light into 11, 11 and 10 bits and the OIT's revealage into eight. This port keeps both as floats.
+- **The diffuse color.** The SSGI's example reads a diffuse color attachment. The frame's own color stands in for it.
+- **The environment's pass.** No pass reads `EquirectEnvironment`.
+
 ## Renderer effects
 
 `renderers/stereo_effects.mojo`, `renderers/ascii_effect.mojo` and `renderers/outline_effect.mojo`. Five of three.js's `examples/jsm/effects/`. Each wraps a renderer and draws the scene in its own way.

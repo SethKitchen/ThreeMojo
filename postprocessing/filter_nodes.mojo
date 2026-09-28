@@ -461,9 +461,12 @@ def radial_blur_pixel(
         b * scale + base.b,
         a * scale + base.a,
     )
+    # three.js's `unpremultiplyAlpha` with the option on; its color is
+    # straight either way. The alpha the sum carries past one is shown as
+    # one, as a canvas shows it.
     if premultiplied:
-        return out
-    return out.premultiplied()
+        out = out.unpremultiplied()
+    return FloatColor(out.r, out.g, out.b, min(out.a, 1)).premultiplied()
 
 
 def radial_blur_light(mut frame: RenderTarget, settings: FilterSettings):
