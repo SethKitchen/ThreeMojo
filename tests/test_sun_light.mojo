@@ -262,6 +262,14 @@ def test_a_sun_at_the_origin_has_no_direction() raises:
         _ = fit_sun(
             scene, a_short_camera(), Vector3(0, 0, 0), sun_light_shadow()
         )
+    # A sun at no finite place has no direction either.
+    with assert_raises(contains="no direction"):
+        _ = fit_sun(
+            scene,
+            a_short_camera(),
+            Vector3(0, 0, nan[DType.float32]()),
+            sun_light_shadow(),
+        )
 
 
 # --- the light --------------------------------------------------------------

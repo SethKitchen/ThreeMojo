@@ -401,6 +401,11 @@ def test_the_loop_keeps_its_history() raises:
     # An even signal stays even and bounded.
     assert_true(second[5].r > 0.3 and second[5].r < 0.5)
     assert_true(second[5].a > 0 and second[5].a <= 1)
+    # A history of another height is seeded again, even at the same width.
+    settings.history_height = SIDE + 1
+    var third = temporal_denoise(raw, view, normals, still, Matrix4(), settings)
+    assert_equal(settings.history_height, SIDE)
+    assert_equal(len(third), SIDE * SIDE)
     settings.alpha_source = AlphaSource(9)
     with assert_raises(contains="alpha source"):
         _ = temporal_denoise(raw, view, normals, still, Matrix4(), settings)

@@ -4909,8 +4909,9 @@ def rasterize_shaded(
             # function. A fragment node's color is veiled in place of the
             # material's, as three.js's `setupOutput` veils it.
             # A volume's color is the light its ray gathers, and its glow;
-            # see `materials.volume_node_material`.
-            if a.kind == VOLUME and mode != SHADE_UV:
+            # see `materials.volume_node_material`. The uv view has written
+            # its coordinates and gone on above, so it never reaches here.
+            if a.kind == VOLUME:
                 var given = NodeInputs(
                     u,
                     v,

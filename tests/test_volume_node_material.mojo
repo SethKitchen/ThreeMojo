@@ -143,6 +143,25 @@ def test_a_near_camera_sends_the_ray_from_the_surface() raises:
     assert_almost_equal(moved.x, 1 - exp(Float32(-1.5)), atol=1e-6)
 
 
+def test_a_ray_of_no_steps_gathers_nothing() raises:
+    # The renderer refuses a ray of no steps. The function itself takes
+    # one, and lets all the light through.
+    var program = empty_program()
+    var ray = volumetric_light(
+        AboveHalf(),
+        ProgramSource(Pointer(to=program)),
+        False,
+        at_surface(),
+        Vector3(0, 0, 2),
+        0.5,
+        0,
+        0,
+    )
+    assert_equal(ray.x, 0)
+    assert_equal(ray.y, 0)
+    assert_equal(ray.z, 0)
+
+
 def test_the_scattering_node_reads_the_step_s_position() raises:
     # A density times the step's height: 2, 1.5 and 1 above a half, so the
     # red is thinned by exp(-(2 + 1.5 + 1) * 100 * 0.01 * 0.5).
@@ -201,6 +220,31 @@ def test_a_step_gathers_the_bulbs_and_the_spots() raises:
     # Outside the cone the spot adds nothing.
     var aside = lighting.volume_light_at(Vector3(3, 2, 0), up, True)
     assert_almost_equal(aside.x, aside.y, atol=1e-5)
+
+
+def test_a_step_with_only_a_spot_gathers_the_spot() raises:
+    # No bulb at all: the step one meter under the spot, on its axis, has
+    # the spot's red and nothing else.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 3, 0)
+    scene.add_light(
+        spot_light(
+            Color(255, 0, 0),
+            scene.add(lamp^),
+            1.0,
+            angle=Angle(30.0, DEGREE),
+            penumbra=0.1,
+        )
+    )
+    scene.update()
+    var lighting = Lighting(scene, eye=Vector3(0, 0, 5))
+    var light = lighting.volume_light_at(
+        Vector3(0, 2, 0), Vector3(0, 1, 0), True
+    )
+    assert_almost_equal(light.x, 1, atol=1e-5)
+    assert_equal(light.y, 0)
+    assert_equal(light.z, 0)
 
 
 def test_a_shadow_darkens_a_step_twice() raises:
@@ -398,6 +442,20 @@ def test_the_renderer_and_the_rasterizer_refuse_a_ray_of_no_steps() raises:
     corners[0].model_radius = -1
     with assert_raises(contains="bounding radius cannot be negative"):
         check_triangle_state(corners[0], corners[1], corners[2])
+
+
+def test_a_box_nearer_than_the_near_plane_marches_no_corner() raises:
+    # The camera's near plane is 5.2 meters out, past the whole box, which
+    # ends at 5. The bounding sphere still reaches past the plane, so the
+    # mesh is drawn, but every triangle is clipped away.
+    var assets = Assets()
+    var scene = box_of_light(assets, volume_node_material(steps=3))
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE), 1, Length(5.2, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var corners = Renderer(SIZE, SIZE).prepare(scene, assets, camera)
+    assert_equal(len(corners), 0)
 
 
 def main() raises:

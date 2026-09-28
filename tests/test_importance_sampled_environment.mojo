@@ -67,6 +67,8 @@ def test_the_map_is_kept_in_half_floats_and_flipped() raises:
     assert_almost_equal(wide.sample(0.25, 0.5).r, 0, atol=1e-6)
     with assert_raises(contains="positive"):
         _ = EquirectEnvironment(0, 2, texels)
+    with assert_raises(contains="positive"):
+        _ = EquirectEnvironment(2, 0, texels)
     with assert_raises(contains="one texel"):
         _ = EquirectEnvironment(3, 2, texels)
 
