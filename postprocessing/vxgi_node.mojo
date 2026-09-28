@@ -536,6 +536,8 @@ struct VXGINode(Movable):
                     slot // view.width,
                 )
             )
+        # The pointer does not keep the numbers alive; this does.
+        _ = numbers^
         return frame^
 
     def render(
