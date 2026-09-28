@@ -52,6 +52,14 @@ from geometries.sculptor import (
 )
 from geometries.sculptor_mesh import NO_CELL, OCTREE_MAX_DEPTH, SculptorMesh
 from geometries.sculptor_tools import (
+    _DecData,
+    _SubData,
+    _dec_decimate_triangles,
+    _dec_find_opposite_triangle,
+    _fill_split,
+    _half_edge_split,
+    _sub_fill_triangles,
+    _unit_or_x,
     area_normal,
     has_at_least_three_common_elements,
     laplacian_smooth,
@@ -1364,6 +1372,305 @@ def test_a_sculptor_needs_one_mesh_of_one_material() raises:
     scene.meshes[0].materials = [material, material]
     with assert_raises(contains="Multi-material"):
         _ = Sculptor(scene, assets, 0)
+
+
+# --- the topology helpers, one case at a time ----------------------------------
+
+
+def test_a_face_is_filled_across_the_split_edge_with_fewest_neighbors() raises:
+    # Only the first edge split.
+    assert_equal(_fill_split(9, -1, -1, 6, 6, 6), 1)
+    # All three: the far corner with the fewest neighbors decides.
+    assert_equal(_fill_split(9, 9, 9, 4, 5, 6), 2)
+    assert_equal(_fill_split(9, 9, 9, 5, 4, 6), 3)
+    assert_equal(_fill_split(9, 9, 9, 6, 6, 4), 1)
+    assert_equal(_fill_split(9, 9, 9, 5, 6, 4), 1)
+    # The first two.
+    assert_equal(_fill_split(9, 9, -1, 4, 6, 5), 2)
+    assert_equal(_fill_split(9, 9, -1, 6, 4, 5), 1)
+    # The first and the third.
+    assert_equal(_fill_split(9, -1, 9, 6, 4, 5), 3)
+    assert_equal(_fill_split(9, -1, 9, 6, 5, 4), 1)
+    # The second, alone or with the third.
+    assert_equal(_fill_split(-1, 9, -1, 6, 6, 6), 2)
+    assert_equal(_fill_split(-1, 9, 9, 6, 5, 6), 3)
+    assert_equal(_fill_split(-1, 9, 9, 5, 6, 6), 2)
+    # The third alone, and none.
+    assert_equal(_fill_split(-1, -1, 9, 6, 6, 6), 3)
+    assert_equal(_fill_split(-1, -1, -1, 6, 6, 6), 0)
+
+
+def test_a_zero_normal_becomes_x() raises:
+    var n = _unit_or_x(Point3(0, 0, 0))
+    assert_equal(n.x, 1)
+    assert_equal(n.y, 0)
+    n = _unit_or_x(Point3(0, 3, 4))
+    assert_equal(n.y, 0.6)
+
+
+def test_a_split_edge_splits_the_face_across_it() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_bumpy())
+    var sub = _SubData(Point3(0, 0, 0), 100, 0)
+    sub.edge_key_stride = 200
+    mesh.re_allocate_arrays(4)
+    # Face 1 is (9, 10, 1). Split its edge 10-1 at a new vertex 81.
+    _half_edge_split(mesh, sub, 1, 10, 1, 9)
+    assert_equal(mesh.nb_vertices, 82)
+    assert_equal(mesh.nb_faces, 129)
+    assert_equal(mesh.faces[3], 10)
+    assert_equal(mesh.faces[4], 81)
+    assert_equal(mesh.faces[5], 9)
+    assert_equal(mesh.faces[128 * 3], 81)
+    assert_equal(mesh.faces[128 * 3 + 1], 1)
+    assert_equal(mesh.faces[128 * 3 + 2], 9)
+    # Face 2, (1, 10, 2), has that edge first; it is split across it.
+    var next = _sub_fill_triangles(mesh, sub, [2])
+    assert_equal(len(next), 2)
+    assert_equal(next[0], 2)
+    assert_equal(next[1], 129)
+    assert_equal(mesh.faces[6], 1)
+    assert_equal(mesh.faces[7], 81)
+    assert_equal(mesh.faces[8], 2)
+    assert_equal(mesh.faces[129 * 3], 81)
+    assert_equal(mesh.faces[129 * 3 + 1], 10)
+    assert_equal(mesh.faces[129 * 3 + 2], 2)
+    assert_equal(len(mesh.vert_ring_vert[81]), 4)
+    assert_equal(len(mesh.vert_ring_face[81]), 4)
+
+
+def test_an_edge_split_twice_shares_its_middle() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_bumpy())
+    var sub = _SubData(Point3(0, 0, 0), 100, 0)
+    sub.edge_key_stride = 200
+    mesh.re_allocate_arrays(4)
+    _half_edge_split(mesh, sub, 1, 10, 1, 9)
+    # Face 2 splits the same edge from its side: no new vertex.
+    _half_edge_split(mesh, sub, 2, 1, 10, 2)
+    assert_equal(mesh.nb_vertices, 82)
+    assert_equal(mesh.nb_faces, 130)
+    assert_equal(mesh.faces[7], 81)
+    assert_equal(len(mesh.vert_ring_face[81]), 4)
+
+
+def _quad(var index: List[Int]) raises -> SculptorMesh:
+    """Return a mesh of two triangles over the four corners of a square.
+
+    Args:
+        index: The two triangles' corners.
+
+    Returns:
+        The mesh.
+
+    Raises:
+        Error: If the mesh is refused.
+    """
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(
+        _triangles([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0.5], index^)
+    )
+    return mesh^
+
+
+def test_each_way_two_faces_can_share_an_edge() raises:
+    # Every pairing of the shared corners. Each collapse stops at the open
+    # edge, so the faces stay as they are.
+    var pairs: List[List[Int]] = [
+        [0, 1, 2, 0, 3, 1],
+        [0, 1, 2, 0, 2, 3],
+        [0, 1, 2, 1, 0, 3],
+        [0, 1, 2, 2, 0, 3],
+        [0, 1, 2, 3, 1, 0],
+        [0, 1, 2, 2, 3, 0],
+        [0, 1, 2, 1, 2, 3],
+        [0, 1, 2, 3, 1, 2],
+        [0, 1, 2, 2, 3, 1],
+    ]
+    for pair in pairs:
+        var mesh = _quad(pair.copy())
+        var dec = _DecData()
+        var tris = List[Int]()
+        _dec_decimate_triangles(mesh, dec, 0, 1, tris)
+        assert_equal(len(dec.verts_decimated), 0)
+        assert_equal(mesh.topology_version, 0)
+    # An edge of one face has no second face to collapse with.
+    var mesh = _quad([0, 1, 2, 0, 2, 3])
+    var dec = _DecData()
+    var tris = List[Int]()
+    assert_equal(_dec_find_opposite_triangle(mesh, 0, 0, 1), -1)
+    _dec_decimate_triangles(mesh, dec, 0, -1, tris)
+    assert_equal(len(tris), 0)
+
+
+def test_no_collapse_touches_an_open_edge() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_bumpy())
+    var tris = List[Int]()
+    var dec = _DecData()
+    # Faces 30 and 15 share 16-17: 16 is inside, 17 on the right edge.
+    _dec_decimate_triangles(mesh, dec, 30, 15, tris)
+    # Faces 3 and 18 share 10-11, both inside; the far corner of face 3
+    # is on the top edge.
+    _dec_decimate_triangles(mesh, dec, 3, 18, tris)
+    _dec_decimate_triangles(mesh, dec, 18, 3, tris)
+    assert_equal(len(dec.verts_decimated), 0)
+    assert_equal(mesh.topology_version, 0)
+
+
+def _bipyramid() raises -> SculptorMesh:
+    """Return two triangular pyramids base to base: 0, 1 and 3 on the
+    base, 2 above and 4 below.
+
+    Returns:
+        The mesh.
+
+    Raises:
+        Error: If the mesh is refused.
+    """
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(
+        _triangles(
+            [0, 0, 0, 1, 0, 0, 0.5, 0.5, 1, 0.5, 1, 0, 0.5, 0.5, -1],
+            [0, 1, 2, 2, 3, 0, 0, 3, 4, 0, 4, 1, 1, 3, 2, 1, 4, 3],
+        )
+    )
+    return mesh^
+
+
+def test_an_edge_whose_ends_share_three_neighbors_flips() raises:
+    var mesh = _bipyramid()
+    var dec = _DecData()
+    var tris = List[Int]()
+    # Faces 0 and 3 share the base edge 0-1, whose ends share 2, 3 and 4.
+    _dec_decimate_triangles(mesh, dec, 0, 3, tris)
+    assert_equal(mesh.topology_version, 1)
+    assert_equal(mesh.faces[0], 0)
+    assert_equal(mesh.faces[1], 4)
+    assert_equal(mesh.faces[2], 2)
+    assert_equal(mesh.faces[9], 2)
+    assert_equal(mesh.faces[10], 4)
+    assert_equal(mesh.faces[11], 1)
+    assert_equal(len(dec.verts_to_delete), 0)
+
+
+def test_an_edge_from_the_apex_collapses() raises:
+    var mesh = _bipyramid()
+    var dec = _DecData()
+    var tris = List[Int]()
+    # Faces 1 and 0 share 2-0: the apex, of three neighbors, and a base
+    # corner of four. The base corner joins the apex.
+    _dec_decimate_triangles(mesh, dec, 1, 0, tris)
+    assert_equal(len(dec.verts_to_delete), 1)
+    assert_equal(dec.verts_to_delete[0], 0)
+    assert_equal(len(dec.tris_to_delete), 2)
+    assert_true(len(tris) > 0)
+
+
+def test_a_tetrahedron_does_not_collapse() raises:
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(
+        _triangles(
+            [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [0, 2, 1, 0, 1, 3, 1, 2, 3, 0, 3, 2],
+        )
+    )
+    var dec = _DecData()
+    var tris = List[Int]()
+    _dec_decimate_triangles(mesh, dec, 0, 1, tris)
+    assert_equal(len(dec.verts_decimated), 0)
+
+
+def test_a_flip_onto_an_existing_edge_is_skipped() raises:
+    # The seven-vertex torus: every two vertices are neighbors, so a flip
+    # would make an edge that is there already.
+    var positions = List[Float32]()
+    var index = List[Int]()
+    for i in range(7):
+        positions.append(Float32(i))
+        positions.append(Float32(i * i % 5))
+        positions.append(Float32(i * i * i % 7))
+    for i in range(7):
+        index.append(i)
+        index.append((i + 1) % 7)
+        index.append((i + 3) % 7)
+        index.append(i)
+        index.append((i + 3) % 7)
+        index.append((i + 2) % 7)
+    var mesh = SculptorMesh()
+    mesh.init_from_geometry(_triangles(positions^, index^))
+    var dec = _DecData()
+    var tris = List[Int]()
+    # Faces 0, (0, 1, 3), and 1, (0, 3, 2), share 0-3.
+    _dec_decimate_triangles(mesh, dec, 0, 1, tris)
+    assert_equal(len(dec.verts_decimated), 0)
+    assert_equal(mesh.topology_version, 0)
+
+
+def test_a_hit_on_a_vertex_takes_its_normal() raises:
+    # The hit vertex is the face's first, second and third corner.
+    var s = _pick(_ray(-1, 0.25, 3, 0, 0, -1))
+    assert_equal(s._hit_face, 48)
+    assert_almost_equal(
+        Float64(s.get_hit_normal().x), 0.12977148365512958, atol=EXACT
+    )
+    assert_almost_equal(
+        Float64(s.get_hit_normal().z), 0.9583124595333423, atol=EXACT
+    )
+    s = _pick(_ray(-1, -1, 3, 0, 0, -1))
+    assert_equal(s._hit_face, 112)
+    assert_almost_equal(
+        Float64(s.get_hit_normal().x), 0.3988215548120161, atol=EXACT
+    )
+    s = _pick(_ray(-0.75, 0.25, 3, 0, 0, -1))
+    assert_equal(s._hit_face, 48)
+    assert_almost_equal(
+        Float64(s.get_hit_normal().y), 0.21212121212121213, atol=EXACT
+    )
+
+
+def test_a_view_too_narrow_gives_no_ray() raises:
+    var assets = Assets()
+    var scene = _scene(_bumpy(), assets, Object3D())
+    var sculptor = Sculptor(scene, assets, 0)
+    sculptor.connect(0, 0, 1e-300, 200)
+    assert_false(sculptor.pick_from_pointer(_camera(), scene, 100, 100))
+    # A drag whose view narrows mid-stroke stops.
+    sculptor.connect(0, 0, 200, 200)
+    sculptor.set_tool(SCULPT_DRAG)
+    sculptor.pointer_down(_camera(), scene, 100, 100)
+    sculptor._rect[2] = 1e-300
+    var before = sculptor.sculpt_mesh().vertices[40 * 3]
+    sculptor.pointer_move(_camera(), scene, assets, 120, 100)
+    assert_equal(sculptor.sculpt_mesh().vertices[40 * 3], before)
+
+
+def test_positions_in_one_place_do_not_weld_to_a_triangle() raises:
+    var mesh = SculptorMesh()
+    with assert_raises(contains="degenerate"):
+        mesh.init_from_geometry(_triangles([1, 1, 1, 1, 1, 1, 1, 1, 1], []))
+    with assert_raises(contains="degenerate"):
+        mesh.init_from_geometry(_triangles([1, 1, 1, 2, 1, 1, 2, 1, 1], []))
+    with assert_raises(contains="degenerate"):
+        mesh.init_from_geometry(_triangles([1, 1, 1, 2, 1, 1, 1, 1, 1], []))
+    with assert_raises(contains="position attribute"):
+        mesh.init_from_geometry(_triangles(List[Float32](), []))
+    with assert_raises(contains="finite"):
+        mesh.init_from_geometry(
+            _triangles([0, 0, 0, 1, 0, 0, nan[DType.float32](), 1, 0], [])
+        )
+    with assert_raises(contains="finite"):
+        mesh.init_from_geometry(
+            _triangles([0, 0, 0, 1, 0, 0, 0, 1, inf[DType.float32]()], [])
+        )
+    with assert_raises(contains="fit in Float32"):
+        mesh.init_from_geometry(
+            _triangles([0, 0, 0, 0, 1e30, 0, 0, 0, 1e30], [])
+        )
+    with assert_raises(contains="fit in Float32"):
+        mesh.init_from_geometry(
+            _triangles([0, 0, 0, 0, 0, 1e30, 1e30, 0, 0], [])
+        )
 
 
 def main() raises:
