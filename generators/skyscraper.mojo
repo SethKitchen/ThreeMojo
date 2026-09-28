@@ -548,7 +548,7 @@ def build_faces(points: List[Vec3d]) -> List[FaceFrame]:
     """
     var faces = List[FaceFrame]()
     var up = Vec3d(0, 1, 0)
-    for i in range(len(points)):  # pragma: no branch
+    for i in range(len(points)):
         var a = points[i]
         var b = points[(i + 1) % len(points)]
         var edge = Vec3d(b.z - a.z, 0, -(b.x - a.x)).normalized()
@@ -720,7 +720,10 @@ def _add_spandrel_bands(
         var top = min(center + band_height / 2, v_top)
         var low = max(center - band_height / 2, bottom)
         var h = top - low
-        if h <= 0:
+        # three.js skips a band of no height. The snap keeps the window
+        # below the floor, `0.62 f + 0.3 < f` for any floor of 1.8 meters
+        # or more, so every band has a height.
+        if h <= 0:  # pragma: no branch
             continue
         parts.bands.append(
             frame.box(

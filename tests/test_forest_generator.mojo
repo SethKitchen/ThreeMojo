@@ -169,6 +169,20 @@ def test_steep_ground_stays_bare() raises:
     assert_true(forest.receive_shadow)
 
 
+def test_low_ground_stays_bare() raises:
+    """A band that starts higher turns the low points away: two trees in
+    the forty-two tries three trees allow."""
+    var terrain = _terrain()
+    var p = _forest(3)
+    p.altitude_min = 0.3
+    var forest = ForestGenerator(p^).build(terrain)
+    assert_equal(forest.instances.count(), 2)
+    assert_equal(forest.attempts, 42)
+    assert_almost_equal(
+        forest.instances.matrices[0].elements[12], 96.2101935, atol=1e-4
+    )
+
+
 def test_no_tree_asked_for_none_planted() raises:
     """A count of zero draws nothing."""
     var terrain = _terrain()

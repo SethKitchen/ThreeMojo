@@ -215,9 +215,9 @@ def thermal_erode(
     var offsets: List[Int] = [-1, 1, -n, n]
     for _ in range(passes):
         var delta = List[Float32](length=n * n, fill=0)
-        for z in range(n):  # pragma: no branch
+        for z in range(n):
             _erode_row(h, delta, n, z, drop, offsets)
-        for k in range(n * n):  # pragma: no branch
+        for k in range(n * n):
             h[k] = Float32(Float64(h[k]) + Float64(delta[k]))
 
 

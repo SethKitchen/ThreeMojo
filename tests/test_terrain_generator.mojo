@@ -155,6 +155,10 @@ def test_erosion_conserves_material() raises:
     for i in range(9):
         total += h[i]
     assert_equal(total, 9)
+    # A grid of no vertex has nothing to erode.
+    var empty = List[Float32]()
+    thermal_erode(empty, 0, 1.0, 1.0, 1)
+    assert_equal(len(empty), 0)
 
 
 def test_no_octave_is_flat() raises:

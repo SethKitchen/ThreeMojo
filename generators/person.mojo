@@ -118,7 +118,7 @@ def ring(
         The points.
     """
     var points = List[Vec3d]()
-    for i in range(segments):  # pragma: no branch
+    for i in range(segments):
         var a = Float64(i) / Float64(segments) * pi * 2 + phase
         points.append(
             Vec3d(center.x + cos(a) * rx, center.y, center.z + sin(a) * rz)
@@ -142,7 +142,7 @@ def limb_sections(
     """
     var sections = List[List[Vec3d]]()
     var last = len(joints) - 1
-    for i in range(len(joints)):  # pragma: no branch
+    for i in range(len(joints)):
         var before = joints[max(0, i - 1)].center
         var after = joints[min(last, i + 1)].center
         var turn = unit_vectors_quaternion(

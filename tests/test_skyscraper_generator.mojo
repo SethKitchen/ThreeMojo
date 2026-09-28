@@ -292,6 +292,7 @@ def test_footprint_and_faces() raises:
     # Another corner, and a corner that is none.
     assert_almost_equal(build_footprint(12, 9, 4, -1, -1)[3].x, -2.0, atol=1e-12)
     assert_equal(len(build_footprint(12, 9, 4, 0, 1)), 4)
+    assert_equal(len(build_faces(List[Vec3d]())), 0)
     var bays = faces[3].bays(2.4)
     assert_equal(bays.count, 5)
     assert_almost_equal(bays.margin, 0.0, atol=1e-12)

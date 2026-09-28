@@ -63,6 +63,8 @@ def test_the_helpers_match_three() raises:
     assert_almost_equal(j.y, 0, atol=1e-12)
     var swung = joint(Vec3d(0, 0, 0), 1, pi / 2, 0)
     assert_almost_equal(swung.z, -1, atol=1e-12)
+    assert_equal(len(ring(Vec3d(0, 0, 0), 1, 1, 0, 0)), 0)
+    assert_equal(len(limb_sections(List[Joint](), 4, 0)), 0)
     var points = ring(Vec3d(0, 2, 0), 1, 0.5, 4, 0)
     assert_equal(len(points), 4)
     assert_almost_equal(points[1].z, 0.5, atol=1e-12)
