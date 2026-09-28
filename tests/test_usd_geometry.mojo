@@ -148,6 +148,8 @@ def test_ngons() raises:
     # Points all in one place have no normal to project on.
     var same: List[Float64] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     _ = triangulate_ngon([0, 1, 2, 3, 4], same)
+    var none = triangulate_with_pattern([0, 1, 2, 3, 4], [5], same, HoleMap())
+    assert_equal(len(none.indices), 0)
     with assert_raises(contains="2^24"):
         _ = triangulate_with_pattern(
             [0], [Float64(MAX_CORNERS) + 1], _square(), HoleMap()
@@ -224,6 +226,10 @@ def test_faces_with_holes() raises:
         [0, 1, 2, 3], [[4, 5, 6, 7]], points
     )
     assert_equal(len(direct), 24)
+    var holeless = triangulate_ngon_with_holes(
+        [0, 1, 2, 3], List[List[Float64]](), points
+    )
+    assert_equal(len(holeless), 6)
     # A face whose corners lie on a line has no triangles.
     var line: List[Float64] = [
         0,

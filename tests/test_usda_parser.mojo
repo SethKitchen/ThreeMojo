@@ -316,6 +316,11 @@ def test_prim_fields() raises:
         "  }\n"
         + "    variants = 3\n)\n{\n}\n"
         + 'def "C" (\n    variants = {\n        other = 1\n    }\n)\n{\n}\n'
+        # Each key fails `^string\\s+(\\w+)$` in one way.
+        + 'def "D" (\n    variants = {\n        stringx = "a"\n        string'
+        ' -x = "b"\n'
+        + '        string x y = "c"\n    }\n)\n{\n}\n'
+        + 'def "E" (\n    variants = {\n    }\n)\n{\n}\n'
     )
     var references = layer.field("/A", "references")
     assert_true(layer.kind(references) == USD_ARRAY)
@@ -332,6 +337,8 @@ def test_prim_fields() raises:
     assert_true(layer.kind(layer.field("/B", "payload")) == USD_OBJECT)
     assert_equal(layer.field("/B", "variantSelection"), -1)
     assert_equal(layer.field("/C", "variantSelection"), -1)
+    assert_equal(layer.field("/D", "variantSelection"), -1)
+    assert_equal(layer.field("/E", "variantSelection"), -1)
     with assert_raises(contains="is a group"):
         _ = _one("uniform token[] xformOpOrder = {\n}")
     with assert_raises(contains="is a group"):
@@ -370,8 +377,9 @@ def test_connections_and_samples() raises:
         "float a.connect = </X.y>\nfloat a = 2\nfloat b = 1\nfloat b.connect"
         " = Z\n"
         + "float3 c.timeSamples = {\n    2: (1, 2, 3),\n    0: (4, 5, 6)\n"
-        + "    1.5: (7, 8, 9)\n    x = 1\n    0 {\n    }\n}\nfloat"
+        + "    1.5: (7, 8, 9)\n    x = 1\n    : 4\n    0 {\n    }\n}\nfloat"
         " d.timeSamples = 5\n"
+        + "float e.timeSamples = {\n}\n"
         + "float a = 3"
     )
     var a = layer.spec("/P.a")
@@ -395,6 +403,8 @@ def test_connections_and_samples() raises:
     assert_equal(len(last), 4)
     assert_true(isnan(last[3]))
     assert_equal(layer.number(_default(layer, "/P.d.timeSamples")), 5)
+    var empty = layer.field("/P.e", "timeSamples")
+    assert_equal(len(layer.values[empty].numbers), 0)
 
 
 def test_values_by_type() raises:

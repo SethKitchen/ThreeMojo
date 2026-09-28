@@ -248,7 +248,7 @@ def lz4_decompress_block(
         var start = out - offset
         if start < 0:
             break
-        for i in range(length):
+        for i in range(length):  # pragma: no branch
             if out >= output_end:
                 break
             output[out] = output[start + i]
@@ -1285,7 +1285,7 @@ struct _Crate(Movable):
             value = self.floats(16, 8)
         elif type == CRATE_VEC2I or type == CRATE_VEC3I:
             var numbers = List[Float64]()
-            for _ in range(_width(type)):
+            for _ in range(_width(type)):  # pragma: no branch
                 numbers.append(Float64(self.signed(4)))
             value = usd_numbers(numbers^)
         elif type == CRATE_TOKEN_VECTOR:
@@ -1413,12 +1413,12 @@ struct _Crate(Movable):
         """Return `this.tokens[ this.strings[ index ] ]`.
 
         Args:
-            index: The string.
+            index: The string. It is not negative: it is read unsigned.
 
         Returns:
             Its token, or the empty string past either list.
         """
-        if index < 0 or index >= len(self.strings):
+        if index >= len(self.strings):
             return ""
         return self.token(self.strings[index])
 
@@ -1443,6 +1443,7 @@ struct _Crate(Movable):
             size = self.unsigned(8)
         if size < 0 or size > 0x7FFFFFFF:
             raise Error("USDC: an array size past 2^31 - 1")
+        # From here `size` is at least 1, so each loop below runs.
         if size == 0:
             return UsdValue(USD_NUMBERS)
         if rep.is_compressed():
@@ -1450,7 +1451,7 @@ struct _Crate(Movable):
         if type == CRATE_INT or type == CRATE_UINT:
             self.fits(size, 4)
             var numbers = List[Float64](capacity=size)
-            for _ in range(size):
+            for _ in range(size):  # pragma: no branch
                 if type == CRATE_INT:
                     numbers.append(Float64(self.signed(4)))
                 else:
@@ -1472,13 +1473,13 @@ struct _Crate(Movable):
                 count = size * 4
             self.fits(count, 2)
             var numbers = List[Float64](capacity=count)
-            for _ in range(count):
+            for _ in range(count):  # pragma: no branch
                 numbers.append(self.half())
             return usd_numbers(numbers^)
         if type == CRATE_TOKEN:
             self.fits(size, 4)
             var strings = List[String](capacity=size)
-            for _ in range(size):
+            for _ in range(size):  # pragma: no branch
                 strings.append(self.token(self.unsigned(4)))
             return usd_strings(strings^)
         return UsdValue(USD_NUMBERS)
@@ -1501,7 +1502,7 @@ struct _Crate(Movable):
         if type == CRATE_INT or type == CRATE_UINT:
             var ints = self.integers(size)
             var numbers = List[Float64](capacity=size)
-            for value in ints:
+            for value in ints:  # pragma: no branch
                 numbers.append(Float64(value))
             return usd_numbers(numbers^)
         if type != CRATE_FLOAT:
@@ -1509,7 +1510,7 @@ struct _Crate(Movable):
         var code = self.signed(1)
         var numbers = List[Float64](capacity=size)
         if code == _FLOAT_AS_INTS:
-            for value in self.integers(size):
+            for value in self.integers(size):  # pragma: no branch
                 numbers.append(Float64(Float32(Float64(value))))
         elif code == _FLOAT_TABLE:
             var entries = self.unsigned(4)
@@ -1517,7 +1518,7 @@ struct _Crate(Movable):
             var table = List[Float64]()
             for _ in range(entries):
                 table.append(self.f32())
-            for index in self.integers(size):
+            for index in self.integers(size):  # pragma: no branch
                 if index >= 0 and index < entries:
                     numbers.append(table[index])
                 else:

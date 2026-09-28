@@ -306,12 +306,10 @@ def _is_frame(key: String) -> Bool:
         Whether it is digits and points only, and not empty.
     """
     var bytes = key.as_bytes()
-    if len(bytes) == 0:
-        return False
     for byte in bytes:
         if not ((byte >= 0x30 and byte <= 0x39) or byte == 0x2E):
             return False
-    return True
+    return len(bytes) > 0
 
 
 def _strip_block_comments(text: String) -> String:
@@ -961,6 +959,7 @@ struct _Reader(Movable):
                 numbers += 1
             elif kind == STRING:
                 strings += 1
+        # An empty list reads as numbers, so the loops after this one run.
         if strings == 0 and numbers == len(items):
             var out = List[Float64]()
             for item in items:
@@ -968,11 +967,11 @@ struct _Reader(Movable):
             return self.layer.add(usd_numbers(out^))
         if numbers == 0 and strings == len(items):
             var out = List[String]()
-            for item in items:
+            for item in items:  # pragma: no branch
                 out.append(doc.string(item))
             return self.layer.add(usd_strings(out^))
         var out = UsdValue(USD_ARRAY)
-        for item in items:
+        for item in items:  # pragma: no branch
             out.items.append(self.json(doc, item))
         return self.layer.add(out^)
 
@@ -1006,7 +1005,7 @@ struct _Reader(Movable):
             if first_is_array:
                 # `parsed.flat()`: each element that is an array is spread.
                 var items = List[Int]()
-                for k in range(parsed.length(root)):
+                for k in range(parsed.length(root)):  # pragma: no branch
                     var item = parsed.at(root, k)
                     if doc_is_array(parsed, item):
                         for j in range(parsed.length(item)):
@@ -1441,7 +1440,8 @@ struct _Reader(Movable):
         Raises:
             Error: If the layer refuses a value.
         """
-        for k in range(len(self.layer.paths)):
+        # The layer holds the root at least.
+        for k in range(len(self.layer.paths)):  # pragma: no branch
             if self.layer.specs[k].spec_type != SPEC_PRIM:
                 continue
             # The root has no `typeName`; every other prim has a string.

@@ -964,16 +964,18 @@ def test_variant_selections() raises:
     var color = b.token("color")
     var red = b.token("red")
     var blue = b.token("blue")
-    b.strings = [color, red, blue, 0]
+    var size = b.token("size")
+    b.strings = [color, red, blue, 0, size]
     var at = b.at()
-    _put(b.data, 4, 8)
-    for pair in [(0, 1), (0, 2), (3, 1), (0, 3)]:
+    _put(b.data, 5, 8)
+    for pair in [(0, 1), (4, 1), (0, 2), (3, 1), (0, 3)]:
         _put(b.data, pair[0], 4)
         _put(b.data, pair[1], 4)
     var layer = _one(b, _rep(CRATE_VARIANT_SELECTION_MAP, at))
     var id = _v(layer)
-    assert_equal(len(layer.values[id].strings), 1)
+    assert_equal(len(layer.values[id].strings), 2)
     assert_equal(layer.text(layer.object_value(id, "color")), "blue")
+    assert_equal(layer.text(layer.object_value(id, "size")), "red")
 
 
 def test_time_samples() raises:
@@ -1158,6 +1160,16 @@ def test_field_sets() raises:
     assert_equal(layer.number(layer.field("/", "undefined")), 2)
 
 
+def test_a_field_set_past_the_end() raises:
+    var b = _Builder()
+    b.spec_paths.append(0)
+    b.spec_sets.append(99)
+    b.spec_types.append(7)
+    var layer = parse_usdc(b.build())
+    assert_equal(len(layer.paths), 1)
+    assert_equal(layer.field("/", "v"), -1)
+
+
 def test_ten_thousand_fields_at_most() raises:
     var b = _Builder(0, 3)
     var field = b.field("v", _rep(CRATE_INT, 1, inlined=True))
@@ -1265,6 +1277,10 @@ def test_empty_crates() raises:
     _put(bytes, 0, 8)
     with assert_raises(contains="no TOKENS section"):
         _ = parse_usdc(bytes^)
+    # A crate before 0.4.0 can have no tokens and no token bytes.
+    var tokenless = _Builder(0, 3)
+    tokenless.tokens = List[String]()
+    assert_equal(len(parse_usdc(tokenless.build()).paths), 0)
 
 
 def test_tokens_past_their_bytes() raises:
@@ -1298,6 +1314,9 @@ def test_empty_lists() raises:
     _put(b.data, 9, 4)
     _put(b.data, 0, 4)
     fields.append(b.field("far", _rep(CRATE_VARIANT_SELECTION_MAP, at)))
+    at = b.at()
+    _put(b.data, 0, 8)
+    fields.append(b.field("tokens", _rep(CRATE_TOKEN_VECTOR, at)))
     var body = List[UInt8]()
     body.append(0x74)
     _put(body, 0, 4)
@@ -1311,6 +1330,7 @@ def test_empty_lists() raises:
     assert_equal(len(_numbers(layer, layer.field("/", "doubles"))), 0)
     assert_equal(len(layer.values[layer.field("/", "map")].strings), 0)
     assert_equal(len(layer.values[layer.field("/", "far")].strings), 0)
+    assert_equal(len(layer.values[layer.field("/", "tokens")].strings), 0)
     var nan = Float64(0) / Float64(0)
     _same(_numbers(layer, layer.field("/", "table")), [nan])
     assert_equal(layer.number(layer.field("/", "undefined")), 1)

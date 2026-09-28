@@ -411,7 +411,8 @@ def _index_of(values: List[Float64], value: Float64) -> Float64:
     Returns:
         The first place, or -1.
     """
-    for k in range(len(values)):
+    # Its one caller passes a face of five corners or more.
+    for k in range(len(values)):  # pragma: no branch
         if values[k] == value:
             return Float64(k)
     return -1
