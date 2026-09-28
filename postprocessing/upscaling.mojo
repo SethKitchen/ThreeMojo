@@ -339,7 +339,9 @@ def easu_pixel(
         The upsampled pixel, straight, clamped to its four nearest texels.
     """
     var ppx = u_of(x, width) * Float32(source.width) - 0.5
-    var ppy = (Float32(y) + 0.5) / Float32(height) * Float32(source.height) - 0.5
+    var ppy = (Float32(y) + 0.5) / Float32(height) * Float32(
+        source.height
+    ) - 0.5
     var fpx = floor(ppx)
     var fpy = floor(ppy)
     var fx = ppx - fpx

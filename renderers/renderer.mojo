@@ -7275,7 +7275,9 @@ struct Renderer(Movable):
             var capable = List[Bool]()
             for index in range(len(frame.items)):
                 capable.append(
-                    oit_capable(assets.materials.get(frame.items[index].material))
+                    oit_capable(
+                        assets.materials.get(frame.items[index].material)
+                    )
                 )
             var kept = kept_draws(capable, self.draw_filter, self.oit_draw)
             var draws = List[Draw]()

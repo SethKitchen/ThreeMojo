@@ -76,7 +76,9 @@ def a_scene(mut assets: Assets) raises -> Scene:
     node.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(30.0, DEGREE))
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(1.0, METER), Length(1.0, METER))),
+            assets.geometries.add(
+                plane(Length(1.0, METER), Length(1.0, METER))
+            ),
             assets.materials.add(Material(Color(255, 255, 255), kind=BASIC)),
             scene.add(node^),
         )
@@ -107,7 +109,10 @@ def test_the_frame_is_blocks_of_small_pixels() raises:
             var here = frame.colors[y * SIZE + x]
             var block = frame.colors[(y // 4 * 4) * SIZE + x // 4 * 4]
             assert_equal(here.r, block.r)
-            assert_equal(frame.depth[y * SIZE + x], frame.depth[(y // 4 * 4) * SIZE + x // 4 * 4])
+            assert_equal(
+                frame.depth[y * SIZE + x],
+                frame.depth[(y // 4 * 4) * SIZE + x // 4 * 4],
+            )
             if here.r > 0.5:
                 lit += 1
     assert_true(lit > 0)

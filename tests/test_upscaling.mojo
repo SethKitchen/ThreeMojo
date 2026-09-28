@@ -66,7 +66,9 @@ def cross(
     return image^
 
 
-def rcas_of(image: List[FloatColor], sharpness: Float32, denoise: Bool) -> Float32:
+def rcas_of(
+    image: List[FloatColor], sharpness: Float32, denoise: Bool
+) -> Float32:
     """Return the center of a 3 by 3 image after RCAS, its red."""
     var result = rcas_pixel(LightView(image, 3, 3), 1, 1, sharpness, denoise)
     return result.r
@@ -103,7 +105,9 @@ def test_rcas_is_three_js_s_arithmetic() raises:
 
 
 def test_rcas_keeps_the_alpha_and_premultiplies() raises:
-    var image = List[FloatColor](length=9, fill=FloatColor(0.25, 0.25, 0.25, 0.5))
+    var image = List[FloatColor](
+        length=9, fill=FloatColor(0.25, 0.25, 0.25, 0.5)
+    )
     var result = rcas_pixel(LightView(image, 3, 3), 1, 1, 0.2, False)
     assert_almost_equal(result.a, 0.5, atol=1e-6)
     assert_almost_equal(result.r, 0.25, atol=1e-5)

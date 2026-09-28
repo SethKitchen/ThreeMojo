@@ -59,6 +59,18 @@ def test_the_settings_are_checked() raises:
     with assert_raises(contains="thresholds"):
         check_taau(bad)
     bad = TaauSettings()
+    bad.depth_threshold = Float32.MAX * 2
+    with assert_raises(contains="thresholds"):
+        check_taau(bad)
+    bad = TaauSettings()
+    bad.edge_depth_diff = -1
+    with assert_raises(contains="thresholds"):
+        check_taau(bad)
+    bad = TaauSettings()
+    bad.max_velocity_length = Float32.MAX * 2
+    with assert_raises(contains="velocity"):
+        check_taau(bad)
+    bad = TaauSettings()
     bad.max_velocity_length = 0
     with assert_raises(contains="velocity"):
         check_taau(bad)
@@ -92,17 +104,22 @@ def resolved(
     depth: Float32 = 0.5,
     x: Int = 3,
     y: Int = 3,
+    velocity_y: Float32 = 0,
+    edge: Bool = False,
 ) raises -> FloatColor:
     """Return one output pixel of the resolve over a 4 by 4 input and an
     8 by 8 history of one color, every pixel moving by the velocity, with a
     last depth of zero seen through identity matrices."""
     var history = List[FloatColor](length=OUT * OUT, fill=history_color)
     var depths = List[Float32](length=IN * IN, fill=depth)
+    if edge:
+        # A near texel among the others: the neighbors' depths part.
+        depths[1 * IN + 1] = 0.95
     var previous = List[Float32](length=IN * IN, fill=0)
     var moved = List[Float32]()
     for _ in range(IN * IN):
         moved.append(velocity_x)
-        moved.append(0)
+        moved.append(velocity_y)
     var settings = TaauSettings()
     var frame = TaauFrame(
         IN, IN, OUT, OUT, 0.1, -0.2, 0.1, 10, True, Matrix4(), settings
@@ -130,9 +147,21 @@ def test_the_resolve_clips_a_kept_history() raises:
     var kept = resolved(red, FloatColor(0, 0, 1, 1), 0)
     assert_almost_equal(kept.r, 1, atol=1e-3)
     assert_almost_equal(kept.b, 0, atol=1e-3)
-    # A history read past the image's edge is dropped: the new frame alone.
-    var dropped = resolved(red, FloatColor(0, 0, 1, 1), 4)
-    assert_almost_equal(dropped.r, 1, atol=1e-5)
+    # A history read past each edge of the image is dropped: the new
+    # frame alone.
+    var across: List[Float32] = [4, -4, 0, 0]
+    var down: List[Float32] = [0, 0, 4, -4]
+    for at in range(4):
+        var dropped = resolved(
+            red, FloatColor(0, 0, 1, 1), across[at], velocity_y=down[at]
+        )
+        assert_almost_equal(dropped.r, 1, atol=1e-5)
+        assert_almost_equal(dropped.b, 0, atol=1e-5)
+    # An edge keeps the history of an uncovered pixel.
+    var kept_edge = resolved(
+        red, FloatColor(0, 0, 1, 1), 0, depth=1, x=2, y=2, edge=True
+    )
+    assert_almost_equal(kept_edge.b, 0, atol=1e-3)
     # So is an uncovered surface.
     var fresh = resolved(red, FloatColor(0, 0, 1, 1), 0, depth=1)
     assert_almost_equal(fresh.r, 1, atol=1e-5)
@@ -141,7 +170,9 @@ def test_the_resolve_clips_a_kept_history() raises:
 def test_a_thin_feature_locks_the_history() raises:
     # One bright input texel among dark ones: its luminance is far from the
     # mean, so the lock keeps the history against the clip.
-    var dots = List[FloatColor](length=IN * IN, fill=FloatColor(0.1, 0.1, 0.1, 1))
+    var dots = List[FloatColor](
+        length=IN * IN, fill=FloatColor(0.1, 0.1, 0.1, 1)
+    )
     dots[1 * IN + 1] = FloatColor(1, 1, 1, 1)
     var history = FloatColor(0, 0, 0.9, 1)
     # The last depth, moved into this view, is this one: 0.9090909.
@@ -160,7 +191,9 @@ def a_scene(mut assets: Assets) raises -> Scene:
     node.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(20.0, DEGREE))
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(1.0, METER), Length(1.0, METER))),
+            assets.geometries.add(
+                plane(Length(1.0, METER), Length(1.0, METER))
+            ),
             assets.materials.add(Material(Color(255, 255, 255), kind=BASIC)),
             scene.add(node^),
         )

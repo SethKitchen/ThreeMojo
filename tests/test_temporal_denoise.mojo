@@ -74,6 +74,14 @@ def test_the_settings_are_checked() raises:
     with assert_raises(contains="frame limit"):
         check_temporal_denoise(bad)
     bad = TemporalDenoiseSettings()
+    bad.max_velocity_length = Float32.MAX * 2
+    with assert_raises(contains="frame limit"):
+        check_temporal_denoise(bad)
+    bad = TemporalDenoiseSettings()
+    bad.max_frames = Float32.MAX * 2
+    with assert_raises(contains="frame limit"):
+        check_temporal_denoise(bad)
+    bad = TemporalDenoiseSettings()
     bad.frame_id = -1
     with assert_raises(contains="frame count"):
         check_temporal_denoise(bad)
@@ -86,9 +94,13 @@ def test_the_helpers_are_three_js_s() raises:
     assert_almost_equal(back.y, 0.5, atol=1e-6)
     assert_almost_equal(back.z, 0.9, atol=1e-6)
     # Inside the box a point is kept; outside it is pulled to the box.
-    var inside = clip_to_aabb(Vector3(0.5, 0.5, 0.5), Vector3(0, 0, 0), Vector3(1, 1, 1))
+    var inside = clip_to_aabb(
+        Vector3(0.5, 0.5, 0.5), Vector3(0, 0, 0), Vector3(1, 1, 1)
+    )
     assert_equal(inside.x, 0.5)
-    var outside = clip_to_aabb(Vector3(3, 0.5, 0.5), Vector3(0, 0, 0), Vector3(1, 1, 1))
+    var outside = clip_to_aabb(
+        Vector3(3, 0.5, 0.5), Vector3(0, 0, 0), Vector3(1, 1, 1)
+    )
     assert_almost_equal(outside.x, 1, atol=1e-5)
     assert_almost_equal(outside.y, 0.5, atol=1e-5)
     # The normal is turned by the view's transpose and made unit length.
@@ -278,6 +290,42 @@ def test_an_even_frame_denoises_to_karis_s_blend() raises:
     )
 
 
+def test_a_tilted_surface_and_a_far_environment_denoise() raises:
+    # A normal off the view axis takes the first tangent.
+    var tilted = DenoiseInputs(
+        SIDE,
+        SIDE,
+        plane_of(FloatColor(0.2, 0.2, 0.2, 0.25)),
+        plane_of(FloatColor(0.8, 0.8, 0.8, 1)),
+        plane_of(Float32(0.25)),
+        plane_of(Vector3(0, 0.6, 0.8)),
+        Matrix4(),
+        Matrix4(),
+    )
+    var out = recurrent_denoise_pixel(tilted, 1, 1, TemporalDenoiseSettings())
+    assert_true(out.r > 0 and out.r < 1)
+    # A wide disk reaches a column whose rays reached the environment,
+    # though the pixel's own neighbors' did not.
+    var raw = plane_of(FloatColor(0.8, 0.8, 0.8, 1))
+    for y in range(SIDE):
+        raw[y * SIDE + 3] = FloatColor(0.8, 0.8, 0.8, 2000)
+    var wide = DenoiseInputs(
+        SIDE,
+        SIDE,
+        plane_of(FloatColor(0.2, 0.2, 0.2, 0.25)),
+        raw^,
+        plane_of(Float32(0.25)),
+        plane_of(Vector3(0, 0, 1)),
+        Matrix4(),
+        Matrix4(),
+    )
+    var settings = TemporalDenoiseSettings()
+    settings.alpha_source = RAY_LENGTH_ALPHA
+    settings.radius = 200
+    var far = recurrent_denoise_pixel(wide, 0, 1, settings)
+    assert_true(far.r > 0 and far.r < 1)
+
+
 def test_a_newer_neighbor_smooths_the_frame_count() raises:
     var history = plane_of(FloatColor(0.2, 0.2, 0.2, 0.25))
     for slot in range(SIDE * SIDE):
@@ -346,7 +394,9 @@ def test_the_loop_keeps_its_history() raises:
     assert_equal(len(first), SIDE * SIDE)
     assert_equal(settings.frame_id, 1)
     assert_equal(settings.history_width, SIDE)
-    var second = temporal_denoise(raw, view, normals, still, Matrix4(), settings)
+    var second = temporal_denoise(
+        raw, view, normals, still, Matrix4(), settings
+    )
     assert_equal(settings.frame_id, 2)
     # An even signal stays even and bounded.
     assert_true(second[5].r > 0.3 and second[5].r < 0.5)

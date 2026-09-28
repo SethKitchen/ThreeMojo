@@ -2227,7 +2227,9 @@ def traa_pass(
     return step^
 
 
-def sharpen_pass(sharpness: Float32 = 0.2, denoise: Bool = False) raises -> Pass:
+def sharpen_pass(
+    sharpness: Float32 = 0.2, denoise: Bool = False
+) raises -> Pass:
     """Return a pass of three.js's `sharpen`, robust contrast-adaptive
     sharpening over the frame.
 

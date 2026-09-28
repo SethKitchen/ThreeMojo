@@ -186,7 +186,7 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
     """
     if not settings.alpha_source.is_valid():
         raise Error("A denoiser's alpha source must be one of the three")
-    if not (
+    var finite = (
         isfinite(settings.clamp_intensity)
         and isfinite(settings.flicker_suppression)
         and isfinite(settings.luma_phi)
@@ -198,7 +198,8 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
         and isfinite(settings.strength)
         and isfinite(settings.denoise_flicker_suppression)
         and isfinite(settings.adaptive_trust)
-    ):
+    )
+    if not finite:
         raise Error("A denoiser setting must be finite")
     if not (
         settings.max_velocity_length > 0
@@ -382,7 +383,7 @@ struct ReprojectInputs(Movable):
             Error: If a list does not have one entry a pixel.
         """
         var count = width * height
-        if not (
+        var complete = (
             len(signal) == count
             and len(history) == count
             and len(depth) == count
@@ -390,7 +391,8 @@ struct ReprojectInputs(Movable):
             and len(normals) == count
             and len(previous_normals) == count
             and len(velocities) == count
-        ):
+        )
+        if not complete:
             raise Error("A reprojection needs one of each input a pixel")
         self.width = width
         self.height = height
@@ -519,7 +521,13 @@ def sample_history(
     var fx = px - fx0
     var fy = py - fy0
     var t00 = _history_tap(
-        inputs, camera, ix, iy, (1 - fx) * (1 - fy), world_position, world_normal
+        inputs,
+        camera,
+        ix,
+        iy,
+        (1 - fx) * (1 - fy),
+        world_position,
+        world_normal,
     )
     var t10 = _history_tap(
         inputs, camera, ix + 1, iy, fx * (1 - fy), world_position, world_normal
@@ -541,9 +549,7 @@ def sample_history(
     )
 
 
-def _history_uv(
-    inputs: ReprojectInputs, x: Int, y: Int
-) -> Vector2:
+def _history_uv(inputs: ReprojectInputs, x: Int, y: Int) -> Vector2:
     """Return where a pixel was, `uv - velocity * (0.5, -0.5)`."""
     var slot = inputs.slot(x, y)
     var moved = inputs.velocities[slot]
@@ -680,13 +686,18 @@ def temporal_reproject_pixel(
         * VARIANCE_CLIP_LUMA_SCALE
         + 1
     )
-    var clipped = from_ycocg(
-        clip_to_aabb(
-            to_ycocg(history.r / scale, history.g / scale, history.b / scale),
-            low,
-            high,
+    var clipped = (
+        from_ycocg(
+            clip_to_aabb(
+                to_ycocg(
+                    history.r / scale, history.g / scale, history.b / scale
+                ),
+                low,
+                high,
+            )
         )
-    ) * scale
+        * scale
+    )
     var clamp_intensity = (
         settings.clamp_intensity
         * max(min(motion * 10, 1), Float32(0.25))
@@ -831,7 +842,9 @@ def karis_blend(
     var w_hist = (1 - a_trust) / (
         luminance_of(denoised.x, denoised.y, denoised.z) * effective * 10 + 1
     )
-    var w_raw = a_trust / (luminance_of(raw.x, raw.y, raw.z) * effective * 10 + 1)
+    var w_raw = a_trust / (
+        luminance_of(raw.x, raw.y, raw.z) * effective * 10 + 1
+    )
     return (denoised * w_hist + raw * w_raw) / max(w_hist + w_raw, TSL_EPSILON)
 
 
@@ -878,12 +891,13 @@ struct DenoiseInputs(Movable):
                 projection cannot be inverted.
         """
         var count = width * height
-        if not (
+        var complete = (
             len(history) == count
             and len(raw) == count
             and len(depth) == count
             and len(normals) == count
-        ):
+        )
+        if not complete:
             raise Error("A denoise needs one of each input a pixel")
         if projection.determinant() == 0:
             raise Error("A denoise's projection must be invertible")
@@ -903,7 +917,9 @@ struct DenoiseInputs(Movable):
         # three.js's `tan( fov / 2 )`, from the projection's second column.
         self.tan_half_fov = 1 / projection.elements[5]
 
-    def sample(self, colors: List[FloatColor], u: Float32, v: Float32) -> FloatColor:
+    def sample(
+        self, colors: List[FloatColor], u: Float32, v: Float32
+    ) -> FloatColor:
         """Return a list read bilinear at a coordinate that grows down,
         held at the edges.
 
@@ -1030,9 +1046,7 @@ def recurrent_denoise_pixel(
     var c = cos(turn)
     var s = sin(turn)
     var frames = 1 / texel.a
-    var variance = max(
-        1 / pow(frames, 1 - settings.strength), Float32(0.05)
-    )
+    var variance = max(1 / pow(frames, 1 - settings.strength), Float32(0.05))
     var aggressivity = 1 - variance
     var raw = _floor0(inputs.sample(inputs.raw, u, v))
     var view_z = abs(here.z)
@@ -1129,7 +1143,9 @@ def recurrent_denoise_pixel(
         var n_world = inverse_view_normal(inputs.normal(su, sv), inputs.view)
         var plane = abs((here - there).dot(normal))
         var normal_weight = exp_f((world_normal.dot(n_world) - 1) * falloff)
-        var w = exp_f(-(diff * aggressivity + plane * depth_scale)) * normal_weight
+        var w = (
+            exp_f(-(diff * aggressivity + plane * depth_scale)) * normal_weight
+        )
         shrink = shrink + (w - shrink) * settings.adapt
         bias = bias + (dir * (w - 0.5) - bias) * 0.5
         var neighbor_luma = luminance_of(
@@ -1137,7 +1153,10 @@ def recurrent_denoise_pixel(
         )
         var boost = 1 / (neighbor_luma * neighbor_luma + 0.01)
         w *= boost + (1 - boost) * min(frames / 5, 1)
-        raw_sum = raw_sum + Vector3(raw_neighbor.r, raw_neighbor.g, raw_neighbor.b) * w
+        raw_sum = (
+            raw_sum
+            + Vector3(raw_neighbor.r, raw_neighbor.g, raw_neighbor.b) * w
+        )
         raw_weight += w
         denoised = denoised + Vector3(neighbor.r, neighbor.g, neighbor.b) * w
         total += w

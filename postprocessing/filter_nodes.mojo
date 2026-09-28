@@ -297,7 +297,9 @@ def scanlines(
     return 1 - (line * 0.5 + 0.5) * intensity
 
 
-def circle(scale: Float32, softness: Float32, u: Float32, v: Float32) -> Float32:
+def circle(
+    scale: Float32, softness: Float32, u: Float32, v: Float32
+) -> Float32:
     """Return three.js's `circle`: one at the center, falling to zero past
     `scale`, over the last `softness` of it.
 
@@ -697,12 +699,14 @@ def _value_at(
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, width - 1)
     var y1 = min(y0 + 1, height - 1)
-    var top = values[y0 * width + x0] + (
-        values[y0 * width + x1] - values[y0 * width + x0]
-    ) * fx
-    var bottom = values[y1 * width + x0] + (
-        values[y1 * width + x1] - values[y1 * width + x0]
-    ) * fx
+    var top = (
+        values[y0 * width + x0]
+        + (values[y0 * width + x1] - values[y0 * width + x0]) * fx
+    )
+    var bottom = (
+        values[y1 * width + x0]
+        + (values[y1 * width + x1] - values[y1 * width + x0]) * fx
+    )
     return top + (bottom - top) * fy
 
 
@@ -827,9 +831,7 @@ def depth_aware_blend_pixel(
     var v = (Float32(y) + 0.5) / Float32(h)
     var near = view.near
     var far = view.far
-    var here = view_z_to_orthographic_depth(
-        _view_z_down(view, u, v), near, far
-    )
+    var here = view_z_to_orthographic_depth(_view_z_down(view, u, v), near, far)
     var push_x = Float32(0)
     var push_y = Float32(0)
     var count = Float32(0)

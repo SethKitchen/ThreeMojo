@@ -143,8 +143,12 @@ def test_the_settings_are_checked() raises:
 
 
 def test_the_noise_is_three_js_s() raises:
-    assert_almost_equal(interleaved_gradient_noise(0.5, 0.5), 0.9324913, atol=1e-5)
-    assert_almost_equal(interleaved_gradient_noise(3.5, 7.5), 0.7645149, atol=1e-5)
+    assert_almost_equal(
+        interleaved_gradient_noise(0.5, 0.5), 0.9324913, atol=1e-5
+    )
+    assert_almost_equal(
+        interleaved_gradient_noise(3.5, 7.5), 0.7645149, atol=1e-5
+    )
 
 
 def test_the_crt_functions_are_three_js_s() raises:
@@ -325,7 +329,10 @@ def test_the_depth_aware_blend_mixes_by_the_mask() raises:
     assert_almost_equal(frame.colors[0].r, 0.5, atol=1e-5)
     with assert_raises(contains="one blend texel"):
         depth_aware_blend_light(
-            frame, view, List[FloatColor](length=3, fill=gray(0)), FilterSettings()
+            frame,
+            view,
+            List[FloatColor](length=3, fill=gray(0)),
+            FilterSettings(),
         )
 
 

@@ -30,7 +30,10 @@ from postprocessing.oit import (
     oit_render,
     oit_weight,
 )
+from core.background import texture_background
 from render.framebuffer import Color, FloatColor
+from render.rasterizer import RasterVertex
+from render.texture import data_texture
 from render.target import FLOAT_TARGET, RenderTarget
 from renderers.draw_filter import (
     ALL_DRAWS,
@@ -69,7 +72,9 @@ def test_one_layer_is_normal_blending() raises:
     var sums = OitAccumulation(1)
     assert_equal(sums.revealage[0], 1)
     sums.add(0, FloatColor(0.8 * 0.5, 0, 0, 0.5), 3)
-    var out = oit_composite(FloatColor(0, 0, 1, 1), sums.accum[0], sums.revealage[0])
+    var out = oit_composite(
+        FloatColor(0, 0, 1, 1), sums.accum[0], sums.revealage[0]
+    )
     assert_almost_equal(out.r, 0.4, atol=1e-5)
     assert_almost_equal(out.b, 0.5, atol=1e-5)
     assert_almost_equal(out.a, 1, atol=1e-6)
@@ -88,7 +93,9 @@ def test_the_order_does_not_matter() raises:
     var second = OitAccumulation(1)
     second.add(0, blue, 5)
     second.add(0, red, 2)
-    var a = oit_composite(FloatColor(0, 1, 0, 1), first.accum[0], first.revealage[0])
+    var a = oit_composite(
+        FloatColor(0, 1, 0, 1), first.accum[0], first.revealage[0]
+    )
     var b = oit_composite(
         FloatColor(0, 1, 0, 1), second.accum[0], second.revealage[0]
     )
@@ -117,7 +124,9 @@ def test_the_draw_filter_keeps_the_right_draws() raises:
 
 
 def test_a_capable_material_is_transparent_normal_and_clear() raises:
-    var glass = Material(Color(255, 0, 0), kind=BASIC, transparent=True, opacity=0.5)
+    var glass = Material(
+        Color(255, 0, 0), kind=BASIC, transparent=True, opacity=0.5
+    )
     assert_true(oit_capable(glass))
     assert_false(oit_capable(Material(Color(255, 0, 0), kind=BASIC)))
     var added = Material(
@@ -146,7 +155,9 @@ def pane(
     node.set_position(x, 0, z)
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(plane(Length(1.2, METER), Length(1.2, METER))),
+            assets.geometries.add(
+                plane(Length(1.2, METER), Length(1.2, METER))
+            ),
             assets.materials.add(
                 Material(color, kind=BASIC, transparent=True, opacity=0.5)
             ),
@@ -194,6 +205,14 @@ def test_the_pass_weighs_the_panes() raises:
     assert_true(covered.g < covered.r + 0.2)
     # Nothing transparent in a corner: the background.
     assert_almost_equal(frame.color_at(0, 0).r, 0, atol=1e-5)
+    # A texture background is painted under the first draw alone.
+    var backed = a_scene(assets)
+    backed.background = texture_background(
+        assets.textures.add(data_texture(1, 1, [0.0, 1.0, 0.0, 1.0]))
+    )
+    var painted = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET)
+    oit_render(painted, renderer, backed, assets, camera)
+    assert_true(painted.color_at(0, 0).g > 0.9)
     # An empty scene weighs nothing.
     var empty = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET)
     oit_render(empty, renderer, Scene(), Assets(), camera)
@@ -238,6 +257,9 @@ def test_the_snap_rounds_to_whole_pixels_from_the_center() raises:
         assert_equal(x, Float32(Int(x)))
         assert_equal(y, Float32(Int(y)))
         assert_true(abs(corners[at].x - frame.corners[at].x) <= 0.5)
+    var none = List[RasterVertex]()
+    snap_to_pixels(none, 10, 6)
+    assert_equal(len(none), 0)
     # A renderer that snaps draws the same scene.
     renderer.snap_vertices = True
     var target = RenderTarget(10, 6, Color(0, 0, 0))

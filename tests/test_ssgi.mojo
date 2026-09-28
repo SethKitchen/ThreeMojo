@@ -161,7 +161,9 @@ def a_scene(mut assets: Assets, light_target: Bool = False) raises -> Scene:
     right and above."""
     var scene = Scene()
     var floor = Object3D()
-    floor.set_euler(Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE))
+    floor.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
     scene.add_mesh(
         Mesh(
             assets.geometries.add(plane(Length(4, METER), Length(4, METER))),
@@ -255,6 +257,20 @@ def test_the_crease_is_darkened_and_lit() raises:
         var other = ssgi_signal(inputs, variants[at])
         for slot in range(SIZE * SIZE):
             assert_true(other[slot].a >= 0 and other[slot].a <= 1)
+    # A bright bounce is held at a luminance of seven.
+    var strong = SsgiSettings()
+    strong.gi_intensity = 1000
+    var held = ssgi_signal(inputs, strong)
+    var capped = 0
+    for slot in range(SIZE * SIZE):
+        var light = held[slot]
+        var luma = (
+            0.2126729 * light.r + 0.7151522 * light.g + 0.0721750 * light.b
+        )
+        assert_true(luma <= 7.001)
+        if luma > 6.99:
+            capped += 1
+    assert_true(capped > 0)
     # The composite: the frame times the AO, plus the frame times the light.
     var before = frame.colors[12 * SIZE + 12]
     ssgi_composite(frame, signal)
@@ -277,6 +293,10 @@ def test_a_frame_without_normals_takes_them_from_the_depth() raises:
     assert_true(inputs.normal(0.5, 0.8).length() > 0.9)
     with assert_raises(contains="the frame's size"):
         _ = ScreenInputs(RenderTarget(4, 4, Color(0, 0, 0)), view_of(frame))
+    with assert_raises(contains="the frame's size"):
+        _ = ScreenInputs(RenderTarget(SIZE, 4, Color(0, 0, 0)), view_of(frame))
+    with assert_raises(contains="the frame's size"):
+        _ = ScreenInputs(RenderTarget(4, SIZE, Color(0, 0, 0)), view_of(frame))
 
 
 def test_the_light_direction_is_in_the_camera_s_space() raises:
@@ -357,6 +377,27 @@ def test_an_orthographic_depth_reads_its_own_view_z() raises:
     left.normalize()
     assert_equal(sss_pixel(inputs, 2, 4, right, settings), 0)
     assert_equal(sss_pixel(inputs, 2, 4, left, settings), 1)
+    # A strip nearer than the thickness is passed over.
+    var thin = settings
+    thin.thickness = Length(0.1, METER)
+    assert_equal(sss_pixel(inputs, 2, 4, right, thin), 1)
+    # No quality takes no step.
+    var none = settings
+    none.quality = 0
+    assert_equal(sss_pixel(inputs, 2, 4, right, none), 1)
+    # Long rays leave the image by each edge and shadow nothing.
+    var long = settings
+    long.max_distance = Length(10.0, METER)
+    var up = Vector3(0, 1, 0.5)
+    up.normalize()
+    var down = Vector3(0, -1, 0.5)
+    down.normalize()
+    assert_equal(sss_pixel(inputs, 1, 4, left, long), 1)
+    assert_equal(sss_pixel(inputs, 1, 4, up, long), 1)
+    assert_equal(sss_pixel(inputs, 1, 4, down, long), 1)
+    var far_right = Vector3(1, 0, 3)
+    far_right.normalize()
+    assert_equal(sss_pixel(inputs, 5, 4, far_right, long), 1)
 
 
 def test_the_composer_runs_both_passes() raises:

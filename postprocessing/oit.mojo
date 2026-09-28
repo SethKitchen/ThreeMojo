@@ -68,9 +68,7 @@ struct OitAccumulation(Movable):
         Args:
             count: How many pixels.
         """
-        self.accum = List[FloatColor](
-            length=count, fill=FloatColor(0, 0, 0, 0)
-        )
+        self.accum = List[FloatColor](length=count, fill=FloatColor(0, 0, 0, 0))
         self.revealage = List[Float32](length=count, fill=1)
 
     def add(mut self, slot: Int, light: FloatColor, distance: Float32):

@@ -354,7 +354,9 @@ def smith_g(n_dot_x: Float32, alpha: Float32) -> Float32:
     return 2 * n_dot_x / (n_dot_x + sqrt(a2 + (1 - a2) * n_dot_x * n_dot_x))
 
 
-def geometry_term(n_dot_l: Float32, n_dot_v: Float32, alpha: Float32) -> Float32:
+def geometry_term(
+    n_dot_l: Float32, n_dot_v: Float32, alpha: Float32
+) -> Float32:
     """Return three.js's `GeometryTerm`: the shadowing of both directions.
 
     Args:
@@ -592,7 +594,9 @@ def conditional_at(env: EquirectEnvironment, u: Float32, v: Float32) -> Float32:
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, w - 1)
     var y1 = min(y0 + 1, h - 1)
-    var top = _lerp(env.conditional[y0 * w + x0], env.conditional[y0 * w + x1], fx)
+    var top = _lerp(
+        env.conditional[y0 * w + x0], env.conditional[y0 * w + x1], fx
+    )
     var bottom = _lerp(
         env.conditional[y1 * w + x0], env.conditional[y1 * w + x1], fx
     )

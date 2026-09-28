@@ -101,7 +101,9 @@ def test_the_mapping_is_three_js_s() raises:
     var side = equirect_uv_to_dir(Vector2(0.75, 0.5))
     assert_almost_equal(side.z, 1, atol=1e-6)
     assert_almost_equal(
-        equirect_dir_pdf(Vector3(1, 0, 0)), Float32(1 / (2 * pi * pi)), atol=1e-6
+        equirect_dir_pdf(Vector3(1, 0, 0)),
+        Float32(1 / (2 * pi * pi)),
+        atol=1e-6,
     )
     assert_equal(equirect_dir_pdf(Vector3(0, 1, 0)), 0)
 
@@ -130,12 +132,18 @@ def test_the_samples_read_the_map() raises:
     var brdf = sample_environment_brdf(env, Matrix4(), up, up, up, 0.5, f0)
     assert_almost_equal(brdf.x, 0.08, atol=1e-5)
     # A mirror lobe takes the reflected ray alone, fully weighed.
-    var mirror = sample_environment_mis(env, Matrix4(), up, up, up, 0.005, f0, 0.5, 0.5)
+    var mirror = sample_environment_mis(
+        env, Matrix4(), up, up, up, 0.005, f0, 0.5, 0.5
+    )
     assert_almost_equal(mirror.x, 0.08, atol=1e-4)
     # A rough lobe draws a second sample: one along the normal, and one
     # across it, which is passed over.
-    var along = sample_environment_mis(env, Matrix4(), up, up, up, 0.5, f0, 0.5, 0.9)
-    var across = sample_environment_mis(env, Matrix4(), up, up, up, 0.5, f0, 0.5, 0.5)
+    var along = sample_environment_mis(
+        env, Matrix4(), up, up, up, 0.5, f0, 0.5, 0.9
+    )
+    var across = sample_environment_mis(
+        env, Matrix4(), up, up, up, 0.5, f0, 0.5, 0.5
+    )
     assert_true(isfinite(along.x) and along.x > 0)
     assert_true(along.x > across.x)
 

@@ -121,12 +121,13 @@ def check_taau(settings: TaauSettings) raises:
             is not positive, the frame weight is outside zero to one, or
             the resolution scale is outside zero to one.
     """
-    if not (
+    var thresholds = (
         isfinite(settings.depth_threshold)
         and isfinite(settings.edge_depth_diff)
         and settings.depth_threshold >= 0
         and settings.edge_depth_diff >= 0
-    ):
+    )
+    if not thresholds:
         raise Error(
             "A TAAU pass's depth thresholds must be finite and not negative"
         )
@@ -140,9 +141,7 @@ def check_taau(settings: TaauSettings) raises:
         and settings.current_frame_weight <= 1
     ):
         raise Error("A TAAU pass's frame weight must be from zero to one")
-    if not (
-        settings.resolution_scale > 0 and settings.resolution_scale <= 1
-    ):
+    if not (settings.resolution_scale > 0 and settings.resolution_scale <= 1):
         raise Error("A TAAU pass's resolution scale must be in (0, 1]")
 
 

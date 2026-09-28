@@ -124,14 +124,15 @@ def check_ssgi(settings: SsgiSettings) raises:
     """
     if settings.slice_count < 1 or settings.step_count < 1:
         raise Error("An SSGI pass needs a slice and a step")
-    if not (
+    var finite = (
         isfinite(settings.ao_intensity)
         and isfinite(settings.gi_intensity)
         and isfinite(settings.radius)
         and isfinite(settings.exp_factor)
         and isfinite(settings.thickness.value)
         and isfinite(settings.backface_lighting)
-    ):
+    )
+    if not finite:
         raise Error("An SSGI pass setting must be finite")
     if not (settings.radius > 0 and settings.exp_factor > 0):
         raise Error("An SSGI pass's radius and step growth must be positive")
@@ -152,9 +153,7 @@ struct ScreenInputs(Movable):
     var width: Int
     var height: Int
 
-    def __init__(
-        out self, frame: RenderTarget, var view: DepthView
-    ) raises:
+    def __init__(out self, frame: RenderTarget, var view: DepthView) raises:
         """Gather a frame's inputs.
 
         Args:
@@ -255,11 +254,11 @@ def gtao_fast_acos(value: Float32) -> Float32:
     Returns:
         The angle, in radians.
     """
-    var out = abs(value) * Float32(-0.156583) + Float32(pi / 2)
-    out *= sqrt(1 - abs(value))
+    var angle = abs(value) * Float32(-0.156583) + Float32(pi / 2)
+    angle *= sqrt(1 - abs(value))
     if value >= 0:
-        return out
-    return Float32(pi) - out
+        return angle
+    return Float32(pi) - angle
 
 
 def glsl_sign(x: Float32) -> Float32:
@@ -370,7 +369,8 @@ def _horizon(
     var sampling = Float32(1) if right else Float32(-1)
     var color = Vector3(0, 0, 0)
     var backface = settings.backface_lighting
-    for i in range(settings.step_count):
+    # At least one step, so the loop runs.
+    for i in range(settings.step_count):  # pragma: no branch
         var fi = Float32(i)
         var offset = (
             pow(
@@ -541,7 +541,9 @@ def ssgi_pixel(
     )
 
 
-def ssgi_signal(inputs: ScreenInputs, settings: SsgiSettings) -> List[FloatColor]:
+def ssgi_signal(
+    inputs: ScreenInputs, settings: SsgiSettings
+) -> List[FloatColor]:
     """Return `SSGINode`'s two targets at every pixel, row by row from the
     top: the indirect light in red, green and blue and the AO in alpha.
 
@@ -559,9 +561,7 @@ def ssgi_signal(inputs: ScreenInputs, settings: SsgiSettings) -> List[FloatColor
     return out^
 
 
-def ssgi_composite(
-    mut frame: RenderTarget, signal: List[FloatColor]
-):
+def ssgi_composite(mut frame: RenderTarget, signal: List[FloatColor]):
     """Mix the SSGI into the frame: `frame * ao + frame * gi`, the frame's
     color standing in for the example's diffuse color.
 
@@ -620,12 +620,13 @@ def check_sss(settings: SssSettings) raises:
     """
     if not settings.light.is_valid():
         raise Error("An SSS pass's light must not be negative")
-    if not (
+    var finite = (
         isfinite(settings.max_distance.value)
         and isfinite(settings.thickness.value)
         and isfinite(settings.shadow_intensity)
         and isfinite(settings.quality)
-    ):
+    )
+    if not finite:
         raise Error("An SSS pass setting must be finite")
     if settings.frame_id < 0:
         raise Error("An SSS pass's frame count must not be negative")
@@ -664,7 +665,9 @@ def _view_z_of(view: DepthView, depth: Float32) -> Float32:
     """Return three.js's `perspectiveDepthToViewZ` or
     `orthographicDepthToViewZ`, by the camera."""
     if view.perspective:
-        return (view.near * view.far) / ((view.far - view.near) * depth - view.far)
+        return (view.near * view.far) / (
+            (view.far - view.near) * depth - view.far
+        )
     return (view.near - view.far) * depth - view.near
 
 
@@ -734,7 +737,10 @@ def sss_pixel(
 
 
 def sss_light(
-    mut frame: RenderTarget, inputs: ScreenInputs, toward: Vector3, settings: SssSettings
+    mut frame: RenderTarget,
+    inputs: ScreenInputs,
+    toward: Vector3,
+    settings: SssSettings,
 ):
     """Multiply the frame's light by `SSSNode`'s shadow.
 
