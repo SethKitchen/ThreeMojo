@@ -1014,7 +1014,7 @@ struct Sculptor(Movable):
             Error: If the tool is drag or scale, which need a pointer, or
                 `pick_from_ray` raises.
         """
-        if self._active_pointer:
+        if Bool(self._active_pointer):
             return False
         _validate_ray_tool(self._tool)
         if not self.pick_from_ray(scene, ray, world_radius):

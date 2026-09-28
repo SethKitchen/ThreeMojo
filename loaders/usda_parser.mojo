@@ -233,7 +233,7 @@ def def_match(key: String) -> Optional[Tuple[String, String]]:
                     return (String(key[byte = at : at + word]), name.value())
                 gap -= 1
         var bare = _quoted_tail(key, at)
-        if bare:
+        if Bool(bare):
             return (String(""), bare.value())
         taken -= 1
     return None

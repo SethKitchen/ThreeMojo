@@ -496,7 +496,7 @@ struct _Index(Movable):
             value: The string.
         """
         var found = self.keys.get(key)
-        if found:
+        if Bool(found):
             self.lists[found.value()].append(value)
             return
         self.keys[key] = len(self.lists)
@@ -512,7 +512,7 @@ struct _Index(Movable):
             The list, empty when there is none.
         """
         var found = self.keys.get(key)
-        if found:
+        if Bool(found):
             return self.lists[found.value()].copy()
         return List[String]()
 
@@ -829,7 +829,7 @@ struct _Composer(Movable):
                     var prim = String(path[byte=:dot])
                     var name = String(path[byte = dot + 1 :])
                     var found = self.attribute_names.get(prim)
-                    if found:
+                    if Bool(found):
                         self.attribute_lists[found.value()].append(name)
                     else:
                         self.attribute_names[prim] = len(self.attribute_lists)
@@ -920,7 +920,7 @@ struct _Composer(Movable):
                     parent + "/{" + set_name + "=}", "variantChildren"
                 )
                 var first = self.layer.element_string(children, 0)
-                if first:
+                if Bool(first):
                     chosen = first.value()
             if chosen != "":
                 out.append(parent + "/{" + set_name + "=" + chosen + "}")
@@ -1012,7 +1012,7 @@ struct _Composer(Movable):
         var attrs = _Attrs()
         self.collect(path, attrs)
         var inside = variant_path_match(path)
-        if inside:
+        if Bool(inside):
             var base = inside.value()[0]
             var relative = inside.value()[1]
             for variant in self.variant_paths(base):
@@ -1063,7 +1063,7 @@ struct _Composer(Movable):
         var references = self.layer.specs[spec].field("references")
         if self.layer.truthy(references) and self.layer.length(references) > 0:
             var first = self.layer.element_string(references, 0)
-            if first:
+            if Bool(first):
                 for found in reference_matches(first.value()):
                     out.append(found[0])
         var payload = self.layer.specs[spec].field("payload")
@@ -1510,7 +1510,7 @@ struct _Composer(Movable):
                 var inverse = op.startswith("!invert!")
                 var name = String(op[byte=8:]) if inverse else op
                 var step = self.operation(name, spec, attrs, scale)
-                if step:
+                if Bool(step):
                     var m = step.value()
                     if inverse:
                         m.invert()
@@ -2056,10 +2056,10 @@ struct _Composer(Movable):
             var c = self.color(
                 fields.get("inputs:diffuseColor"), "diffuseColor"
             )
-            if c:
+            if Bool(c):
                 built.materials[material].color = c.value()
         var map_scale = self.scaled(built.materials[material].map.value, built)
-        if map_scale and len(map_scale.value()) >= 3:
+        if Bool(map_scale) and len(map_scale.value()) >= 3:
             var s = map_scale.value().copy()
             built.materials[material].color = authored_color(
                 s[0], s[1], s[2], "USD scale"
@@ -2073,12 +2073,12 @@ struct _Composer(Movable):
             var c = self.color(
                 fields.get("inputs:emissiveColor"), "emissiveColor"
             )
-            if c:
+            if Bool(c):
                 built.materials[material].emissive = c.value()
         var emissive_map = built.materials[material].emissive_map.value
         if emissive_map >= 0:
             var s = self.scaled(emissive_map, built)
-            if s:
+            if Bool(s):
                 if len(s.value()) >= 3:
                     var v = s.value().copy()
                     built.materials[material].emissive = authored_color(
@@ -2094,7 +2094,7 @@ struct _Composer(Movable):
         var normal_map = built.materials[material].normal_map.value
         if normal_map >= 0:
             var s = self.scaled(normal_map, built)
-            if s:
+            if Bool(s):
                 var v = s.value().copy()
                 var x = v[0] if len(v) > 0 else nan[DType.float64]()
                 var y = v[1] if len(v) > 1 else nan[DType.float64]()
@@ -2139,12 +2139,12 @@ struct _Composer(Movable):
             var c = self.color(
                 fields.get("inputs:specularColor"), "specularColor"
             )
-            if c:
+            if Bool(c):
                 built.materials[material].specular_color = c.value()
         var specular_scale = self.scaled(
             built.materials[material].specular_color_map.value, built
         )
-        if specular_scale and len(specular_scale.value()) >= 3:
+        if Bool(specular_scale) and len(specular_scale.value()) >= 3:
             var s = specular_scale.value().copy()
             built.materials[material].specular_color = authored_color(
                 s[0], s[1], s[2], "USD scale"
@@ -2248,7 +2248,7 @@ struct _Composer(Movable):
             if k > 0:
                 out += ","
             var text = self.layer.element_string(id, k)
-            if text:
+            if Bool(text):
                 out += text.value()
             else:
                 out += js_number_text(self.layer.element_number(id, k))
@@ -2517,7 +2517,7 @@ struct _Composer(Movable):
                 var white = _is_white(built.materials[material].color)
                 if white and built.materials[material].map == NO_TEXTURE:
                     var color = self.color(tint, "displayColor")
-                    if color:
+                    if Bool(color):
                         built.materials[material].color = color.value()
         var fade = attrs.get("primvars:displayOpacity")
         var fades = (
