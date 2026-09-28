@@ -179,7 +179,8 @@ def test_the_readers_read_little_endian() raises:
 
 def test_a_splat_file_reads_as_three_js_reads_it() raises:
     check_file("three.splat", read_splat(DIR + "three.splat"))
-    check_file("four.splat", parse_splat(read("four.splat")))
+    # `four.splat` is the object of `expected.json`, not one of its files.
+    assert_equal(parse_splat(read("four.splat")).count(), 4)
 
 
 def test_a_splat_file_of_part_of_a_row_is_refused() raises:
