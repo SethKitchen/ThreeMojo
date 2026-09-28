@@ -32,6 +32,7 @@ Look something up.
 - [Cameras](Cameras)
 - [Geometry](Geometry)
 - [Geometry addons](Geometry-addons)
+- [Sculptor](Sculptor)
 - [Meshes and assets](Meshes-and-assets)
 - [Scene objects](Scene-objects)
 - [Animated objects](Animated-objects)

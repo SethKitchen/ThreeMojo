@@ -20,6 +20,7 @@
 - [Geometry](Geometry)
 - [Geometry addons](Geometry-addons)
 - [Lofts and clipping groups](Lofts-and-clipping-groups)
+- [Sculptor](Sculptor)
 - [Meshes and assets](Meshes-and-assets)
 - [Lines](Lines)
 - [Points and sprites](Points-and-sprites)
