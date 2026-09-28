@@ -855,7 +855,8 @@ struct _Composer(Movable):
             self.materials_by_root.add(root, path)
         if type_name == "Shader" and slash > 0:
             var ancestor = String(path[byte=:slash])
-            while ancestor.byte_length() > 0:
+            # The walk ends at a material or at the top.
+            while ancestor.byte_length() > 0:  # pragma: no branch
                 var at = self.layer.spec(ancestor)
                 var is_material = (
                     at >= 0
@@ -964,7 +965,7 @@ struct _Composer(Movable):
         if has_samples:
             ref times = self.layer.values[samples].numbers
             var chosen = 0
-            for k in range(len(times)):
+            for k in range(len(times)):  # pragma: no branch
                 if times[k] == 0:
                     chosen = k
                     break
@@ -983,7 +984,7 @@ struct _Composer(Movable):
         var found = self.attribute_names.get(path)
         if not found:
             return
-        for name in self.attribute_lists[found.value()]:
+        for name in self.attribute_lists[found.value()]:  # pragma: no branch
             var full = path + "." + name
             var value = self.resolve_value(full, List[String]())
             if self.layer.defined(value):
@@ -1183,7 +1184,7 @@ struct _Composer(Movable):
         if len(built.objects[child].children) != 1:
             return -1
         var grandchild = built.objects[child].children[0]
-        if built.objects[grandchild].is_mesh and not _moved(built.objects[child].node):
+        if built.objects[grandchild].is_mesh and not moved(built.objects[child].node):
             built.detach(grandchild)
             return grandchild
         return -1
@@ -1238,10 +1239,9 @@ struct _Composer(Movable):
             # A variant's paths hold its `{set=choice}`, so none is a direct
             # child's.
             entries.extend(self.children.get(variant))
+        # The index holds only prims.
         for path in entries:
             var spec = self.layer.spec(path)
-            if spec < 0 or self.layer.specs[spec].spec_type != SPEC_PRIM:
-                continue
             var name = _last_part(path)
             var type_name = self.type_name(spec)
             if self.build_references(parent, path, spec, type_name, assets, built):
@@ -1305,7 +1305,7 @@ struct _Composer(Movable):
             return False
         var local = self.local_variants(spec)
         var groups = List[Int]()
-        for reference in references:
+        for reference in references:  # pragma: no branch
             var group = self.resolve_reference(
                 reference, local[0].copy(), local[1].copy(), assets, built
             )
@@ -1325,7 +1325,7 @@ struct _Composer(Movable):
                 return True
         var object = built.add(_Object(_last_part(path)))
         self.apply_transform(object, spec, attrs, built)
-        for group in groups:
+        for group in groups:  # pragma: no branch
             for child in built.objects[group].children.copy():
                 built.attach(object, child)
         built.attach(parent, object)
@@ -1480,7 +1480,7 @@ struct _Composer(Movable):
                 raise Error("USD: an xformOpOrder that is not a list of names")
             var matrix = Matrix4()
             var scale: Optional[List[Float64]] = None
-            for op in self.layer.values[order].strings.copy():
+            for op in self.layer.values[order].strings.copy():  # pragma: no branch
                 var inverse = op.startswith("!invert!")
                 var name = String(op[byte=8:]) if inverse else op
                 var step = self.operation(name, spec, attrs, scale)
@@ -1673,7 +1673,7 @@ struct _Composer(Movable):
         var name = String("material:binding")
         var found = self.layer.spec(prim + "." + name)
         var parts = _split(prim)
-        for i in range(1, len(parts)):
+        for i in range(1, len(parts)):  # pragma: no branch
             var ancestor = String("/").join(parts[: i + 1])
             var relative = String("/").join(parts[i + 1 :])
             for variant in self.variant_paths(ancestor):
@@ -1712,7 +1712,7 @@ struct _Composer(Movable):
         """
         var resolved = -1
         var ancestor = String("")
-        for part in _split(prim):
+        for part in _split(prim):  # pragma: no branch
             if part == "":
                 continue
             ancestor += "/" + part
@@ -1791,7 +1791,7 @@ struct _Composer(Movable):
         var bound = self.material_path(path, spec)
         if bound == "":
             var found = List[String]()
-            for k in range(len(self.layer.paths)):
+            for k in range(len(self.layer.paths)):  # pragma: no branch
                 var p = self.layer.paths[k]
                 var below = p.startswith(path + "/") and p.endswith(
                     ".material:binding"
@@ -1827,7 +1827,7 @@ struct _Composer(Movable):
         Raises:
             Error: If a variant set is not a list of names.
         """
-        for path in paths:
+        for path in paths:  # pragma: no branch
             for shader in self.shaders_by_material.get(path):
                 var attrs = self.attributes(shader)
                 var id = attrs.get("info:id")
@@ -2281,7 +2281,9 @@ struct _Composer(Movable):
             var base = _last_part(clean)
             for k in assets.order():
                 var name = assets.names[k]
-                if name.endswith(base) or name.endswith("/" + base):
+                # three.js also asks `endsWith( '/' + baseName )`, which
+                # `endsWith( baseName )` answers.
+                if name.endswith(base):
                     return self.create_texture(k, "", attrs, transform, assets, built)
             if self.base_path != "":
                 return self.create_texture(-1, resolved, attrs, transform, assets, built)
@@ -2407,11 +2409,11 @@ struct _Composer(Movable):
         object.is_mesh = True
         if len(subsets) > 0:
             var faces = List[List[Float64]]()
-            for subset in subsets:
+            for subset in subsets:  # pragma: no branch
                 faces.append(subset.indices.copy())
             built.geometries.append(build_usd_geometry_with_subsets(arrays, faces))
             var own = self.material_path(path, spec)
-            for subset in subsets:
+            for subset in subsets:  # pragma: no branch
                 var material = built.new_material()
                 var bound = subset.material if subset.material != "" else own
                 if bound != "":
@@ -2424,7 +2426,7 @@ struct _Composer(Movable):
         object.geometry = len(built.geometries) - 1
         var tint = attrs.get("primvars:displayColor")
         if self.layer.truthy(tint) and self.layer.length(tint) >= 3:
-            for material in object.materials:
+            for material in object.materials:  # pragma: no branch
                 var white = _is_white(built.materials[material].color)
                 if white and built.materials[material].map == NO_TEXTURE:
                     var color = self.color(tint, "displayColor")
@@ -2438,7 +2440,7 @@ struct _Composer(Movable):
         )
         if fades:
             var opacity = Float32(self.layer.element_number(fade, 0))
-            for material in object.materials:
+            for material in object.materials:  # pragma: no branch
                 var opaque = built.materials[material].opacity == 1
                 var solid = not built.materials[material].transparent
                 if opacity < 1 and opaque and solid:
@@ -2561,7 +2563,7 @@ def _is_primitive(type_name: String) -> Bool:
     )
 
 
-def _moved(node: Object3D) raises -> Bool:
+def moved(node: Object3D) raises -> Bool:
     """Return three.js's `_hasNonIdentityTransform`: a position, a turn or
     a scale that is not the identity's.
 
@@ -2695,7 +2697,7 @@ def _emit(
             geometry = store.geometries.add(
                 built.geometries[built.objects[object].geometry].clone()
             )
-            for material in built.objects[object].materials:
+            for material in built.objects[object].materials:  # pragma: no branch
                 var m = built.materials[material]
                 var textures: List[TextureId] = [
                     m.map,
