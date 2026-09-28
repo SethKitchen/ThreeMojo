@@ -182,6 +182,8 @@ A line, points and a sprite use a `BASIC` material. The writer writes that mater
 
 When a mesh and a line use the same material, the writer writes one entry for each class.
 
+The reader also reads three.js's node materials, such as `MeshStandardNodeMaterial`, as the class that each extends. It compiles the material's `inputNodes` and the document's `nodes` to a node program. See [Node materials](Node-materials#threejss-node-json).
+
 The writer writes the fields that the three.js class has. For example, only a `MeshPhongMaterial` has `specular` and `shininess`. The reader uses the three.js defaults for a field that is not there. For example, a `MeshPhongMaterial` without `specular` gets `0x111111`. Colors are 24-bit sRGB numbers, as `Color.getHex` gives them.
 
 These fields use three.js's keys and three.js's defaults:

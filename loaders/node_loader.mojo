@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""three.js's node JSON: `NodeLoader`, `NodeMaterialLoader` and the node
-half of `NodeObjectLoader`.
+"""The node JSON of three.js: `NodeLoader`, `NodeMaterialLoader` and the
+node half of `NodeObjectLoader`.
 
 three.js writes a node material as a list of nodes. Each node has a
 `uuid`, a `type` (the class that made it), the uuids of its inputs under
@@ -224,9 +224,7 @@ def plain_material_type(name: String) -> String:
     if name == "NodeMaterial":
         return "MeshBasicMaterial"
     if name.endswith("NodeMaterial"):
-        return String(name[byte = 0 : len(name) - len("NodeMaterial")]) + (
-            "Material"
-        )
+        return String(name[byte = 0 : name.byte_length() - 12]) + "Material"
     return name
 
 
@@ -241,12 +239,7 @@ def type_width(name: String) -> Int:
     Returns:
         One to four, nine or sixteen, or -1 for a type that is not read.
     """
-    if (
-        name == "float"
-        or name == "int"
-        or name == "uint"
-        or name == "bool"
-    ):
+    if name == "float" or name == "int" or name == "uint" or name == "bool":
         return 1
     if name == "color":
         return 3
@@ -254,7 +247,7 @@ def type_width(name: String) -> Int:
         return 9
     if name == "mat4":
         return 16
-    var size = len(name)
+    var size = name.byte_length()
     if size < 4:
         return -1
     var stem = String(name[byte = 0 : size - 1])
@@ -346,7 +339,7 @@ def _flag(
 
 
 struct NodeLoader(Movable):
-    """three.js's `NodeLoader`: reads node JSON into a `NodeGraph`.
+    """Reads node JSON into a `NodeGraph`: three.js's `NodeLoader`.
 
     `parse_nodes` indexes a list of nodes by uuid, as three.js's
     `parseNodes` does. `node` then builds the graph node of a uuid, with
@@ -574,7 +567,9 @@ struct NodeLoader(Movable):
             return self.graph.screen_uv()
         if type == JSON_POINT_UV_NODE:
             return self.graph.point_coord()
-        return self._texture(document, item, uuid, type == JSON_CUBE_TEXTURE_NODE)
+        return self._texture(
+            document, item, uuid, type == JSON_CUBE_TEXTURE_NODE
+        )
 
     def _value(
         mut self, document: JsonDocument, item: Int, uniform: String
@@ -594,7 +589,9 @@ struct NodeLoader(Movable):
                     Float32(document.number(document.at(value, index)))
                 )
         elif document.kind(value) == BOOLEAN:
-            numbers.append(1 if document.boolean(value) else 0)
+            numbers.append(
+                Float32(1) if document.boolean(value) else Float32(0)
+            )
         else:
             numbers.append(Float32(document.number(value)))
         if len(numbers) != width:
@@ -615,14 +612,18 @@ struct NodeLoader(Movable):
         if width == 3:
             return self.graph.vec3(numbers[0], numbers[1], numbers[2])
         if width == 4:
-            return self.graph.vec4(numbers[0], numbers[1], numbers[2], numbers[3])
+            return self.graph.vec4(
+                numbers[0], numbers[1], numbers[2], numbers[3]
+            )
         # A matrix, column by column.
         if width == 9:
             var columns = List[NodeRef]()
             for column in range(3):  # pragma: no branch
                 var at = column * 3
                 columns.append(
-                    self.graph.vec3(numbers[at], numbers[at + 1], numbers[at + 2])
+                    self.graph.vec3(
+                        numbers[at], numbers[at + 1], numbers[at + 2]
+                    )
                 )
             return self.graph.mat3(columns[0], columns[1], columns[2])
         var columns = List[NodeRef]()
@@ -630,7 +631,10 @@ struct NodeLoader(Movable):
             var at = column * 4
             columns.append(
                 self.graph.vec4(
-                    numbers[at], numbers[at + 1], numbers[at + 2], numbers[at + 3]
+                    numbers[at],
+                    numbers[at + 1],
+                    numbers[at + 2],
+                    numbers[at + 3],
                 )
             )
         return self.graph.mat4(columns[0], columns[1], columns[2], columns[3])
@@ -662,7 +666,9 @@ struct NodeLoader(Movable):
             matrix.elements[index] = numbers[index]
         return self.graph.uniform(name, matrix)
 
-    def _attribute(mut self, document: JsonDocument, item: Int) raises -> NodeRef:
+    def _attribute(
+        mut self, document: JsonDocument, item: Int
+    ) raises -> NodeRef:
         """Build an `AttributeNode`."""
         var name = _text(document, item, "_attributeName")
         if name == "uv":
@@ -682,7 +688,9 @@ struct NodeLoader(Movable):
             )
         return self._leaf(self.graph.attribute(name, self._attribute_types[at]))
 
-    def _operator(mut self, document: JsonDocument, item: Int) raises -> NodeRef:
+    def _operator(
+        mut self, document: JsonDocument, item: Int
+    ) raises -> NodeRef:
         """Build an `OperatorNode`, by its `op`."""
         var op = _text(document, item, "op")
         var a = self._input(document, item, "aNode")
@@ -990,12 +998,16 @@ struct NodeLoader(Movable):
             "offsetNode",
         ]:
             if self._has_input(document, item, name):
-                raise Error("Node JSON: a texture node's " + name + " is not read")
+                raise Error(
+                    "Node JSON: a texture node's " + name + " is not read"
+                )
         var has_uv = self._has_input(document, item, "uvNode")
         var has_level = self._has_input(document, item, "levelNode")
         if cube:
             if has_level:
-                raise Error("Node JSON: a cube texture node's level is not read")
+                raise Error(
+                    "Node JSON: a cube texture node's level is not read"
+                )
             var sampler = self.graph.cube_uniform(uuid)
             var direction: NodeRef
             if has_uv:
@@ -1103,7 +1115,9 @@ struct NodeLoader(Movable):
             if refs[index] < 0:
                 continue
             var output = NodeOutput(index)
-            var value = self.convert(NodeRef(refs[index]), output.value_type().name())
+            var value = self.convert(
+                NodeRef(refs[index]), output.value_type().name()
+            )
             if output == NORMAL_NODE:
                 # three.js's normal node is in view space and replaces the
                 # normal: take it to world space, less the normal.
