@@ -82,7 +82,15 @@ def voxelize_kernel(
     header: MutPointer[Float32, MutAnyOrigin],
     triangle_count: Int32,
 ):
-    """Find one voxel's bits and last triangle: `voxel_bits`."""
+    """Find one voxel's bits and last triangle: `voxel_bits`.
+
+    Args:
+        occupancy: Each voxel's sub-voxel bits, written.
+        ids: One more than each voxel's last triangle, written.
+        triangles: The triangle records.
+        header: The grid's floats.
+        triangle_count: How many records there are.
+    """
     var grid = VxgiGrid(header=_read(header))
     var index = Int(global_idx.x)
     if index >= grid.level_count(0):
@@ -100,7 +108,13 @@ def resolve_kernel(
     occupancy: MutPointer[Int32, MutAnyOrigin],
     header: MutPointer[Float32, MutAnyOrigin],
 ):
-    """Resolve one voxel's opacity from its bits: `resolve_voxel`."""
+    """Resolve one voxel's opacity from its bits: `resolve_voxel`.
+
+    Args:
+        opacity: The opacity chain, its level zero written.
+        occupancy: Each voxel's sub-voxel bits.
+        header: The grid's floats.
+    """
     var grid = VxgiGrid(header=_read(header))
     var index = Int(global_idx.x)
     if index >= grid.level_count(0):
@@ -113,7 +127,13 @@ def opacity_mip_kernel(
     header: MutPointer[Float32, MutAnyOrigin],
     level: Int32,
 ):
-    """Fill one voxel of a coarser opacity level: `opacity_mip_voxel`."""
+    """Fill one voxel of a coarser opacity level: `opacity_mip_voxel`.
+
+    Args:
+        opacity: The opacity chain, the level written.
+        header: The grid's floats.
+        level: The level, one or more.
+    """
     var grid = VxgiGrid(header=_read(header))
     var tier = Int(level)
     var index = Int(global_idx.x)
@@ -131,7 +151,13 @@ def radiance_mip_kernel(
     header: MutPointer[Float32, MutAnyOrigin],
     level: Int32,
 ):
-    """Fill one voxel of a coarser radiance level: `radiance_mip_voxel`."""
+    """Fill one voxel of a coarser radiance level: `radiance_mip_voxel`.
+
+    Args:
+        radiance: The radiance chain, the level written.
+        header: The grid's floats.
+        level: The level, one or more.
+    """
     var grid = VxgiGrid(header=_read(header))
     var tier = Int(level)
     var index = Int(global_idx.x)
@@ -156,7 +182,20 @@ def inject_kernel(
     light_count: Int32,
     shadow_tan: Float32,
 ):
-    """Light one voxel: `inject_voxel`."""
+    """Light one voxel: `inject_voxel`.
+
+    Args:
+        direct: The direct radiance, written.
+        radiance: The radiance chain, its level zero written.
+        triangles: The triangle records.
+        lights: The light records.
+        opacity: The opacity chain.
+        occupancy: Each voxel's sub-voxel bits.
+        ids: One more than each voxel's last triangle.
+        header: The grid's floats.
+        light_count: How many lights.
+        shadow_tan: The tangent of half a shadow cone's aperture.
+    """
     var grid = VxgiGrid(header=_read(header))
     var index = Int(global_idx.x)
     if index >= grid.level_count(0):
@@ -191,7 +230,20 @@ def bounce_kernel(
     tan_half: Float32,
     trace_distance: Float32,
 ):
-    """Bounce the light once at one voxel: `bounce_voxel`."""
+    """Bounce the light once at one voxel: `bounce_voxel`.
+
+    Args:
+        target: The new radiance chain, its level zero written.
+        direct: The direct radiance.
+        source: The radiance chain of the pass before.
+        triangles: The triangle records.
+        opacity: The opacity chain.
+        occupancy: Each voxel's sub-voxel bits.
+        ids: One more than each voxel's last triangle.
+        header: The grid's floats.
+        tan_half: The tangent of half a cone's aperture.
+        trace_distance: How far a cone may reach.
+    """
     var grid = VxgiGrid(header=_read(header))
     var index = Int(global_idx.x)
     if index >= grid.level_count(0):
@@ -225,7 +277,19 @@ def pixel_kernel(
     width: Int32,
     height: Int32,
 ):
-    """Gather one pixel: `vxgi_pixel`."""
+    """Gather one pixel: `vxgi_pixel`.
+
+    Args:
+        out_pixels: Four floats a pixel, written.
+        opacity: The opacity chain.
+        radiance: The radiance chain.
+        params: The pass's numbers, `VXGINode.params`.
+        depth: One window depth a pixel.
+        normals: Three floats a pixel, the view-space normal.
+        header: The grid's floats.
+        width: The frame's width.
+        height: The frame's height.
+    """
     var grid = VxgiGrid(header=_read(header))
     var slot = Int(global_idx.x)
     var w = Int(width)

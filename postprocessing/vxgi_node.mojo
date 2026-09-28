@@ -216,7 +216,7 @@ def _debug_view(
     var span = intersect_volume(grid, eye, toward)
     var far = min(span[1], surface_distance)
     var t = span[0]
-    for _ in range(DEBUG_STEPS):
+    for _ in range(DEBUG_STEPS):  # pragma: no branch
         if t >= far:
             break
         var point = eye + toward * t

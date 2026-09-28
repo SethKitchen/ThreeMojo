@@ -13722,3 +13722,94 @@ def test_both_backends_map_through_a_custom_curve() raises:
     renderer.custom_tone_mapping = _NO_NODES
     var plain = _flags_on_both(renderer, scene, assets)
     assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)
+
+
+# --- Voxel global illumination -----------------------------------------------
+
+
+def _vxgi_disagreements(
+    want: List[Float32], got: List[Float32], tolerance: Float32
+) raises -> Int:
+    """Return how many floats of two lists differ by more than a
+    tolerance, the lists being of one length."""
+    assert_equal(len(got), len(want))
+    var count = 0
+    for at in range(len(want)):
+        if abs(want[at] - got[at]) > tolerance:
+            count += 1
+    return count
+
+
+def test_both_backends_voxelize_and_light_a_corner_alike() raises:
+    # The kernel asks every triangle of each voxel what the host's walk
+    # sets, and lights and bounces each voxel with the host's functions.
+    # A cone's steps can end a hair apart where a device's `pow`, `cos` or
+    # `log2` differs in the last bit, so a few texels may differ.
+    if skipped_for_lack_of_a_gpu("both backends voxelize a corner alike"):
+        return
+    from lights.vxgi_volume import VXGIVolume
+    from render.gpu_vxgi import GpuVxgi
+    from test_vxgi_node import a_corner
+
+    var assets = Assets()
+    var scene = a_corner(assets)
+    var host = VXGIVolume(8)
+    host.update(scene, assets)
+    var on_device = VXGIVolume(8)
+    var device = GpuVxgi()
+    device.update(on_device, scene, assets)
+    assert_equal(len(on_device.occupancy), len(host.occupancy))
+    var bits = 0
+    var ids = 0
+    for at in range(len(host.occupancy)):
+        if host.occupancy[at] != on_device.occupancy[at]:
+            bits += 1
+        if host.triangle_ids[at] != on_device.triangle_ids[at]:
+            ids += 1
+    assert_equal(bits, 0)
+    assert_equal(ids, 0)
+    assert_equal(_vxgi_disagreements(host.opacity, on_device.opacity, 1e-6), 0)
+    var loose = len(host.radiance) // 100
+    assert_true(
+        _vxgi_disagreements(host.direct, on_device.direct, 1e-3) <= loose
+    )
+    assert_true(
+        _vxgi_disagreements(host.radiance, on_device.radiance, 1e-3) <= loose
+    )
+
+
+def test_both_backends_gather_a_corner_alike() raises:
+    # Every pixel runs `vxgi_pixel` on the device, over the volume the
+    # host built.
+    if skipped_for_lack_of_a_gpu("both backends gather a corner alike"):
+        return
+    from postprocessing.vxgi_node import VXGINode
+    from render.gpu_vxgi import GpuVxgi
+    from test_vxgi_node import a_corner, drawn, view_of, world_of
+
+    var assets = Assets()
+    var scene = a_corner(assets)
+    var target = drawn(scene, assets)
+    var host = VXGINode(8)
+    var want = host.render(view_of(target), world_of(), scene, assets, 3)
+    var on_device = VXGINode(8)
+    var device = GpuVxgi()
+    var got = device.render(
+        on_device, view_of(target), world_of(), scene, assets, 3
+    )
+    var loose = len(want.ao) // 100
+    var ao = 0
+    var gi = 0
+    for slot in range(len(want.ao)):
+        if abs(want.ao[slot] - got.ao[slot]) > 1e-3:
+            ao += 1
+        var a = want.gi[slot]
+        var b = got.gi[slot]
+        if (
+            abs(a.r - b.r) > 1e-3
+            or abs(a.g - b.g) > 1e-3
+            or abs(a.b - b.b) > 1e-3
+        ):
+            gi += 1
+    assert_true(ao <= loose)
+    assert_true(gi <= loose)
