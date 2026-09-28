@@ -1,0 +1,76 @@
+#usda 1.0
+(
+    defaultPrim = "Toy"
+)
+
+def Xform "Toy" (
+    variants = {
+        string color = "red"
+    }
+    prepend variantSets = ["color", "size"]
+)
+{
+    def Mesh "Body" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        double3 xformOp:translate = (0.5, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Red"
+        {
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0, 0)
+            }
+        }
+
+        def Material "Green"
+        {
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 1, 0)
+            }
+        }
+    }
+
+    variantSet "color" = {
+        "green" {
+            over "Body"
+            {
+                rel material:binding = </Toy/Looks/Green>
+                double3 xformOp:translate = (0.5, 0, 2)
+            }
+        }
+        "red" {
+            over "Body"
+            {
+                rel material:binding = </Toy/Looks/Red>
+                double3 xformOp:translate = (0.5, 0, 1)
+            }
+
+            def Xform "Badge"
+            {
+                double3 xformOp:translate = (0.5, 1, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+        }
+    }
+    variantSet "size" = {
+        "big" {
+            def Xform "Extra"
+            {
+            }
+        }
+        "small" {
+        }
+    }
+}

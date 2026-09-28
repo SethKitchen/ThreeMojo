@@ -602,9 +602,9 @@ def test_a_line_cannot_be_lit() raises:
     # And a kind that is not a kind at all, on both ends, so it is the
     # kind itself being refused rather than the disagreement.
     var unknown = end(0.5, 0.5)
-    unknown.kind = MaterialKind(12)
+    unknown.kind = MaterialKind(13)
     var also = end(4.5, 0.5)
-    also.kind = MaterialKind(12)
+    also.kind = MaterialKind(13)
     with assert_raises():
         check_line_state(unknown, also)
 

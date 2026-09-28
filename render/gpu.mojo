@@ -111,7 +111,9 @@ from lights.shadow import (
     biased_position,
     bilinear,
     bilinear_texel,
+    SUN_BLEND,
     cascade_reach,
+    sun_reach,
     cube_tap,
     cube_texel,
     inside_point_shadow,
@@ -131,6 +133,10 @@ from lights.shadow import (
     view_depth,
     vsm_shadow,
 )
+from lights.ies_spot_light import ies_coordinate
+from lights.light import IES_SPOT, SpotShape
+from lights.light_probe_grid import GRID_HEADER, grid_falloff, grid_taps
+from lights.projector_light import projector_attenuation
 from lights.ltc import (
     LTC_FLOATS,
     ltc_blend,
@@ -163,6 +169,7 @@ from lights.lighting import (
     occluded_light,
     physical_light,
     scattering_through,
+    shadowed_twice,
     physical_outgoing,
     physical_surface,
     toon_coord,
@@ -218,8 +225,10 @@ from materials.material import (
     GOURAUD,
     LAMBERT,
     MATCAP,
+    MaterialKind,
     NORMALS,
     OBJECT_SPACE_NORMAL_MAP,
+    VOLUME,
     PHONG,
     PHYSICAL,
     SHADOW,
@@ -229,6 +238,12 @@ from materials.material import (
     Combine,
     combine_light,
 )
+from materials.mesh_sss_node_material import (
+    scatters,
+    subsurface_diffuse,
+    thickness_of,
+)
+from materials.volume_node_material import RayLights, volumetric_light
 from render.cube_texture import (
     FACE_COUNT,
     Basis3,
@@ -278,6 +293,8 @@ from materials.nodes import (
     OPACITY_NODE,
     OUTPUT_NODE,
     RECEIVED_SHADOW_NODE,
+    OFFSET_NODE,
+    SCATTERING_NODE,
     ProgramShape,
     NodeContext,
     NodeInputs,
@@ -355,6 +372,9 @@ from postprocessing.composer import (
     HALFTONE,
     LUT,
     MOTION_BLUR,
+    SHARPEN,
+    CRT,
+    RADIAL_BLUR,
     TEXTURE,
     CUBE_TEXTURE,
     GOD_RAYS,
@@ -387,6 +407,12 @@ from postprocessing.composer import (
     vignette_pixel,
 )
 from postprocessing.display_nodes import motion_blur_pixel
+from postprocessing.filter_nodes import (
+    FilterSettings,
+    crt_pixel,
+    radial_blur_pixel,
+)
+from postprocessing.upscaling import rcas_pixel
 from postprocessing.effects import (
     GlitchUniforms,
     HalftoneBlending,
@@ -442,7 +468,40 @@ from render.computation import (
     GPUComputationRenderer,
     compute_texel,
 )
+from materials.compute_ids import ATOMIC_LOAD
+from materials.compute_nodes import (
+    ComputeNode,
+    ComputeRunner,
+    ComputeSource,
+    MutUntracked,
+    StorageBufferStore,
+    StorageMemory,
+    atomic_result,
+    pack_storage,
+    run_statements,
+    unpack_storage,
+)
+from std.atomic import Atomic
 from renderers.renderer import Renderer
+from objects.gaussian_splat import GaussianSplat
+from render.splat_raster import prepare_gaussian_splat
+from render.splatrule import (
+    SPLAT_A,
+    SPLAT_AXIS_X,
+    SPLAT_AXIS_Y,
+    SPLAT_B,
+    SPLAT_DEPTH,
+    SPLAT_FLOATS,
+    SPLAT_G,
+    SPLAT_R,
+    SPLAT_SCALE1,
+    SPLAT_SCALE2,
+    SPLAT_X,
+    SPLAT_Y,
+    ProjectedSplat,
+    splat_alpha,
+    splat_depth_passes,
+)
 from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
 from std.math import ceildiv, cos, floor, inf, log2, sin, sqrt
@@ -612,7 +671,10 @@ comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
 # velocity attachment reads.
 comptime LANE_CURRENT = LANE_SCATTER + 8
 comptime LANE_PREVIOUS = LANE_CURRENT + 3
-comptime FLOATS_PER_VERTEX = LANE_PREVIOUS + 3
+# A `VOLUME` triangle's ray: its steps and the mesh's bounding radius in
+# world space; see `RasterVertex.steps`.
+comptime LANE_VOLUME = LANE_PREVIOUS + 3
+comptime FLOATS_PER_VERTEX = LANE_VOLUME + 2
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -786,7 +848,11 @@ comptime LIGHTS_BACK = LIGHTS_PROBE + SH_COUNT * 3
 # what a triangle lit by a block of its own reads in place of the kernel's
 # arguments. See `flatten_frame_lights`.
 comptime LIGHTS_COUNTS = LIGHTS_BACK + 3
-comptime LIGHTS_FIRST = LIGHTS_COUNTS + 4
+# Where the probe grid's block begins in this same buffer, or `NO_SHADOW`
+# for none: `LightProbeGrid.flatten`, after the spot profiles. See
+# `lights.light_probe_grid`.
+comptime LIGHTS_GRID = LIGHTS_COUNTS + 4
+comptime LIGHTS_FIRST = LIGHTS_GRID + 1
 # How the depth buffer is laid out: one float of depth a pixel, then the
 # attachments a `RenderTarget` holds, each a plane of its own, so the
 # kernel leaves a whole target behind with no argument more. Metal binds
@@ -811,20 +877,26 @@ comptime PLANE_FLOATS = PLANE_METAL_ROUGH + 2
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
 # where its shadow map begins in the same buffer, or -1 for none. A
-# directional light's last five are its `ShadowCascade`: its start, its
-# end, its span in meters, zero for no cascade, and whether it is the
-# last and whether it fades, as one or zero. The maps
+# directional light's last eight are its `ShadowCascade`: its start, its
+# end, its span in meters, zero for no cascade, whether it is the last
+# and whether it fades, as one or zero, its `CascadeBlend`, and under
+# `SUN_BLEND` its fade start and where the cascade before it ends. The maps
 # ride after the lights, each `SHADOW_HEADER` floats and then its depths,
 # rather than in a buffer of their own, because Metal binds at most
 # thirty-one arguments to a kernel and this one has thirty-one. A spot
 # light's fifteenth is where its map's `SPOT_MAP_FLOATS` begin, after the
 # shadow maps, or -1 for none.
-comptime DIRECTIONAL_FLOATS = 12
+comptime DIRECTIONAL_FLOATS = 15
 # Where a directional light's cascade begins in its record.
 comptime CASCADE_AT = 7
 comptime POINT_FLOATS = 9
 comptime HEMISPHERE_FLOATS = 9
-comptime SPOT_FLOATS = 15
+comptime SPOT_FLOATS = 16
+# A spot light's sixteenth float is where its `SpotProfile` begins, after
+# the spot light maps, or -1 for a cone: its `SpotShape`, the IES
+# profile's slot in the texture table or -1, and the sixteen-float frame.
+# See `lights.spot_profile`.
+comptime SPOT_PROFILE_FLOATS = 18
 # A rect area light: its center, its half width and its half height in
 # world space, and its radiance. When there is at least one, the two LTC
 # tables follow the last, `LTC_FLOATS` each; see `lights.ltc`.
@@ -1136,6 +1208,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.previous.x)
         flat.append(corner.previous.y)
         flat.append(corner.previous.z)
+        flat.append(Float32(corner.steps))
+        flat.append(corner.model_radius)
     return flat^
 
 
@@ -1223,14 +1297,14 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     three of ambient, one of `Lighting.scale`, one of how many rect area
     lights there are, 27 of the light probes' coefficients, three of the
     camera's back axis, four of how many directional, point, hemisphere
-    and spot lights there are, then twelve per
+    and spot lights there are, then fifteen per
     directional light -- a unit
     direction, the light it carries, its shadow and its cascade -- then
     nine per point light: where
     it is, the light it carries, its decay, its cutoff and its shadow. Then
     nine per
     hemisphere light: which way the sky is, what the sky carries and what
-    the ground carries. Then fifteen per spot light: where it is, which way
+    the ground carries. Then sixteen per spot light: where it is, which way
     it points, what it carries, its decay, its cutoff, the cosines of its
     cone and of its penumbra, its shadow and its map. Already decoded and scaled by `Lighting`,
     so the device does no color-space work and both backends sum exactly
@@ -1257,13 +1331,20 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     and six faces of depths. Each spot light carries a fifteenth float:
     where its map begins, or `NO_SHADOW`. The maps follow the shadow maps,
     each the texture's slot in the texture table, the normal bias and the
-    sixteen-float frame; see `lights.shadow.SpotLightMap`.
+    sixteen-float frame; see `lights.shadow.SpotLightMap`. Each spot light
+    carries a sixteenth float: where its `SpotProfile` begins, or
+    `NO_SHADOW` for a cone. The profiles follow the spot light maps, each
+    its shape, the IES profile's slot and the frame; see
+    `lights.spot_profile`. The probe grid follows them, as
+    `LightProbeGrid.flatten` lays it out, and the header's `LIGHTS_GRID`
+    says where it begins.
 
     Returns:
-        `LIGHTS_FIRST + 12 * count + 9 * point_count + 9 * hemisphere_count
-        + 15 * spot_count + 12 * rect_count` floats, then the two LTC
+        `LIGHTS_FIRST + 15 * count + 9 * point_count + 9 * hemisphere_count
+        + 16 * spot_count + 12 * rect_count` floats, then the two LTC
         tables when `rect_count` is not zero, then the shadow maps, then
-        the spot light maps.
+        the spot light maps, then the spot profiles, then the probe
+        grid.
     """
     var flat = List[Float32]()
     # Where each shadow map will begin, worked out before the lights that
@@ -1290,6 +1371,13 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     for _ in range(len(lighting.spot_maps)):
         map_starts.append(next)
         next += SPOT_MAP_FLOATS
+    var profile_starts = List[Int]()
+    for _ in range(len(lighting.spot_profiles)):
+        profile_starts.append(next)
+        next += SPOT_PROFILE_FLOATS
+    var grid_start = NO_SHADOW
+    if not lighting.grid.is_empty():
+        grid_start = Float32(next)
     flat.append(lighting.eye.x)
     flat.append(lighting.eye.y)
     flat.append(lighting.eye.z)
@@ -1313,6 +1401,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(Float32(lighting.point_count()))
     flat.append(Float32(lighting.hemisphere_count()))
     flat.append(Float32(lighting.spot_count()))
+    flat.append(grid_start)
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -1329,6 +1418,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(band.span.to(METER))
         flat.append(Float32(1) if band.last else Float32(0))
         flat.append(Float32(1) if band.fade else Float32(0))
+        flat.append(Float32(band.blend.value))
+        flat.append(band.fade_start)
+        flat.append(band.ramp_end)
     for index in range(lighting.point_count()):
         ref position = lighting.positions[index]
         flat.append(position.x)
@@ -1373,6 +1465,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(lighting.penumbra_cosines[index])
         flat.append(_shadow_start(starts, lighting.spot_shadows[index]))
         flat.append(_shadow_start(map_starts, lighting.spot_map_slots[index]))
+        flat.append(
+            _shadow_start(profile_starts, lighting.spot_profile_slots[index])
+        )
     for index in range(lighting.rect_count()):
         ref center = lighting.rect_positions[index]
         flat.append(center.x)
@@ -1427,6 +1522,13 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(picture.normal_bias)
         for element in range(16):  # pragma: no branch
             flat.append(picture.frame[element])
+    for slot in range(len(lighting.spot_profiles)):
+        ref profile = lighting.spot_profiles[slot]
+        flat.append(Float32(profile.shape.value))
+        flat.append(Float32(profile.texture.value))
+        for element in range(16):  # pragma: no branch
+            flat.append(profile.frame[element])
+    flat.extend(lighting.grid.flatten())
     return flat^
 
 
@@ -1598,6 +1700,39 @@ def _point_through(
     if block < 0 or not receives:
         return 1
     return _cube_shadow_at(lights, Int(block), position, normal)
+
+
+def _spot_attenuation(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    at: Int,
+    angle_cos: Float32,
+    position: Vector3,
+) -> Float32:
+    """Return how much of one spot light's beam reaches a surface: the
+    device counterpart of `Lighting.spot_attenuation`, reading the light's
+    record at `at` and its profile, when it has one, after the spot light
+    maps. The cone's `smoothstep`, the IES profile read through the
+    texture table as the host reads it, or the projector's fade, from the
+    functions the host calls."""
+    var block = lights[unsafe_offset=at + 15]
+    if block < 0:
+        return smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+    var start = Int(block)
+    if SpotShape(Int(lights[unsafe_offset=start])) == IES_SPOT:
+        var image = _describe(table, Int(lights[unsafe_offset=start + 1]))
+        var place = ies_coordinate(angle_cos, image.flip_y)
+        return _sample_at(texels, ramp, image, place.u, place.v, 0).r
+    var frame = SIMD[DType.float32, 16](0)
+    for element in range(16):
+        frame[element] = lights[unsafe_offset=start + 2 + element]
+    return projector_attenuation(frame, position, lights[unsafe_offset=at + 12])
 
 
 def _spot_tint(
@@ -1804,7 +1939,7 @@ def _direction_through[
         return _shaped_through(
             lights, at + 6, receives, position, normal, shape
         )
-    var reach = cascade_reach(
+    var depth = (
         view_depth(
             position,
             Vector3(
@@ -1818,12 +1953,24 @@ def _direction_through[
                 lights[unsafe_offset=LIGHTS_BACK + 2],
             ),
         )
-        / span,
+        / span
+    )
+    var reach = cascade_reach(
+        depth,
         lights[unsafe_offset=at + CASCADE_AT],
         lights[unsafe_offset=at + CASCADE_AT + 1],
         lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
         lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
     )
+    if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(SUN_BLEND.value):
+        reach = sun_reach(
+            depth,
+            lights[unsafe_offset=at + CASCADE_AT],
+            lights[unsafe_offset=at + CASCADE_AT + 7],
+            lights[unsafe_offset=at + CASCADE_AT + 6],
+            lights[unsafe_offset=at + CASCADE_AT + 1],
+            lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+        )
     if reach[0] == 0:
         return Vector3(0, 0, 0)
     var through = _shaped_through(
@@ -2157,10 +2304,14 @@ def _ambient_at(
     nx: Float32,
     ny: Float32,
     nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
 ) -> Vector3:
-    """Return the ambient term and the light probes' irradiance at a
-    normal: the device counterpart of `Lighting.ambient_at`, summed in its
-    order, the probes' nine terms first and then the ambient color."""
+    """Return the ambient term, the light probes' irradiance and the probe
+    grid's at a surface: the device counterpart of `Lighting.ambient_at`,
+    summed in its order, the probes' nine terms first, then the ambient
+    color, then the grid's blend at the position."""
     var normal = Vector3(nx, ny, nz)
     var red = Float32(0)
     var green = Float32(0)
@@ -2171,10 +2322,72 @@ def _ambient_at(
         red = red + lights[unsafe_offset=at] * weight
         green = green + lights[unsafe_offset=at + 1] * weight
         blue = blue + lights[unsafe_offset=at + 2] * weight
-    return Vector3(
+    var total = Vector3(
         lights[unsafe_offset=LIGHTS_AMBIENT] + red,
         lights[unsafe_offset=LIGHTS_AMBIENT + 1] + green,
         lights[unsafe_offset=LIGHTS_AMBIENT + 2] + blue,
+    )
+    var block = lights[unsafe_offset=LIGHTS_GRID]
+    if block < 0:
+        return total
+    var grid = _grid_irradiance(lights, Int(block), normal, Vector3(px, py, pz))
+    return Vector3(total.x + grid.x, total.y + grid.y, total.z + grid.z)
+
+
+def _grid_irradiance(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    start: Int,
+    normal: Vector3,
+    position: Vector3,
+) -> Vector3:
+    """Return the probe grid's irradiance at a surface: the device
+    counterpart of `LightProbeGrid.irradiance_at`: the eight probes from
+    `grid_taps`, each lane blended over the corners in their order, the
+    nine terms summed in index order, held at zero or above and weighed
+    by `grid_falloff`."""
+    var low = Vector3(
+        lights[unsafe_offset=start],
+        lights[unsafe_offset=start + 1],
+        lights[unsafe_offset=start + 2],
+    )
+    var high = Vector3(
+        lights[unsafe_offset=start + 3],
+        lights[unsafe_offset=start + 4],
+        lights[unsafe_offset=start + 5],
+    )
+    var taps = grid_taps(
+        position,
+        normal,
+        low,
+        high,
+        Int(lights[unsafe_offset=start + 6]),
+        Int(lights[unsafe_offset=start + 7]),
+        Int(lights[unsafe_offset=start + 8]),
+    )
+    var first = start + GRID_HEADER
+    var red = Float32(0)
+    var green = Float32(0)
+    var blue = Float32(0)
+    for index in range(SH_COUNT):
+        var weight = sh_irradiance_weight(index, normal)
+        var r = Float32(0)
+        var g = Float32(0)
+        var b = Float32(0)
+        for corner in range(8):
+            var at = first + Int(taps.probes[corner]) * SH_COUNT * 3 + index * 3
+            r = r + lights[unsafe_offset=at] * taps.weights[corner]
+            g = g + lights[unsafe_offset=at + 1] * taps.weights[corner]
+            b = b + lights[unsafe_offset=at + 2] * taps.weights[corner]
+        red = red + r * weight
+        green = green + g * weight
+        blue = blue + b * weight
+    var fade = grid_falloff(
+        position, low, high, lights[unsafe_offset=start + 9]
+    )
+    return Vector3(
+        max(red, Float32(0)) * fade,
+        max(green, Float32(0)) * fade,
+        max(blue, Float32(0)) * fade,
     )
 
 
@@ -2204,7 +2417,7 @@ def _arriving[
     answer by the parity tests. A `Vector3` only because the kernel has no
     color type; the three components are red, green and blue.
     """
-    var base = _ambient_at(lights, nx, ny, nz)
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -2305,10 +2518,8 @@ def _arriving[
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2411,7 +2622,7 @@ def _toon_arriving[
     term and the hemisphere lights are not stepped, because three.js
     reflects those through `RE_IndirectDiffuse`.
     """
-    var base = _ambient_at(lights, nx, ny, nz)
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -2509,10 +2720,8 @@ def _toon_arriving[
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2664,10 +2873,8 @@ def _highlight[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2811,10 +3018,8 @@ def _scattered[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
@@ -2843,6 +3048,162 @@ def _scattered[
             lights[unsafe_offset=at + 8] * tint.z * (sent * (bare * shadowed.z))
         )
     return Vector3(red, green, blue)
+
+
+def _volume_light(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    place: Vector3,
+    normal: Vector3,
+    receives: Bool,
+) -> Vector3:
+    """Return the light that one step of a volume's ray gathers: the device
+    counterpart of `Lighting.volume_light_at`, the point lights and then
+    the spot lights, each by `shadowed_twice`."""
+    var total = Vector3(0, 0, 0)
+    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
+    for index in range(points):
+        var at = first_point + index * POINT_FLOATS
+        var distance = (
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            )
+            - place
+        ).length()
+        total = total + shadowed_twice(
+            Vector3(
+                lights[unsafe_offset=at + 3],
+                lights[unsafe_offset=at + 4],
+                lights[unsafe_offset=at + 5],
+            ),
+            falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            ),
+            _point_shaped(lights, at + 8, receives, place, normal, Unshaped()),
+        )
+    var first_spot = (
+        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
+    )
+    for index in range(spots):
+        var at = first_spot + index * SPOT_FLOATS
+        var toward = (
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            )
+            - place
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            toward.dot(
+                Vector3(
+                    lights[unsafe_offset=at + 3],
+                    lights[unsafe_offset=at + 4],
+                    lights[unsafe_offset=at + 5],
+                )
+            )
+            / distance,
+        )
+        var tint = _spot_tint(
+            lights, texels, ramp, table, at + 14, place, normal
+        )
+        total = total + shadowed_twice(
+            Vector3(
+                lights[unsafe_offset=at + 6] * tint.x,
+                lights[unsafe_offset=at + 7] * tint.y,
+                lights[unsafe_offset=at + 8] * tint.z,
+            ),
+            rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            ),
+            _shaped_through(
+                lights, at + 13, receives, place, normal, Unshaped()
+            ),
+        )
+    return total
+
+
+struct _DeviceRay[origin: Origin[mut=True]](ImplicitlyCopyable, RayLights):
+    """The kernel's `RayLights`: its light buffer, as `LitRay` is the
+    host's over a `Lighting`."""
+
+    var lights: MutPointer[Float32, Self.origin]
+    var texels: MutPointer[UInt8, Self.origin]
+    var ramp: MutPointer[Float32, Self.origin]
+    var table: MutPointer[Int32, Self.origin]
+    var count: Int
+    var points: Int
+    var hemispheres: Int
+    var spots: Int
+    var normal: Vector3
+    var receives: Bool
+
+    def __init__(
+        out self,
+        lights: MutPointer[Float32, Self.origin],
+        texels: MutPointer[UInt8, Self.origin],
+        ramp: MutPointer[Float32, Self.origin],
+        table: MutPointer[Int32, Self.origin],
+        count: Int,
+        points: Int,
+        hemispheres: Int,
+        spots: Int,
+        normal: Vector3,
+        receives: Bool,
+    ):
+        """Read the lights of the light buffer, for a ray that starts at a
+        fragment with this normal."""
+        self.lights = lights
+        self.texels = texels
+        self.ramp = ramp
+        self.table = table
+        self.count = count
+        self.points = points
+        self.hemispheres = hemispheres
+        self.spots = spots
+        self.normal = normal
+        self.receives = receives
+
+    def light_at(self, position: Vector3) -> Vector3:
+        """Return `_volume_light` at one step.
+
+        Args:
+            position: Where the step is, in world space.
+
+        Returns:
+            The light, linear.
+        """
+        return _volume_light(
+            self.lights.unsafe_origin_cast[MutAnyOrigin](),
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            self.count,
+            self.points,
+            self.hemispheres,
+            self.spots,
+            position,
+            self.normal,
+            self.receives,
+        )
 
 
 def _world_at(
@@ -3030,10 +3391,14 @@ def _indirect(
     nx: Float32,
     ny: Float32,
     nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
 ) -> Vector3:
-    """Return the light with no direction reaching a surface facing
-    (nx, ny, nz): the device counterpart of `Lighting.indirect_at`."""
-    var base = _ambient_at(lights, nx, ny, nz)
+    """Return the light with no direction reaching a surface at
+    (px, py, pz) facing (nx, ny, nz): the device counterpart of
+    `Lighting.indirect_at`."""
+    var base = _ambient_at(lights, nx, ny, nz, px, py, pz)
     var red = base.x
     var green = base.y
     var blue = base.z
@@ -3211,10 +3576,8 @@ def _physical[
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
         ) / distance
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
-            angle_cos,
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, position
         )
         if rim <= 0:
             continue
@@ -6021,7 +6384,13 @@ def rasterize_kernel(
             var wy = Float32(0)
             var wz = Float32(0)
             if mode != Int32(SHADE_UV.value) and (
-                lit or looked_up or reflects or catches or measures or noded
+                lit
+                or looked_up
+                or reflects
+                or catches
+                or measures
+                or noded
+                or kind == Int32(VOLUME.value)
             ):
                 wx = (
                     corners[unsafe_offset=base + LANE_WX] * share_a
@@ -6684,6 +7053,9 @@ def rasterize_kernel(
                         nx,
                         ny,
                         nz,
+                        wx,
+                        wy,
+                        wz,
                     )
                 arriving = occluded_light(arriving, indirect, baked, occlusion)
             # What a physical surface's roughness and metalness are
@@ -7790,6 +8162,47 @@ def rasterize_kernel(
                         layers,
                         shape,
                     )
+                    # The light through from behind, as `rasterize_shaded`
+                    # adds it; see `materials.mesh_sss_node_material`.
+                    if scatters(nodes, noded, MaterialKind(Int(kind))):
+                        var thickness = thickness_of(
+                            nodes,
+                            NodeInputs(
+                                u,
+                                v,
+                                spot,
+                                facing,
+                                tint,
+                                Vector3(0, 0, 0),
+                                textured,
+                            ),
+                        )
+                        direct = subsurface_diffuse(
+                            direct,
+                            _scattered(
+                                lights,
+                                texels,
+                                ramp,
+                                table,
+                                Int(light_count),
+                                Int(point_count),
+                                Int(hemisphere_count),
+                                Int(spot_count),
+                                facing.x,
+                                facing.y,
+                                facing.z,
+                                spot.x,
+                                spot.y,
+                                spot.z,
+                                thickness.distortion,
+                                thickness.power,
+                                thickness.scale,
+                                thickness.ambient,
+                                receives,
+                                shape,
+                            ),
+                            thickness,
+                        )
                     var around = _indirect(
                         lights,
                         Int(light_count),
@@ -7798,6 +8211,9 @@ def rasterize_kernel(
                         nx,
                         ny,
                         nz,
+                        wx,
+                        wy,
+                        wz,
                     )
                     var indirect = Vector3(
                         around.x + baked.x,
@@ -8011,6 +8427,51 @@ def rasterize_kernel(
                         red = joined.r
                         green = joined.g
                         blue = joined.b
+                # A volume's color is the light its ray gathers, and its
+                # glow, as the host takes it.
+                if kind == Int32(VOLUME.value) and mode != Int32(
+                    SHADE_UV.value
+                ):
+                    var given = NodeInputs(
+                        u,
+                        v,
+                        Vector3(wx, wy, wz),
+                        Vector3(nx, ny, nz),
+                        tint,
+                        Vector3(0, 0, 0),
+                        textured,
+                    )
+                    var offset = Float32(0)
+                    if noded and has_output(nodes, OFFSET_NODE):
+                        offset = run_nodes(nodes, OFFSET_NODE, given)[0]
+                    var ray = volumetric_light(
+                        _DeviceRay(
+                            lights,
+                            texels,
+                            ramp,
+                            table,
+                            Int(light_count),
+                            Int(point_count),
+                            Int(hemisphere_count),
+                            Int(spot_count),
+                            Vector3(nx, ny, nz),
+                            receives,
+                        ),
+                        nodes,
+                        noded and has_output(nodes, SCATTERING_NODE),
+                        given,
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_EYE],
+                            lights[unsafe_offset=LIGHTS_EYE + 1],
+                            lights[unsafe_offset=LIGHTS_EYE + 2],
+                        ),
+                        corners[unsafe_offset=base + LANE_VOLUME + 1],
+                        Int(corners[unsafe_offset=base + LANE_VOLUME]),
+                        offset,
+                    )
+                    red = ray.x + glow_r
+                    green = ray.y + glow_g
+                    blue = ray.z + glow_b
                 # A fragment node's color in place of the material's, as the
                 # host takes it.
                 if fragmented:
@@ -9001,6 +9462,17 @@ struct GpuRenderer(Movable):
                 raise Error(
                     "A spot light's map names a texture that has not been"
                     " uploaded; call set_textures() first"
+                )
+        # An IES spot light's profile, checked the same way: the kernel
+        # reads it through the same table.
+        for slot in range(len(lighting.spot_profiles)):
+            ref profile = lighting.spot_profiles[slot]
+            if profile.shape != IES_SPOT:
+                continue
+            if profile.texture.value >= self.uploaded:
+                raise Error(
+                    "An IES spot light's profile names a texture that has"
+                    " not been uploaded; call set_textures() first"
                 )
         # A point's two maps, checked the same way and for the same
         # reason, and its alpha map for holding data as a triangle's is.
@@ -10296,6 +10768,100 @@ def motion_blur_kernel(
     data[unsafe_offset=slot] = 0
 
 
+def sharpen_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    sharpness: Float32,
+    denoise: Int32,
+):
+    """Sharpen each pixel by RCAS: `rcas_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, rcas_pixel(view, x, y, sharpness, denoise != 0))
+    data[unsafe_offset=slot] = 0
+
+
+def crt_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    curvature: Float32,
+    bleeding: Float32,
+    scanline_intensity: Float32,
+    scanline_count: Float32,
+    scanline_speed: Float32,
+    vignette_intensity: Float32,
+    vignette_smoothness: Float32,
+    time: Float32,
+):
+    """Show each pixel as a cathode-ray tube would: `crt_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = FilterSettings()
+    settings.curvature = curvature
+    settings.bleeding = bleeding
+    settings.scanline_intensity = scanline_intensity
+    settings.scanline_count = scanline_count
+    settings.scanline_speed = scanline_speed
+    settings.vignette_intensity = vignette_intensity
+    settings.vignette_smoothness = vignette_smoothness
+    settings.time = time
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, crt_pixel(view, x, y, settings))
+    data[unsafe_offset=slot] = 0
+
+
+def radial_blur_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    center_u: Float32,
+    center_v: Float32,
+    weight: Float32,
+    decay: Float32,
+    count: Int32,
+    exposure: Float32,
+    premultiplied: Int32,
+):
+    """Blur each pixel toward a center: `radial_blur_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = FilterSettings()
+    settings.center_u = center_u
+    settings.center_v = center_v
+    settings.weight = weight
+    settings.decay = decay
+    settings.count = Int(count)
+    settings.exposure = exposure
+    settings.premultiplied_alpha = premultiplied != 0
+    var slot = y * w + x
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, radial_blur_pixel(view, x, y, settings))
+    data[unsafe_offset=slot] = 0
+
+
 def glitch_kernel(
     light: MutPointer[Float32, MutAnyOrigin],
     source: MutPointer[Float32, MutAnyOrigin],
@@ -10679,7 +11245,10 @@ def runs_on_device(kind: PassKind) -> Bool:
     the device. The pixelated, GTAO and transition passes draw the scene,
     so the host runs them. A shader pass whose program reads a texture in
     the assets also runs on the host; see `GpuComposer.render`. A motion
-    blur runs on the device with the velocities the host frame holds.
+    blur runs on the device with the velocities the host frame holds. The
+    sharpen, CRT and radial blur passes run on the device; the other
+    display node passes of issue 251 draw the scene or read the depth, and
+    run on the host.
 
     Args:
         kind: The pass's kind.
@@ -10711,6 +11280,9 @@ def runs_on_device(kind: PassKind) -> Bool:
         or kind == TEXTURE
         or kind == LUT
         or kind == MOTION_BLUR
+        or kind == SHARPEN
+        or kind == CRT
+        or kind == RADIAL_BLUR
     )
 
 
@@ -11426,6 +11998,61 @@ struct GpuComposer(Movable):
                 grid_dim=grid,
                 block_dim=(TILE, TILE),
             )
+        elif kind == SHARPEN:
+            self._take_source()
+            ref settings = composer.passes[index].upscale
+            self.context.enqueue_function[sharpen_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.sharpness,
+                Int32(1 if settings.denoise else 0),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == CRT:
+            # The clock moves on as the host's does.
+            composer.passes[index].filters.time += delta_time
+            self._take_source()
+            ref settings = composer.passes[index].filters
+            self.context.enqueue_function[crt_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.curvature,
+                settings.bleeding,
+                settings.scanline_intensity,
+                settings.scanline_count,
+                settings.scanline_speed,
+                settings.vignette_intensity,
+                settings.vignette_smoothness,
+                settings.time,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == RADIAL_BLUR:
+            self._take_source()
+            ref settings = composer.passes[index].filters
+            self.context.enqueue_function[radial_blur_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                settings.center_u,
+                settings.center_v,
+                settings.weight,
+                settings.decay,
+                Int32(settings.count),
+                settings.exposure,
+                Int32(1 if settings.premultiplied_alpha else 0),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
         elif kind == GLITCH:
             var uniforms = glitch_uniforms(composer.passes[index].glitch)
             if uniforms.bypass:
@@ -11872,3 +12499,460 @@ struct GpuComputation(Movable):
                 )
             computation.variables[at].images[next] = out^
         computation.current = next
+
+
+# --- Gaussian splats --------------------------------------------------------
+
+
+def splat_kernel(
+    colors: MutPointer[Float32, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    flags: MutPointer[Int32, MutAnyOrigin],
+    splats: MutPointer[Float32, MutAnyOrigin],
+    count: Int32,
+    width: Int32,
+    height: Int32,
+    depth_mode: Int32,
+):
+    """Blend every projected splat into one pixel, in order:
+    `render.splat_raster.rasterize_splats` turned inside out.
+
+    Each thread owns one pixel. It walks the splats in draw order, tests
+    each against the pixel's depth with `splat_depth_passes`, and blends
+    `splat_alpha` of it source over with `blend_fragment`, as
+    `RenderTarget.blend` does on the host. `flags` holds 1 for a pixel the
+    scissor lets be drawn and 0 for one it does not; a pixel a splat
+    blended into is set to 2, so the host knows it now holds light."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    if x >= w or y >= Int(height):
+        return
+    var slot = y * w + x
+    if flags[unsafe_offset=slot] == 0:
+        return
+    var at = slot * 4
+    var pixel = Rgba(
+        colors[unsafe_offset=at],
+        colors[unsafe_offset=at + 1],
+        colors[unsafe_offset=at + 2],
+        colors[unsafe_offset=at + 3],
+    )
+    var stored = depth[unsafe_offset=slot]
+    var mode = DepthMode(Int(depth_mode))
+    var blended = 0
+    for index in range(Int(count)):
+        var lane = index * SPLAT_FLOATS
+        var splat = ProjectedSplat(
+            splats[unsafe_offset=lane + SPLAT_X],
+            splats[unsafe_offset=lane + SPLAT_Y],
+            splats[unsafe_offset=lane + SPLAT_DEPTH],
+            splats[unsafe_offset=lane + SPLAT_AXIS_X],
+            splats[unsafe_offset=lane + SPLAT_AXIS_Y],
+            splats[unsafe_offset=lane + SPLAT_SCALE1],
+            splats[unsafe_offset=lane + SPLAT_SCALE2],
+            splats[unsafe_offset=lane + SPLAT_R],
+            splats[unsafe_offset=lane + SPLAT_G],
+            splats[unsafe_offset=lane + SPLAT_B],
+            splats[unsafe_offset=lane + SPLAT_A],
+        )
+        if not splat_depth_passes(mode, splat.depth, stored):
+            continue
+        var alpha = splat_alpha(splat, x, y)
+        if not alpha > 0:
+            continue
+        pixel = blend_fragment(
+            pixel,
+            Rgba(splat.r, splat.g, splat.b, alpha),
+            NORMAL_MODE,
+            False,
+            Rgba(0),
+        )
+        blended += 1
+    if blended == 0:
+        return
+    for channel in range(4):
+        colors[unsafe_offset=at + channel] = pixel[channel]
+    flags[unsafe_offset=slot] = 2
+
+
+struct GpuSplats(Movable):
+    """Draws Gaussian splats into a `RenderTarget` on the device: the
+    device half of `render.splat_raster`, one thread a pixel. The host
+    sorts and projects, and `splat_kernel` blends, so the image is the
+    one `rasterize_splats` makes."""
+
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    var colors: DeviceBuffer[DType.float32]
+    var depth: DeviceBuffer[DType.float32]
+    var flags: DeviceBuffer[DType.int32]
+    var splats: DeviceBuffer[DType.float32]
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.colors^
+        _ = self.depth^
+        _ = self.flags^
+        _ = self.splats^
+        _ = self.context^
+
+    def __init__(out self) raises:
+        """Open the device.
+
+        Raises:
+            Error: If no GPU is present.
+        """
+        if not available():
+            raise Error("No GPU available")
+        self.context = DeviceContext()
+        self.colors = self.context.enqueue_create_buffer[DType.float32](4)
+        self.depth = self.context.enqueue_create_buffer[DType.float32](4)
+        self.flags = self.context.enqueue_create_buffer[DType.int32](4)
+        self.splats = self.context.enqueue_create_buffer[DType.float32](4)
+
+    def draw(
+        mut self, mut target: RenderTarget, splats: List[ProjectedSplat]
+    ) raises:
+        """Blend projected splats into a target, as `rasterize_splats`
+        does on the host.
+
+        Args:
+            target: The target. Its depth is tested and left as it is.
+            splats: The splats, in the order to draw them.
+
+        Raises:
+            Error: If the target's depth mode is not valid.
+        """
+        if not target.depth_mode.is_valid():
+            raise Error("A Gaussian splat needs a valid depth mode")
+        var w = target.width
+        var h = target.height
+        var pixels = w * h
+        var light = List[Float32](capacity=pixels * 4)
+        var flags = List[Int32](capacity=pixels)
+        for slot in range(pixels):
+            var color = target.light_at(slot)
+            light.append(color.r)
+            light.append(color.g)
+            light.append(color.b)
+            light.append(color.a)
+            var inside = target.scissor.contains_pixel(slot % w, slot // w, h)
+            flags.append(Int32(1) if inside else Int32(0))
+        var flat = List[Float32](capacity=len(splats) * SPLAT_FLOATS)
+        for index in range(len(splats)):
+            splats[index].append_to(flat)
+        # A launch in flight may still read the old buffers.
+        self.context.synchronize()
+        self.colors = self.context.enqueue_create_buffer[DType.float32](
+            pixels * 4
+        )
+        self.depth = self.context.enqueue_create_buffer[DType.float32](pixels)
+        self.flags = self.context.enqueue_create_buffer[DType.int32](pixels)
+        self.splats = self.context.enqueue_create_buffer[DType.float32](
+            max(len(flat), 4)
+        )
+        with self.colors.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=light.unsafe_ptr(), count=pixels * 4
+            )
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=target.depth.unsafe_ptr(),
+                count=pixels,
+            )
+        with self.flags.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=flags.unsafe_ptr(), count=pixels
+            )
+        with self.splats.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=flat.unsafe_ptr(), count=len(flat)
+            )
+        self.context.enqueue_function[splat_kernel](
+            self.colors.unsafe_ptr(),
+            self.depth.unsafe_ptr(),
+            self.flags.unsafe_ptr(),
+            self.splats.unsafe_ptr(),
+            Int32(len(splats)),
+            Int32(w),
+            Int32(h),
+            Int32(target.depth_mode.value),
+            grid_dim=(ceildiv(w, TILE), ceildiv(h, TILE)),
+            block_dim=(TILE, TILE),
+        )
+        with self.colors.map_to_host() as host:
+            unsafe_memcpy(
+                dest=light.unsafe_ptr(), src=host.unsafe_ptr(), count=pixels * 4
+            )
+        with self.flags.map_to_host() as host:
+            unsafe_memcpy(
+                dest=flags.unsafe_ptr(), src=host.unsafe_ptr(), count=pixels
+            )
+        for slot in range(pixels):
+            if flags[slot] != 2:
+                continue
+            var at = slot * 4
+            target.colors[slot] = FloatColor(
+                light[at], light[at + 1], light[at + 2], light[at + 3]
+            )
+            target.data[slot] = False
+
+    def draw_gaussian_splat[
+        C: Camera
+    ](
+        mut self,
+        mut target: RenderTarget,
+        scene: Scene,
+        mut splat: GaussianSplat,
+        camera: C,
+    ) raises:
+        """Draw a splat object into a target on the device, as
+        `render.splat_raster.draw_gaussian_splat` does on the host.
+
+        Args:
+            target: The target, drawn into already or cleared.
+            scene: The scene, updated, that holds the object's node.
+            splat: The splats; see `prepare_gaussian_splat`.
+            camera: The camera to project through.
+
+        Raises:
+            Error: Everything `prepare_gaussian_splat` and `draw` raise.
+        """
+        var splats = prepare_gaussian_splat(
+            scene,
+            splat,
+            camera,
+            target.width,
+            target.height,
+            target.depth_mode,
+        )
+        self.draw(target, splats)
+
+
+# --- compute nodes -----------------------------------------------------------
+
+
+struct _DeviceMemory(ImplicitlyCopyable, StorageMemory):
+    """The device's `StorageMemory`: the invocations run at once, so an
+    atomic function swaps the float's bits in a loop until no other
+    invocation changed them between the read and the write."""
+
+    var live: Pointer[Float32, MutUntracked]
+
+    def __init__(out self, live: Pointer[Float32, MutUntracked]):
+        """Point at the memory the step writes.
+
+        Args:
+            live: The memory.
+        """
+        self.live = live
+
+    def store(self, at: Int, value: Float32):
+        """Write one float.
+
+        Args:
+            at: Its place in the memory.
+            value: The float.
+        """
+        self.live[unsafe_offset=at] = value
+
+    def atomic(self, op: Int, at: Int, value: Float32) -> Float32:
+        """Run an atomic function on one float, at once:
+        `materials.compute_nodes.atomic_result` in a compare-and-swap loop.
+
+        Args:
+            op: The function, an `AtomicOp`'s value.
+            at: The float's place in the memory.
+            value: The operand.
+
+        Returns:
+            What the float held before.
+        """
+        var bits = self.live.unsafe_offset(at).unsafe_bitcast[Int32]()
+        var expected = Atomic[Int32].fetch_add(bits, 0)
+        while True:
+            var old = bitcast[DType.float32](expected)
+            if op == ATOMIC_LOAD.value:
+                return old
+            var new = bitcast[DType.int32](atomic_result(op, old, value))
+            if Atomic[Int32].compare_exchange(bits, expected, new):
+                return old
+
+
+def compute_node_kernel(
+    code: MutPointer[Float32, MutAnyOrigin],
+    before: MutPointer[Float32, MutAnyOrigin],
+    regions: MutPointer[Int32, MutAnyOrigin],
+    live: MutPointer[Float32, MutAnyOrigin],
+    kept: MutPointer[Float32, MutAnyOrigin],
+    buffers: Int32,
+    table_at: Int32,
+    count: Int32,
+    workgroup_size: Int32,
+    workgroups: Int32,
+    results: Int32,
+    first: Int32,
+    last: Int32,
+):
+    """Run one step of a compute node at one invocation: `run_statements`
+    on a `ComputeSource`, as `materials.compute_nodes.run_compute` runs it
+    on the host. A workgroup is a block, and an invocation past the count
+    returns, as three.js's does."""
+    var index = Int(global_idx.x)
+    if index >= Int(count):
+        return
+    var source = ComputeSource(
+        code.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        before.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        regions.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked](),
+        kept.unsafe_origin_cast[MutUntracked]().unsafe_offset(
+            index * Int(results) * 4
+        ),
+        Int(buffers),
+        Int(table_at),
+        index,
+        Int(workgroup_size),
+        Int(workgroups),
+    )
+    run_statements(
+        source,
+        _DeviceMemory(live.unsafe_origin_cast[MutUntracked]()),
+        Int(first),
+        Int(last),
+    )
+
+
+struct GpuCompute(ComputeRunner, Movable):
+    """Runs compute nodes on the device, three.js's `renderer.compute` on
+    WebGPU. Each step is one launch, a block a workgroup, so a barrier is
+    the end of a launch."""
+
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    var code: DeviceBuffer[DType.float32]
+    var before: DeviceBuffer[DType.float32]
+    var live: DeviceBuffer[DType.float32]
+    var regions: DeviceBuffer[DType.int32]
+    var kept: DeviceBuffer[DType.float32]
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.code^
+        _ = self.before^
+        _ = self.live^
+        _ = self.regions^
+        _ = self.kept^
+        _ = self.context^
+
+    def __init__(out self) raises:
+        """Open the device.
+
+        Raises:
+            Error: If no GPU is present.
+        """
+        if not available():
+            raise Error("No GPU available")
+        self.context = DeviceContext()
+        self.code = self.context.enqueue_create_buffer[DType.float32](4)
+        self.before = self.context.enqueue_create_buffer[DType.float32](4)
+        self.live = self.context.enqueue_create_buffer[DType.float32](4)
+        self.regions = self.context.enqueue_create_buffer[DType.int32](4)
+        self.kept = self.context.enqueue_create_buffer[DType.float32](4)
+
+    def compute(
+        mut self, mut store: StorageBufferStore, node: ComputeNode
+    ) raises:
+        """Run a compute node over a store's buffers on the device, as
+        `materials.compute_nodes.run_compute` runs it on the host.
+
+        Args:
+            store: The buffers. They are read from and written back to it.
+            node: The node.
+
+        Raises:
+            Error: If the store has no buffer the node names, or holds it
+                as another type.
+        """
+        var packed = pack_storage(store, node)
+        ref memory = packed[0]
+        ref regions = packed[1]
+        var floats = max(len(memory), 1)
+        var kept = max(node.count * node.results * 4, 4)
+        # A launch in flight may still read the old buffers.
+        self.context.synchronize()
+        self.code = self.context.enqueue_create_buffer[DType.float32](
+            len(node.program.code)
+        )
+        self.live = self.context.enqueue_create_buffer[DType.float32](floats)
+        self.before = self.context.enqueue_create_buffer[DType.float32](floats)
+        self.regions = self.context.enqueue_create_buffer[DType.int32](
+            max(len(regions), 1)
+        )
+        self.kept = self.context.enqueue_create_buffer[DType.float32](kept)
+        with self.code.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=node.program.code.unsafe_ptr(),
+                count=len(node.program.code),
+            )
+        with self.live.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=memory.unsafe_ptr(),
+                count=len(memory),
+            )
+        with self.regions.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=regions.unsafe_ptr(),
+                count=len(regions),
+            )
+        var zeros = List[Float32](length=kept, fill=0)
+        with self.kept.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=zeros.unsafe_ptr(), count=kept
+            )
+        var copy_blocks = ceildiv(floats, TILE * TILE)
+        for stage in range(node.stages()):
+            self.context.enqueue_function[copy_floats_kernel](
+                self.before.unsafe_ptr(),
+                self.live.unsafe_ptr(),
+                Int32(floats),
+                grid_dim=copy_blocks,
+                block_dim=TILE * TILE,
+            )
+            self.context.enqueue_function[compute_node_kernel](
+                self.code.unsafe_ptr(),
+                self.before.unsafe_ptr(),
+                self.regions.unsafe_ptr(),
+                self.live.unsafe_ptr(),
+                self.kept.unsafe_ptr(),
+                Int32(store.count()),
+                Int32(node.table_at),
+                Int32(node.count),
+                Int32(node.workgroup_size),
+                Int32(node.workgroups()),
+                Int32(node.results),
+                Int32(node.stage_starts[stage]),
+                Int32(node.stage_starts[stage + 1]),
+                grid_dim=node.workgroups(),
+                block_dim=node.workgroup_size,
+            )
+        var out = List[Float32](length=len(memory), fill=0)
+        with self.live.map_to_host() as host:
+            unsafe_memcpy(
+                dest=out.unsafe_ptr(), src=host.unsafe_ptr(), count=len(memory)
+            )
+        unpack_storage(store, out)

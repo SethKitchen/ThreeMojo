@@ -267,13 +267,13 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(MATCAP.is_valid())
     assert_true(STANDARD.is_valid())
     assert_true(PHYSICAL.is_valid())
-    assert_false(MaterialKind(12).is_valid())
+    assert_false(MaterialKind(13).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
     with assert_raises():
         _ = Material(Color(0, 0, 0), blending=Blending(7))
     with assert_raises():
-        _ = Material(Color(0, 0, 0), kind=MaterialKind(12))
+        _ = Material(Color(0, 0, 0), kind=MaterialKind(13))
     # Editing one after the fact is possible too; the rasterizers check.
     var changed = OPAQUE
     changed.value = 7

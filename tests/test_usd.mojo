@@ -3,29 +3,65 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `loaders.usd`: `assets/usd/cube.usda` and `scene.usdz` read
-as three.js 0.180's `USDLoader` reads them, from
-`assets/usd/three_usd.mjs`."""
+"""Tests for `loaders.usd`: the fixtures of `assets/usd/` read as three.js
+r186's `USDLoader`, `USDAParser` and `USDCParser` read them, from
+`assets/usd/three_usd.mjs`, and a scene written by `exporters.usdz` read
+back."""
 
 from core.assets import Assets
-from core.buffer_geometry import NORMAL, POSITION, UV
-from core.object3d import NO_PARENT, NodeId
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import NORMAL, POSITION, UV, UV1, BufferGeometry
+from core.object3d import GROUP_TYPE, NO_PARENT, OBJECT3D_TYPE, Object3D
 from core.scene import Scene
-from loaders.json import JsonDocument, NULL, STRING, parse_json
+from exporters.usdz import export_usdz
+from geometries.box import box
+from loaders.json import (
+    ARRAY,
+    BOOLEAN,
+    NULL,
+    NUMBER,
+    OBJECT,
+    STRING,
+    JsonDocument,
+    parse_json,
+)
+from loaders.model_nodes import texture_from_file
 from loaders.usd import (
-    UsdModel,
+    decode_text,
+    lowercase_extension,
     parse_usd,
     parse_usda,
     read_usd,
-    read_usda,
-    usda_tree,
+    read_usdz,
+    url_base,
 )
+from loaders.usd_composer import UsdModel, UsdTexture
+from loaders.usd_specs import (
+    USD_ARRAY,
+    USD_BOOLEAN,
+    USD_NULL,
+    USD_NUMBER,
+    USD_NUMBERS,
+    USD_OBJECT,
+    USD_SAMPLES,
+    USD_STRING,
+    USD_STRINGS,
+    USD_UNDEFINED,
+    UsdLayer,
+)
+from loaders.usda_parser import parse_usda_layer
+from loaders.usdc_parser import parse_usdc
 from loaders.zip import ZIP_STORED, ZipEntry, zip_archive
-from materials.material import Material
+from materials.material import PHYSICAL, STANDARD, Material, MaterialId
+from math.quaternion import Quaternion
+from math.vector2 import Vector2
+from math.vector3 import Vector3
+from objects.mesh import Mesh
+from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, srgb_to_linear
-from render.texture import CLAMP, MIRROR, REPEAT, Wrap
+from render.texture import CLAMP, COVERAGE, IGNORED, MIRROR, REPEAT, Wrap
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isnan
+from std.math import isinf, isnan
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -35,828 +71,738 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from units.si import DEGREE, METER, Angle, Length
+
+comptime _DIR = "assets/usd/"
 
 
-def _flatten(
-    doc: JsonDocument,
-    node: Int,
-    depth: Int,
-    mut out: List[Int],
-    mut depths: List[Int],
+def _reference() raises -> JsonDocument:
+    """Return three.js's reading of the fixtures."""
+    return parse_json(Path(_DIR + "usd.json").read_text())
+
+
+def _same_number(
+    got: Float64, doc: JsonDocument, node: Int, what: String
 ) raises:
-    """Collect a reference object and those under it, depth first.
+    """Assert a number is three.js's, a non-finite one as its text.
 
     Args:
+        got: The number.
         doc: The reference.
-        node: The object.
-        depth: How deep it is.
-        out: The objects so far.
-        depths: Their depths.
+        node: Its value.
+        what: The name, for a failure.
     """
-    out.append(node)
-    depths.append(depth)
-    var children = doc.get(node, "children")
-    for k in range(doc.length(children)):
-        _flatten(doc, doc.at(children, k), depth + 1, out, depths)
+    if doc.kind(node) == STRING:
+        var text = doc.string(node)
+        if text == "NaN":
+            assert_true(isnan(got), what + " is NaN")
+        else:
+            assert_true(isinf(got), what + " is infinite")
+            assert_equal(got > 0, text == "Infinity", what)
+        return
+    var want = doc.number(node)
+    assert_almost_equal(got, want, atol=1e-9 + abs(want) * 1e-12, msg=what)
+
+
+def _same_value(
+    layer: UsdLayer, id: Int, doc: JsonDocument, node: Int, what: String
+) raises:
+    """Assert a layer value is three.js's.
+
+    Args:
+        layer: The layer.
+        id: The value.
+        doc: The reference.
+        node: Its value.
+        what: The name, for a failure.
+    """
+    var kind = doc.kind(node)
+    var got = layer.kind(id)
+    if kind == STRING:
+        var text = doc.string(node)
+        if text == "__undefined__":
+            assert_true(got == USD_UNDEFINED, what + " is undefined")
+        elif got == USD_NUMBER:
+            _same_number(layer.number(id), doc, node, what)
+        else:
+            assert_true(got == USD_STRING, what + " is a string")
+            assert_equal(layer.text(id), text, what)
+    elif kind == NUMBER:
+        assert_true(got == USD_NUMBER, what + " is a number")
+        _same_number(layer.number(id), doc, node, what)
+    elif kind == BOOLEAN:
+        assert_true(got == USD_BOOLEAN, what + " is a boolean")
+        assert_equal(layer.number(id) != 0, doc.boolean(node), what)
+    elif kind == NULL:
+        assert_true(got == USD_NULL, what + " is null")
+    elif kind == ARRAY:
+        assert_true(layer.is_array(id), what + " is an array")
+        assert_equal(layer.length(id), doc.length(node), what + " length")
+        for k in range(doc.length(node)):
+            var item = doc.at(node, k)
+            var name = what + "[" + String(k) + "]"
+            if got == USD_NUMBERS:
+                _same_number(layer.values[id].numbers[k], doc, item, name)
+            elif got == USD_STRINGS:
+                assert_equal(
+                    layer.values[id].strings[k], doc.string(item), name
+                )
+            else:
+                _same_value(layer, layer.values[id].items[k], doc, item, name)
+    else:
+        var samples = doc.length(node) == 2 and doc.has(node, "times")
+        if samples:
+            assert_true(got == USD_SAMPLES, what + " is samples")
+            var times = doc.get(node, "times")
+            var values = doc.get(node, "values")
+            assert_equal(len(layer.values[id].numbers), doc.length(times))
+            for k in range(doc.length(times)):
+                _same_number(
+                    layer.values[id].numbers[k], doc, doc.at(times, k), what
+                )
+                _same_value(
+                    layer,
+                    layer.values[id].items[k],
+                    doc,
+                    doc.at(values, k),
+                    what + " sample",
+                )
+            return
+        assert_true(got == USD_OBJECT, what + " is an object")
+        assert_equal(len(layer.values[id].strings), doc.length(node), what)
+        for k in range(doc.length(node)):
+            var key = doc.key(node, k)
+            _same_value(
+                layer,
+                layer.object_value(id, key),
+                doc,
+                doc.get(node, key),
+                what + "." + key,
+            )
+
+
+def _same_layer(layer: UsdLayer, doc: JsonDocument, name: String) raises:
+    """Assert a layer holds three.js's paths, spec types and fields.
+
+    Args:
+        layer: The layer.
+        doc: The reference.
+        name: The fixture.
+    """
+    var specs = doc.get(doc.get(doc.root(), "layers"), name)
+    assert_equal(len(layer.paths), doc.length(specs), name + " paths")
+    for k in range(doc.length(specs)):
+        var entry = doc.at(specs, k)
+        var path = doc.string(doc.get(entry, "path"))
+        assert_equal(layer.paths[k], path, name)
+        assert_equal(
+            layer.specs[k].spec_type.value,
+            doc.integer(doc.get(entry, "specType")),
+            path,
+        )
+        var fields = doc.get(entry, "fields")
+        assert_equal(len(layer.specs[k].names), doc.length(fields), path)
+        for f in range(doc.length(fields)):
+            var key = doc.key(fields, f)
+            assert_equal(layer.specs[k].names[f], key, path)
+            _same_value(
+                layer,
+                layer.specs[k].values[f],
+                doc,
+                doc.get(fields, key),
+                path + "." + key,
+            )
+
+
+def test_usda_layers_match_three_js() raises:
+    var doc = _reference()
+    for name in [  # pragma: no branch
+        "scene.usda",
+        "values.usda",
+        "variants.usda",
+        "stage.usda",
+        "geo.usda",
+    ]:
+        _same_layer(parse_usda_layer(Path(_DIR + name).read_text()), doc, name)
+
+
+def test_usdc_layers_match_three_js() raises:
+    var doc = _reference()
+    for name in [  # pragma: no branch
+        "scene.usdc",
+        "values.usdc",
+        "values_0_3.usdc",
+        "values_0_6.usdc",
+        "variants.usdc",
+        "geo.usdc",
+    ]:
+        _same_layer(parse_usdc(Path(_DIR + name).read_bytes()), doc, name)
 
 
 def _near_list(
     got: List[Float32], doc: JsonDocument, node: Int, what: String
 ) raises:
-    """Assert numbers are three.js's, NaN as `"NaN"`.
+    """Assert numbers are three.js's, rounded to a millionth.
 
     Args:
         got: The numbers.
-        doc: The reference.
-        node: Its list.
+        doc: The reference: a list, or the length alone.
+        node: Its value.
         what: The name, for a failure.
     """
-    assert_equal(len(got), doc.length(node), what)
+    if doc.kind(node) == NUMBER:
+        assert_equal(len(got), doc.integer(node), what + " length")
+        return
+    assert_equal(len(got), doc.length(node), what + " length")
     for k in range(len(got)):
         var want = doc.at(node, k)
         if doc.kind(want) == STRING:
-            assert_true(isnan(got[k]), what)
+            assert_true(isnan(got[k]), what + " is NaN")
         else:
             assert_almost_equal(
-                Float64(got[k]), doc.number(want), atol=1e-6, msg=what
+                Float64(got[k]), doc.number(want), atol=2e-5, msg=what
             )
 
 
-def _color(got: UInt8, want: Float64, what: String) raises:
-    """Assert an sRGB byte holds a linear channel, to a byte's step.
+def _near_color(got: Color, doc: JsonDocument, node: Int, what: String) raises:
+    """Assert an sRGB color holds three.js's linear channels, to a byte.
 
     Args:
-        got: The byte.
-        want: The linear channel.
+        got: The color.
+        doc: The reference.
+        node: Its three channels.
         what: The name, for a failure.
     """
-    assert_almost_equal(
-        Float64(srgb_to_linear(Float32(got) / 255)), want, atol=0.005, msg=what
-    )
+    var channels = [got.r, got.g, got.b]
+    for k in range(3):  # pragma: no branch
+        assert_almost_equal(
+            Float64(srgb_to_linear(Float32(channels[k]) / 255)),
+            doc.number(doc.at(node, k)),
+            atol=0.005,
+            msg=what,
+        )
 
 
-def _map(
-    assets: Assets, id: TextureId, doc: JsonDocument, node: Int, what: String
+def _texture_of(model: UsdModel, id: TextureId) raises -> UsdTexture:
+    """Return what the model keeps of a texture.
+
+    Args:
+        model: What was added.
+        id: The texture.
+
+    Returns:
+        Its entry.
+    """
+    for texture in model.textures:  # pragma: no branch
+        if texture.id == id:
+            return texture.copy()
+    raise Error("no such texture")
+
+
+def _same_map(
+    assets: Assets,
+    model: UsdModel,
+    id: TextureId,
+    doc: JsonDocument,
+    node: Int,
+    what: String,
 ) raises:
-    """Assert a map is three.js's: there or not, and placed alike.
+    """Assert a map is three.js's.
 
     Args:
         assets: The assets.
+        model: What was added.
         id: The map.
         doc: The reference.
-        node: Its entry.
+        node: Its entry, or `null`.
         what: The name, for a failure.
     """
     if doc.kind(node) == NULL:
-        assert_true(id == NO_TEXTURE, what)
+        assert_true(id == NO_TEXTURE, what + " is none")
         return
-    assert_true(id != NO_TEXTURE, what)
+    assert_true(id != NO_TEXTURE, what + " is there")
+    var entry = _texture_of(model, id)
     ref texture = assets.textures.get(id)
+    var url = doc.get(node, "url")
+    if doc.kind(url) == NULL:
+        assert_false(entry.loaded, what + " is not loaded")
+    elif doc.string(url) == "blob":
+        assert_true(entry.loaded and entry.in_archive, what + " is in the zip")
+    else:
+        assert_true(entry.loaded, what + " is loaded")
+        assert_equal(entry.source, doc.string(url), what)
     var wraps: List[Wrap] = [REPEAT, CLAMP, MIRROR]
-    assert_true(
-        texture.wrap_s == wraps[doc.integer(doc.get(node, "wrapS")) - 1000],
-        what,
-    )
-    assert_true(
-        texture.wrap_t == wraps[doc.integer(doc.get(node, "wrapT")) - 1000],
-        what,
-    )
+    var ws = doc.integer(doc.get(node, "wrapS")) - 1000
+    var wt = doc.integer(doc.get(node, "wrapT")) - 1000
+    assert_true(texture.wrap_s == wraps[ws], what + " wrapS")
+    assert_true(texture.wrap_t == wraps[wt], what + " wrapT")
     var srgb = doc.string(doc.get(node, "colorSpace")) == "srgb"
     assert_true(texture.color_space == (SRGB if srgb else LINEAR), what)
+    assert_equal(
+        texture.channel.value, doc.integer(doc.get(node, "channel")), what
+    )
     assert_almost_equal(
         Float64(texture.rotation.value),
         doc.number(doc.get(node, "rotation")),
-        atol=1e-6,
+        atol=1e-5,
+        msg=what + " rotation",
     )
     var repeat = doc.get(node, "repeat")
+    var offset = doc.get(node, "offset")
     assert_almost_equal(
         Float64(texture.repeat.x), doc.number(doc.at(repeat, 0))
     )
     assert_almost_equal(
         Float64(texture.repeat.y), doc.number(doc.at(repeat, 1))
     )
-    var offset = doc.get(node, "offset")
     assert_almost_equal(
-        Float64(texture.offset.x), doc.number(doc.at(offset, 0))
+        Float64(texture.offset.x), doc.number(doc.at(offset, 0)), atol=1e-5
     )
     assert_almost_equal(
-        Float64(texture.offset.y), doc.number(doc.at(offset, 1))
+        Float64(texture.offset.y), doc.number(doc.at(offset, 1)), atol=1e-5
     )
+    for key in ["scale", "bias"]:  # pragma: no branch
+        var want = doc.get(node, key)
+        var got = entry.scale.copy() if key == "scale" else entry.bias.copy()
+        if doc.kind(want) == NULL:
+            assert_false(Bool(got), what + " " + key)
+        else:
+            assert_true(Bool(got), what + " " + key)
+            assert_equal(len(got.value()), doc.length(want))
+            for k in range(doc.length(want)):
+                assert_almost_equal(got.value()[k], doc.number(doc.at(want, k)))
 
 
-def _same(
-    model: UsdModel, mut scene: Scene, assets: Assets, name: String
+def _same_material(
+    assets: Assets,
+    model: UsdModel,
+    id: MaterialId,
+    doc: JsonDocument,
+    node: Int,
+    what: String,
 ) raises:
-    """Assert a model is what three.js made of a fixture.
+    """Assert a material is three.js's.
 
     Args:
-        model: The model.
-        scene: The scene it went into.
-        assets: The assets it went into.
-        name: The fixture.
+        assets: The assets.
+        model: What was added.
+        id: The material.
+        doc: The reference.
+        node: Its entry.
+        what: The name, for a failure.
     """
-    var doc = parse_json(Path("assets/usd/usd.json").read_text())
-    var want = List[Int]()
-    var depths = List[Int]()
-    _flatten(doc, doc.get(doc.root(), name), 0, want, depths)
-    # The first is three.js's group, the root.
-    assert_equal(len(model.objects), len(want) - 1, name)
-    var parents: List[NodeId] = [model.root]
-    for k in range(len(model.objects)):
-        ref object = model.objects[k]
-        var entry = want[k + 1]
-        var depth = depths[k + 1]
-        while len(parents) > depth:
-            _ = parents.pop()
-        ref node = scene.node(object.node)
-        assert_equal(node.name, doc.string(doc.get(entry, "name")), name)
-        assert_true(node.parent == parents[len(parents) - 1], name)
-        parents.append(object.node)
-        assert_equal(
-            object.is_mesh, doc.string(doc.get(entry, "type")) == "Mesh"
+    ref m = assets.materials.get(id)
+    _near_color(m.color, doc, doc.get(node, "color"), what + " color")
+    _near_color(m.emissive, doc, doc.get(node, "emissive"), what + " emissive")
+    _near_color(
+        m.specular_color,
+        doc,
+        doc.get(node, "specularColor"),
+        what + " specular",
+    )
+    var numbers: List[Float32] = [
+        m.roughness,
+        m.metalness,
+        m.clearcoat,
+        m.clearcoat_roughness,
+        m.ior,
+        m.opacity,
+        m.alpha_test,
+        m.normal_scale.x,
+        m.normal_scale.y,
+    ]
+    var keys: List[String] = [
+        "roughness",
+        "metalness",
+        "clearcoat",
+        "clearcoatRoughness",
+        "ior",
+        "opacity",
+        "alphaTest",
+    ]
+    for k in range(len(keys)):  # pragma: no branch
+        assert_almost_equal(
+            Float64(numbers[k]),
+            doc.number(doc.get(node, keys[k])),
+            atol=1e-5,
+            msg=what + " " + keys[k],
         )
-        var position = doc.get(entry, "position")
-        var quaternion = doc.get(entry, "quaternion")
-        var scale = doc.get(entry, "scale")
-        _near_list(
-            [node.position.x, node.position.y, node.position.z],
+    var scale = doc.get(node, "normalScale")
+    assert_almost_equal(Float64(numbers[7]), doc.number(doc.at(scale, 0)))
+    assert_almost_equal(Float64(numbers[8]), doc.number(doc.at(scale, 1)))
+    assert_equal(m.transparent, doc.boolean(doc.get(node, "transparent")), what)
+    var maps: List[TextureId] = [
+        m.map,
+        m.emissive_map,
+        m.normal_map,
+        m.roughness_map,
+        m.metalness_map,
+        m.ao_map,
+        m.specular_color_map,
+    ]
+    var names: List[String] = [
+        "map",
+        "emissiveMap",
+        "normalMap",
+        "roughnessMap",
+        "metalnessMap",
+        "aoMap",
+        "specularColorMap",
+    ]
+    for k in range(len(names)):  # pragma: no branch
+        _same_map(
+            assets,
+            model,
+            maps[k],
             doc,
-            position,
-            "p",
+            doc.get(node, names[k]),
+            what + " " + names[k],
         )
-        _near_list(
-            [
-                node.quaternion.x,
-                node.quaternion.y,
-                node.quaternion.z,
-                node.quaternion.w,
-            ],
-            doc,
-            quaternion,
-            "q",
-        )
-        _near_list([node.scale.x, node.scale.y, node.scale.z], doc, scale, "s")
-        if not object.is_mesh:
-            continue
+
+
+def _same_object(
+    scene: Scene,
+    assets: Assets,
+    model: UsdModel,
+    mut at: Int,
+    doc: JsonDocument,
+    node: Int,
+    what: String,
+) raises:
+    """Assert an object and those under it are three.js's, depth first.
+
+    Args:
+        scene: The scene.
+        assets: The assets.
+        model: What was added.
+        at: The object's place in `model.objects`; moved past those under
+            it.
+        doc: The reference.
+        node: Its entry.
+        what: The file, for a failure.
+    """
+    ref object = model.objects[at]
+    var place = at
+    var three = scene.get(object.node)
+    var name = what + " " + doc.string(doc.get(node, "name"))
+    assert_equal(three.name, doc.string(doc.get(node, "name")), what)
+    var type = doc.string(doc.get(node, "type"))
+    assert_equal(object.is_mesh, type == "Mesh", name + " is a mesh")
+    if type == "Group":
+        assert_true(three.object_type == GROUP_TYPE, name + " is a group")
+    var position = doc.get(node, "position")
+    var quaternion = doc.get(node, "quaternion")
+    var scale = doc.get(node, "scale")
+    var got: List[Float32] = [
+        three.position.x,
+        three.position.y,
+        three.position.z,
+        three.quaternion.x,
+        three.quaternion.y,
+        three.quaternion.z,
+        three.quaternion.w,
+        three.scale.x,
+        three.scale.y,
+        three.scale.z,
+    ]
+    var want = List[Float64]()
+    for k in range(3):  # pragma: no branch
+        want.append(doc.number(doc.at(position, k)))
+    for k in range(4):  # pragma: no branch
+        want.append(doc.number(doc.at(quaternion, k)))
+    for k in range(3):  # pragma: no branch
+        want.append(doc.number(doc.at(scale, k)))
+    for k in range(10):  # pragma: no branch
+        assert_almost_equal(Float64(got[k]), want[k], atol=1e-4, msg=name)
+    if object.is_mesh:
         ref geometry = assets.geometries.get(object.geometry)
-        var attributes = doc.get(entry, "attributes")
-        assert_equal(
-            doc.length(attributes),
-            3 if geometry.has_attribute(String(UV)) else 2,
-        )
-        for key in [POSITION, NORMAL, UV]:
+        var attributes = doc.get(node, "attributes")
+        var count = 0
+        for key in [POSITION, NORMAL, UV, UV1]:  # pragma: no branch
             if doc.has(attributes, String(key)):
+                count += 1
                 _near_list(
-                    geometry.attribute_view(String(key)).packed(),
+                    geometry.attribute_view(String(key)).data.copy(),
                     doc,
                     doc.get(attributes, String(key)),
                     name + " " + String(key),
                 )
-        var material = assets.materials.get(object.material)
-        var m = doc.get(entry, "material")
-        var color = doc.get(m, "color")
-        var emissive = doc.get(m, "emissive")
-        _color(material.color.r, doc.number(doc.at(color, 0)), "red")
-        _color(material.color.g, doc.number(doc.at(color, 1)), "green")
-        _color(material.color.b, doc.number(doc.at(color, 2)), "blue")
-        _color(material.emissive.r, doc.number(doc.at(emissive, 0)), "emissive")
-        _color(material.emissive.b, doc.number(doc.at(emissive, 2)), "emissive")
-        assert_almost_equal(
-            Float64(material.roughness),
-            doc.number(doc.get(m, "roughness")),
-            atol=1e-6,
-        )
-        assert_almost_equal(
-            Float64(material.metalness),
-            doc.number(doc.get(m, "metalness")),
-            atol=1e-6,
-        )
-        assert_almost_equal(
-            Float64(material.clearcoat),
-            doc.number(doc.get(m, "clearcoat")),
-            atol=1e-6,
-        )
-        assert_almost_equal(
-            Float64(material.clearcoat_roughness),
-            doc.number(doc.get(m, "clearcoatRoughness")),
-            atol=1e-6,
-        )
-        assert_almost_equal(
-            Float64(material.ior), doc.number(doc.get(m, "ior")), atol=1e-6
-        )
-        _map(assets, material.map, doc, doc.get(m, "map"), "map")
-        _map(
-            assets,
-            material.emissive_map,
-            doc,
-            doc.get(m, "emissiveMap"),
-            "emissive",
-        )
-        _map(
-            assets, material.normal_map, doc, doc.get(m, "normalMap"), "normal"
-        )
-        _map(
-            assets,
-            material.roughness_map,
-            doc,
-            doc.get(m, "roughnessMap"),
-            "rough",
-        )
-        _map(
-            assets,
-            material.metalness_map,
-            doc,
-            doc.get(m, "metalnessMap"),
-            "metal",
-        )
-        _map(
-            assets,
-            material.clearcoat_map,
-            doc,
-            doc.get(m, "clearcoatMap"),
-            "coat",
-        )
-        _map(
-            assets,
-            material.clearcoat_roughness_map,
-            doc,
-            doc.get(m, "clearcoatRoughnessMap"),
-            "coat roughness",
-        )
-        _map(assets, material.ao_map, doc, doc.get(m, "aoMap"), "ao")
+        assert_equal(geometry.attribute_count(), count, name + " attributes")
+        var groups = doc.get(node, "groups")
+        assert_equal(len(geometry.groups), doc.length(groups), name + " groups")
+        for g in range(doc.length(groups)):
+            var group = doc.at(groups, g)
+            assert_equal(
+                geometry.groups[g].start, doc.integer(doc.at(group, 0))
+            )
+            assert_equal(
+                geometry.groups[g].count, doc.integer(doc.at(group, 1))
+            )
+            assert_equal(
+                geometry.groups[g].material_index.value,
+                doc.integer(doc.at(group, 2)),
+            )
+        var materials = doc.get(node, "materials")
+        assert_equal(len(object.materials), doc.length(materials), name)
+        for k in range(doc.length(materials)):
+            _same_material(
+                assets,
+                model,
+                object.materials[k],
+                doc,
+                doc.at(materials, k),
+                name + " material " + String(k),
+            )
+    var children = doc.get(node, "children")
+    at += 1
+    var count = 0
+    for k in range(doc.length(children)):
+        assert_true(at < len(model.objects), name + " has a child")
+        assert_equal(model.objects[at].parent, place, name + " child")
+        _same_object(scene, assets, model, at, doc, doc.at(children, k), what)
+        count += 1
+    assert_equal(count, doc.length(children))
 
 
-def test_usda_text_is_read_as_three_js_reads_it() raises:
+def _same_scene(
+    scene: Scene,
+    assets: Assets,
+    model: UsdModel,
+    doc: JsonDocument,
+    key: String,
+) raises:
+    """Assert a model is three.js's reading of a fixture.
+
+    Args:
+        scene: The scene.
+        assets: The assets.
+        model: What was added.
+        doc: The reference.
+        key: The fixture's entry.
+    """
+    var at = 0
+    _same_object(
+        scene,
+        assets,
+        model,
+        at,
+        doc,
+        doc.get(doc.get(doc.root(), "scenes"), key),
+        key,
+    )
+    assert_equal(at, len(model.objects), key + " has no other objects")
+
+
+def test_scenes_match_three_js() raises:
+    var doc = _reference()
+    for name in [  # pragma: no branch
+        "scene.usda",
+        "scene.usdc",
+        "variants.usdc",
+        "values.usdc",
+        "package.usdz",
+        "crate.usdz",
+        "roundtrip.usdz",
+    ]:
+        var scene = Scene()
+        var assets = Assets()
+        var model = read_usd(_DIR + name, scene, assets)
+        _same_scene(scene, assets, model, doc, name)
+
+
+def test_text_matches_three_js() raises:
+    var doc = _reference()
     var scene = Scene()
     var assets = Assets()
-    var model = read_usda("assets/usd/cube.usda", scene, assets)
-    _same(model, scene, assets, "cube.usda")
+    var model = parse_usda(Path(_DIR + "scene.usda").read_text(), scene, assets)
+    _same_scene(scene, assets, model, doc, "scene.usda text")
     assert_equal(len(model.textures), 0)
 
 
-def test_a_usdz_is_read_as_three_js_reads_it() raises:
+def _roundtrip_scene() raises -> Tuple[Scene, Assets]:
+    """Return the scene `assets/usd/roundtrip.usdz` was written from."""
     var scene = Scene()
     var assets = Assets()
-    var model = read_usd("assets/usd/scene.usdz", scene, assets)
-    _same(model, scene, assets, "scene.usdz")
-    # The brick is in the archive; the bump map's file is not.
-    assert_equal(len(model.missing_textures), 1)
-    assert_equal(model.missing_textures[0], "textures/missing.png")
-    ref brick = assets.textures.get(model.textures[0])
-    assert_true(brick.width > 1)
+    var brick = texture_from_file("assets/brick.png", SRGB, REPEAT, COVERAGE)
+    brick.repeat = Vector2(2, 2)
+    brick.offset = Vector2(0.25, 0)
+    brick.rotation = Angle(30.0, DEGREE)
+    var map = assets.textures.add(brick^)
+    var bumps = texture_from_file("assets/brick.png", LINEAR, MIRROR, IGNORED)
+    var normal = assets.textures.add(bumps^)
+    var m0 = Material(Color(hex=0x8040FF), kind=STANDARD)
+    m0.roughness = 0.5
+    m0.metalness = 0.25
+    var m1 = Material(Color(hex=0xFFFFFF), kind=PHYSICAL)
+    m1.map = map
+    m1.normal_map = normal
+    m1.clearcoat = 0.5
+    m1.clearcoat_roughness = 0.25
+    m1.ior = 1.25
+    m1.emissive = Color(hex=0x202020)
+    var crate = assets.geometries.add(
+        box(Length(1.0, METER), Length(2.0, METER), Length(0.5, METER))
+    )
+    var tri = BufferGeometry()
+    tri.set_attribute(
+        String(POSITION),
+        BufferAttribute([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0], 3),
+    )
+    tri.set_attribute(
+        String(NORMAL),
+        BufferAttribute([Float32(0), 0, 1, 0, 0, 1, 0, 0, 1], 3),
+    )
+    tri.set_attribute(
+        String(UV), BufferAttribute([Float32(0), 0, 1, 0, 0, 1], 2)
+    )
+    var lid = assets.geometries.add(tri^)
+    var id0 = assets.materials.add(m0)
+    var id1 = assets.materials.add(m1)
+    var n0 = Object3D()
+    n0.name = "Crate"
+    n0.set_position(1, 2, 3)
+    n0.set_scale(2, 2, 2)
+    var crate_node = scene.add(n0^)
+    var n1 = Object3D()
+    n1.name = "Lid"
+    n1.quaternion = Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(90.0, DEGREE)
+    )
+    n1.set_position(0, 1, 0)
+    var lid_node = scene.attach(n1^, crate_node)
+    scene.add_mesh(Mesh(crate, id0, crate_node))
+    scene.add_mesh(Mesh(lid, id1, lid_node))
+    return (scene^, assets^)
 
 
-def _usda(text: String) raises -> Tuple[UsdModel, Scene, Assets]:
-    """Read USDA text into a new scene.
+def test_round_trip_through_the_exporter() raises:
+    # The fixture is what the exporter writes today, so three.js's reading
+    # of it is three.js's reading of this port's export.
+    var world = _roundtrip_scene()
+    var archive = export_usdz(world[0], world[1])
+    var fixture = Path(_DIR + "roundtrip.usdz").read_bytes()
+    assert_equal(len(archive), len(fixture), "the exporter writes the fixture")
+    for k in range(len(archive)):
+        assert_equal(archive[k], fixture[k], "the exporter writes the fixture")
+    var scene = Scene()
+    var assets = Assets()
+    var model = parse_usd(archive, scene, assets)
+    _same_scene(scene, assets, model, _reference(), "roundtrip.usdz")
+    # The geometry reads back as the exporter wrote it.
+    var crate = model.objects[4].copy()
+    ref geometry = assets.geometries.get(crate.geometry)
+    assert_equal(len(geometry.attribute_view(String(POSITION)).data), 36 * 3)
+
+
+def test_read_usdz_is_read_usd() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = read_usdz(_DIR + "crate.usdz", scene, assets)
+    assert_equal(scene.get(model.objects[1].node).name, "Root")
+
+
+def test_parent() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var holder = Object3D()
+    holder.name = "Holder"
+    var at = scene.add(holder^)
+    var model = parse_usda(
+        '#usda 1.0\ndef Xform "A"\n{\n}\n', scene, assets, at
+    )
+    assert_true(scene.get(model.root).parent == at)
+    assert_equal(len(model.objects), 2)
+
+
+def test_extension_and_folder() raises:
+    assert_equal(lowercase_extension("a/b.USDZ"), "usdz")
+    assert_equal(lowercase_extension("a.b/c"), "")
+    assert_equal(lowercase_extension("abc"), "")
+    assert_equal(url_base("a/b/c.usd"), "a/b/")
+    assert_equal(url_base("c.usd"), "./")
+
+
+def test_decode_text() raises:
+    assert_equal(decode_text([0xEF, 0xBB, 0xBF, 0x41]), "A")
+    assert_equal(decode_text([0x41, 0x42]), "AB")
+    assert_equal(decode_text([0xEF, 0xBB]), "�")
+    assert_equal(decode_text(List[UInt8]()), "")
+
+
+def _zip(names: List[String], data: List[List[UInt8]]) raises -> List[UInt8]:
+    """Return a stored archive of files.
+
+    Args:
+        names: The files' names.
+        data: Their bytes.
+
+    Returns:
+        The archive.
+    """
+    var entries = List[ZipEntry]()
+    for k in range(len(names)):  # pragma: no branch
+        entries.append(ZipEntry(names[k], ZIP_STORED, data[k].copy()))
+    return zip_archive(entries)
+
+
+def _bytes(text: String) -> List[UInt8]:
+    """Return a text's bytes.
 
     Args:
         text: The text.
 
     Returns:
-        The model, the scene and the assets.
+        Its UTF-8 bytes.
     """
+    return List[UInt8](text.as_bytes())
+
+
+def test_archives() raises:
     var scene = Scene()
     var assets = Assets()
-    var model = parse_usda(text, scene, assets)
-    return (model^, scene^, assets^)
-
-
-def test_the_text_is_read_into_a_tree_as_three_js_reads_it() raises:
-    var tree = usda_tree(
-        "a = b = c\nlist = x (\n  meta = 1\n)\nk = v\nk = w\n(\nk\n{\n"
-        + "  inner = 2\n}\nk\n{\n}\n}\n}\nq = 1\n"
+    var layer = '#usda 1.0\ndef Xform "A"\n{\n}\n'
+    # The first file is the stage; a `.usd` of text is USDA. A later file
+    # of the same name replaces the first in its place, and a file of any
+    # other kind is dropped.
+    var archive = _zip(
+        ["dir/x.USD", "notes.txt", "dir/x.USD", "img.JPG"],
+        [_bytes("#usda 1.0\n"), _bytes("hi"), _bytes(layer), _bytes("no")],
     )
-    # `split( '=' )[ 1 ]`: a second `=` ends the value.
-    assert_equal(tree.text(0, "a").value(), "b")
-    # A value that ends with `(` loses it and opens metadata, which is
-    # not kept.
-    assert_equal(tree.text(0, "list").value(), "x ")
-    assert_false(tree.has(0, "meta"))
-    # A key keeps its first place when it is set again.
-    assert_equal(tree.nodes[0].keys[2], "k")
-    # A lone `(` with no name before it opens the key `null`. Inside it,
-    # `{` opens the group of the name before, which a second `{` reopens.
-    var meta = tree.kid(0, "null")
-    var group = tree.kid(meta, "k")
-    assert_true(group >= 0)
-    assert_equal(tree.text(0, "k").value(), "w")
-    assert_equal(tree.text(group, "inner").value(), "2")
-    # Past the root, `}` changes nothing, and writing goes on.
-    assert_equal(tree.text(0, "q").value(), "1")
-    # A `{` with nothing named opens the key `null`.
-    assert_true(usda_tree("{\n}\n").kid(0, "null") >= 0)
-    # An empty string is no group: `{` opens a new one.
-    var empty = usda_tree("k =\nk\n{\n  x = 1\n}\n")
-    assert_true(empty.kid(0, "k") >= 0)
-    with assert_raises(contains="writes into a string"):
-        _ = usda_tree("k = v\nk\n{\n  x = 1\n}\n")
-    with assert_raises(contains="writes into a string or into nothing"):
-        _ = usda_tree(")\nx = 1\n")
-    with assert_raises(contains="into nothing"):
-        _ = usda_tree(")\na (\n")
-    # An order of keys as JavaScript walks them: indices first.
-    var order = usda_tree("b = 1\n2 = 2\n1 = 3\n").order(0)
-    assert_equal(order[0], 2)
-    assert_equal(order[1], 1)
-
-
-def test_references_are_found_as_three_js_finds_them() raises:
-    var brick = Path("assets/brick.png").read_bytes()
-    var stage = (
-        '#usda 1.0\ndef Xform "A" (\n    prepend references ='
-        + ' @x/geo.usda@</Shape>\n)\n{\n}\ndef Xform "B" (\n'
-        + "    prepend references = @crate.usdc@</Shape>\n)\n{\n}\n"
-        + 'def Xform "C" (\n    prepend references = @gone.usda@</S>\n)\n'
-        + "{\n}\n"
-    )
-    var geo = (
-        'def Mesh "Shape"\n{\n    point3f[] points = [(0, 0, 0), (1, 0, 0),'
-        + " (0, 1, 0)]\n}\n"
-    )
-    var crate = List[UInt8](String("PXR-USDC and more").as_bytes())
-    var archive = zip_archive(
-        [
-            ZipEntry("stage.usda", ZIP_STORED, List[UInt8](stage.as_bytes())),
-            ZipEntry("geo.usda", ZIP_STORED, List[UInt8](geo.as_bytes())),
-            ZipEntry("crate.usdc", ZIP_STORED, crate^),
-            ZipEntry("a.png", ZIP_STORED, brick^),
-        ]
-    )
-    var scene = Scene()
-    var assets = Assets()
     var model = parse_usd(archive, scene, assets)
-    # `x/geo.usda` loses `x/`, as `/^.\//` cuts it. A crate's group and a
-    # missing layer hold no mesh.
-    assert_true(model.objects[0].is_mesh)
-    assert_false(model.objects[1].is_mesh)
-    assert_false(model.objects[2].is_mesh)
-    # A reference into a PNG looks for a name in a string.
-    var into_png = (
-        'def Xform "A" (\n    prepend references = @a.png@</S>\n)\n{\n}\n'
-    )
-    var png_archive = zip_archive(
-        [
-            ZipEntry("s.usd", ZIP_STORED, List[UInt8](into_png.as_bytes())),
-            ZipEntry("a.png", ZIP_STORED, [1, 2, 3]),
-        ]
-    )
-    with assert_raises(contains="`in` reads a key"):
-        _ = parse_usd(png_archive, scene, assets)
-    with assert_raises(contains="no @path@ and name"):
-        _ = _usda('def Xform "A" (\n    prepend references = @a\n)\n{\n}\n')
-    with assert_raises(contains="is a group, not a string"):
-        _ = _usda('def Xform "A"\n{\n    prepend references = {\n    }\n}\n')
-
-
-def test_meshes_are_built_as_three_js_builds_them() raises:
-    # Counts of five are stepped over; no indices and no counts of three
-    # or four is no corner at all.
-    var skipped = _usda(
-        'def Xform "A"\n{\n    def Mesh "M"\n    {\n'
-        + "        int[] faceVertexCounts = [5]\n"
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-    )
-    ref geometry = skipped[2].geometries.get(skipped[0].objects[0].geometry)
-    assert_equal(len(geometry.attribute_view(String(POSITION)).packed()), 0)
-    # A corner past the list reads NaN.
-    var past = _usda(
-        'def Xform "A"\n{\n    def Mesh "M"\n    {\n'
-        + "        int[] faceVertexCounts = [3]\n"
-        + "        int[] faceVertexIndices = [0, 1]\n"
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-    )
-    var corners = (
-        past[2]
-        .geometries.get(past[0].objects[0].geometry)
-        .attribute_view(String(POSITION))
-        .packed()
-    )
-    assert_true(isnan(corners[6]))
-    # Numbers as JavaScript's `Number` reads JSON values.
-    var numbers = _usda(
-        'def Xform "A"\n{\n    def Mesh "M"\n    {\n'
-        + '        point3f[] points = ["2", true, null, [], [5], [1, 2], {"a":'
-        " 1}, false, 1]\n"
-        + "    }\n}\n"
-    )
-    var read = (
-        numbers[2]
-        .geometries.get(numbers[0].objects[0].geometry)
-        .attribute_view(String(POSITION))
-        .packed()
-    )
-    assert_equal(read[0], 2)
-    assert_equal(read[1], 1)
-    assert_equal(read[2], 0)
-    assert_equal(read[3], 0)
-    assert_equal(read[4], 5)
-    assert_true(isnan(read[5]))
-    assert_true(isnan(read[6]))
-    assert_equal(read[7], 0)
-    var mesh = 'def Xform "A"\n{\n    def Mesh "M"\n    {\n'
-    with assert_raises(contains="with no faceVertexIndices"):
-        _ = _usda(mesh + "        int[] faceVertexCounts = [3]\n    }\n}\n")
-    with assert_raises(contains="not an array"):
-        _ = _usda(mesh + "        int[] faceVertexIndices = 5\n    }\n}\n")
-    with assert_raises(contains="not whole vertices"):
-        _ = _usda(mesh + "        point3f[] points = [1, 2]\n    }\n}\n")
-    with assert_raises(contains="st indices with no faceVertexCounts"):
-        _ = _usda(
-            mesh
-            + "        texCoord2f[] primvars:st = [(0, 0)]\n"
-            + "        int[] primvars:st:indices = [0]\n    }\n}\n"
+    assert_equal(scene.get(model.objects[1].node).name, "A")
+    # A `.usd` crate is the stage too.
+    var crate = Path(_DIR + "geo.usdc").read_bytes()
+    model = parse_usd(_zip(["a.usd"], [crate.copy()]), scene, assets)
+    assert_equal(scene.get(model.objects[1].node).name, "Other")
+    # A `.usdc` whose bytes are text is read as text.
+    model = parse_usd(_zip(["a.usdc"], [_bytes(layer)]), scene, assets)
+    assert_equal(scene.get(model.objects[1].node).name, "A")
+    with assert_raises(contains="first file must be a USD layer"):
+        _ = parse_usd(
+            _zip(["a.png", "b.usda"], [_bytes("x"), _bytes(layer)]),
+            scene,
+            assets,
         )
-    with assert_raises(contains="normals that are not three numbers"):
-        _ = _usda(mesh + "        normal3f[] normals = [1, 2]\n    }\n}\n")
-    with assert_raises(contains="normals with no faceVertexCounts"):
-        _ = _usda(mesh + "        normal3f[] normals = [1, 2, 3]\n    }\n}\n")
-    with assert_raises(contains="a group, not a string"):
-        _ = _usda(mesh + "        point3f[] points = {\n        }\n    }\n}\n")
-    # A mesh that is text: empty is none, anything else is read with `in`.
-    var blank = _usda('def Xform "A"\n{\n    def Mesh "M" =\n}\n')
-    assert_false(blank[0].objects[0].is_mesh)
-    with assert_raises(contains="`in` reads a key"):
-        _ = _usda('def Xform "A"\n{\n    def Mesh "M" = x\n}\n')
-    with assert_raises(contains="`in` reads a key"):
-        _ = _usda('def Xform "A" =\n')
+    with assert_raises(contains="first file must be a USD layer"):
+        _ = parse_usd(_zip(List[String](), List[List[UInt8]]()), scene, assets)
 
 
-def _material(
-    surface: String, extra: String = ""
-) raises -> Tuple[UsdModel, Scene, Assets]:
-    """Read a triangle bound to a material of one surface shader.
-
-    Args:
-        surface: The surface shader's inputs.
-        extra: More of the material, after the surface.
-
-    Returns:
-        The model, the scene and the assets.
-    """
-    return _usda(
-        'def Xform "A"\n{\n    rel material:binding = </Looks/M>\n'
-        + '    def Mesh "Face"\n    {\n'
-        + "        int[] faceVertexCounts = [3]\n"
-        + "        int[] faceVertexIndices = [0, 1, 2]\n"
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-        + 'def Scope "Looks"\n{\n    def Material "M"\n    {\n'
-        + "        token outputs:surface.connect ="
-        " </Looks/M/S.outputs:surface>\n"
-        + '        def Shader "S"\n        {\n'
-        + surface
-        + "        }\n"
-        + extra
-        + "    }\n}\n"
-    )
-
-
-def test_materials_are_built_as_three_js_builds_them() raises:
-    var shader = (
-        '        def Shader "T"\n        {\n'
-        + "            asset inputs:file = @t.png@\n"
-        + '            token inputs:wrapS = "mirror"\n        }\n'
-    )
-    var textured = _material(
-        "            color3f inputs:emissiveColor.connect ="
-        " </Looks/M/T.outputs:rgb>\n"
-        + "            float inputs:metallic.connect = </Looks/M/T.outputs:r>\n"
-        + "            float inputs:clearcoat.connect ="
-        " </Looks/M/T.outputs:r>\n"
-        + "            float inputs:clearcoatRoughness.connect ="
-        " </Looks/M/T.outputs:r>\n",
-        shader
-        + '        def Shader "Transform2d_emissive" = x\n'
-        + '        def Shader "Transform2d_metallic"\n        {\n'
-        + "            float inputs:rotation =\n"
-        + "        }\n",
-    )
-    var built = textured[2].materials.get(textured[0].objects[0].material)
-    assert_true(built.emissive_map != NO_TEXTURE)
-    assert_equal(built.emissive.r, 255)
-    assert_equal(built.metalness, 1)
-    assert_equal(built.clearcoat, 1)
-    assert_equal(built.clearcoat_roughness, 1)
-    assert_true(built.clearcoat_roughness_map != NO_TEXTURE)
-    ref first = textured[2].textures.get(built.emissive_map)
-    assert_true(first.wrap_s == MIRROR)
-    assert_true(first.wrap_t == CLAMP)
-    assert_equal(len(textured[0].missing_textures), 4)
-    # A binding of one part looks for `def Material "undefined"`.
-    var lone = _usda(
-        'def Xform "A"\n{\n    rel material:binding = </M>\n}\n'
-        + 'def Material "undefined"\n{\n    token outputs:surface.connect ='
-        + " </undefined/S.outputs:surface>\n"
-        + '    def Shader "S"\n    {\n        float inputs:roughness = 0.5\n   '
-        " }\n}\n"
-    )
-    _ = lone^
-    # A surface that is not a group, or not there, or a connection that is
-    # a group or names no shader, is the default material.
-    for text in [
-        "token outputs:surface.connect = x\n",
-        "token outputs:surface.connect = </a/Missing.outputs:surface>\n",
-        "token outputs:surface.connect = {\n        }\n",
-    ]:
-        var plain = _usda(
-            'def Xform "A"\n{\n    def Material "M"\n    {\n        '
-            + text
-            + "    }\n}\n"
-        )
-        _ = plain^
-    with assert_raises(contains="`in` reads a key"):
-        _ = _usda(
-            'def Xform "A"\n{\n    def Material "M"\n    {\n'
-            + "        token outputs:surface.connect = </S.outputs:surface>\n"
-            + '        def Shader "S" = text\n    }\n}\n'
-        )
-    with assert_raises(contains="names no shader"):
-        _ = _material(
-            "            color3f inputs:diffuseColor.connect = </x>\n"
-        )
-    with assert_raises(contains="`in` reads a key"):
-        _ = _material(
-            "            normal3f inputs:normal.connect ="
-            " </a/Gone.outputs:rgb>\n"
-        )
-    with assert_raises(contains="has no file"):
-        _ = _material(
-            "            float inputs:occlusion.connect = </a/T.outputs:r>\n",
-            '        def Shader "T"\n        {\n        }\n',
-        )
-    with assert_raises(contains="wrap three.js does not know"):
-        _ = _material(
-            "            float inputs:roughness.connect = </a/T.outputs:r>\n",
-            '        def Shader "T"\n        {\n'
-            + "            asset inputs:file = @t.png@\n"
-            + '            token inputs:wrapT = "border"\n        }\n',
-        )
-    with assert_raises(contains="from zero to one"):
-        _ = _material("            color3f inputs:diffuseColor = (2, 0, 0)\n")
-    with assert_raises(contains="from zero to one"):
-        _ = _material("            color3f inputs:emissiveColor = (0, 0)\n")
-
-
-def test_nodes_are_placed_and_named_as_three_js_does() raises:
-    var placed = _usda(
-        'def Xform "a-b" def Xform "Ok"\n{\n'
-        + "    matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0),"
-        + " (0, 0, 1, 0), (4, 5, 6, 1) )\n}\n"
-        + 'def Xform "x-y"\n{\n}\n'
-    )
-    var first = placed[0].objects[0].node
-    var second = placed[0].objects[1].node
-    assert_equal(placed[1].node(first).name, "Ok")
-    assert_equal(placed[1].node(first).position.y, 5)
-    assert_equal(placed[1].node(second).name, "")
-    with assert_raises(contains="fewer than sixteen"):
-        _ = _usda(
-            'def Xform "A"\n{\n    matrix4d xformOp:transform = ( (1, 0) )\n}\n'
-        )
-
-
-def test_what_three_js_throws_on_in_an_archive_is_refused() raises:
+def test_bytes_that_are_text() raises:
     var scene = Scene()
     var assets = Assets()
-    # A crate is an empty group.
-    var crate = parse_usd(
-        List[UInt8](String("PXR-USDC").as_bytes()), scene, assets
-    )
-    assert_equal(len(crate.objects), 0)
-    with assert_raises(contains="archive is empty"):
-        _ = parse_usd(zip_archive([]), scene, assets)
-    with assert_raises(contains="first file is not a USD layer"):
-        _ = parse_usd(
-            zip_archive([ZipEntry("a.png", ZIP_STORED, [1])]), scene, assets
-        )
-    with assert_raises(contains="is not UTF-8 text"):
-        _ = parse_usd(
-            zip_archive([ZipEntry("a.usda", ZIP_STORED, [0xFF])]), scene, assets
-        )
-    # A byte order mark is dropped.
-    var marked = parse_usd(
-        zip_archive(
-            [
-                ZipEntry(
-                    "a.usda",
-                    ZIP_STORED,
-                    [0xEF, 0xBB, 0xBF, 100, 101, 102, 10],
-                )
-            ]
-        ),
-        scene,
-        assets,
-    )
-    assert_equal(len(marked.objects), 0)
-    # `load` reads bytes, so a `.usda` file is not a ZIP.
+    var model = parse_usd(_bytes('#usda 1.0\ndef "B"\n{\n}\n'), scene, assets)
+    assert_equal(scene.get(model.objects[1].node).name, "B")
+    model = parse_usd(_bytes("P"), scene, assets)
+    assert_equal(len(model.objects), 1)
+    model = parse_usd(_bytes("P\n"), scene, assets)
+    assert_equal(len(model.objects), 1)
+
+
+def test_refusals() raises:
+    var scene = Scene()
+    var assets = Assets()
     with assert_raises():
-        _ = read_usd("assets/usd/cube.usda", scene, assets)
-    # A file of a name twice keeps the last, and a file that is neither a
-    # PNG nor a layer is stepped over.
-    var twice = parse_usd(
-        zip_archive(
-            [
-                ZipEntry("a.usda", ZIP_STORED, [120, 10]),
-                ZipEntry("readme.txt", ZIP_STORED, [1]),
-                ZipEntry("a.usda", ZIP_STORED, [121, 10]),
-            ]
-        ),
-        scene,
-        assets,
-    )
-    assert_equal(len(twice.objects), 0)
-
-
-def test_the_tree_s_edges_are_read_as_three_js_reads_them() raises:
-    var tree = usda_tree("a = 1\ng = {\n}\n}\n}\n)\n")
-    assert_false(Bool(tree.text(0, "missing")))
-    assert_false(Bool(tree.text(0, "g")))
-    assert_equal(tree.kid(0, "missing"), -1)
-    assert_equal(tree.kid(0, "a"), -1)
-
-
-def _mesh(body: String) raises -> Tuple[UsdModel, Scene, Assets]:
-    """Read an Xform holding one mesh of the given lines.
-
-    Args:
-        body: The mesh's lines.
-
-    Returns:
-        The model, the scene and the assets.
-    """
-    return _usda(
-        'def Xform "A"\n{\n    def Mesh "M"\n    {\n' + body + "    }\n}\n"
-    )
-
-
-def test_mesh_edges_are_read_as_three_js_reads_them() raises:
-    var three = "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-    # A face of five is stepped over; a fractional corner reads NaN.
-    var mixed = _mesh(
-        three
-        + "        int[] faceVertexCounts = [3, 5]\n"
-        + "        int[] faceVertexIndices = [0.5, 1, 2, 0, 1, 2, 0, 1]\n"
-    )
-    var corners = (
-        mixed[2]
-        .geometries.get(mixed[0].objects[0].geometry)
-        .attribute_view(String(POSITION))
-        .packed()
-    )
-    assert_equal(len(corners), 9)
-    # Empty arrays: no corners and no counts.
-    var empty = _mesh(
-        three
-        + "        int[] faceVertexCounts = []\n"
-        + "        int[] faceVertexIndices = []\n"
-    )
-    var none = (
-        empty[2]
-        .geometries.get(empty[0].objects[0].geometry)
-        .attribute_view(String(POSITION))
-        .packed()
-    )
-    assert_equal(len(none), 0)
-    var no_indices = _mesh(three + "        int[] faceVertexCounts = []\n")
-    _ = no_indices^
-    # Normals of none, which are not as long as the points: none of their
-    # own corners.
-    var no_normals = _mesh(
-        three
-        + "        int[] faceVertexCounts = [3]\n"
-        + "        int[] faceVertexIndices = [0, 1, 2]\n"
-        + "        normal3f[] normals = []\n"
-    )
-    _ = no_normals^
-    # A reference with no archive, and a binding of nothing.
-    var unreferenced = _usda(
-        'def Xform "A" (\n    prepend references = @a.usda@</M>\n)\n{\n'
-        + "    rel material:binding = </\n}\n"
-    )
-    assert_false(unreferenced[0].objects[0].is_mesh)
-    with assert_raises(contains="with no faceVertexIndices"):
-        _ = _mesh(three + "        int[] faceVertexCounts = [4]\n")
-    # `st` indices with no `st` are stepped over.
-    var lone = _mesh(three + "        int[] primvars:st:indices = [0]\n")
-    _ = lone^
-    # Normals as long as the points and no corners are kept as they are.
-    var kept = _mesh(
-        three
-        + "        normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1)]\n"
-    )
-    var normals = (
-        kept[2]
-        .geometries.get(kept[0].objects[0].geometry)
-        .attribute_view(String(NORMAL))
-        .packed()
-    )
-    assert_equal(len(normals), 9)
-    # Normals of their own, one a corner, read through their own corners.
-    var own = _mesh(
-        three
-        + "        int[] faceVertexCounts = [3]\n"
-        + "        int[] faceVertexIndices = [0, 1, 2]\n"
-        + "        normal3f[] normals = [(0, 0, 1)]\n"
-    )
-    var own_normals = (
-        own[2]
-        .geometries.get(own[0].objects[0].geometry)
-        .attribute_view(String(NORMAL))
-        .packed()
-    )
-    assert_equal(own_normals[2], 1)
-    assert_true(isnan(own_normals[3]))
-    # No points: no normals are computed.
-    var pointless = _mesh("        int[] faceVertexIndices = [0]\n")
-    ref bare = pointless[2].geometries.get(pointless[0].objects[0].geometry)
-    assert_false(bare.has_attribute(String(NORMAL)))
-    with assert_raises(contains="is a group, not a string"):
-        _ = _mesh(three + "        float2[] primvars:st = {\n        }\n")
-
-
-def test_material_edges_are_read_as_three_js_reads_them() raises:
-    # An empty group before the shader is searched and passed; a binding
-    # with no `>` still names its material; a material with no surface
-    # is the default.
-    var looked = _usda(
-        'def Scope "Empty"\n{\n}\n'
-        + 'def Xform "A"\n{\n    rel material:binding = </Looks/M\n'
-        + '    def Mesh "Face"\n    {\n'
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-        + 'def Xform "B"\n{\n    rel material:binding = </Looks/N>\n'
-        + '    def Mesh "Face"\n    {\n'
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-        + 'def Scope "Plain" = x\n'
-        + 'def Scope "Looks"\n{\n    def Material "N"\n    {\n    }\n'
-        + '    def Material "M"\n    {\n'
-        + "        token outputs:surface.connect ="
-        " </Looks/M/S.outputs:surface>\n"
-        + '        def Shader "S"\n        {\n'
-        + "            color3f inputs:diffuseColor.connect ="
-        " </Looks/M/T.outputs:rgb>\n"
-        + "        }\n"
-        + '        def Shader "T"\n        {\n'
-        + "            asset inputs:file = @t.png@\n"
-        + '            token inputs:wrapS = "clamp"\n'
-        + '            token inputs:wrapT = "repeat"\n'
-        + "        }\n    }\n}\n"
-    )
-    var map = looked[2].materials.get(looked[0].objects[0].material).map
-    assert_true(map != NO_TEXTURE)
-    assert_true(looked[2].textures.get(map).wrap_t == REPEAT)
-    with assert_raises(contains="wrap three.js does not know"):
-        _ = _material(
-            "            float inputs:roughness.connect = </a/T.outputs:r>\n",
-            '        def Shader "T"\n        {\n'
-            + "            asset inputs:file = @t.png@\n"
-            + "            token inputs:wrapS = {\n            }\n"
-            + "        }\n",
-        )
-    # A texture whose file is a layer of the archive has no image.
-    var stage = (
-        'def Xform "A"\n{\n    rel material:binding = </Looks/M>\n'
-        + '    def Mesh "Face"\n    {\n'
-        + "        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]\n"
-        + "    }\n}\n"
-        + 'def Scope "Looks"\n{\n    def Material "M"\n    {\n'
-        + "        token outputs:surface.connect ="
-        " </Looks/M/S.outputs:surface>\n"
-        + '        def Shader "S"\n        {\n'
-        + "            color3f inputs:diffuseColor.connect ="
-        " </Looks/M/T.outputs:rgb>\n"
-        + "        }\n"
-        + '        def Shader "T"\n        {\n'
-        + "            asset inputs:file = @other.usda@\n        }\n    }\n}\n"
-    )
-    var scene = Scene()
-    var assets = Assets()
-    var layered = parse_usd(
-        zip_archive(
-            [
-                ZipEntry(
-                    "stage.usda", ZIP_STORED, List[UInt8](stage.as_bytes())
-                ),
-                ZipEntry("other.usda", ZIP_STORED, [120, 10]),
-            ]
-        ),
-        scene,
-        assets,
-    )
-    assert_equal(layered.missing_textures[0], "other.usda")
-
-
-def test_names_are_read_as_three_js_reads_them() raises:
-    var named = _usda(
-        'def Xform "" def Xform "Ok"\n{\n}\ndef Xform "open\n{\n}\n'
-    )
-    var first = named[0].objects[0].node
-    var second = named[0].objects[1].node
-    assert_equal(named[1].node(first).name, "Ok")
-    assert_equal(named[1].node(second).name, "")
+        _ = read_usd(_DIR + "missing.usdz", scene, assets)
 
 
 def main() raises:

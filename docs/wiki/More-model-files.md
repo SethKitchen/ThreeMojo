@@ -24,7 +24,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [KMZ](#kmz) | `loaders/kmz.mojo` | `read_kmz(path, scene, assets) -> ColladaModel` | `KMZLoader` |
 | [VTK](#vtk) | `loaders/vtk.mojo` | `read_vtk(path) -> BufferGeometry` | `VTKLoader` |
 | [NRRD](#nrrd) | `loaders/nrrd.mojo` | `read_nrrd(path) -> Volume` | `NRRDLoader`, and `Volume` |
-| [USD](#usd) | `loaders/usd.mojo` | `read_usd(path, scene, assets) -> UsdModel` | `USDLoader` |
+| [USD](#usd) | `loaders/usd.mojo` | `read_usd(path, scene, assets) -> UsdModel` | `USDLoader` and `USDZLoader` |
 | [LWO](#lwo) | `loaders/lwo.mojo` | `read_lwo(path, scene, assets) -> LwoModel` | `LWOLoader` |
 | [LDraw](#ldraw) | `loaders/ldraw.mojo` | `read_ldraw(path, loader) -> LDrawModel` | `LDrawLoader` |
 | [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader`, and `DRACOExporter` in [Exporters](Exporters#draco) |
@@ -1075,59 +1075,112 @@ The loader refuses these, with a message that names the problem. three.js throws
 
 ## USD
 
-`loaders/usd.mojo`. `read_usd(path, scene, assets)` reads a USDZ archive into a scene. `read_usda` reads USDA text. three.js: `USDLoader`.
+`loaders/usd.mojo` reads a USD file into a scene: USDA text, a USDC crate or a USDZ archive. It builds meshes, transforms, `UsdPreviewSurface` materials and textures. three.js r186: `USDLoader`, and `USDZLoader`, its old name.
 
 ```mojo
-var model = read_usd("assets/usd/scene.usdz", scene, assets)
+var model = read_usd("assets/usd/package.usdz", scene, assets)
 ```
 
 | Function | What it does |
 |---|---|
-| `read_usd(path, scene, assets) -> UsdModel` | Read a file as bytes, as three.js's `load` does. |
-| `read_usda(path, scene, assets) -> UsdModel` | Read a file as USDA text. |
-| `parse_usd(bytes, scene, assets) -> UsdModel` | Read the bytes of a USDZ archive or a USDC crate. |
-| `parse_usda(text, scene, assets) -> UsdModel` | Read USDA text. |
-| `usda_tree(text) -> UsdaTree` | Read USDA text into three.js's tree of names and values. |
+| `read_usd(path, scene, assets, parent) -> UsdModel` | Read a `.usd`, `.usda`, `.usdc` or `.usdz` file. A texture that is not in the file is found beside the file. |
+| `read_usdz(path, scene, assets, parent) -> UsdModel` | The same as `read_usd`, as `USDZLoader` is the same as `USDLoader`. |
+| `parse_usd(bytes, scene, assets, parent, path) -> UsdModel` | Read the bytes of a file. `path` is the folder for textures, or empty. |
+| `parse_usda(text, scene, assets, parent, path) -> UsdModel` | Read USDA text. |
+| `compose_usd(layer, assets, path, scene, store, parent) -> UsdModel` | Build one `UsdLayer` into a scene. `loaders/usd_composer.mojo`. |
+| `parse_usda_layer(text) -> UsdLayer` | Read USDA text into its specs. `loaders/usda_parser.mojo`. |
+| `parse_usdc(bytes) -> UsdLayer` | Read a USDC crate into its specs. `loaders/usdc_parser.mojo`. |
+
+`parent` is optional. The root group goes under it.
+
+### How a file is read
+
+The first bytes of the file select the parser, as in three.js:
+
+1. `PXR-USDC` is a crate. `loaders/usdc_parser.mojo` reads it.
+2. `PK` is a USDZ archive. Its first file must be a `.usda`, `.usdc` or `.usd` layer, and it is the stage. The other layers and the PNG, JPEG and AVIF images of the archive are kept for the stage to find.
+3. Any other file is USDA text. `loaders/usda_parser.mojo` reads it.
+
+A layer is a `UsdLayer`: a spec for each path, with its type and its fields, as three.js's `specsByPath`. `loaders/usd_specs.mojo` holds it. `loaders/usd_composer.mojo` builds the layer into the scene. `loaders/usd_geometry.mojo` builds the meshes.
+
+### USDC crates
+
+A crate is the binary layer of OpenUSD. The parser reads the bootstrap, the table of contents and the `TOKENS`, `STRINGS`, `FIELDS`, `FIELDSETS`, `PATHS` and `SPECS` sections. From version 0.4.0 the sections are compressed:
+
+- `decompress_lz4` expands OpenUSD's `TfFastCompression`: LZ4 blocks in chunks.
+- `decompress_integers32` expands the integer coding: a common value, two bits of code for each integer and the differences in one, two or four bytes.
+
+Arrays of integers and of floats use the same compression. `CrateType` names the type of each value.
 
 ### UsdModel
 
 | Field | What it holds |
 |---|---|
 | `root` | The node that three.js's `Group` becomes. |
-| `objects` | Each node that was added, a mesh or a node with nothing to draw, in the order added. |
-| `textures` | Each texture that a material read. |
-| `missing_textures` | The file of each map whose image is not in the archive. |
+| `objects` | Each node that was added, in the order added. A `UsdObject` has its node, the place of its parent, and a mesh's geometry and materials. |
+| `textures` | Each texture that a material wears, with its file and the `inputs:scale` and `inputs:bias` of its `UsdUVTexture`. |
+| `missing_textures` | The file of each texture whose image was not found or not read. |
 
 ### What is built
 
-Each `def Xform` is a node under the `def Xform` or `def Scope` that holds it. Its name is its quoted word. It is a mesh when a `def Mesh` is in it, or in the layer that its `prepend references` names. The mesh has `position`, `normal` and `uv`, and no index. Its material is a physical material from a `UsdPreviewSurface`, with the maps that three.js reads. A `matrix4d xformOp:transform` places the node.
-
-A USDC crate gives an empty node, as three.js's crate reader does.
+- Each prim under `/` is a node under its parent, in the order of the layer's paths.
+- A `Mesh` is a mesh. Its faces are triangulated, and a face with holes is cut with earcut. It has `position`, `normal`, `uv`, `uv1` and `color` when the prim has them. A mesh with `GeomSubset`s has a group and a material for each subset.
+- A `Cube`, `Sphere`, `Cylinder`, `Cone` and `Capsule` are meshes of the three.js geometries.
+- A `Material`, `Shader`, `GeomSubset` and `SkelAnimation` are not nodes. Any other prim is a node with nothing to draw.
+- The children of the selected variant of each variant set are children too.
+- `xformOpOrder` applies the transform operations in order, with `!invert!`. A prim with no order sets its translation, scale, rotation and orientation separately.
+- The root layer's `metersPerUnit` scales the scene. An `upAxis` of `Z` turns the scene to Y up.
+- `prepend references` and `payload` compose a layer of the archive, or a prim of the same layer, under the prim. When the layer holds one mesh, the mesh takes the prim's place.
+- `material:binding` binds a material. A `UsdPreviewSurface` gives a physical material: color, emissive color, normal map, roughness, metalness, occlusion, index of refraction, specular color, clear coat and opacity. Each can be a value or a `UsdUVTexture`.
+- A texture has the wrap of its shader and the placement of a `UsdTransform2d`. It reads the second set of texture coordinates when its reader reads `st1`.
 
 ### Same as three.js
 
 The loader keeps these three.js behaviors:
 
-- A node takes the first `def Mesh` that is in it. So a parent shows the mesh of its first child too.
-- `material:binding` finds a material by the second part of its path.
-- The corners of a face start at its index times its count of corners.
-- A corner past the list is NaN.
-- A map whose image is not in the archive is one black texel. three.js keeps a texture with no image, which draws black.
-- A texture's rotation is in radians.
-- `read_usd` refuses a `.usda` file, because three.js's `load` reads it as a ZIP.
+- A mesh with no binding wears the first material under the root's `Looks` or `Materials`.
+- A mesh with a white material wears its `displayColor` and `displayOpacity`.
+- A diffuse color is read as sRGB. A color that `USDZExporter` writes in linear reads back darker.
+- Two maps that share a texture share its color space: the color space of the last map.
+- A texture whose image is not found is one black texel, as a three.js texture with no image draws.
+- In a crate, an inlined `int` is read as unsigned, a dictionary is empty, and a reference or a payload is `null`. So the references of a crate do not compose.
+- A crate before version 0.4.0 reads with the wrong paths, as three.js reads it.
+- In USDA text, a time sample keeps the comma after its value, so `(1, 2, 3),` reads as four numbers, the last NaN.
+
+### Differences from three.js
+
+These parts of `USDLoader` are not ported:
+
+- Skeletons, skinning and `SkelAnimation` clips. A `Skeleton` is not a node, but its children are.
+- The OpenPBR surface. The port reads only `UsdPreviewSurface`.
+- Cameras and lights. They are nodes with nothing to draw.
+- The `LoadingManager` URL modifier. A texture is found in the archive, then on the disk beside the file.
+- AVIF images. An AVIF texture is kept in the archive but is not decoded, so it is one black texel.
 
 ### Errors
 
-The loader refuses these, with a message that names the problem:
+The loader refuses what three.js throws on:
 
-- A value that is not JSON, and a line that writes into a string or into nothing. three.js throws on these.
-- A reference with no `@`, a texture input that names no shader, and a shader with no file. three.js throws on these too.
-- An array value that is not an array, a color outside zero to one, and a wrap that three.js does not know.
-- Points that are not three numbers each, a transform that is not sixteen finite numbers, and text that is not UTF-8.
+- A file that cannot be read, and an archive whose first file is not a USD layer.
+- A crate that does not start with `PXR-USDC`, and a read past the end of the crate.
+- A crate array of more than 2^31 - 1 elements.
+- In USDA text, a line that writes into a string or into nothing.
+- In USDA text, a quaternion array that is a string, or that is not a multiple of four long.
+- A transform operation that is not numbers, and a texture scale that is not a list.
+
+The loader also refuses these, where the port holds less than three.js:
+
+- A crate with no `TOKENS`, `FIELDS`, `FIELDSETS`, `PATHS` or `SPECS` section, and a spec of no known type.
+- A crate with an LZ4 chunk past the end of its input, or a path tree that does not end.
+- A crate count past what the file can hold.
+- An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
+- A material value that is not a number, and a color outside zero to one.
+- A texture that reads `st2`. The port has no third set of texture coordinates.
+- References that nest more than 64 deep.
 
 ### Example
 
-`assets/usd/cube.usda` has meshes of quads and triangles, normals, texture coordinates and a material. `assets/usd/scene.usdz` references a mesh in another layer, and has a textured material. `tests/test_usd.mojo` compares both with three.js 0.180.
+`assets/usd/` has the fixtures. `make_usd.py` writes the `.usda` and `.usdc` layers and the archives with OpenUSD's `usd-core`. `three_usd.mjs` reads each file with three.js 0.186.0 and writes `usd.json`. `tests/test_usd.mojo` compares each layer and each scene with `usd.json`. It also writes a scene with `export_usdz` and reads the archive back: `roundtrip.usdz` is that archive.
 
 ## LWO
 

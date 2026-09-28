@@ -1,0 +1,124 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "ThreeMojo"
+    }
+    defaultPrim = "Values"
+    endTimeCode = 2
+    framesPerSecond = 30
+    startTimeCode = 0
+    timeCodesPerSecond = 30
+)
+
+def Xform "Values" (
+    customData = {
+        int answer = 42
+        string note = "kept"
+    }
+    doc = "Every value type"
+    kind = "component"
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    bool aBool = 1
+    uchar aUChar = 200
+    int anInt = -7
+    int aBigInt = 100000
+    uint aUInt = 4000000000
+    int64 anInt64 = -9000000000
+    uint64 aUInt64 = 9000000000
+    half aHalf = 0.5
+    float aFloat = 0.25
+    float aWideFloat = 3.14159
+    double aDouble = 0.125
+    double aWideDouble = 2.718281828459045
+    string aString = "text with \"quotes\""
+    token aToken = "tokenValue"
+    asset anAsset = @textures/image.png@
+    matrix2d aMatrix2 = ( (2, 0), (0, 3) )
+    matrix3d aMatrix3 = ( (1, 2, 3), (4, 5, 6), (7, 8, 9) )
+    matrix4d aMatrix4 = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1.5, 2.5, 3.5, 1) )
+    matrix4d anIdentity = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+    matrix3d aDiagonal3 = ( (2, 0, 0), (0, 3, 0), (0, 0, 4) )
+    matrix2d aDiagonal2 = ( (5, 0), (0, 6) )
+    quatd aQuatd = (0.5, 0.5, 0.5, 0.5)
+    quatf aQuatf = (1, 0, 0, 0)
+    quath aQuath = (0, 1, 0, 0)
+    double2 aVec2d = (1.5, 2.5)
+    float2 aVec2f = (0.5, 0.75)
+    float2 aSmallVec2f = (1, 2)
+    half2 aVec2h = (1, -2)
+    int2 aVec2i = (3, 4)
+    int2 aBigVec2i = (300, 400)
+    double3 aVec3d = (1.5, 2.5, 3.5)
+    double3 anInlinedVec3d = (1, 2, 3)
+    float3 aVec3f = (0.5, 0.25, 0.125)
+    float3 aSmallVec3f = (1, -2, 3)
+    half3 aVec3h = (0.5, 1.5, 2.5)
+    int3 aVec3i = (5, 6, 7)
+    int3 aBigVec3i = (500, 600, 700)
+    double4 aVec4d = (1.5, 2.5, 3.5, 4.5)
+    float4 aVec4f = (0.5, 0.25, 0.125, 0.0625)
+    float4 aSmallVec4f = (1, 2, 3, 4)
+    half4 aVec4h = (0.5, 1, 2, 4)
+    int4 aVec4i = (1, 2, 3, 4)
+    int4 aBigVec4i = (1000, 2000, 3000, 4000)
+    int[] someInts = [1, 2, 3]
+    int[] manyInts = [0, 1, 2, 3, 4, 5, 6, 7, 1000, 1001, 1002, 70000, 70001, -5, -6, -100000, 3, 3, 3, 3]
+    int[] noInts = []
+    uint[] someUInts = [1, 2, 4000000000]
+    uint[] manyUInts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    float[] someFloats = [0.5, 1.5]
+    float[] wholeFloats = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, -1]
+    float[] fewFloats = [0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.5, 0.25, 0.75]
+    double[] someDoubles = [0.1, 0.2]
+    double[] manyDoubles = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    half[] someHalves = [0.5, -2, 65504, 0.00006103515625, 0.000000059604645]
+    half[] manyHalves = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    float2[] someVec2f = [(0, 1), (2, 3)]
+    float3[] someVec3f = [(0, 1, 2), (3, 4, 5)]
+    float4[] someVec4f = [(0, 1, 2, 3)]
+    half3[] someVec3h = [(0.5, 1, 1.5)]
+    quatf[] someQuatf = [(1, 0, 0, 0), (0, 0, 1, 0)]
+    quath[] someQuath = [(1, 0, 0, 0)]
+    matrix4d[] someMatrices = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+    token[] someTokens = ["a", "b", "c"]
+    string[] someStrings = ["x", "y"]
+    int64[] someInt64s = [1, 2]
+    double2[] someVec2d = [(1, 2)]
+    float3 animated.timeSamples = {
+        0: (0, 0, 0),
+        1.5: (1, 2, 3),
+        2: (4, 5, 6),
+    }
+    double spin.timeSamples = {
+        0: 0,
+        2: 90,
+    }
+    custom float withMeta = 2 (
+        doc = "an attribute with metadata"
+    )
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    double3 xformOp:translate = (1.5, 2, 3)
+    rel material:binding = </Values/Looks/Mat> (
+        bindMaterialAs = "strongerThanDescendants"
+    )
+    rel targets = [</Values/A>, </Values/B>]
+    float connected.connect = </Values.aFloat>
+
+    def Scope "A"
+    {
+    }
+
+    def "B"
+    {
+    }
+
+    over "C"
+    {
+    }
+
+    class "D"
+    {
+    }
+}

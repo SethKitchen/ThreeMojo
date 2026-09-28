@@ -6,6 +6,8 @@
 
 three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`, `RectAreaLight`, `LightProbe`.
 
+[Lighting addons](Lighting-addons) has a sun, an IES spot light, a projector, a grid of light probes and an environment of one color.
+
 ## Add a light
 
 ```mojo
@@ -135,7 +137,7 @@ scene.add_light(light_probe_from_cube(sky, 1.0))
 
 ### How it lights a surface
 
-`Lighting` adds every probe's coefficients, times its intensity, into `probe`. Its color is not read, as in three.js. `Lighting.ambient_at(normal)` is the ambient term plus the probes' irradiance. Every lit kind starts its sum there, and the sum is divided by pi, as three.js's `BRDF_Lambert` divides it.
+`Lighting` adds every probe's coefficients, times its intensity, into `probe`. Its color is not read, as in three.js. `Lighting.ambient_at(normal, position)` is the ambient term plus the irradiance of the probes and of the [probe grid](Lighting-addons#light-probe-grid). Every lit kind starts its sum there, and the sum is divided by pi, as three.js's `BRDF_Lambert` divides it.
 
 A probe of a uniform sky of radiance one gives an irradiance of pi. A white matte surface under it reflects one.
 
@@ -164,7 +166,7 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 |---|---|
 | `ambient: FloatColor` | The sum of the ambient lights, linear. |
 | `probe: SphericalHarmonics3` | The sum of the light probes, each times its intensity. |
-| `ambient_at(normal) -> FloatColor` | `ambient` plus the probes' irradiance at `normal`, before the division by pi. |
+| `ambient_at(normal, position) -> FloatColor` | `ambient` plus the irradiance of the probes and the probe grid at `normal`, before the division by pi. |
 | `count()` | The number of directional lights. |
 | `point_count()` | The number of point lights. |
 | `hemisphere_count()` | The number of hemisphere lights. |

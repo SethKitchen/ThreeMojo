@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing controls window exporters environments \
+                  postprocessing controls window exporters environments generators \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
@@ -55,7 +55,7 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 # imports `max.gpu.host`, and what imports it inherits the dependency. Leaving
 # them in the default lists meant CPU-only development could not be checked
 # without MAX, and the claim could rot without anything noticing.
-GPU_LIB_SOURCES  := render/gpu.mojo
+GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo
 # The suites that import render/gpu.mojo but open no device: they flatten
 # vertices, state tables, textures and lights on the host and read the
 # layout back. They need MAX installed and no GPU, so CI runs them with
@@ -75,19 +75,20 @@ CPU_DOC_SOURCES  := $(CPU_LIB_SOURCES) $(TOOL_LIBS)
 # Sources whose coverage is measured. The coverage tool is deliberately absent
 # so a bug in it cannot flatter its own numbers.
 #
-# COVERAGE_EXCLUDE drops a file from measurement entirely, and exactly one file
-# is on it. render/gpu.mojo cannot be instrumented at all under this design: a
+# COVERAGE_EXCLUDE drops a file from measurement entirely: the GPU library
+# sources. render/gpu.mojo cannot be instrumented at all under this design: a
 # probe writes a record to stderr, and a GPU kernel has no stderr. It is
 # covered instead by tests/test_gpu.mojo asserting its output matches the CPU
 # rasterizer pixel for pixel, and by tests/test_fillrule.mojo pinning the
-# coverage math the two now share.
+# coverage math the two now share. render/gpu_vxgi.mojo is the same: its
+# kernels call lights/vxgi_volume.mojo, which the host suites cover.
 #
 # Five modules used to sit here as well -- render/png.mojo among them -- because
 # instrumenting them made the *compile* take minutes. The cause turned out to be
 # one construct the instrumenter emitted, a Bool loop flag assigned a constant
 # and read after nested loops, and not the modules at all. All five are measured
 # again. See coverage/instrument.mojo and docs/mojo-compiler-issue/.
-COVERAGE_EXCLUDE := render/gpu.mojo
+COVERAGE_EXCLUDE := $(GPU_LIB_SOURCES)
 COVERED := $(filter-out $(COVERAGE_EXCLUDE),$(LIB_SOURCES))
 COV_DIR := coverage/build
 # Rendered images land here. The APNG figures are committed for the wiki;

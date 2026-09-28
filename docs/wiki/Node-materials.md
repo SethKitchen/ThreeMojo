@@ -4,7 +4,7 @@
 
 ![A node graph shifts a sphere from orange to blue and back](out/nodes.png)
 
-`examples/graph.mojo` draws this picture.
+`examples/graph.mojo` draws this picture. [TSL functions](TSL-functions) builds three.js's function library on a graph.
 
 three.js: `NodeMaterial` and its outputs, from `colorNode` to `depthNode`. TSL's `uniform`, `If`, `Loop`, `Fn`, `Discard`, `varying`, `dFdx`, `dFdy` and its math. MaterialX's noise. `ShaderMaterial` and `RawShaderMaterial` in a subset of GLSL.
 
@@ -136,9 +136,65 @@ A surface in the shadow then gets `mix( 1, mix( color, 1, shadow ), intensity * 
 
 The shadow pass runs on the host, under its own shading mode, `SHADE_SHADOW`. `set_shading` and `GpuRenderer.draw` refuse that mode. The GPU reads the colors of each map from the light buffer, as it reads the depths.
 
+## Lighting models
+
+Two of three.js's node materials have a lighting model of their own. `MeshSSSNodeMaterial` lets light through a surface from behind. `VolumeNodeMaterial` gathers light and shadow along a ray through a mesh. Both rasterizers run both models with the same functions, and the parity tests in `tests/test_gpu.mojo` hold them to the same pixels.
+
+### Subsurface scattering
+
+A `PHYSICAL` material whose graph sets `THICKNESS_COLOR_NODE` is three.js's `MeshSSSNodeMaterial`. Each light with a direction then shows through the surface toward the camera. Put the thickness in the color, as three.js's examples do:
+
+```mojo
+var graph = NodeGraph()
+var thickness = graph.swizzle(graph.texture(thickness_map, graph.uv()), "r")
+graph.set_output(
+    THICKNESS_COLOR_NODE, graph.mul(graph.vec3(1, 0.4, 0.2), thickness)
+)
+graph.set_output(THICKNESS_SCALE_NODE, graph.float(16))
+var program = assets.programs.add(graph.compile())
+var skin = assets.materials.add(
+    Material(Color(255, 200, 180), kind=PHYSICAL, roughness=0.5, nodes=program)
+)
+```
+
+Each directional, point and spot light adds this light to the direct diffuse light:
+
+`(pow(saturate(dot(V, -H)), power) * scale + ambient) * color * attenuation * light`
+
+`V` is the direction to the camera. `H` is the direction to the light, bent along the normal by `distortion` and made unit length. The five numbers are the five other thickness outputs. An output that the graph does not set takes three.js's default.
+
+The surface's color does not tint this light, and the one over pi of the diffuse lobe does not scale it. The shadows darken it, as they darken the light. The functions are in `materials.mesh_sss_node_material`.
+
+A `STANDARD` material ignores the thickness outputs, as three.js's `MeshStandardNodeMaterial` ignores them. For a `PHONG` surface, use `Material.set_scattering`. See [Materials](Materials#subsurface-scattering).
+
+### Volumetric light
+
+A `VOLUME` material is three.js's `VolumeNodeMaterial`. Its surface shows the light that a ray through the mesh gathers from the point and spot lights. Build it with `volume_node_material`:
+
+```mojo
+var graph = NodeGraph()
+var noise_map = graph.volume_uniform("noise", noise)
+var at = graph.fract(graph.mul(graph.position_world(), graph.float(0.1)))
+var grain = graph.swizzle(graph.texture_3d(noise_map, at), "r")
+graph.set_output(SCATTERING_NODE, graph.add(graph.float(0.5), grain))
+var fog = assets.materials.add(
+    volume_node_material(steps=20, nodes=assets.programs.add(graph.compile()))
+)
+```
+
+The material is drawn from its back faces, blended, with no depth test and no depth write, as three.js's is. `steps` is three.js's `steps`, 25 by default. Change it with `set_steps`. A fragment's ray works like this:
+
+1. The ray runs from the camera to the fragment when the camera is more than twice the mesh's bounding radius from it. Otherwise the ray runs from the fragment to the camera. The radius is the geometry's bounding sphere in world space, three.js's `modelRadius`.
+2. The ray takes `steps` equal steps. The first step is `OFFSET_NODE` of a step from the start, or at the start.
+3. At each step, each point light and each spot light adds its color, times its falloff, its cone and its map. Its shadow multiplies it twice, as three.js multiplies it. A directional light adds nothing, because it has no distance.
+4. `SCATTERING_NODE` multiplies that density. In this output, `position_world()` is the position of the step. three.js hands the same position to `scatteringNode` as `positionRay`.
+5. What the ray lets through is multiplied by `exp(-density * 0.01 * step)` at each step, which is Beer's law.
+
+The surface's color is one minus what the ray lets through, plus `EMISSIVE_NODE`. Its alpha is the material's. A volume refuses an emissive color and an emissive map, because three.js's material has neither. The functions are in `materials.volume_node_material`.
+
 ## Outputs
 
-A graph sets one to seventeen outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
+A graph sets one to twenty-five outputs. Each output replaces one part of the material's own shading. The material keeps every part that the graph does not set.
 
 | Output | Type | three.js | What it replaces |
 |---|---|---|---|
@@ -159,6 +215,14 @@ A graph sets one to seventeen outputs. Each output replaces one part of the mate
 | `SIZE_NODE` | `float` | `sizeNode` | A point's width in pixels: the material's size and its attenuation. Only a point reads it. See [Points and lines](#points-and-lines). |
 | `RECEIVED_SHADOW_NODE` | `vec3` | `receivedShadowNode` | Each light's shadow on the surface. The `shadow` node reads it. See [Shadows of its own](#shadows-of-its-own). |
 | `CAST_SHADOW_NODE` | `vec4` | `castShadowNode` | The opaque black that a light sees through a caster, under `shadow_map_transmitted`. |
+| `THICKNESS_COLOR_NODE` | `vec3` | `thicknessColorNode` | Nothing. It lets light through a `PHYSICAL` surface from behind. See [Subsurface scattering](#subsurface-scattering). |
+| `THICKNESS_DISTORTION_NODE` | `float` | `thicknessDistortionNode` | The default 0.1. |
+| `THICKNESS_AMBIENT_NODE` | `float` | `thicknessAmbientNode` | The default 0. |
+| `THICKNESS_ATTENUATION_NODE` | `float` | `thicknessAttenuationNode` | The default 0.1. |
+| `THICKNESS_POWER_NODE` | `float` | `thicknessPowerNode` | The default 2. |
+| `THICKNESS_SCALE_NODE` | `float` | `thicknessScaleNode` | The default 10. |
+| `SCATTERING_NODE` | `float` | `scatteringNode` | Nothing. It multiplies the density at each step of a `VOLUME` surface's ray. See [Volumetric light](#volumetric-light). |
+| `OFFSET_NODE` | `float` | `offsetNode` | Nothing. It moves the start of a `VOLUME` surface's ray by a part of one step. |
 
 The alpha of the finished color stays what the fragment had. An output node changes only its color.
 
@@ -545,6 +609,64 @@ three.js writes each node of the graph with its type and its inputs. This port w
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
+### three.js's node JSON
+
+`loaders.node_loader` reads the node graph that three.js writes, and compiles it here. A node material that you make in three.js can load in this port. The module is three.js's `NodeLoader`, `NodeMaterialLoader` and `NodeObjectLoader`.
+
+`read_object_json` and `read_material_json` read a three.js node material without more work:
+
+- A type such as `MeshStandardNodeMaterial` is read as the class that it extends, here `MeshStandardMaterial`. `NodeMaterial` is read as `MeshBasicMaterial`.
+- The nodes are the file's `nodes` list, and the material's own `nodes` list where it has one.
+- Each texture node reads the texture that the file names. The loader sets the id that the texture gets in `assets.textures`, and the transform of the texture.
+
+Read a material that `NodeMaterial.toJSON()` wrote alone into a graph:
+
+```mojo
+var read = read_node_material(text)
+var program = read.graph.compile()
+for i in range(len(read.textures)):
+    program.set_texture(read.textures[i].uniform, my_textures[read.textures[i].texture])
+var id = assets.programs.add(program^)
+```
+
+Use a `NodeLoader` to read one node, or a list of nodes. `parse(document, item)` reads what `Node.toJSON()` writes, and returns the node's `NodeRef` in `loader.graph`. `parse_nodes(document, list)` indexes a list by uuid. `node(document, uuid)` builds one node and the nodes that it reads.
+
+The loader reads these node classes:
+
+| Class | Node here |
+|---|---|
+| `VarNode`, `SubBuild` | The input node. |
+| `VaryingNode` | `varying` of the input. A varying of an attribute is the attribute. |
+| `ConstNode` | A constant: a `float`, a `bool` (one or zero), a vector, a `color` or a matrix. |
+| `UniformNode` | A uniform of the same type, named by the node's uuid. |
+| `AttributeNode` | `uv()`, `position_local()`, `normal_local()` or `vertex_color()` for `uv`, `position`, `normal` and `color`. Another name is a custom attribute. |
+| `VertexColorNode` | `vertex_color()`. |
+| `OperatorNode` | Each `op` of TSL, from `+` to `>>`. |
+| `MathNode` | Each `method` of TSL that has a node here. `sinh` to `atanh` are made from `exp` and `log`. `transformDirection` is the matrix times the direction, made unit length. |
+| `ConditionalNode` | `select`. |
+| `SplitNode`, `JoinNode` | `swizzle` and `join`. A join of three `vec3` columns is a `mat3`, and a join of four `vec4` columns is a `mat4`. |
+| `ConvertNode` | The conversion that three.js's node builder makes. |
+| `FrontFacingNode`, `ScreenNode`, `PointUVNode` | `front_facing()`, `screen_uv()` and `point_coord()`. |
+| `TextureNode` | A texture uniform named by the node's uuid, read with `texture`, `texture_level` or `texture_load`. |
+| `CubeTextureNode` | A cube uniform named by the node's uuid, read with `texture_cube`. With no coordinate, it reads in the view ray reflected by the normal, three.js's `reflectVector`. |
+
+`loader.textures` lists each texture node. Each entry has the name of its uniform, the uuid of the texture that it reads, and whether it is a cube. A texture node with no coordinate reads `uv()` through the texture's transform, as three.js does. That transform is a `mat3` uniform named after the node's uuid and `.matrix`. The object loader sets it from the texture's `offset`, `repeat`, `rotation` and `center`.
+
+Each property of the material's `inputNodes` sets one output. The property has the name of the output in three.js, from `colorNode` to `castShadowNode`. The loader converts each node to the type of its output, as three.js does. It also makes these changes:
+
+- `normalNode` is the normal in view space in three.js. The loader turns it into world space, and subtracts the normal. The sum is then three.js's normal.
+- `positionNode` is the local position in three.js. The loader subtracts the local position.
+- A `colorNode` of type `vec4` or `float` has an alpha. The alpha multiplies the opacity node, or the material's `opacity`, as three.js's `vec4(colorNode)` does.
+
+The loader refuses these things:
+
+- A node class that is not in the table, when an output reads it. The error gives the class.
+- A `Node` with no class of its own. three.js writes each TSL function, such as `positionWorld`, `normalWorld` or `cameraPosition`, as a `Node` with no body. three.js's own loader cannot build these nodes again.
+- A custom attribute whose type the caller did not declare with `set_attribute`. three.js does not write the type of an attribute.
+- A material property that has no output here, such as `clearcoatNode`.
+- A texture node with a bias, a comparison, a depth, a gradient or an offset. A cube node with a level.
+- A uuid that no node has, and nodes that read each other in a cycle.
+
 ## Shaders from three.js's examples
 
 Five of the shaders in three.js's `examples/jsm/shaders` come as programs. Each compiles three.js's own GLSL through the subset, with three.js's default uniforms. Give the program's id to `shader_material`.
@@ -664,5 +786,10 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 
 ## What is not ported
 
-- Compute nodes, storage buffers and `instancedArray`.
+- A `VOLUME` material's `depthNode`. three.js reads it as the depth of the scene, to stop a ray at the nearest opaque surface. That needs a pass's depth texture, and no node here reads one. Here `DEPTH_NODE` sets the fragment's depth, as on every other kind.
+- A rectangle of light in a volume, three.js's `LTC_Evaluate_Volume`. A `VOLUME` ray gathers the point and spot lights only.
+- `receivedShadowNode` on a volume's ray. The shadows at each step are not shaped by the graph.
+- three.js's node JSON does not keep the name of a uniform, the update of a uniform or the type of an attribute. So `time` is a plain uniform named by its uuid. Set it with `set_uniform` before each frame.
+- The node classes of three.js that are TSL functions, and the classes that have no node here, such as `ModelNode`, `MaterialNode` and `PropertyNode`. A material that uses them cannot load.
+- A material that reads a storage buffer. Compute nodes, storage buffers and `instancedArray` are on [Compute nodes](Compute-nodes). A material reads what they compute as a texture or an attribute.
 - Post-processing nodes as nodes. Several of three.js's display nodes run as composer passes instead; see [Post-processing](Post-processing#display-nodes).

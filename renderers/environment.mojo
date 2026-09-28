@@ -32,6 +32,7 @@ from cameras.cube_camera import CubeCamera
 from core.assets import Assets
 from core.background import CUBE_BACKGROUND
 from core.scene import Scene
+from lights.light_probe_grid import LightProbeGrid
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, CubeTexture
@@ -150,6 +151,52 @@ def pmrem_from_scene(
         Error: If `CubeCamera` refuses the size or the planes, `render_into`
             refuses the scene, or `pmrem_from_faces` refuses the sigma.
     """
+    return pmrem_from_faces(
+        scene_cube(renderer, scene, assets, near, far, size, position),
+        sigma,
+    )
+
+
+def scene_cube(
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    near: Length = DEFAULT_SCENE_NEAR,
+    far: Length = DEFAULT_SCENE_FAR,
+    size: Int = DEFAULT_SCENE_SIZE,
+    position: Vector3 = Vector3(0, 0, 0),
+    probe_grid: LightProbeGrid = LightProbeGrid.none(),
+) raises -> CubeTexture:
+    """Draw a scene into a cube around a point, in linear light: what
+    three.js's `CubeCamera` renders, before `pmrem_from_scene` prefilters
+    it and before a light probe grid is baked from it.
+
+    Each face is drawn through a ninety-degree camera by a renderer of the
+    face's size with `renderer`'s background, shading, depth mode,
+    clipping, shadow map type and workers, into a float target, so light
+    above one survives. Nothing is tone mapped. The renderer's LTC tables
+    go along. Its probe grid does not: the faces are lit by `probe_grid`
+    alone, empty by default, so a grid is not baked from its own light.
+
+    Args:
+        renderer: What to take the drawing settings from.
+        scene: The scene to draw, updated.
+        assets: The geometry, materials and textures it names.
+        near: Each face's near plane.
+        far: Each face's far plane.
+        size: How many texels a side each face is.
+        position: Where to stand, in world space.
+        probe_grid: A grid of light probes that lights the faces, as a
+            bake's later passes light them, or an empty grid.
+
+    Returns:
+        The six faces as float textures.
+
+    Raises:
+        Error: If `CubeCamera` refuses the size or the planes, or
+            `render_into` refuses the scene, or `set_light_probe_grid`
+            refuses the grid.
+    """
     var camera = CubeCamera(near, far, size)
     camera.place(position)
     var side = Renderer(size, size, renderer.workers)
@@ -158,6 +205,8 @@ def pmrem_from_scene(
     side.depth_mode = renderer.depth_mode
     side.local_clipping_enabled = renderer.local_clipping_enabled
     side.shadow_map_type = renderer.shadow_map_type
+    side.set_ltc_tables(renderer.ltc_tables())
+    side.set_light_probe_grid(LightProbeGrid(copy=probe_grid))
     var faces = List[Texture]()
     for face in range(FACE_COUNT):  # pragma: no branch
         var target = RenderTarget(
@@ -174,4 +223,4 @@ def pmrem_from_scene(
         faces.append(
             float_texture(size, size, data^, CLAMP, BILINEAR, False, IGNORED)
         )
-    return pmrem_from_faces(CubeTexture(faces^), sigma)
+    return CubeTexture(faces^)

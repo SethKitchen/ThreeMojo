@@ -45,6 +45,8 @@ from geometries.plane import (
     plane,
 )
 from lights.light import (
+    IES_SPOT,
+    PROJECTOR_SPOT,
     ambient_light,
     directional_light,
     hemisphere_light,
@@ -54,12 +56,17 @@ from lights.lighting import (
     Lighting,
     PERSPECTIVE_VIEW,
 )
+from lights.light_probe_grid import (
+    GRID_HEADER,
+)
 from lights.ltc import (
     load_ltc_tables,
     LTC_FLOATS,
 )
 from lights.shadow import (
     BASIC_SHADOW_MAP,
+    CSM_BLEND,
+    SUN_BLEND,
     PCF_SHADOW_MAP,
     SHADOW_HEADER,
     SHADOW_INTENSITY_AT,
@@ -146,6 +153,7 @@ from render.gpu import (
     LANE_ATTENUATION_DISTANCE,
     LANE_ATTENUATION_R,
     LANE_BUMP_SCALE,
+    LANE_VOLUME,
     LANE_CLEARCOAT,
     LANE_CLEARCOAT_NORMAL_SCALE_X,
     LANE_CLEARCOAT_NORMAL_SCALE_Y,
@@ -191,6 +199,7 @@ from render.gpu import (
     LIGHTS_BACK,
     LIGHTS_EYE,
     LIGHTS_COUNTS,
+    LIGHTS_GRID,
     LIGHTS_FIRST,
     LIGHTS_PROBE,
     LIGHTS_RECT_COUNT,
@@ -222,6 +231,7 @@ from render.gpu import (
     RECT_FLOATS,
     runs_on_device,
     SPOT_FLOATS,
+    SPOT_PROFILE_FLOATS,
     STATE_ANISOTROPY_MAP,
     STATE_AO_MAP,
     STATE_BUMP_MAP,
@@ -341,7 +351,9 @@ from test_gpu import (
     a_pmrem_store,
     a_point,
     a_scene_behind,
+    a_probe_grid,
     a_shadowed_scene,
+    a_shaped_spot_scene,
     a_varying_line,
     baked_pair,
     corner,
@@ -389,8 +401,15 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 125)
+    assert_equal(len(flat), 127)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
+    # A volume's ray rides last: its steps, then the mesh's radius.
+    var marched = corners.copy()
+    marched[0].steps = 25
+    marched[0].model_radius = 1.5
+    var volume = flatten(marched)
+    assert_equal(volume[LANE_VOLUME], Float32(25))
+    assert_equal(volume[LANE_VOLUME + 1], Float32(1.5))
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -581,7 +600,7 @@ def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
     )
     var lighting = Lighting(scene)
     var flat = flatten_lights(lighting)
-    assert_equal(len(flat), LIGHTS_FIRST + 9 + 15)
+    assert_equal(len(flat), LIGHTS_FIRST + 9 + 16)
     assert_almost_equal(flat[LIGHTS_AMBIENT], Float32(0.5), atol=Float64(1e-6))
     # The sky is straight up, white at a quarter, over a black ground.
     var sky = LIGHTS_FIRST
@@ -892,7 +911,7 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     assert_equal(len(maps), 2)
     var lighting = Lighting(scene, shadows=maps^)
     var flat = flatten_lights(lighting)
-    var lights_end = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var lights_end = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var first_map = lights_end
     var second_map = first_map + SHADOW_HEADER + 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
@@ -950,7 +969,7 @@ def test_the_light_buffer_carries_a_cube_and_a_spot_lights_map() raises:
     var lighting = Lighting(scene, shadows=shadows^, spot_maps=slides^)
     var flat = flatten_lights(lighting)
     assert_equal(POINT_FLOATS, 9)
-    assert_equal(SPOT_FLOATS, 15)
+    assert_equal(SPOT_FLOATS, 16)
     var first_map = LIGHTS_FIRST + POINT_FLOATS + SPOT_FLOATS
     var second_map = first_map + SHADOW_HEADER + 6 * 16 * 16
     var slide_at = second_map + SHADOW_HEADER + 8 * 8
@@ -988,7 +1007,7 @@ def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() r
     renderer.shadow_map_type = VSM_SHADOW_MAP
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
     var flat = flatten_lights(lighting)
-    var first_map = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var first_map = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var second_map = first_map + SHADOW_HEADER + 2 * 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 2 * 32 * 32)
     assert_equal(
@@ -1014,7 +1033,7 @@ def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() r
 
 
 def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
-    # A directional light's last five floats are its cascade, and every
+    # A directional light's last eight floats are its cascade, and every
     # shadow map's header ends with its intensity.
     var assets = Assets()
     var scene = a_shadowed_scene(assets)
@@ -1025,7 +1044,7 @@ def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
     var renderer = Renderer(24, 18)
     var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
     var flat = flatten_lights(lighting)
-    assert_equal(DIRECTIONAL_FLOATS, CASCADE_AT + 5)
+    assert_equal(DIRECTIONAL_FLOATS, CASCADE_AT + 8)
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT], Float32(0.25))
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 1], Float32(0.75))
     assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 2], Float32(20))
@@ -1035,6 +1054,16 @@ def test_the_light_buffer_carries_cascades_and_shadow_intensities() raises:
     assert_equal(flat[first_map + SHADOW_INTENSITY_AT], Float32(0.4))
     var second_map = Int(flat[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 13])
     assert_equal(flat[second_map + SHADOW_INTENSITY_AT], Float32(1))
+    assert_equal(flat[LIGHTS_FIRST + CASCADE_AT + 5], Float32(CSM_BLEND.value))
+    # A sun's cascade carries its blend, its fade start and where the one
+    # before it ends.
+    scene.lights[0].cascade = ShadowCascade(
+        2, 9, Length(1.0, METER), True, False, SUN_BLEND, 8.5, 3
+    )
+    var sun = flatten_lights(Lighting(scene))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 5], Float32(SUN_BLEND.value))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 6], Float32(8.5))
+    assert_equal(sun[LIGHTS_FIRST + CASCADE_AT + 7], Float32(3))
     # A light that is no cascade carries a span of zero.
     var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
     assert_equal(bare[LIGHTS_FIRST + CASCADE_AT + 2], Float32(0))
@@ -1056,7 +1085,7 @@ def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
     assert_equal(flat[LIGHTS_RECT_COUNT], Float32(1))
     assert_equal(LIGHTS_RECT_COUNT, LIGHTS_PROBE - 1)
     assert_equal(RECT_FLOATS, 12)
-    var first_rect = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15
+    var first_rect = LIGHTS_FIRST + DIRECTIONAL_FLOATS + 16
     var first_table = first_rect + RECT_FLOATS
     var first_map = first_table + 2 * LTC_FLOATS
     assert_equal(flat[first_rect + 1], Float32(3))
@@ -1206,7 +1235,8 @@ def test_flattening_the_lights_carries_the_probes() raises:
     var flat = flatten_lights(lighting)
     assert_equal(LIGHTS_BACK, LIGHTS_PROBE + 27)
     assert_equal(LIGHTS_COUNTS, LIGHTS_BACK + 3)
-    assert_equal(LIGHTS_FIRST, LIGHTS_COUNTS + 4)
+    assert_equal(LIGHTS_GRID, LIGHTS_COUNTS + 4)
+    assert_equal(LIGHTS_FIRST, LIGHTS_GRID + 1)
     for lane in range(27):
         assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
     # Band zero is the average light, which is not black.
@@ -1578,6 +1608,67 @@ def test_flattening_carries_the_blend_constant() raises:
     assert_equal(flat[LANE_BLEND_CONSTANT + 1], Float32(0.5))
     assert_equal(flat[LANE_BLEND_CONSTANT + 2], Float32(0.75))
     assert_equal(flat[LANE_BLEND_CONSTANT + 3], Float32(1))
+
+
+def test_the_light_buffer_carries_the_spot_profiles_and_the_grid() raises:
+    # A spot light's sixteenth float says where its profile begins, after
+    # the spot light maps: its shape, the IES profile's slot and the
+    # frame. The probe grid follows the profiles, and the header says
+    # where it begins.
+    var assets = Assets()
+    var scene = a_shaped_spot_scene(assets)
+    var renderer = Renderer(24, 18)
+    var shadows = renderer.shadow_maps(scene, assets)
+    var slides = renderer.spot_light_maps(scene, assets)
+    var profiles = renderer.spot_profiles(scene, assets)
+    assert_equal(len(shadows), 1)
+    assert_equal(len(slides), 1)
+    assert_equal(len(profiles), 2)
+    var grid = a_probe_grid()
+    var lighting = Lighting(
+        scene,
+        shadows=shadows^,
+        spot_maps=slides^,
+        profiles=profiles^,
+        probe_grid=grid,
+    )
+    var flat = flatten_lights(lighting)
+    assert_equal(SPOT_FLOATS, 16)
+    assert_equal(SPOT_PROFILE_FLOATS, 18)
+    var first_spot = LIGHTS_FIRST
+    var second_spot = first_spot + SPOT_FLOATS
+    var shadow_at = second_spot + SPOT_FLOATS
+    var slide_at = shadow_at + SHADOW_HEADER + 16 * 16
+    var ies_at = slide_at + SPOT_MAP_FLOATS
+    var projector_at = ies_at + SPOT_PROFILE_FLOATS
+    var grid_at = projector_at + SPOT_PROFILE_FLOATS
+    assert_equal(flat[first_spot + 13], Float32(shadow_at))
+    assert_equal(flat[first_spot + 14], NO_SHADOW)
+    assert_equal(flat[first_spot + 15], Float32(ies_at))
+    assert_equal(flat[second_spot + 13], NO_SHADOW)
+    assert_equal(flat[second_spot + 14], Float32(slide_at))
+    assert_equal(flat[second_spot + 15], Float32(projector_at))
+    assert_equal(flat[ies_at], Float32(IES_SPOT.value))
+    assert_equal(flat[ies_at + 1], Float32(0))
+    assert_equal(flat[projector_at], Float32(PROJECTOR_SPOT.value))
+    assert_equal(flat[projector_at + 1], Float32(-1))
+    assert_equal(flat[projector_at + 2], lighting.spot_profiles[1].frame[0])
+    assert_equal(flat[projector_at + 17], lighting.spot_profiles[1].frame[15])
+    assert_equal(flat[LIGHTS_GRID], Float32(grid_at))
+    assert_equal(len(flat), grid_at + GRID_HEADER + 27 * 8)
+    assert_equal(flat[grid_at], Float32(-3))
+    assert_equal(flat[grid_at + 6], Float32(2))
+    assert_equal(flat[grid_at + 9], Float32(1))
+    # The grid rides with its intensity multiplied in.
+    assert_almost_equal(
+        flat[grid_at + GRID_HEADER],
+        grid.probes[0].lanes[0] * 1.5,
+        atol=Float64(1e-6),
+    )
+    # Without them, the lights carry `NO_SHADOW`, and so does the header.
+    var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
+    assert_equal(bare[LIGHTS_GRID], NO_SHADOW)
+    assert_equal(bare[LIGHTS_FIRST + DIRECTIONAL_FLOATS + 15], NO_SHADOW)
 
 
 def main() raises:
