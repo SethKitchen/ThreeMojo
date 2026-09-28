@@ -92,8 +92,12 @@ four floats. The compiler gives a register back when the last reader of its
 value has run, so an output can hold up to `MAX_INSTRUCTIONS` instructions
 while no more than `MAX_REGISTERS` values are alive at once.
 
-**What three.js offers that is not ported.** Compute nodes, storage buffers,
-`Break`, `Continue` and `Return` in a loop, integer and bit operations, the
+**Compute programs.** `materials.compute_nodes` builds three.js's compute
+nodes on a graph: its statements' roots are laid out by `compile_roots`
+and run by `run_code`, and the compute leaves read the invocation, the
+storage buffers and the statements' results through `NodeSource`.
+
+**What three.js offers that is not ported.** `Break`, `Continue` and `Return` in a loop, integer and bit operations, the
 matrix functions (`transpose`, `inverse`), the Worley and cell noises and
 `mx_noise_vec3`, and a texture node's own mip level: a texture node reads
 its image at the level the surface's own coordinates pick, where WebGPU
@@ -101,6 +105,12 @@ measures the derivatives of the coordinate the node computes.
 """
 
 from lights.shadow import ShadowShape
+from materials.compute_ids import (
+    ComputeBuiltin,
+    ComputeStatementId,
+    StorageBufferId,
+    WorkgroupArrayId,
+)
 from math.arc_tangent import atan2_float32, atan_float32
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
@@ -236,7 +246,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_SHADOW.value
+            and self.value <= NODE_COMPUTE_RESULT.value
         )
 
 
@@ -411,6 +421,14 @@ comptime NODE_VIEWPORT_TEXTURE = NodeKind(106)
 # of it: the argument of three.js's `receivedShadowNode`. A leaf numbered
 # after the operations; see `shadow`.
 comptime NODE_SHADOW = NodeKind(107)
+# A compute program's leaves; see `materials.compute_nodes`. One of the
+# invocation's numbers, three.js's `instanceIndex` and the compute
+# builtins; an element of a storage buffer or a workgroup array, read at
+# the index its one input computes; and what an earlier statement of the
+# program left. Only a compute program reads them.
+comptime NODE_COMPUTE_BUILTIN = NodeKind(108)
+comptime NODE_STORAGE_ELEMENT = NodeKind(109)
+comptime NODE_COMPUTE_RESULT = NodeKind(110)
 
 
 @fieldwise_init
@@ -626,6 +644,38 @@ def _is_attribute(kind: NodeKind) -> Bool:
         or kind == NODE_SCREEN_UV
         or kind == NODE_SHADOW
     )
+
+
+def _is_compute(kind: NodeKind) -> Bool:
+    """Return True for a node only a compute program reads."""
+    return (
+        kind == NODE_COMPUTE_BUILTIN
+        or kind == NODE_STORAGE_ELEMENT
+        or kind == NODE_COMPUTE_RESULT
+    )
+
+
+# The nodes other than the attributes that read a surface: the texture
+# reads, the scene behind, varyings and derivatives. The last lanes repeat
+# the first.
+comptime _SURFACE_READS = SIMD[DType.int32, 16](
+    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE_LEVEL.value),
+    Int32(NODE_TEXEL_FETCH.value),
+    Int32(NODE_TEXTURE_SIZE.value),
+    Int32(NODE_TEXTURE_CUBE.value),
+    Int32(NODE_TEXTURE_3D.value),
+    Int32(NODE_TEXTURE_ARRAY.value),
+    Int32(NODE_VIEWPORT_TEXTURE.value),
+    Int32(NODE_VARYING.value),
+    Int32(NODE_DFDX.value),
+    Int32(NODE_DFDY.value),
+    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE.value),
+)
 
 
 # What an open block is: an `If` before and after its `Else`, and a `Loop`.
@@ -3742,6 +3792,129 @@ struct NodeGraph(Copyable, Movable):
         self.End()
         return self.mul(self.get(result), self.float(amplitude))
 
+    # --- compute leaves -------------------------------------------------------
+
+    def compute_builtin(mut self, which: ComputeBuiltin) raises -> NodeRef:
+        """Return one of the invocation's numbers, a `float`: three.js's
+        `instanceIndex` and the other compute builtins. Only a compute
+        program reads it; see `materials.compute_nodes`.
+
+        Args:
+            which: The number, such as `INSTANCE_INDEX`.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `which` is not one of the numbers.
+        """
+        if not which.is_valid():
+            raise Error("A compute builtin names no number there is")
+        return self._add(
+            NODE_COMPUTE_BUILTIN,
+            NODE_FLOAT,
+            value=Lanes(Float32(which.value), 0, 0, 0),
+        )
+
+    def _storage_element(
+        mut self, slot: Int, index: NodeRef, type: ValueType
+    ) raises -> NodeRef:
+        """Return a storage element read at an index, of a slot the program
+        keeps: a buffer's id, or minus one less a workgroup array's.
+
+        Raises:
+            Error: If `index` is not a `float` of this graph, or `type` is
+                not a `float` or a vector.
+        """
+        self._check(index)
+        if self._types[index.value] != NODE_FLOAT:
+            raise Error(
+                "A storage element is read at a float index, not a "
+                + self._types[index.value].name()
+            )
+        if not type.is_vector():
+            raise Error("A storage element is a float or a vector")
+        return self._add(
+            NODE_STORAGE_ELEMENT,
+            type,
+            index.value,
+            value=Lanes(Float32(slot), 0, 0, 0),
+        )
+
+    def storage_element(
+        mut self, buffer: StorageBufferId, index: NodeRef, type: ValueType
+    ) raises -> NodeRef:
+        """Return a storage buffer's element at an index, as it was when
+        the program's step began: three.js's `storage(...).element(i)`.
+        Only a compute program reads it; `ComputeKernel.element` adds what
+        the invocation stored since.
+
+        Args:
+            buffer: The buffer.
+            index: The element's place, a `float` of a whole number.
+            type: The element's type, the buffer's.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `buffer` is negative, `index` is not a `float` of this
+                graph, or `type` is not a `float` or a vector.
+        """
+        if not buffer.is_valid():
+            raise Error("A storage element names no buffer there can be")
+        return self._storage_element(buffer.value, index, type)
+
+    def storage_element(
+        mut self, array: WorkgroupArrayId, index: NodeRef, type: ValueType
+    ) raises -> NodeRef:
+        """Return a workgroup array's element at an index, the invocation's
+        own workgroup's copy: three.js's `workgroupArray(...).element(i)`.
+
+        Args:
+            array: The array.
+            index: The element's place, a `float` of a whole number.
+            type: The element's type, the array's.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `array` is negative, `index` is not a `float` of this
+                graph, or `type` is not a `float` or a vector.
+        """
+        if not array.is_valid():
+            raise Error("A storage element names no array there can be")
+        return self._storage_element(-1 - array.value, index, type)
+
+    def compute_result(
+        mut self, statement: ComputeStatementId, type: ValueType
+    ) raises -> NodeRef:
+        """Return what an earlier statement of a compute program left: an
+        atomic function's old value, or a value the program holds. Only a
+        compute program reads it.
+
+        Args:
+            statement: The statement.
+            type: What it left: a `float` or a vector.
+
+        Returns:
+            The node.
+
+        Raises:
+            Error: If `statement` is negative, or `type` is not a `float`
+                or a vector.
+        """
+        if not statement.is_valid():
+            raise Error("A compute result names no statement there can be")
+        if not type.is_vector():
+            raise Error("A compute result is a float or a vector")
+        return self._add(
+            NODE_COMPUTE_RESULT,
+            type,
+            value=Lanes(Float32(statement.value), 0, 0, 0),
+        )
+
     # --- variables and control flow -------------------------------------------
 
     def Var(mut self, value: NodeRef) raises -> NodeVar:
@@ -4280,12 +4453,39 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If a node the path reads is not in this graph.
         """
+        var keep = self.logical_not(self.running())
+        self._discards.append(keep.value)
+
+    def running(mut self) raises -> NodeRef:
+        """Return where the code built here runs: every open branch's
+        condition, where no `Break`, `Continue` or `Return` has stopped it.
+        A compute statement is kept only there.
+
+        Returns:
+            A `float` node, one where the code runs; the constant one
+            outside every branch.
+
+        Raises:
+            Error: If a node the path reads is not in this graph.
+        """
         var path = self._path()
         var gate = self._gate()
         if gate.value >= 0:
             path = self.logical_and(path, gate)
-        var keep = self.logical_not(path)
-        self._discards.append(keep.value)
+        return path
+
+    def in_loop(self) -> Bool:
+        """Return True if a `Loop` is open here. `End` copies a loop's body
+        once for each time through, so a compute statement, which the graph
+        does not hold, cannot be made inside one.
+
+        Returns:
+            Whether any open block is a `Loop`.
+        """
+        for index in range(len(self._blocks)):
+            if self._blocks[index].kind == _BLOCK_LOOP:
+                return True
+        return False
 
     def call(mut self, function: Fn, args: List[NodeRef]) raises -> NodeRef:
         """Build a function's nodes into this graph, TSL's `fn(a, b)`.
@@ -4447,14 +4647,37 @@ struct NodeGraph(Copyable, Movable):
             stack.append(0)
         return order^
 
+    def _check_compute(self, kind: NodeKind) raises:
+        """Refuse a node a compute program cannot compute.
+
+        Raises:
+            Error: If the node reads an attribute, the fragment's place, the
+                lit color, the shadow, a texture, a varying or a derivative:
+                a compute program runs on no surface.
+        """
+        if (
+            _is_attribute(kind)
+            or _SURFACE_READS.eq(Int32(kind.value)).reduce_or()
+        ):
+            raise Error(
+                "A compute program runs on no surface: it reads no"
+                " attribute, texture, varying or derivative"
+            )
+
     def _check_stage(self, output: NodeOutput, kind: NodeKind) raises:
         """Refuse a node an output's stage cannot compute.
 
         Raises:
             Error: If a position node reads what only a fragment has, a
-                fragment output reads what only a vertex has, or an output
-                other than `OUTPUT_NODE` reads the lit color.
+                fragment output reads what only a vertex has, an output
+                other than `OUTPUT_NODE` reads the lit color, or any
+                output reads what only a compute program has.
         """
+        if _is_compute(kind):
+            raise Error(
+                "Only a compute program reads a storage element, an"
+                " invocation's number or a statement's result"
+            )
         var local = kind == NODE_POSITION_LOCAL or kind == NODE_NORMAL_LOCAL
         if output == POSITION_NODE:
             var fragment = (
@@ -4560,49 +4783,123 @@ struct NodeGraph(Copyable, Movable):
             if root < 0:
                 layouts.append(_Layout())
                 continue
-            if root >= work.count():
-                raise Error("An output names a node the graph does not hold")
-            var order = work._order(root)
-            for index in range(len(order)):  # pragma: no branch
-                var node = order[index]
-                # The two are open fields, so an edited graph can hold a
-                # kind no instruction means or a type no value has.
-                if (
-                    not work._kinds[node].is_valid()
-                    or not work._types[node].is_valid()
-                ):
-                    raise Error("A node holds a kind or a type there is not")
-                if (
-                    work._kinds[node] == NODE_MATRIX_COLUMNS
-                    or work._kinds[node] == NODE_MATRIX_TAIL
-                ):
-                    raise Error(
-                        "A matrix a node graph builds is only multiplied,"
-                        " not read by an instruction"
-                    )
-                work._check_stage(NodeOutput(output), work._kinds[node])
-            var layout: _Layout
-            try:
-                layout = _lay_out(work, order, root, zero, pool, _SLOT_ORDER)
-            except:
-                # Too many values at once in slot order: the neediest input
-                # first, then the oldest. The same nodes, so the same pooled
-                # values.
-                try:
-                    layout = _lay_out(work, order, root, zero, pool, _NEEDIEST)
-                except:
-                    layout = _lay_out(work, order, root, zero, pool, _OLDEST)
+            var layout = work._root_layout(root, output, zero, pool)
             total += len(layout.ops)
             layouts.append(layout^)
         if total == 0:
             raise Error("A node graph needs at least one output")
         var program = NodeProgram()
+        var starts = work._assemble(layouts, pool, program)
+        for output in range(NODE_OUTPUT_COUNT):  # pragma: no branch
+            program.code[output * 2] = Float32(starts[output])
+            program.code[output * 2 + 1] = Float32(len(layouts[output].ops))
+        return program^
+
+    def compile_roots(
+        self, roots: List[NodeRef], mut starts: List[Int]
+    ) raises -> NodeProgram:
+        """Return a compute program's roots laid out as `compile` lays out
+        outputs: what `materials.compute_nodes` runs with `run_code`. The
+        program sets no output; `starts` says where each root is.
+
+        Args:
+            roots: The nodes to lay out, each a `float` or a vector. A root
+                can be named more than once.
+            starts: Filled with each root's first instruction and its
+                count, two numbers a root.
+
+        Returns:
+            The program, at time zero under an identity view.
+
+        Raises:
+            Error: If an `If` or a `Loop` is still open, a `Discard` was
+                made, a root is not a node of this graph, the nodes make a
+                cycle, a node reads what only a surface has (see
+                `_check_compute`), or a root needs more than
+                `MAX_INSTRUCTIONS` instructions or `MAX_REGISTERS` values
+                at once.
+        """
+        if len(self._blocks) > 0:
+            raise Error(
+                "A node graph has an If or a Loop that End never closed"
+            )
+        if len(self._discards) > 0:
+            raise Error("A compute program has no fragment to Discard")
+        var work = self.copy()
+        var zero = work._add(NODE_CONSTANT, NODE_VEC4).value
+        var layouts = List[_Layout]()
+        var pool = _Pool(work)
+        for index in range(len(roots)):
+            work._check(roots[index])
+            layouts.append(work._root_layout(roots[index].value, -1, zero, pool))
+        var program = NodeProgram()
+        var at = work._assemble(layouts, pool, program)
+        starts = List[Int]()
+        for index in range(len(layouts)):
+            starts.append(at[index])
+            starts.append(len(layouts[index].ops))
+        return program^
+
+    def _root_layout(
+        self, root: Int, output: Int, zero: Int, mut pool: _Pool
+    ) raises -> _Layout:
+        """Return one root's instructions: an output's, or a compute
+        program's where `output` is -1.
+
+        Raises:
+            Error: If a node reads one the graph does not hold, the nodes
+                make a cycle, a node is one the root's stage cannot run, or
+                the root needs too many instructions or values at once.
+        """
+        if root >= self.count():
+            raise Error("An output names a node the graph does not hold")
+        var order = self._order(root)
+        for index in range(len(order)):  # pragma: no branch
+            var node = order[index]
+            # The two are open fields, so an edited graph can hold a
+            # kind no instruction means or a type no value has.
+            if (
+                not self._kinds[node].is_valid()
+                or not self._types[node].is_valid()
+            ):
+                raise Error("A node holds a kind or a type there is not")
+            if (
+                self._kinds[node] == NODE_MATRIX_COLUMNS
+                or self._kinds[node] == NODE_MATRIX_TAIL
+            ):
+                raise Error(
+                    "A matrix a node graph builds is only multiplied,"
+                    " not read by an instruction"
+                )
+            if output < 0:
+                self._check_compute(self._kinds[node])
+            else:
+                self._check_stage(NodeOutput(output), self._kinds[node])
+        try:
+            return _lay_out(self, order, root, zero, pool, _SLOT_ORDER)
+        except:
+            # Too many values at once in slot order: the neediest input
+            # first, then the oldest. The same nodes, so the same pooled
+            # values.
+            try:
+                return _lay_out(self, order, root, zero, pool, _NEEDIEST)
+            except:
+                return _lay_out(self, order, root, zero, pool, _OLDEST)
+
+    def _assemble(
+        self, layouts: List[_Layout], pool: _Pool, mut program: NodeProgram
+    ) -> List[Int]:
+        """Append the layouts' instructions and the pool to a program's
+        header, and list where each layout starts."""
+        var total = 0
+        for index in range(len(layouts)):
+            total += len(layouts[index].ops)
         var base = PROGRAM_HEADER + total * INSTRUCTION_FLOATS
         var at = PROGRAM_HEADER
-        for output in range(NODE_OUTPUT_COUNT):  # pragma: no branch
-            ref layout = layouts[output]
-            program.code[output * 2] = Float32(at)
-            program.code[output * 2 + 1] = Float32(len(layout.ops))
+        var starts = List[Int]()
+        for which in range(len(layouts)):
+            ref layout = layouts[which]
+            starts.append(at)
             for index in range(len(layout.ops)):
                 program.code.append(Float32(layout.ops[index]))
                 program.code.append(Float32(layout.a[index]))
@@ -4635,7 +4932,7 @@ struct NodeGraph(Copyable, Movable):
         program.attribute_names = self._attribute_names.copy()
         program.attribute_offsets = self._attribute_offsets.copy()
         program.attribute_widths = self._attribute_widths.copy()
-        return program^
+        return starts^
 
 
 struct _Pool(Movable):
@@ -5777,6 +6074,44 @@ trait NodeSource:
         """
         ...
 
+    def compute_builtin(self, which: Int) -> Float32:
+        """Return one of a compute invocation's numbers, three.js's
+        `instanceIndex` and the rest. A source that runs no compute
+        program gives zero.
+
+        Args:
+            which: The number, a `ComputeBuiltin`'s value.
+
+        Returns:
+            The number.
+        """
+        return 0
+
+    def storage_element(self, slot: Int, index: Float32) -> Lanes:
+        """Return a storage buffer's or a workgroup array's element as the
+        step began. A source that runs no compute program gives zeros.
+
+        Args:
+            slot: A buffer's id, or minus one less a workgroup array's.
+            index: The element's place.
+
+        Returns:
+            The element's floats, then zeros; zeros past either end.
+        """
+        return Lanes(0)
+
+    def statement_result(self, statement: Int) -> Lanes:
+        """Return what an earlier statement of a compute program left. A
+        source that runs no compute program gives zeros.
+
+        Args:
+            statement: The statement, a `ComputeStatementId`'s value.
+
+        Returns:
+            The value, then zeros.
+        """
+        return Lanes(0)
+
 
 def perspective_shares(
     wa: Float32,
@@ -6197,6 +6532,12 @@ def _leaf[
         for lane in range(Int(immediate) // 8):  # pragma: no branch
             out[lane] = custom[first + lane]
         return out
+    if op == NODE_COMPUTE_BUILTIN.value:
+        return Lanes(source.compute_builtin(Int(immediate)))
+    if op == NODE_STORAGE_ELEMENT.value:
+        return source.storage_element(Int(immediate), x[0])
+    if op == NODE_COMPUTE_RESULT.value:
+        return source.statement_result(Int(immediate))
     if op == NODE_FRONT_FACING.value:
         var behind = source.seen_from_behind()
         if immediate != 0:
@@ -6822,8 +7163,30 @@ def run_nodes[
     Returns:
         The value, in as many lanes as its type has.
     """
-    var start = Int(source.word(output.value * 2))
-    var count = Int(source.word(output.value * 2 + 1))
+    return run_code(
+        source,
+        Int(source.word(output.value * 2)),
+        Int(source.word(output.value * 2 + 1)),
+        inputs,
+    )
+
+
+def run_code[
+    S: NodeSource
+](source: S, start: Int, count: Int, inputs: NodeInputs) -> Lanes:
+    """Return what a run of instructions computes: `run_nodes` for one
+    output, and a compute program's statements for each of their roots.
+
+    Args:
+        source: The program, where its textures are sampled, and its
+            triangle or its invocation.
+        start: Where the first instruction is in the program.
+        count: How many instructions there are, at least one.
+        inputs: The fragment's or the vertex's attributes.
+
+    Returns:
+        What the last instruction wrote, in as many lanes as its type has.
+    """
     var registers = Array[Lanes, MAX_REGISTERS](fill=Lanes(0))
     var written = 0
     # Never empty: the caller asks only of an output the program sets, and
@@ -6854,6 +7217,9 @@ def run_nodes[
             or op == NODE_TEXTURE_CUBE.value
             or op == NODE_TEXTURE_3D.value
             or op == NODE_TEXTURE_ARRAY.value
+            or op == NODE_COMPUTE_BUILTIN.value
+            or op == NODE_STORAGE_ELEMENT.value
+            or op == NODE_COMPUTE_RESULT.value
         ):
             registers[written] = _leaf(
                 source, op, x, z, immediate, third, inputs
