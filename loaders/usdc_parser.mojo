@@ -286,7 +286,7 @@ def decompress_lz4(input: List[UInt8], size: Int) raises -> List[UInt8]:
         return output^
     var header = 1
     var sizes = List[Int]()
-    for _ in range(chunks):
+    for _ in range(chunks):  # pragma: no branch
         var packed = 0
         for b in range(4):  # pragma: no branch
             if header + b < len(input):
@@ -295,7 +295,7 @@ def decompress_lz4(input: List[UInt8], size: Int) raises -> List[UInt8]:
         header += 4
     var at = header
     var out = 0
-    for k in range(chunks):
+    for k in range(chunks):  # pragma: no branch
         if sizes[k] > 0 and at + sizes[k] > len(input):
             raise Error("USDC: an LZ4 chunk runs past the end of its input")
         var produced = min(_CHUNK, size - out)
@@ -821,11 +821,11 @@ struct _Crate(Movable):
         """
         var start = 0
         for _ in range(count):
-            var end = start
+            var first = min(start, len(data))
+            var end = first
             while end < len(data) and data[end] != 0:
                 end += 1
-            var first = min(start, len(data))
-            self.tokens.append(_decode(data, first, max(first, end)))
+            self.tokens.append(_decode(data, first, end))
             start = end + 1
 
     def read_tokens(mut self) raises:
