@@ -85,7 +85,7 @@ which here says the caller has computed something wrong.
 """
 
 from math.vector2 import Vector2
-from std.math import cos, floor, pi, sin
+from std.math import cos, floor, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
 # The fewest straight runs that stand in for a curve when its length is
@@ -182,16 +182,26 @@ def ellipse_sweep(start: Angle, end: Angle, clockwise: Bool) raises -> Float32:
         zero down to minus a whole turn clockwise. Never zero.
 
     Raises:
-        Error: If the two angles are the same, which three.js draws as a
-            single point.
+        Error: If an angle is not finite, or the two angles are the same,
+            which three.js draws as a single point.
     """
-    var delta = end.to(RADIAN) - start.to(RADIAN)
-    if abs(delta) < SAME_ANGLE:
+    var difference = Float64(end.to(RADIAN)) - Float64(start.to(RADIAN))
+    if not isfinite(difference):
+        raise Error("An ellipse needs finite angles")
+    if abs(difference) < Float64(SAME_ANGLE):
         raise Error("An ellipse needs two different angles")
-    while delta < 0:
-        delta += WHOLE_TURN
-    while delta > WHOLE_TURN:
-        delta -= WHOLE_TURN
+    # Range reduction must terminate even when a turn is less than one ULP.
+    var remaining = abs(difference)
+    var divisor = Float64(WHOLE_TURN)
+    while divisor <= remaining / 2:
+        divisor *= 2
+    while divisor >= Float64(WHOLE_TURN):
+        if remaining >= divisor:
+            remaining -= divisor
+        divisor *= 0.5
+    var delta = Float32(remaining)
+    if difference < 0 and delta > 0:
+        delta = WHOLE_TURN - delta
     if delta < SAME_ANGLE:
         delta = WHOLE_TURN
     if clockwise:

@@ -42,7 +42,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {".git", ".venv", ".cache", "out", "coverage/build", "node_modules"}
 
 FROM_IMPORT = re.compile(r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\s+(.*)$")
-PLAIN_IMPORT = re.compile(r"^\s*import\s+([A-Za-z_][\w.]*)")
+PLAIN_IMPORT = re.compile(r"^\s*import\s+(.*)$")
 QUOTED_ASSET = re.compile(r'"(assets/[^"]*)"')
 
 ALL = "ALL"
@@ -67,18 +67,18 @@ def changed_paths(base):
     merge_base = git("merge-base", base, "HEAD")
     if merge_base is None:
         return None
-    diff = git("diff", "--name-status", "--no-renames", merge_base.strip())
-    untracked = git("ls-files", "--others", "--exclude-standard")
+    diff = git("diff", "--name-status", "--no-renames", "-z", merge_base.strip())
+    untracked = git("ls-files", "--others", "--exclude-standard", "-z")
     if diff is None or untracked is None:
         return None
     paths = {}
-    for line in diff.splitlines():
-        status, _, path = line.partition("\t")
+    fields = diff.split("\0")
+    for status, path in zip(fields[0::2], fields[1::2]):
         paths[path] = status == "D"
     # An untracked file matters only when a build reads it: a new module or
     # a new asset. A `.venv` link or an editor's scratch file does not.
-    for path in untracked.splitlines():
-        if path.endswith(".mojo") or path.startswith("assets/"):
+    for path in filter(None, untracked.split("\0")):
+        if path.endswith((".mojo", ".py")) or path.startswith("assets/"):
             paths[path] = False
     return paths
 
@@ -116,7 +116,7 @@ def imported_names(source):
     """Return the dotted module names a source imports, with the names
     after `import` in a `from` line, which can be submodules."""
     names = []
-    lines = source.splitlines()
+    lines = [line.split("#", 1)[0] for line in source.splitlines()]
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -137,7 +137,10 @@ def imported_names(source):
         else:
             match = PLAIN_IMPORT.match(line)
             if match:
-                names.append(match.group(1))
+                for item in match.group(1).split(","):
+                    name = item.strip().split(" as ")[0].strip()
+                    if name:
+                        names.append(name)
         index += 1
     return names
 

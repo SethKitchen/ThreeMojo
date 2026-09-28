@@ -1373,7 +1373,8 @@ struct _Loader(Movable):
             if (
                 offset < 0
                 or length < 0
-                or offset + length > len(self.buffers[buffer])
+                or offset > len(self.buffers[buffer])
+                or length > len(self.buffers[buffer]) - offset
             ):
                 raise Error(
                     "glTF: a compressed buffer view runs past its buffer"
@@ -1423,7 +1424,8 @@ struct _Loader(Movable):
         if (
             offset < 0
             or length < 0
-            or offset + length > len(self.buffers[buffer])
+            or offset > len(self.buffers[buffer])
+            or length > len(self.buffers[buffer]) - offset
         ):
             raise Error("glTF: a buffer view runs past its buffer")
         return (buffer, offset, length, stride)
@@ -1431,6 +1433,14 @@ struct _Loader(Movable):
     def accessor_floats(
         mut self, index: Int, raw: Bool = False
     ) raises -> Tuple[List[Float32], Int]:
+        """Return decoded accessor values, normalized unless raw is set."""
+        return self._accessor_values[DType.float32](index, raw)
+
+    def _accessor_values[
+        dtype: DType
+    ](mut self, index: Int, raw: Bool = False) raises -> Tuple[
+        List[SIMD[dtype, 1]], Int
+    ]:
         """Return an accessor's numbers as floats, normalized when it says
         so and `raw` is not set, and how many make one element, with its
         sparse values put in place."""
@@ -1440,59 +1450,124 @@ struct _Loader(Movable):
         var kind = self.text(accessor, "type")
         var width = _components_of(kind)
         var size = _component_size(component)
+        var rows = width
+        var columns = 1
+        if kind == "MAT2":
+            rows = 2
+            columns = 2
+        elif kind == "MAT3":
+            rows = 3
+            columns = 3
+        elif kind == "MAT4":
+            rows = 4
+            columns = 4
+        var column_stride = rows * size
+        if columns > 1:
+            column_stride = ((column_stride + 3) // 4) * 4
+        var element_size = columns * column_stride
+        # Only column starts need padding; the final column can end at data.
+        var occupied_size = (columns - 1) * column_stride + rows * size
+        var alignment = 4 if columns > 1 else size
+        var offsets = List[Int]()
+        # Every type accepted by _components_of has a positive width.
+        for lane in range(width):  # pragma: no branch
+            offsets.append(
+                (lane // rows) * column_stride + (lane % rows) * size
+            )
         var normalized = self.flag(accessor, "normalized") and not raw
-        var out = List[Float32]()
+        var out = List[SIMD[dtype, 1]]()
         var view_index = self.integer(accessor, "bufferView", -1)
+        var offset = self.integer(accessor, "byteOffset", 0)
+        if offset < 0 or offset % size != 0:
+            raise Error(
+                "glTF: an accessor needs a nonnegative aligned byteOffset"
+            )
         if count < 0:
             raise Error("glTF: an accessor's count must not be negative")
+        if view_index < -1 or (view_index == -1 and offset != 0):
+            raise Error(
+                "glTF: an accessor without a buffer view cannot have a"
+                " byteOffset"
+            )
         if view_index < 0:
             # No view: every number is zero, as the specification has it.
             for _ in range(count * width):
                 out.append(0)
         else:
             var view = self.view_bytes(view_index)
-            var start = view[1] + self.integer(accessor, "byteOffset", 0)
+            if offset > view[2] or (view[1] + offset) % alignment != 0:
+                raise Error(
+                    "glTF: an accessor runs past its buffer view or is"
+                    " misaligned"
+                )
+            var start = view[1] + offset
             var stride = view[3]
             if stride == 0:
-                stride = size * width
-            if (
-                count > 0
-                and start + (count - 1) * stride + size * width
-                > view[1] + view[2]
-            ):
-                raise Error("glTF: an accessor runs past its buffer view")
+                stride = element_size
+            elif stride < element_size or stride % 4 != 0 or stride > 252:
+                raise Error("glTF: an accessor has an invalid byteStride")
+            var available = view[2] - offset
+            if count > 0:
+                if occupied_size > available:
+                    raise Error("glTF: an accessor runs past its buffer view")
+                if count - 1 > (available - occupied_size) // stride:
+                    raise Error("glTF: an accessor runs past its buffer view")
             ref bytes = self.buffers[view[0]]
             for element in range(count):
                 var at = start + element * stride
                 for lane in range(width):  # pragma: no branch
                     out.append(
-                        _read_component(
-                            bytes, at + lane * size, component, normalized
+                        _read_component[dtype](
+                            bytes, at + offsets[lane], component, normalized
                         )
                     )
         var sparse = self.document.get(accessor, "sparse")
         if sparse != NO_NODE:
-            self.apply_sparse(sparse, out, count, width, component, normalized)
+            self.apply_sparse(
+                sparse,
+                out,
+                count,
+                width,
+                component,
+                normalized,
+                offsets,
+                element_size,
+                alignment,
+            )
         return (out^, width)
 
-    def sparse_view(self, part: Int, length: Int) raises -> Tuple[Int, Int]:
+    def sparse_view(
+        self, part: Int, length: Int, alignment: Int = 1
+    ) raises -> Tuple[Int, Int]:
         """Return the buffer and the first byte of a sparse accessor's
         `indices` or `values`, checked to hold `length` bytes."""
         var view_index = self.required_integer(part, "bufferView")
         var view = self.view_bytes(view_index)
         var offset = self.integer(part, "byteOffset", 0)
-        if offset < 0 or offset + length > view[2]:
+        if (
+            length < 0
+            or offset < 0
+            or offset > view[2]
+            or length > view[2] - offset
+        ):
             raise Error("glTF: a sparse accessor runs past its buffer view")
+        if view[3] != 0 or (view[1] + offset) % alignment != 0:
+            raise Error("glTF: a sparse accessor must be packed and aligned")
         return (view[0], view[1] + offset)
 
-    def apply_sparse(
+    def apply_sparse[
+        dtype: DType
+    ](
         self,
         sparse: Int,
-        mut out: List[Float32],
+        mut out: List[SIMD[dtype, 1]],
         count: Int,
         width: Int,
         component: Int,
         normalized: Bool,
+        offsets: List[Int],
+        element_size: Int,
+        alignment: Int,
     ) raises:
         """Put a sparse accessor's values over the elements its indices
         name, as three.js's `GLTFLoader` does."""
@@ -1521,15 +1596,17 @@ struct _Loader(Movable):
         ):
             raise Error("glTF: sparse indices must be unsigned integers")
         var index_size = _component_size(index_type)
-        var size = _component_size(component)
-        var found = self.sparse_view(indices, changed * index_size)
-        var what = self.sparse_view(values, changed * width * size)
+        var found = self.sparse_view(indices, changed * index_size, index_size)
+        var occupied_size = offsets[width - 1] + _component_size(component)
+        var what = self.sparse_view(
+            values, (changed - 1) * element_size + occupied_size, alignment
+        )
         ref index_bytes = self.buffers[found[0]]
         ref value_bytes = self.buffers[what[0]]
         var last = -1
         for slot in range(changed):  # pragma: no branch
             var element = Int(
-                _read_component(
+                _read_component[DType.int64](
                     index_bytes,
                     found[1] + slot * index_size,
                     index_type,
@@ -1545,9 +1622,9 @@ struct _Loader(Movable):
                 )
             last = element
             for lane in range(width):  # pragma: no branch
-                out[element * width + lane] = _read_component(
+                out[element * width + lane] = _read_component[dtype](
                     value_bytes,
-                    what[1] + (slot * width + lane) * size,
+                    what[1] + slot * element_size + offsets[lane],
                     component,
                     normalized,
                 )
@@ -1570,7 +1647,7 @@ struct _Loader(Movable):
             raise Error("glTF: indices must be unsigned integers")
         if self.text(accessor, "type") != "SCALAR":
             raise Error("glTF: indices must be scalars")
-        var floats = self.accessor_floats(index)
+        var floats = self._accessor_values[DType.int64](index, True)
         var out = List[Int]()
         for at in range(len(floats[0])):
             out.append(Int(floats[0][at]))
@@ -2387,10 +2464,30 @@ struct _Loader(Movable):
         if component == COMPONENT_FLOAT:
             var floats = self.attribute_floats(name, accessor, draco)
             return BufferAttribute(floats[0].copy(), floats[1])
-        var raw = self.attribute_floats(name, accessor, draco, True)
-        var stored = List[Int](capacity=len(raw[0]))
-        for value in raw[0]:
-            stored.append(Int(value))
+        # Decode integer storage directly; Float32 cannot hold every UInt32.
+        var stored = List[Int]()
+        var width = 0
+        var compressed = False
+        if Bool(draco):
+            ref found = draco.value()
+            for slot in range(len(found.names)):
+                if found.names[slot] == name:
+                    var index = found.geometry.unique_attribute(found.ids[slot])
+                    if index < 0:
+                        raise Error(
+                            "glTF: a Draco attribute id is not in the Draco"
+                            " data"
+                        )
+                    width = found.geometry.attributes[index].components
+                    stored = found.geometry.integer_values(
+                        index, _draco_type_of(component)
+                    )
+                    compressed = True
+        if not compressed:
+            var raw = self._accessor_values[DType.int64](accessor, True)
+            width = raw[1]
+            for value in raw[0]:
+                stored.append(Int(value))
         # glTF forbids a normalized unsigned int, and one is read as it
         # is, as `_integer_component` reads it.
         var normalized = (
@@ -2398,7 +2495,7 @@ struct _Loader(Movable):
             and component != COMPONENT_UNSIGNED_INT
         )
         return BufferAttribute(
-            stored, raw[1], _component_type_of(component), normalized
+            stored, width, _component_type_of(component), normalized
         )
 
     def draco_floats(
@@ -3465,13 +3562,15 @@ def _component_size(component: Int) raises -> Int:
     raise Error("glTF: a component type that is not known")
 
 
-def _read_component(
-    bytes: List[UInt8], at: Int, component: Int, normalized: Bool
-) -> Float32:
-    """Return one component as a float, normalized to zero through one or
+def _read_component[
+    dtype: DType
+](bytes: List[UInt8], at: Int, component: Int, normalized: Bool) -> SIMD[
+    dtype, 1
+]:
+    """Return one component as a number, normalized to zero through one or
     minus one through one when the accessor says so."""
     if component == COMPONENT_FLOAT:
-        return bitcast[DType.float32](UInt32(_le32(bytes, at)))
+        return bitcast[DType.float32](UInt32(_le32(bytes, at))).cast[dtype]()
     var raw: Int
     if component == COMPONENT_UNSIGNED_BYTE:
         raw = Int(bytes[at])
@@ -3488,7 +3587,9 @@ def _read_component(
     else:
         # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits.
         raw = _le32(bytes, at)
-    return _integer_component(raw, component, normalized)
+    if normalized:
+        return _integer_component(raw, component, True).cast[dtype]()
+    return SIMD[dtype, 1](raw)
 
 
 def _component_type_of(component: Int) -> ComponentType:

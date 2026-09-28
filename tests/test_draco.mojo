@@ -724,6 +724,15 @@ def test_a_draco_attribute_reads_at_its_accessors_type() raises:
 
 def test_bad_draco_primitives_are_refused() raises:
     var two = _accessor(5125, "SCALAR") + "," + _accessor(5126, "VEC3")
+    assert_true(
+        "not in the Draco data"
+        in _gltf_refusal(
+            "grid.drc",
+            _accessor(5125, "SCALAR") + "," + _accessor(5123, "VEC3"),
+            '"POSITION":1',
+            '"POSITION":9',
+        )
+    )
     # A Booleans attribute reads as bytes, then is not a color.
     assert_true(
         "COLOR_0 must be"

@@ -13,6 +13,7 @@ color and a box of another material, a group `Empty` that holds a bare
 node, and a node `Lamp` with a point light.
 """
 
+from core.buffer_geometry import BufferGeometry
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -183,7 +184,7 @@ def test_the_signatures_leave_out_the_color() raises:
     var side = Length(1.0, METER)
     assert_equal(
         attributes_signature(box(side, side, side)),
-        "normal_3_False|position_3_False|uv_2_False",
+        "normal_3_False_0_0|position_3_False_0_0|uv_2_False_0_0",
     )
 
 
@@ -271,6 +272,46 @@ def test_a_node_that_carries_anything_stays() raises:
     assert_equal(len(left), 7)
     for at in range(len(left)):
         assert_equal(scene.get(left[at]).name, names[at])
+
+
+def test_indexed_and_nonindexed_geometry_use_separate_batches() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var side = Length(1, METER)
+    var shape = box(side, side, side)
+    var expanded = shape.to_non_indexed()
+    var indexed = assets.geometries.add(shape^)
+    var nonindexed = assets.geometries.add(expanded^)
+    var material = assets.materials.add(Material(Color(255, 255, 255)))
+    for at in range(4):
+        scene.add_mesh(
+            Mesh(
+                indexed if at < 2 else nonindexed,
+                material,
+                scene.add(Object3D()),
+            )
+        )
+    var stats = SceneOptimizer().to_batched_mesh(scene, assets)
+    assert_equal(stats.batched_meshes, 2)
+    assert_equal(scene.batched_meshes[0].count(), 2)
+    assert_equal(scene.batched_meshes[1].count(), 2)
+    assert_true(scene.batched_meshes[0].indexed.value())
+    assert_false(scene.batched_meshes[1].indexed.value())
+
+
+def test_geometries_without_positions_stay_in_place() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var material = assets.materials.add(Material(Color(255, 255, 255)))
+    var first = scene.add(Object3D())
+    var second = scene.add(Object3D())
+    scene.add_mesh(Mesh(geometry, material, first))
+    scene.add_mesh(Mesh(geometry, material, second))
+    _ = SceneOptimizer().to_batched_mesh(scene, assets)
+    assert_equal(len(scene.batched_meshes), 0)
+    assert_true(scene.in_scene(first))
+    assert_true(scene.in_scene(second))
 
 
 def main() raises:

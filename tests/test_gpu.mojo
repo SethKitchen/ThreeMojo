@@ -67,7 +67,7 @@ from lights.shadow import (
 from lights.csm import CSM
 from geometries.box import cube
 from geometries.sphere import sphere
-from math.matrix4 import translation
+from math.matrix4 import translation, scaling
 from math.vector2 import Vector2
 from std.math import cos, inf, isinf, max, pi, sin
 from math.vector3 import Vector3
@@ -298,7 +298,14 @@ from materials.material import (
 )
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, POSITION, UV, UV1
+from core.buffer_geometry import (
+    BufferGeometry,
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+)
 from math.matrix4 import Matrix4, rotation_x
 from objects.skeleton import Bone, Skeleton, bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -5478,7 +5485,7 @@ def test_both_backends_agree_on_a_prepared_toon_scene() raises:
 # --- morph targets, both backends -------------------------------------------
 
 
-def test_both_backends_agree_on_a_morphed_mesh() raises:
+def _check_morphed_mesh(transform_normals: Bool) raises:
     # A morph target moves vertices in `Renderer.prepare`, which is the one
     # place both backends read from, so the two are drawing the same
     # triangles by construction. This is what says so: the same scene worn
@@ -5499,7 +5506,17 @@ def test_both_backends_agree_on_a_morphed_mesh() raises:
         stretched.append(point.x * 1.8)
         stretched.append(point.y + 0.4)
         stretched.append(point.z)
-    shape.add_morph_target(BufferAttribute(stretched^, 3))
+    if transform_normals:
+        var normals = shape.clone_attribute(NORMAL)
+        for vertex in range(normals.count()):
+            normals.set_component(vertex, 0, normals.component(vertex, 0) + 0.5)
+        var original = normals.packed()
+        shape.add_morph_target(BufferAttribute(stretched^, 3), normals^)
+        shape.apply_matrix4(Matrix4())
+        assert_equal(shape.morph_normals[0].packed(), original)
+        shape.apply_matrix4(scaling(1.2, 0.8, 1.1))
+    else:
+        shape.add_morph_target(BufferAttribute(stretched^, 3))
     var box = assets.geometries.add(shape^)
 
     var scene = Scene()
@@ -5554,6 +5571,14 @@ def test_both_backends_agree_on_a_morphed_mesh() raises:
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 200, "the morphed box barely drew anything")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_a_morphed_mesh() raises:
+    _check_morphed_mesh(False)
+
+
+def test_both_backends_agree_on_transformed_morph_normals() raises:
+    _check_morphed_mesh(True)
 
 
 def test_both_backends_agree_on_many_color_morphs() raises:

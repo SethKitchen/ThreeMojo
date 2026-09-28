@@ -567,7 +567,9 @@ def test_morph_targets_follow_the_transform() raises:
     geometry.translate(Length(1, METER), Length(0, METER), Length(0, METER))
     _match(_numbers(geometry.morph_positions[0]), [1, 0, 1, 2, 0, 1, 1, 2, 2])
     geometry.scale(1, 2, 1)
-    _match(_numbers(geometry.morph_normals[0]), [0, 1, 0, 0, 1, 0, 0, 1, 0])
+    # Each target uses its base normal's scale, so partial blends keep
+    # their direction. Only the middle base normal shortened by half.
+    _match(_numbers(geometry.morph_normals[0]), [0, 0.5, 0, 0, 1, 0, 0, 0.5, 0])
     # Offsets turn and do not move.
     var relative = _triangle()
     relative.add_morph_target(BufferAttribute([0.0, 1, 0, 0, 1, 0, 0, 1, 0], 3))

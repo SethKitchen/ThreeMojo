@@ -134,11 +134,13 @@ from math.ray import Ray
 from math.triangle import Triangle
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from math.sort_utils import radix_sort
 from core.geometry_store import GeometryId
 from materials.material import BACK_SIDE, FRONT_SIDE, MaterialId
 from objects.line import SEGMENTS, segment_count, segment_ends
 from objects.mesh import Mesh
 from std.math import cos, inf, isnan, max, min, sin
+from std.memory import bitcast
 from units.si import Length, METER, RADIAN
 
 
@@ -1550,13 +1552,33 @@ def _within_on_image(
     return depth >= -1 and depth <= 1 and (target - closest).length() < reach
 
 
-def _sort_by_distance(mut hits: List[Hit]):
+def _sort_by_distance(mut hits: List[Hit]) raises:
     """Sort `hits` by distance, ascending, in place and stably.
 
-    Insertion sort, as the renderer's draw order uses: a pick meets a
-    handful of triangles, and a stable order keeps two hits at one distance
-    in the order they were found.
+    A short pick uses insertion sort without another allocation. A large
+    pick uses the shared radix sorter, so a dense point cloud or many
+    overlapping meshes do not take quadratic work. Distances come from
+    lengths and are nonnegative: their Float32 bits have the same order.
+    Equal distances keep the order in which the hits were found.
+
+    Args:
+        hits: The hits produced by the pickers, with nonnegative distances.
+
+    Raises:
+        Error: Never; every item names a key in the radix sort.
     """
+    if len(hits) > 32:
+        var keys = List[UInt32](capacity=len(hits))
+        var order = List[Int](capacity=len(hits))
+        for position in range(len(hits)):  # pragma: no branch
+            keys.append(bitcast[DType.uint32](hits[position].distance))
+            order.append(position)
+        radix_sort(order, keys)
+        var sorted = List[Hit](capacity=len(hits))
+        for position in range(len(order)):  # pragma: no branch
+            sorted.append(hits[order[position]])
+        hits = sorted^
+        return
     for position in range(len(hits)):
         var hit = hits[position]
         var slot = position

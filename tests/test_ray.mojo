@@ -501,5 +501,44 @@ def test_a_ray_parallel_to_a_segment_takes_the_end_it_points_to() raises:
     assert_point(backward.on_segment, -1, 0, 0)
 
 
+def test_a_distant_segment_keeps_its_gap_in_each_region() raises:
+    # Squared distances at ten kilometers lose gaps of a few meters in
+    # Float32. The gap must still match the two returned nearest points.
+    var depths: List[Float32] = [-5, -10000]
+    for depth in depths:
+        for flip in range(2):
+            var start = Vector3(-5, 2, depth)
+            var end = Vector3(5, 2, depth)
+            var across = _approach(start, end) if flip == 0 else _approach(
+                end, start
+            )
+            assert_almost_equal(across.distance_sq, 4, atol=TOLERANCE)
+            assert_point(across.on_ray, 0, 0, depth)
+            assert_point(across.on_segment, 0, 2, depth)
+
+            start = Vector3(3, 2, depth)
+            end = Vector3(5, 2, depth)
+            var beside = _approach(start, end) if flip == 0 else _approach(
+                end, start
+            )
+            assert_almost_equal(beside.distance_sq, 13, atol=TOLERANCE)
+            assert_point(beside.on_ray, 0, 0, depth)
+            assert_point(beside.on_segment, 3, 2, depth)
+
+            start = Vector3(0, 2, depth - 1)
+            end = Vector3(0, 2, depth + 1)
+            var parallel = _approach(start, end) if flip == 0 else _approach(
+                end, start
+            )
+            assert_almost_equal(parallel.distance_sq, 4, atol=TOLERANCE)
+            assert_point(parallel.on_ray, 0, 0, depth - 1)
+            assert_point(parallel.on_segment, 0, 2, depth - 1)
+
+            var point = _approach(start, start)
+            assert_almost_equal(point.distance_sq, 4, atol=TOLERANCE)
+            assert_point(point.on_ray, 0, 0, depth - 1)
+            assert_point(point.on_segment, 0, 2, depth - 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -32,6 +32,7 @@ from core.buffer_geometry import (
     NORMAL,
     POSITION,
 )
+from geometries.attribute_utils import merge_attributes
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import cos, isfinite, isnan, log10
@@ -160,29 +161,25 @@ def merge_geometries(
     # first part carries one at least.
     for slot in range(first.attribute_count()):  # pragma: no branch
         ref name = first.names[slot]
-        var data = List[Float32]()
+        var attributes = List[BufferAttribute]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].attribute_view(name).packed())
-        merged.set_attribute(
-            name, BufferAttribute(data^, first.values[slot].item_size)
-        )
+            attributes.append(geometries[part].clone_attribute(name))
+        merged.set_attribute(name, merge_attributes(attributes))
     for target in range(first.morph_count()):
-        var data = List[Float32]()
+        var attributes = List[BufferAttribute]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].morph_positions[target].packed())
-        merged.morph_positions.append(BufferAttribute(data^, 3))
+            attributes.append(geometries[part].morph_positions[target].clone())
+        merged.morph_positions.append(merge_attributes(attributes))
     for target in range(len(first.morph_normals)):
-        var data = List[Float32]()
+        var attributes = List[BufferAttribute]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].morph_normals[target].packed())
-        merged.morph_normals.append(BufferAttribute(data^, 3))
+            attributes.append(geometries[part].morph_normals[target].clone())
+        merged.morph_normals.append(merge_attributes(attributes))
     for target in range(len(first.morph_colors)):
-        var data = List[Float32]()
+        var attributes = List[BufferAttribute]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].morph_colors[target].packed())
-        merged.morph_colors.append(
-            BufferAttribute(data^, first.morph_colors[target].item_size)
-        )
+            attributes.append(geometries[part].morph_colors[target].clone())
+        merged.morph_colors.append(merge_attributes(attributes))
     merged.morph_names = first.morph_names.copy()
     merged.morph_relative = first.morph_relative
     merged.set_index(index^)

@@ -175,7 +175,11 @@ With a custom sort, the batch draws as one object at its node's depth, in the or
 
 Each set of two or more meshes becomes one `BatchedMesh` beside the first mesh. The batch wears the first mesh's material in white. Each mesh becomes an instance: its geometry, its place relative to the batch, and its material's color. The meshes leave the scene. Then every node that carries nothing and holds nothing leaves too. The result tells how many meshes merged, into how many batches.
 
-Only plain meshes of one material merge. three.js also merges skinned and instanced meshes as plain ones. A node that a camera rides carries nothing that the scene knows of. List it in `keep` to keep it. `to_instancing_mesh` raises, because three.js does not have it either.
+Only static plain meshes of one material merge. Each batch shares its parent, visibility, layers, render order, culling, and shadow settings. Material keys compare every rendering field except RGB. Geometry equality compares every attribute and its stored values, including typed and interleaved attributes.
+
+Meshes with children, other objects on the same node, user data, morphs, custom shadow materials, instanced attributes, or a restricted draw range stay in place. Nodes listed in `keep` also stay in place. List camera nodes and nodes used by animation or application code in `keep`. The optimizer captures each eligible node's current transform. Later changes to its shared parent move the batch; later changes to the original mesh node do not.
+
+three.js also merges skinned and instanced meshes as plain ones. This port keeps them intact. `to_instancing_mesh` raises, because three.js does not have it either.
 
 ## LOD
 
