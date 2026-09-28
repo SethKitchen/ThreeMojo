@@ -46,6 +46,7 @@
 - [GPU computation](GPU-computation)
 - [Progressive light map](Progressive-light-map)
 - [Gaussian splats](Gaussian-splats)
+- [Voxel global illumination](Voxel-global-illumination)
 - [SVG renderer](SVG-renderer)
 - [Image files](Image-files)
 - [Model files](Model-files)
