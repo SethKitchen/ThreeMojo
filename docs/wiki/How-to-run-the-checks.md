@@ -52,7 +52,19 @@ A change to one leaf module, for example a loader, checks one suite in about a m
 
 Coverage is exact for each module it measures, because every suite that can reach the module runs. A test change can lower the coverage of a module that the change does not reach. `AFFECTED` does not see that. The full run does.
 
-The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs `check-cpu` twice: on Ubuntu and on a macOS runner with Apple Silicon.
+The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs the checks on Ubuntu and on a macOS runner with Apple Silicon.
+
+## Split the suites over machines
+
+A suite's time is almost all compilation. So CI splits the suites over runners that work at the same time. Set `SHARD=i/n` to run group `i` of `n`:
+
+```bash
+make test-cpu SHARD=2/3
+```
+
+`tools/shard.py` makes the groups. It weighs each suite by the source that the suite imports, and it gives the heaviest suite to the lightest group first. Every machine computes the same groups. `SHARD` splits the suites only. The format check, lint, the compile-fail cases and the documentation check run whole, in one job.
+
+Coverage splits into three steps. Each CI runner runs `coverage-instrument` and then `coverage-capture` for its group. One more runner runs `coverage-instrument`, collects the captures of every group in `coverage/build/hits/`, and runs `coverage-report`. The report fails if a suite of the whole list left no capture.
 
 ## Measure the examples
 

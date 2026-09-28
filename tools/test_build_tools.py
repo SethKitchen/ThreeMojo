@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import affected
 import cache_key
+import shard
 
 
 class DependencyTests(unittest.TestCase):
@@ -122,44 +123,100 @@ class GpuStatusTests(unittest.TestCase):
                 self.assertEqual(gpu_status.main(), 2)
 
 
+class ShardTests(unittest.TestCase):
+    def test_groups_cover_every_suite_once_and_balance(self):
+        weights = {'a': 9, 'b': 7, 'c': 4, 'd': 3, 'e': 2, 'f': 1}
+        groups = shard.split(list(weights), 3, weights.__getitem__)
+        dealt = [name for group in groups for name in group]
+        self.assertEqual(sorted(dealt), sorted(weights))
+        loads = [sum(weights[name] for name in group) for group in groups]
+        self.assertEqual(sorted(loads), [8, 9, 9])
+        # The same split every time.
+        self.assertEqual(groups, shard.split(list(weights), 3, weights.__getitem__))
+
+    def test_a_group_keeps_the_given_order_and_refuses_a_bad_index(self):
+        import contextlib
+        import io
+        suites = ['tests/test_potpack.mojo', 'tests/test_vector3.mojo']
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(shard.main(['1/1'] + suites), 0)
+        self.assertEqual(output.getvalue().split(), suites)
+        with contextlib.redirect_stderr(io.StringIO()):
+            for bad in ([], ['0/2'], ['3/2'], ['x/2'], ['1']):
+                self.assertEqual(shard.main(bad), 2)
+
+
 class MakeCacheTests(unittest.TestCase):
     def test_explicit_partial_checks_have_distinct_keys(self):
         import subprocess
         root = Path(__file__).resolve().parent.parent
-        command = ['make', '--no-print-directory', '-s', '--eval',
-                   'cache-key-test:;@echo $(HASH)', 'cache-key-test']
-        full = subprocess.check_output(command, cwd=root, text=True).strip()
-        for override in ('CPU_TESTS=', 'COVERED=', 'MOJOFLAGS=-I . -O0'):
-            partial = subprocess.check_output(command + [override], cwd=root, text=True).strip()
-            self.assertNotEqual(full, partial, override)
-
-
+        # A second makefile adds the target: macOS ships GNU Make 3.81,
+        # which has no --eval.
+        with tempfile.TemporaryDirectory() as scratch:
+            extra = Path(scratch) / 'key.mk'
+            extra.write_text('cache-key-test:\n\t@echo $(HASH)\n')
+            command = ['make', '--no-print-directory', '-s', '-f', 'Makefile',
+                       '-f', str(extra), 'cache-key-test']
+            full = subprocess.check_output(command, cwd=root, text=True).strip()
+            for override in ('CPU_TESTS=', 'COVERED=', 'MOJOFLAGS=-I . -O0'):
+                partial = subprocess.check_output(command + [override], cwd=root, text=True).strip()
+                self.assertNotEqual(full, partial, override)
 
 
 class CoverageIoTests(unittest.TestCase):
-    def test_capture_and_replay_preserve_every_byte_and_order(self):
+    def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
         import gzip
         import sys
         import coverage_io
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            expected = b'COVLINE:m:1\nCOVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n' * 10000
+            stream = b'COVLINE:m:1\nCOVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n' * 10000
+            reduced = (b'COVLINE:m:1\nCOVLINE:m:2.0:T\nCOVLINE:m:2:T\n'
+                       b'COVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n')
             captures = []
             for index in range(2):
                 source = root / f'{index}.input'
-                source.write_bytes(expected + str(index).encode())
+                source.write_bytes(stream + str(index).encode())
                 capture = root / f'{index}.txt.gz'
                 self.assertEqual(coverage_io.capture([
                     sys.executable, '-c', 'import sys;sys.stderr.buffer.write(open(sys.argv[1], "rb").read());print("passed")', str(source)
                 ], root / f'{index}.out', capture), 0)
-                self.assertEqual(gzip.decompress(capture.read_bytes()), source.read_bytes())
-                self.assertLess(capture.stat().st_size, source.stat().st_size // 10)
+                # Other output passes through, after the records.
+                self.assertEqual(gzip.decompress(capture.read_bytes()), reduced + str(index).encode())
                 captures.append(capture)
             result = root / 'replayed'
             command = [sys.executable, '-c',
                        'import sys; out=open(sys.argv[1], "wb"); [out.write(open(p,"rb").read()) for p in sys.argv[2:]]', str(result)]
             self.assertEqual(coverage_io.report(command, captures), 0)
-            self.assertEqual(result.read_bytes(), expected + b'0' + expected + b'1')
+            self.assertEqual(result.read_bytes(), reduced + b'0' + reduced + b'1')
+
+    def test_the_reducer_keeps_every_payload_and_distinct_evaluation(self):
+        import coverage_io
+        written = []
+        reducer = coverage_io.Reducer(written.append)
+        for line in [
+            # Two decisions interleaved; the first evaluated twice alike.
+            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:a:1:T\n',
+            b'COVBRANCH:b:2:F\n', b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
+            # A condition overwritten before its decision closes: both
+            # payloads reach the hit set, the last state the evaluation.
+            b'COVBRANCH:a:1.1:T\n', b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
+            # A condition left open, carried into the next evaluation.
+            b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3:F\n',
+            # Output and malformed records pass as they are.
+            b'  COVLINE:a:9  \n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
+        ]:
+            reducer.feed(line)
+        self.assertEqual(b''.join(written), b''.join([
+            b'COVLINE:a:1.0:T\n', b'COVLINE:b:2.0:F\n', b'COVLINE:a:1:T\n',
+            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
+            b'COVLINE:b:2:F\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:b:2:F\n',
+            b'COVLINE:a:1.1:T\n', b'COVLINE:a:1.1:F\n', b'COVLINE:a:1:F\n',
+            b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
+            b'COVLINE:c:3.1:T\n', b'COVLINE:c:3.0:F\n', b'COVLINE:c:3:F\n',
+            b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3:F\n',
+            b'COVLINE:a:9\n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
+        ]))
 
     def test_failed_suite_retains_diagnostics_and_exit_status(self):
         import contextlib
