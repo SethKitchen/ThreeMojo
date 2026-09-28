@@ -83,22 +83,22 @@ The labeled set follows a standard dissection of the lower limb.
 
 | Part | Role |
 |---|---|
-| `GLUTEUS_MAXIMUS` | Posterior hip to the gluteal tuberosity. |
-| `GLUTEUS_MEDIUS` | Iliac analog to the greater trochanter. |
-| `TENSOR_FASCIAE_LATAE` | ASIS analog into the iliotibial tract. |
+| `GLUTEUS_MAXIMUS` | Back of the ilium and the sacrum, behind the hip, to the gluteal tuberosity. |
+| `GLUTEUS_MEDIUS` | Outer ilium below the crest to the greater trochanter. |
+| `TENSOR_FASCIAE_LATAE` | Anterior superior iliac spine into the iliotibial tract. |
 | `ILIOTIBIAL_TRACT` | Fascia from the trochanter to Gerdy's tubercle. |
-| `SARTORIUS` | ASIS analog to the pes anserinus. |
-| `RECTUS_FEMORIS` | AIIS analog to the patella. |
+| `SARTORIUS` | Anterior superior iliac spine to the pes anserinus. |
+| `RECTUS_FEMORIS` | Anterior inferior iliac spine to the patella. |
 | `VASTUS_LATERALIS` | Lateral thigh to the patella. |
 | `VASTUS_MEDIALIS` | Medial thigh to the patella. |
 | `VASTUS_INTERMEDIUS` | Deep anterior femur to the patella. |
-| `PECTINEUS` | Pubic analog to the lesser trochanter. |
-| `ADDUCTOR_LONGUS` | Pubic analog to the medial femoral shaft. |
+| `PECTINEUS` | Pectineal line of the pubis to the lesser trochanter. |
+| `ADDUCTOR_LONGUS` | Front of the pubic body to the medial femoral shaft. |
 | `ADDUCTOR_MAGNUS` | Deep medial thigh to the medial femoral condyle. |
-| `GRACILIS` | Pubic analog to the pes anserinus. |
-| `BICEPS_FEMORIS` | Ischial analog to the fibular head. |
-| `SEMITENDINOSUS` | Ischial analog to the pes anserinus. |
-| `SEMIMEMBRANOSUS` | Ischial analog to the medial tibial condyle. |
+| `GRACILIS` | Inferior pubic ramus to the pes anserinus. |
+| `BICEPS_FEMORIS` | Ischial tuberosity to the fibular head. |
+| `SEMITENDINOSUS` | Ischial tuberosity to the pes anserinus. |
+| `SEMIMEMBRANOSUS` | Ischial tuberosity to the medial tibial condyle. |
 | `GASTROCNEMIUS` | Both femoral condyles to the Achilles origin. |
 | `SOLEUS` | Posterior tibia and fibula to the heel analog. |
 | `TIBIALIS_ANTERIOR` | Proximal tibia to the medial midfoot analog. |
@@ -114,7 +114,22 @@ The labeled set follows a standard dissection of the lower limb.
 
 Vastus intermedius and adductor magnus fill the deep thigh compartments. Tibialis posterior fills the deep calf compartment.
 
-Pelvic origins and the heel are authored offsets from the femoral head and the tibial plafond. This template has no pelvis and no foot bones yet.
+### Origins on the pelvis
+
+The pelvic origins come from the pelvis that holds the femur. See [Pelvis](Pelvis). Each landmark keeps its offset from the right hip joint center. A left leg mirrors that offset.
+
+| Landmark | Where on the pelvis | Muscles |
+|---|---|---|
+| `asis` | Anterior superior iliac spine | Tensor, sartorius |
+| `aiis` | Anterior inferior iliac spine | Rectus femoris |
+| `iliac` | Iliac tubercle | Gluteus medius, and the top of the leg's skin |
+| `psis`, `sacral` | Posterior superior spine and the sacrum's lateral border | Gluteus maximus |
+| `ischial` | Low on the back of the ischial tuberosity | The hamstrings, adductor magnus |
+| `pubis` | Front of the pubic body | Adductor longus |
+| `pectineal` | Pectineal line | Pectineus |
+| `pubic_arch` | Inferior pubic ramus | Gracilis, adductor magnus |
+
+The heel comes from the foot's calcaneal tuberosity.
 
 `MuscleDimensions` is editable. Editing a landmark does not rebuild the others. Call `muscle_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 

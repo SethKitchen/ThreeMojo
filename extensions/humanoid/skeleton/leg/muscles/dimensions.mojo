@@ -33,6 +33,7 @@ from extensions.humanoid.skeleton.field import (
     empty_bounds,
     field_gradient,
     finite_point,
+    mix_point,
     sd_ellipse_segment,
     smin,
 )
@@ -61,6 +62,10 @@ from extensions.humanoid.skeleton.leg.patella.dimensions import (
 from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaDimensions,
     tibia_dimensions,
+)
+from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
+    PelvisDimensions,
+    pelvis_dimensions,
 )
 from math.vector3 import Vector3
 from std.math import sqrt
@@ -166,6 +171,12 @@ struct MuscleDimensions(ImplicitlyCopyable):
     var iliac: Vector3
     var ischial: Vector3
     var pubis: Vector3
+    var psis: Vector3
+    # The sacrum's lateral border, low on the back of the pelvis.
+    var sacral: Vector3
+    var pectineal: Vector3
+    # The inferior pubic ramus, below the symphysis.
+    var pubic_arch: Vector3
     var med_condyle: Vector3
     var lat_condyle: Vector3
     var femur_mid: Vector3
@@ -214,6 +225,10 @@ struct MuscleDimensions(ImplicitlyCopyable):
         finite_point(self.iliac, "iliac crest", "muscle")
         finite_point(self.ischial, "ischial tuberosity", "muscle")
         finite_point(self.pubis, "pubis", "muscle")
+        finite_point(self.psis, "PSIS", "muscle")
+        finite_point(self.sacral, "sacral border", "muscle")
+        finite_point(self.pectineal, "pectineal line", "muscle")
+        finite_point(self.pubic_arch, "pubic arch", "muscle")
         finite_point(self.med_condyle, "medial condyle", "muscle")
         finite_point(self.lat_condyle, "lateral condyle", "muscle")
         finite_point(self.femur_mid, "femur midshaft", "muscle")
@@ -503,6 +518,9 @@ def muscle_dimensions_from_bones(
     var k = 0.0050 * S
     if athleticism == TONED:
         k = 0.0042 * S
+    # The pelvic origins come from the pelvis that holds this femur.
+    var pelvis = pelvis_dimensions(femur.stature, femur.sex)
+    var pubic_body = pelvis.symphysis_bottom + Vector3(0.0072 * S, 0, 0)
     var dims = MuscleDimensions(
         femur.stature,
         femur.sex,
@@ -514,11 +532,36 @@ def muscle_dimensions_from_bones(
         hip,
         gt,
         lt,
-        hip + Vector3(lat * 0.045 * S, 0.016 * S, 0.024 * S),
-        hip + Vector3(lat * 0.030 * S, 0.006 * S, 0.030 * S),
-        hip + Vector3(lat * 0.046 * S, 0.045 * S, -0.004 * S),
-        hip + Vector3(-lat * 0.022 * S, -0.052 * S, -0.048 * S),
-        hip + Vector3(-lat * 0.038 * S, -0.048 * S, 0.018 * S),
+        _from_pelvis(pelvis.asis, pelvis, hip, lat),
+        _from_pelvis(pelvis.aiis, pelvis, hip, lat),
+        _from_pelvis(pelvis.tubercle, pelvis, hip, lat),
+        # The hamstrings' facet: low on the back of the tuberosity.
+        _from_pelvis(
+            pelvis.tuberosity + Vector3(0, -0.006 * S, -0.006 * S),
+            pelvis,
+            hip,
+            lat,
+        ),
+        # The front of the pubic body, below the tubercle.
+        _from_pelvis(
+            mix_point(pelvis.pubic_tubercle, pelvis.symphysis_bottom, 0.35)
+            + Vector3(0, 0, 0.002 * S),
+            pelvis,
+            hip,
+            lat,
+        ),
+        _from_pelvis(pelvis.psis, pelvis, hip, lat),
+        _from_pelvis(
+            mix_point(pelvis.psis, pelvis.coccyx_tip, 0.6)
+            + Vector3(0.004 * S, 0, -0.004 * S),
+            pelvis,
+            hip,
+            lat,
+        ),
+        _from_pelvis(pelvis.pectineal, pelvis, hip, lat),
+        _from_pelvis(
+            mix_point(pubic_body, pelvis.ramus, 0.30), pelvis, hip, lat
+        ),
         med_c,
         lat_c,
         femur_origin_point,
@@ -540,6 +583,18 @@ def muscle_dimensions_from_bones(
     )
     dims.bellies = _pack(dims)
     return dims
+
+
+def _from_pelvis(
+    point: Vector3, pelvis: PelvisDimensions, hip: Vector3, lat: Float32
+) -> Vector3:
+    """Return a right-side pelvic landmark in this leg's frame.
+
+    The landmark keeps its offset from the right hip joint center. A
+    left leg mirrors that offset.
+    """
+    var offset = point - pelvis.hip
+    return hip + Vector3(lat * offset.x, offset.y, offset.z)
 
 
 def muscle_distance(
@@ -830,9 +885,16 @@ def _widened(station: _Station, factor: Float32, widen_z: Bool) -> _Station:
 
 
 def _packs(part: MusclePart) -> Bool:
-    """Return whether a part's belly packs: every muscle, no tendon."""
+    """Return whether a part's belly packs.
+
+    Every muscle packs but the two gluteals: they are authored against
+    the pelvis, over the buttock and flat on the ilium, not around a
+    shaft. No tendon packs.
+    """
     return (
-        part != ILIOTIBIAL_TRACT
+        part != GLUTEUS_MAXIMUS
+        and part != GLUTEUS_MEDIUS
+        and part != ILIOTIBIAL_TRACT
         and part != ACHILLES_TENDON
         and part != PATELLAR_TENDON
     )
@@ -1019,19 +1081,28 @@ def _strap(
 def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     """Return the gluteus maximus: a thick sheet over the buttock.
 
-    It is broad and a few centimeters deep, not round.
+    It is broad across its fibers and about three centimeters deep. Its
+    width stays nearly even from the sacrum to the femur, so it covers
+    the buttock instead of bulging in the middle.
     """
-    var rb = _r(S, scale, 0.0491)
-    var origin = _at(d.iliac, d.ischial, 0.45) + Vector3(
-        0, 0.002 * S, -0.010 * S
+    var rb = _r(S, scale, 0.0470)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    # It rises from the back of the ilium, the sacrum and the coccyx,
+    # beside the natal cleft, and crosses behind the hip.
+    var origin = _at(d.psis, d.sacral, 0.45) + Vector3(
+        lat * 0.003 * S, 0, -0.008 * S
     )
-    var insertion = _at(d.gt, d.femur_mid, 0.30) + Vector3(0, 0, -0.014 * S)
-    var belly = d.hip + Vector3(0, -0.034 * S, -0.030 * S)
-    var r0 = 0.48 * rb
-    var r1 = 0.78 * rb
+    # Its lower fibers run into the iliotibial tract and the gluteal
+    # tuberosity, well down the femur, so the fold fades out laterally.
+    var insertion = _at(d.gt, d.femur_mid, 0.42) + Vector3(0, 0, -0.012 * S)
+    var belly = d.hip + Vector3(lat * 0.006 * S, -0.036 * S, -0.058 * S)
+    var r0 = 0.55 * rb
+    var r1 = 0.88 * rb
     var r2 = rb
-    var r3 = 0.75 * rb
-    var r4 = 0.42 * rb
+    var r3 = 0.70 * rb
+    var r4 = 0.34 * rb
     return MuscleChain(
         origin,
         _at(origin, belly, 0.50),
@@ -1043,31 +1114,41 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
         r2,
         r3,
         r4,
-        0.45 * r0,
-        0.48 * r1,
-        0.50 * r2,
-        0.48 * r3,
-        0.45 * r4,
+        0.34 * r0,
+        0.36 * r1,
+        0.38 * r2,
+        0.40 * r3,
+        0.55 * r4,
     )
 
 
 def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     """Return the fan from the outer ilium to the greater trochanter.
 
-    It spreads from under the iliac crest, so it is broad and flat.
+    It spreads under the iliac crest from the front of the ilium to its
+    back, so it is broadest at its origin and converges on the
+    trochanter. It lies flat on the ilium: about two centimeters thick.
     """
-    var rb = _r(S, scale, 0.036)
-    var lat = Float32(1)
-    if d.side == LEFT:
-        lat = Float32(-1)
-    var origin = _at(d.iliac, d.gt, 0.10)
-    return _fusiform(
+    # The middle of its origin, behind the tubercle and below the crest.
+    var origin = _at(d.iliac, d.gt, 0.10) + Vector3(0, 0, -0.006 * S)
+    var gt = d.gt
+    var unit = S * scale / Float32(182.88)
+    return MuscleChain(
         origin,
-        d.gt,
-        Vector3(lat * 0.010 * S, 0, 0.004 * S),
-        0.80 * rb,
-        rb,
-        0.45,
+        _at(origin, gt, 0.30),
+        _at(origin, gt, 0.55),
+        _at(origin, gt, 0.80),
+        gt,
+        1.0 * unit,
+        1.8 * unit,
+        2.3 * unit,
+        1.9 * unit,
+        1.1 * unit,
+        6.5 * unit,
+        6.0 * unit,
+        4.8 * unit,
+        3.2 * unit,
+        1.6 * unit,
     )
 
 
@@ -1160,7 +1241,7 @@ def _vastus_intermedius(
 def _pectineus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.0142)
     return _fusiform(
-        d.pubis, d.lt, Vector3(0, 0, 0.008 * S), 0.62 * rb, rb, 0.72
+        d.pectineal, d.lt, Vector3(0, 0, 0.008 * S), 0.62 * rb, rb, 0.72
     )
 
 
@@ -1188,7 +1269,7 @@ def _adductor_magnus(
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.pubis, d.ischial, 0.56)
+    var origin = _at(d.pubic_arch, d.ischial, 0.56)
     var insertion = d.med_condyle + Vector3(-lat * 0.006 * S, 0.018 * S, 0)
     return _fusiform(
         origin,
@@ -1206,7 +1287,7 @@ def _gracilis(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     if d.side == LEFT:
         lat = Float32(-1)
     return _strap(
-        d.pubis,
+        d.pubic_arch,
         d.pes,
         Vector3(-lat * 0.018 * S, 0, 0.006 * S),
         rb,

@@ -422,6 +422,56 @@ def mix_point(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     )
 
 
+def ud_triangle(point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Float32:
+    """Return the unsigned distance from `point` to a flat triangle.
+
+    A thin plate of bone is this distance less its half-thickness.
+
+    Args:
+        point: The sample point, in meters.
+        a: First corner, in meters.
+        b: Second corner, in meters.
+        c: Third corner, in meters.
+
+    Returns:
+        The distance to the nearest point of the triangle, in meters.
+    """
+    var ba = b - a
+    var pa = point - a
+    var cb = c - b
+    var pb = point - b
+    var ac = a - c
+    var pc = point - c
+    var normal = cross(ba, ac)
+    var inside = Float32(0)
+    if cross(ba, normal).dot(pa) >= 0:
+        inside += 1
+    if cross(cb, normal).dot(pb) >= 0:
+        inside += 1
+    if cross(ac, normal).dot(pc) >= 0:
+        inside += 1
+    var span = normal.dot(normal)
+    if inside > 2 and span > 0:
+        var height = normal.dot(pa)
+        return sqrt(height * height / span)
+    return sqrt(
+        min(
+            min(_edge_gap(ba, pa), _edge_gap(cb, pb)),
+            _edge_gap(ac, pc),
+        )
+    )
+
+
+def _edge_gap(edge: Vector3, offset: Vector3) -> Float32:
+    """Return the squared distance from an offset to one triangle edge."""
+    var span = edge.dot(edge)
+    var t = Float32(0)
+    if span > 0:
+        t = max(Float32(0), min(Float32(1), edge.dot(offset) / span))
+    var gap = edge * t - offset
+    return gap.dot(gap)
+
+
 @fieldwise_init
 struct TubeChain(ImplicitlyCopyable):
     """Five tapered circular stations of one vessel, nerve or tract."""
