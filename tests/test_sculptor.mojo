@@ -385,6 +385,14 @@ def test_the_distance_to_a_triangle_in_each_region() raises:
     assert_equal(distance_sq_to_triangle(Point3(-1, 0.5, 0), a, b, c), 1)
     assert_equal(distance_sq_to_triangle(Point3(1, 1, 0), a, b, c), 0.5)
     assert_equal(distance_sq_to_triangle(Point3(0.25, 0.25, 1), a, b, c), 1)
+    # Over the line of AC, past C, but out of the region of C: the point
+    # skips the edge AC, and the edge BC is nearest.
+    assert_almost_equal(
+        distance_sq_to_triangle(
+            Point3(-1, 1, 2), a, Point3(-1, -1, 2), Point3(0, 0, 1)
+        ),
+        8.0 / 3.0,
+    )
     # A flat triangle is measured to its edges.
     assert_equal(
         distance_sq_to_triangle(Point3(0.5, 1, 0), a, b, Point3(2, 0, 0)),

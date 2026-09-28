@@ -297,11 +297,14 @@ def distance_sq_to_triangle(
     if d6 >= 0 and d5 <= d6:
         return _dot(cp, cp)
     var vb = d5 * d2 - d1 * d6
-    if vb <= 0 and d2 >= 0 and d6 <= 0:
+    # The Voronoi regions cover the plane. With the corners and the edge
+    # AB already out, a point behind AC has `d2 >= 0`, and a point behind
+    # BC is in the region of BC. Ericson's other tests are always true.
+    if vb <= 0 and d6 <= 0:
         var w = d2 / (d2 - d6)
         return _dot(_edge_rest(ap, ac, w), _edge_rest(ap, ac, w))
     var va = d3 * d6 - d5 * d4
-    if va <= 0 and d4 - d3 >= 0 and d5 - d6 >= 0:
+    if va <= 0:
         var w = (d4 - d3) / (d4 - d3 + d5 - d6)
         return _dot(_edge_rest(bp, bc, w), _edge_rest(bp, bc, w))
     var inverse = 1.0 / (va + vb + vc)

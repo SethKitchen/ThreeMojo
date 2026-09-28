@@ -117,14 +117,6 @@ def _turned_x(
     return geometry^
 
 
-def _turned_y(
-    var geometry: BufferGeometry, angle: Float64
-) raises -> BufferGeometry:
-    """Return a geometry turned about y, three.js's `rotateY`."""
-    geometry.rotate_y(_a(angle))
-    return geometry^
-
-
 def _turned_z(
     var geometry: BufferGeometry, angle: Float64
 ) raises -> BufferGeometry:

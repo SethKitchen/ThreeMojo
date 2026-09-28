@@ -727,12 +727,10 @@ def _add_spandrel_bands(
         var center = bottom + Float64(f) * fh
         var top = min(center + band_height / 2, v_top)
         var low = max(center - band_height / 2, bottom)
+        # three.js skips a band of no height. The snap makes the floor at
+        # least three modules and keeps the window at least one module
+        # below it, so every band has a height and no band is skipped.
         var h = top - low
-        # three.js skips a band of no height. The snap keeps the window
-        # below the floor, `0.62 f + 0.3 < f` for any floor of 1.8 meters
-        # or more, so every band has a height.
-        if h <= 0:  # pragma: no branch
-            continue
         parts.bands.append(
             frame.box(
                 frame.length / 2, (top + low) / 2, -0.3, band_length, h, 0.6

@@ -1004,7 +1004,8 @@ struct NodeLoader(Movable):
         """Build a `TextureNode` or a `CubeTextureNode`, reading a texture
         uniform named by the node's uuid."""
         var texture = _text(document, item, "value")
-        for name in [
+        # The list is never empty, so the loop always runs.
+        for name in [  # pragma: no branch
             "biasNode",
             "compareNode",
             "depthNode",
