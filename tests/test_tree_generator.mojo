@@ -71,7 +71,9 @@ def test_default_tree_matches_three() raises:
     assert_equal(len(geometry.index), 18756)
     _vertex(geometry, String(POSITION), 0, 0, 0, -0.672)
     _vertex(geometry, String(NORMAL), 0, 0, 0, -1)
-    _vertex(geometry, String(POSITION), 2077, -2.4344132, 10.7338264, -0.4239750)
+    _vertex(
+        geometry, String(POSITION), 2077, -2.4344132, 10.7338264, -0.4239750
+    )
     _vertex(geometry, String(NORMAL), 2077, 0.0749140, 0.9095214, 0.4088506)
     _vertex(geometry, String(POSITION), 4154, 0.4016370, 17.6735287, 1.1806126)
     _vertex(geometry, String(NORMAL), 4154, 0.8521077, -0.2042644, 0.4818595)

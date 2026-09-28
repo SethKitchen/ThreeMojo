@@ -57,7 +57,6 @@ def _count(geometry: BufferGeometry, id: Int) raises -> Int:
     return n
 
 
-
 def test_body_stations_match_three() raises:
     """A set of stations: the profile's, and the arches', each once."""
     var sedan = body_stations(CarSpec(SEDAN))

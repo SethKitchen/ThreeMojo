@@ -26,7 +26,9 @@ from std.math import pi
 from units.si import Angle, Length, METER, RADIAN
 
 
-def rounded_rect(width: Float64, depth: Float64, radius: Float64) raises -> Shape:
+def rounded_rect(
+    width: Float64, depth: Float64, radius: Float64
+) raises -> Shape:
     """Return a rectangle with rounded corners centered on the origin,
     three.js's `roundedRect`.
 

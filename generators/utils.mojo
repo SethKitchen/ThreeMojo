@@ -52,8 +52,11 @@ struct PartId(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the codes there are, zero to
-        eight."""
+        """Return True if this is one of the codes there are.
+
+        Returns:
+            Whether the code is from zero to eight.
+        """
         return self.value >= 0 and self.value < PART_ID_COUNT
 
 
@@ -341,15 +344,13 @@ def part(geometry: BufferGeometry, id: PartId) raises -> BufferGeometry:
     """
     if not id.is_valid():
         raise Error("A part code must be from zero to eight")
-    var tagged = (
-        geometry.clone() if geometry.is_indexed() else merge_vertices(geometry)
+    var tagged = geometry.clone() if geometry.is_indexed() else merge_vertices(
+        geometry
     )
     var count = tagged.vertex_count()
     tagged.set_attribute(
         String(PART_ID),
-        BufferAttribute(
-            List[Float32](length=count, fill=Float32(id.value)), 1
-        ),
+        BufferAttribute(List[Float32](length=count, fill=Float32(id.value)), 1),
     )
     return tagged^
 
@@ -449,9 +450,15 @@ def compose_matrix(
     var wy = qw * y2
     var wz = qw * z2
     return basis_matrix(
-        Vec3d((1 - (yy + zz)) * scale.x, (xy + wz) * scale.x, (xz - wy) * scale.x),
-        Vec3d((xy - wz) * scale.y, (1 - (xx + zz)) * scale.y, (yz + wx) * scale.y),
-        Vec3d((xz + wy) * scale.z, (yz - wx) * scale.z, (1 - (xx + yy)) * scale.z),
+        Vec3d(
+            (1 - (yy + zz)) * scale.x, (xy + wz) * scale.x, (xz - wy) * scale.x
+        ),
+        Vec3d(
+            (xy - wz) * scale.y, (1 - (xx + zz)) * scale.y, (yz + wx) * scale.y
+        ),
+        Vec3d(
+            (xz + wy) * scale.z, (yz - wx) * scale.z, (1 - (xx + yy)) * scale.z
+        ),
         position,
     )
 
@@ -541,7 +548,7 @@ struct Instances(Movable):
         """Create an empty set of instances of one geometry.
 
         Args:
-            name: three.js's mesh name.
+            name: The mesh's name, as three.js names it.
             geometry: The geometry every instance draws.
         """
         self.name = name

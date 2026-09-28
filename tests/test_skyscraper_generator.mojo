@@ -146,13 +146,37 @@ def test_small_tower_matches_three() raises:
     assert_equal(len(parts.finials), 7)
     _affine(
         parts.windows[0],
-        [0.7071068, 0, -0.7071068, 0, 1, 0, 0.7071068, 0, 0.7071068,
-         3.1514719, 6.3, 3.3485281],
+        [
+            0.7071068,
+            0,
+            -0.7071068,
+            0,
+            1,
+            0,
+            0.7071068,
+            0,
+            0.7071068,
+            3.1514719,
+            6.3,
+            3.3485281,
+        ],
     )
     _affine(
         parts.glass[5],
-        [0.7071068, 0, -0.7071068, 0, 1, 0, 0.7071068, 0, 0.7071068,
-         4.7366686, 14.7, 1.5396123],
+        [
+            0.7071068,
+            0,
+            -0.7071068,
+            0,
+            1,
+            0,
+            0.7071068,
+            0,
+            0.7071068,
+            4.7366686,
+            14.7,
+            1.5396123,
+        ],
     )
     var room = parts.glass_rooms[5]
     assert_almost_equal(room.center.x, 3.8881404, atol=1e-6)
@@ -166,8 +190,20 @@ def test_small_tower_matches_three() raises:
     )
     _affine(
         parts.bands[3],
-        [3.5757359, 0, -3.5757359, 0, 1.8, 0, 0.4242641, 0, 0.4242641,
-         3.7878680, 16.8, 2.2878680],
+        [
+            3.5757359,
+            0,
+            -3.5757359,
+            0,
+            1.8,
+            0,
+            0.4242641,
+            0,
+            0.4242641,
+            3.7878680,
+            16.8,
+            2.2878680,
+        ],
     )
     _affine(
         parts.trim[24],
@@ -179,19 +215,55 @@ def test_small_tower_matches_three() raises:
     )
     _affine(
         parts.shop_glass[0],
-        [2.8849957, 0, -2.8849957, 0, 2.8, 0, 0.7071068, 0, 0.7071068,
-         3.8727208, 1.9, 2.3727208],
+        [
+            2.8849957,
+            0,
+            -2.8849957,
+            0,
+            2.8,
+            0,
+            0.7071068,
+            0,
+            0.7071068,
+            3.8727208,
+            1.9,
+            2.3727208,
+        ],
     )
     assert_almost_equal(parts.shop_rooms[0].width, 4.08, atol=1e-9)
     _affine(
         parts.awnings[0],
-        [3.1819805, 0, -3.1819805, 0, 0.14, 0, 0.9192388, 0, 0.9192388,
-         4.4949747, 3.18, 2.9949747],
+        [
+            3.1819805,
+            0,
+            -3.1819805,
+            0,
+            0.14,
+            0,
+            0.9192388,
+            0,
+            0.9192388,
+            4.4949747,
+            3.18,
+            2.9949747,
+        ],
     )
     _affine(
         parts.back_walls[0],
-        [5.1313708, 0, -5.1313708, 0, 16.8, 0, 0.5656854, 0, 0.5656854,
-         3.2928932, 12.6, 1.7928932],
+        [
+            5.1313708,
+            0,
+            -5.1313708,
+            0,
+            16.8,
+            0,
+            0.5656854,
+            0,
+            0.5656854,
+            3.2928932,
+            12.6,
+            1.7928932,
+        ],
     )
     var geometry = bake(parts)
     assert_equal(geometry.vertex_count(), 11364)
@@ -290,7 +362,9 @@ def test_footprint_and_faces() raises:
     assert_almost_equal(faces[4].origin.z, 0.5, atol=1e-12)
     assert_almost_equal(faces[4].n.x, 1, atol=1e-12)
     # Another corner, and a corner that is none.
-    assert_almost_equal(build_footprint(12, 9, 4, -1, -1)[3].x, -2.0, atol=1e-12)
+    assert_almost_equal(
+        build_footprint(12, 9, 4, -1, -1)[3].x, -2.0, atol=1e-12
+    )
     assert_equal(len(build_footprint(12, 9, 4, 0, 1)), 4)
     assert_equal(len(build_faces(List[Vec3d]())), 0)
     var bays = faces[3].bays(2.4)
@@ -320,7 +394,9 @@ def test_palette_and_placements() raises:
     assert_equal(len(building_palette()), 17)
     assert_equal(pick_building_color(0), 0xA8553C)
     assert_equal(pick_building_color(35), building_palette()[9])
-    var flat = Affine(Vec3d(1, 0, 0), Vec3d(0, 0, 0), Vec3d(0, 0, 1), Vec3d(1, 2, 3))
+    var flat = Affine(
+        Vec3d(1, 0, 0), Vec3d(0, 0, 0), Vec3d(0, 0, 1), Vec3d(1, 2, 3)
+    )
     var turn = flat.normal_turn()
     assert_equal(turn.x_axis.x, 0)
     var m = flat.matrix4()

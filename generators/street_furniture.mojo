@@ -102,24 +102,32 @@ def _cylinder(
     return cylinder(_l(top), _l(bottom), _l(height), segments, 1, open_ended)
 
 
-def _box(width: Float64, height: Float64, depth: Float64) raises -> BufferGeometry:
+def _box(
+    width: Float64, height: Float64, depth: Float64
+) raises -> BufferGeometry:
     """Return three.js's `BoxGeometry`."""
     return box(_l(width), _l(height), _l(depth))
 
 
-def _turned_x(var geometry: BufferGeometry, angle: Float64) raises -> BufferGeometry:
+def _turned_x(
+    var geometry: BufferGeometry, angle: Float64
+) raises -> BufferGeometry:
     """Return a geometry turned about x, three.js's `rotateX`."""
     geometry.rotate_x(_a(angle))
     return geometry^
 
 
-def _turned_y(var geometry: BufferGeometry, angle: Float64) raises -> BufferGeometry:
+def _turned_y(
+    var geometry: BufferGeometry, angle: Float64
+) raises -> BufferGeometry:
     """Return a geometry turned about y, three.js's `rotateY`."""
     geometry.rotate_y(_a(angle))
     return geometry^
 
 
-def _turned_z(var geometry: BufferGeometry, angle: Float64) raises -> BufferGeometry:
+def _turned_z(
+    var geometry: BufferGeometry, angle: Float64
+) raises -> BufferGeometry:
     """Return a geometry turned about z, three.js's `rotateZ`."""
     geometry.rotate_z(_a(angle))
     return geometry^
@@ -147,9 +155,7 @@ def _strut(a: Vec3d, b: Vec3d, radius: Float64) raises -> BufferGeometry:
     geometry.apply_matrix4(
         unit_vectors_turn(Vec3d(0, 1, 0), direction.normalized())
     )
-    return _moved(
-        geometry^, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2
-    )
+    return _moved(geometry^, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
 
 
 def placed(
@@ -220,8 +226,14 @@ struct StreetlightGenerator(Copyable, Movable):
         )
         return merge_geometries(
             [
-                part(_moved(_cylinder(0.18, 0.22, 0.6, 8), 0, 0.3, 0), LIGHT_METAL),
-                part(_moved(_cylinder(r, r * 1.7, h, 8), 0, h / 2, 0), LIGHT_METAL),
+                part(
+                    _moved(_cylinder(0.18, 0.22, 0.6, 8), 0, 0.3, 0),
+                    LIGHT_METAL,
+                ),
+                part(
+                    _moved(_cylinder(r, r * 1.7, h, 8), 0, h / 2, 0),
+                    LIGHT_METAL,
+                ),
                 part(arm, LIGHT_METAL),
                 part(
                     _moved(
@@ -306,8 +318,14 @@ struct TrafficlightGenerator(Copyable, Movable):
         var lens_z = head_z - 0.19
         return merge_geometries(
             [
-                part(_moved(_cylinder(0.2, 0.26, 0.5, 8), 0, 0.25, 0), SIGNAL_METAL),
-                part(_moved(_cylinder(r, r * 1.2, h, 8), 0, h / 2, 0), SIGNAL_METAL),
+                part(
+                    _moved(_cylinder(0.2, 0.26, 0.5, 8), 0, 0.25, 0),
+                    SIGNAL_METAL,
+                ),
+                part(
+                    _moved(_cylinder(r, r * 1.2, h, 8), 0, h / 2, 0),
+                    SIGNAL_METAL,
+                ),
                 part(
                     _moved(
                         _turned_x(_cylinder(0.07, 0.1, reach, 8), pi / 2),
@@ -326,8 +344,13 @@ struct TrafficlightGenerator(Copyable, Movable):
                     ),
                     SIGNAL_METAL,
                 ),
-                part(_moved(_box(0.4, 0.42, 0.2), 0, 2.6, r + 0.1), SIGNAL_METAL),
-                part(_moved(_box(0.36, 0.95, 0.32), 0, head_y, head_z), SIGNAL_METAL),
+                part(
+                    _moved(_box(0.4, 0.42, 0.2), 0, 2.6, r + 0.1), SIGNAL_METAL
+                ),
+                part(
+                    _moved(_box(0.36, 0.95, 0.32), 0, head_y, head_z),
+                    SIGNAL_METAL,
+                ),
                 _lens_disc(head_y + 0.28, lens_z, SIGNAL_RED),
                 _lens_disc(head_y, lens_z, SIGNAL_AMBER),
                 _lens_disc(head_y - 0.28, lens_z, SIGNAL_GREEN),
@@ -379,10 +402,24 @@ struct TrashcanGenerator(Copyable, Movable):
         mound.scale(1, 0.55, 1)
         return merge_geometries(
             [
-                part(_moved(_cylinder(r, r * 0.92, h, 16, True), 0, h / 2, 0), CAN_MESH),
-                part(_moved(_cylinder(r + 0.03, r + 0.03, 0.07, 16), 0, h, 0), CAN_RIM),
-                part(_moved(_cylinder(r * 0.92, r * 0.86, 0.06, 16), 0, 0.03, 0), CAN_RIM),
-                part(_moved(_cylinder(r * 0.86, r * 0.7, h * 0.9, 12), 0, h * 0.5, 0), CAN_TRASH),
+                part(
+                    _moved(_cylinder(r, r * 0.92, h, 16, True), 0, h / 2, 0),
+                    CAN_MESH,
+                ),
+                part(
+                    _moved(_cylinder(r + 0.03, r + 0.03, 0.07, 16), 0, h, 0),
+                    CAN_RIM,
+                ),
+                part(
+                    _moved(_cylinder(r * 0.92, r * 0.86, 0.06, 16), 0, 0.03, 0),
+                    CAN_RIM,
+                ),
+                part(
+                    _moved(
+                        _cylinder(r * 0.86, r * 0.7, h * 0.9, 12), 0, h * 0.5, 0
+                    ),
+                    CAN_TRASH,
+                ),
                 part(_moved(mound^, 0.02, h + 0.02, -0.01), CAN_TRASH),
             ]
         )
@@ -438,23 +475,42 @@ struct BenchGenerator(Copyable, Movable):
         for side in range(2):  # pragma: no branch
             var x = Float64(side * 2 - 1) * (half_length - 0.07)
             parts.append(
-                part(_moved(_box(0.05, seat_y, 0.06), x, seat_y / 2, front_z), BENCH_IRON)
-            )
-            parts.append(
-                part(_moved(_box(0.05, back_y, 0.06), x, back_y / 2, back_z), BENCH_IRON)
-            )
-            parts.append(
                 part(
-                    _moved(_box(0.06, 0.05, front_z - back_z + 0.1), x, seat_y - 0.04, 0),
+                    _moved(_box(0.05, seat_y, 0.06), x, seat_y / 2, front_z),
                     BENCH_IRON,
                 )
             )
             parts.append(
-                part(_moved(_box(0.05, 0.22, 0.05), x, seat_y + 0.11, front_z), BENCH_IRON)
+                part(
+                    _moved(_box(0.05, back_y, 0.06), x, back_y / 2, back_z),
+                    BENCH_IRON,
+                )
             )
             parts.append(
                 part(
-                    _moved(_box(0.05, 0.05, front_z - back_z + 0.06), x, seat_y + 0.22, 0),
+                    _moved(
+                        _box(0.06, 0.05, front_z - back_z + 0.1),
+                        x,
+                        seat_y - 0.04,
+                        0,
+                    ),
+                    BENCH_IRON,
+                )
+            )
+            parts.append(
+                part(
+                    _moved(_box(0.05, 0.22, 0.05), x, seat_y + 0.11, front_z),
+                    BENCH_IRON,
+                )
+            )
+            parts.append(
+                part(
+                    _moved(
+                        _box(0.05, 0.05, front_z - back_z + 0.06),
+                        x,
+                        seat_y + 0.22,
+                        0,
+                    ),
                     BENCH_IRON,
                 )
             )
@@ -475,7 +531,10 @@ struct BenchGenerator(Copyable, Movable):
         for i in range(5):  # pragma: no branch
             var z = z0 + (z1 - z0) * (Float64(i) / 4)
             parts.append(
-                part(_moved(_box(slat_length, 0.03, 0.07), 0, seat_y, z), BENCH_WOOD)
+                part(
+                    _moved(_box(slat_length, 0.03, 0.07), 0, seat_y, z),
+                    BENCH_WOOD,
+                )
             )
         for i in range(3):  # pragma: no branch
             var t = Float64(i) / 2
@@ -538,25 +597,52 @@ struct HydrantGenerator(Copyable, Movable):
             _l(r * 0.65), 10, 4, _a(0), _a(pi * 2), _a(0), _a(pi / 2)
         )
         var parts: List[BufferGeometry] = [
-            part(_moved(_cylinder(r * 1.5, r * 1.7, 0.08, 12), 0, 0.04, 0), HYDRANT_BODY),
-            part(_moved(_cylinder(r, r * 1.1, h, 12), 0, 0.08 + h / 2, 0), HYDRANT_BODY),
-            part(_moved(_cylinder(r * 0.65, r, 0.12, 12), 0, 0.69, 0), HYDRANT_BODY),
+            part(
+                _moved(_cylinder(r * 1.5, r * 1.7, 0.08, 12), 0, 0.04, 0),
+                HYDRANT_BODY,
+            ),
+            part(
+                _moved(_cylinder(r, r * 1.1, h, 12), 0, 0.08 + h / 2, 0),
+                HYDRANT_BODY,
+            ),
+            part(
+                _moved(_cylinder(r * 0.65, r, 0.12, 12), 0, 0.69, 0),
+                HYDRANT_BODY,
+            ),
             part(_moved(dome^, 0, 0.75, 0), HYDRANT_BODY),
-            part(_moved(_cylinder(r * 1.18, r * 1.18, 0.035, 12), 0, 0.645, 0), HYDRANT_BODY),
-            part(_moved(_cylinder(r * 1.28, r * 1.28, 0.04, 12), 0, 0.11, 0), HYDRANT_BODY),
+            part(
+                _moved(_cylinder(r * 1.18, r * 1.18, 0.035, 12), 0, 0.645, 0),
+                HYDRANT_BODY,
+            ),
+            part(
+                _moved(_cylinder(r * 1.28, r * 1.28, 0.04, 12), 0, 0.11, 0),
+                HYDRANT_BODY,
+            ),
             part(_side_stub(0.06, 0.12, -(r + 0.03)), HYDRANT_BODY),
             part(_side_stub(0.06, 0.12, r + 0.03), HYDRANT_BODY),
             part(
-                _moved(_turned_x(_cylinder(0.075, 0.075, 0.12, 8), pi / 2), 0, 0.4, r + 0.03),
+                _moved(
+                    _turned_x(_cylinder(0.075, 0.075, 0.12, 8), pi / 2),
+                    0,
+                    0.4,
+                    r + 0.03,
+                ),
                 HYDRANT_BODY,
             ),
             part(_side_stub(0.07, 0.025, -(r + 0.102)), HYDRANT_CAP),
             part(_side_stub(0.07, 0.025, r + 0.102), HYDRANT_CAP),
             part(
-                _moved(_turned_x(_cylinder(0.085, 0.085, 0.025, 8), pi / 2), 0, 0.4, r + 0.102),
+                _moved(
+                    _turned_x(_cylinder(0.085, 0.085, 0.025, 8), pi / 2),
+                    0,
+                    0.4,
+                    r + 0.102,
+                ),
                 HYDRANT_CAP,
             ),
-            part(_moved(_cylinder(0.05, 0.05, 0.07, 6), 0, 0.87, 0), HYDRANT_CAP),
+            part(
+                _moved(_cylinder(0.05, 0.05, 0.07, 6), 0, 0.87, 0), HYDRANT_CAP
+            ),
         ]
         return merge_geometries(parts)
 
@@ -575,7 +661,9 @@ struct HydrantGenerator(Copyable, Movable):
         return placed("Hydrants", self.geometry(), placements)
 
 
-def _side_stub(radius: Float64, length: Float64, x: Float64) raises -> BufferGeometry:
+def _side_stub(
+    radius: Float64, length: Float64, x: Float64
+) raises -> BufferGeometry:
     """Return a hydrant's side outlet or cap: a short cylinder along x."""
     return _moved(
         _turned_z(_cylinder(radius, radius, length, 8), pi / 2), x, 0.45, 0
@@ -689,11 +777,15 @@ struct StreetTreeGenerator(Copyable, Movable):
         var limb_length: List[Float64] = [1.5, 1.4, 1.2, 1.3]
         for i in range(4):  # pragma: no branch
             var length = limb_length[i]
-            var limb = _moved(_cylinder(0.03, 0.07, length, 5), 0, length / 2, 0)
+            var limb = _moved(
+                _cylinder(0.03, 0.07, length, 5), 0, length / 2, 0
+            )
             limb = _turned_z(_turned_x(limb^, limb_x[i]), limb_z[i])
             wood.append(_moved(limb^, 0, h - 0.15, 0))
         var parts: List[BufferGeometry] = [
-            part(_moved(_cylinder(0.24, 0.3, 0.05, 10), 0, 0.025, 0), TREE_TRUNK),
+            part(
+                _moved(_cylinder(0.24, 0.3, 0.05, 10), 0, 0.025, 0), TREE_TRUNK
+            ),
             part(_moved(grate^, 0, 0.045, 0), TREE_GRATE),
             part(merge_geometries(wood), TREE_TRUNK),
             part(leaf_clump(2.15, 0, 3.9, 0.1), TREE_LEAF),

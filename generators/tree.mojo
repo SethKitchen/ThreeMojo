@@ -261,9 +261,7 @@ def _grow(
 ):
     """Grow one branch as a tube, then its children, three.js's
     `growBranch`."""
-    var sections = max(
-        3, min(24, _js_round(length / meters(p.section_length)))
-    )
+    var sections = max(3, min(24, _js_round(length / meters(p.section_length))))
     var radial = max(3, p.radial_segments - level)
     var step = length / Float64(sections)
     var gnarl = p.gnarl[min(level, len(p.gnarl) - 1)]
@@ -298,9 +296,9 @@ def _grow(
     var pipe_drop = pow(1.0 / Float64(n), 1.0 / p.radius_exponent)
     var up = Vec3d(0, 1, 0)
     for i in range(n):
-        var t = start + (Float64(i) + 0.5 + (random.next() - 0.5) * 0.6) / Float64(
-            n
-        ) * (1 - start)
+        var t = start + (
+            Float64(i) + 0.5 + (random.next() - 0.5) * 0.6
+        ) / Float64(n) * (1 - start)
         var ring = _ring_at(rings, t)
         var tilt = angle + _signed(random) * radians(p.angle_variance)
         var roll = Float64(i) * GOLDEN_ANGLE + _signed(random) * 0.4
@@ -340,21 +338,7 @@ def _bake(tubes: List[TreeTube]) raises -> BufferGeometry:
         ref rings = tubes[tube].rings
         var radial = tubes[tube].radial
         for r in range(len(rings)):  # pragma: no branch
-            ref ring = rings[r]
-            var binormal = ring.tangent.cross(ring.normal)
-            for j in range(radial):  # pragma: no branch
-                var angle = Float64(j) / Float64(radial) * 2 * pi
-                var c = cos(angle)
-                var s = sin(angle)
-                var nx = c * ring.normal.x + s * binormal.x
-                var ny = c * ring.normal.y + s * binormal.y
-                var nz = c * ring.normal.z + s * binormal.z
-                positions.append(Float32(ring.position.x + nx * ring.radius))
-                positions.append(Float32(ring.position.y + ny * ring.radius))
-                positions.append(Float32(ring.position.z + nz * ring.radius))
-                normals.append(Float32(nx))
-                normals.append(Float32(ny))
-                normals.append(Float32(nz))
+            _write_ring(positions, normals, rings[r], radial)
         for r in range(len(rings) - 1):  # pragma: no branch
             _join(index, offset + r * radial, radial)
         offset += len(rings) * radial
@@ -363,6 +347,30 @@ def _bake(tubes: List[TreeTube]) raises -> BufferGeometry:
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_index(index^)
     return geometry^
+
+
+def _write_ring(
+    mut positions: List[Float32],
+    mut normals: List[Float32],
+    ring: TreeRing,
+    radial: Int,
+):
+    """Write one ring's vertices: a circle round its center in the plane of
+    its normal and binormal."""
+    var binormal = ring.tangent.cross(ring.normal)
+    for j in range(radial):  # pragma: no branch
+        var angle = Float64(j) / Float64(radial) * 2 * pi
+        var c = cos(angle)
+        var s = sin(angle)
+        var nx = c * ring.normal.x + s * binormal.x
+        var ny = c * ring.normal.y + s * binormal.y
+        var nz = c * ring.normal.z + s * binormal.z
+        positions.append(Float32(ring.position.x + nx * ring.radius))
+        positions.append(Float32(ring.position.y + ny * ring.radius))
+        positions.append(Float32(ring.position.z + nz * ring.radius))
+        normals.append(Float32(nx))
+        normals.append(Float32(ny))
+        normals.append(Float32(nz))
 
 
 def _join(mut index: List[Int], a: Int, radial: Int):

@@ -104,7 +104,9 @@ def test_figures_match_three() raises:
     """The two poses have three.js's parts, a crown at 1.75 and soles on
     the ground."""
     var walk = person_geometry(WALK, Length(1.75, METER))
-    assert_equal(walk.vertex_count(), 86 + 30 + 12 + 62 + 2 * (24 + 23 + 40) + 66)
+    assert_equal(
+        walk.vertex_count(), 86 + 30 + 12 + 62 + 2 * (24 + 23 + 40) + 66
+    )
     assert_equal(_count(walk, PERSON_HEAD.value), 86)
     assert_equal(_count(walk, PERSON_SHOES.value), 80)
     assert_equal(_count(walk, PERSON_LEGS.value), 66)

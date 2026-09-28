@@ -192,7 +192,11 @@ struct _HeightField:
 
 
 def thermal_erode(
-    mut h: List[Float32], n: Int, cell_size: Float64, talus: Float64, passes: Int
+    mut h: List[Float32],
+    n: Int,
+    cell_size: Float64,
+    talus: Float64,
+    passes: Int,
 ):
     """Relax the slopes of a height grid to the angle of repose, three.js's
     `thermalErode`.

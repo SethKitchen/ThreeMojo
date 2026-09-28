@@ -68,7 +68,9 @@ def test_small_terrain_matches_three() raises:
     assert_equal(geometry.vertex_count(), 169)
     assert_equal(len(geometry.index), 12 * 12 * 6)
     assert_almost_equal(generator.min_y.to(METER), 2.742187738418579, atol=1e-5)
-    assert_almost_equal(generator.max_y.to(METER), 37.121307373046875, atol=1e-5)
+    assert_almost_equal(
+        generator.max_y.to(METER), 37.121307373046875, atol=1e-5
+    )
     assert_almost_equal(generator.heights[0], 37.121307373046875, atol=1e-4)
     assert_almost_equal(generator.heights[84], 22.182085037231445, atol=1e-4)
     assert_almost_equal(generator.heights[168], 14.970646858215332, atol=1e-4)
@@ -124,7 +126,9 @@ def test_erosion_relaxes_steep_slopes() raises:
     p.talus = 0.2
     var generator = TerrainGenerator(p^)
     var geometry = generator.build()
-    assert_almost_equal(generator.min_y.to(METER), 10.996254920959473, atol=1e-4)
+    assert_almost_equal(
+        generator.min_y.to(METER), 10.996254920959473, atol=1e-4
+    )
     assert_almost_equal(generator.max_y.to(METER), 32.98222732543945, atol=1e-4)
     assert_almost_equal(generator.heights[0], 32.38276672363281, atol=1e-4)
     assert_almost_equal(generator.heights[84], 21.677453994750977, atol=1e-4)

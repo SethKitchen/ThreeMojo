@@ -68,7 +68,11 @@ struct BodyType(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is the sedan, the SUV or the taxi."""
+        """Return True if this is one of the three bodies.
+
+        Returns:
+            Whether the body is the sedan, the SUV or the taxi.
+        """
         return self.value >= 0 and self.value < 3
 
 
@@ -113,14 +117,38 @@ struct CarSpec(Copyable, Movable):
             raise Error("A car body must be the sedan, the SUV or the taxi")
         if body == SUV:
             self.body = [
-                2.30, 0.84, 0.84, 0.99,
-                2.15, 0.94, 0.94, 1.10,
-                1.40, 0.98, 1.02, 1.17,
-                0.76, 0.96, 1.04, 1.19,
-                -0.45, 0.96, 1.05, 1.20,
-                -1.40, 0.98, 1.03, 1.21,
-                -2.16, 0.94, 0.94, 1.16,
-                -2.30, 0.84, 0.86, 1.03,
+                2.30,
+                0.84,
+                0.84,
+                0.99,
+                2.15,
+                0.94,
+                0.94,
+                1.10,
+                1.40,
+                0.98,
+                1.02,
+                1.17,
+                0.76,
+                0.96,
+                1.04,
+                1.19,
+                -0.45,
+                0.96,
+                1.05,
+                1.20,
+                -1.40,
+                0.98,
+                1.03,
+                1.21,
+                -2.16,
+                0.94,
+                0.94,
+                1.16,
+                -2.30,
+                0.84,
+                0.86,
+                1.03,
             ]
             self.front_base = Vec3d(0.86, 1.15, 0.78)
             self.front_roof = Vec3d(0.76, 1.73, 0.18)
@@ -134,14 +162,38 @@ struct CarSpec(Copyable, Movable):
             self.rails = True
         else:
             self.body = [
-                2.25, 0.79, 0.67, 0.79,
-                2.11, 0.89, 0.78, 0.91,
-                1.38, 0.94, 0.87, 1.00,
-                0.75, 0.92, 0.89, 1.025,
-                -0.45, 0.92, 0.91, 1.04,
-                -1.38, 0.94, 0.88, 1.06,
-                -2.10, 0.89, 0.77, 0.97,
-                -2.25, 0.81, 0.70, 0.85,
+                2.25,
+                0.79,
+                0.67,
+                0.79,
+                2.11,
+                0.89,
+                0.78,
+                0.91,
+                1.38,
+                0.94,
+                0.87,
+                1.00,
+                0.75,
+                0.92,
+                0.89,
+                1.025,
+                -0.45,
+                0.92,
+                0.91,
+                1.04,
+                -1.38,
+                0.94,
+                0.88,
+                1.06,
+                -2.10,
+                0.89,
+                0.77,
+                0.97,
+                -2.25,
+                0.81,
+                0.70,
+                0.85,
             ]
             self.front_base = Vec3d(0.82, 0.99, 0.78)
             self.front_roof = Vec3d(0.69, 1.45, 0.12)
@@ -227,16 +279,22 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     var index = 0
     while index < spec.rows() - 2 and z < spec.at(index + 1, 0):
         index += 1
-    var t = (z - spec.at(index, 0)) / (spec.at(index + 1, 0) - spec.at(index, 0))
+    var t = (z - spec.at(index, 0)) / (
+        spec.at(index + 1, 0) - spec.at(index, 0)
+    )
     var w = spec.at(index, 1) + (spec.at(index + 1, 1) - spec.at(index, 1)) * t
     var shoulder = (
         spec.at(index, 2) + (spec.at(index + 1, 2) - spec.at(index, 2)) * t
     )
-    var deck = spec.at(index, 3) + (spec.at(index + 1, 3) - spec.at(index, 3)) * t
+    var deck = (
+        spec.at(index, 3) + (spec.at(index + 1, 3) - spec.at(index, 3)) * t
+    )
     var distance = abs(abs(z) - spec.wheel_z)
-    var sill = spec.wheel_radius + sqrt(
-        max(0.0, radius * radius - distance * distance)
-    ) if distance <= radius else 0.28
+    var sill = (
+        spec.wheel_radius
+        + sqrt(max(0.0, radius * radius - distance * distance)) if distance
+        <= radius else 0.28
+    )
     var right: List[Vec3d] = [
         Vec3d(w * 0.82, sill, z),
         Vec3d(w * 0.97, sill + (shoulder - sill) * 0.12, z),
@@ -285,7 +343,9 @@ def build_body(spec: CarSpec) raises -> BufferGeometry:
     return geometry^
 
 
-def panel(corners: List[Vec3d], id: PartId, curved: Bool) raises -> BufferGeometry:
+def panel(
+    corners: List[Vec3d], id: PartId, curved: Bool
+) raises -> BufferGeometry:
     """Return a window panel on four corners, three.js's `panel`. A curved
     panel is cut four by two and bowed, as a windscreen is.
 
@@ -302,7 +362,9 @@ def panel(corners: List[Vec3d], id: PartId, curved: Bool) raises -> BufferGeomet
     """
     var columns = 4 if curved else 1
     var rows = 2 if curved else 1
-    var normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]).normalized()
+    var normal = (
+        (corners[1] - corners[0]).cross(corners[3] - corners[0]).normalized()
+    )
     var positions = List[Float32]()
     var uvs = List[Float32]()
     var index = List[Int]()
@@ -310,8 +372,10 @@ def panel(corners: List[Vec3d], id: PartId, curved: Bool) raises -> BufferGeomet
         var v = Float64(y) / Float64(rows)
         for x in range(columns + 1):  # pragma: no branch
             var u = Float64(x) / Float64(columns)
-            var p = corners[0].lerp(corners[1], u).lerp(
-                corners[3].lerp(corners[2], u), v
+            var p = (
+                corners[0]
+                .lerp(corners[1], u)
+                .lerp(corners[3].lerp(corners[2], u), v)
             )
             var arch = 4 * u * (1 - u)
             var lift = arch * v * 0.035 if curved else 0.0
@@ -364,7 +428,11 @@ def _roof(spec: CarSpec) raises -> BufferGeometry:
         for i in range(5):  # pragma: no branch
             var u = Float64(i) / 4
             row.append(
-                _v((u * 2 - 1) * edge.x, edge.y + 4 * u * (1 - u) * 0.035, edge.z)
+                _v(
+                    (u * 2 - 1) * edge.x,
+                    edge.y + 4 * u * (1 - u) * 0.035,
+                    edge.z,
+                )
             )
         sections.append(row^)
     return part(loft(sections, False), CAR_BODY)
@@ -515,7 +583,9 @@ def body_type_of(index: Int, color: Int) -> BodyType:
         The body.
     """
     var hashed = (index * 2654435761) & 0xFFFFFFFF
-    return TAXI if color == TAXI_COLOR else (SUV if hashed % 100 < 42 else SEDAN)
+    return TAXI if color == TAXI_COLOR else (
+        SUV if hashed % 100 < 42 else SEDAN
+    )
 
 
 @fieldwise_init
@@ -558,9 +628,7 @@ struct CarGenerator(Movable):
             if slot < 0:
                 slot = len(types)
                 types.append(body.value)
-                var instances = Instances(
-                    "Car", car_geometry(CarSpec(body))
-                )
+                var instances = Instances("Car", car_geometry(CarSpec(body)))
                 instances.item_size = 3
                 instances.cast_shadow = True
                 instances.receive_shadow = True

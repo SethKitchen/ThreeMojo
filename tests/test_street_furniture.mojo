@@ -59,7 +59,9 @@ def _two() -> List[Matrix4]:
 def test_part_tags_and_welds() raises:
     """A part is tagged on every vertex; one without an index is welded
     first, and a code out of range is refused."""
-    var tagged = part(box(Length(1, METER), Length(1, METER), Length(1, METER)), PartId(3))
+    var tagged = part(
+        box(Length(1, METER), Length(1, METER), Length(1, METER)), PartId(3)
+    )
     assert_equal(tagged.vertex_count(), 24)
     assert_equal(_part_at(tagged, 23), 3)
     var ball = icosahedron(Length(1, METER), 0)
@@ -149,9 +151,7 @@ def test_hydrant_matches_three() raises:
     """Nine body parts, a dome among them, then four bare caps."""
     var generator = HydrantGenerator()
     var geometry = generator.geometry()
-    assert_equal(
-        geometry.vertex_count(), 76 * 5 + 55 + 52 * 3 + 52 * 3 + 40
-    )
+    assert_equal(geometry.vertex_count(), 76 * 5 + 55 + 52 * 3 + 52 * 3 + 40)
     assert_equal(_part_at(geometry, 0), 0)
     assert_equal(_part_at(geometry, geometry.vertex_count() - 1), 1)
     var bounds = geometry.bounding_box()
@@ -192,7 +192,9 @@ def test_a_clump_blends_toward_the_crown() raises:
         out.y -= 3.9
         out.z -= 0.1
         assert_true(normal.dot(out) > 0)
-    assert_almost_equal(clump_hash(0.1, 0.2, 0.3), 0.9140054186032103, atol=1e-9)
+    assert_almost_equal(
+        clump_hash(0.1, 0.2, 0.3), 0.9140054186032103, atol=1e-9
+    )
 
 
 def test_turning_one_unit_vector_onto_another() raises:

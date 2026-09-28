@@ -123,8 +123,7 @@ struct ForestParameters(Copyable, Movable):
         )
         check_finite(self.min_scale + self.max_scale, "A tree scale")
         check_finite(
-            self.distortion
-            + Float64(self.density_frequency.to(PER_METER)),
+            self.distortion + Float64(self.density_frequency.to(PER_METER)),
             "A blob distortion or density",
         )
 
@@ -228,9 +227,7 @@ struct ForestInstances(Movable):
     var from_distance: Length
     var to_distance: Length
 
-    def __init__(
-        out self, var instances: Instances, p: ForestParameters
-    ):
+    def __init__(out self, var instances: Instances, p: ForestParameters):
         """Create an empty forest of blobs.
 
         Args:
@@ -319,9 +316,7 @@ struct ForestGenerator(Movable):
         p.check()
         if terrain.grid_size == 0:
             raise Error("A forest needs a built terrain")
-        var forest = ForestInstances(
-            Instances("Forest", blob_geometry(p)), p
-        )
+        var forest = ForestInstances(Instances("Forest", blob_geometry(p)), p)
         forest.instances.item_size = 4
         var size = meters(terrain.parameters.size)
         var min_y = meters(terrain.min_y)

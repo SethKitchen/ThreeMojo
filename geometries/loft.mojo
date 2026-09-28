@@ -71,7 +71,9 @@ def _unit(v: _P) -> _P:
 
 def _cross(a: _P, b: _P) -> _P:
     """Return a cross product."""
-    return _P(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+    return _P(
+        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
+    )
 
 
 def _dot(a: _P, b: _P) -> Float64:
@@ -127,7 +129,9 @@ def _cap(
     var normal = _unit(_P(nx, ny, nz))
     var neighbor = _mean(sections[1 if at == 0 else rows - 2])
     var toward = _P(
-        neighbor.x - centroid.x, neighbor.y - centroid.y, neighbor.z - centroid.z
+        neighbor.x - centroid.x,
+        neighbor.y - centroid.y,
+        neighbor.z - centroid.z,
     )
     var sign = -1.0 if _dot(normal, toward) > 0 else 1.0
     normal = _P(normal.x * sign, normal.y * sign, normal.z * sign)
@@ -143,9 +147,10 @@ def _cap(
         contour.append(_dot(d, bitangent))
     for q in range(columns):  # pragma: no branch
         var p = (q + columns - 1) % columns
-        area += contour[p * 2] * contour[q * 2 + 1] - contour[q * 2] * contour[
-            p * 2 + 1
-        ]
+        area += (
+            contour[p * 2] * contour[q * 2 + 1]
+            - contour[q * 2] * contour[p * 2 + 1]
+        )
     # three.js reverses a clockwise contour, and the points with it, for
     # earcut. Reading both backward is the same.
     var clockwise = area * 0.5 < 0
@@ -268,7 +273,9 @@ def loft(
     if cap_end:
         _cap(out, sections, rows - 1)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(out.vertices.copy(), 3))
+    geometry.set_attribute(
+        String(POSITION), BufferAttribute(out.vertices.copy(), 3)
+    )
     geometry.set_attribute(String(UV), BufferAttribute(out.uvs.copy(), 2))
     geometry.set_index(out.index.copy())
     geometry.compute_vertex_normals()

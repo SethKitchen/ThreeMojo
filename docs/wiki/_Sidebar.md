@@ -19,6 +19,7 @@
 - [Cameras](Cameras)
 - [Geometry](Geometry)
 - [Geometry addons](Geometry-addons)
+- [Procedural generators](Procedural-generators)
 - [Meshes and assets](Meshes-and-assets)
 - [Lines](Lines)
 - [Points and sprites](Points-and-sprites)

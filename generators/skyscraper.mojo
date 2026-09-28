@@ -78,6 +78,7 @@ comptime BRICK_LENGTH = 0.6
 comptime ROOM_CENTER = "roomCenter"
 comptime ROOM_SIZE = "roomSize"
 
+
 def building_palette() -> List[Int]:
     """Return the palette three.js picks a tower's masonry color from,
     `buildingPalette`: limestone and pale stone most often, then buff,
@@ -116,7 +117,11 @@ struct BaseStyle(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the two styles."""
+        """Return True if this is one of the two styles.
+
+        Returns:
+            Whether the style is the arcade or the storefront.
+        """
         return self.value == 0 or self.value == 1
 
 
@@ -437,7 +442,9 @@ struct SkyscraperStyle(Copyable, Movable):
         self.pier_depth = _length_or(p.pier_depth, pier_depth)
         self.window_reveal = _length_or(p.window_reveal, reveal)
         self.string_course_height = _length_or(p.string_course_height, course)
-        self.arch_bay_width_ratio = _number_or(p.arch_bay_width_ratio, arch_ratio)
+        self.arch_bay_width_ratio = _number_or(
+            p.arch_bay_width_ratio, arch_ratio
+        )
         self.arch_rise = _number_or(p.arch_rise, arch_rise)
         self.string_course_every = p.string_course_every
         self.chamfer_width = meters(p.chamfer_width)
@@ -472,7 +479,8 @@ struct SkyscraperStyle(Copyable, Movable):
         # step along.
         var v_module = BRICK_HEIGHT * 2
         self.floor_height = max(
-            v_module * 3, _js_round(meters(p.floor_height) / v_module) * v_module
+            v_module * 3,
+            _js_round(meters(p.floor_height) / v_module) * v_module,
         )
         self.window_height = (
             _js_round(self.floor_height * WINDOW_HEIGHT_RATIO / v_module)
@@ -787,7 +795,9 @@ def _add_windows(
     for f in range(floors):  # pragma: no branch
         var cy = bottom + (Float64(f) + 0.5) * fh
         var room_bays = 3 if _floor_hash(f, frame, 0) > 0.5 else 2
-        var room_phase = Int(floor(_floor_hash(f, frame, 1) * Float64(room_bays)))
+        var room_phase = Int(
+            floor(_floor_hash(f, frame, 1) * Float64(room_bays))
+        )
         for b in range(bays.count):  # pragma: no branch
             var cx = bays.margin + (Float64(b) + 0.5) * bays.width
             parts.windows.append(frame.matrix(cx, cy, 0))
@@ -902,6 +912,49 @@ def _affine_geometry(
     return geometry^
 
 
+def _reveal_quad(
+    mut positions: List[Float32],
+    mut normals: List[Float32],
+    mut uvs: List[Float32],
+    a: Vector2,
+    b: Vector2,
+    d: Float32,
+):
+    """Append the two triangles that sweep one edge of an opening back by
+    the wall's thickness, both facing into the opening."""
+    var dx = Float64(b.x) - Float64(a.x)
+    var dy = Float64(b.y) - Float64(a.y)
+    var length = sqrt(dx * dx + dy * dy)
+    var inverse = 1 / (length if length != 0 else 1.0)
+    var corners: List[Float32] = [
+        a.x,
+        a.y,
+        0,
+        a.x,
+        a.y,
+        -d,
+        b.x,
+        b.y,
+        -d,
+        a.x,
+        a.y,
+        0,
+        b.x,
+        b.y,
+        -d,
+        b.x,
+        b.y,
+        0,
+    ]
+    positions.extend(corners^)
+    for _ in range(6):  # pragma: no branch
+        normals.append(Float32(dy * inverse))
+        normals.append(Float32(-dx * inverse))
+        normals.append(0)
+        uvs.append(0)
+        uvs.append(0)
+
+
 def _arch_reveals(
     holes: List[Path], depth: Float64, curve_segments: Int
 ) raises -> BufferGeometry:
@@ -914,23 +967,7 @@ def _arch_reveals(
     for h in range(len(holes)):  # pragma: no branch
         var points = holes[h].sample(curve_segments)
         for i in range(len(points) - 1):  # pragma: no branch
-            var a = points[i]
-            var b = points[i + 1]
-            var dx = Float64(b.x) - Float64(a.x)
-            var dy = Float64(b.y) - Float64(a.y)
-            var length = sqrt(dx * dx + dy * dy)
-            var inverse = 1 / (length if length != 0 else 1.0)
-            var corners: List[Float32] = [
-                a.x, a.y, 0, a.x, a.y, -d, b.x, b.y, -d,
-                a.x, a.y, 0, b.x, b.y, -d, b.x, b.y, 0,
-            ]
-            positions.extend(corners^)
-            for _ in range(6):  # pragma: no branch
-                normals.append(Float32(dy * inverse))
-                normals.append(Float32(-dx * inverse))
-                normals.append(0)
-                uvs.append(0)
-                uvs.append(0)
+            _reveal_quad(positions, normals, uvs, points[i], points[i + 1], d)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
@@ -948,7 +985,9 @@ def _add_arcade(
     var bays = frame.bays(arch_width)
     var sill = height * 0.04
     var spring = height * 0.55
-    var apex = min(height * 0.96, spring + (arch_width / 2) * (0.8 + s.arch_rise))
+    var apex = min(
+        height * 0.96, spring + (arch_width / 2) * (0.8 + s.arch_rise)
+    )
     var length = Float32(frame.length)
     var outline = Path(Vector2(0, 0))
     outline.line_to(Vector2(length, 0))
@@ -1014,7 +1053,9 @@ def _slab(
         var dz = cz - p.z
         var d = sqrt(dx * dx + dz * dz)
         var scale = inset / (d if d != 0 else 1.0)
-        var point = Vector2(Float32(p.x + dx * scale), Float32(p.z + dz * scale))
+        var point = Vector2(
+            Float32(p.x + dx * scale), Float32(p.z + dz * scale)
+        )
         if k == 0:
             outline.move_to(point)
         else:
@@ -1030,7 +1071,12 @@ def _slab(
 
 
 def _box_part(
-    width: Float64, height: Float64, depth: Float64, x: Float64, y: Float64, z: Float64
+    width: Float64,
+    height: Float64,
+    depth: Float64,
+    x: Float64,
+    y: Float64,
+    z: Float64,
 ) raises -> BufferGeometry:
     """Return a box of a size moved to a point, without an index."""
     var geometry = box(
@@ -1046,7 +1092,9 @@ def _box_part(
     return geometry.to_non_indexed()
 
 
-def pier_geometry(style: SkyscraperStyle, height: Float64) raises -> BufferGeometry:
+def pier_geometry(
+    style: SkyscraperStyle, height: Float64
+) raises -> BufferGeometry:
     """Return the pier module: a wide pier with a slimmer pilaster on its
     face, stopping short of the top, three.js's `buildPierGeometry`.
 
@@ -1067,18 +1115,31 @@ def pier_geometry(style: SkyscraperStyle, height: Float64) raises -> BufferGeome
         [
             _box_part(w, height, d * 0.6, 0, height / 2, d * 0.3),
             _box_part(
-                w * 0.55, pilaster, d * 0.45, 0, pilaster / 2, d * 0.6 + d * 0.225
+                w * 0.55,
+                pilaster,
+                d * 0.45,
+                0,
+                pilaster / 2,
+                d * 0.6 + d * 0.225,
             ),
         ]
     )
 
 
 def _reveal_wall(
-    x: Float64, y: Float64, rx: Float64, ry: Float64, width: Float64, height: Float64, depth: Float64
+    x: Float64,
+    y: Float64,
+    rx: Float64,
+    ry: Float64,
+    width: Float64,
+    height: Float64,
+    depth: Float64,
 ) raises -> BufferGeometry:
     """Return one reveal wall of a window opening, set back to the
     glazing."""
-    var wall = plane(Length(Float32(width), METER), Length(Float32(height), METER))
+    var wall = plane(
+        Length(Float32(width), METER), Length(Float32(height), METER)
+    )
     wall.rotate_x(Angle(Float32(rx), RADIAN))
     wall.rotate_y(Angle(Float32(ry), RADIAN))
     wall.translate(
@@ -1158,7 +1219,10 @@ def glass_geometry(style: SkyscraperStyle) raises -> BufferGeometry:
         Error: If the opening is too small for its frame.
     """
     return plane(
-        Length(Float32(style.bay_width - style.pier_width - WINDOW_BORDER * 2), METER),
+        Length(
+            Float32(style.bay_width - style.pier_width - WINDOW_BORDER * 2),
+            METER,
+        ),
         Length(Float32(style.window_height - WINDOW_BORDER * 2), METER),
     ).to_non_indexed()
 
@@ -1261,7 +1325,9 @@ struct _Baked:
         geometry.set_attribute(
             String(POSITION), BufferAttribute(self.positions.copy(), 3)
         )
-        geometry.set_attribute(String(NORMAL), BufferAttribute(self.normals.copy(), 3))
+        geometry.set_attribute(
+            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        )
         geometry.set_attribute(String(UV), BufferAttribute(self.uvs.copy(), 2))
         geometry.set_attribute(
             String(PART_ID), BufferAttribute(self.part_ids.copy(), 1)
@@ -1311,7 +1377,9 @@ struct SkyscraperGenerator(Movable):
         var parts = SkyscraperParts(SkyscraperStyle(self.parameters))
         ref s = parts.style
         var floors = max(3, Int(_js_round(s.total_height / s.floor_height)))
-        var base_floors = max(1, Int(_js_round(Float64(floors) * s.base_fraction)))
+        var base_floors = max(
+            1, Int(_js_round(Float64(floors) * s.base_fraction))
+        )
         var crown_floors = max(
             1, Int(_js_round(Float64(floors) * s.crown_fraction))
         )
@@ -1346,9 +1414,7 @@ struct SkyscraperGenerator(Movable):
         var course = s.string_course_height
         var crown_cornice = course * 1.6
         var ground = s.floor_height
-        parts.use_arcade = (
-            s.base_style == ARCADE and base_height > ground * 1.5
-        )
+        parts.use_arcade = s.base_style == ARCADE and base_height > ground * 1.5
         var total = s.total_height
         var every = s.string_course_every
         var parapet_depth = s.pier_depth

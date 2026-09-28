@@ -202,7 +202,9 @@ def city_layout(p: CityParameters) raises -> CityLayout:
     var street = meters(p.street)
     var sidewalk = meters(p.sidewalk_width)
     if not (lot > 0 and street >= 0 and sidewalk >= 0):
-        raise Error("A city's lot must be positive, its street and walk not less")
+        raise Error(
+            "A city's lot must be positive, its street and walk not less"
+        )
     var block_w = Float64(p.lots_x) * lot
     var block_d = Float64(p.lots_z) * lot
     return CityLayout(
@@ -268,7 +270,9 @@ struct BlockEdge(ImplicitlyCopyable):
         )
 
 
-def block_edges(x: Float64, z: Float64, w: Float64, d: Float64) -> List[BlockEdge]:
+def block_edges(
+    x: Float64, z: Float64, w: Float64, d: Float64
+) -> List[BlockEdge]:
     """Return a block's four curb edges, three.js's `blockEdges`.
 
     Args:
@@ -368,14 +372,20 @@ def _plan_tower(
     p.chamfer_corner_x = corner_x
     p.chamfer_corner_z = corner_z
     p.setback_depth = 0.8 + random.next() * 2 if random.next() < 0.4 else 0.0
-    p.string_course_every = 3 + Int(
-        floor(random.next() * 6)
-    ) if random.next() < 0.85 else 0
+    p.string_course_every = (
+        3 + Int(floor(random.next() * 6)) if random.next() < 0.85 else 0
+    )
     var cx = _front(
-        zone_x + Float64(lx) * layout.inner_lot_x, layout.inner_lot_x, fw, corner_x
+        zone_x + Float64(lx) * layout.inner_lot_x,
+        layout.inner_lot_x,
+        fw,
+        corner_x,
     )
     var cz = _front(
-        zone_z + Float64(lz) * layout.inner_lot_z, layout.inner_lot_z, fd, corner_z
+        zone_z + Float64(lz) * layout.inner_lot_z,
+        layout.inner_lot_z,
+        fd,
+        corner_z,
     )
     plan.towers.append(
         TowerPlan(
@@ -492,8 +502,56 @@ def _plan_corners(
         var ix = -1.0 if cx == 1 else 1.0
         var iz = -1.0 if cz == 1 else 1.0
         if cx == cz:
-            plan.signals.append(place(x + ix * 1.4, top, z + iz * 1.4, -ix, -iz))
+            plan.signals.append(
+                place(x + ix * 1.4, top, z + iz * 1.4, -ix, -iz)
+            )
         plan.cans.append(place(x + ix * 2.2, top, z + iz * 2.2, ix, iz))
+
+
+def _plan_block(
+    mut plan: CityPlan,
+    mut random: SeededRandom,
+    bx: Int,
+    bz: Int,
+    curb: Float64,
+):
+    """Lay out one block: its slab when the curb has a height, and a tower
+    on each lot, lot by lot."""
+    var layout = plan.layout
+    var block_x = layout.block_x(bx)
+    var block_z = layout.block_z(bz)
+    if curb > 0:
+        plan.slabs.append(
+            basis_matrix(
+                Vec3d(1, 0, 0),
+                Vec3d(0, 1, 0),
+                Vec3d(0, 0, 1),
+                Vec3d(
+                    block_x + layout.block_w / 2,
+                    0,
+                    block_z + layout.block_d / 2,
+                ),
+            )
+        )
+    var walk = layout.sidewalk_width
+    for lx in range(layout.lots_x):  # pragma: no branch
+        for lz in range(layout.lots_z):  # pragma: no branch
+            _plan_tower(
+                plan, random, block_x + walk, block_z + walk, lx, lz, curb
+            )
+
+
+def _plan_block_furniture(
+    mut plan: CityPlan, mut random: SeededRandom, bx: Int, bz: Int, top: Float64
+):
+    """Dress one block: its four curb edges, then its corners."""
+    var layout = plan.layout
+    var block_x = layout.block_x(bx)
+    var block_z = layout.block_z(bz)
+    var edges = block_edges(block_x, block_z, layout.block_w, layout.block_d)
+    for i in range(4):  # pragma: no branch
+        _plan_edge(plan, random, edges[i], top, layout.sidewalk_width)
+    _plan_corners(plan, block_x, block_z, top)
 
 
 struct City(Movable):
@@ -589,45 +647,12 @@ struct CityGenerator(Movable):
         var layout = plan.layout
         var random = generator_random(self.parameters.seed)
         var curb = meters(self.parameters.curb_height)
-        var walk = layout.sidewalk_width
         for bx in range(layout.blocks_x):  # pragma: no branch
             for bz in range(layout.blocks_z):  # pragma: no branch
-                var block_x = layout.block_x(bx)
-                var block_z = layout.block_z(bz)
-                if curb > 0:
-                    plan.slabs.append(
-                        basis_matrix(
-                            Vec3d(1, 0, 0),
-                            Vec3d(0, 1, 0),
-                            Vec3d(0, 0, 1),
-                            Vec3d(
-                                block_x + layout.block_w / 2,
-                                0,
-                                block_z + layout.block_d / 2,
-                            ),
-                        )
-                    )
-                for lx in range(layout.lots_x):  # pragma: no branch
-                    for lz in range(layout.lots_z):  # pragma: no branch
-                        _plan_tower(
-                            plan,
-                            random,
-                            block_x + walk,
-                            block_z + walk,
-                            lx,
-                            lz,
-                            curb,
-                        )
+                _plan_block(plan, random, bx, bz, curb)
         for bx in range(layout.blocks_x):  # pragma: no branch
             for bz in range(layout.blocks_z):  # pragma: no branch
-                var block_x = layout.block_x(bx)
-                var block_z = layout.block_z(bz)
-                var edges = block_edges(
-                    block_x, block_z, layout.block_w, layout.block_d
-                )
-                for i in range(4):  # pragma: no branch
-                    _plan_edge(plan, random, edges[i], curb, walk)
-                _plan_corners(plan, block_x, block_z, curb)
+                _plan_block_furniture(plan, random, bx, bz, curb)
         return plan^
 
     def sidewalk(self) raises -> SidewalkGenerator:
@@ -707,6 +732,4 @@ struct CityGenerator(Movable):
                     t.box_center,
                 )
             )
-        return placed(
-            "CityProxy", box(_len(1), _len(1), _len(1)), boxes
-        )
+        return placed("CityProxy", box(_len(1), _len(1), _len(1)), boxes)

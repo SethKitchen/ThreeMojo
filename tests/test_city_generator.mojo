@@ -131,19 +131,43 @@ def test_default_plan_matches_three() raises:
     _matrix(
         plan.trees[0],
         [
-            -0.5468356, 0, 0.6060206, 0,
-            0, 0.8162660, 0, 0,
-            -0.6060206, 0, -0.5468356, 0,
-            -88.5, 0.15, -69.5, 1,
+            -0.5468356,
+            0,
+            0.6060206,
+            0,
+            0,
+            0.8162660,
+            0,
+            0,
+            -0.6060206,
+            0,
+            -0.5468356,
+            0,
+            -88.5,
+            0.15,
+            -69.5,
+            1,
         ],
     )
     _matrix(
         plan.people[0],
         [
-            -0.8032440, 0, -0.7107167, 0,
-            0, 1.0725293, 0, 0,
-            0.7107167, 0, -0.8032440, 0,
-            -90.5653038, 0.15, -67.4221386, 1,
+            -0.8032440,
+            0,
+            -0.7107167,
+            0,
+            0,
+            1.0725293,
+            0,
+            0,
+            0.7107167,
+            0,
+            -0.8032440,
+            0,
+            -90.5653038,
+            0.15,
+            -67.4221386,
+            1,
         ],
     )
     _matrix(
@@ -157,19 +181,43 @@ def test_default_plan_matches_three() raises:
     _matrix(
         plan.signals[0],
         [
-            -0.7071068, 0, 0.7071068, 0,
-            0, 1, 0, 0,
-            -0.7071068, 0, -0.7071068, 0,
-            -99.6, 0.15, -69.6, 1,
+            -0.7071068,
+            0,
+            0.7071068,
+            0,
+            0,
+            1,
+            0,
+            0,
+            -0.7071068,
+            0,
+            -0.7071068,
+            0,
+            -99.6,
+            0.15,
+            -69.6,
+            1,
         ],
     )
     _matrix(
         plan.cans[0],
         [
-            0.7071068, 0, -0.7071068, 0,
-            0, 1, 0, 0,
-            0.7071068, 0, 0.7071068, 0,
-            -98.8, 0.15, -68.8, 1,
+            0.7071068,
+            0,
+            -0.7071068,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0.7071068,
+            0,
+            0.7071068,
+            0,
+            -98.8,
+            0.15,
+            -68.8,
+            1,
         ],
     )
     _matrix(
@@ -199,7 +247,9 @@ def test_a_one_lot_city_is_built() raises:
     assert_equal(tower.parameters.seed, 88147)
     assert_almost_equal(tower.position.x, -0.4527250847779207, atol=1e-9)
     assert_almost_equal(tower.position.z, -0.5609898315044113, atol=1e-9)
-    assert_almost_equal(tower.parameters.setback_depth, 2.0452710345387457, atol=1e-12)
+    assert_almost_equal(
+        tower.parameters.setback_depth, 2.0452710345387457, atol=1e-12
+    )
     assert_equal(tower.parameters.string_course_every, 0)
     assert_equal(len(city.buildings), 1)
     assert_equal(city.buildings[0].vertex_count(), 23886)
@@ -229,17 +279,33 @@ def test_a_one_lot_city_is_built() raises:
     _matrix(
         plan.trees[0],
         [
-            1.0104943, 0, -0.3023698, 0,
-            0, 1.0547636, 0, 0,
-            0.3023698, 0, 1.0104943, 0,
-            -2.5, 0, -13.5, 1,
+            1.0104943,
+            0,
+            -0.3023698,
+            0,
+            0,
+            1.0547636,
+            0,
+            0,
+            0.3023698,
+            0,
+            1.0104943,
+            0,
+            -2.5,
+            0,
+            -13.5,
+            1,
         ],
     )
     var proxy = generator.build_proxy(plan)
     assert_equal(proxy.name, "CityProxy")
     assert_equal(proxy.count(), 1)
-    assert_almost_equal(proxy.matrices[0].elements[5], 38.00633364903985, atol=1e-4)
-    assert_almost_equal(proxy.matrices[0].elements[13], 19.003166824519926, atol=1e-4)
+    assert_almost_equal(
+        proxy.matrices[0].elements[5], 38.00633364903985, atol=1e-4
+    )
+    assert_almost_equal(
+        proxy.matrices[0].elements[13], 19.003166824519926, atol=1e-4
+    )
     assert_equal(generator.build_proxy(CityPlan(plan.layout)).count(), 0)
 
 

@@ -62,7 +62,11 @@ struct Pose(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is walking or standing."""
+        """Return True if this is one of the two poses.
+
+        Returns:
+            Whether the pose is walking or standing.
+        """
         return self.value == 0 or self.value == 1
 
 
@@ -80,7 +84,9 @@ struct Joint(ImplicitlyCopyable):
     var rz: Float64
 
 
-def joint(parent: Vec3d, length: Float64, swing: Float64, splay: Float64) -> Vec3d:
+def joint(
+    parent: Vec3d, length: Float64, swing: Float64, splay: Float64
+) -> Vec3d:
     """Return the joint a bone's length below its parent, swung forward
     and splayed out, three.js's `joint`.
 
@@ -168,9 +174,13 @@ def _vectors(sections: List[List[Vec3d]]) -> List[List[Vector3]]:
     return out^
 
 
-def _limb(joints: List[Joint], cap_end: Bool, segments: Int) raises -> BufferGeometry:
+def _limb(
+    joints: List[Joint], cap_end: Bool, segments: Int
+) raises -> BufferGeometry:
     """Return a limb lofted through its joints, three.js's `limb`."""
-    return loft(_vectors(limb_sections(joints, segments, 0)), True, False, cap_end)
+    return loft(
+        _vectors(limb_sections(joints, segments, 0)), True, False, cap_end
+    )
 
 
 def torso_section(y: Float64, width: Float64, depth: Float64) -> List[Vec3d]:
@@ -212,7 +222,9 @@ def hip_section(side: Float64) -> List[Vec3d]:
     var points = List[Vec3d]()
     for i in range(7):  # pragma: no branch
         var y = 0.82 if i == 0 or i == 6 else 0.89
-        points.append(Vec3d(side * 0.093 - side * xs[i] * 0.093, y, zs[i] * 0.1))
+        points.append(
+            Vec3d(side * 0.093 - side * xs[i] * 0.093, y, zs[i] * 0.1)
+        )
     if side > 0:
         points.reverse()
     return points^
@@ -267,12 +279,30 @@ def _head(walking: Bool) raises -> List[BufferGeometry]:
     """Return the head and its two ears, turned and tilted for the pose
     and set so the crown is at 1.75."""
     var rows: List[Float64] = [
-        1.75, 0.014, 0.014, -0.012,
-        1.708, 0.081, 0.081, -0.01,
-        1.656, 0.093, 0.086, 0,
-        1.617, 0.086, 0.077, 0.009,
-        1.561, 0.072, 0.065, 0.012,
-        1.532, 0.045, 0.043, 0.005,
+        1.75,
+        0.014,
+        0.014,
+        -0.012,
+        1.708,
+        0.081,
+        0.081,
+        -0.01,
+        1.656,
+        0.093,
+        0.086,
+        0,
+        1.617,
+        0.086,
+        0.077,
+        0.009,
+        1.561,
+        0.072,
+        0.065,
+        0.012,
+        1.532,
+        0.045,
+        0.043,
+        0.005,
     ]
     var sections = List[List[Vec3d]]()
     for r in range(6):  # pragma: no branch
@@ -353,18 +383,32 @@ def person_geometry(pose: Pose, height: Length) raises -> BufferGeometry:
     neck.translate(_l(0), _l(1.515), _l(0))
     parts.append(part(neck, PERSON_SKIN))
     var jacket_rows: List[Float64] = [
-        1.5, 0.055, 0.052,
-        1.425, 0.20, 0.10,
-        1.365, 0.195, 0.111,
-        1.285, 0.18, 0.115,
-        1.095, 0.152, 0.103,
-        1.015, 0.166, 0.108,
+        1.5,
+        0.055,
+        0.052,
+        1.425,
+        0.20,
+        0.10,
+        1.365,
+        0.195,
+        0.111,
+        1.285,
+        0.18,
+        0.115,
+        1.095,
+        0.152,
+        0.103,
+        1.015,
+        0.166,
+        0.108,
     ]
     var jacket = List[List[Vec3d]]()
     for r in range(6):  # pragma: no branch
         jacket.append(
             torso_section(
-                jacket_rows[r * 3], jacket_rows[r * 3 + 1], jacket_rows[r * 3 + 2]
+                jacket_rows[r * 3],
+                jacket_rows[r * 3 + 1],
+                jacket_rows[r * 3 + 2],
             )
         )
     parts.append(part(loft(_vectors(jacket), True, False, True), PERSON_COAT))
@@ -418,7 +462,9 @@ def person_geometry(pose: Pose, height: Length) raises -> BufferGeometry:
     joined.compute_vertex_normals()
     joined.set_attribute(
         String(UV),
-        BufferAttribute(List[Float32](length=joined.vertex_count() * 2, fill=0), 2),
+        BufferAttribute(
+            List[Float32](length=joined.vertex_count() * 2, fill=0), 2
+        ),
     )
     parts.append(part(joined, PERSON_LEGS))
     var geometry = merge_geometries(parts)
