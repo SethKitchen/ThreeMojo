@@ -13722,3 +13722,55 @@ def test_both_backends_map_through_a_custom_curve() raises:
     renderer.custom_tone_mapping = _NO_NODES
     var plain = _flags_on_both(renderer, scene, assets)
     assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)
+
+
+from math.bounds import Plane as _ClipPlane
+from objects.clipping_group import ClippingGroup as _ClippingGroup
+from objects.group import group as _group
+
+
+def test_both_backends_cut_what_a_clipping_group_holds() raises:
+    if skipped_for_lack_of_a_gpu("both backends cut by a clipping group"):
+        return
+    # A lit cube under two nested groups: the outer cuts at x = 0.2, and
+    # the inner keeps what is above y = 0.1 or in front of z = 0.3. The
+    # cut is made on the host, before either rasterizer, so both fill the
+    # same clipped triangles.
+    var assets = Assets()
+    var scene = Scene()
+    var outer = scene.add(_group())
+    var inner = scene.attach(_group(), outer)
+    var turned = Object3D()
+    turned.rotate_y(Angle(35.0, DEGREE))
+    turned.rotate_x(Angle(20.0, DEGREE))
+    var node = scene.attach(turned^, inner)
+    scene.add_clipping_group(
+        _ClippingGroup(outer, [_ClipPlane(Vector3(-1, 0, 0), 0.2)])
+    )
+    scene.add_clipping_group(
+        _ClippingGroup(
+            inner,
+            [
+                _ClipPlane(Vector3(0, 1, 0), -0.1),
+                _ClipPlane(Vector3(0, 0, 1), -0.3),
+            ],
+            clip_intersection=True,
+        )
+    )
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    scene.add_mesh(
+        Mesh(box, assets.materials.add(Material(Color(200, 120, 60))), node)
+    )
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.3))
+    var lamp = scene.add(Object3D())
+    scene.node(lamp).set_position(1, 2, 3)
+    scene.add_light(directional_light(Color(255, 255, 255), lamp, 1.0))
+    scene.update()
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var both = _flags_on_both(renderer, scene, assets)
+    assert_true(
+        count_background(both[0], BACKGROUND) < 48 * 36 - 50,
+        "the cube drew nothing",
+    )
+    assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)

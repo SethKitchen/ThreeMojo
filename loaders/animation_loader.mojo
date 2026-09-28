@@ -24,9 +24,9 @@ the clip on:
   name.
 - `.bones[name]` is the first node below that node with the bone's name.
 - `.material` and `.map` are the material of the first mesh at the node.
-- `.morphTargetInfluences[i]` is a morph target of the first mesh, or
-  skinned mesh, at the node, by index or by name in its
-  `morph_target_dictionary`. With no index it is every morph target.
+- `.morphTargetInfluences[i]` is a morph target of the first mesh at the
+  node, by index or by name in its `morph_target_dictionary`. With no
+  index it is every morph target.
 - A light's property is the first light at the node.
 
 ## What differs from three.js
@@ -35,7 +35,8 @@ three.js keeps a track whose name finds nothing, and binds it to nothing
 when it plays. Here such a track is left out when the clip is read, and a
 clip whose every track is left out is left out too. A track on a camera,
 on `.material[i]` or on `.materials` binds nothing, as a scene holds no
-camera and a mesh here names one material for a track.
+camera and a mesh here names one material for a track. A morph track
+binds to a `Mesh`, and not to a `SkinnedMesh`.
 """
 
 from animation.animation_clip import AnimationClip
@@ -49,7 +50,6 @@ from animation.animation_json import (
 from animation.keyframe_track import (
     LightIndex,
     MORPH_INFLUENCE,
-    SKINNED_MORPH_INFLUENCE,
     TrackTarget,
     light_target,
     material_target,
@@ -94,9 +94,9 @@ def _is_count(text: String) -> Bool:
 def _morph_target(
     scene: Scene, node: NodeId, index: String
 ) raises -> Optional[TrackTarget]:
-    """Return the morph target a track names on the first mesh, or skinned
-    mesh, at a node: every target for no index, one by number, or one by
-    its name in the mesh's `morph_target_dictionary`."""
+    """Return the morph target a track names on the first mesh at a node:
+    every target for no index, one by number, or one by its name in the
+    mesh's `morph_target_dictionary`."""
     for mesh in range(len(scene.meshes)):
         if scene.meshes[mesh].node != node:
             continue
@@ -104,15 +104,6 @@ def _morph_target(
         if not slot:
             return None
         return TrackTarget(MORPH_INFLUENCE, mesh, slot.value())
-    for mesh in range(len(scene.skinned_meshes)):
-        if scene.skinned_meshes[mesh].node != node:
-            continue
-        var slot = _slot_of(
-            scene.skinned_meshes[mesh].morph_target_dictionary, index
-        )
-        if not slot:
-            return None
-        return TrackTarget(SKINNED_MORPH_INFLUENCE, mesh, slot.value())
     return None
 
 
