@@ -19,6 +19,7 @@
 - [Cameras](Cameras)
 - [Geometry](Geometry)
 - [Geometry addons](Geometry-addons)
+- [Sculptor](Sculptor)
 - [Meshes and assets](Meshes-and-assets)
 - [Lines](Lines)
 - [Points and sprites](Points-and-sprites)

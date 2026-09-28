@@ -235,7 +235,9 @@ def distance_sq_to_segment(point: Point3, v1: Point3, v2: Point3) -> Float64:
     return rx * rx + ry * ry + rz * rz
 
 
-def _degenerate_distance(point: Point3, v1: Point3, v2: Point3, v3: Point3) -> Float64:
+def _degenerate_distance(
+    point: Point3, v1: Point3, v2: Point3, v3: Point3
+) -> Float64:
     """Return the squared distance to the nearest of a flat triangle's
     three edges."""
     return min(

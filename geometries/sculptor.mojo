@@ -367,7 +367,9 @@ struct Sculptor(Movable):
     var _matrix_world: List[Float64]
     var _matrix_inverse: List[Float64]
 
-    def __init__(out self, mut scene: Scene, mut assets: Assets, mesh: Int) raises:
+    def __init__(
+        out self, mut scene: Scene, mut assets: Assets, mesh: Int
+    ) raises:
         """Weld a mesh's geometry and give the mesh a sculptable copy.
 
         Args:
@@ -424,7 +426,9 @@ struct Sculptor(Movable):
 
     # --- the view ------------------------------------------------------------
 
-    def connect(mut self, left: Float64, top: Float64, width: Float64, height: Float64):
+    def connect(
+        mut self, left: Float64, top: Float64, width: Float64, height: Float64
+    ):
         """Take pointer events in a view, three.js's `connect`. A view
         already connected is disconnected first.
 
@@ -598,17 +602,24 @@ struct Sculptor(Movable):
             var hit = intersection_ray_triangle(
                 self._ray_origin,
                 self._ray_direction,
-                point_of(self._sculpt_mesh.vertices, self._sculpt_mesh.faces[face * 3]),
                 point_of(
-                    self._sculpt_mesh.vertices, self._sculpt_mesh.faces[face * 3 + 1]
+                    self._sculpt_mesh.vertices,
+                    self._sculpt_mesh.faces[face * 3],
                 ),
                 point_of(
-                    self._sculpt_mesh.vertices, self._sculpt_mesh.faces[face * 3 + 2]
+                    self._sculpt_mesh.vertices,
+                    self._sculpt_mesh.faces[face * 3 + 1],
+                ),
+                point_of(
+                    self._sculpt_mesh.vertices,
+                    self._sculpt_mesh.faces[face * 3 + 2],
                 ),
             )
             if hit >= 0 and hit < distance:
                 distance = hit
-                self._hit_point = ray_point(self._ray_origin, self._ray_direction, hit)
+                self._hit_point = ray_point(
+                    self._ray_origin, self._ray_direction, hit
+                )
                 self._hit_face = face
         return self._hit_face != -1
 
@@ -652,9 +663,10 @@ struct Sculptor(Movable):
         scale2: Float64,
     ) raises -> Bool:
         """Pick the surface under a pixel with the matrices already read."""
-        if not self._update_pointer_ray(
-            camera, scene, client_x, client_y
-        ) or not self._pick_closest_face():
+        if (
+            not self._update_pointer_ray(camera, scene, client_x, client_y)
+            or not self._pick_closest_face()
+        ):
             self._clear_hit()
             return False
         self._update_radii(camera, scene, scale2)
@@ -718,7 +730,10 @@ struct Sculptor(Movable):
                 (n1.z * w1 + n2.z * w2 + n3.z * w3) * inverse_sum,
             )
         var length = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
-        self._hit_normal = Point3(n.x / length, n.y / length, n.z / length) if length > 0 else n
+        self._hit_normal = (
+            Point3(n.x / length, n.y / length, n.z / length) if length
+            > 0 else n
+        )
 
     def _dynamic_topology(mut self, picked: List[Int]) -> List[Int]:
         """Split long edges and collapse short ones in the brush, three.js's
@@ -763,7 +778,9 @@ struct Sculptor(Movable):
         """Stamp the tool once at the hit, three.js's `_applyStroke`."""
         var tool = self._tool
         var strength = self._strength
-        var deforms = strength != 0 or tool == SCULPT_DRAG or tool == SCULPT_SCALE
+        var deforms = (
+            strength != 0 or tool == SCULPT_DRAG or tool == SCULPT_SCALE
+        )
         var remeshes = tool != SCULPT_SMOOTH and self._detail != 0
         if not deforms and not remeshes:
             return
@@ -778,15 +795,19 @@ struct Sculptor(Movable):
         var drag = self._drag_direction
         var negative = self._negative
         if tool == SCULPT_CLAY or tool == SCULPT_FLATTEN:
-            var front = get_front_vertices(self._sculpt_mesh, picked, self._ray_direction)
+            var front = get_front_vertices(
+                self._sculpt_mesh, picked, self._ray_direction
+            )
             var plane_normal = area_normal(self._sculpt_mesh, front)
             if not plane_normal:
                 return
             var normal = plane_normal.value()
             var plane_point = area_center(self._sculpt_mesh, front)
             if tool == SCULPT_CLAY:
-                var offset = sqrt(radius2) * CLAY_OFFSET_RATIO * (
-                    -1.0 if negative else 1.0
+                var offset = (
+                    sqrt(radius2)
+                    * CLAY_OFFSET_RATIO
+                    * (-1.0 if negative else 1.0)
                 )
                 plane_point = Point3(
                     plane_point.x + normal.x * offset,
@@ -805,17 +826,33 @@ struct Sculptor(Movable):
             )
         elif tool == SCULPT_BRUSH:
             tool_brush(
-                self._sculpt_mesh, picked, hit_normal, hit, radius2, strength, negative
+                self._sculpt_mesh,
+                picked,
+                hit_normal,
+                hit,
+                radius2,
+                strength,
+                negative,
             )
         elif tool == SCULPT_INFLATE:
-            tool_inflate(self._sculpt_mesh, picked, hit, radius2, strength, negative)
+            tool_inflate(
+                self._sculpt_mesh, picked, hit, radius2, strength, negative
+            )
         elif tool == SCULPT_SMOOTH:
             tool_smooth(self._sculpt_mesh, picked, strength)
         elif tool == SCULPT_PINCH:
-            tool_pinch(self._sculpt_mesh, picked, hit, radius2, strength, negative)
+            tool_pinch(
+                self._sculpt_mesh, picked, hit, radius2, strength, negative
+            )
         elif tool == SCULPT_CREASE:
             tool_crease(
-                self._sculpt_mesh, picked, hit_normal, hit, radius2, strength, negative
+                self._sculpt_mesh,
+                picked,
+                hit_normal,
+                hit,
+                radius2,
+                strength,
+                negative,
             )
         elif tool == SCULPT_DRAG:
             tool_drag(self._sculpt_mesh, picked, hit, radius2, drag)
@@ -836,25 +873,36 @@ struct Sculptor(Movable):
         and add a `change` event when anything changed since the last
         write, three.js's `_syncGeometry`."""
         var vertex_count = self._sculpt_mesh.nb_vertices
-        var replaced = self._sculpt_mesh.buffer_version != self._last_buffer_version
+        var replaced = (
+            self._sculpt_mesh.buffer_version != self._last_buffer_version
+        )
         var dirty = _compact_dirty_vertices(self._dirty_vertices, vertex_count)
         var changed = self._geometry_synced and (
             replaced
             or dirty
             or self._sculpt_mesh.topology_version != self._last_topology_version
         )
-        if self.geometry.value < 0 or self.geometry.value >= assets.geometries.count():
+        if (
+            self.geometry.value < 0
+            or self.geometry.value >= assets.geometries.count()
+        ):
             raise Error("Sculptor: the sculpted geometry is not in the assets.")
         ref geometry = assets.geometries.geometries[self.geometry.value]
         geometry.set_attribute(
             String(POSITION),
-            BufferAttribute(_prefix(self._sculpt_mesh.vertices, vertex_count * 3), 3),
+            BufferAttribute(
+                _prefix(self._sculpt_mesh.vertices, vertex_count * 3), 3
+            ),
         )
         geometry.set_attribute(
             String(NORMAL),
-            BufferAttribute(_prefix(self._sculpt_mesh.render_normals, vertex_count * 3), 3),
+            BufferAttribute(
+                _prefix(self._sculpt_mesh.render_normals, vertex_count * 3), 3
+            ),
         )
-        geometry.set_index(_prefix(self._sculpt_mesh.triangles, self._sculpt_mesh.nb_faces * 3))
+        geometry.set_index(
+            _prefix(self._sculpt_mesh.triangles, self._sculpt_mesh.nb_faces * 3)
+        )
         self._last_topology_version = self._sculpt_mesh.topology_version
         self._last_buffer_version = self._sculpt_mesh.buffer_version
         self._dirty_vertices = List[Int]()
@@ -880,7 +928,8 @@ struct Sculptor(Movable):
         var geometry = BufferGeometry()
         geometry.name = assets.geometries.get(self.geometry).name
         geometry.set_attribute(
-            String(POSITION), BufferAttribute(_prefix(mesh.vertices, vertex_length), 3)
+            String(POSITION),
+            BufferAttribute(_prefix(mesh.vertices, vertex_length), 3),
         )
         geometry.set_attribute(
             String(NORMAL),
@@ -931,7 +980,9 @@ struct Sculptor(Movable):
                 " scale."
             )
         self._ray_origin = _apply_matrix(self._matrix_inverse, origin)
-        self._ray_direction = _transform_direction(self._matrix_inverse, direction)
+        self._ray_direction = _transform_direction(
+            self._matrix_inverse, direction
+        )
         if not self._pick_closest_face():
             self._clear_hit()
             return False
@@ -940,7 +991,11 @@ struct Sculptor(Movable):
         return True
 
     def stroke_from_ray(
-        mut self, mut scene: Scene, mut assets: Assets, ray: Ray, world_radius: Length
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        ray: Ray,
+        world_radius: Length,
     ) raises -> Bool:
         """Stamp the tool where a ray meets the mesh, beginning a stroke,
         three.js's `strokeFromRay`. Call `end_stroke` after the last stamp.
@@ -1016,7 +1071,11 @@ struct Sculptor(Movable):
     def pick_from_pointer[
         C: Camera
     ](
-        mut self, camera: C, mut scene: Scene, client_x: Float64, client_y: Float64
+        mut self,
+        camera: C,
+        mut scene: Scene,
+        client_x: Float64,
+        client_y: Float64,
     ) raises -> Bool:
         """Pick the surface under a pixel without sculpting, three.js's
         `pickFromPointer`.
@@ -1124,7 +1183,9 @@ struct Sculptor(Movable):
         elif self._tool == SCULPT_SCALE:
             self._sculpt_stroke_scale(assets, client_x, client_y)
         else:
-            var sampled = self._sculpt_stroke(camera, scene, assets, client_x, client_y)
+            var sampled = self._sculpt_stroke(
+                camera, scene, assets, client_x, client_y
+            )
             # Keep the hit under the pointer between stamps.
             if not sampled and self._intersection_ray_mesh(
                 camera, scene, client_x, client_y
@@ -1164,7 +1225,9 @@ struct Sculptor(Movable):
         if distance <= min_spacing:
             return False
         # A pointer at no finite place stamps nothing, as in three.js.
-        var count = Int(floor(distance / min_spacing)) if isfinite(distance) else 0
+        var count = Int(floor(distance / min_spacing)) if isfinite(
+            distance
+        ) else 0
         var step_x = dx / Float64(count)
         var step_y = dy / Float64(count)
         var x = self._last_pointer_x + step_x
@@ -1216,9 +1279,13 @@ struct Sculptor(Movable):
             d.x * px + d.y * py + d.z * pz
         ) / denominator if denominator > 0 else 0.0
         var moved = Point3(
-            o.x + d.x * projection, o.y + d.y * projection, o.z + d.z * projection
+            o.x + d.x * projection,
+            o.y + d.y * projection,
+            o.z + d.z * projection,
         )
-        self._drag_direction = Point3(moved.x - hit.x, moved.y - hit.y, moved.z - hit.z)
+        self._drag_direction = Point3(
+            moved.x - hit.x, moved.y - hit.y, moved.z - hit.z
+        )
         self._hit_point = moved
         self._update_radii(camera, scene, scale2)
         return True
@@ -1241,9 +1308,9 @@ struct Sculptor(Movable):
         if distance == 0:
             return
         var min_spacing = STAMP_SPACING_RATIO * self._size
-        var count = max(
-            1, Int(floor(distance / min_spacing))
-        ) if isfinite(distance) else 0
+        var count = max(1, Int(floor(distance / min_spacing))) if isfinite(
+            distance
+        ) else 0
         var step_x = dx / Float64(count)
         var step_y = dy / Float64(count)
         var x = self._last_pointer_x + step_x

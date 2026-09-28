@@ -293,9 +293,9 @@ struct SculptorMesh(Movable):
                 " 3 is required."
             )
         var source_count = position.count()
-        var element_count = (
-            len(geometry.index) if geometry.is_indexed() else source_count
-        )
+        var element_count = len(
+            geometry.index
+        ) if geometry.is_indexed() else source_count
         if element_count % 3 != 0:
             raise Error(
                 "SculptorMesh: The geometry must contain triangles with a"
@@ -400,7 +400,9 @@ struct SculptorMesh(Movable):
             var second = self.faces[face * 3 + 1]
             var third = self.faces[face * 3 + 2]
             var one = third if first == vertex else first
-            var two = third if (first != vertex and second == vertex) else second
+            var two = third if (
+                first != vertex and second == vertex
+            ) else second
             if self.vert_tag_flags[one] != tag:
                 self.vert_tag_flags[one] = tag
                 ring.append(one)
@@ -646,12 +648,18 @@ struct SculptorMesh(Movable):
                 )
             parent = self.cells[parent].parent if grown > 0 else NO_CELL
 
-    def _split_holds(self, cell: Int, x: Float64, y: Float64, z: Float64) -> Bool:
+    def _split_holds(
+        self, cell: Int, x: Float64, y: Float64, z: Float64
+    ) -> Bool:
         """Return True if a center falls in a cell's split box: above each
         low, at or below each high."""
         ref s = self.cells[cell].aabb_split
         return (
-            x > s[0] and y > s[1] and z > s[2] and x <= s[3] and y <= s[4]
+            x > s[0]
+            and y > s[1]
+            and z > s[2]
+            and x <= s[3]
+            and y <= s[4]
             and z <= s[5]
         )
 
@@ -807,7 +815,9 @@ struct SculptorMesh(Movable):
             self._collect(cell, stack, collected)
         return collected^
 
-    def _collect(self, cell: Int, mut stack: List[Int], mut collected: List[Int]):
+    def _collect(
+        self, cell: Int, mut stack: List[Int], mut collected: List[Int]
+    ):
         """Push a cell's children, or collect a leaf's faces."""
         if len(self.cells[cell].children) == 8:
             for i in range(8):  # pragma: no branch
@@ -916,7 +926,9 @@ struct SculptorMesh(Movable):
                 self.faces_tag_flags[face] = tag
                 out.append(face)
 
-    def expands_vertices(mut self, vertices: List[Int], rings: Int) -> List[Int]:
+    def expands_vertices(
+        mut self, vertices: List[Int], rings: Int
+    ) -> List[Int]:
         """Return the vertices and their neighbors, `rings` times over,
         three.js's `expandsVertices`.
 
@@ -935,7 +947,9 @@ struct SculptorMesh(Movable):
         for _ in range(rings):  # pragma: no branch
             var end = len(expanded)
             for i in range(begin, end):
-                for neighbor in self.vert_ring_vert[expanded[i]].copy():  # pragma: no branch
+                for neighbor in self.vert_ring_vert[
+                    expanded[i]
+                ].copy():  # pragma: no branch
                     if self.vert_tag_flags[neighbor] != tag:
                         self.vert_tag_flags[neighbor] = tag
                         expanded.append(neighbor)
@@ -953,7 +967,9 @@ struct SculptorMesh(Movable):
         """
         for face in faces:
             for corner in range(3):  # pragma: no branch
-                self.triangles[face * 3 + corner] = self.faces[face * 3 + corner]
+                self.triangles[face * 3 + corner] = self.faces[
+                    face * 3 + corner
+                ]
 
     def update_vertices_on_edge(mut self, vertices: List[Int]):
         """Mark which vertices lie on an open edge, three.js's
@@ -1020,7 +1036,9 @@ struct SculptorMesh(Movable):
 def _outside(low: Float64, high: Float64, value: Float64) -> Float64:
     """Return how far a value lies outside a range, signed as three.js's
     `collectIntersectSphere` has it; zero inside."""
-    return low - value if low > value else (high - value if high < value else 0.0)
+    return low - value if low > value else (
+        high - value if high < value else 0.0
+    )
 
 
 def _weld_positions(
@@ -1097,10 +1115,18 @@ def _find_weld(
     cells are searched z, then y, then x, the cell before its neighbor."""
     var found = NO_CELL
     var closest = inf[DType.float64]()
-    for k in range(search_count * search_count * search_count):  # pragma: no branch
+    for k in range(
+        search_count * search_count * search_count
+    ):  # pragma: no branch
         var sx = cells[0] if k % search_count == 0 else neighbors[0]
-        var sy = cells[1] if (k // search_count) % search_count == 0 else neighbors[1]
-        var sz = cells[2] if k // (search_count * search_count) == 0 else neighbors[2]
+        var sy = (
+            cells[1] if (k // search_count) % search_count
+            == 0 else neighbors[1]
+        )
+        var sz = (
+            cells[2] if k // (search_count * search_count)
+            == 0 else neighbors[2]
+        )
         var candidate = cell_heads.get(_hash_position(sx, sy, sz), NO_CELL)
         while candidate != NO_CELL:
             var distance_squared = _sqr_dist_to(merged, candidate, p)

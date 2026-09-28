@@ -82,7 +82,9 @@ struct _SubData(Movable):
     var radius2: Float64
     var edge_max2: Float64
 
-    def __init__(out self, center: Point3, radius2: Float64, edge_max2: Float64):
+    def __init__(
+        out self, center: Point3, radius2: Float64, edge_max2: Float64
+    ):
         """Start a pass about a brush."""
         self.vertices_map = Dict[Int, Int]()
         self.edge_key_stride = 0
@@ -122,7 +124,9 @@ def _sub_fill_triangle(
     mesh.add_nb_face(1)
 
 
-def _fill_split(val1: Int, val2: Int, val3: Int, num1: Int, num2: Int, num3: Int) -> Int:
+def _fill_split(
+    val1: Int, val2: Int, val3: Int, num1: Int, num2: Int, num3: Int
+) -> Int:
     """Return which split edge a face is cut across: 1 for its first edge,
     2 for its second, 3 for its third, 0 for none. With more than one, the
     one whose far corner has the fewest neighbors, as three.js chooses."""
@@ -189,7 +193,12 @@ def _unit_or_x(n: Point3) -> Point3:
 
 
 def _half_edge_split(
-    mut mesh: SculptorMesh, mut sub: _SubData, tri: Int, v1: Int, v2: Int, v3: Int
+    mut mesh: SculptorMesh,
+    mut sub: _SubData,
+    tri: Int,
+    v1: Int,
+    v2: Int,
+    v3: Int,
 ):
     """Split the edge `v1, v2` of a face at its middle, three.js's
     `halfEdgeSplit`. A new middle vertex bulges along the mean normal, by
@@ -487,9 +496,8 @@ def _dec_delete_vertex(mut mesh: SculptorMesh, vertex: Int):
     var tris = mesh.vert_ring_face[last_pos].copy()
     for tri in tris:  # pragma: no branch
         var corner = tri * 3 + (
-            0 if mesh.faces[tri * 3] == last_pos else (
-                1 if mesh.faces[tri * 3 + 1] == last_pos else 2
-            )
+            0 if mesh.faces[tri * 3]
+            == last_pos else (1 if mesh.faces[tri * 3 + 1] == last_pos else 2)
         )
         mesh.faces[corner] = vertex
     var ring = mesh.vert_ring_vert[last_pos].copy()
@@ -510,9 +518,8 @@ def _replace_corner(mut mesh: SculptorMesh, tri: Int, old: Int, new: Int):
     """Replace a face's corner `old` with `new`, the third corner when
     neither of the first two is `old`."""
     var corner = tri * 3 + (
-        0 if mesh.faces[tri * 3] == old else (
-            1 if mesh.faces[tri * 3 + 1] == old else 2
-        )
+        0 if mesh.faces[tri * 3]
+        == old else (1 if mesh.faces[tri * 3 + 1] == old else 2)
     )
     mesh.faces[corner] = new
 
@@ -605,7 +612,9 @@ def _dec_edge_collapse(
     _set_point(
         mesh.vertices,
         v1,
-        Point3(mean_x - n.x * dot_n, mean_y - n.y * dot_n, mean_z - n.z * dot_n),
+        Point3(
+            mean_x - n.x * dot_n, mean_y - n.y * dot_n, mean_z - n.z * dot_n
+        ),
     )
     mesh.vert_tag_flags[v2] = -1
     mesh.faces_tag_flags[tri1] = -1
@@ -657,7 +666,9 @@ def _dec_decimate_triangles(
         _dec_edge_collapse(mesh, dec, tri1, tri2, c1, b1, a1, a2, tris)
 
 
-def _dec_find_opposite_triangle(mesh: SculptorMesh, tri: Int, v1: Int, v2: Int) -> Int:
+def _dec_find_opposite_triangle(
+    mesh: SculptorMesh, tri: Int, v1: Int, v2: Int
+) -> Int:
     """Return the other face on the edge `v1 v2`, or -1 when the edge has
     one face or more than two, three.js's `decFindOppositeTriangle`."""
     var count = 0
@@ -708,12 +719,20 @@ def _dec_try(
     if len1 < len2 and len1 < len3:
         if len1 < limit:
             _dec_decimate_triangles(
-                mesh, dec, tri, _dec_find_opposite_triangle(mesh, tri, i1, i2), tris
+                mesh,
+                dec,
+                tri,
+                _dec_find_opposite_triangle(mesh, tri, i1, i2),
+                tris,
             )
     elif len2 < len3:
         if len2 < limit:
             _dec_decimate_triangles(
-                mesh, dec, tri, _dec_find_opposite_triangle(mesh, tri, i2, i3), tris
+                mesh,
+                dec,
+                tri,
+                _dec_find_opposite_triangle(mesh, tri, i2, i3),
+                tris,
             )
     elif len3 < limit:
         _dec_decimate_triangles(
@@ -812,7 +831,9 @@ def _smoothed(mesh: SculptorMesh, vertex: Int) -> Point3:
         for neighbor in mesh.vert_ring_vert[vertex]:  # pragma: no branch
             if mesh.vert_on_edge[neighbor] == 1:
                 var q = point_of(mesh.vertices, neighbor)
-                edge_sum = Point3(edge_sum.x + q.x, edge_sum.y + q.y, edge_sum.z + q.z)
+                edge_sum = Point3(
+                    edge_sum.x + q.x, edge_sum.y + q.y, edge_sum.z + q.z
+                )
                 edge_count += 1
         if edge_count >= 2:
             var n = Float64(edge_count)
@@ -922,7 +943,9 @@ def area_center(mesh: SculptorMesh, vertices: List[Int]) -> Point3:
     return Point3(sum.x / n, sum.y / n, sum.z / n)
 
 
-def _reach(mesh: SculptorMesh, vertex: Int, center: Point3, radius: Float64) -> Float64:
+def _reach(
+    mesh: SculptorMesh, vertex: Int, center: Point3, radius: Float64
+) -> Float64:
     """Return how far a vertex is from the center, as a share of the
     radius: the vertex minus the center, as three.js measures it."""
     var p = point_of(mesh.vertices, vertex)
@@ -1120,7 +1143,9 @@ def tool_pinch(
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off),
+            Point3(
+                p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off
+            ),
         )
 
 
@@ -1228,9 +1253,13 @@ def tool_scale(
         var dx = p.x - center.x
         var dy = p.y - center.y
         var dz = p.z - center.z
-        var fall_off = falloff(sqrt(dx * dx + dy * dy + dz * dz) / radius) * scale
+        var fall_off = (
+            falloff(sqrt(dx * dx + dy * dy + dz * dz) / radius) * scale
+        )
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off),
+            Point3(
+                p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off
+            ),
         )
