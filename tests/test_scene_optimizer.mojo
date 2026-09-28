@@ -31,6 +31,7 @@ from materials.material import (
     LAMBERT,
     Material,
     MaterialId,
+    VOLUME,
     standard_material,
 )
 from math.matrix4 import Matrix4
@@ -186,6 +187,13 @@ def test_the_signatures_leave_out_the_color() raises:
     masked.lights = lights_of([0])
     assert_true(
         material_signature(assets, red) != material_signature(assets, masked)
+    )
+    # Two volumes that march a different number of steps are not one batch.
+    var coarse = Material(Color(255, 0, 0), kind=VOLUME)
+    var fine = Material(Color(255, 0, 0), kind=VOLUME)
+    fine.set_steps(coarse.steps * 2)
+    assert_true(
+        material_signature(assets, coarse) != material_signature(assets, fine)
     )
     var side = Length(1.0, METER)
     assert_equal(
