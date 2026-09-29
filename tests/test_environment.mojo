@@ -67,14 +67,18 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
-from render.rect import Rect
 from render.srgb import SRGB
 from render.target import RenderTarget
 from render.texture import CLAMP, NEAREST, Texture
 from render.texture_store import TextureId
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, _BackdropRays, _backdrop_band
+from render.rect import Rect
+from std.runtime._asyncrt import TaskGroup
+from math.matrix4 import Matrix4
+from render.cube_texture import env_rotation
+from render.rect import Rect
 from std.math import pi
 from std.testing import (
     TestSuite,
@@ -862,6 +866,76 @@ def test_a_refused_background_does_not_erase_the_target_first() raises:
         renderer.render_into(target, scene, assets, camera_at(0, 0, 4))
     # The view that was already there is untouched.
     assert_color(target.shown(WIDTH // 2, HEIGHT // 2), drawn)
+
+
+def test_a_cube_background_on_several_workers_matches_one() raises:
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_cube())
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    scene.background = cube_background(sky)
+    var one = a_renderer()
+    var many = Renderer(WIDTH, HEIGHT, workers=3)
+    many.set_background(CLEAR)
+    var looking = camera_at(-3, 1, 2)
+    var alone = one.render(scene, assets, looking)
+    var banded = many.render(scene, assets, looking)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(banded.get_pixel(x, y).r, alone.get_pixel(x, y).r)
+            assert_equal(banded.get_pixel(x, y).g, alone.get_pixel(x, y).g)
+            assert_equal(banded.get_pixel(x, y).b, alone.get_pixel(x, y).b)
+
+
+def test_a_backdrop_band_carries_its_error_back() raises:
+    # `backdrop` refuses a missing cube before any band starts, so no band
+    # ever reads one. A band run by itself does, and it must write the
+    # error into its own slot.
+    var assets = Assets()
+    var whole = Rect.whole(WIDTH, HEIGHT)
+    var rays = _BackdropRays(
+        cube_background(CubeTextureId(4)),
+        whole,
+        whole,
+        0,
+        WIDTH,
+        HEIGHT,
+        Matrix4(),
+        Matrix4(),
+        env_rotation(Scene().background_rotation),
+        0,
+        1,
+    )
+    var image = Framebuffer(WIDTH, HEIGHT, Color(0, 0, 0, 0))
+    var bytes = SrgbBytes()
+    var errors = List[String](length=2, fill=String(""))
+    var group = TaskGroup()
+    group.create_task(
+        _backdrop_band(
+            Pointer(to=rays)
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=image)
+            .unsafe_mut_cast[True]()
+            .unsafe_origin_cast[MutAnyOrigin](),
+            Pointer(to=assets)
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            Pointer(to=bytes)
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            1,
+            0,
+            HEIGHT,
+        )
+    )
+    group.wait()
+    _ = len(bytes.thresholds)
+    _ = rays.width
+    assert_equal(errors[0], "")
+    assert_true(errors[1] != "")
 
 
 def main() raises:

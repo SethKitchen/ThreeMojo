@@ -275,6 +275,7 @@ from renderers.draw_filter import (
 )
 from render.rasterizer import (
     Corner,
+    _raise_band_errors,
     Surface,
     corner_of,
     joined,
@@ -311,6 +312,7 @@ from renderers.clip import (
     within_depth,
     within_sides,
 )
+from std.runtime._asyncrt import TaskGroup
 from std.math import cos, floor, isfinite, max, pi, sin
 from std.memory import ArcPointer
 from std.sys import num_logical_cores
@@ -4184,6 +4186,101 @@ def _set_backdrop(
     """
     var shown = color.encode_with(bytes)
     image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
+
+
+@fieldwise_init
+struct _BackdropRays(ImplicitlyCopyable):
+    """What every pixel of a backdrop seen by direction needs: its ray,
+    where it lands, and how it is shown."""
+
+    var backdrop: Background
+    var kept: Rect
+    var viewport: Rect
+    var top: Int
+    var width: Int
+    var height: Int
+    var unproject: Matrix4
+    var to_world: Matrix4
+    var spin: Basis3
+    var blur: Float32
+    var shown: Float32
+
+    def paint(
+        self,
+        mut image: Framebuffer,
+        assets: Assets,
+        bytes: SrgbBytes,
+        first: Int,
+        past: Int,
+    ) raises:
+        """Paint the rows `first` up to `past` of the backdrop.
+
+        Args:
+            image: Where each pixel is written.
+            assets: The background's textures.
+            bytes: The table each pixel is encoded through.
+            first: The first row.
+            past: One past the last row.
+
+        Raises:
+            Error: If a texture the background names cannot be read.
+        """
+        for y in range(first, past):
+            for x in range(self.width):  # pragma: no branch
+                if not self.kept.contains_pixel(
+                    x, y, self.height
+                ) or not self.viewport.contains_pixel(x, y, self.height):
+                    continue
+                var ndc_x = (Float32(x - self.viewport.x) + 0.5) / Float32(
+                    self.viewport.width
+                ) * 2 - 1
+                var ndc_y = (
+                    1
+                    - (Float32(y - self.top) + 0.5)
+                    / Float32(self.viewport.height)
+                    * 2
+                )
+                var near = self.unproject.transform_point(
+                    Vector3(ndc_x, ndc_y, -1)
+                )
+                var far = self.unproject.transform_point(
+                    Vector3(ndc_x, ndc_y, 1)
+                )
+                var looked = self.spin.turn(
+                    self.to_world.transform_direction(far - near)
+                )
+                var seen: FloatColor
+                if self.backdrop.kind == TEXTURE_BACKGROUND:
+                    seen = _panorama_seen(
+                        assets.textures.get(self.backdrop.texture),
+                        looked,
+                        self.blur,
+                    )
+                else:
+                    seen = _sky_seen(
+                        assets.cube_textures.get(self.backdrop.cube),
+                        looked,
+                        self.blur,
+                    )
+                _set_backdrop(image, x, y, _brightened(seen, self.shown), bytes)
+
+
+async def _backdrop_band(
+    rays: Pointer[_BackdropRays, ImmutAnyOrigin],
+    image: MutPointer[Framebuffer, MutAnyOrigin],
+    assets: Pointer[Assets, ImmutAnyOrigin],
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    band: Int,
+    first: Int,
+    past: Int,
+):
+    """`_BackdropRays.paint` as a task, one band of rows; a task cannot
+    raise, so an error is written into the band's slot."""
+    try:
+        rays[].paint(image[], assets[], bytes[], first, past)
+    except e:
+        errors[unsafe_offset=band] = String(e)
 
 
 def _brightened(color: FloatColor, factor: Float32) -> FloatColor:
@@ -8598,31 +8695,50 @@ struct Renderer(Movable):
         unproject.invert()
         var to_world = camera.view_matrix_in(scene)
         to_world.invert()
-        for y in range(self.height):  # pragma: no branch
-            for x in range(self.width):  # pragma: no branch
-                if not kept.contains_pixel(
-                    x, y, self.height
-                ) or not viewport.contains_pixel(x, y, self.height):
-                    continue
-                var ndc_x = (Float32(x - viewport.x) + 0.5) / Float32(
-                    viewport.width
-                ) * 2 - 1
-                var ndc_y = (
-                    1 - (Float32(y - top) + 0.5) / Float32(viewport.height) * 2
+        var rays = _BackdropRays(
+            backdrop,
+            kept,
+            viewport,
+            top,
+            self.width,
+            self.height,
+            unproject,
+            to_world,
+            spin,
+            blur,
+            shown,
+        )
+        # Each pixel is its own, so the rows are split over the workers.
+        var bands = min(self.workers, self.height)
+        if bands == 1:
+            rays.paint(image, assets, bytes, 0, self.height)
+            return image^
+        var errors = List[String](length=bands, fill=String(""))
+        var group = TaskGroup()
+        for band in range(bands):  # pragma: no branch
+            group.create_task(
+                _backdrop_band(
+                    Pointer(to=rays)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=image)
+                    .unsafe_mut_cast[True]()
+                    .unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=assets).unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=bytes)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    band,
+                    band * self.height // bands,
+                    (band + 1) * self.height // bands,
                 )
-                var near = unproject.transform_point(Vector3(ndc_x, ndc_y, -1))
-                var far = unproject.transform_point(Vector3(ndc_x, ndc_y, 1))
-                var looked = spin.turn(to_world.transform_direction(far - near))
-                var seen: FloatColor
-                if backdrop.kind == TEXTURE_BACKGROUND:
-                    seen = _panorama_seen(
-                        assets.textures.get(backdrop.texture), looked, blur
-                    )
-                else:
-                    seen = _sky_seen(
-                        assets.cube_textures.get(backdrop.cube), looked, blur
-                    )
-                _set_backdrop(image, x, y, _brightened(seen, shown), bytes)
+            )
+        group.wait()
+        # The tasks read these through pointers the compiler cannot see.
+        _ = len(bytes.thresholds)
+        _ = rays.width
+        _raise_band_errors(errors)
         return image^
 
     def render_cube(
