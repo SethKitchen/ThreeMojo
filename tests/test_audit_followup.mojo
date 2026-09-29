@@ -350,6 +350,22 @@ def test_malformed_sparse_splat_accessors_are_refused() raises:
     assert_true(
         "must rise" in sparse_refusal('{"count":2,' + parts, first=1, second=1)
     )
+    # Indices of each unsigned width are read.
+    for index_type in [5123, 5125]:
+        assert_equal(
+            sparse_refusal(
+                '{"count":1,"indices":{"bufferView":0,"componentType":'
+                + String(index_type)
+                + "},"
+                + values
+                + "}",
+                (
+                    '[{"buffer":0,"byteLength":4},'
+                    '{"buffer":0,"byteOffset":4,"byteLength":8}]'
+                ),
+            ),
+            "accepted",
+        )
 
 
 def placed(text: String) raises -> Scene:
