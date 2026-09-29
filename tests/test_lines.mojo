@@ -33,6 +33,7 @@ from render.volume_texture_store import (
     Data3DTextureStore,
     DataArrayTextureStore,
 )
+from render.splatrule import ProjectedSplat
 from render.rasterizer import (
     DRAW_SEGMENTS,
     Corner,
@@ -527,6 +528,7 @@ def one_band(
     var no_rows = List[Int]()
     var no_triangles = List[Corner]()
     var no_surfaces = List[Surface]()
+    var no_splats = List[ProjectedSplat]()
     var group = TaskGroup()
     group.create_task(
         _frame_band(
@@ -541,6 +543,9 @@ def one_band(
             segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            no_splats.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
             draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             len(draws),
             Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
@@ -565,6 +570,7 @@ def one_band(
     _ = len(no_rows)
     _ = len(no_triangles)
     _ = len(no_surfaces)
+    _ = len(no_splats)
     _ = len(segment_rows)
     return errors^
 
