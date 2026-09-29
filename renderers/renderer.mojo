@@ -5514,11 +5514,14 @@ struct Renderer(Movable):
             )
             var run_start = run[0]
             var triangles = run[1]
-            # Grown once per draw rather than by doubling as corners arrive,
-            # which copied the frame's whole list several times over: three
-            # corners a triangle, before the clipper adds any or the facing
-            # test drops any.
-            corners.reserve(len(corners) + triangles * 3)
+            # Room for this draw's corners, three a triangle before the
+            # clipper adds any or the facing test drops any. Grown to at
+            # least double when it runs out: reserving the exact size
+            # reallocated on every draw and copied the frame's whole list
+            # each time, which a scene of many meshes paid for quadratically.
+            var need = len(corners) + triangles * 3
+            if need > corners.capacity():
+                corners.reserve(max(need, 2 * corners.capacity()))
             var begin = len(corners)
             var lights_up = not kind.is_data() and kind != SHADOW
             # A light's view approximates alpha to coverage by an alpha
