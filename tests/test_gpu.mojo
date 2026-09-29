@@ -14745,3 +14745,41 @@ def test_both_backends_counting_sort_alike() raises:
         var bin = (place * 5) % 7
         assert_true(bin >= last)
         last = bin
+
+
+def test_scene_splats_mix_with_transparent_meshes_on_both_backends() raises:
+    if skipped_for_lack_of_a_gpu("scene splats mix with transparent meshes"):
+        return
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_gaussian_splat(_splat_cloud(node))
+    var assets = Assets()
+    var shape = assets.geometries.add(plane(Length(2, METER), Length(2, METER)))
+    var green = assets.materials.add(
+        Material(Color(0, 255, 0), opacity=0.4, kind=BASIC, transparent=True)
+    )
+    var front = Object3D()
+    front.set_position(0, 0, 1)
+    var front_node = scene.add(front^)
+    scene.add_mesh(Mesh(shape, green, front_node))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var renderer = Renderer(40, 30)
+    renderer.background = BACKGROUND
+    renderer.viewport = Rect(4, 3, 28, 24)
+    var host = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    assert_true(len(frame.splats) > 0)
+    var device = render_triangles(
+        frame.corners,
+        40,
+        30,
+        BACKGROUND,
+        draws=frame.draws,
+        points=frame.points,
+        splats=frame.splats,
+    )
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)

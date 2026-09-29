@@ -34,7 +34,7 @@ through `render.splatrule`.
 
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId
-from core.raycaster import Raycaster
+from math.ray_query import RayQuery
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -190,9 +190,9 @@ struct GaussianSplat(Copyable, Movable):
         sphere.radius = reach
         self.bounding_sphere = sphere
 
-    def raycast(
-        mut self, world: Matrix4, raycaster: Raycaster
-    ) raises -> List[SplatHit]:
+    def raycast[
+        R: RayQuery
+    ](mut self, world: Matrix4, raycaster: R) raises -> List[SplatHit]:
         """Return where a ray meets the splats, three.js's `raycast`.
 
         Args:
@@ -210,11 +210,11 @@ struct GaussianSplat(Copyable, Movable):
             self.compute_bounding_sphere()
         var sphere = self.bounding_sphere.value()
         sphere.apply_matrix4(world)
-        if not raycaster.ray.intersects_sphere(sphere):
+        if not raycaster.query_ray().intersects_sphere(sphere):
             return hits^
         var inverse = world
         inverse.invert()
-        var ray = raycaster.ray
+        var ray = raycaster.query_ray()
         ray.apply_matrix4(inverse)
         if not ray.intersects_box(self.bounding_box.value()):
             return hits^
@@ -223,10 +223,10 @@ struct GaussianSplat(Copyable, Movable):
             if t < 0:
                 continue
             var point = world.transform_point(ray.at(Float32(t)))
-            var distance = raycaster.ray.origin.distance_to(point)
-            if distance < raycaster.near.value:
+            var distance = raycaster.query_ray().origin.distance_to(point)
+            if distance < raycaster.query_near().value:
                 continue
-            if distance > raycaster.far.value:
+            if distance > raycaster.query_far().value:
                 continue
             hits.append(SplatHit(Length(distance, METER), point, index))
         return hits^

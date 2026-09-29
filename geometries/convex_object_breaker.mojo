@@ -41,6 +41,7 @@ from math.quaternion import Quaternion
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.benchmark import black_box
+from std.collections import Set
 from std.math import cos, pi, sin, sqrt
 from units.si import Angle, KILOGRAM, Length, METER, Mass, RADIAN
 
@@ -171,7 +172,7 @@ struct ConvexObjectBreaker(Movable):
             len(geometry.index) // 3 if indexed else point_count // 3
         )
         var delta = self.small_delta
-        var segments = List[Bool](length=point_count * point_count, fill=False)
+        var segments = Set[Tuple[Int, Int]]()
 
         for i in range(face_count - 1):  # pragma: no branch
             var a1 = _vertex(geometry, indexed, i, 0)
@@ -189,14 +190,14 @@ struct ConvexObjectBreaker(Movable):
                 var b_shared = b1 == a2 or b1 == b2 or b1 == c2
                 if a_shared:
                     if b_shared:
-                        segments[a1 * point_count + b1] = True
-                        segments[b1 * point_count + a1] = True
+                        segments.add((a1, b1))
+                        segments.add((b1, a1))
                     else:
-                        segments[c1 * point_count + a1] = True
-                        segments[a1 * point_count + c1] = True
+                        segments.add((c1, a1))
+                        segments.add((a1, c1))
                 elif b_shared:
-                    segments[c1 * point_count + b1] = True
-                    segments[b1 * point_count + c1] = True
+                    segments.add((c1, b1))
+                    segments.add((b1, c1))
 
         var local = _local_plane(plane, object)
         var delta64 = Float64(delta)
@@ -211,10 +212,10 @@ struct ConvexObjectBreaker(Movable):
             for segment in range(3):  # pragma: no branch
                 var i0 = corners[segment]
                 var i1 = corners[(segment + 1) % 3]
-                if segments[i0 * point_count + i1]:
+                if (i0, i1) in segments:
                     continue
-                segments[i0 * point_count + i1] = True
-                segments[i1 * point_count + i0] = True
+                segments.add((i0, i1))
+                segments.add((i1, i0))
                 var p0 = _corner(coords, i0)
                 var p1 = _corner(coords, i1)
                 var mark0 = _sort(local, p0, delta64, points1, points2)

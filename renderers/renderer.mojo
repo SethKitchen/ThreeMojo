@@ -77,6 +77,17 @@ of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
 """
 
+from renderers.render_list import (
+    RenderItem,
+    RenderSort,
+    _Source,
+    _Span,
+    _sort_by,
+    _sort_with,
+    _furthest_first,
+    _add_run,
+)
+
 from render.color_spaces import (
     ColorSpaceId,
     OutputEncoding,
@@ -152,6 +163,9 @@ from math.bounds import Plane, Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
 from render.rect import Rect
+from render.splatrule import ProjectedSplat
+from render.splat_raster import prepare_gaussian_splat
+from render.rasterizer import DRAW_SPLATS
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
@@ -934,47 +948,6 @@ struct _Draw(ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct _Source(ImplicitlyCopyable):
-    """The object a run of primitives came from: its node, its geometry
-    and the material it was drawn with."""
-
-    var node: NodeId
-    var geometry: GeometryId
-    var material: MaterialId
-
-
-@fieldwise_init
-struct RenderItem(ImplicitlyCopyable):
-    """One run of a prepared frame, what three.js's render list holds for
-    one object: what a render hook is told, and what a custom sort
-    compares.
-
-    The node, the geometry and the material drawn with, the scene's
-    `override_material` when it replaced the object's own. A sprite names
-    no geometry, and its `geometry` is -1.
-    """
-
-    var node: NodeId
-    var geometry: GeometryId
-    var material: MaterialId
-    # Which primitives the run holds, and how many: `DRAW_TRIANGLES`,
-    # `DRAW_SEGMENTS` or `DRAW_POINTS`.
-    var kind: DrawKind
-    var count: Int
-    # The node's render order, three.js's `renderOrder`.
-    var order: Int
-    # How far ahead of the camera the object's origin is, in meters: the
-    # larger, the further. It orders as three.js's `z` does.
-    var z: Float32
-
-
-# How a caller orders a frame's runs, three.js's `setOpaqueSort` and
-# `setTransparentSort`: True when the first is drawn before the second. A
-# plain function, as three.js's is, and the sort is stable.
-comptime RenderSort = def(RenderItem, RenderItem) thin -> Bool
-
-
-@fieldwise_init
 struct RenderInfo(ImplicitlyCopyable):
     """What the renderer drew, three.js's `renderer.info.render`.
 
@@ -1132,6 +1105,8 @@ struct _RendererState(Movable):
             self.info.calls += 1
             if item.kind == DRAW_TRIANGLES:
                 self.info.triangles += item.count
+            elif item.kind == DRAW_SPLATS:
+                self.info.triangles += item.count * 2
             elif item.kind == DRAW_SEGMENTS:
                 self.info.lines += item.count
             else:
@@ -1223,75 +1198,6 @@ struct NoHooks(RenderHooks):
     def __init__(out self):
         """Make the empty set of hooks."""
         pass
-
-
-struct _Span(ImplicitlyCopyable):
-    """One draw's run of primitives in a prepared list, with its sort key.
-
-    What `_prepared` and `_prepared_lines` record beside the corners they
-    emit, and what `prepare_frame` turns into `Draw` records: the run,
-    which list it is in, how deep the draw was, whether it blends, and
-    whether it transmits.
-    """
-
-    var kind: DrawKind
-    # The first primitive of the run, a triangle or a segment.
-    var first: Int
-    var count: Int
-    var depth: Float32
-    var blends: Bool
-    # The draw's node's render order, which sorts before the depth.
-    var order: Int
-    # Whether the draw's material transmits, three.js's `transmissive`
-    # list: drawn after every opaque run and before every blended one.
-    var transmits: Bool
-    # What drew the run.
-    var source: _Source
-
-    def __init__(
-        out self,
-        kind: DrawKind,
-        first: Int,
-        count: Int,
-        depth: Float32,
-        blends: Bool,
-        order: Int,
-        source: _Source,
-        transmits: Bool = False,
-    ):
-        """Record one run.
-
-        Args:
-            kind: Which list the run is in.
-            first: Its first primitive.
-            count: How many primitives it holds.
-            depth: The draw's camera-space depth.
-            blends: Whether its material blends.
-            order: Its node's render order.
-            source: What drew it.
-            transmits: Whether its material transmits. Only a filled
-                surface can.
-        """
-        self.kind = kind
-        self.first = first
-        self.count = count
-        self.depth = depth
-        self.blends = blends
-        self.order = order
-        self.source = source
-        self.transmits = transmits
-
-    def item(self) -> RenderItem:
-        """Return the run as a hook and a sort see it."""
-        return RenderItem(
-            self.source.node,
-            self.source.geometry,
-            self.source.material,
-            self.kind,
-            self.count,
-            self.order,
-            -self.depth,
-        )
 
 
 def _note_span(
@@ -2023,79 +1929,6 @@ def _casts(cast_shadow: Bool, receive_shadow: Bool, receivers: Bool) -> Bool:
         Whether the object is drawn into the map.
     """
     return cast_shadow or (receivers and receive_shadow)
-
-
-def _sort_by(
-    mut items: List[Int], mut keys: List[Float32], mut orders: List[Int]
-):
-    """Sort `items` by render order, then by `keys`, ascending, in place
-    and stably.
-
-    Insertion sort: the lists are one entry per draw, hundreds in a busy
-    scene rather than millions, and a stable order keeps draws at equal
-    order and depth in the order the caller gave them.
-    """
-    for position in range(len(items)):
-        var item = items[position]
-        var key = keys[position]
-        var order = orders[position]
-        var slot = position
-        while slot > 0 and _after(orders[slot - 1], keys[slot - 1], order, key):
-            items[slot] = items[slot - 1]
-            keys[slot] = keys[slot - 1]
-            orders[slot] = orders[slot - 1]
-            slot -= 1
-        items[slot] = item
-        keys[slot] = key
-        orders[slot] = order
-
-
-def _after(
-    order: Int, key: Float32, other_order: Int, other_key: Float32
-) -> Bool:
-    """Return True if an entry sorts after another: a higher render order,
-    or the same order and a larger key."""
-    return order > other_order or (order == other_order and key > other_key)
-
-
-def _sort_with(mut runs: List[_Span], before: RenderSort):
-    """Sort runs in place, stably, by a caller's function, three.js's
-    custom sort: a run moves in front of the one before it while the
-    function says it is drawn first."""
-    for position in range(1, len(runs)):
-        var held = runs[position]
-        var slot = position
-        while slot > 0 and before(held.item(), runs[slot - 1].item()):
-            runs[slot] = runs[slot - 1]
-            slot -= 1
-        runs[slot] = held
-
-
-def _furthest_first(mut runs: List[_Span], custom: Optional[RenderSort]):
-    """Sort blended or transmissive runs in place: by the caller's
-    transparent sort when there is one, and otherwise by render order
-    and then furthest first, as `_draws` sorts its translucent draws."""
-    var sorted = Bool(custom)
-    if sorted:
-        _sort_with(runs, custom.value())
-        return
-    var order = List[Int]()
-    var depths = List[Float32]()
-    var orders = List[Int]()
-    for position in range(len(runs)):
-        order.append(position)
-        depths.append(runs[position].depth)
-        orders.append(runs[position].order)
-    _sort_by(order, depths, orders)
-    var kept = runs.copy()
-    for position in range(len(order)):
-        runs[position] = kept[order[position]]
-
-
-def _add_run(mut draws: List[Draw], mut items: List[RenderItem], run: _Span):
-    """Append one run to a frame's draw order, and its item beside it."""
-    draws.append(Draw(run.kind, run.first, run.count))
-    items.append(run.item())
 
 
 def _turned_around(corner: RasterVertex) -> RasterVertex:
@@ -4277,6 +4110,7 @@ struct Frame(Movable):
     var segments: List[RasterVertex]
     # Raster vertices, one per point, as `prepare_points` returns them.
     var points: List[RasterVertex]
+    var splats: List[ProjectedSplat]
     # The order to draw in, as runs of one list or another; see
     # `render.rasterizer.Draw`.
     var draws: List[Draw]
@@ -4295,6 +4129,7 @@ struct Frame(Movable):
         var points: List[RasterVertex] = List[RasterVertex](),
         var programs: NodeProgramStore = NodeProgramStore(),
         var items: List[RenderItem] = List[RenderItem](),
+        var splats: List[ProjectedSplat] = List[ProjectedSplat](),
     ):
         """Hold a prepared frame.
 
@@ -4306,11 +4141,13 @@ struct Frame(Movable):
             programs: The node programs the corners name, for this frame.
                 None by default.
             items: What drew each draw. None by default.
+            splats: The projected Gaussian ellipses. None by default.
         """
         self.corners = corners^
         self.segments = segments^
         self.draws = draws^
         self.points = points^
+        self.splats = splats^
         self.programs = programs^
         self.items = items^
 
@@ -6961,6 +6798,39 @@ struct Renderer(Movable):
         for span in range(len(point_spans)):
             if point_spans[span].blends:
                 mixed.append(point_spans[span])
+        var splats = List[ProjectedSplat]()
+        var view = camera.view_matrix_in(scene)
+        for index in range(len(scene.gaussian_splats)):
+            ref object = scene.gaussian_splats[index][]
+            var prepared = prepare_gaussian_splat(
+                scene,
+                object,
+                camera,
+                self.width,
+                self.height,
+                self.depth_mode_for(camera),
+                self.viewport,
+            )
+            if len(prepared) == 0:
+                continue
+            var first = len(splats)
+            splats.extend(Span(prepared))
+            var origin = view.transform_point(
+                scene.world_matrix(object.node).transform_point(
+                    Vector3(0, 0, 0)
+                )
+            )
+            mixed.append(
+                _Span(
+                    DRAW_SPLATS,
+                    first,
+                    len(prepared),
+                    origin.z,
+                    True,
+                    scene.render_order(object.node),
+                    _Source(object.node, GeometryId(-1), MaterialId(-1)),
+                )
+            )
         _furthest_first(mixed, self._transparent_sort)
         for position in range(len(mixed)):
             _add_run(draws, items, mixed[position])
@@ -6968,7 +6838,9 @@ struct Renderer(Movable):
         # three.js updates its `time` and camera nodes before a frame.
         var programs = assets.programs.copy()
         programs.set_frame(self.time, camera.view_matrix_in(scene))
-        return Frame(corners^, segments^, draws^, points^, programs^, items^)
+        return Frame(
+            corners^, segments^, draws^, points^, programs^, items^, splats^
+        )
 
     def render[
         C: Camera
@@ -7380,7 +7252,8 @@ struct Renderer(Movable):
             var capable = List[Bool]()
             for index in range(len(frame.items)):
                 capable.append(
-                    oit_capable(
+                    frame.items[index].kind != DRAW_SPLATS
+                    and oit_capable(
                         assets.materials.get(frame.items[index].material)
                     )
                 )
@@ -7404,6 +7277,7 @@ struct Renderer(Movable):
             self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
             frame.segments,
             frame.points,
+            len(frame.splats) > 0,
         )
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
@@ -7504,6 +7378,7 @@ struct Renderer(Movable):
             assets.data_3d_textures,
             assets.data_array_textures,
             lightings,
+            frame.splats,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])

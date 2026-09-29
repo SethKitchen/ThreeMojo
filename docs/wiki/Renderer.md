@@ -143,6 +143,12 @@ The output is one flat list, three `RasterVertex` per triangle. Both rasterizers
 
 Opaque draws come first, nearest first. Translucent draws follow, furthest first. The order is per draw, by the depth of its own placed origin. An instance sorts where it is, not where its node is, so a translucent mesh between two instances of a group falls between them. Only the draws the camera makes are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
 
+Equal sort keys keep their input order. Lists of up to 32 draws use insertion sort without extra storage. Larger lists use a stable merge sort with O(n log n) comparisons. An already ordered list needs one linear scan and no extra storage. Custom sorts use the same stable sorter.
+
+A custom comparator must define a consistent strict ordering. For a tie, it must return `False` in both directions.
+
+`bench/renderer_sort_bench.mojo` compares the draw sort with its previous implementation and checks that the results match.
+
 `prepare_frame` sorts lines and wireframes into the same order. A translucent line falls between the translucent surfaces on either side of it. See [Lines](Lines#two-lists-one-order).
 
 ## Frustum culling
@@ -257,3 +263,11 @@ A mesh the camera's layers or frustum leave out is not checked.
 `make bench-scene` times each stage on its own on a sphere of twelve thousand triangles. At 1280 by 720 with 16 workers a frame takes about 6 milliseconds on an Apple M4 Max. The rasterizer is the largest stage. `prepare` is single threaded and takes about half a millisecond. A triangle wholly inside the depth range skips the clipper, and the corner list is sized once per draw.
 
 The resolve encodes the clear color once and copies it to every pixel that still holds it. A frame that is mostly background pays for the pixels that are not.
+
+
+## Gaussian splat runs
+
+`Scene.add_gaussian_splat` adds an owned splat object to the transparent list.
+Its `RenderItem.kind` is `DRAW_SPLATS`. Its geometry and material IDs are -1,
+because splat data belongs to the object. Hooks must check the kind before
+looking up those IDs in asset stores. See [Gaussian splats](Gaussian-splats).

@@ -159,6 +159,7 @@ extension is read without it. A primitive of triangle strips or fans is
 refused, and so is a point or a line on a skinned or an instanced node.
 """
 
+from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
     CUBIC_SPLINE,
@@ -1421,13 +1422,7 @@ struct _Loader(Movable):
                 " only a compressed buffer view can name a fallback buffer"
             )
         var offset = self.integer(view, "byteOffset", 0)
-        if (
-            offset < 0
-            or length < 0
-            or offset > len(self.buffers[buffer])
-            or length > len(self.buffers[buffer]) - offset
-        ):
-            raise Error("glTF: a buffer view runs past its buffer")
+        check_buffer_range(len(self.buffers[buffer]), offset, length)
         return (buffer, offset, length, stride)
 
     def accessor_floats(
@@ -1448,42 +1443,17 @@ struct _Loader(Movable):
         var component = self.required_integer(accessor, "componentType")
         var count = self.required_integer(accessor, "count")
         var kind = self.text(accessor, "type")
-        var width = _components_of(kind)
         var size = _component_size(component)
-        var rows = width
-        var columns = 1
-        if kind == "MAT2":
-            rows = 2
-            columns = 2
-        elif kind == "MAT3":
-            rows = 3
-            columns = 3
-        elif kind == "MAT4":
-            rows = 4
-            columns = 4
-        var column_stride = rows * size
-        if columns > 1:
-            column_stride = ((column_stride + 3) // 4) * 4
-        var element_size = columns * column_stride
-        # Only column starts need padding; the final column can end at data.
-        var occupied_size = (columns - 1) * column_stride + rows * size
-        var alignment = 4 if columns > 1 else size
-        var offsets = List[Int]()
-        # Every type accepted by _components_of has a positive width.
-        for lane in range(width):  # pragma: no branch
-            offsets.append(
-                (lane // rows) * column_stride + (lane % rows) * size
-            )
+        var layout = AccessorLayout(kind, size)
+        var width = layout.width
+        var offsets = layout.offsets()
+        var element_size = layout.element_size
+        var alignment = layout.alignment
         var normalized = self.flag(accessor, "normalized") and not raw
         var out = List[SIMD[dtype, 1]]()
         var view_index = self.integer(accessor, "bufferView", -1)
         var offset = self.integer(accessor, "byteOffset", 0)
-        if offset < 0 or offset % size != 0:
-            raise Error(
-                "glTF: an accessor needs a nonnegative aligned byteOffset"
-            )
-        if count < 0:
-            raise Error("glTF: an accessor's count must not be negative")
+        layout.check(count, offset)
         if view_index < -1 or (view_index == -1 and offset != 0):
             raise Error(
                 "glTF: an accessor without a buffer view cannot have a"
@@ -1495,23 +1465,18 @@ struct _Loader(Movable):
                 out.append(0)
         else:
             var view = self.view_bytes(view_index)
-            if offset > view[2] or (view[1] + offset) % alignment != 0:
-                raise Error(
-                    "glTF: an accessor runs past its buffer view or is"
-                    " misaligned"
-                )
-            var start = view[1] + offset
-            var stride = view[3]
-            if stride == 0:
-                stride = element_size
-            elif stride < element_size or stride % 4 != 0 or stride > 252:
-                raise Error("glTF: an accessor has an invalid byteStride")
-            var available = view[2] - offset
-            if count > 0:
-                if occupied_size > available:
-                    raise Error("glTF: an accessor runs past its buffer view")
-                if count - 1 > (available - occupied_size) // stride:
-                    raise Error("glTF: an accessor runs past its buffer view")
+            var span = layout.span(
+                count,
+                offset,
+                view[1],
+                view[2],
+                view[3],
+                self.document.has(
+                    self.entry("bufferViews", view_index), "byteStride"
+                ),
+            )
+            var start = span[0]
+            var stride = span[1]
             ref bytes = self.buffers[view[0]]
             for element in range(count):
                 var at = start + element * stride

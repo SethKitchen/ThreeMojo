@@ -124,14 +124,7 @@ from render.tonemap import (
 )
 from std.math import inf, isfinite, max, min
 
-# `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
-# only `parallelism_level` and `initialize_runtime` in public view, and
-# nothing public in `std` runs work on the thread pool -- `std.algorithm.map`
-# is sequential. So the private module is the only way to keep the bands
-# parallel, and this import is the one place the project reaches past a
-# leading underscore. It pins the toolchain to 1.1: 1.0 has no `_asyncrt`
-# and 1.1 has no `asyncrt`, so one source cannot serve both.
-from std.runtime._asyncrt import TaskGroup
+from render.tasks import TaskGroup
 
 
 @fieldwise_init

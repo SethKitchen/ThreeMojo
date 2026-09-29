@@ -26,8 +26,8 @@ Draw a scene with splats in three steps:
 2. `draw_gaussian_splat` draws each `GaussianSplat` into the same target.
 3. `RenderTarget.resolve` turns the light into an image.
 
-The splats cover the whole target. A renderer's viewport does not move
-them.
+Pass the renderer's viewport to place the splats in the same camera rectangle.
+The target's scissor limits the pixels that blending can touch.
 """
 
 from cameras.camera import Camera
@@ -46,6 +46,7 @@ from render.splatrule import (
     splat_reach,
 )
 from render.target import RenderTarget
+from render.rect import Rect
 from std.math import ceil, floor, max, min
 from units.si import Length, METER
 
@@ -59,6 +60,7 @@ def prepare_gaussian_splat[
     width: Int,
     height: Int,
     depth_mode: DepthMode,
+    viewport: Optional[Rect] = None,
 ) raises -> List[ProjectedSplat]:
     """Sort, color and project a splat object's splats, in draw order.
 
@@ -70,6 +72,7 @@ def prepare_gaussian_splat[
         width: The target's width in pixels.
         height: The target's height in pixels.
         depth_mode: How the target stores depth.
+        viewport: The camera rectangle, or the whole target.
 
     Returns:
         The splats on the screen, furthest first once sorted. A splat
@@ -82,6 +85,9 @@ def prepare_gaussian_splat[
     """
     if not depth_mode.is_valid():
         raise Error("A Gaussian splat needs a valid depth mode")
+    var rect = viewport.value() if Bool(viewport) else Rect.whole(width, height)
+    if not rect.is_valid():
+        raise Error("A Gaussian splat needs a valid viewport")
     var out = List[ProjectedSplat]()
     if not scene.shows(splat.node, camera.visible_layers()):
         return out^
@@ -103,8 +109,8 @@ def prepare_gaussian_splat[
     var place = SplatView(
         view * world,
         camera.projection_matrix(),
-        width,
-        height,
+        rect.width,
+        rect.height,
         depth_mode,
         log_depth_factor(camera.far_distance()),
     )
@@ -133,7 +139,10 @@ def prepare_gaussian_splat[
             place,
         )
         if Bool(projected):
-            out.append(projected.value())
+            var placed = projected.value()
+            placed.x += Float32(rect.x)
+            placed.y += Float32(rect.top(height))
+            out.append(placed)
     return out^
 
 
@@ -152,14 +161,35 @@ def rasterize_splats(
     if not target.depth_mode.is_valid():
         raise Error("A Gaussian splat needs a valid depth mode")
     for index in range(len(splats)):
-        var splat = splats[index]
-        var reach = splat_reach(splat)
-        var left = max(Int(floor(splat.x - reach[0])) - 1, 0)
-        var right = min(Int(ceil(splat.x + reach[0])) + 1, target.width - 1)
-        var top = max(Int(floor(splat.y - reach[1])) - 1, 0)
-        var bottom = min(Int(ceil(splat.y + reach[1])) + 1, target.height - 1)
-        for y in range(top, bottom + 1):
-            _blend_row(target, splat, y, left, right)
+        rasterize_splat(target, splats[index], 0, target.height - 1)
+
+
+def rasterize_splat(
+    mut target: RenderTarget,
+    splat: ProjectedSplat,
+    first_row: Int,
+    last_row: Int,
+) raises:
+    """Blend one splat into a disjoint worker band.
+
+    Args:
+        target: The checked target.
+        splat: One projected splat.
+        first_row: The band's first row.
+        last_row: The band's last row, inclusive.
+
+    Raises:
+        Error: If a target blend is refused.
+    """
+    var reach = splat_reach(splat)
+    var left = max(Int(floor(splat.x - reach[0])) - 1, 0)
+    var right = min(Int(ceil(splat.x + reach[0])) + 1, target.width - 1)
+    var top = max(Int(floor(splat.y - reach[1])) - 1, max(0, first_row))
+    var bottom = min(
+        Int(ceil(splat.y + reach[1])) + 1, min(target.height - 1, last_row)
+    )
+    for y in range(top, bottom + 1):
+        _blend_row(target, splat, y, left, right)
 
 
 def _blend_row(
@@ -195,7 +225,11 @@ def _blend_row(
 def draw_gaussian_splat[
     C: Camera
 ](
-    mut target: RenderTarget, scene: Scene, mut splat: GaussianSplat, camera: C
+    mut target: RenderTarget,
+    scene: Scene,
+    mut splat: GaussianSplat,
+    camera: C,
+    viewport: Optional[Rect] = None,
 ) raises:
     """Draw a splat object into a target on the CPU: three.js's render of a
     `GaussianSplat`.
@@ -206,11 +240,18 @@ def draw_gaussian_splat[
         scene: The scene, updated, that holds the object's node.
         splat: The splats; see `prepare_gaussian_splat`.
         camera: The camera to project through.
+        viewport: The camera rectangle, or the whole target.
 
     Raises:
         Error: Everything `prepare_gaussian_splat` raises.
     """
     var splats = prepare_gaussian_splat(
-        scene, splat, camera, target.width, target.height, target.depth_mode
+        scene,
+        splat,
+        camera,
+        target.width,
+        target.height,
+        target.depth_mode,
+        viewport,
     )
     rasterize_splats(target, splats)

@@ -193,14 +193,9 @@ from render.pointrule import (
 )
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
-# `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
-# only `parallelism_level` and `initialize_runtime` in public view, and
-# nothing public in `std` runs work on the thread pool -- `std.algorithm.map`
-# is sequential. So the private module is the only way to keep the bands
-# parallel, and this import is the one place the project reaches past a
-# leading underscore. It pins the toolchain to 1.1: 1.0 has no `_asyncrt`
-# and 1.1 has no `asyncrt`, so one source cannot serve both.
-from std.runtime._asyncrt import TaskGroup
+from render.tasks import TaskGroup
+from render.splatrule import ProjectedSplat
+from render.splat_raster import rasterize_splat
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
@@ -2530,6 +2525,7 @@ def check_output_kinds(
     mapped: Bool,
     segments: List[RasterVertex] = List[RasterVertex](),
     points: List[RasterVertex] = List[RasterVertex](),
+    splats: Bool = False,
 ) raises:
     """Refuse a tone-mapped frame that holds both data and blended light.
 
@@ -2570,6 +2566,7 @@ def check_output_kinds(
         points: Raster vertices, one per point, as submitted alongside. A
             point is never data either, and a blended one counts as a
             blended segment does. Empty by default.
+        splats: Whether projected splats add blended light. False by default.
 
     Raises:
         Error: If the curve is on and the frame holds both a surface that
@@ -2579,7 +2576,7 @@ def check_output_kinds(
     if not mapped:
         return
     var shows_data = False
-    var mixes_light = False
+    var mixes_light = splats
     for triangle in range(len(corners) // 3):
         ref first = corners[triangle * 3]
         # A triangle whose material turns the tone mapping off keeps the
@@ -6202,21 +6199,22 @@ struct DrawKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or
-        `DRAW_POINTS`."""
+        `DRAW_POINTS` or `DRAW_SPLATS`."""
         return (
             self == DRAW_TRIANGLES
             or self == DRAW_SEGMENTS
             or self == DRAW_POINTS
+            or self == DRAW_SPLATS
         )
 
     def stride(self) -> Int:
         """Return how many corners one primitive of this kind takes: three
-        for a triangle, two for a segment, one for a point. Three for a
+        for a triangle, two for a segment, one for a point or splat. Three for a
         kind that is none of them, which `check_draws` refuses before
         anything reads the answer."""
         if self == DRAW_SEGMENTS:
             return 2
-        if self == DRAW_POINTS:
+        if self == DRAW_POINTS or self == DRAW_SPLATS:
             return 1
         return 3
 
@@ -6227,6 +6225,8 @@ comptime DRAW_TRIANGLES = DrawKind(0)
 comptime DRAW_SEGMENTS = DrawKind(1)
 # A run of points, one corner each, out of a frame's point list.
 comptime DRAW_POINTS = DrawKind(2)
+# Projected Gaussian ellipses, held separately from point vertices.
+comptime DRAW_SPLATS = DrawKind(3)
 
 
 @fieldwise_init
@@ -6250,7 +6250,11 @@ struct Draw(ImplicitlyCopyable):
 
 
 def check_draws(
-    draws: List[Draw], triangles: Int, segments: Int, points: Int = 0
+    draws: List[Draw],
+    triangles: Int,
+    segments: Int,
+    points: Int = 0,
+    splats: Int = 0,
 ) raises:
     """Refuse a draw list that names what a frame does not hold.
 
@@ -6263,6 +6267,7 @@ def check_draws(
         triangles: How many triangles the frame's corner list holds.
         segments: How many segments its segment list holds.
         points: How many points its point list holds. None by default.
+        splats: How many projected splats the frame holds. None by default.
 
     Raises:
         Error: If a draw's kind is none of `DRAW_TRIANGLES`, `DRAW_SEGMENTS`
@@ -6282,7 +6287,14 @@ def check_draws(
             held = segments
         if draw.kind == DRAW_POINTS:
             held = points
-        if draw.first < 0 or draw.count < 0 or draw.first + draw.count > held:
+        if draw.kind == DRAW_SPLATS:
+            held = splats
+        if (
+            draw.first < 0
+            or draw.count < 0
+            or draw.first > held
+            or draw.count > held - draw.first
+        ):
             raise Error("A draw runs past the primitives the frame holds")
 
 
@@ -6367,6 +6379,7 @@ async def _frame_band(
     segment_rows: MutPointer[Int, MutAnyOrigin],
     points: Pointer[RasterVertex, ImmutAnyOrigin],
     point_rows: MutPointer[Int, MutAnyOrigin],
+    splats: Pointer[ProjectedSplat, ImmutAnyOrigin],
     draws: Pointer[Draw, ImmutAnyOrigin],
     draw_count: Int,
     target: MutPointer[RenderTarget, MutAnyOrigin],
@@ -6411,6 +6424,15 @@ async def _frame_band(
         for index in range(draw_count):
             var draw = draws[unsafe_offset=index]
             var past = draw.first + draw.count
+            if draw.kind == DRAW_SPLATS:
+                for splat in range(draw.first, past):
+                    rasterize_splat(
+                        target[],
+                        splats[unsafe_offset=splat],
+                        first_row,
+                        last_row,
+                    )
+                continue
             if draw.kind == DRAW_TRIANGLES:
                 for triangle in range(draw.first, past):
                     if (
@@ -6530,6 +6552,7 @@ def rasterize_frame(
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
     lightings: List[Lighting] = List[Lighting](),
+    splats: List[ProjectedSplat] = List[ProjectedSplat](),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -6588,6 +6611,7 @@ def rasterize_frame(
             resolves to, in `Renderer.light_masks` order: a triangle whose
             `lights` is `i` above zero is lit by `lightings[i - 1]`, and
             one whose `lights` is zero by `lighting`.
+        splats: Projected Gaussian splats referenced by DRAW_SPLATS runs.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -6653,7 +6677,7 @@ def rasterize_frame(
         check_point_maps(
             points[point], mode, textures, cubes, programs, volumes, arrays
         )
-    check_draws(draws, triangles, lines, len(points))
+    check_draws(draws, triangles, lines, len(points), len(splats))
     # Asked of the triangles a draw names rather than of the whole list:
     # the transmission pass draws the opaque runs of a frame that holds
     # transmissive triangles too, before there is a scene for them to
@@ -6671,6 +6695,10 @@ def rasterize_frame(
         for index in range(len(draws)):
             ref draw = draws[index]
             var past = draw.first + draw.count
+            if draw.kind == DRAW_SPLATS:
+                for splat in range(draw.first, past):
+                    rasterize_splat(target, splats[splat], 0, target.height - 1)
+                continue
             if draw.kind == DRAW_TRIANGLES:
                 for triangle in range(draw.first, past):
                     rasterize_shaded(
@@ -6745,6 +6773,7 @@ def rasterize_frame(
                 segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 point_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                splats.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 len(draws),
                 Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
@@ -6772,6 +6801,7 @@ def rasterize_frame(
     _ = len(triangle_rows)
     _ = len(segment_rows)
     _ = len(point_rows)
+    _ = len(splats)
     _raise_band_errors(errors)
 
 
