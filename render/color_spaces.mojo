@@ -39,7 +39,7 @@ XYZ times the source's matrix to XYZ, the matrix that `convert` applies.
 three.js's internal `_getMatrix` multiplies the two the other way round.
 """
 
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.benchmark import black_box
 from std.math import pow
 
@@ -625,6 +625,22 @@ struct OutputEncoding(ImplicitlyCopyable):
         var out = self.light(color)
         if self.srgb:
             return out.encode()
+        return out.quantize()
+
+    def encode_with(self, color: FloatColor, bytes: SrgbBytes) -> Color:
+        """Return what `encode` returns, with an sRGB output's bytes read
+        from a table rather than worked out with a power.
+
+        Args:
+            color: Straight linear light in the working space.
+            bytes: The thresholds, from `SrgbBytes()`.
+
+        Returns:
+            The same bytes `encode` gives.
+        """
+        var out = self.light(color)
+        if self.srgb:
+            return out.encode_with(bytes)
         return out.quantize()
 
     def flatten(self) -> List[Float32]:

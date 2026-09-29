@@ -6487,15 +6487,8 @@ def _leaf[
     inputs: NodeInputs,
 ) -> Lanes:
     """Return what a node that computes nothing from other nodes holds, or
-    a texture read, whose coordinate is `x` and whose level is `z`."""
-    if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
-        var at = Int(immediate)
-        return Lanes(
-            source.word(at),
-            source.word(at + 1),
-            source.word(at + 2),
-            source.word(at + 3),
-        )
+    a texture read, whose coordinate is `x` and whose level is `z`. A
+    constant and a uniform are read in `run_code` itself."""
     if op == NODE_TIME.value:
         return Lanes(source.word(PROGRAM_TIME))
     if op == NODE_CAMERA_POSITION.value:
@@ -7005,16 +6998,10 @@ def _operation[
 ](
     source: S, op: Int, x: Lanes, y: Lanes, z: Lanes, immediate: Float32
 ) -> Lanes:
-    """Return what a math node computes from its inputs' registers."""
+    """Return what a math node computes from its inputs' registers. The
+    commonest nodes, `add`, `sub`, `mul`, `div`, a swizzle, a join and a
+    negation, are worked out in `run_code` itself."""
     var width = Int(immediate)
-    if op == NODE_ADD.value:
-        return x + y
-    if op == NODE_SUB.value:
-        return x - y
-    if op == NODE_MUL.value:
-        return x * y
-    if op == NODE_DIV.value:
-        return x / y
     if op == NODE_MIX.value:
         return x * (1 - z) + y * z
     if op == NODE_CLAMP.value:
@@ -7047,15 +7034,6 @@ def _operation[
         return Lanes(sqrt(_dot(x, x, width)))
     if op == NODE_FRACT.value:
         return x - floor(x)
-    if op == NODE_SWIZZLE.value:
-        return Lanes(
-            x[width & 3],
-            x[(width >> 2) & 3],
-            x[(width >> 4) & 3],
-            x[(width >> 6) & 3],
-        )
-    if op == NODE_JOIN.value:
-        return _joined(x, y, z, width)
     if op == NODE_ABS.value:
         return abs(x)
     if op == NODE_SIGN.value:
@@ -7078,8 +7056,6 @@ def _operation[
         return sqrt(x)
     if op == NODE_INVERSE_SQRT.value:
         return 1 / sqrt(x)
-    if op == NODE_NEGATE.value:
-        return -x
     if op == NODE_ONE_MINUS.value:
         return 1 - x
     if op == NODE_SATURATE.value:
@@ -7234,6 +7210,45 @@ def run_code[
         var z = registers[third]
         var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
         written = Int(source.word(at + INSTRUCTION_DEST))
+        # The commonest nodes, worked out here, each exactly as `_leaf` or
+        # `_operation` works it out: calling either costs more than a
+        # multiply does, and most of a program is these.
+        if op == NODE_MUL.value:
+            registers[written] = x * y
+            continue
+        if op == NODE_ADD.value:
+            registers[written] = x + y
+            continue
+        if op == NODE_SUB.value:
+            registers[written] = x - y
+            continue
+        if op == NODE_DIV.value:
+            registers[written] = x / y
+            continue
+        if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
+            var place = Int(immediate)
+            registers[written] = Lanes(
+                source.word(place),
+                source.word(place + 1),
+                source.word(place + 2),
+                source.word(place + 3),
+            )
+            continue
+        if op == NODE_SWIZZLE.value:
+            var order = Int(immediate)
+            registers[written] = Lanes(
+                x[order & 3],
+                x[(order >> 2) & 3],
+                x[(order >> 4) & 3],
+                x[(order >> 6) & 3],
+            )
+            continue
+        if op == NODE_JOIN.value:
+            registers[written] = _joined(x, y, z, Int(immediate))
+            continue
+        if op == NODE_NEGATE.value:
+            registers[written] = -x
+            continue
         # The leaves, and `gl_FragCoord`, the facing and a texture read at
         # a level, leaves numbered after them.
         if (

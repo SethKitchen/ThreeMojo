@@ -1419,7 +1419,7 @@ def test_a_malformed_sparse_accessor_is_refused() raises:
     sparse_bin(bin)
     refuses(
         sparse_doc(bin, '{"componentType":5126,"count":-1,"type":"VEC3"}'),
-        "must not be negative",
+        "count is invalid",
     )
 
 

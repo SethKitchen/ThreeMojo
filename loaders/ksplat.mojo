@@ -133,9 +133,9 @@ def ksplat_components(degree: Int) raises -> Int:
         0, 9, 24 or 45.
 
     Raises:
-        Error: If the degree is above 3.
+        Error: If the degree is outside 0 through 3.
     """
-    if degree > 3:
+    if degree < 0 or degree > 3:
         raise Error(
             "KSPLAT: unsupported spherical harmonics degree " + String(degree)
         )
@@ -336,6 +336,16 @@ def parse_ksplat(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             raise Error("KSPLAT: a section holds more splats than rows")
         if read + section.splats > header.splats:
             raise Error("KSPLAT: KSPLAT splat count mismatch")
+        if section.splats > 0 and header.level != KSPLAT_UNCOMPRESSED:
+            if (
+                section.bucket_count == 0
+                or section.bucket_bytes < 12
+                or section.full_buckets > section.bucket_count
+                or section.partial_buckets
+                != section.bucket_count - section.full_buckets
+                or (section.full_buckets > 0 and section.bucket_size == 0)
+            ):
+                raise Error("KSPLAT: invalid KSPLAT bucket data")
         if section.splats > 0:
             out.ensure_bands(header.splats, section.degree)
             _read_section(
@@ -354,16 +364,25 @@ def parse_ksplat(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         base += storage
     if read != header.splats:
         raise Error("KSPLAT: KSPLAT splat count mismatch")
-    var bands = out.bands.copy()
+    # Take the arrays without copying them. Keep every field initialized
+    # so an error from the checked geometry factory can destroy `out`.
+    var centers = List[Float32]()
+    var covariances = List[Float32]()
+    var colors = List[UInt8]()
+    var bands = List[List[UInt8]]()
+    swap(centers, out.centers)
+    swap(covariances, out.covariances)
+    swap(colors, out.colors)
+    swap(bands, out.bands)
     while len(bands) < 3:
         bands.append(List[UInt8]())
     return create_gaussian_splat_geometry(
-        out.centers.copy(),
-        out.covariances.copy(),
-        out.colors.copy(),
-        bands[0].copy(),
-        bands[1].copy(),
-        bands[2].copy(),
+        centers^,
+        covariances^,
+        colors^,
+        bands.pop(0),
+        bands.pop(0),
+        bands.pop(0),
     )
 
 

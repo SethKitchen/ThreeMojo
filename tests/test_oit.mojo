@@ -249,14 +249,19 @@ def test_the_snap_rounds_to_whole_pixels_from_the_center() raises:
     var scene = a_scene(assets)
     var renderer = Renderer(10, 6)
     var frame = renderer.prepare_frame(scene, assets, a_camera())
+    # The frame's own slim corners, and the same corners whole.
     var corners = frame.corners.copy()
     snap_to_pixels(corners, 10, 6)
+    var whole = frame.whole_corners()
+    snap_to_pixels(whole, 10, 6)
     for at in range(len(corners)):
         var x = corners[at].x - 5
         var y = corners[at].y - 3
         assert_equal(x, Float32(Int(x)))
         assert_equal(y, Float32(Int(y)))
         assert_true(abs(corners[at].x - frame.corners[at].x) <= 0.5)
+        assert_equal(whole[at].x, corners[at].x)
+        assert_equal(whole[at].y, corners[at].y)
     var none = List[RasterVertex]()
     snap_to_pixels(none, 10, 6)
     assert_equal(len(none), 0)

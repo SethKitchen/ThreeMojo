@@ -975,7 +975,7 @@ def test_accessors_that_are_wrong_are_refused() raises:
         "sparse splat accessor",
         "unknown component type 5124",
         "cannot be MAT4",
-        "reaches past its data",
+        "past its buffer",
     ]
     for at in range(len(cases)):
         refused(
@@ -1012,7 +1012,7 @@ def test_accessors_that_are_wrong_are_refused() raises:
             )
             + "]}]"
         ),
-        "reaches past its data",
+        "past its buffer",
     )
 
 

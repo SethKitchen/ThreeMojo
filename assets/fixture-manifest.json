@@ -1,0 +1,862 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "df163976daa3d26195a5e8406f496cc81a728031",
+  "families": [
+    {
+      "family": "animation",
+      "generator": "assets/animation/three_paths.mjs",
+      "generator_sha256": "7d84ae67a5875cc19063489e596eb0416e7e591ee6be065f73cdc8e718edc5b3",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/animation",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_paths.mjs > three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/animation/clips.json": "042eb3da88569c9dd53867c8c70be13f80fd0c44d683008fd0efc325b2db0ae1",
+        "assets/animation/three.json": "d2a217f1f415bd58f25c9f7717c9482de51822fe04b7f7b19e9bded96309dc80"
+      }
+    },
+    {
+      "family": "csm",
+      "generator": "assets/csm/three_csm_helper.mjs",
+      "generator_sha256": "8dcaa4475961ed6f72fc24e3bf5eb67b5bcb1ca53fabab9d7e8cc3eb29444438",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/csm",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_csm_helper.mjs > three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/csm/three.json": "3c1cfd2c44097111b7c38b6afab4e01d273d9da913355b86c2eff38916fdd740"
+      }
+    },
+    {
+      "family": "curve_json",
+      "generator": "assets/curve_json/three_curves.mjs",
+      "generator_sha256": "1cfbe936575738f1936e801156e5a308c47b43ff63efc1155980096800597a85",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/curve_json",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_curves.mjs > curves.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/curve_json/curves.json": "756e540558e9614c934bbbfdb95c18d59a2af68419a4f78a0b4b73ae2d01c105"
+      }
+    },
+    {
+      "family": "dds",
+      "generator": "assets/dds/three_dds.mjs",
+      "generator_sha256": "9f9fe47e32847f32fca55e7a89650881bf91e499d06c02e6d2fd21bf989169e1",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/dds",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_dds.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/dds/bgr.dds": "e3a5038991fc3c60ce92e862423c860983abdf0496828fbe542b8d1a8d54a627",
+        "assets/dds/bgra.dds": "02740ac0ddfbec73c4844602d47474bce89f3510ed7d00a760c651d82c3fd95a",
+        "assets/dds/dds.json": "d9404fa3aeccffcaa97d501209a1161db27109d278c3728655770023a29b78d9"
+      }
+    },
+    {
+      "family": "draco/export",
+      "generator": "assets/draco/export/three_export.mjs",
+      "generator_sha256": "8aa0d8fb1d48dc1efd41778f7cc2840eb73277a74b13a88e89048cc29049396b",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/draco/export",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0 draco3d@1.5.6",
+        "node three_export.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/draco/export/three.bin": "36d25f9a39d29c496c03f0a2a5c31759aa0ffe7f1002b7ba23c3f5e171d6dbc9",
+        "assets/draco/export/three.json": "b9483b8739b1531f7f89d91ceccb251ef3be7f57b66a4689b11e5e978725af81"
+      }
+    },
+    {
+      "family": "earcut",
+      "generator": "assets/earcut/three_holes.mjs",
+      "generator_sha256": "4be3a8537615db3427aa4fadf835ad8c8d9c98c48fd15e42e5e60392752d7840",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/earcut",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_holes.mjs > holes.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/earcut/holes.json": "b412509a5f30df560c43e356ee47348be32a8b2057c99e3ba0cb95766430d945"
+      }
+    },
+    {
+      "family": "exporters",
+      "generator": "assets/exporters/three_exporters.mjs",
+      "generator_sha256": "bc1814a7b8e93838dc5c905291c1a57b55fcdf8360a4016223ccbb3dbc7b437d",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/exporters",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_exporters.mjs > three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/exporters/three.json": "8eeb990ad874424a07933ca0623cf33553180408c2b3064c1669206a4615c02b"
+      }
+    },
+    {
+      "family": "gaussian_splat",
+      "generator": "assets/gaussian_splat/make_splats.mjs",
+      "generator_sha256": "e24fc34144b21710de488d22dbff38cefb7ff87c8b714881c27d797dc8a1347e",
+      "three_version": "0.186.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/gaussian_splat",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.186.0",
+        "node make_splats.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/gaussian_splat/ascii.ply": "c6bda4b6f17283fdf9742d3c512a87213cf2f6b645e51daaca4e1101bd46eaed",
+        "assets/gaussian_splat/empty.gltf": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "assets/gaussian_splat/expected.json": "69789ba70cb561c3c9a443d8e6237482ec5ec0953fba18abcc54fa6aca206266",
+        "assets/gaussian_splat/external.bin": "d476f1584449ee1c46a9ddfaaa5d096f6320a94ac466a8add9e4a835dae79d6f",
+        "assets/gaussian_splat/external.gltf": "6286b1890646ff9bcb690ae2a3935dd95af6f9d4e879b3e956180ede1de90ada",
+        "assets/gaussian_splat/four.splat": "c90ac0ff462c61c50dc469c218bf2ba04fc8cd96c29c2cb50084428d919cd3d8",
+        "assets/gaussian_splat/level0.ksplat": "f956c5aa8c9a2243bca1d0269aa433c7a415c9aa54ad693eca495d274d036a55",
+        "assets/gaussian_splat/level1.ksplat": "bfa47fba1f5e4913d241b90c307b80073bace72e1efe17e1e09dbaf5ca1fdd94",
+        "assets/gaussian_splat/level2.ksplat": "c1239638d1fa10852d045d706a4d1119a07940f6dfb600861c07f04d2c4a7f81",
+        "assets/gaussian_splat/level2_default_range.ksplat": "71e14593f6f088efc12306bfc73b085e5f2d405dcda8983c595a3cb98cb453b1",
+        "assets/gaussian_splat/splat.ply": "63f1370e586077bd6752f3af2e71bf5d2facd63755fbed98a513a7649f41cad5",
+        "assets/gaussian_splat/splats.glb": "c925930bc47e89c67361c4c412ef149d8a0c939e9b34e0f0ac4c6e214c03c95c",
+        "assets/gaussian_splat/splats.gltf": "d322b97e14f9fc4e49dee9256a1b02f7e11412ca066ceddc6e96d7d5f847d267",
+        "assets/gaussian_splat/three.splat": "3bd887fbff24039f990878155f53d5d9372b9d39dbefc2de53f9df3c439f260b",
+        "assets/gaussian_splat/v1.spz": "1dcf05eb5a434d64d80e9dea4e07307799014f314ca0245ee7b76edf71cf287d",
+        "assets/gaussian_splat/v2.spz": "ac0547cde7a64abe59000d1e2b82f5a1292d375f7533ca6b952deee6c6d9b5ae",
+        "assets/gaussian_splat/v3.spz": "d1786b4c290780613b16f3763ff73bdb50607896912636354d4dc3fa7900f61a",
+        "assets/gaussian_splat/v4.spz": "bb06da3e61c039e7b6fddd23cc273452c401a871cf8906e88f69f50813843a34"
+      }
+    },
+    {
+      "family": "gcode",
+      "generator": "assets/gcode/three_gcode.mjs",
+      "generator_sha256": "f3058f5660b79be54188ab869c6b2954e4541b0cbcb8d6aaf32cfab48f3430ed",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/gcode",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_gcode.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/gcode/fixture.gcode": "ba7d1111cb25816ff81c202a91c3cfa0823fc785f7cd68bfcd20c3dd1411c717",
+        "assets/gcode/gcode.json": "103963b1e0eb89d9ea306b1af22317c41d94c43db0ffe4d59f81700794ea69d7"
+      }
+    },
+    {
+      "family": "geometries",
+      "generator": "assets/geometries/three_geometries.mjs",
+      "generator_sha256": "19ae555f797ae63fecb871bed246401a7c454caa526533e6b19e511190a80209",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/geometries",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_geometries.mjs > three_geometries.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/geometries/three_geometries.json": "2cf97579a5676139eac93ca05a06a4036b63dc4779a4cdb04126ec01f3d6db8e"
+      }
+    },
+    {
+      "family": "geometry_json",
+      "generator": "assets/geometry_json/three_scene.mjs",
+      "generator_sha256": "45ff8b60a0e48252d8ae6e10a1cdc69f0ff7c6481fac1b75489073f22e0e9320",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/geometry_json",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_scene.mjs > scene.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/geometry_json/scene.json": "7173932af0820e6c1cc37501ba4e81124b9a8503e656d343de5dcafcfc245fcb"
+      }
+    },
+    {
+      "family": "geometry_tools",
+      "generator": "assets/geometry_tools/three_tools.mjs",
+      "generator_sha256": "9218878647269dbafe51efb2f09d6b93fb09b205c7a19dcb982d0df18b450ec5",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/geometry_tools",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_tools.mjs > three.json",
+        "node three_tools.mjs coaster > coaster.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/geometry_tools/coaster.json": "93eedf08b83a2cd128434883986aad91b1714d5e83700bb37099ccddc2d1aafd",
+        "assets/geometry_tools/three.json": "476ef999be2d963ec9fa095881f7a92121398cb4d37ccdb5729ced139e99c553"
+      }
+    },
+    {
+      "family": "gltf",
+      "generator": "assets/gltf/three_export.mjs",
+      "generator_sha256": "614f87385d5ee06e60c20ce2edad1ef9ba4f1d37090482492c5d1a2c26fa6934",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/gltf",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_export.mjs > three_export.gltf"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/gltf/box.bin": "decbd0d97f863df44b750a848afa6ef2008ffd891e52eda16c067b293161944b",
+        "assets/gltf/box.glb": "c757750970ccbf7db66afea7b3928e294bd0757c7f623bbca7a7ed315c87eb2a",
+        "assets/gltf/box.gltf": "b011ec96594466321ba91bbd43e32bdbf2d11ece3263b054ac61f3825566881c",
+        "assets/gltf/checker.png": "7f2538a6e81af23e034f8ca2efc2cb5f1d7d709f502fa30bdccfebe774e4ecab",
+        "assets/gltf/embedded.gltf": "5dc84e82e8fe281c17d882cef7efca4c67dc2f2317991723655dece843c38d63",
+        "assets/gltf/three_export.gltf": "34576b9805ebd282e458732713c4efbe6cf7c2de60c2144e412431a570480af6"
+      }
+    },
+    {
+      "family": "gltf_variants",
+      "generator": "assets/gltf_variants/three_variants.mjs",
+      "generator_sha256": "99b9f1a8439f121d29f2deb0f9801e0571fc62072e71a52408d8d4da69a5f8c6",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/gltf_variants",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_variants.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Copy KHR_materials_variants.js from takahirox/three-gltf-extensions commit 9ae3a14 beside the generator."
+      ],
+      "artifacts": {
+        "assets/gltf_variants/variants.gltf": "16f30c536e475e2f4aa76cad1b8e644024b1cd88fc69035ae891da9fe6b19ca6",
+        "assets/gltf_variants/variants.json": "cbefa33d56ebe130218350be69967a127dee81fc5ebfc5ac8b0cb1894364ead2"
+      }
+    },
+    {
+      "family": "js_number",
+      "generator": "assets/js_number/srgb.mjs",
+      "generator_sha256": "43ff409c9e16aff3139ffa244444994ae31642a61be5aac47f8154c01a8eff41",
+      "three_version": null,
+      "version_evidence": "The original generator does not record its three.js version.",
+      "cwd": "assets/js_number",
+      "commands": [
+        "node srgb.mjs > srgb.generated.txt"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Supply and record an exact three version before regeneration. Review the generated words against _SRGB_TO_LINEAR in loaders/js_number.mojo; do not overwrite the module with stdout."
+      ],
+      "artifacts": {
+        "assets/js_number/v8.json": "3818f7a49f6a5fad3ee9be3ce7a7d7721b402d5c301ecd7a19b0472d108ad091",
+        "loaders/js_number.mojo": "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101"
+      }
+    },
+    {
+      "family": "kmz",
+      "generator": "assets/kmz/make_kmz.mjs",
+      "generator_sha256": "6937ff46327d958cff5021951cb405bb383a249eac3d7fe66002c30bf84bcf6a",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/kmz",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node make_kmz.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/kmz/model.kmz": "58924060691e1807291eab002239d3a2ce7b7124bd58f263dda72ef0174aae75",
+        "assets/kmz/tri.dae": "f36fa30536b4d3d20c716231f45bfc5e83bb139d5ee2445e7905cc18b99ec759"
+      }
+    },
+    {
+      "family": "ldraw",
+      "generator": "assets/ldraw/three_ldraw.mjs",
+      "generator_sha256": "4d2bfaaf245c6a9fed7be315519e4a97a9eb306773c286442c680599092faea1",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/ldraw",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_ldraw.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/ldraw/broken/bad_alpha.ldr": "dd031129e29a76330f0e6463ddb995d79e3ee14763be8c45460071094b8781a2",
+        "assets/ldraw/broken/bad_edge.ldr": "a4cb334fc35e08bd897a50d604d6ce20f7acd8ff9f19d72d1426cb848b723fe2",
+        "assets/ldraw/broken/bad_line.ldr": "dfe2ef3ccdf1fdda6ddac8e7fd21f3db8dbd182aa1f3538d49009a022333a689",
+        "assets/ldraw/broken/bad_luminance.ldr": "9ef6c8b9fe9f1f40ae6035e153708880a2042d857fdccb6bddfceba2fc9fd8e3",
+        "assets/ldraw/broken/bad_token.ldr": "ed68ee326657d820fa3afe31a1f0033f0c90135ab7ae1e94872c3fd24ecee3d1",
+        "assets/ldraw/broken/bad_value.ldr": "6f4d72cfc4a03679af4eddf308895306da54dbe763632a44f878eea0bb70329e",
+        "assets/ldraw/broken/missing.ldr": "539f821c42f455ff7474350fbc2f7da5c02e54b757c002882b92f07da5370e27",
+        "assets/ldraw/broken/no_name.ldr": "f5cfdb2d22a14e81a52f5f7a1a9a5fbf7f678085aa686846be4074fec4c8f798",
+        "assets/ldraw/kitchen.mpd": "e7c99bb41bce85c155981d50dfef96cbae805ceca2b7c2e8ae94907dca079468",
+        "assets/ldraw/ldraw.json": "58f5aea9a273efbc7a1eaf73ae3c4a4f2d5ea71c1944a6b4d29fd34bcb0648d7",
+        "assets/ldraw/library/p/48/tri.dat": "9fc8ce150fcf35f50881b72be366c79e64696b6c90f07e85d2a18546b5f81a83",
+        "assets/ldraw/library/p/edgy.dat": "1d9cfb4a10dbfbe19d413393a1d7a745f33c1425a1a37b0efa472ff2b26dde25",
+        "assets/ldraw/library/p/holder.dat": "20c5872e432dd767605d9f7ed95850d685a75fbe42b9976f0653146b960b1c78",
+        "assets/ldraw/library/p/rect.dat": "dfcf7a3434adb9303687b80074754eeaa6c17b67683817e91ad2ce0721122b3d",
+        "assets/ldraw/library/parts/brick.dat": "4def8c7c2664721870f4664d505903e20c60ea3146d6b3496f97b8c2f4494826",
+        "assets/ldraw/library/parts/broken.dat": "8b3fc1cafb891427261f2ae929b2439bac062f98ff1985751efe8e4af36200e4",
+        "assets/ldraw/library/parts/plate.dat": "8ca0b771d8835dee0ba090012e27b616a1e996db02735d5a7307a19a55d63af3",
+        "assets/ldraw/library/parts/s/brick_s01.dat": "fd73c2918ba66a84eb274755cfc5d63bf1b787c086953439de12bd38c4e9f984",
+        "assets/ldraw/library/wire/mixed.dat": "c22b643d9360c37709c92a0533a87ccd53ab728eb3acb9854f5e74d50671fd00",
+        "assets/ldraw/scene.mpd": "bb67aebf64e500d328145841a13c0da97be6370d6d342a1fab0ab6b52567a7dd"
+      }
+    },
+    {
+      "family": "lwo",
+      "generator": "assets/lwo/three_lwo.mjs",
+      "generator_sha256": "1672169c283200250f0dd06ac4081bee3737e61a17e6b48eb5e1bcfc202c5cf3",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/lwo",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_lwo.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/lwo/broken/color_no_value.lwo": "17909a882f1b6342ac8e42bf778ad7e00ff3bec26d61df0598a714217e17e8f8",
+        "assets/lwo/broken/color_shape.lwo": "2e7813fad7a4d6529d6edf4aea910714a13a1da3c8358f24be1e1ee999f4dc00",
+        "assets/lwo/broken/empty_tags.lwo": "ba237ed69462195f1fd8f7fdbf67d77c54015eb308a40fe969b1346a6855b270",
+        "assets/lwo/broken/entry_on_text.lwo": "fe86a14db524a213e4ffa231b0db2d8d86362cffcf8aba792cc0e563977ef2b1",
+        "assets/lwo/broken/far_point.lwo": "c6dfc645b98c65695f10c050f9902fc66993bb0cf888528ef69bcece90685663",
+        "assets/lwo/broken/far_uv.lwo": "7413d554b6224d2652179ee363944a66e3bee72c135ba24dfc727ff377695781",
+        "assets/lwo/broken/few_tags.lwo": "835cedf80c5a94be2d55db3ce58583a36467b991d6aec8eeff4fd570e7f81376",
+        "assets/lwo/broken/lines_no_surface.lwo": "3700fa8d46a0e55eb0f35616e28bbc5974f8ca526c7b0f25ca6400923dbbd8ed",
+        "assets/lwo/broken/no_connections.lwo": "0c0b57c4cc9fa54d1d55f1b19c1fa04742236d9a34bcb746f9d708afc252c2ee",
+        "assets/lwo/broken/no_form.lwo": "6a7953477567236392588fa997ac6fced7b5489c22c55cf61ce61832b293d93f",
+        "assets/lwo/broken/no_material.lwo": "e7a35a582b39b70134bd2d719b1390d902ec6d6ddebaea3f147910481c8d5aea",
+        "assets/lwo/broken/no_material_node.lwo": "49692bf646966035b74454b728e2e0d388daa9493a2728b244713d98868335ec",
+        "assets/lwo/broken/no_node.lwo": "c0ca54f94d6d3236b0fe757726f8ea738f9674353dc8aaf41425e265efb14348",
+        "assets/lwo/broken/no_node_names.lwo": "7bb257f58ae05c4a96b7162e33afb8233ea8febeed9c42f4b998bd26cdb3ac2a",
+        "assets/lwo/broken/no_parent.lwo": "674b33e14def147fb2a3ef67fddafa4e0b85de3315ce91bcced5e829724abb3d",
+        "assets/lwo/broken/no_polygons.lwo": "9f4d3c4d31681e6da0d38c602c02899b9222a32e5e1bafb185ae5c3f5db2e5b1",
+        "assets/lwo/broken/no_surface.lwo": "faed5fab5d404e1cb76c886f5621c972bc01d6e9259a8c3803cd578cd0378746",
+        "assets/lwo/broken/no_tags.lwo": "4a27a7ac51477b1773c909b4fd301b8f35816209500bd30b6475eb77bf6dbf6f",
+        "assets/lwo/broken/no_texture_file.lwo": "51f2fd78db915567b8186941303885dca8a4c53f6b078b0a38b8abf708ac8826",
+        "assets/lwo/broken/no_texture_node.lwo": "8841d93f541804c3c004056eb4d3f939261e928a46c7fdba1160287afb7e25dc",
+        "assets/lwo/broken/no_value.lwo": "b4a6efdc4384d538497f470b55a9a4945707beb1db802905e9e0a0dec2d016bc",
+        "assets/lwo/broken/not_form.lwo": "437ef5aeb7e70e1bf95d8b8e19c3155adeb967531d01b463f1cc50846fcec170",
+        "assets/lwo/broken/not_lwo.lwo": "d953787c4133239467647d558f93ea644f5e10c8d342c62c7250a50961f8890f",
+        "assets/lwo/broken/not_surface.lwo": "cfddc33792b10b41768b921b2cf4c6ef01adf9004dabd3b8ae422a08c0300e65",
+        "assets/lwo/broken/open_string.lwo": "dd6e4f5a47ae35b3aa1c6d89b72c52ccadcbdf4fdb90e58cae0187134ac554a9",
+        "assets/lwo/broken/points_after.lwo": "389808783c475cf944b6aa34fa7fee10a2f05f37a4ec039c09a30db27e967a07",
+        "assets/lwo/broken/scalar_shape.lwo": "854c8175240a94a56479ea0fa5e33863c679d1f8b562c9840e7d0da7e938e8c4",
+        "assets/lwo/broken/short.lwo": "68d685fc8201698170a1ff43a4f0e361564a9ab52a9c97dee5800e084e6d43d1",
+        "assets/lwo/broken/short_inputs.lwo": "df20ceec7993b439bb672141ac5a757ce05179f929eb92395a01a1510741ad2a",
+        "assets/lwo/broken/short_node_inputs.lwo": "124fc2ca185cf929f26e69771ae5079a2c7c1b37fff2f141238d49d5cc403c44",
+        "assets/lwo/broken/tags_first.lwo": "ffb47fd124017c5da656f9e9d5a5c64456dee293d1d960b168b1a32fe362fee3",
+        "assets/lwo/broken/wrap7.lwo": "e4bd9694443fa8858c7d3dd27b910bb8ea773e50e101062ab322e5d47fbac53f",
+        "assets/lwo/images/color.png": "36f1626eebe1985b0ac4bb691f40ebe586a47c5a1c442d2cfe12e8e4c8bfa3b3",
+        "assets/lwo/kitchen.lwo": "2a0541b188b3eb8e4295bf5ae23d0983a8ed85143f30b468048d6d8d32606dac",
+        "assets/lwo/kitchen3.lwo": "0bb1dc95ae07c254992b90cf7b6a376fd86552ba53d5dab5a36bfbcf071a36ca",
+        "assets/lwo/lwo.json": "79b1b346193b135327db00860c7d57d378dff6f01e412942592e249742a3ded1",
+        "assets/lwo/phong.lwo": "6d7790354d872c2d3b1fc89079b7d0086730584e8dffc4f145333fca6a3c06de",
+        "assets/lwo/physical.lwo": "0abc13b035775b1b5cb712f0b439add1be9c3d713750411028cc1c31a60ddaba",
+        "assets/lwo/scene.lwo": "f6a4de9c6692dd2687f8e27e2bf378e2e4c597cbdac382753065decdbb48f16b",
+        "assets/lwo/standard.lwo": "cf00af43b1883f920985a58e785e523273c4958b38f71e7c271510e8e76289bb"
+      }
+    },
+    {
+      "family": "md2",
+      "generator": "assets/md2/three_characters.mjs",
+      "generator_sha256": "d157e386dd151f4c662e9b9c06ef4b951989be74be95ac41ae9b39f6f7914f1d",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/md2",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_characters.mjs > characters.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/md2/characters.json": "1ebf901c7733cfb4051c271fd44d212a5d6914bdb187a844fa23e2b1a54950e7",
+        "assets/md2/fixture.json": "90f27e784b21443434b4c5fdd00eff4b8c2ca508c1b6b4743ed406ce5eb4ce89",
+        "assets/md2/fixture.md2": "a0bd86316e8c3c4383e707c9667f5b4d0e2f247dae5e790f75f08dc1f98a3c7e",
+        "assets/md2/many.md2": "075581ccf55d6567170375dd933b334c5234863d0b49c2c634396e5296792b96"
+      }
+    },
+    {
+      "family": "mdd",
+      "generator": "assets/mdd/three_mdd.mjs",
+      "generator_sha256": "3d2230d609b90ad43b68d4f6812b75ae3b820608712fc5f89ecd4e0b9be92b17",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/mdd",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_mdd.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/mdd/fixture.mdd": "d0f3bc7a6e6b1bbd68cfa60427a2c3bf186d85945d32c56306eadbd27b693b00",
+        "assets/mdd/mdd.json": "2ef2bea0fab2c912c1fdd97a6a13e09f3156bef555ea12846c7237102c2ba5a0"
+      }
+    },
+    {
+      "family": "meshopt",
+      "generator": "assets/meshopt/three_meshopt.mjs",
+      "generator_sha256": "55e5f86ec70cef82b0385dd0a14f0ae14faec6bb0eee1a98fda42245e141d13b",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/meshopt",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0 meshoptimizer@0.22.0",
+        "node three_meshopt.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/meshopt/hill_optional.gltf": "93a85f57d93ae166250a35a6de165453593c1003db551d1351ceb6061cef4247",
+        "assets/meshopt/hill_required.gltf": "7c8ce99a4cfd6e62e09c8d156bb12fb4572261e5425000dbc29f512d8450eddc",
+        "assets/meshopt/meshopt.json": "29a012b77b2b89b0af5129b7eb18b28679124ef07879edf4fe2ca61bdb9fbed9"
+      }
+    },
+    {
+      "family": "nrrd",
+      "generator": "assets/nrrd/three_nrrd.mjs",
+      "generator_sha256": "d1650fad60affdf9faefeca732d5625dbfd2a1891f625047c86db40503195532",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/nrrd",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_nrrd.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/nrrd/ascii.nrrd": "b40672b36f39c2a97a00f6e331bf9e160a616a4b8218ba42bc3e69cd893e2f1d",
+        "assets/nrrd/gzip.nrrd": "0dc8aeba1b33c43941c9e4e705cadbf8684be86e9ce6652b2409bbe96da88145",
+        "assets/nrrd/hex.nrrd": "37422b2200aba167efcea08755ee4958456021de1bead6356327d80f5ea3d932",
+        "assets/nrrd/nrrd.json": "a39c9a33ac53cdc21a4326228d8b13c5ccb83605dc459795e4599ec23f9c3a37",
+        "assets/nrrd/raw.nrrd": "aae88d3827bca1aa34a8ad6b67ad4ecebede28c12ecdc551380497a07a1a1338",
+        "assets/nrrd/whole.nrrd": "02dfb852ffa7a5f2db3c8754b8e847cf0a9335022ab7b1c4e050ceeb4aa20375"
+      }
+    },
+    {
+      "family": "optimizer",
+      "generator": "assets/optimizer/three_optimizer.mjs",
+      "generator_sha256": "60616bf166a08dfbd1b9bf58a3792c5ddad5763d8815efa49ba284357a5b081b",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/optimizer",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_optimizer.mjs > three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/optimizer/three.json": "f91862c1a89c63a53607495b8055b9b77dfbcd348e1c35c5b4bb5bbabd468bdf"
+      }
+    },
+    {
+      "family": "output_color_space",
+      "generator": "assets/output_color_space/three_output.mjs",
+      "generator_sha256": "e719f77a8d6715b994671531bfcc5502947788c4cf2bba981ae77012c02caa60",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/output_color_space",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_output.mjs > output.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/output_color_space/output.json": "1060406ce5cffcc10b3f5264cec04ce404837e553e465cf604bb8fe5a2f36bfc"
+      }
+    },
+    {
+      "family": "pdb",
+      "generator": "assets/pdb/three_pdb.mjs",
+      "generator_sha256": "3a9bf2a888f197ca34c7fbdb2157bd2e945a76cf1f2ff32258142eb77a1e0996",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/pdb",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_pdb.mjs > pdb.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/pdb/fixture.pdb": "8ee487230faf3f3b86c1cdb636dcd67e95cccecfb19cf7239defa5c65b5fad21",
+        "assets/pdb/pdb.json": "c97d65959bbcb175859325e88b5abe4a7cd92fa9ce8389d2850b43b2377f6021"
+      }
+    },
+    {
+      "family": "pvrtc",
+      "generator": "assets/pvrtc/three_pvr.mjs",
+      "generator_sha256": "5a79ec30628b2935b941974e0838401766f1c5cf3aa12d45815f4e0e3f42c56f",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/pvrtc",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_pvr.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/pvrtc/2bpp_16x8.bin": "84aef8794b7bd307312482ddfe1f44f9fcd6b440ca342f084745a3d72548548c",
+        "assets/pvrtc/2bpp_32x16.bin": "d56575b1ba7085fe7d995ccbc14836bfb843e460dd06d6fd533d0a9198ee13e1",
+        "assets/pvrtc/2bpp_8x4.bin": "a43c6462b770359f656f74231fc4421a1f16e14b7d676c576ceef3c6c498c28a",
+        "assets/pvrtc/4bpp_16x8.bin": "80890b5f81b0d0542994f2eb7c41bf54fda5a1eb890848821d17791e0b808af7",
+        "assets/pvrtc/4bpp_32x32.bin": "04fe9dd7dcb774e96d6c2e4eb3bb56112a18fd50c4f0fb4df4b67a9422e06cce",
+        "assets/pvrtc/4bpp_4x4.bin": "bfd7f3bab4c1af433591c1d4f10d23237af1979fc6172bf50c61e71d74fa940d",
+        "assets/pvrtc/4bpp_8x8.bin": "d2aa13871a6aa594c3d7fa4e99d594c15942b8505f3cf189cc0bd5c168c7d33c",
+        "assets/pvrtc/cube.pvr": "754153e7270249e24cbbb6f484669aec7fc4cbd8e2025867d051a00204531eab",
+        "assets/pvrtc/make_reference.cpp": "cc254f2a5fb3fe6b512ddf5188066673f8aca17757bba105dbdfa3451a28a1f1",
+        "assets/pvrtc/mips.pvr": "77a65e20ac093c64323baaf6f83f0fbe95e6ff37baa1f06460c165d572f90a3c",
+        "assets/pvrtc/pvr.json": "089131679f85802874313a4e0e88da97c30e6cd3c4cfacd287919877ca97b0e4",
+        "assets/pvrtc/reference.json": "ad7f1876645425e377740c820db37bd18fbed7c4a58d4574dc5cd6c01cd62445",
+        "assets/pvrtc/v2.pvr": "07f76d1814a2ff962cde86d3b271c118f1cb22eab76c03002cefb954f4692810"
+      }
+    },
+    {
+      "family": "scene_objects",
+      "generator": "assets/scene_objects/reference.mjs",
+      "generator_sha256": "c9c3d091352db255fe6164b3504c6c85a1178cdf80b68eda611737a369303063",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/scene_objects",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node reference.mjs > reference.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/scene_objects/reference.json": "b78833d055393423f0c27ae42a20477e15550a4cbb07fff4265ac6021999ab29"
+      }
+    },
+    {
+      "family": "sort",
+      "generator": "assets/sort/three_sort.mjs",
+      "generator_sha256": "bc51494a80275390f5eab5bbf22332e75576ea0ad8e215e37c7471a8ab78acfd",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/sort",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_sort.mjs > three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/sort/three.json": "93713ae11bc71d4d29a0efb2d924502d57fce5acf2f5df174014e9f46956bb18"
+      }
+    },
+    {
+      "family": "svg_renderer",
+      "generator": "assets/svg_renderer/three_svg.mjs",
+      "generator_sha256": "c4ddda96fb3d22bf1935a6913dc2901969f890edfdde3e332238646abccf56b6",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/svg_renderer",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_svg.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
+      ],
+      "artifacts": {
+        "assets/svg_renderer/svg.json": "a3a5fb7dfe51c1e3fedb25167e5f7840301a8cf7d57cc003382bd4cb429c1888"
+      }
+    },
+    {
+      "family": "tiff",
+      "generator": "assets/tiff/three_tiff.mjs",
+      "generator_sha256": "3105df907f5e26502af498ee2d52c43d86fbb967ab529cb5e26a12ff7f8b3235",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/tiff",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_tiff.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Run assets/tiff/make_tiff.py first, as the generator header describes."
+      ],
+      "artifacts": {
+        "assets/tiff/bilevel_deflate.tif": "1eaabffe690609982099391c62001fda8599840e1078162544c936a183d4786d",
+        "assets/tiff/bilevel_lzw.tif": "2fb7c007e5fcd9e98936a1021c3992e115dcaaf8072d991bc45a5d4c0d5a0c4e",
+        "assets/tiff/bilevel_no_photometric.tif": "815784a20896a623430aaf0e893c8e0c78c6b2a3c6135db8e9691786537afbc0",
+        "assets/tiff/bilevel_packbits.tif": "a9081933f9c250bfda665a2b3d45bc027c849285b3fa23d3304f76c9228b7b52",
+        "assets/tiff/bilevel_raw.tif": "a81dfba1806e60b35dcd11dfe1c474fb185568f7904521b8c98d302177a64e09",
+        "assets/tiff/black2.tif": "5babeebdd9d2213016746dab50b362c51e758f60da63d2ad0fcf2c1b5bf13d5d",
+        "assets/tiff/black4.tif": "5ca53e4a9dd217482e8e42e4343b368bce69e46ca8cd007003ec0167cd88e623",
+        "assets/tiff/cmyk_alpha.tif": "1dae4322c3241c0d64a86cebfe4a4e153d46167ce98d127681c1d813e02e60c0",
+        "assets/tiff/cmyk_deflate.tif": "511f8dc1ae51308c9311bcbc9720895213589247dd919ca7e2e995990ad29fb2",
+        "assets/tiff/cmyk_lzw.tif": "f3399412ae4ff0efc213dd8a092ecc4887d9b28ce18c615cab4651bb166523fb",
+        "assets/tiff/cmyk_packbits.tif": "93d56147952bc24a43b131ccd4323340ee8346a401c951da0fb9f7be796474ac",
+        "assets/tiff/cmyk_raw.tif": "9cfe697ba7931e1428a1649f8f35a906bf28da5bbd71c85d36441b74da4cf672",
+        "assets/tiff/compression99.tif": "808a948a3e5fd7bd16b6ea15585c8ed86b98fe89971be1cce84a3d7015b9d8a0",
+        "assets/tiff/deflate32946.tif": "7b92fe53b94f94e8296fc531a9400999af18b20452bac22e398713387dabd8e9",
+        "assets/tiff/deflate_big.tif": "07c24547dc1a6616382986924502e8c7c30fd7cbc3c895649ab658d8b020cefe",
+        "assets/tiff/float_gray.tif": "ef03489985e477c3c7a1201ee0b0850ae60b15152dc33688d1f7bb683bd557eb",
+        "assets/tiff/float_nan.tif": "aec68273461e5d9338284c1ad8122ba8fc0da865ebaa6c2563cf3e757864a29d",
+        "assets/tiff/float_rgb.tif": "a0fdf5f189f4c7c57c389dd28ae567c2fc98b46b53ee7103faa47756c889f4e1",
+        "assets/tiff/float_rgb5.tif": "5bd57c15cb14dd5835b94c049213d42a3a2d40a8f1cea1e2c53780b2e1253054",
+        "assets/tiff/float_rgb_swap.tif": "5f20b9f44ee753d00ed7d301afedc039ee52a5f036601dedd6975048146f1917",
+        "assets/tiff/float_rgba.tif": "3139e2e696d4ea4f6da447a92f633ed016cb2632563ffa4935019bc77aec88e7",
+        "assets/tiff/gray12.tif": "7de719eaab225e00c2fdf833b8c3948868b68eb6ee587ea594d0764ce8ba0470",
+        "assets/tiff/gray16_be_strips.tif": "58d17711225e2cd96c3f12f41444a020dc00e5af8276233f3998786d0b7f5ccf",
+        "assets/tiff/gray16_deflate.tif": "3615ebf2bf236ba9c1e103c182b58e62175dafba4a7ada18e3be6b6d6ed86bef",
+        "assets/tiff/gray16_lzw.tif": "f1d11a9dc65712a7c0efc97021513b96b3c5ab4d0461416755ecdffa2d0137e6",
+        "assets/tiff/gray16_packbits.tif": "43689cb21e98aa7605cc9da3cc7edfe5eaab41f2f87f1f0e4f11ab02edf4b45a",
+        "assets/tiff/gray16_raw.tif": "4d5bd4ae63e34d744fbb5cc9a7c3e6b1d1b40c88fa0fb648484338ee8b03b53a",
+        "assets/tiff/gray32_int.tif": "72c76bbae0f73265cd8f1cb373e21ab55beb0f9571a890fc1c44e438b6fa6b29",
+        "assets/tiff/gray_alpha.tif": "f42dee1b46a9ed3c52a7be7eed1ae8ef6f8c0cf1c1d2ecfcab25a3312895c223",
+        "assets/tiff/gray_deflate.tif": "ef1d8bb98af98a15c071469d5b1e8c78153ab9f65a5e4118be55626abf50d91f",
+        "assets/tiff/gray_lzw.tif": "4b1ee4e9d905e7c0697e9e0ba58eea4d9e32323fa13637d386074a8d5d73b36f",
+        "assets/tiff/gray_packbits.tif": "166bfb49504564315b245bb6969b9d9b932fd1927174b5e5d9ef22549ddbd57a",
+        "assets/tiff/gray_raw.tif": "a9cc3ca4548cfae594db113ffd820def0101a0d5aecff371bfdf81b3851697ff",
+        "assets/tiff/huge.tif": "12cb21491a700f89d58027258beabe6a03c2a77e770155a567bfa851baa17382",
+        "assets/tiff/lzw_bad.tif": "2fa44c41416b123bfb8eced61f27382ff5f59b9893d5c92fcd55152af4afd3b5",
+        "assets/tiff/lzw_bad_after_clear.tif": "76b3478bd246aa96e94193eff7850d1c6536e76b9a8908c3c41a1b255493ea9e",
+        "assets/tiff/lzw_clear_eoi.tif": "297d4bdb36e21c477fc9b759a9ec1702308881b82d57598ff0c3529d440d303b",
+        "assets/tiff/lzw_no_eoi.tif": "36e15267451053f056efd271983e8b48eb0db41aa07a1711a30dcd7ad03327f8",
+        "assets/tiff/lzw_noise.tif": "b8f1608d1e75b7d40b25724afe81279fb2a02f28d316fa7e095cced23b615d06",
+        "assets/tiff/lzw_runs.tif": "b3f34fc6281b120a070dece806c51af27852d15372241e4ea417a3d135ce10a6",
+        "assets/tiff/mask.tif": "fb3044402500c60052584729d7d4f3d6a86c67f3e31bb7d7b118cba5dfa141e6",
+        "assets/tiff/no_counts.tif": "616920f830eb2f3cd383af26fb09db3b406ad7b219c78ccd4396a824c91442d2",
+        "assets/tiff/no_height.tif": "ffc7544b2f4980aa71517be50adb6d427be0d19c5bce054977605b3515904a4d",
+        "assets/tiff/no_photometric8.tif": "43af4e34d7e1fd3170e098db117c80d1819247b272ed4e0ce7f5a68e870e07c1",
+        "assets/tiff/no_strips.tif": "bc888abbd2b94179c28f69308d36dfb9b0e855099896c4e6a4dc0b4476897b8c",
+        "assets/tiff/no_width.tif": "75ba99fabf53c371abe8b75b9d0b71eb8f778e2934e77c502758efd0e12b6d86",
+        "assets/tiff/not_tiff.tif": "55a567697815f07e7a3e31b782175852ec7fe2c17e37ac6a7a829f7a703cfe25",
+        "assets/tiff/packbits_edge.tif": "44017e9c9da15b268a90d504b5ced9c0e5bd07b777285ef6746ab2cd61c520b5",
+        "assets/tiff/palette1.tif": "0990f781df840bd91df98e45225db7a41c879b85162c898cb2220cd50331476d",
+        "assets/tiff/palette16.tif": "f5244a8ac84f43b5f881d9213f6eb50550fa27f98eec1f104c9a657258680add",
+        "assets/tiff/palette2.tif": "8f2b5f5619b98b6e57dbe53b9c39abcedd858b7be8c615481ce6eeebb3fcc5a4",
+        "assets/tiff/palette4.tif": "cd8c6e3da5f239afe08a7c264f8cd28cc112bcb647c5029c1f8036795d8f7eb9",
+        "assets/tiff/palette_alpha.tif": "6c743c444e3cc6d5baad33ab75ffe50ba1a254cfa675d9e46e74333c518cc69f",
+        "assets/tiff/palette_deflate.tif": "5fdfec00d2e0bea1b28415ff74cc2ab2dbb990f1c969b61f03ab6bd5a43b5b93",
+        "assets/tiff/palette_lzw.tif": "7c3ea39ffcfe5862a1f74cf3edd584f50f881ba6a0bef57c92bc7411a08d10f8",
+        "assets/tiff/palette_packbits.tif": "a4625530d830b1d24f632a470a83031350bec6d4a4e8d588e31f29b80715c347",
+        "assets/tiff/palette_raw.tif": "d8d090c0fd53a5109025c433ea0377c19b45b6a9ffb657cbb42f044719c19fd8",
+        "assets/tiff/past_end.tif": "281464a26ce57170b7965d95e941ed8fe5fb6353d890d44a00d9e7679d70a022",
+        "assets/tiff/photometric9.tif": "3519a589fbc1aadba524d3c433bb19b8a493c3a0aa32f43d327fc9d1e6bf56ef",
+        "assets/tiff/planar2.tif": "bdcd435dba38b70903cd4ea2edc30152a59804f3b67fb405962fbf7e15574f87",
+        "assets/tiff/predict_gray.tif": "6405a1323f640930b810eb51b405616ea89997b25b86e3893a79cd6b7633a460",
+        "assets/tiff/predict_gray16.tif": "e2ecbfe7b046eed399474dcc4d993e60d93e5b8023581c0d9b10d17b41e7038e",
+        "assets/tiff/predict_rgb.tif": "7361be313f8f2f3c64e1af70d4c35923dbfb2f2a2a5af3d00e5fc32cc188e872",
+        "assets/tiff/predict_strips.tif": "2a487c70f7ea03e9c16f4ebf10f3a1a5488383f223f21450ccf1ee19fa912c94",
+        "assets/tiff/predictor_empty.tif": "29e48e0843ca6c996df4093063623e3e61e6237f3f3b629807b4ec44f921baba",
+        "assets/tiff/rgb16_be.tif": "aaed5ceed0e3b43adf4d819bf90ff5bac45d26b336206a9d3182db85a8758660",
+        "assets/tiff/rgb16_two.tif": "d92f57317f394669de4e79e13aec0f8ccc792f7b91ce288982e1319b7127189f",
+        "assets/tiff/rgb4.tif": "d25f775a3effdc4c62b6bea86bdb26dd36674c6664f94a36384bcd9c536fc91c",
+        "assets/tiff/rgb_deflate.tif": "82bb07906fbc033b65c999477b30a0169469950de756a03f7c9d04523deba6aa",
+        "assets/tiff/rgb_lzw.tif": "ed81bff3b599b9a8683f6f8e5adc6b7a3bc12c20c037859b7bdf6a2b024b44df",
+        "assets/tiff/rgb_one.tif": "c8de770ad0c5e83aa126f375a59f88aeeb4c01ff935fd13989f3605b546cf8e8",
+        "assets/tiff/rgb_packbits.tif": "4788a4b7957e52a927d8ceb6c02a6e2c5f30077c6b4331153421e9e05b1a7893",
+        "assets/tiff/rgb_raw.tif": "de7857cc573d685674f4539e4ecc1ecaa9a74be4ebe936199e3f61439961713b",
+        "assets/tiff/rgb_two.tif": "c4cdf0f61f19ac3dba58bc0648b228dc63e4586684ee7b250dfdcde36b4e004a",
+        "assets/tiff/rgba16.tif": "9ff01863a7b9fb17513952a2e7d4fc3a1ef1f518905740efc4e98852f3c2e6ab",
+        "assets/tiff/rgba_deflate.tif": "6dee4f352ad08745d8604e57b9f549db32b77315a580cbd7d3879c0b55b2e84d",
+        "assets/tiff/rgba_lzw.tif": "b799fea06e19d2c622df578c67d49f74c728c9933f2c52d3067d087efe02c1b0",
+        "assets/tiff/rgba_packbits.tif": "baf1534e48ebd54e94039dd4a8e475baed43e39557a2179343b1f5ec9444ee2f",
+        "assets/tiff/rgba_raw.tif": "ff914b250e21dd86cc5ec60b544f239ae032f7a18ccd9b5792fde2441dba5747",
+        "assets/tiff/short_header.tif": "8098f558ad61910c9cbd58414f208262f728a119ad2921162fbacbc18b7324d3",
+        "assets/tiff/short_strips.tif": "6d491b4e89e7114e20cd94a093b91352827c19c5d942b424150069233638d83d",
+        "assets/tiff/strips.tif": "606cbc1f2be36508f8c2a6dc82435acbd596e61d19016b5bd6d1528769dd7981",
+        "assets/tiff/tag_past_end.tif": "ea4442574e4496a940b870fd3a2f715936cc5e9415e1e919a96874e63d87e54c",
+        "assets/tiff/tag_type0.tif": "5e31ac2dfc6a93003520f2b2629c558f031684e2f82b82322789928b10196306",
+        "assets/tiff/tag_type14.tif": "7ec6e1642c3024cc41337e2c60b4bd906493fb895c0ad29e243907cf520bc816",
+        "assets/tiff/tag_type6.tif": "1dac912085bdc7c2acf6ad5e058256272be2175adae07380353edb63d09ca628",
+        "assets/tiff/tags_odd.tif": "e75dcbad9adbd68909bfb1cae2607790c8cfc93e21ccee00aee43435c077428e",
+        "assets/tiff/tiff.json": "476e6278cd7ace762a7e9ff1725ea87162fd6b5341058c5682acd42d8420887a",
+        "assets/tiff/tile_counts.tif": "aeef1db3fc00ac50ade21f43a1bf4b2341b284742277a175b76316bce399af1e",
+        "assets/tiff/tile_missing.tif": "15d2de009ae0e1bfa405e3adc60ef18cb67b88644dedfc731840b3369636bc9c",
+        "assets/tiff/tiled_deflate.tif": "fc58703564613e7b74474a25c676e75287d5c2d9795bf8aa9af3afa13151d82e",
+        "assets/tiff/tiled_packbits.tif": "a3f260a7b4b6a02f785d1dcdd199f4a05877623de5cc77b1e1e504a2423d4a97",
+        "assets/tiff/white1.tif": "ee387f54bd854471cb6b1e9c1ba0994ff934700a357bb36f59985474a664f510",
+        "assets/tiff/white16.tif": "3768f5e969a976963ffacc6a9fdf8c0e0e1f7e9edd556b54f4761cc7c9c23be0",
+        "assets/tiff/white2.tif": "f6fc93e3e1f24e7b4e67cdc09e5846832a489916de470dc609faa17160e77750",
+        "assets/tiff/white4.tif": "bcdd4dba6f408e6f10cf6258980d36be75e29b60718069069e415232d35ab90b",
+        "assets/tiff/white8.tif": "8ce4d569c4f23f5ce4721eaff822f0d47a526d107e59be110aff558fb54728d0"
+      }
+    },
+    {
+      "family": "ttf",
+      "generator": "assets/ttf/three_ttf.mjs",
+      "generator_sha256": "917270daa84383fb50d3f87f5a083e1e2db5cf17889416f3005ea1e6a332406e",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/ttf",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_ttf.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Run assets/ttf/make_fonts.py first, as the generator header describes."
+      ],
+      "artifacts": {
+        "assets/ttf/astral.ttf": "14df872796c583e281a1b7eb22b7a40d5f281fbee56ecd6598f2310a41bcb217",
+        "assets/ttf/bare.ttf": "e8660b76914c8cfc6addb63fa24feaac9f9d35174e99fee3afce0df0a30b52d5",
+        "assets/ttf/broken/far_component.ttf": "597cf2ff8c3db3ef26294609af831ea04971b807593d11df07787b52a3d75f96",
+        "assets/ttf/broken/few_glyphs.ttf": "b230a0d8da1962c772aa66954f34a29c463c4c6d667cfbd9e1b8c9812994d391",
+        "assets/ttf/broken/flags.ttf": "34b3b8e44f1f9ae56f06836f5080adbcbc618762e87f460dca10a58b1b381326",
+        "assets/ttf/broken/format_6.ttf": "84e24abf68796c464240c33ea1362b63752e481e5167c478eb2efd1244cc76be",
+        "assets/ttf/broken/loop.ttf": "a579a566885ac39c7b5ea32717366d5bbab6d36eca003551201c38555213fa9a",
+        "assets/ttf/broken/mac_cmap.ttf": "dca9a66d2f49260008a35912a3b2af0c4dd5ec33abb9fd87b525a69fb40d3776",
+        "assets/ttf/broken/matched.ttf": "7fe422c8db3a3e16a312b0967e66b9c4f53e9a0a0f841b290e42e641ff025876",
+        "assets/ttf/broken/matched_second.ttf": "3e726a17d261533b3eab2e12153c23fa0483c08a3cfb1d5f0ec144157c825cf6",
+        "assets/ttf/broken/no_glyf.ttf": "9f686e2aa566dbc1c87ae2d377506f44fc540911ba77b90603542d6603109dbe",
+        "assets/ttf/broken/no_loca.ttf": "83b6d8d9098f50c522c92966583a08be28ff3e59520eeb07b2274b168d843d76",
+        "assets/ttf/broken/no_post.ttf": "3e29a129c3a4b14fce1cebaf0e33f9c46b172f7b9dd6b0807edff975fdd1920d",
+        "assets/ttf/broken/otto.ttf": "ca7f0cd05799d0f0f17d1c676fd5f7e6d75d0f0459b69e4fc309f710761cc94d",
+        "assets/ttf/broken/short.ttf": "ed979e3711296b2a601824d30a15f41e94c51c76c6da17aefd08492ca218cef9",
+        "assets/ttf/broken/surrogate.ttf": "55ed3f6ccbe27bad8831311eb83da3f362bec7ddf4c7c0e099c26496f72b5678",
+        "assets/ttf/curves.ttf": "21280e634e0f089464c9f737a956a2d60bb15ca4c6b00ef5ee02dec9401b3a37",
+        "assets/ttf/edges.ttf": "20cc85a1ab79ac7cb07ba57fab799c89c064d5203e95183ece3513c9b88d3d7b",
+        "assets/ttf/kenpixel.ttf": "fd42226067fc44707d41ef9f43597574c6a0fd415249416b38cf93371a7a611a",
+        "assets/ttf/true.ttf": "2937cbf64900d67f0e56a0c63802fd9e7e5036304bb799c659d0edd9856bf870",
+        "assets/ttf/ttf.json": "d39d78218c5dc880791f84c2cd0df9978927502e54f804d2f8eda78dc654b73a",
+        "assets/ttf/zero.ttf": "db55d2d1c12d1f7456e875f0e796992e99e7166290953d6e775727fd1201f7eb"
+      }
+    },
+    {
+      "family": "usd",
+      "generator": "assets/usd/three_usd.mjs",
+      "generator_sha256": "be728911a2af43ec6fc8a76ca6a264de40f7533975e81a5daf66eaef0d208aea",
+      "three_version": "0.186.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": ".",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.186.0",
+        "THREE=\"$PWD/node_modules/three\" node assets/usd/three_usd.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Run assets/usd/make_usd.py first, as the generator header describes."
+      ],
+      "artifacts": {
+        "assets/usd/crate.usdz": "a95845f78db349fbdc3b1086b862c64546cc82a086be129d6038422d2a8cbe41",
+        "assets/usd/geo.usda": "2c8ebb418df7492d1b2f00df114f4398b598d7f88a11e597fcfaf1df46eddc4d",
+        "assets/usd/geo.usdc": "a6c6101de5c1a007449d84f2b9faaaad32419c53bcfa6dfe07f9419ce126f746",
+        "assets/usd/package.usdz": "29b14c6de35386fbfe023473c1f3a6e87c8ac33a51aa6ca847fb36d6927ed8b4",
+        "assets/usd/roundtrip.usdz": "b1238e203e0478e4575236060a94542033357454f37d63be7358cc8188a0af9f",
+        "assets/usd/scene.usda": "147c25fc1cb13cc6d327a52a8190ccd71173e1885cf502f49c7bab6c3bdda4e8",
+        "assets/usd/scene.usdc": "1916dcf9c6f5062fa0e8024b58fb8b2bccbe68773dc056d319a306631c1e14c2",
+        "assets/usd/stage.usda": "a252126450dc3ddf82e338612da415f4e22e8c78fcba40186c3348edf3c2e706",
+        "assets/usd/usd.json": "8b1aa86d6ec49afffffc8886f7e307b58d0a44636a3841f0d8b0cb5b8e92c220",
+        "assets/usd/values.usda": "4f21db9f56f77ae7017508a52a11a1ee7b3e3539689cd05872020e6d18e48b63",
+        "assets/usd/values.usdc": "5da0c992da226ae1385dc795a5fdabda59e56c56035a2fa057149340d76d28fa",
+        "assets/usd/values_0_3.usdc": "a44e6b269e13704ce50041a1f00797eb696741365b5cf783e47cf8492422ffa5",
+        "assets/usd/values_0_6.usdc": "89549cad0fa952fffd54efa6721f0e9078e209bc466b987e0874cb4cff594e56",
+        "assets/usd/variants.usda": "20db23afd7650a16ab9313538c964200d0e185ecbae3b9cd7edbc9e119a37702",
+        "assets/usd/variants.usdc": "acd87d5cf00a10fc77db0f0b995182ee0c126a082cdf15516ef5b71a6708656a"
+      }
+    },
+    {
+      "family": "vtk",
+      "generator": "assets/vtk/three_vtk.mjs",
+      "generator_sha256": "92fae74eb0f12d2e5449cbada20c48719ff583cdaa6d699cec738787d89abab6",
+      "three_version": "0.180.0",
+      "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
+      "cwd": "assets/vtk",
+      "commands": [
+        "npm install --no-save --package-lock=false three@0.180.0",
+        "node three_vtk.mjs"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Install @xmldom/xmldom. Its historical version was not recorded; a reproducible auxiliary dependency pin remains open."
+      ],
+      "artifacts": {
+        "assets/vtk/appended.vtp": "98a8a7b98d7d72c85c2e3a09ad3566a87d6697fa0a6cef054827d45de53d6c29",
+        "assets/vtk/ascii.vtk": "a985e711424a7b102a455245e0726e20f8bf3e74d20079117221cc5ffa1917b3",
+        "assets/vtk/ascii.vtp": "64bd57fe8a1150e60048b2ca892be942354146f0f3837bd6acf64fc78dabd205",
+        "assets/vtk/base64.vtp": "5915b1b1efabcead9b3e4b88a0a5aa14ad0570b0f759416777dc3302516571b8",
+        "assets/vtk/binary.vtk": "e30789e259b6ab865386aa2ad27d683a121133972c39f1a086ff92f556caacc1",
+        "assets/vtk/binary.vtp": "9fbe0969a5dfd939de986d5383918390a7d623008fc287c1942b5ebef1e81bdb",
+        "assets/vtk/cells.vtk": "571a696a729c9ca0af0a22a1f87e06cdb4483b73ddc320199062642f9b93bec3",
+        "assets/vtk/headers.vtp": "c6ebb9a9683f54d8249485613d3ab9b086895c6ef9c06a9b07ce1cc1c0bd990e",
+        "assets/vtk/offsets.vtp": "0de3c52904932374227e433530d87195be0f384fde4a7124fdeaf17c19fb41dc",
+        "assets/vtk/quirks.vtk": "19ab1e20125f98169d778b14bb88958cb53510f620df636d9c04f618d2f1bdcb",
+        "assets/vtk/strips.vtp": "2e773ca17a0279dff6d7c7ef021d3f467a6a554c4508513dfe53ffa8164171e1",
+        "assets/vtk/vtk.json": "4b6d2c0b878060071f52451f6cd03da69fd6eac91c0d51968ef1d893b5409b54",
+        "assets/vtk/zlib.vtp": "e5edfd9efc7a8efc871873a5252020e040dc77fc474f32ef9b6a958fa1c4e50d"
+      }
+    }
+  ]
+}

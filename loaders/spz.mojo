@@ -81,9 +81,9 @@ def spz_vectors(degree: Int) raises -> Int:
         0, 3, 8, 15 or 24.
 
     Raises:
-        Error: If the degree is above 4.
+        Error: If the degree is outside 0 through 4.
     """
-    if degree > 4:
+    if degree < 0 or degree > 4:
         raise Error(
             "SPZ: unsupported SPZ spherical harmonics degree " + String(degree)
         )
@@ -241,6 +241,8 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         raise Error("SPZ: invalid SPZ magic")
     if version < 1 or version > 3:
         raise Error("SPZ: SPZ version " + String(version) + " is not supported")
+    if count > MAX_SPZ_SPLATS:
+        raise Error("SPZ: the file holds too many splats")
     var vectors = spz_vectors(stored)
     var positions = count * 3 * (2 if version == 1 else 3)
     var rotations = count * (4 if version == 3 else 3)
@@ -303,6 +305,10 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     """
     if len(bytes) < 20:
         raise Error("SPZ: invalid SPZ header")
+    if le_u32(bytes, 0) != SPZ_MAGIC:
+        raise Error("SPZ: invalid SPZ magic")
+    if le_u32(bytes, 4) != 4:
+        raise Error("SPZ: the raw SPZ parser requires version 4")
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
     var streams = Int(bytes[15])
@@ -317,7 +323,7 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         count * 4,
         count * spz_vectors(stored) * 3,
     ]
-    if table + streams * 16 > len(bytes):
+    if table < 20 or table > len(bytes) or streams * 16 > len(bytes) - table:
         raise Error("SPZ: the SPZ table of contents is past the end")
     var fields = List[List[UInt8]]()
     var start = table + streams * 16
@@ -328,24 +334,26 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             continue
         if used >= streams:
             raise Error("SPZ: the file has too few SPZ streams")
-        var length = le_u32(bytes, table + used * 16) + (
-            le_u32(bytes, table + used * 16 + 4) << 32
+        var length = UInt64(le_u32(bytes, table + used * 16)) | (
+            UInt64(le_u32(bytes, table + used * 16 + 4)) << 32
         )
-        if start + length > len(bytes):
+        if length > UInt64(len(bytes) - start):
             raise Error("SPZ: an SPZ stream is past the end")
-        var stream = zstd_decompress(_cut(bytes, start, length), sizes[field])
+        var stream = zstd_decompress(
+            _cut(bytes, start, Int(length)), sizes[field]
+        )
         if len(stream) != sizes[field]:
             raise Error("SPZ: an SPZ stream does not hold its field")
         fields.append(stream^)
-        start += length
+        start += Int(length)
         used += 1
     var parts = _Fields(
-        fields[0].copy(),
-        fields[1].copy(),
-        fields[2].copy(),
-        fields[3].copy(),
-        fields[4].copy(),
-        fields[5].copy(),
+        fields.pop(0),
+        fields.pop(0),
+        fields.pop(0),
+        fields.pop(0),
+        fields.pop(0),
+        fields.pop(0),
         count,
         4,
         Int(bytes[13]),
@@ -400,9 +408,9 @@ def _attributes(fields: _Fields) raises -> GaussianSplatGeometry:
         centers^,
         covariances^,
         colors^,
-        bands[0].copy(),
-        bands[1].copy(),
-        bands[2].copy(),
+        bands.pop(0),
+        bands.pop(0),
+        bands.pop(0),
     )
 
 

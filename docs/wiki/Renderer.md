@@ -29,7 +29,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
 | `prepare_points(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [points](Points-and-sprites). A [sprite](Points-and-sprites#sprites) is two triangles, and `prepare` makes them. |
-| `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
+| `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). The triangles are slim corners and their surfaces; `whole_corners()` gives them whole. See [Slim corners](Rasterization#slim-corners). |
 | `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. A target with `samples` is drawn at its sample grid and resolved into its pixels. See below. |
 | `render_with(hooks, scene, assets, camera)`, `render_into_with(hooks, target, scene, assets, camera)` | The same, with render hooks. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags). |
@@ -142,6 +142,12 @@ The output is one flat list, three `RasterVertex` per triangle. Both rasterizers
 ## Draw order
 
 Opaque draws come first, nearest first. Translucent draws follow, furthest first. The order is per draw, by the depth of its own placed origin. An instance sorts where it is, not where its node is, so a translucent mesh between two instances of a group falls between them. Only the draws the camera makes are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
+
+Equal sort keys keep their input order. Lists of up to 32 draws use insertion sort without extra storage. Larger lists use a stable merge sort with O(n log n) comparisons. An already ordered list needs one linear scan and no extra storage. Custom sorts use the same stable sorter.
+
+A custom comparator must define a consistent strict ordering. For a tie, it must return `False` in both directions.
+
+`bench/renderer_sort_bench.mojo` compares the draw sort with its previous implementation and checks that the results match.
 
 `prepare_frame` sorts lines and wireframes into the same order. A translucent line falls between the translucent surfaces on either side of it. See [Lines](Lines#two-lists-one-order).
 
@@ -257,3 +263,11 @@ A mesh the camera's layers or frustum leave out is not checked.
 `make bench-scene` times each stage on its own on a sphere of twelve thousand triangles. At 1280 by 720 with 16 workers a frame takes about 6 milliseconds on an Apple M4 Max. The rasterizer is the largest stage. `prepare` is single threaded and takes about half a millisecond. A triangle wholly inside the depth range skips the clipper, and the corner list is sized once per draw.
 
 The resolve encodes the clear color once and copies it to every pixel that still holds it. A frame that is mostly background pays for the pixels that are not.
+
+
+## Gaussian splat runs
+
+`Scene.add_gaussian_splat` adds an owned splat object to the transparent list.
+Its `RenderItem.kind` is `DRAW_SPLATS`. Its geometry and material IDs are -1,
+because splat data belongs to the object. Hooks must check the kind before
+looking up those IDs in asset stores. See [Gaussian splats](Gaussian-splats).

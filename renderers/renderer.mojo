@@ -77,6 +77,17 @@ of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
 """
 
+from renderers.render_list import (
+    RenderItem,
+    RenderSort,
+    _Source,
+    _Span,
+    _sort_by,
+    _sort_with,
+    _furthest_first,
+    _add_run,
+)
+
 from render.color_spaces import (
     ColorSpaceId,
     OutputEncoding,
@@ -152,6 +163,9 @@ from math.bounds import Plane, Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
 from render.rect import Rect
+from render.splatrule import ProjectedSplat
+from render.splat_raster import prepare_gaussian_splat
+from render.rasterizer import DRAW_SPLATS
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
@@ -242,8 +256,9 @@ from materials.nodes import (
 from render.pointrule import attenuated_size
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
+from render.srgb import srgb_to_linear
 from render.target import RenderTarget, check_samples, sample_grid
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
@@ -273,6 +288,12 @@ from renderers.draw_filter import (
     snap_to_pixels,
 )
 from render.rasterizer import (
+    Corner,
+    _raise_band_errors,
+    Surface,
+    corner_of,
+    joined,
+    surface_of,
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
@@ -305,6 +326,7 @@ from renderers.clip import (
     within_depth,
     within_sides,
 )
+from render.tasks import TaskGroup
 from std.math import cos, floor, isfinite, max, pi, sin
 from std.memory import ArcPointer
 from std.sys import num_logical_cores
@@ -692,7 +714,7 @@ def _light_at_corner(
 
 
 def _march_volume(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     begin: Int,
     steps: Int,
     geometry: BufferGeometry,
@@ -715,9 +737,13 @@ def _march_volume(
     check_steps(steps)
     var bound = geometry.bounding_sphere()
     bound.apply_matrix4(world)
-    for index in range(begin, len(corners)):
-        corners[index].steps = steps
-        corners[index].model_radius = bound.radius
+    # On the surfaces of the corners the draw added: the draw's own.
+    if begin < len(corners):
+        for surface in range(  # pragma: no branch
+            corners.corners[begin].surface, len(corners.surfaces)
+        ):
+            corners.surfaces[surface].steps = steps
+            corners.surfaces[surface].model_radius = bound.radius
 
 
 def _customs(
@@ -934,47 +960,6 @@ struct _Draw(ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct _Source(ImplicitlyCopyable):
-    """The object a run of primitives came from: its node, its geometry
-    and the material it was drawn with."""
-
-    var node: NodeId
-    var geometry: GeometryId
-    var material: MaterialId
-
-
-@fieldwise_init
-struct RenderItem(ImplicitlyCopyable):
-    """One run of a prepared frame, what three.js's render list holds for
-    one object: what a render hook is told, and what a custom sort
-    compares.
-
-    The node, the geometry and the material drawn with, the scene's
-    `override_material` when it replaced the object's own. A sprite names
-    no geometry, and its `geometry` is -1.
-    """
-
-    var node: NodeId
-    var geometry: GeometryId
-    var material: MaterialId
-    # Which primitives the run holds, and how many: `DRAW_TRIANGLES`,
-    # `DRAW_SEGMENTS` or `DRAW_POINTS`.
-    var kind: DrawKind
-    var count: Int
-    # The node's render order, three.js's `renderOrder`.
-    var order: Int
-    # How far ahead of the camera the object's origin is, in meters: the
-    # larger, the further. It orders as three.js's `z` does.
-    var z: Float32
-
-
-# How a caller orders a frame's runs, three.js's `setOpaqueSort` and
-# `setTransparentSort`: True when the first is drawn before the second. A
-# plain function, as three.js's is, and the sort is stable.
-comptime RenderSort = def(RenderItem, RenderItem) thin -> Bool
-
-
-@fieldwise_init
 struct RenderInfo(ImplicitlyCopyable):
     """What the renderer drew, three.js's `renderer.info.render`.
 
@@ -1132,6 +1117,8 @@ struct _RendererState(Movable):
             self.info.calls += 1
             if item.kind == DRAW_TRIANGLES:
                 self.info.triangles += item.count
+            elif item.kind == DRAW_SPLATS:
+                self.info.triangles += item.count * 2
             elif item.kind == DRAW_SEGMENTS:
                 self.info.lines += item.count
             else:
@@ -1223,75 +1210,6 @@ struct NoHooks(RenderHooks):
     def __init__(out self):
         """Make the empty set of hooks."""
         pass
-
-
-struct _Span(ImplicitlyCopyable):
-    """One draw's run of primitives in a prepared list, with its sort key.
-
-    What `_prepared` and `_prepared_lines` record beside the corners they
-    emit, and what `prepare_frame` turns into `Draw` records: the run,
-    which list it is in, how deep the draw was, whether it blends, and
-    whether it transmits.
-    """
-
-    var kind: DrawKind
-    # The first primitive of the run, a triangle or a segment.
-    var first: Int
-    var count: Int
-    var depth: Float32
-    var blends: Bool
-    # The draw's node's render order, which sorts before the depth.
-    var order: Int
-    # Whether the draw's material transmits, three.js's `transmissive`
-    # list: drawn after every opaque run and before every blended one.
-    var transmits: Bool
-    # What drew the run.
-    var source: _Source
-
-    def __init__(
-        out self,
-        kind: DrawKind,
-        first: Int,
-        count: Int,
-        depth: Float32,
-        blends: Bool,
-        order: Int,
-        source: _Source,
-        transmits: Bool = False,
-    ):
-        """Record one run.
-
-        Args:
-            kind: Which list the run is in.
-            first: Its first primitive.
-            count: How many primitives it holds.
-            depth: The draw's camera-space depth.
-            blends: Whether its material blends.
-            order: Its node's render order.
-            source: What drew it.
-            transmits: Whether its material transmits. Only a filled
-                surface can.
-        """
-        self.kind = kind
-        self.first = first
-        self.count = count
-        self.depth = depth
-        self.blends = blends
-        self.order = order
-        self.source = source
-        self.transmits = transmits
-
-    def item(self) -> RenderItem:
-        """Return the run as a hook and a sort see it."""
-        return RenderItem(
-            self.source.node,
-            self.source.geometry,
-            self.source.material,
-            self.kind,
-            self.count,
-            self.order,
-            -self.depth,
-        )
 
 
 def _note_span(
@@ -2025,79 +1943,6 @@ def _casts(cast_shadow: Bool, receive_shadow: Bool, receivers: Bool) -> Bool:
     return cast_shadow or (receivers and receive_shadow)
 
 
-def _sort_by(
-    mut items: List[Int], mut keys: List[Float32], mut orders: List[Int]
-):
-    """Sort `items` by render order, then by `keys`, ascending, in place
-    and stably.
-
-    Insertion sort: the lists are one entry per draw, hundreds in a busy
-    scene rather than millions, and a stable order keeps draws at equal
-    order and depth in the order the caller gave them.
-    """
-    for position in range(len(items)):
-        var item = items[position]
-        var key = keys[position]
-        var order = orders[position]
-        var slot = position
-        while slot > 0 and _after(orders[slot - 1], keys[slot - 1], order, key):
-            items[slot] = items[slot - 1]
-            keys[slot] = keys[slot - 1]
-            orders[slot] = orders[slot - 1]
-            slot -= 1
-        items[slot] = item
-        keys[slot] = key
-        orders[slot] = order
-
-
-def _after(
-    order: Int, key: Float32, other_order: Int, other_key: Float32
-) -> Bool:
-    """Return True if an entry sorts after another: a higher render order,
-    or the same order and a larger key."""
-    return order > other_order or (order == other_order and key > other_key)
-
-
-def _sort_with(mut runs: List[_Span], before: RenderSort):
-    """Sort runs in place, stably, by a caller's function, three.js's
-    custom sort: a run moves in front of the one before it while the
-    function says it is drawn first."""
-    for position in range(1, len(runs)):
-        var held = runs[position]
-        var slot = position
-        while slot > 0 and before(held.item(), runs[slot - 1].item()):
-            runs[slot] = runs[slot - 1]
-            slot -= 1
-        runs[slot] = held
-
-
-def _furthest_first(mut runs: List[_Span], custom: Optional[RenderSort]):
-    """Sort blended or transmissive runs in place: by the caller's
-    transparent sort when there is one, and otherwise by render order
-    and then furthest first, as `_draws` sorts its translucent draws."""
-    var sorted = Bool(custom)
-    if sorted:
-        _sort_with(runs, custom.value())
-        return
-    var order = List[Int]()
-    var depths = List[Float32]()
-    var orders = List[Int]()
-    for position in range(len(runs)):
-        order.append(position)
-        depths.append(runs[position].depth)
-        orders.append(runs[position].order)
-    _sort_by(order, depths, orders)
-    var kept = runs.copy()
-    for position in range(len(order)):
-        runs[position] = kept[order[position]]
-
-
-def _add_run(mut draws: List[Draw], mut items: List[RenderItem], run: _Span):
-    """Append one run to a frame's draw order, and its item beside it."""
-    draws.append(Draw(run.kind, run.first, run.count))
-    items.append(run.item())
-
-
 def _turned_around(corner: RasterVertex) -> RasterVertex:
     """Return `corner` with its normal reversed, and its normal and bump
     map scales with it.
@@ -2580,6 +2425,110 @@ def _whole_in_view(
     return within_sides(c.position, sides)
 
 
+struct _Slim(Movable, Sized):
+    """A frame's triangles as they are prepared: each corner slim, and each
+    draw's material once per facing, as `Corner` and `Surface`.
+
+    The emitters append whole corners, as they always have; each is split
+    here, so the frame's list holds a quarter of what it did. A draw calls
+    `new_surface` first. Front and back faces each share one surface, so
+    their normal and bump map scales keep the correct sign.
+    """
+
+    var corners: List[Corner]
+    var surfaces: List[Surface]
+    # One surface for each facing in the current draw.
+    var front_surface: Int
+    var back_surface: Int
+    var turned: Bool
+
+    def __init__(out self):
+        """Hold nothing yet."""
+        self.corners = List[Corner]()
+        self.surfaces = List[Surface]()
+        self.front_surface = -1
+        self.back_surface = -1
+        self.turned = False
+
+    def __len__(self) -> Int:
+        """Return how many corners there are.
+
+        Returns:
+            The count, three a triangle.
+        """
+        return len(self.corners)
+
+    def reserve(mut self, count: Int):
+        """Make room for `count` corners in all.
+
+        Args:
+            count: The corners the list should hold without growing.
+        """
+        self.corners.reserve(count)
+
+    def capacity(self) -> Int:
+        """Return how many corners fit before the list grows.
+
+        Returns:
+            The capacity of the corner list.
+        """
+        return self.corners.capacity()
+
+    def new_surface(mut self):
+        """Start a draw: its first corner starts a surface of its own."""
+        self.front_surface = -1
+        self.back_surface = -1
+        self.turned = False
+
+    def append(mut self, vertex: RasterVertex):
+        """Add a corner, and its surface when it is the facing's first.
+
+        Args:
+            vertex: The whole corner.
+        """
+        var surface = self.back_surface if self.turned else self.front_surface
+        if surface < 0:
+            surface = len(self.surfaces)
+            self.surfaces.append(surface_of(vertex))
+            if self.turned:
+                self.back_surface = surface
+            else:
+                self.front_surface = surface
+        self.corners.append(corner_of(vertex, surface))
+
+    def take_corners(mut self) -> List[Corner]:
+        """Give up the corners, for a `Frame`, and hold none.
+
+        Returns:
+            The corners.
+        """
+        var taken = self.corners^
+        self.corners = List[Corner]()
+        return taken^
+
+    def take_surfaces(mut self) -> List[Surface]:
+        """Give up the surfaces, for a `Frame`, and hold none.
+
+        Returns:
+            The surfaces the corners named.
+        """
+        var taken = self.surfaces^
+        self.surfaces = List[Surface]()
+        return taken^
+
+    def whole(self) -> List[RasterVertex]:
+        """Return every corner whole again, in order.
+
+        Returns:
+            The whole corners.
+        """
+        var out = List[RasterVertex](capacity=len(self.corners))
+        for index in range(len(self.corners)):
+            ref corner = self.corners[index]
+            out.append(joined(corner, self.surfaces[corner.surface]))
+        return out^
+
+
 @fieldwise_init
 struct _Paint(ImplicitlyCopyable):
     """What every corner of one filled draw carries besides its own
@@ -2673,7 +2622,7 @@ struct _Paint(ImplicitlyCopyable):
 
     def emit_in_uv_space(
         self,
-        mut corners: List[RasterVertex],
+        mut corners: _Slim,
         a: ClipVertex,
         b: ClipVertex,
         c: ClipVertex,
@@ -2711,7 +2660,7 @@ struct _Paint(ImplicitlyCopyable):
 
     def emit(
         self,
-        mut corners: List[RasterVertex],
+        mut corners: _Slim,
         a: ClipVertex,
         b: ClipVertex,
         c: ClipVertex,
@@ -2750,7 +2699,10 @@ struct _Paint(ImplicitlyCopyable):
             return
         if self.side == BACK_SIDE and not away:
             return
-        if self.side == BACK_SIDE or (self.side == DOUBLE_SIDE and away):
+        corners.turned = self.side == BACK_SIDE or (
+            self.side == DOUBLE_SIDE and away
+        )
+        if corners.turned:
             # A two-sided surface seen from behind is lit on the side being
             # looked at: three.js's `normal *= faceDirection`, which its
             # shader applies under `DOUBLE_SIDED`. A `BACK_SIDE` surface is
@@ -3289,7 +3241,7 @@ def _frames_of(
 
 
 def _emit_sprite(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     assets: Assets,
     sprite: Sprite,
     draw: _Draw,
@@ -3472,7 +3424,7 @@ def _emit_sprite(
 
 def _emit_clipped(
     paint: _Paint,
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     a: ClipVertex,
     b: ClipVertex,
     c: ClipVertex,
@@ -3685,7 +3637,7 @@ struct _Ribbon(ImplicitlyCopyable):
 def _emit_cap(
     ribbon: _Ribbon,
     paint: _Paint,
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     end: ClipVertex,
     outward: Float32,
     near: Float32,
@@ -3727,7 +3679,7 @@ def _emit_cap(
 
 
 def _emit_wide_line(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     assets: Assets,
     draw: _Draw,
     view: Matrix4,
@@ -4075,15 +4027,115 @@ def _scaled(rect: Rect, factor: Int) -> Rect:
 
 
 def _set_backdrop(
-    mut image: Framebuffer, x: Int, y: Int, color: FloatColor
+    mut image: Framebuffer,
+    x: Int,
+    y: Int,
+    color: FloatColor,
+    bytes: SrgbBytes,
 ) raises:
     """Write one backdrop pixel: the color encoded to sRGB bytes, opaque.
 
     Opaque whatever the texture's alpha said, as three.js's background
     plane is drawn opaque: a background hides nothing but the clear color.
+    `bytes` encodes it, as `encode` would.
     """
-    var shown = color.encode()
+    var shown = color.encode_with(bytes)
     image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
+
+
+@fieldwise_init
+struct _BackdropRays(ImplicitlyCopyable):
+    """What every pixel of a backdrop seen by direction needs: its ray,
+    where it lands, and how it is shown."""
+
+    var backdrop: Background
+    var kept: Rect
+    var viewport: Rect
+    var top: Int
+    var width: Int
+    var height: Int
+    var unproject: Matrix4
+    var to_world: Matrix4
+    var spin: Basis3
+    var blur: Float32
+    var shown: Float32
+
+    def paint(
+        self,
+        mut image: Framebuffer,
+        assets: Assets,
+        bytes: SrgbBytes,
+        first: Int,
+        past: Int,
+    ) raises:
+        """Paint the rows `first` up to `past` of the backdrop.
+
+        Args:
+            image: Where each pixel is written.
+            assets: The background's textures.
+            bytes: The table each pixel is encoded through.
+            first: The first row.
+            past: One past the last row.
+
+        Raises:
+            Error: If a texture the background names cannot be read.
+        """
+        for y in range(first, past):  # pragma: no branch
+            for x in range(self.width):  # pragma: no branch
+                if not self.kept.contains_pixel(
+                    x, y, self.height
+                ) or not self.viewport.contains_pixel(x, y, self.height):
+                    continue
+                var ndc_x = (Float32(x - self.viewport.x) + 0.5) / Float32(
+                    self.viewport.width
+                ) * 2 - 1
+                var ndc_y = (
+                    1
+                    - (Float32(y - self.top) + 0.5)
+                    / Float32(self.viewport.height)
+                    * 2
+                )
+                var near = self.unproject.transform_point(
+                    Vector3(ndc_x, ndc_y, -1)
+                )
+                var far = self.unproject.transform_point(
+                    Vector3(ndc_x, ndc_y, 1)
+                )
+                var looked = self.spin.turn(
+                    self.to_world.transform_direction(far - near)
+                )
+                var seen: FloatColor
+                if self.backdrop.kind == TEXTURE_BACKGROUND:
+                    seen = _panorama_seen(
+                        assets.textures.get(self.backdrop.texture),
+                        looked,
+                        self.blur,
+                    )
+                else:
+                    seen = _sky_seen(
+                        assets.cube_textures.get(self.backdrop.cube),
+                        looked,
+                        self.blur,
+                    )
+                _set_backdrop(image, x, y, _brightened(seen, self.shown), bytes)
+
+
+async def _backdrop_band(
+    rays: Pointer[_BackdropRays, ImmutAnyOrigin],
+    image: MutPointer[Framebuffer, MutAnyOrigin],
+    assets: Pointer[Assets, ImmutAnyOrigin],
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    band: Int,
+    first: Int,
+    past: Int,
+):
+    """`_BackdropRays.paint` as a task, one band of rows; a task cannot
+    raise, so an error is written into the band's slot."""
+    try:
+        rays[].paint(image[], assets[], bytes[], first, past)
+    except e:
+        errors[unsafe_offset=band] = String(e)
 
 
 def _brightened(color: FloatColor, factor: Float32) -> FloatColor:
@@ -4188,7 +4240,7 @@ def _reads_scene(assets: Assets, nodes: NodeProgramId) raises -> Bool:
 def _looks_behind(frame: Frame, triangle: Int) raises -> Bool:
     """Return True if a triangle of a prepared frame transmits, or its
     node program reads the scene behind it."""
-    ref first = frame.corners[triangle * 3]
+    ref first = frame.surfaces[frame.corners[triangle * 3].surface]
     return first.transmission > 0 or (
         first.nodes != NO_NODES and frame.programs.get(first.nodes).reads_scene
     )
@@ -4215,8 +4267,12 @@ def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
     if draw.kind == DRAW_TRIANGLES:
         return (
             _looks_behind(frame, draw.first)
-            or frame.corners[draw.first * 3].blend.mixes()
+            or frame.surfaces[
+                frame.corners[draw.first * 3].surface
+            ].blend.mixes()
         )
+    if draw.kind == DRAW_SPLATS:
+        return True
     if draw.kind == DRAW_SEGMENTS:
         return frame.segments[draw.first * 2].blend.mixes()
     return frame.points[draw.first].blend.mixes()
@@ -4244,12 +4300,27 @@ def _paint_backdrop(
     Nothing is claimed in depth: a background is behind everything.
     """
     var top = kept.top(target.height)
+    # What `FloatColor(srgb=...)` makes of each byte, worked out once for
+    # the 256 of them rather than three times a pixel.
+    var decoded = List[Float32](capacity=256)
+    for byte in range(256):  # pragma: no branch
+        decoded.append(srgb_to_linear(Float32(byte) / 255))
     for y in range(top, top + kept.height):  # pragma: no branch
         for x in range(kept.x, kept.x + kept.width):  # pragma: no branch
             var pixel = image.get_pixel(x, y)
             if pixel.a != 255:
                 continue
-            target.write(x, y, FloatColor(srgb=pixel), False)
+            target.write(
+                x,
+                y,
+                FloatColor(
+                    decoded[Int(pixel.r)],
+                    decoded[Int(pixel.g)],
+                    decoded[Int(pixel.b)],
+                    Float32(pixel.a) / 255,
+                ),
+                False,
+            )
 
 
 def available_workers() -> Int:
@@ -4271,12 +4342,16 @@ struct Frame(Movable):
     identical output -- the property `prepare` alone gave the triangles.
     """
 
-    # Raster vertices, three per triangle, as `prepare` returns them.
-    var corners: List[RasterVertex]
+    # The triangles' corners, three each, slim: each names its surface.
+    # `whole_corners` gives them as `prepare` returns them.
+    var corners: List[Corner]
+    # What the corners of each draw share, named by index.
+    var surfaces: List[Surface]
     # Raster vertices, two per segment, as `prepare_lines` returns them.
     var segments: List[RasterVertex]
     # Raster vertices, one per point, as `prepare_points` returns them.
     var points: List[RasterVertex]
+    var splats: List[ProjectedSplat]
     # The order to draw in, as runs of one list or another; see
     # `render.rasterizer.Draw`.
     var draws: List[Draw]
@@ -4289,30 +4364,49 @@ struct Frame(Movable):
 
     def __init__(
         out self,
-        var corners: List[RasterVertex],
+        var corners: List[Corner],
+        var surfaces: List[Surface],
         var segments: List[RasterVertex],
         var draws: List[Draw],
         var points: List[RasterVertex] = List[RasterVertex](),
         var programs: NodeProgramStore = NodeProgramStore(),
         var items: List[RenderItem] = List[RenderItem](),
+        var splats: List[ProjectedSplat] = List[ProjectedSplat](),
     ):
         """Hold a prepared frame.
 
         Args:
-            corners: The triangles' corners, three each.
+            corners: The triangles' corners, three each, slim.
+            surfaces: What the corners name.
             segments: The segments' corners, two each.
             draws: The order to draw them in.
             points: The points, one corner each. None by default.
             programs: The node programs the corners name, for this frame.
                 None by default.
             items: What drew each draw. None by default.
+            splats: The projected Gaussian ellipses. None by default.
         """
         self.corners = corners^
+        self.surfaces = surfaces^
         self.segments = segments^
         self.draws = draws^
         self.points = points^
+        self.splats = splats^
         self.programs = programs^
         self.items = items^
+
+    def whole_corners(self) -> List[RasterVertex]:
+        """Return the triangles' corners whole, three each: what `prepare`
+        returns, and what `render.gpu.GpuRenderer.draw` takes.
+
+        Returns:
+            Each corner joined to its surface.
+        """
+        var out = List[RasterVertex](capacity=len(self.corners))
+        for index in range(len(self.corners)):
+            ref corner = self.corners[index]
+            out.append(joined(corner, self.surfaces[corner.surface]))
+        return out^
 
 
 struct Renderer(Movable):
@@ -4948,6 +5042,25 @@ struct Renderer(Movable):
             return STANDARD_DEPTH
         return self.depth_mode
 
+    def _encode_depth[C: Camera](self, mut vertices: _Slim, camera: C) raises:
+        """`_encode_depth` on the surfaces of slim corners, which hold the
+        depth mode the camera writes.
+
+        Args:
+            vertices: The frame's triangles.
+            camera: The camera the frame is drawn through.
+
+        Raises:
+            Error: As the other overload.
+        """
+        var mode = self.depth_mode_for(camera)
+        var scale = Float32(0)
+        if mode == LOGARITHMIC_DEPTH:
+            scale = log_depth_factor(camera.far_distance())
+        for index in range(len(vertices.surfaces)):
+            vertices.surfaces[index].state.depth_mode = mode
+            vertices.surfaces[index].state.log_depth_scale = scale
+
     def _encode_depth[
         C: Camera
     ](self, mut vertices: List[RasterVertex], camera: C) raises:
@@ -5035,6 +5148,34 @@ struct Renderer(Movable):
         transmissive_backs: Bool = False,
         distance_casters: Bool = False,
     ) raises -> List[RasterVertex]:
+        """`_prepared_slim`, each corner whole: what `prepare` returns and
+        what a pass that reads whole corners takes."""
+        return self._prepared_slim(
+            scene,
+            assets,
+            camera,
+            wireframe,
+            spans,
+            casters_only,
+            receivers_cast,
+            transmissive_backs,
+            distance_casters,
+        ).whole()
+
+    def _prepared_slim[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        wireframe: Bool,
+        mut spans: List[_Span],
+        casters_only: Bool = False,
+        receivers_cast: Bool = False,
+        transmissive_backs: Bool = False,
+        distance_casters: Bool = False,
+    ) raises -> _Slim:
         """Turn a scene into the triangles a rasterizer can fill.
 
         Everything that is not filling pixels happens here: world transforms,
@@ -5115,7 +5256,7 @@ struct Renderer(Movable):
                 checks are made on the draws that are made: a mesh the
                 camera's layers or frustum leave out is not read.
         """
-        var corners = List[RasterVertex]()
+        var corners = _Slim()
         # Asked of the scene as well as the camera: a camera riding a node
         # looks from wherever the scene put that node.
         var view = camera.view_matrix_in(scene)
@@ -5170,6 +5311,8 @@ struct Renderer(Movable):
         # see `light_masks`.
         var masks = light_masks(assets)
         for slot in range(len(draws)):
+            # Each draw shares one surface per facing.
+            corners.new_surface()
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
                 # surface and is left out of the wireframe half. Its
@@ -5677,11 +5820,14 @@ struct Renderer(Movable):
             )
             var run_start = run[0]
             var triangles = run[1]
-            # Grown once per draw rather than by doubling as corners arrive,
-            # which copied the frame's whole list several times over: three
-            # corners a triangle, before the clipper adds any or the facing
-            # test drops any.
-            corners.reserve(len(corners) + triangles * 3)
+            # Room for this draw's corners, three a triangle before the
+            # clipper adds any or the facing test drops any. Grown to at
+            # least double when it runs out: reserving the exact size
+            # reallocated on every draw and copied the frame's whole list
+            # each time, which a scene of many meshes paid for quadratically.
+            var need = len(corners) + triangles * 3
+            if need > corners.capacity():
+                corners.reserve(max(need, 2 * corners.capacity()))
             var begin = len(corners)
             var lights_up = not kind.is_data() and kind != SHADOW
             # A light's view approximates alpha to coverage by an alpha
@@ -6900,9 +7046,11 @@ struct Renderer(Movable):
             self._state[].advance_camera(
                 camera.view_matrix_in(scene), camera.projection_matrix()
             )
-        var corners: List[RasterVertex]
+        var corners: _Slim
         try:
-            corners = self._prepared(scene, assets, camera, False, corner_spans)
+            corners = self._prepared_slim(
+                scene, assets, camera, False, corner_spans
+            )
         finally:
             # Each object drawn keeps its matrix for the next frame, even
             # when this one is refused, and no later frame keeps
@@ -6961,6 +7109,39 @@ struct Renderer(Movable):
         for span in range(len(point_spans)):
             if point_spans[span].blends:
                 mixed.append(point_spans[span])
+        var splats = List[ProjectedSplat]()
+        var view = camera.view_matrix_in(scene)
+        for index in range(len(scene.gaussian_splats)):
+            ref object = scene.gaussian_splats[index][]
+            var prepared = prepare_gaussian_splat(
+                scene,
+                object,
+                camera,
+                self.width,
+                self.height,
+                self.depth_mode_for(camera),
+                self.viewport,
+            )
+            if len(prepared) == 0:
+                continue
+            var first = len(splats)
+            splats.extend(Span(prepared))
+            var origin = view.transform_point(
+                scene.world_matrix(object.node).transform_point(
+                    Vector3(0, 0, 0)
+                )
+            )
+            mixed.append(
+                _Span(
+                    DRAW_SPLATS,
+                    first,
+                    len(prepared),
+                    origin.z,
+                    True,
+                    scene.render_order(object.node),
+                    _Source(object.node, GeometryId(-1), MaterialId(-1)),
+                )
+            )
         _furthest_first(mixed, self._transparent_sort)
         for position in range(len(mixed)):
             _add_run(draws, items, mixed[position])
@@ -6968,7 +7149,16 @@ struct Renderer(Movable):
         # three.js updates its `time` and camera nodes before a frame.
         var programs = assets.programs.copy()
         programs.set_frame(self.time, camera.view_matrix_in(scene))
-        return Frame(corners^, segments^, draws^, points^, programs^, items^)
+        return Frame(
+            corners.take_corners(),
+            corners.take_surfaces(),
+            segments^,
+            draws^,
+            points^,
+            programs^,
+            items^,
+            splats^,
+        )
 
     def render[
         C: Camera
@@ -7380,7 +7570,8 @@ struct Renderer(Movable):
             var capable = List[Bool]()
             for index in range(len(frame.items)):
                 capable.append(
-                    oit_capable(
+                    frame.items[index].kind != DRAW_SPLATS
+                    and oit_capable(
                         assets.materials.get(frame.items[index].material)
                     )
                 )
@@ -7400,10 +7591,11 @@ struct Renderer(Movable):
         # asks it before a launch. The uv view is data throughout and is
         # never tone mapped, so it is never refused; see below.
         check_output_kinds(
-            frame.corners,
+            frame.surfaces,
             self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
             frame.segments,
             frame.points,
+            len(frame.splats) > 0,
         )
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
@@ -7488,6 +7680,7 @@ struct Renderer(Movable):
         # `render.rasterizer.rasterize_frame` and `prepare_frame`.
         rasterize_frame(
             frame.corners,
+            frame.surfaces,
             frame.segments,
             frame.draws,
             target,
@@ -7504,6 +7697,7 @@ struct Renderer(Movable):
             assets.data_3d_textures,
             assets.data_array_textures,
             lightings,
+            frame.splats,
         )
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
@@ -7698,6 +7892,7 @@ struct Renderer(Movable):
             _paint_backdrop(drawn, kept, backdrop.value())
         rasterize_frame(
             frame.corners,
+            frame.surfaces,
             frame.segments,
             _opaque_draws(frame),
             drawn,
@@ -8347,6 +8542,8 @@ struct Renderer(Movable):
         # three.js's `backgroundIntensity`, on every background image.
         var shown = scene.background_intensity
         var image = Framebuffer(self.width, self.height, Color(0, 0, 0, 0))
+        # Every pixel is encoded through one table; see `SrgbBytes`.
+        var bytes = SrgbBytes()
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -8378,6 +8575,7 @@ struct Renderer(Movable):
                             x,
                             y,
                             _brightened(picture.sample(u, v), shown),
+                            bytes,
                         )
                 return image^
         elif backdrop.cube.value >= assets.cube_textures.count():
@@ -8401,31 +8599,50 @@ struct Renderer(Movable):
         unproject.invert()
         var to_world = camera.view_matrix_in(scene)
         to_world.invert()
-        for y in range(self.height):  # pragma: no branch
-            for x in range(self.width):  # pragma: no branch
-                if not kept.contains_pixel(
-                    x, y, self.height
-                ) or not viewport.contains_pixel(x, y, self.height):
-                    continue
-                var ndc_x = (Float32(x - viewport.x) + 0.5) / Float32(
-                    viewport.width
-                ) * 2 - 1
-                var ndc_y = (
-                    1 - (Float32(y - top) + 0.5) / Float32(viewport.height) * 2
+        var rays = _BackdropRays(
+            backdrop,
+            kept,
+            viewport,
+            top,
+            self.width,
+            self.height,
+            unproject,
+            to_world,
+            spin,
+            blur,
+            shown,
+        )
+        # Each pixel is its own, so the rows are split over the workers.
+        var bands = min(self.workers, self.height)
+        if bands == 1:
+            rays.paint(image, assets, bytes, 0, self.height)
+            return image^
+        var errors = List[String](length=bands, fill=String(""))
+        var group = TaskGroup()
+        for band in range(bands):  # pragma: no branch
+            group.create_task(
+                _backdrop_band(
+                    Pointer(to=rays)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=image)
+                    .unsafe_mut_cast[True]()
+                    .unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=assets).unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=bytes)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    band,
+                    band * self.height // bands,
+                    (band + 1) * self.height // bands,
                 )
-                var near = unproject.transform_point(Vector3(ndc_x, ndc_y, -1))
-                var far = unproject.transform_point(Vector3(ndc_x, ndc_y, 1))
-                var looked = spin.turn(to_world.transform_direction(far - near))
-                var seen: FloatColor
-                if backdrop.kind == TEXTURE_BACKGROUND:
-                    seen = _panorama_seen(
-                        assets.textures.get(backdrop.texture), looked, blur
-                    )
-                else:
-                    seen = _sky_seen(
-                        assets.cube_textures.get(backdrop.cube), looked, blur
-                    )
-                _set_backdrop(image, x, y, _brightened(seen, shown))
+            )
+        group.wait()
+        # The tasks read these through pointers the compiler cannot see.
+        _ = len(bytes.thresholds)
+        _ = rays.width
+        _raise_band_errors(errors)
         return image^
 
     def render_cube(

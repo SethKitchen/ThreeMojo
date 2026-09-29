@@ -186,6 +186,7 @@ from render.rasterizer import (
     check_line_state,
     check_point_state,
     DRAW_POINTS,
+    DRAW_SPLATS,
     DRAW_SEGMENTS,
     SHADE_LIT,
     SHADE_SHADOW,
@@ -5580,6 +5581,33 @@ def rasterize_kernel(
         var kind = draws[unsafe_offset=draw * INTS_PER_DRAW]
         var first = Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 1])
         var past = first + Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 2])
+        if kind == Int32(DRAW_SPLATS.value):
+            for index in range(past - first):
+                var base = first + index * (SPLAT_FLOATS + 1)
+                var splat = _projected_splat_at(points, base)
+                var splat_mode = DepthMode(
+                    Int(points[unsafe_offset=base + SPLAT_FLOATS])
+                )
+                var held = nearest if solid else cleared_depth(splat_mode)
+                if not splat_depth_passes(splat_mode, splat.depth, held):
+                    continue
+                var coverage = splat_alpha(splat, x, y)
+                if not coverage > 0:
+                    continue
+                var result = blend_fragment(
+                    _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
+                    Rgba(splat.r, splat.g, splat.b, coverage),
+                    NORMAL_MODE,
+                    False,
+                    Rgba(0),
+                )
+                mixed_r = result[0]
+                mixed_g = result[1]
+                mixed_b = result[2]
+                mixed_a = result[3]
+                found = True
+                data = False
+            continue
         if kind == Int32(DRAW_POINTS.value):
             # A run of points. The question is "does this point cover me",
             # and `render.pointrule` answers it from the expression the
@@ -9138,6 +9166,7 @@ struct GpuRenderer(Movable):
         custom_tone_mapping: NodeProgramId = NO_NODES,
         output_color_space: ColorSpaceId = SRGB_COLOR_SPACE,
         lightings: List[Lighting] = List[Lighting](),
+        splats: List[ProjectedSplat] = List[ProjectedSplat](),
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -9212,6 +9241,7 @@ struct GpuRenderer(Movable):
                 materials name, as `rasterize_frame` takes them. Each
                 goes up as a block of its own; see
                 `flatten_frame_lights`.
+            splats: Projected Gaussian splats referenced by DRAW_SPLATS runs.
 
         Raises:
             Error: If the corner count is not a multiple of three, a
@@ -9331,7 +9361,14 @@ struct GpuRenderer(Movable):
             order.append(Draw(DRAW_TRIANGLES, 0, triangles))
             order.append(Draw(DRAW_SEGMENTS, 0, len(lines) // 2))
             order.append(Draw(DRAW_POINTS, 0, len(points)))
-        check_draws(order, triangles, len(lines) // 2, len(points))
+            if len(splats) > 0:
+                order.append(Draw(DRAW_SPLATS, 0, len(splats)))
+        check_draws(order, triangles, len(lines) // 2, len(points), len(splats))
+        if len(points) > 2147483647 // FLOATS_PER_VERTEX:
+            raise Error("A point buffer exceeds the device index range")
+        var splat_offset = len(points) * FLOATS_PER_VERTEX
+        if len(splats) > (2147483647 - splat_offset) // (SPLAT_FLOATS + 1):
+            raise Error("A splat buffer exceeds the device index range")
         # Asked of the triangles a draw names, as `rasterize_frame` asks
         # it: the kernel reads the target wherever a triangle transmits.
         var ready = transmission.is_ready()
@@ -9626,6 +9663,7 @@ struct GpuRenderer(Movable):
             mode != SHADE_UV and tone_mapping != NO_TONE_MAPPING,
             lines,
             points,
+            len(splats) > 0,
         )
         # A ramp holds data and says so the same two ways, and must hold
         # texels to step through. Asked under every mode that lights the
@@ -9739,24 +9777,31 @@ struct GpuRenderer(Movable):
                 )
 
         var point_count = len(points)
-        if point_count > self.point_capacity:
+        var point_room = ceildiv(
+            splat_offset + len(splats) * (SPLAT_FLOATS + 1), FLOATS_PER_VERTEX
+        )
+        if point_room > self.point_capacity:
             self.context.synchronize()
             self.points = self.context.enqueue_create_buffer[DType.float32](
-                point_count * FLOATS_PER_VERTEX
+                point_room * FLOATS_PER_VERTEX
             )
             self.point_maps = self.context.enqueue_create_buffer[DType.int32](
-                point_count * STATE_PER_POINT
+                point_room * STATE_PER_POINT
             )
-            self.point_capacity = point_count
+            self.point_capacity = point_room
 
-        if point_count > 0:
+        if point_room > 0:
             var dots = flatten(points)
+            for index in range(len(splats)):
+                splats[index].append_to(dots)
+                dots.append(Float32(depth_mode.value))
             with self.points.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
                     src=dots.unsafe_ptr(),
                     count=len(dots),
                 )
+        if point_count > 0:
             var dot_state = point_state(points, program_starts(programs))
             with self.point_maps.map_to_host() as host:
                 unsafe_memcpy(
@@ -9775,7 +9820,10 @@ struct GpuRenderer(Movable):
         flat_draws.reserve(len(order) * INTS_PER_DRAW)
         for index in range(len(order)):  # pragma: no branch
             flat_draws.append(Int32(order[index].kind.value))
-            flat_draws.append(Int32(order[index].first))
+            var first = order[index].first
+            if order[index].kind == DRAW_SPLATS:
+                first = splat_offset + first * (SPLAT_FLOATS + 1)
+            flat_draws.append(Int32(first))
             flat_draws.append(Int32(order[index].count))
         with self.draw_list.map_to_host() as host:
             unsafe_memcpy(
@@ -10239,6 +10287,7 @@ def render_triangles(
     programs: NodeProgramStore = NodeProgramStore(),
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    splats: List[ProjectedSplat] = List[ProjectedSplat](),
 ) raises -> Framebuffer:
     """Draw prepared triangles, lines and points on the GPU and read the
     image back.
@@ -10274,6 +10323,7 @@ def render_triangles(
         programs: The node materials' programs; see `GpuRenderer.draw`.
         volumes: The 3D textures the programs read.
         arrays: The array textures the programs read.
+        splats: Projected Gaussian splats referenced by the draw list.
 
     Returns:
         The rendered image.
@@ -10300,6 +10350,7 @@ def render_triangles(
         backdrop,
         transmission=transmission,
         programs=programs,
+        splats=splats,
     )
     return renderer.read_back()
 
@@ -12504,6 +12555,25 @@ struct GpuComputation(Movable):
 # --- Gaussian splats --------------------------------------------------------
 
 
+def _projected_splat_at(
+    data: MutPointer[Float32, MutAnyOrigin], lane: Int
+) -> ProjectedSplat:
+    """Read the shared projected-splat layout on the device."""
+    return ProjectedSplat(
+        data[unsafe_offset=lane + SPLAT_X],
+        data[unsafe_offset=lane + SPLAT_Y],
+        data[unsafe_offset=lane + SPLAT_DEPTH],
+        data[unsafe_offset=lane + SPLAT_AXIS_X],
+        data[unsafe_offset=lane + SPLAT_AXIS_Y],
+        data[unsafe_offset=lane + SPLAT_SCALE1],
+        data[unsafe_offset=lane + SPLAT_SCALE2],
+        data[unsafe_offset=lane + SPLAT_R],
+        data[unsafe_offset=lane + SPLAT_G],
+        data[unsafe_offset=lane + SPLAT_B],
+        data[unsafe_offset=lane + SPLAT_A],
+    )
+
+
 def splat_kernel(
     colors: MutPointer[Float32, MutAnyOrigin],
     depth: MutPointer[Float32, MutAnyOrigin],
@@ -12712,6 +12782,7 @@ struct GpuSplats(Movable):
         scene: Scene,
         mut splat: GaussianSplat,
         camera: C,
+        viewport: Optional[Rect] = None,
     ) raises:
         """Draw a splat object into a target on the device, as
         `render.splat_raster.draw_gaussian_splat` does on the host.
@@ -12721,6 +12792,7 @@ struct GpuSplats(Movable):
             scene: The scene, updated, that holds the object's node.
             splat: The splats; see `prepare_gaussian_splat`.
             camera: The camera to project through.
+            viewport: The camera rectangle, or the whole target.
 
         Raises:
             Error: Everything `prepare_gaussian_splat` and `draw` raise.
@@ -12732,6 +12804,7 @@ struct GpuSplats(Movable):
             target.width,
             target.height,
             target.depth_mode,
+            viewport,
         )
         self.draw(target, splats)
 

@@ -49,9 +49,9 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 ## Features
 
-A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
+A ticked item is ported, tested with full coverage, and documented on the linked wiki page. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 215 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+Every three.js feature in scope is ported: 215 features, and none is open. Each wiki page lists what its port leaves out, under "What is not ported". [Out of scope](#out-of-scope) lists what the port leaves out on purpose, and why. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -119,7 +119,7 @@ The port is not at parity with three.js yet. 215 features are ported and 0 are o
 <details>
 <summary>Ported: 15</summary>
 
-- [x] [Gaussian splats](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats): the GaussianSplat object drawn alike by both rasterizers, and the SPLAT, KSPLAT, SPZ, splat PLY and KHR_gaussian_splatting glTF loaders [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
+- [x] [Gaussian splats](https://github.com/SethKitchen/ThreeMojo/wiki/Gaussian-splats): the GaussianSplat object drawn alike by both rasterizers, and the SPLAT, KSPLAT, SPZ, splat PLY and KHR_gaussian_splatting glTF loaders. Scene draw ordering, viewport projection, sparse glTF attributes and node placement [#247](https://github.com/SethKitchen/ThreeMojo/issues/247)
 - [x] [MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope](https://github.com/SethKitchen/ThreeMojo/wiki/Animated-objects): blended morph flip-books, Quake II characters, and a node that keeps its turn [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [x] [Skeleton, morph, batch and LOD tools](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#skeleton-tools): clone and retarget, CCD IK, uncapped morphs, batch deletion and sorting, any node as a level [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [x] [Scene objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-objects): Reflector, Refractor, two waters, Sky, lens flare, marching cubes, grounded skybox and shadow mesh [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)

@@ -12,13 +12,15 @@ slowly moving triangle would swim. These pixels stay put until the edge
 crosses them.
 """
 
+from core.clock import Clock
 from math.vector2 import Vector2
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
 from std.math import cos, pi, sin
 from std.pathlib import Path
-from std.sys import argv
+from std.sys import argv, stderr
+from units.si import MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/coverage.png"
 comptime WIDTH = 240
@@ -65,11 +67,20 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var angle = Float32(2) * Float32(pi) * Float32(index)
         angle = angle / (Float32(3) * Float32(FRAMES))
         frames.append(frame_at(angle))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

@@ -16,6 +16,88 @@ key. Here the items are indices and the keys a list, so `get` is
 `keys[item]`. `radix_sort_keys` sorts the keys themselves.
 """
 
+from std.math import min
+
+
+def stable_sort[
+    T: ImplicitlyCopyable & Deinitable, //, before: def(T, T) thin -> Bool
+](mut items: List[T]):
+    """Sort stably with a plain comparator. See the closure overload.
+
+    Parameters:
+        T: The value type.
+        before: True when the first value must precede the second.
+
+    Args:
+        items: The values to sort in place.
+    """
+
+    def compare(a: T, b: T) capturing -> Bool:
+        return before(a, b)
+
+    stable_sort[compare](items)
+
+
+def stable_sort[
+    T: ImplicitlyCopyable & Deinitable,
+    //,
+    before: def(T, T) capturing[_] -> Bool,
+](mut items: List[T]):
+    """Sort by a strict ordering and keep equal items in their input order.
+
+    Short lists use insertion sort without allocation. Longer lists use
+    a bottom-up merge with one buffer, O(n log n) comparisons and O(n)
+    extra storage. The comparator must define a strict weak ordering.
+
+    Parameters:
+        T: The value type.
+        before: True when the first value must precede the second.
+
+    Args:
+        items: The values to sort in place.
+    """
+    var count = len(items)
+    if count <= 32:
+        for position in range(1, count):
+            var held = items[position]
+            var slot = position
+            while slot > 0 and before(held, items[slot - 1]):
+                items[slot] = items[slot - 1]
+                slot -= 1
+            items[slot] = held
+        return
+    # Keep the linear, allocation-free case for ordered frame lists.
+    var inversions = 0
+    for index in range(1, count):  # pragma: no branch
+        if before(items[index], items[index - 1]):
+            inversions += 1
+            break
+    if inversions == 0:
+        return
+    var buffer = items.copy()
+    var width = 1
+    while width < count:
+        # count is greater than 32, so every merge pass has a run.
+        for start in range(0, count, width * 2):  # pragma: no branch
+            var middle = min(start + width, count)
+            var end = min(start + width * 2, count)
+            var left = start
+            var right = middle
+            # start is below count and width is positive: the run is nonempty.
+            for destination in range(start, end):  # pragma: no branch
+                # Take from the left on a tie. This preserves stability.
+                if right < end and (
+                    left >= middle or before(items[right], items[left])
+                ):
+                    buffer[destination] = items[right]
+                    right += 1
+                else:
+                    buffer[destination] = items[left]
+                    left += 1
+        swap(items, buffer)
+        width *= 2
+
+
 # three.js's constants: eight bits a pass, four passes of a 32-bit key.
 comptime _POWER = 3
 comptime _BIN_BITS = 1 << _POWER

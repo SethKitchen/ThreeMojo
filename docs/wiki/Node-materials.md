@@ -784,6 +784,25 @@ A point and a `Line` run a node material too, as three.js runs a `ShaderMaterial
 - A `SHADOW` material's mask reads the depths alone. The colors of a transmitted shadow do not change it.
 - The raycaster picks the geometry without the position node, as three.js's raycaster does.
 
+## Node JSON compatibility
+
+`loaders.node_loader.node_json_type_names()` is the checked type list.
+`tests/test_node_loader.mojo` tests the accepted types and rejects unsupported
+classes with an explicit error.
+
+| Serialized class or feature | Support |
+| --- | --- |
+| `VarNode`, `SubBuild`, `VaryingNode` | Supported references and graph wrappers. |
+| `ConstNode`, `UniformNode`, `AttributeNode`, `VertexColorNode` | Supported values and inputs. Uniform update callbacks are not serialized. |
+| `OperatorNode`, `MathNode`, `ConditionalNode` | Supported operations listed by the loader. Unknown operations raise an error. |
+| `SplitNode`, `JoinNode`, `ConvertNode` | Supported lane and type operations. |
+| `FrontFacingNode`, `ScreenNode`, `PointUVNode` | Supported fragment inputs. |
+| `TextureNode`, `CubeTextureNode` | Supported sampled textures. |
+| TSL function bodies | Not stored in three.js node JSON; the loader rejects them. |
+| `ModelNode`, `MaterialNode`, `PropertyNode`, `StorageBufferNode` | Rejected. Use explicit graph inputs, textures, or attributes where available. |
+| Post-processing nodes | Use the corresponding composer passes. |
+| Volume `depthNode`, rectangle lights, ray `receivedShadowNode` | Not supported; see the limits below. |
+
 ## What is not ported
 
 - A `VOLUME` material's `depthNode`. three.js reads it as the depth of the scene, to stop a ray at the nearest opaque surface. That needs a pass's depth texture, and no node here reads one. Here `DEPTH_NODE` sets the fragment's depth, as on every other kind.

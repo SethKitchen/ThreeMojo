@@ -668,18 +668,18 @@ def test_each_primitive_keeps_the_flags_its_three_js_shader_reads() raises:
             assert_true(state.dithering)
             assert_true(state.premultiplied_alpha)
         elif item.geometry.value < 0:
-            var state = frame.corners[first * 3].state
+            var state = frame.whole_corners()[first * 3].state
             assert_false(state.dithering)
             assert_true(state.alpha_hash)
             assert_false(state.premultiplied_alpha)
             sprites += 1
         elif item.node == made.mesh:
-            var state = frame.corners[first * 3].state
+            var state = frame.whole_corners()[first * 3].state
             assert_true(state.dithering)
             assert_true(state.alpha_hash)
             assert_true(state.premultiplied_alpha)
         else:
-            var state = frame.corners[first * 3].state
+            var state = frame.whole_corners()[first * 3].state
             assert_false(state.dithering)
             assert_false(state.alpha_hash)
             assert_true(state.premultiplied_alpha)
@@ -699,8 +699,8 @@ def test_each_primitive_keeps_the_flags_its_three_js_shader_reads() raises:
         if item.kind == DRAW_SEGMENTS:
             assert_false(shown.segments[first * 2].state.dithering)
         elif item.node == plain.mesh:
-            assert_false(shown.corners[first * 3].state.dithering)
-            assert_false(shown.corners[first * 3].state.alpha_hash)
+            assert_false(shown.whole_corners()[first * 3].state.dithering)
+            assert_false(shown.whole_corners()[first * 3].state.alpha_hash)
 
 
 # --- shadows --------------------------------------------------------------

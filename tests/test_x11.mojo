@@ -155,13 +155,17 @@ struct Server(Movable):
             Error: If Xvfb does not start.
         """
         var lines = run(
-            "f=$(mktemp); Xvfb -displayfd 3 -screen 0 320x240x"
+            "command -v Xvfb >/dev/null 2>&1 || exit 1;"
+            + " f=$(mktemp) || exit 1; Xvfb -displayfd 3 -screen 0 320x240x"
             + String(depth)
             + ' -nolisten tcp -noreset 3>"$f" >/dev/null 2>&1 & p=$!;'
-            + ' for i in $(seq 600); do [ -s "$f" ] && break; sleep 0.1;'
-            + ' done; echo $p; cat "$f"; rm -f "$f"'
+            + ' for i in $(seq 600); do [ -s "$f" ] && break;'
+            + ' kill -0 "$p" 2>/dev/null || break; sleep 0.1; done;'
+            + ' if [ ! -s "$f" ]; then kill "$p" 2>/dev/null;'
+            + ' wait "$p" 2>/dev/null; rm -f "$f"; exit 1; fi;'
+            + ' echo $p; cat "$f"; rm -f "$f"'
         ).split("\n")
-        if len(lines) < 2:
+        if len(lines) < 2 or lines[1].strip() == "":
             raise Error("Xvfb did not start")
         self.pid = String(lines[0])
         self.display = ":" + String(lines[1].strip())

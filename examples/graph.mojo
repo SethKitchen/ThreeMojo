@@ -14,6 +14,7 @@ its normal by the same wave. The lights still shade the sphere.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
@@ -27,8 +28,8 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import pi
 from std.pathlib import Path
-from std.sys import argv
-from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
+from std.sys import argv, stderr
+from units.si import DEGREE, METER, SECOND, Angle, Duration, Length, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/nodes.png"
 comptime WIDTH = 240
@@ -120,6 +121,8 @@ def main() raises:
     camera.place(Vector3(0.2, 0.25, 3.0), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var seconds = (
@@ -129,5 +132,12 @@ def main() raises:
             frame_at(renderer, camera, assets, scene, node, step, seconds)
         )
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

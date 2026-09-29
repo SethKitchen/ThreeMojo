@@ -2966,8 +2966,11 @@ def export_gltf(
             or points geometry is indexed, or a clip's morph tracks name a
             target that is not there or cannot be merged. Also if
             `max_texture_size` is below one, or custom extensions are
-            written and a `gltfExtensions` is not an object.
+            written and a `gltfExtensions` is not an object. Also if the
+            scene holds Gaussian splats, which cannot be serialized yet.
     """
+    if len(scene.gaussian_splats) > 0:
+        raise Error("glTF export cannot serialize Gaussian splats yet")
     if not container.is_valid():
         raise Error("glTF: a container that is none of the three")
     if Bool(options.max_texture_size) and options.max_texture_size.value() < 1:

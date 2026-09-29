@@ -128,6 +128,7 @@ from core.buffer_geometry import (
 )
 from core.buffer_attribute import BufferAttribute
 from core.scene import Scene
+from math.ray_query import RayQuery
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
 from math.ray import Ray
@@ -422,7 +423,7 @@ def _worn_vertex(
     return worn[vertex]
 
 
-struct Raycaster(ImplicitlyCopyable):
+struct Raycaster(ImplicitlyCopyable, RayQuery):
     """A ray with a range, that asks a scene what it meets."""
 
     var ray: Ray
@@ -441,6 +442,18 @@ struct Raycaster(ImplicitlyCopyable):
     var has_camera: Bool
     var camera_world: Matrix4
     var camera_perspective: Bool
+
+    def query_ray(self) -> Ray:
+        """Return the world-space ray for an object's ray query."""
+        return self.ray
+
+    def query_near(self) -> Length:
+        """Return the nearest distance for an object's ray query."""
+        return self.near
+
+    def query_far(self) -> Length:
+        """Return the furthest distance for an object's ray query."""
+        return self.far
 
     def __init__(
         out self,

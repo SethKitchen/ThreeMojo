@@ -11,7 +11,7 @@ forward and reversed, run in Node by `three_sort.mjs` beside it.
 """
 
 from loaders.json import JsonDocument, parse_json
-from math.sort_utils import radix_sort, radix_sort_keys
+from math.sort_utils import radix_sort, radix_sort_keys, stable_sort
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
@@ -97,6 +97,72 @@ def test_an_item_must_name_a_key() raises:
     items = [-1]
     with assert_raises(contains="must name a key"):
         radix_sort(items, keys)
+
+
+def _check_stable(count: Int, reversed: Bool) raises:
+    var items = List[Int]()
+    var keys = List[Int]()
+    for index in range(count):
+        items.append(index)
+        keys.append((index * 97) % 13)
+
+    def before(a: Int, b: Int) capturing -> Bool:
+        return keys[a] > keys[b] if reversed else keys[a] < keys[b]
+
+    stable_sort[before](items)
+    var seen = List[Bool](length=count, fill=False)
+    for index in range(count):
+        assert_true(not seen[items[index]])
+        seen[items[index]] = True
+        if index > 0:
+            var a = items[index - 1]
+            var b = items[index]
+            assert_true(not before(b, a))
+            if keys[a] == keys[b]:
+                assert_true(a < b)
+
+
+def test_stable_sort_preserves_ties_across_merge_boundaries() raises:
+    for count in [0, 1, 2, 31, 32, 33, 65, 511]:
+        _check_stable(count, False)
+        _check_stable(count, True)
+
+
+def test_a_large_reverse_sort_has_a_logarithmic_comparison_bound() raises:
+    var items = List[Int]()
+    for index in range(8192, 0, -1):
+        items.append(index)
+    var comparisons = 0
+
+    def before(a: Int, b: Int) capturing -> Bool:
+        comparisons += 1
+        return a < b
+
+    stable_sort[before](items)
+    assert_true(comparisons <= 8192 * 13)
+    for index in range(8192):
+        assert_equal(items[index], index + 1)
+
+
+def test_equal_items_and_an_already_sorted_list_keep_their_order() raises:
+    for count in [2, 33, 65]:
+        var items = List[Int]()
+        for index in range(count):
+            items.append(index)
+
+        def tied(a: Int, b: Int) -> Bool:
+            return False
+
+        stable_sort[tied](items)
+        for index in range(count):
+            assert_equal(items[index], index)
+
+        def ascending(a: Int, b: Int) -> Bool:
+            return a < b
+
+        stable_sort[ascending](items)
+        for index in range(count):
+            assert_equal(items[index], index)
 
 
 def main() raises:

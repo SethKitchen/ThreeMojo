@@ -36,12 +36,12 @@ it to `GLTFLoader`.
 **Names.** Each primitive is named after its mesh, or `mesh_N`, made
 unique as three.js's `createUniqueName` makes a name: sanitized, then
 `_1`, `_2` and on for a name used before. Every primitive of every mesh
-takes a name, in mesh order. three.js also counts the names of the nodes,
-and names the meshes in the order the nodes reach them.
+takes a name, in mesh order, after node names have been reserved. three.js
+can name meshes in the order the nodes reach them.
 
 **Accessors.** An accessor of floats, or of integers that are normalized
-or not, is read, with its buffer view's byte stride. A sparse accessor is
-refused.
+or not, is read, with its buffer view's byte stride. Sparse values overlay
+the base buffer or an implicit zero array.
 
 A mesh that mixes splat and other primitives, a splat primitive that is
 not `POINTS`, a kernel that is not `ellipse`, a missing `colorSpace`, a
@@ -49,6 +49,8 @@ missing field, fields of different counts, a band that is incomplete, not
 three numbers or not as many as the positions, or a band above a missing
 one is refused, with three.js's reasons.
 """
+
+from loaders.gltf_layout import AccessorLayout, check_buffer_range
 
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
@@ -61,7 +63,11 @@ from core.gaussian_splat_utils import (
 )
 from core.user_data import UserData, user_data_of
 from loaders.fbx import sanitize_node_name
-from loaders.gltf import decode_base64, split_glb
+from loaders.gltf import decode_base64, split_glb, _apply_matrix
+from core.scene import Scene
+from core.object3d import NodeId, Object3D, NO_PARENT
+from math.quaternion import Quaternion
+from objects.gaussian_splat import GaussianSplat
 from loaders.json import OBJECT, JsonDocument, parse_json
 from loaders.splat import le_u32
 from std.memory import bitcast
@@ -73,6 +79,8 @@ comptime KHR_GAUSSIAN_SPLATTING = "KHR_gaussian_splatting"
 comptime GLTF_POINTS = 0
 # glTF's default mode, `TRIANGLES`.
 comptime GLTF_TRIANGLES = 4
+# Bound allocation for implicit zero accessors as well as stored attributes.
+comptime MAX_GLTF_SPLATS = 10000000
 # `glTF`, the binary container's magic, little-endian.
 comptime _GLB_MAGIC = 0x46546C67
 
@@ -276,50 +284,171 @@ def _read_accessor(
         Its numbers.
 
     Raises:
-        Error: If the accessor is sparse, of an unknown type, or reaches
-            past its buffer view or its buffer.
+        Error: If the accessor has invalid sparse data, counts, offsets or
+            strides, exceeds `MAX_GLTF_SPLATS`, names a missing buffer,
+            or reaches past its buffer view or its buffer.
     """
     var accessor = document.at(
         document.get(document.root(), "accessors"), index
     )
-    if document.has(accessor, "sparse"):
-        raise Error("glTF: a sparse splat accessor is not read")
     var component = document.integer(document.get(accessor, "componentType"))
     var width = _component_bytes(component)
-    var size = _element_size(document.string(document.get(accessor, "type")))
+    var kind = document.string(document.get(accessor, "type"))
+    var size = _element_size(kind)
+    var layout = AccessorLayout(kind, width)
     var count = document.integer(document.get(accessor, "count"))
+    if count < 0 or count > MAX_GLTF_SPLATS:
+        raise Error("glTF: a splat accessor has an invalid count")
+    var offset = _offset(document, accessor)
+    layout.check(count, offset)
     var normalized = False
     if document.has(accessor, "normalized"):
         normalized = document.boolean(document.get(accessor, "normalized"))
-    var values = List[Float64](length=count * size, fill=0)
     if not document.has(accessor, "bufferView"):
+        if offset != 0:
+            raise Error(
+                "glTF: a splat accessor without a view cannot have a byteOffset"
+            )
+        var values = List[Float64](length=count * size, fill=0)
+        _apply_sparse_splat(
+            document,
+            buffers,
+            accessor,
+            count,
+            size,
+            component,
+            normalized,
+            values,
+        )
         return _Accessor(values^, count, size)
     var view = document.at(
         document.get(document.root(), "bufferViews"),
         document.integer(document.get(accessor, "bufferView")),
     )
-    ref buffer = buffers[document.integer(document.get(view, "buffer"))]
-    var start = _offset(document, view) + _offset(document, accessor)
-    var stride = size * width
-    if document.has(view, "byteStride"):
-        stride = document.integer(document.get(view, "byteStride"))
+    var buffer_index = document.integer(document.get(view, "buffer"))
+    if buffer_index < 0 or buffer_index >= len(buffers):
+        raise Error("glTF: a splat buffer view names a missing buffer")
+    ref buffer = buffers[buffer_index]
+    var view_offset = _offset(document, view)
     var length = document.integer(document.get(view, "byteLength"))
-    var reach = (
-        _offset(document, accessor) + stride * (count - 1) + size * width
+    check_buffer_range(len(buffer), view_offset, length)
+    var stride = size * width
+    var explicit_stride = document.has(view, "byteStride")
+    if explicit_stride:
+        stride = document.integer(document.get(view, "byteStride"))
+    var span = layout.span(
+        count, offset, view_offset, length, stride, explicit_stride
     )
-    var outside = _offset(document, view) + length > len(buffer)
-    if count > 0:
-        if reach > length or outside:
-            raise Error("glTF: a splat accessor reaches past its data")
+    var start = span[0]
+    stride = span[1]
+    # Validate the metadata before allocating or reading the output.
+    var values = List[Float64](capacity=count * size)
     for element in range(count):
         for lane in range(size):  # pragma: no branch
-            values[element * size + lane] = _component(
-                buffer,
-                start + element * stride + lane * width,
+            values.append(
+                _component(
+                    buffer,
+                    start + element * stride + lane * width,
+                    component,
+                    normalized,
+                )
+            )
+    _apply_sparse_splat(
+        document, buffers, accessor, count, size, component, normalized, values
+    )
+    return _Accessor(values^, count, size)
+
+
+def _sparse_span(
+    document: JsonDocument,
+    buffers: List[List[UInt8]],
+    part: Int,
+    size: Int,
+    alignment: Int,
+) raises -> Tuple[Int, Int]:
+    """Check a packed sparse index or value range before it is read."""
+    var view = document.at(
+        document.get(document.root(), "bufferViews"),
+        document.integer(document.get(part, "bufferView")),
+    )
+    var buffer = document.integer(document.get(view, "buffer"))
+    if buffer < 0 or buffer >= len(buffers):
+        raise Error("glTF: a sparse splat accessor names a missing buffer")
+    var base = _offset(document, view)
+    var length = document.integer(document.get(view, "byteLength"))
+    check_buffer_range(len(buffers[buffer]), base, length)
+    var offset = _offset(document, part)
+    check_buffer_range(length, offset, size)
+    if document.has(view, "byteStride") or (base + offset) % alignment != 0:
+        raise Error("glTF: a sparse splat accessor must be packed and aligned")
+    return (buffer, base + offset)
+
+
+def _apply_sparse_splat(
+    document: JsonDocument,
+    buffers: List[List[UInt8]],
+    accessor: Int,
+    count: Int,
+    width: Int,
+    component: Int,
+    normalized: Bool,
+    mut values: List[Float64],
+) raises:
+    """Overlay sparse values without a Float32 precision round trip."""
+    if not document.has(accessor, "sparse"):
+        return
+    var sparse = document.get(accessor, "sparse")
+    if (
+        document.kind(sparse) != OBJECT
+        or not document.has(sparse, "count")
+        or not document.has(sparse, "indices")
+        or not document.has(sparse, "values")
+    ):
+        raise Error(
+            "glTF: a sparse splat accessor needs count, indices and values"
+        )
+    var changed = document.integer(document.get(sparse, "count"))
+    if changed < 1 or changed > count:
+        raise Error("glTF: a sparse splat accessor has an invalid count")
+    var indices = document.get(sparse, "indices")
+    var data = document.get(sparse, "values")
+    var index_type = document.integer(document.get(indices, "componentType"))
+    if index_type != 5121 and index_type != 5123 and index_type != 5125:
+        raise Error("glTF: sparse indices must be unsigned integers")
+    var index_size = _component_bytes(index_type)
+    var component_size = _component_bytes(component)
+    var found = _sparse_span(
+        document, buffers, indices, changed * index_size, index_size
+    )
+    var what = _sparse_span(
+        document,
+        buffers,
+        data,
+        changed * width * component_size,
+        component_size,
+    )
+    var last = -1
+    for slot in range(changed):  # pragma: no branch
+        var element = Int(
+            _component(
+                buffers[found[0]],
+                found[1] + slot * index_size,
+                index_type,
+                False,
+            )
+        )
+        if element <= last or element >= count:
+            raise Error(
+                "glTF: sparse indices must rise and stay inside the accessor"
+            )
+        last = element
+        for lane in range(width):  # pragma: no branch
+            values[element * width + lane] = _component(
+                buffers[what[0]],
+                what[1] + (slot * width + lane) * component_size,
                 component,
                 normalized,
             )
-    return _Accessor(values^, count, size)
 
 
 def _offset(document: JsonDocument, node: Int) raises -> Int:
@@ -355,7 +484,9 @@ def _buffers(
         One list of bytes a buffer.
 
     Raises:
-        Error: If a `data:` URI is not base64, or a file cannot be read.
+        Error: If a `data:` URI is not base64, a file cannot be read, a
+            buffer is shorter than its declared length, or a later
+            buffer has no URI.
     """
     var out = List[List[UInt8]]()
     if not document.has(document.root(), "buffers"):
@@ -363,17 +494,31 @@ def _buffers(
     var list = document.get(document.root(), "buffers")
     for index in range(document.length(list)):
         var buffer = document.at(list, index)
+        var length = document.integer(document.get(buffer, "byteLength"))
+        if length < 0:
+            raise Error("glTF: a splat buffer needs a nonnegative byteLength")
+        var data: List[UInt8]
         if not document.has(buffer, "uri"):
-            out.append(binary.copy())
-            continue
-        var uri = document.string(document.get(buffer, "uri"))
-        if uri.startswith("data:"):
-            var comma = uri.find(",")
-            if comma < 0 or not uri[byte=:comma].endswith(";base64"):
-                raise Error("glTF: a data URI that is not base64")
-            out.append(decode_base64(String(uri[byte = comma + 1 :])))
+            if index != 0:
+                raise Error("glTF: only the first splat buffer can have no URI")
+            data = binary.copy()
         else:
-            out.append(Path(directory + uri).read_bytes())
+            var uri = document.string(document.get(buffer, "uri"))
+            if uri.startswith("data:"):
+                var comma = uri.find(",")
+                if comma < 0 or not uri[byte=:comma].endswith(";base64"):
+                    raise Error("glTF: a data URI that is not base64")
+                data = decode_base64(String(uri[byte = comma + 1 :]))
+            else:
+                data = Path(directory + uri).read_bytes()
+        if length > len(data):
+            raise Error("glTF: a splat buffer is shorter than its byteLength")
+        # GLB padding is not part of the declared buffer. Views must not
+        # read it, even though the container supplies those extra bytes.
+        if length < len(data):
+            var trimmed = List[UInt8](data[:length])
+            data = trimmed^
+        out.append(data^)
     return out^
 
 
@@ -448,6 +593,14 @@ def load_gltf_gaussian_splats(
     var buffers = _buffers(document, binary, directory)
     var out = List[GltfGaussianSplatMesh]()
     var names = _Names()
+    if document.has(document.root(), "nodes"):
+        var nodes = document.get(document.root(), "nodes")
+        for index in range(document.length(nodes)):
+            var node = document.at(nodes, index)
+            if document.has(node, "name"):
+                var name = document.string(document.get(node, "name"))
+                if name != "":
+                    _ = names.unique(name)
     if not document.has(document.root(), "meshes"):
         return out^
     var meshes = document.get(document.root(), "meshes")
@@ -768,4 +921,170 @@ def read_gltf_gaussian_splats(
         return load_gltf_gaussian_splats(parts[0], parts[1], directory)
     return load_gltf_gaussian_splats(
         String(unsafe_from_utf8=bytes), List[UInt8](), directory
+    )
+
+
+def _node_numbers(
+    document: JsonDocument, node: Int, field: String, count: Int
+) raises -> List[Float32]:
+    """Read a node transform field without silently accepting a short array."""
+    var out = List[Float32]()
+    if not document.has(node, field):
+        return out^
+    var values = document.get(node, field)
+    if document.length(values) != count:
+        raise Error("glTF: a node transform has the wrong length")
+    for index in range(count):  # pragma: no branch
+        out.append(Float32(document.number(document.at(values, index))))
+    return out^
+
+
+def load_gltf_gaussian_splat_scene(
+    json: String, binary: List[UInt8], directory: String, mut scene: Scene
+) raises -> List[NodeId]:
+    """Place the default glTF scene's Gaussian splats on its node hierarchy.
+
+    Args:
+        json: The glTF JSON.
+        binary: The GLB binary chunk, or empty.
+        directory: The base directory for relative buffer URIs.
+        scene: The destination scene. Its splats enter the normal render list.
+
+    Returns:
+        Scene node IDs by glTF node index. Unreached nodes are NO_PARENT.
+
+    Raises:
+        Error: If a splat, transform, scene, or node hierarchy is malformed.
+    """
+    var document = parse_json(json)
+    var meshes = load_gltf_gaussian_splats(json, binary, directory)
+    var count = 0
+    if document.has(document.root(), "nodes"):
+        count = document.length(document.get(document.root(), "nodes"))
+    var ids = List[NodeId](length=count, fill=NO_PARENT)
+    if not document.has(document.root(), "scenes"):
+        return ids^
+    var chosen = 0
+    if document.has(document.root(), "scene"):
+        chosen = document.integer(document.get(document.root(), "scene"))
+    var selected = document.at(document.get(document.root(), "scenes"), chosen)
+    if not document.has(selected, "nodes"):
+        return ids^
+    var roots = document.get(selected, "nodes")
+    var pending = List[Tuple[Int, Int]]()
+    for slot in range(document.length(roots) - 1, -1, -1):
+        pending.append((document.integer(document.at(roots, slot)), -1))
+    var order = List[Int]()
+    var parents = List[Int](length=count, fill=-1)
+    var reached = List[Bool](length=count, fill=False)
+    # Validate the entire selected hierarchy before adding any scene nodes.
+    while len(pending) > 0:
+        var entry = pending.pop()
+        var index = entry[0]
+        if index < 0 or index >= count:
+            raise Error("glTF: a splat node index is not there")
+        if reached[index]:
+            raise Error("glTF: a splat node is reached twice")
+        reached[index] = True
+        parents[index] = entry[1]
+        order.append(index)
+        var node = document.at(document.get(document.root(), "nodes"), index)
+        if document.has(node, "children"):
+            var children = document.get(node, "children")
+            for slot in range(document.length(children) - 1, -1, -1):
+                pending.append(
+                    (document.integer(document.at(children, slot)), index)
+                )
+    var names = _Names()
+    var node_names = List[String]()
+    for index in range(count):
+        var node = document.at(document.get(document.root(), "nodes"), index)
+        var name = _string_or_empty(document, node, "name")
+        node_names.append(names.unique(name) if name != "" else String())
+    var mesh_map = List[Int]()
+    if document.has(document.root(), "meshes"):
+        mesh_map = List[Int](
+            length=document.length(document.get(document.root(), "meshes")),
+            fill=-1,
+        )
+    for index in range(len(meshes)):
+        mesh_map[meshes[index].mesh] = index
+    for at in range(len(order)):
+        var index = order[at]
+        var node = document.at(document.get(document.root(), "nodes"), index)
+        var placed = Object3D()
+        placed.name = node_names[index]
+        if document.has(node, "extras"):
+            var extras = document.get(node, "extras")
+            if document.kind(extras) == OBJECT:
+                placed.user_data = user_data_of(document, extras)
+        var matrix = _node_numbers(document, node, "matrix", 16)
+        if len(matrix) > 0:
+            _apply_matrix(placed, matrix)
+        else:
+            var position = _node_numbers(document, node, "translation", 3)
+            var rotation = _node_numbers(document, node, "rotation", 4)
+            var scale = _node_numbers(document, node, "scale", 3)
+            if len(position) > 0:
+                placed.set_position(position[0], position[1], position[2])
+            if len(rotation) > 0:
+                placed.set_quaternion(
+                    Quaternion(
+                        rotation[0], rotation[1], rotation[2], rotation[3]
+                    )
+                )
+            if len(scale) > 0:
+                placed.set_scale(scale[0], scale[1], scale[2])
+        var id: NodeId
+        if parents[index] < 0:
+            id = scene.add(placed^)
+        else:
+            id = scene.attach(placed^, ids[parents[index]])
+        ids[index] = id
+        if not document.has(node, "mesh"):
+            continue
+        var mesh = document.integer(document.get(node, "mesh"))
+        if mesh < 0 or mesh >= len(mesh_map):
+            raise Error("glTF: a splat node names a missing mesh")
+        if mesh_map[mesh] < 0:
+            continue
+        ref primitives = meshes[mesh_map[mesh]].primitives
+        for primitive in range(len(primitives)):  # pragma: no branch
+            var attached = id
+            if len(primitives) > 1:
+                var child = Object3D()
+                child.name = primitives[primitive].name
+                attached = scene.attach(child^, id)
+            scene.add_gaussian_splat(
+                GaussianSplat(primitives[primitive].geometry.copy(), attached)
+            )
+    scene.update()
+    return ids^
+
+
+def read_gltf_gaussian_splat_scene(
+    path: String, mut scene: Scene
+) raises -> List[NodeId]:
+    """Read and place a glTF or GLB scene's Gaussian splats.
+
+    Args:
+        path: The document path.
+        scene: The destination scene.
+
+    Returns:
+        Scene node IDs by glTF node index.
+
+    Raises:
+        Error: If the file or its splat scene is refused.
+    """
+    var file = Path(path)
+    var bytes = file.read_bytes()
+    var directory = String(path[byte = : path.rfind("/") + 1])
+    if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
+        var parts = split_glb(bytes)
+        return load_gltf_gaussian_splat_scene(
+            parts[0], parts[1], directory, scene
+        )
+    return load_gltf_gaussian_splat_scene(
+        String(unsafe_from_utf8=bytes), List[UInt8](), directory, scene
     )

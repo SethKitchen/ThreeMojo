@@ -1107,6 +1107,12 @@ def test_what_the_loader_refuses() raises:
         "a",
         "a node type that is not read: ModelNode",
     )
+    for kind in [
+        String("MaterialNode"),
+        String("PropertyNode"),
+        String("StorageBufferNode"),
+    ]:
+        _refused(_node("a", kind), "a", "a node type that is not read: " + kind)
     _refused(_node("a", "VarNode"), "a", "a VarNode has no node")
     _refused(
         _node("a", "VarNode", _in("node", "b")), "a", "no node has the uuid b"

@@ -32,7 +32,12 @@ from controls.input import (
     PointerButton,
     SECONDARY,
 )
-from controls.selection_box import DRAG_DEPTH, Selection, SelectionBox
+from controls.selection_box import (
+    DRAG_DEPTH,
+    Selection,
+    SelectionBox,
+    _NodeObjects,
+)
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
@@ -556,6 +561,21 @@ def test_an_empty_scene_selects_nothing() raises:
         Vector3(1, 1, 0.5),
     )
     assert_equal(len(nothing.instanced_meshes), 0)
+
+
+def test_node_lookup_preserves_multiple_objects_and_checks_ids() raises:
+    var lookup = _NodeObjects(100000, 3)
+    lookup.link(2, NodeId(99999))
+    lookup.link(1, NodeId(0))
+    lookup.link(0, NodeId(99999))
+    assert_equal(lookup.heads[99999], 0)
+    assert_equal(lookup.next[0], 2)
+    assert_equal(lookup.next[2], -1)
+    assert_equal(lookup.heads[1], -1)
+    with assert_raises(contains="not there"):
+        lookup.link(0, NodeId(-1))
+    with assert_raises(contains="not there"):
+        lookup.link(0, NodeId(100000))
 
 
 def main() raises:

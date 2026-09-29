@@ -45,11 +45,15 @@ The file formats keep a scale and a rotation. `write_covariance` makes the covar
 
 ## The draw
 
-`render/splat_raster.mojo` draws a `GaussianSplat` into a `RenderTarget`. Do these steps to draw a scene with splats:
+Register a splat with `scene.add_gaussian_splat(splat^)`. `Renderer.render`
+and `render_into` then draw it in the transparent object list. Render order,
+object depth, visibility, layers, viewport, scissor, and custom transparent
+comparators apply. The splats inside one object keep their own depth order.
+`Scene.clone` copies their geometry and gives each copy its own sort cache.
 
-1. Call `Renderer.render_into` to draw the meshes, lines and points into the target.
-2. Call `draw_gaussian_splat` for each `GaussianSplat`.
-3. Call `RenderTarget.resolve` to make the image.
+The standalone `draw_gaussian_splat` API still draws into an existing target.
+Pass its optional `viewport` to project into a rectangle. By default, it uses
+the whole target. Call it in the order required by other transparent draws.
 
 `prepare_gaussian_splat` sorts the splats when `auto_sort` is on. It adds the spherical harmonics to the colors. Then it projects each splat with `render/splatrule.mojo`. `rasterize_splats` blends the projected splats in draw order.
 
@@ -70,6 +74,11 @@ var device = GpuSplats()
 device.draw_gaussian_splat(target, scene, splat, camera)
 ```
 
+For a scene frame, pass `frame.splats` with `frame.draws` to the `splats`
+argument of `GpuRenderer.draw` or `render_triangles`. These APIs keep splat
+runs between other transparent runs.
+
+
 ## The file formats
 
 | Format | Reader | What it is |
@@ -84,9 +93,18 @@ device.draw_gaussian_splat(target, scene, splat, camera)
 
 The SPZ reader uses `loaders.nrrd.gunzip` for gzip and `render.zstd` for Zstandard. A version 4 file needs no other decoder.
 
-The glTF reader returns one `GltfGaussianSplatMesh` for each mesh that has splat primitives. Each primitive gets a name that is unique, as three.js makes it. The mesh keeps its `extras` as user data.
+`read_gltf_gaussian_splat_scene(path, scene)` places splat meshes on the selected
+scene's nodes. It reads matrix or TRS transforms, node names and extras.
+It copies geometry when two nodes use one mesh. Other mesh types are not
+loaded by this entry point. Sparse attributes overlay stored or zero values.
+
+The glTF mesh reader returns one `GltfGaussianSplatMesh` for each mesh that has splat primitives. Each primitive gets a name that is unique, as three.js makes it. The mesh keeps its `extras` as user data.
 
 Each reader refuses a file with the problems that three.js refuses. The module docstrings list them.
+
+The glTF splat reader checks counts, buffer references, offsets, alignment and strides before it allocates or reads attributes. Each accessor can hold up to ten million splats. An accessor with no buffer view must have no byte offset. Buffer views cannot read padding beyond the buffer's declared length.
+
+SPZ uses the same splat limit in every version. The SPZ v4 parser checks its magic, version and unsigned stream lengths. Compressed KSPLAT sections must have complete bucket centers and consistent bucket counts.
 
 ## Tests
 
@@ -94,8 +112,7 @@ Each reader refuses a file with the problems that three.js refuses. The module d
 
 ## What is not ported
 
-- `Renderer.render` does not draw a `GaussianSplat` by itself. You must call `draw_gaussian_splat` after `render_into`. The splats do not mix with the depth order of other transparent objects.
-- The splats cover the whole target. A viewport of the renderer does not move them.
-- The glTF reader does not place the splat meshes on the nodes of the file. It reads no sparse accessor. It counts only the mesh names when it makes a name unique. three.js also counts the node names.
+- Names reserve node names before mesh names. Mesh allocation uses file order; three.js can allocate meshes in node traversal order.
+- Scene JSON and glTF exporters reject scenes with registered splats. They cannot serialize this data yet. Ray picking still uses `GaussianSplat.raycast` directly.
 - The GPU sort of three.js runs on the CPU here, as the WebGL fallback of three.js does.
 - A `.ksplat` section that holds more splats than its rows is refused. three.js reads on into the next section.

@@ -470,20 +470,21 @@ def test_every_primitive_of_a_frame_carries_the_mode() raises:
     var renderer = Renderer(SIZE, SIZE)
     renderer.set_depth_mode(LOGARITHMIC_DEPTH)
     var frame = renderer.prepare_frame(scene, assets, _camera())
-    assert_true(len(frame.corners) > 0)
+    var whole = frame.whole_corners()
+    assert_true(len(whole) > 0)
     assert_true(len(frame.segments) > 0)
     assert_true(len(frame.points) > 0)
     var factor = log_depth_factor(100)
-    for index in range(len(frame.corners)):
-        assert_true(frame.corners[index].state.depth_mode == LOGARITHMIC_DEPTH)
-        assert_equal(frame.corners[index].state.log_depth_scale, factor)
+    for index in range(len(whole)):
+        assert_true(whole[index].state.depth_mode == LOGARITHMIC_DEPTH)
+        assert_equal(whole[index].state.log_depth_scale, factor)
     assert_true(frame.segments[0].state.depth_mode == LOGARITHMIC_DEPTH)
     assert_true(frame.points[0].state.depth_mode == LOGARITHMIC_DEPTH)
     # Reversed, with no factor to carry.
     renderer.set_depth_mode(REVERSED_DEPTH)
     var turned = renderer.prepare_frame(scene, assets, _camera())
-    assert_true(turned.corners[0].state.depth_mode == REVERSED_DEPTH)
-    assert_equal(turned.corners[0].state.log_depth_scale, 0)
+    assert_true(turned.whole_corners()[0].state.depth_mode == REVERSED_DEPTH)
+    assert_equal(turned.whole_corners()[0].state.log_depth_scale, 0)
     assert_true(turned.segments[0].state.depth_mode == REVERSED_DEPTH)
 
 

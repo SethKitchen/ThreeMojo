@@ -13,6 +13,7 @@ shading and fog. The curve stays put. Only the exposure changes.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
@@ -26,8 +27,8 @@ from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/exposure.png"
 comptime WIDTH = 240
@@ -74,6 +75,8 @@ def main() raises:
     )
     camera.place(Vector3(0, 0.15, 3.1), Vector3(0, 0, 0))
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var turn = Float32(2) * Float32(pi) * Float32(index) / Float32(FRAMES)
@@ -83,5 +86,12 @@ def main() raises:
         renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, exposure)
         frames.append(renderer.render(scene, assets, camera))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

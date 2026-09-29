@@ -28,7 +28,8 @@ way by habit:
   `std.runtime` keeps only `parallelism_level` and `initialize_runtime`, and
   nothing public in `std` runs work on a thread pool. This is the one place
   the project reaches past a leading underscore. 1.0 has no `_asyncrt`; 1.1
-  has no `asyncrt`.
+  has no `asyncrt`. Production modules import the adapter in
+  `render/tasks.mojo`, which holds the private import.
 - `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved
   into the `max` package, and the compiler says so when it cannot find it.
 - A module beside the file being compiled now beats any `-I` path. That is

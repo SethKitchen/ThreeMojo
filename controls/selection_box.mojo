@@ -50,6 +50,7 @@ from controls.input import (
     PRIMARY,
 )
 from core.geometry_store import GeometryId
+from core.object3d import NodeId
 from core.scene import Scene
 from math.bounds import Plane
 from math.frustum import Frustum
@@ -63,6 +64,24 @@ from units.si import Length, METER
 comptime _STEP = Float32(1.1920929e-07)
 # The depth three.js's example gives a dragged corner.
 comptime DRAG_DEPTH = Float32(0.5)
+
+
+struct _NodeObjects(Movable):
+    """Object lists by stable node ID, preserving each list's input order."""
+
+    var heads: List[Int]
+    var next: List[Int]
+
+    def __init__(out self, nodes: Int, objects: Int):
+        self.heads = List[Int](length=nodes, fill=-1)
+        self.next = List[Int](length=objects, fill=-1)
+
+    def link(mut self, index: Int, node: NodeId) raises:
+        """Prepend an object while its source list is visited in reverse."""
+        if node.value < 0 or node.value >= len(self.heads):
+            raise Error("A selection object names a node that is not there")
+        self.next[index] = self.heads[node.value]
+        self.heads[node.value] = index
 
 
 struct Selection(Movable):
@@ -319,37 +338,61 @@ struct SelectionBox(Copyable, Movable):
         var frustum = self.frustum(camera, scene, start, end)
         var picked = Selection()
         var order = scene.traverse()
+        var meshes = _NodeObjects(scene.count(), len(scene.meshes))
+        for index in range(len(scene.meshes) - 1, -1, -1):
+            meshes.link(index, scene.meshes[index].node)
+        var skinned_meshes = _NodeObjects(
+            scene.count(), len(scene.skinned_meshes)
+        )
+        for index in range(len(scene.skinned_meshes) - 1, -1, -1):
+            skinned_meshes.link(index, scene.skinned_meshes[index].node)
+        var lines = _NodeObjects(scene.count(), len(scene.lines))
+        for index in range(len(scene.lines) - 1, -1, -1):
+            lines.link(index, scene.lines[index].node)
+        var points = _NodeObjects(scene.count(), len(scene.points))
+        for index in range(len(scene.points) - 1, -1, -1):
+            points.link(index, scene.points[index].node)
+        var instanced_meshes = _NodeObjects(
+            scene.count(), len(scene.instanced_meshes)
+        )
+        for index in range(len(scene.instanced_meshes) - 1, -1, -1):
+            instanced_meshes.link(index, scene.instanced_meshes[index].node)
         for at in range(len(order)):
             var node = order[at]
             var world = scene.world_matrix(node)
-            for index in range(len(scene.meshes)):
+            var meshes_cursor = meshes.heads[node.value]
+            while meshes_cursor >= 0:
+                var index = meshes_cursor
+                meshes_cursor = meshes.next[index]
                 ref mesh = scene.meshes[index]
-                if mesh.node == node and _centered(
-                    frustum, assets, mesh.geometry, world
-                ):
+                if _centered(frustum, assets, mesh.geometry, world):
                     picked.meshes.append(index)
-            for index in range(len(scene.skinned_meshes)):
+            var skinned_meshes_cursor = skinned_meshes.heads[node.value]
+            while skinned_meshes_cursor >= 0:
+                var index = skinned_meshes_cursor
+                skinned_meshes_cursor = skinned_meshes.next[index]
                 ref skinned = scene.skinned_meshes[index]
-                if skinned.node == node and _centered(
-                    frustum, assets, skinned.geometry, world
-                ):
+                if _centered(frustum, assets, skinned.geometry, world):
                     picked.skinned_meshes.append(index)
-            for index in range(len(scene.lines)):
+            var lines_cursor = lines.heads[node.value]
+            while lines_cursor >= 0:
+                var index = lines_cursor
+                lines_cursor = lines.next[index]
                 ref line = scene.lines[index]
-                if line.node == node and _centered(
-                    frustum, assets, line.geometry, world
-                ):
+                if _centered(frustum, assets, line.geometry, world):
                     picked.lines.append(index)
-            for index in range(len(scene.points)):
+            var points_cursor = points.heads[node.value]
+            while points_cursor >= 0:
+                var index = points_cursor
+                points_cursor = points.next[index]
                 ref dots = scene.points[index]
-                if dots.node == node and _centered(
-                    frustum, assets, dots.geometry, world
-                ):
+                if _centered(frustum, assets, dots.geometry, world):
                     picked.points.append(index)
-            for index in range(len(scene.instanced_meshes)):
+            var instanced_meshes_cursor = instanced_meshes.heads[node.value]
+            while instanced_meshes_cursor >= 0:
+                var index = instanced_meshes_cursor
+                instanced_meshes_cursor = instanced_meshes.next[index]
                 ref group = scene.instanced_meshes[index]
-                if group.node != node:
-                    continue
                 var inside = List[Int]()
                 for instance in range(group.count()):
                     var placed = group.matrix_at(instance)

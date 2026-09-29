@@ -830,7 +830,7 @@ def test_a_blended_sprite_is_sorted_among_the_blended_surfaces() raises:
     assert_equal(len(frame.draws), 2)
     assert_equal(frame.draws[0].count, 4)
     assert_equal(frame.draws[1].count, 2)
-    assert_true(frame.corners[0].z > frame.corners[12].z)
+    assert_true(frame.whole_corners()[0].z > frame.whole_corners()[12].z)
     var image = renderer.render(scene, assets, a_camera())
     # Half red over half blue over black at the center: both show.
     var middle = image.get_pixel(8, 8)

@@ -607,8 +607,8 @@ def test_a_draw_kind_knows_its_stride() raises:
     assert_equal(DRAW_SEGMENTS.stride(), 2)
     assert_equal(DRAW_POINTS.stride(), 1)
     assert_true(DRAW_POINTS.is_valid())
-    assert_false(DrawKind(3).is_valid())
-    assert_equal(DrawKind(3).stride(), 3)
+    assert_false(DrawKind(4).is_valid())
+    assert_equal(DrawKind(4).stride(), 3)
 
 
 def test_a_draw_of_points_is_held_to_the_points_there_are() raises:

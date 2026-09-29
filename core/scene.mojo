@@ -97,6 +97,8 @@ from objects.line_segments2 import LineSegments2
 from objects.lod import Lod
 from objects.mesh import Mesh
 from objects.points import Points
+from objects.gaussian_splat import GaussianSplat
+from std.memory import ArcPointer
 from objects.skinned_mesh import SkinnedMesh
 from objects.sprite import Sprite
 
@@ -176,6 +178,8 @@ struct Scene(Movable):
     # have one: a point is its own primitive, with its own pass and its
     # own rule. See `objects.points`.
     var points: List[Points]
+    # Owned objects with mutable sort caches, like the renderer's frame cache.
+    var gaussian_splats: List[ArcPointer[GaussianSplat]]
     # The camera-facing squares, each naming a node here. Their own list
     # because a sprite names no geometry: it is drawn as two triangles
     # the renderer builds for it. See `objects.sprite`.
@@ -239,6 +243,7 @@ struct Scene(Movable):
         self.skinned_meshes = List[SkinnedMesh]()
         self.lines = List[Line]()
         self.points = List[Points]()
+        self.gaussian_splats = List[ArcPointer[GaussianSplat]]()
         self.sprites = List[Sprite]()
         self.wide_lines = List[LineSegments2]()
         self.clipping_groups = List[ClippingGroup]()
@@ -482,6 +487,18 @@ struct Scene(Movable):
         if line.node.value >= len(self._nodes):
             raise Error("A line must name a node that is in the scene")
         self.lines.append(line)
+
+    def add_gaussian_splat(mut self, var splat: GaussianSplat) raises:
+        """Attach a Gaussian splat object to the scene's draw list.
+
+        Args:
+            splat: The owned object, naming a node in this scene.
+
+        Raises:
+            Error: If the node does not exist.
+        """
+        _ = self.get(splat.node)
+        self.gaussian_splats.append(ArcPointer(splat^))
 
     def add_points(mut self, points: Points) raises:
         """Add vertices to draw as squares of pixels, the three.js
@@ -1745,7 +1762,7 @@ struct Scene(Movable):
         for child in kids:
             self.add(self.clone(child), parent=target)
 
-    def _carry(mut self, copies: List[Int]):
+    def _carry(mut self, copies: List[Int]) raises:
         """Copy what the copied nodes carry onto their copies."""
         for index in range(len(self.meshes)):
             var copy = _copy_of(copies, self.meshes[index].node)
@@ -1790,6 +1807,19 @@ struct Scene(Movable):
                 var line = self.lines[index]
                 line.node = NodeId(copy)
                 self.lines.append(line)
+        for index in range(len(self.gaussian_splats)):
+            ref splat = self.gaussian_splats[index][]
+            var copy = _copy_of(copies, splat.node)
+            if copy >= 0:
+                self.gaussian_splats.append(
+                    ArcPointer(
+                        GaussianSplat(
+                            splat.splat_geometry.copy(),
+                            NodeId(copy),
+                            auto_sort=splat.auto_sort,
+                        )
+                    )
+                )
         for index in range(len(self.points)):
             var copy = _copy_of(copies, self.points[index].node)
             if copy >= 0:

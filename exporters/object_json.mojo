@@ -2439,8 +2439,11 @@ def object_to_json(
             mode is none of its named values, a batch's geometries cannot
             be joined, a camera has a view shift, a number is not
             finite, or a clip is refused by `animation_json.write_clip` or
-            has a track on a thing the document does not hold.
+            has a track on a thing the document does not hold. Also if
+            the scene holds Gaussian splats, which cannot be serialized yet.
     """
+    if len(scene.gaussian_splats) > 0:
+        raise Error("Scene JSON cannot serialize Gaussian splats yet")
     var carried = _Carried(scene, cameras)
     var out = _Writer()
     var tree = JsonWriter()

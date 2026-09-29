@@ -22,6 +22,7 @@ A target can take several samples a pixel; see [Multisampled render targets](#mu
 | `FloatColor(style="rgb(255, 128, 0)", space=SRGB)` | A color from a CSS string. three.js's `setStyle`. See [CSS strings](#css-strings). |
 | `FloatColor(hue=h, saturation=s, lightness=l, space=LINEAR)` | A color from HSL in the linear working space. three.js's `setHSL`. Pass `space=SRGB` to describe an sRGB color, decoded. The hue wraps. The other two clamp. |
 | `encode() -> Color` | Encode linear light to sRGB bytes, clamped. |
+| `encode_with(bytes) -> Color` | The same bytes as `encode`, read from an `SrgbBytes` table. See [The sRGB table](#the-srgb-table). |
 | `hex() -> Int` | The encoded color as a 24-bit value. three.js's `getHex`. |
 | `hex_string() -> String` | The same value as six lowercase hexadecimal digits. three.js's `getHexString`. |
 | `style(space=SRGB) -> String` | A CSS string: `rgb(r,g,b)`, or `color(srgb-linear r g b)` for `LINEAR`. three.js's `getStyle`. |
@@ -41,6 +42,13 @@ A target can take several samples a pixel; see [Multisampled render targets](#mu
 | `a == b` | Every channel equal. three.js's `equals`. |
 
 `HSL(hue, saturation, lightness)` holds the three floats `hsl()` returns. A gray has a hue and a saturation of zero. A half-lightness gray is linear 0.5, which encodes to 188. In sRGB it is the gray that `0x808080` decodes to.
+
+
+### The sRGB table
+
+`SrgbBytes()` holds the least light that encodes to each byte, found with `encode` itself. `byte(value)` returns the byte `encode` gives for one channel, with no power. `RenderTarget.resolve` builds one table for each image and encodes every pixel with it.
+
+The table gives the same bytes as `encode`. The encoded byte never falls as the light rises, so each byte starts at one threshold. The tests check each threshold against the encoding on every platform that runs them.
 
 ### CSS strings
 

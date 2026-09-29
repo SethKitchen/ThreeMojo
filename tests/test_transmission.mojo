@@ -582,7 +582,7 @@ def test_transmissive_runs_draw_between_the_opaque_and_the_blended() raises:
     for index in range(len(frame.draws)):
         ref draw = frame.draws[index]
         assert_equal(draw.kind, DRAW_TRIANGLES)
-        ref corner = frame.corners[draw.first * 3]
+        ref corner = frame.whole_corners()[draw.first * 3]
         var now = 0
         if corner.transmission > 0:
             now = 1

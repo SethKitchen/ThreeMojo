@@ -379,6 +379,9 @@ def _carries(scene: Scene, node: NodeId, except_mesh: Int = -1) -> Bool:
     for at in range(len(scene.points)):
         if scene.points[at].node == node:
             return True
+    for at in range(len(scene.gaussian_splats)):
+        if scene.gaussian_splats[at][].node == node:
+            return True
     for at in range(len(scene.sprites)):
         if scene.sprites[at].node == node:
             return True
