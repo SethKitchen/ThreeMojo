@@ -9,8 +9,10 @@ The spinal cord runs down the vertebral canal from T1 and ends in the
 conus at the first lumbar disc. The sympathetic trunks run down the
 rib heads and the fronts of the lumbar bodies. The intercostal nerves
 run under the ribs, and the iliohypogastric nerve crosses the back of
-the abdomen toward the groin. The brain, the neck and the arm's nerves
-are not modeled.
+the abdomen toward the groin. The brachial plexus leaves the spine by
+the first thoracic vertebra, crosses the first rib behind the
+subclavian artery and reaches the armpit, where the arm's nerves take
+it over. The brain and the neck are not modeled.
 
 The spinal cord lies on the midline; the rest are paired, authored on
 the right and mirrored on x for the left. Physical radii drive distance
@@ -36,6 +38,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
     Sweep,
     SweepField,
+    spline_points,
     tube,
 )
 from math.vector3 import Vector3
@@ -56,13 +59,15 @@ struct TorsoNerve(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named nerve."""
         if self.value < 0:
             return False
-        return self.value <= ILIOHYPOGASTRIC_NERVE.value
+        return self.value <= BRACHIAL_PLEXUS.value
 
 
 comptime SPINAL_CORD = TorsoNerve(0)
 comptime SYMPATHETIC_TRUNK = TorsoNerve(1)
 comptime INTERCOSTAL_NERVES = TorsoNerve(2)
 comptime ILIOHYPOGASTRIC_NERVE = TorsoNerve(3)
+# Its upper, middle and lower trunks, drawn as one part.
+comptime BRACHIAL_PLEXUS = TorsoNerve(4)
 
 
 def is_paired_nerve(part: TorsoNerve) raises -> Bool:
@@ -140,7 +145,7 @@ def torso_nerve_field(
                 var at = along_path(path, 0.08 + 0.1 * Float32(k))
                 run.append(at - Vector3(0, f.cm(0.8), 0))
             sweeps.append(tube(run, f.cm(0.12), f.cm(0.1)))
-    else:
+    elif part == ILIOHYPOGASTRIC_NERVE:
         sweeps.append(
             tube(
                 template_points(
@@ -167,6 +172,21 @@ def torso_nerve_field(
                 f.cm(0.1),
             )
         )
+    else:
+        # fmt: off
+        var trunks = floats(
+            4.2, 52.8, -1.8, 7.0, 51.8, -1.0, 10.4, 49.9, 0.0, 13.2, 47.6, 0.6,
+            4.8, 52.0, -1.6, 7.2, 51.2, -0.8, 10.6, 49.3, 0.2, 13.6, 47.0, 0.1,
+            5.2, 51.2, -1.4, 7.4, 50.6, -0.6, 10.8, 48.7, -0.2, 13.8, 46.3, -0.4,
+        )
+        # fmt: on
+        for k in range(3):
+            var run = List[Vector3]()
+            for j in range(4):
+                var at = 12 * k + 3 * j
+                run.append(f.at(trunks[at], trunks[at + 1], trunks[at + 2]))
+            run.append(f.at(14.8, 45.2, -0.1))
+            sweeps.append(tube(spline_points(run, 3), f.cm(0.35), f.cm(0.3)))
     return SweepField(
         sweeps^, List[Dome](), placed, f.cm(0.03), f.cm(0.02), 0.004
     )
@@ -216,6 +236,8 @@ def torso_nerve_label(part: TorsoNerve) -> String:
         return "intercostal nerves"
     if part == ILIOHYPOGASTRIC_NERVE:
         return "iliohypogastric nerve"
+    if part == BRACHIAL_PLEXUS:
+        return "brachial plexus"
     return "torso nerve"
 
 
@@ -223,10 +245,10 @@ def named_torso_nerves() -> List[TorsoNerve]:
     """Return every named torso nerve in a stable order.
 
     Returns:
-        The cord, the sympathetic trunk, the intercostals and the
-        iliohypogastric nerve.
+        The cord, the sympathetic trunk, the intercostals, the
+        iliohypogastric nerve and the brachial plexus.
     """
     var parts = List[TorsoNerve]()
-    for index in range(ILIOHYPOGASTRIC_NERVE.value + 1):
+    for index in range(BRACHIAL_PLEXUS.value + 1):
         parts.append(TorsoNerve(index))
     return parts^

@@ -101,6 +101,10 @@ mkdir -p out
 | `lymph.mojo` | `lymph.png` | [Lymph](Lymph) |
 | `nerves.mojo` | `nerves.png` | [Nerves](Nerves) |
 | `integument.mojo` | `integument.png` | [Integument](Integument) |
+| `pelvis.mojo` | `pelvis.png` | [Pelvis](Pelvis) |
+| `torso.mojo` | `torso.png` | [Torso](Torso) |
+| `arm.mojo` | `arm.png` | [Arm](Arm) |
+| `hand.mojo` | `hand.png` | [Hand](Hand) |
 | `water.mojo` | `water.png` | [Water](Water) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.

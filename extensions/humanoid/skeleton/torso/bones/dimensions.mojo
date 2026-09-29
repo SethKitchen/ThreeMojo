@@ -6,8 +6,10 @@
 """The bones of the torso, as implicit solids.
 
 The set is the twelve thoracic and five lumbar vertebrae, the twelve
-pairs of ribs and the sternum. The shoulder girdle belongs to the arm
-and is not modeled here.
+pairs of ribs, the sternum, and the shoulder girdle: a clavicle and a
+scapula on each side. The girdle rides on the back and the top of the
+chest. The arm hangs from the glenoid of each scapula; see
+`shoulder_girdle` and `upper_arm_point`.
 
 The torso shares the pelvis frame: the origin is the midpoint of the
 two hip joint centers, plus y is proximal, plus x is body-right and plus
@@ -45,7 +47,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     tube,
 )
 from math.vector3 import Vector3
-from std.math import max, min
+from std.math import cos, max, min, sin
 from units.si import Length
 
 # The female template against the male one: narrower and shallower
@@ -64,6 +66,9 @@ comptime VERTEBRAE = 17
 comptime RIBS = 12
 # Cortical shell, as a ratio of stature.
 comptime TORSO_SHELL = Float32(0.0008)
+# How far each arm hangs out from the side, in radians: about six
+# degrees, so the arm's skin clears the chest below the armpit.
+comptime ARM_ABDUCTION = Float32(0.10)
 
 
 @fieldwise_init
@@ -71,9 +76,9 @@ struct TorsoBone(Equatable, ImplicitlyCopyable, Writable):
     """Which bone of the torso a caller asks for.
 
     `T1` through `L5` are the vertebrae, then the sternum, then the
-    ribs. The type stops a bare integer at compile time. A value that is
-    not one of the named bones is still constructible, and the boundary
-    that reads it refuses it.
+    ribs, then the clavicle and the scapula. The type stops a bare
+    integer at compile time. A value that is not one of the named bones
+    is still constructible, and the boundary that reads it refuses it.
     """
 
     var value: Int
@@ -82,7 +87,7 @@ struct TorsoBone(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named torso bone."""
         if self.value < 0:
             return False
-        return self.value <= RIB_12.value
+        return self.value <= SCAPULA.value
 
 
 comptime T1 = TorsoBone(0)
@@ -115,6 +120,8 @@ comptime RIB_9 = TorsoBone(26)
 comptime RIB_10 = TorsoBone(27)
 comptime RIB_11 = TorsoBone(28)
 comptime RIB_12 = TorsoBone(29)
+comptime CLAVICLE = TorsoBone(30)
+comptime SCAPULA = TorsoBone(31)
 
 
 @fieldwise_init
@@ -400,14 +407,17 @@ def is_paired_bone(part: TorsoBone) raises -> Bool:
         part: A named torso bone.
 
     Returns:
-        True for the ribs. The vertebrae and the sternum lie on the
-        midline.
+        True for the ribs, the clavicles and the scapulae. The vertebrae
+        and the sternum lie on the midline.
 
     Raises:
         Error: If `part` is not named.
     """
     if not part.is_valid():
-        raise Error("A torso bone must be a named vertebra, rib or sternum")
+        raise Error(
+            "A torso bone must be a named vertebra, rib, sternum, clavicle"
+            " or scapula"
+        )
     return part.value >= RIB_1.value
 
 
@@ -418,8 +428,8 @@ def torso_bone_label(part: TorsoBone) -> String:
         part: A torso bone, named or not.
 
     Returns:
-        A short label such as `"T7"`, `"L3"`, `"sternum"` or `"rib 5"`,
-        or `"torso bone"` when `part` is not named.
+        A short label such as `"T7"`, `"L3"`, `"sternum"`, `"rib 5"` or
+        `"scapula"`, or `"torso bone"` when `part` is not named.
     """
     if not part.is_valid():
         return "torso bone"
@@ -429,6 +439,10 @@ def torso_bone_label(part: TorsoBone) -> String:
         return "L" + String(part.value - L1.value + 1)
     if part == STERNUM:
         return "sternum"
+    if part == CLAVICLE:
+        return "clavicle"
+    if part == SCAPULA:
+        return "scapula"
     return "rib " + String(part.value - RIB_1.value + 1)
 
 
@@ -436,10 +450,11 @@ def named_torso_bones() -> List[TorsoBone]:
     """Return every named torso bone in a stable order.
 
     Returns:
-        T1 to L5, the sternum, then ribs one to twelve.
+        T1 to L5, the sternum, ribs one to twelve, the clavicle and the
+        scapula.
     """
     var parts = List[TorsoBone]()
-    for index in range(RIB_12.value + 1):
+    for index in range(SCAPULA.value + 1):
         parts.append(TorsoBone(index))
     return parts^
 
@@ -470,6 +485,10 @@ def torso_bone_field(
     var sweeps = List[Sweep]()
     if part == STERNUM:
         sweeps.append(_sternum(dimensions))
+    elif part == CLAVICLE:
+        sweeps.append(_clavicle(dimensions))
+    elif part == SCAPULA:
+        _scapula(sweeps, dimensions)
     elif part.value >= RIB_1.value:
         sweeps.append(_rib(dimensions, part.value - RIB_1.value))
     else:
@@ -628,6 +647,205 @@ def _sternum(dimensions: TorsoDimensions) -> Sweep:
     plate.add(dimensions.xiphisternal, f.cm(0.5), f.cm(1.4) * f.wide)
     plate.add(dimensions.xiphoid, f.cm(0.25), f.cm(0.4) * f.wide)
     return plate^
+
+
+@fieldwise_init
+struct ShoulderGirdle(ImplicitlyCopyable):
+    """Landmarks of the right clavicle and scapula, in meters.
+
+    The left girdle is the mirror image on x; see `torso_side_point`.
+    """
+
+    # The medial end of the clavicle, on the manubrium.
+    var sternoclavicular: Vector3
+    # The lateral end of the clavicle, on the acromion.
+    var acromioclavicular: Vector3
+    # The lateral tip of the acromion.
+    var acromion: Vector3
+    # The tip of the coracoid process.
+    var coracoid: Vector3
+    # The center of the glenoid's face.
+    var glenoid: Vector3
+    # The center of the humeral head: the shoulder joint's center.
+    var shoulder: Vector3
+    var superior_angle: Vector3
+    var inferior_angle: Vector3
+    # Where the scapular spine leaves the medial border.
+    var spine_root: Vector3
+
+
+def shoulder_girdle(dimensions: TorsoDimensions) -> ShoulderGirdle:
+    """Return the landmarks of the right shoulder girdle.
+
+    The clavicle runs from the manubrium out, up and back to the
+    acromion. The scapula lies on the back of the chest from the second
+    to the seventh rib, just lateral of the erector spinae. Its glenoid
+    faces out and a little forward, under the acromion.
+
+    Args:
+        dimensions: Landmarks from `torso_dimensions`.
+
+    Returns:
+        The right girdle's landmarks.
+    """
+    var f = dimensions.frame
+    return ShoulderGirdle(
+        f.at(3.0, 48.9, 3.0),
+        f.at(17.6, 49.8, -1.8),
+        f.at(19.6, 49.5, -1.4),
+        f.at(15.0, 46.9, 1.6),
+        f.at(16.0, 46.0, -3.0),
+        f.at(18.5, 46.0, -2.4),
+        f.at(7.8, 50.0, -9.8),
+        f.at(8.6, 36.2, -9.6),
+        f.at(7.2, 47.5, -10.4),
+    )
+
+
+def upper_arm_point(
+    dimensions: TorsoDimensions, x: Float32, y: Float32, z: Float32
+) -> Vector3:
+    """Return a point on the right upper arm, as it hangs.
+
+    The arm is authored straight down from the center of the humeral
+    head, and turned `ARM_ABDUCTION` out from the side about that
+    center. Its lengths scale with stature alone, so a narrower female
+    shoulder moves the arm in without thinning it.
+
+    Args:
+        dimensions: Landmarks from `torso_dimensions`.
+        x: Centimeters lateral of the humeral head's center.
+        y: Centimeters above it: negative down the arm.
+        z: Centimeters in front of it.
+
+    Returns:
+        The point in the pelvis frame, in meters.
+    """
+    var f = dimensions.frame
+    var c = cos(ARM_ABDUCTION)
+    var s = sin(ARM_ABDUCTION)
+    return shoulder_girdle(dimensions).shoulder + Vector3(
+        f.cm(x * c - y * s), f.cm(x * s + y * c), f.cm(z)
+    )
+
+
+def clavicle_path(dimensions: TorsoDimensions) -> List[Vector3]:
+    """Return the centerline of the right clavicle, medial to lateral.
+
+    Its medial two-thirds bow forward and its lateral third bows back,
+    so it is shaped like a flat S seen from above.
+
+    Args:
+        dimensions: Landmarks from `torso_dimensions`.
+
+    Returns:
+        A smooth curve from the sternal end to the acromial end, in
+        meters.
+    """
+    var girdle = shoulder_girdle(dimensions)
+    var f = dimensions.frame
+    var points = List[Vector3]()
+    points.append(girdle.sternoclavicular)
+    points.append(f.at(6.5, 49.2, 3.9))
+    points.append(f.at(10.5, 49.6, 3.0))
+    points.append(f.at(14.0, 49.9, 0.9))
+    points.append(f.at(16.5, 50.0, -1.0))
+    points.append(girdle.acromioclavicular)
+    return spline_points(points, 3)
+
+
+def _clavicle(dimensions: TorsoDimensions) -> Sweep:
+    """Return the right clavicle: a bulbous sternal end, a round shaft
+    and a flat acromial end."""
+    var f = dimensions.frame
+    var path = clavicle_path(dimensions)
+    # The flat end lies in the horizontal plane, so the hint runs up.
+    var bone = Sweep(Vector3(0, 1, 0))
+    var count = len(path)
+    for index in range(count):
+        var t = Float32(index) / Float32(count - 1)
+        var tall = f.cm(1.0) + (f.cm(0.42) - f.cm(1.0)) * min(2 * t, 1)
+        var wide = f.cm(1.1) + (f.cm(0.6) - f.cm(1.1)) * min(3 * t, 1)
+        if t > 0.6:
+            wide = f.cm(0.6) + f.cm(0.4) * (t - 0.6) / 0.4
+        bone.add(path[index], tall, wide)
+    return bone^
+
+
+def _scapula(mut sweeps: List[Sweep], dimensions: TorsoDimensions):
+    """Append the right scapula: its blade, its borders, its spine and
+    acromion, the coracoid and the glenoid."""
+    var f = dimensions.frame
+    var g = shoulder_girdle(dimensions)
+    # The blade, in bands from the medial border out to the lateral
+    # border. Each band is thin across the blade and tall along y; the
+    # blade curves around the chest, so each band has its own normal.
+    # fmt: off
+    var bands = floats(
+        8.0, 49.2, -9.8, 12.8, 48.6, -6.2, 1.2,
+        7.4, 47.0, -10.3, 14.2, 46.6, -4.6, 1.6,
+        7.6, 44.5, -10.3, 13.6, 44.5, -5.4, 1.6,
+        7.9, 42.0, -10.2, 12.6, 42.0, -6.8, 1.6,
+        8.2, 39.5, -10.0, 11.2, 39.5, -8.2, 1.5,
+        8.5, 37.2, -9.8, 9.6, 37.0, -9.2, 1.0,
+    )
+    # fmt: on
+    for band in range(len(bands) // 7):
+        var at = 7 * band
+        var a = f.at(bands[at], bands[at + 1], bands[at + 2])
+        var b = f.at(bands[at + 3], bands[at + 4], bands[at + 5])
+        var along = b - a
+        var normal = Vector3(-along.z, 0, along.x)
+        var blade = Sweep(normal)
+        blade.add(a, f.cm(0.28), f.cm(bands[at + 6]))
+        blade.add(b, f.cm(0.25), f.cm(bands[at + 6]))
+        sweeps.append(blade^)
+    # The borders: a thick lateral border, and thin medial and superior
+    # ones.
+    var lateral = List[Vector3]()
+    lateral.append(g.inferior_angle)
+    lateral.append(f.at(11.0, 39.5, -8.2))
+    lateral.append(f.at(13.3, 43.0, -5.8))
+    lateral.append(f.at(14.8, 44.8, -4.2))
+    sweeps.append(tube(lateral, f.cm(0.5), f.cm(0.62)))
+    var medial = List[Vector3]()
+    medial.append(g.superior_angle)
+    medial.append(g.spine_root)
+    medial.append(f.at(7.6, 42.5, -10.3))
+    medial.append(g.inferior_angle)
+    sweeps.append(tube(medial, f.cm(0.35), f.cm(0.4)))
+    var superior = List[Vector3]()
+    superior.append(g.superior_angle)
+    superior.append(f.at(11.0, 49.2, -7.6))
+    superior.append(f.at(13.4, 48.4, -5.2))
+    sweeps.append(tube(superior, f.cm(0.32), f.cm(0.38)))
+    # The spine: a ridge standing back from the blade, thin along y,
+    # from the medial border up and out to the acromion.
+    var spine = Sweep(Vector3(0, 1, 0))
+    spine.add(g.spine_root - Vector3(0, 0, f.cm(0.5)), f.cm(0.4), f.cm(0.7))
+    spine.add(f.at(10.5, 48.0, -10.6), f.cm(0.45), f.cm(1.0))
+    spine.add(f.at(13.8, 48.8, -8.8), f.cm(0.5), f.cm(1.1))
+    spine.add(f.at(15.8, 49.2, -6.2), f.cm(0.5), f.cm(0.9))
+    sweeps.append(spine^)
+    # The acromion: a flat shelf over the humeral head.
+    var acromion = Sweep(Vector3(0, 1, 0))
+    acromion.add(f.at(15.8, 49.2, -6.2), f.cm(0.5), f.cm(0.9))
+    acromion.add(f.at(17.6, 49.7, -4.6), f.cm(0.45), f.cm(1.3))
+    acromion.add(f.at(19.0, 49.8, -2.8), f.cm(0.42), f.cm(1.3))
+    acromion.add(g.acromion, f.cm(0.4), f.cm(0.8))
+    sweeps.append(acromion^)
+    # The coracoid: a hook forward from the top of the neck.
+    var coracoid = List[Vector3]()
+    coracoid.append(f.at(13.8, 48.2, -4.6))
+    coracoid.append(f.at(14.6, 48.6, -2.2))
+    coracoid.append(f.at(15.2, 47.6, 0.6))
+    coracoid.append(g.coracoid)
+    sweeps.append(tube(coracoid, f.cm(0.8), f.cm(0.45)))
+    # The neck and the glenoid: a shallow oval face, taller than wide.
+    var glenoid = Sweep(Vector3(0, 1, 0))
+    glenoid.add(f.at(14.4, 46.0, -3.9), f.cm(1.2), f.cm(0.9))
+    glenoid.add(g.glenoid, f.cm(1.9), f.cm(1.4))
+    sweeps.append(glenoid^)
 
 
 def _vertebra(mut sweeps: List[Sweep], dimensions: TorsoDimensions, index: Int):

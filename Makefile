@@ -682,6 +682,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/foot.png $(OUT_DIR)/limb.png \
            $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
            $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
+           $(OUT_DIR)/pelvis.png $(OUT_DIR)/torso.png \
+           $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
            $(OUT_DIR)/water.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
@@ -1157,6 +1159,30 @@ $(OUT_DIR)/foot.png: $(LIB_SOURCES) examples/foot.mojo
 $(OUT_DIR)/limb.png: $(LIB_SOURCES) examples/limb.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/limb.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# The lower body: the pelvis, both legs and both feet, with skin and without.
+$(OUT_DIR)/pelvis.png: $(LIB_SOURCES) examples/pelvis.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/pelvis.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A body below the neck, arms included, with skin and without.
+$(OUT_DIR)/torso.png: $(LIB_SOURCES) examples/torso.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/torso.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# An arm and its hand, with skin and without.
+$(OUT_DIR)/arm.png: $(LIB_SOURCES) examples/arm.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/arm.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A hand and its fingers, with skin and without.
+$(OUT_DIR)/hand.png: $(LIB_SOURCES) examples/hand.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/hand.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo

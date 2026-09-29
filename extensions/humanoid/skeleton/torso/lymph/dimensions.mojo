@@ -9,8 +9,9 @@ The cisterna chyli collects the lymph of the legs and the abdomen in
 front of the first two lumbar bodies. The thoracic duct carries it up
 between the aorta and the azygos vein toward the neck, which is not
 modeled. Para-aortic nodes lie beside the lumbar aorta; parasternal
-nodes follow the internal thoracic vessels. Five representative nodes
-stand for each group. Radii are authored ratios of stature. They are
+nodes follow the internal thoracic vessels. The axillary nodes lie in
+the fat of the armpit and gather the arm's lymph and the chest wall's.
+Five representative nodes stand for each group. Radii are authored ratios of stature. They are
 not a cited count or size table.
 
 The cisterna and the duct lie on the midline; the node groups are
@@ -52,13 +53,15 @@ struct TorsoLymph(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named lymphatic."""
         if self.value < 0:
             return False
-        return self.value <= PARASTERNAL_NODES.value
+        return self.value <= AXILLARY_NODES.value
 
 
 comptime CISTERNA_CHYLI = TorsoLymph(0)
 comptime THORACIC_DUCT = TorsoLymph(1)
 comptime PARA_AORTIC_NODES = TorsoLymph(2)
 comptime PARASTERNAL_NODES = TorsoLymph(3)
+# The apical, central, lateral, pectoral and subscapular nodes.
+comptime AXILLARY_NODES = TorsoLymph(4)
 
 
 def is_paired_lymph(part: TorsoLymph) raises -> Bool:
@@ -68,7 +71,7 @@ def is_paired_lymph(part: TorsoLymph) raises -> Bool:
         part: A named lymphatic.
 
     Returns:
-        True for the two node groups.
+        True for the three node groups.
 
     Raises:
         Error: If `part` is not named.
@@ -180,6 +183,14 @@ def torso_lymph_field(
                 ),
             )
             r = f.cm(0.3)
+        if part == AXILLARY_NODES:
+            # fmt: off
+            nodes = template_points(f, floats(
+                13.6, 46.8, 0.6, 15.0, 42.5, -1.0, 16.0, 43.8, -0.5,
+                13.8, 40.8, 3.2, 13.5, 41.0, -4.5,
+            ))
+            # fmt: on
+            r = f.cm(0.5)
         for index in range(len(nodes)):
             var node = Sweep(Vector3(1, 0, 0))
             node.round(nodes[index], r)
@@ -233,6 +244,8 @@ def torso_lymph_label(part: TorsoLymph) -> String:
         return "para-aortic nodes"
     if part == PARASTERNAL_NODES:
         return "parasternal nodes"
+    if part == AXILLARY_NODES:
+        return "axillary nodes"
     return "torso lymph"
 
 
@@ -240,9 +253,9 @@ def named_torso_lymph() -> List[TorsoLymph]:
     """Return every named torso lymphatic in a stable order.
 
     Returns:
-        The cisterna, the duct and the two node groups.
+        The cisterna, the duct and the three node groups.
     """
     var parts = List[TorsoLymph]()
-    for index in range(PARASTERNAL_NODES.value + 1):
+    for index in range(AXILLARY_NODES.value + 1):
         parts.append(TorsoLymph(index))
     return parts^

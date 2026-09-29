@@ -384,7 +384,9 @@ Content that is not a three.js port lives under `extensions/`. Each item is test
 - [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers, with Phong and physical looks
 - [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot in an arch, with ligaments, muscles and the later layers
 - [x] [Pelvis](https://github.com/SethKitchen/ThreeMojo/wiki/Pelvis): the hip bones, sacrum and coccyx, with ligaments, muscles, the later layers and one skin over the lower body
-- [x] [Torso](https://github.com/SethKitchen/ThreeMojo/wiki/Torso): the vertebrae, ribs and sternum, with joint tissues, muscles, the later layers and one skin over the body below the neck
+- [x] [Torso](https://github.com/SethKitchen/ThreeMojo/wiki/Torso): the vertebrae, ribs, sternum and shoulder girdle, with joint tissues, muscles, the later layers and one skin below the neck [#264](https://github.com/SethKitchen/ThreeMojo/issues/264)
+- [x] [Arm](https://github.com/SethKitchen/ThreeMojo/wiki/Arm): the humerus, radius and ulna hung from the scapula, with joint tissues, muscles, vessels, nerves, lymph, skin and hair [#265](https://github.com/SethKitchen/ThreeMojo/issues/265)
+- [x] [Hand](https://github.com/SethKitchen/ThreeMojo/wiki/Hand): the carpals, metacarpals and the phalanges of each finger, with joint tissues, muscles and tendons, the later layers, skin and hair [#266](https://github.com/SethKitchen/ThreeMojo/issues/266)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
 

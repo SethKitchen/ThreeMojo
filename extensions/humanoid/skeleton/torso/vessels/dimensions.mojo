@@ -11,10 +11,12 @@ inferior vena cava climbs right of the spine to where the heart would
 take it. The azygos vein runs up the right of the bodies and arches
 forward. The internal thoracic arteries run behind the costal
 cartilages and continue as the epigastric arteries in the rectus
-sheath. Intercostal arteries and veins run under the ribs.
+sheath. Intercostal arteries and veins run under the ribs. The
+subclavian artery arches over the first rib and under the clavicle to
+the armpit, and the subclavian vein runs in front of it; there the
+arm's axillary vessels take them over.
 
-The heart, the great vessels of the neck and the arm's vessels are not
-modeled. The aorta, the vena cava and the azygos vein are unpaired;
+The heart and the great vessels of the neck are not modeled. The aorta, the vena cava and the azygos vein are unpaired;
 the rest are paired, authored on the right and mirrored on x for the
 left. Physical radii drive distance and mass. Geometry applies a
 separate diagrammatic minimum radius.
@@ -37,6 +39,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
     Sweep,
     SweepField,
+    spline_points,
     tube,
 )
 from math.vector3 import Vector3
@@ -57,7 +60,7 @@ struct TorsoVessel(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named vessel."""
         if self.value < 0:
             return False
-        return self.value <= INTERCOSTAL_VEINS.value
+        return self.value <= SUBCLAVIAN_VEIN.value
 
 
 comptime THORACIC_AORTA = TorsoVessel(0)
@@ -68,6 +71,8 @@ comptime INTERNAL_THORACIC_ARTERY = TorsoVessel(4)
 comptime EPIGASTRIC_ARTERY = TorsoVessel(5)
 comptime INTERCOSTAL_ARTERIES = TorsoVessel(6)
 comptime INTERCOSTAL_VEINS = TorsoVessel(7)
+comptime SUBCLAVIAN_ARTERY = TorsoVessel(8)
+comptime SUBCLAVIAN_VEIN = TorsoVessel(9)
 
 
 def is_torso_artery(part: TorsoVessel) raises -> Bool:
@@ -90,6 +95,7 @@ def is_torso_artery(part: TorsoVessel) raises -> Bool:
         or part == INTERNAL_THORACIC_ARTERY
         or part == EPIGASTRIC_ARTERY
         or part == INTERCOSTAL_ARTERIES
+        or part == SUBCLAVIAN_ARTERY
     )
 
 
@@ -303,6 +309,22 @@ def torso_vessel_field(
                 f.cm(0.14),
             )
         )
+    elif part == SUBCLAVIAN_ARTERY:
+        # fmt: off
+        var run = template_points(f, floats(
+            2.0, 47.6, 0.8, 4.0, 50.4, 0.2, 6.0, 51.2, -0.4,
+            9.0, 49.6, 0.6, 12.5, 47.6, 0.5,
+        ))
+        # fmt: on
+        sweeps.append(tube(spline_points(run, 3), f.cm(0.45), f.cm(0.42)))
+    elif part == SUBCLAVIAN_VEIN:
+        # fmt: off
+        var run = template_points(f, floats(
+            12.5, 47.0, 1.4, 8.5, 48.3, 2.0, 5.0, 48.6, 1.9,
+            2.4, 47.8, 1.6,
+        ))
+        # fmt: on
+        sweeps.append(tube(spline_points(run, 3), f.cm(0.55), f.cm(0.6)))
     else:
         # Under each rib from the third to the eleventh: the vein above,
         # the artery below it.
@@ -375,6 +397,10 @@ def torso_vessel_label(part: TorsoVessel) -> String:
         return "intercostal arteries"
     if part == INTERCOSTAL_VEINS:
         return "intercostal veins"
+    if part == SUBCLAVIAN_ARTERY:
+        return "subclavian artery"
+    if part == SUBCLAVIAN_VEIN:
+        return "subclavian vein"
     return "torso vessel"
 
 
@@ -382,9 +408,9 @@ def named_torso_vessels() -> List[TorsoVessel]:
     """Return every named torso vessel in a stable order.
 
     Returns:
-        Four unpaired trunks, then four paired runs.
+        Four unpaired trunks, then six paired runs.
     """
     var parts = List[TorsoVessel]()
-    for index in range(INTERCOSTAL_VEINS.value + 1):
+    for index in range(SUBCLAVIAN_VEIN.value + 1):
         parts.append(TorsoVessel(index))
     return parts^

@@ -8,9 +8,10 @@
     mojo run -I . examples/torso.mojo [path.png]
 
 The page is Torso. A six-foot male stands twice on a floor, without
-arms, neck or head. The left copy shows the bones, the joint tissues
-and the muscles of the torso, the pelvis, both legs and both feet. The
-right copy shows one skin over all of it. The program also prints the
+the neck or the head. The left copy shows the bones, the joint tissues
+and the muscles of the torso and its shoulder girdle, the pelvis, both
+legs and feet, and both arms and hands. The right copy shows one skin
+down to the wrists, and each hand's own. The program also prints the
 mass of several torso parts.
 """
 
@@ -38,6 +39,7 @@ from extensions.humanoid.skeleton.torso.body import add_body
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     L3,
     RIB_7,
+    SCAPULA,
     STERNUM,
 )
 from extensions.humanoid.skeleton.torso.bones.mass import torso_bone_mass
@@ -70,7 +72,7 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime ANATOMY_DETAIL = 16
 comptime SKIN_DETAIL = 56
-comptime SPACING = Float32(0.34)
+comptime SPACING = Float32(0.44)
 
 
 def frame_at(
@@ -136,6 +138,7 @@ def main() raises:
     print("  L3", torso_bone_mass(person, L3).mass.to(GRAM), "g")
     print("  seventh rib", torso_bone_mass(person, RIB_7).mass.to(GRAM), "g")
     print("  sternum", torso_bone_mass(person, STERNUM).mass.to(GRAM), "g")
+    print("  scapula", torso_bone_mass(person, SCAPULA).mass.to(GRAM), "g")
     print(
         "  erector spinae",
         torso_muscle_mass(person, ERECTOR_SPINAE).mass.to(GRAM),
@@ -254,7 +257,7 @@ def main() raises:
         Length(0.05, METER),
         Length(30.0, METER),
     )
-    camera.place(Vector3(0.0, 0.95, 4.1), Vector3(0.0, 0.80, 0.0))
+    camera.place(Vector3(0.0, 0.95, 4.6), Vector3(0.0, 0.80, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()

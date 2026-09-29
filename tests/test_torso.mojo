@@ -12,8 +12,9 @@ from extensions.humanoid.athleticism import Athleticism
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.arm.frame import arm_dimensions
 from extensions.humanoid.skeleton.bone import bone_phong
-from extensions.humanoid.skeleton.field import flip_x
+from extensions.humanoid.skeleton.field import flip_x, mix_point
 from extensions.humanoid.skeleton.look import (
     artery_phong,
     cartilage_phong,
@@ -45,12 +46,15 @@ from extensions.humanoid.skeleton.torso.body import (
     body_skin_mesh,
 )
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
+    ARM_ABDUCTION,
+    CLAVICLE,
     L1,
     L3,
     L5,
     RIB_1,
     RIB_7,
     RIB_12,
+    SCAPULA,
     STERNUM,
     T1,
     T7,
@@ -59,9 +63,11 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
     along_path,
     canal_center,
     cartilage_end,
+    clavicle_path,
     is_paired_bone,
     named_torso_bones,
     rib_path,
+    shoulder_girdle,
     spinous_tip,
     template_points,
     torso_bone_distance,
@@ -70,6 +76,7 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
     torso_cm,
     torso_dimensions,
     torso_side_point,
+    upper_arm_point,
 )
 from extensions.humanoid.skeleton.torso.bones.geometry import torso_bone
 from extensions.humanoid.skeleton.torso.bones.mass import (
@@ -90,9 +97,12 @@ from extensions.humanoid.skeleton.torso.contents import (
     TorsoContents,
 )
 from extensions.humanoid.skeleton.torso.ligaments.dimensions import (
+    ACROMIOCLAVICULAR_JOINT,
     ANTERIOR_LONGITUDINAL_LIGAMENT,
+    CORACOCLAVICULAR_LIGAMENT,
     COSTAL_CARTILAGES,
     INTERVERTEBRAL_DISCS,
+    STERNOCLAVICULAR_JOINT,
     SUPRASPINOUS_LIGAMENT,
     TorsoLigament,
     is_paired_ligament,
@@ -111,6 +121,7 @@ from extensions.humanoid.skeleton.torso.ligaments.mass import (
     torso_ligament_occupancy,
 )
 from extensions.humanoid.skeleton.torso.lymph.dimensions import (
+    AXILLARY_NODES,
     CISTERNA_CHYLI,
     PARASTERNAL_NODES,
     THORACIC_DUCT,
@@ -131,7 +142,12 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     DIAPHRAGM,
     ERECTOR_SPINAE,
     INTERCOSTALS,
+    LATISSIMUS_DORSI,
     PECTORALIS_MAJOR,
+    PECTORALIS_MINOR,
+    RHOMBOIDS,
+    SUBCLAVIUS,
+    TRAPEZIUS,
     TorsoMuscle,
     TorsoMuscleDimensions,
     is_paired_muscle,
@@ -148,6 +164,7 @@ from extensions.humanoid.skeleton.torso.muscles.mass import (
     torso_muscle_occupancy,
 )
 from extensions.humanoid.skeleton.torso.nerves.dimensions import (
+    BRACHIAL_PLEXUS,
     ILIOHYPOGASTRIC_NERVE,
     SPINAL_CORD,
     SYMPATHETIC_TRUNK,
@@ -187,6 +204,8 @@ from extensions.humanoid.skeleton.torso.vessels.dimensions import (
     AZYGOS_VEIN,
     EPIGASTRIC_ARTERY,
     INTERCOSTAL_VEINS,
+    SUBCLAVIAN_ARTERY,
+    SUBCLAVIAN_VEIN,
     THORACIC_AORTA,
     UPPER_ABDOMINAL_AORTA,
     UPPER_VENA_CAVA,
@@ -318,19 +337,22 @@ def test_torso_refuses_bad_input() raises:
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_bone_field(dims, T1, BodySide(4))
     with assert_raises(contains="named vertebra"):
-        _ = is_paired_bone(TorsoBone(30))
+        _ = is_paired_bone(TorsoBone(32))
 
 
 def test_bones_are_named_and_solid() raises:
     var dims = torso_dimensions(Length(6.0, FOOT), MALE)
     var bones = named_torso_bones()
-    assert_equal(len(bones), 30)
+    assert_equal(len(bones), 32)
     assert_equal(torso_bone_label(T1), "T1")
     assert_equal(torso_bone_label(L3), "L3")
     assert_equal(torso_bone_label(STERNUM), "sternum")
     assert_equal(torso_bone_label(RIB_7), "rib 7")
     assert_equal(torso_bone_label(TorsoBone(-1)), "torso bone")
-    assert_false(TorsoBone(30).is_valid())
+    assert_equal(torso_bone_label(CLAVICLE), "clavicle")
+    assert_equal(torso_bone_label(SCAPULA), "scapula")
+    assert_false(TorsoBone(32).is_valid())
+    assert_true(is_paired_bone(SCAPULA))
     assert_true(is_paired_bone(RIB_1))
     assert_false(is_paired_bone(L1))
     for index in range(len(bones)):
@@ -351,6 +373,49 @@ def test_bones_are_named_and_solid() raises:
     assert_true(mesh.triangle_count() > 0)
 
 
+def test_the_shoulder_girdle_rides_the_chest() raises:
+    var dims = torso_dimensions(Length(6.0, FOOT), MALE)
+    var g = shoulder_girdle(dims)
+    # The clavicle runs from the manubrium out, up and back to the
+    # acromion, bowing forward on the way.
+    assert_true(g.sternoclavicular.x < g.acromioclavicular.x)
+    assert_true(g.acromioclavicular.y > g.sternoclavicular.y)
+    assert_true(g.acromioclavicular.z < g.sternoclavicular.z)
+    var path = clavicle_path(dims)
+    assert_true(along_path(path, 0.3).z > g.sternoclavicular.z)
+    assert_true(torso_bone_distance(dims, CLAVICLE, RIGHT, path[3]) < 0)
+    assert_true(torso_bone_distance(dims, CLAVICLE, LEFT, flip_x(path[3])) < 0)
+    assert_true(
+        torso_bone_distance(dims, STERNUM, RIGHT, g.sternoclavicular) < 0.02
+    )
+    # The scapula lies on the back, behind the ribs, from about the
+    # second rib to the seventh; its glenoid holds the humeral head.
+    assert_true(torso_bone_distance(dims, SCAPULA, RIGHT, g.glenoid) < 0)
+    assert_true(torso_bone_distance(dims, SCAPULA, RIGHT, g.acromion) < 0.005)
+    assert_true(torso_bone_distance(dims, SCAPULA, RIGHT, g.coracoid) < 0.005)
+    assert_true(g.superior_angle.y > g.inferior_angle.y)
+    assert_true(g.inferior_angle.y > dims.centers[L1.value].y)
+    var blade = mix_point(g.spine_root, g.inferior_angle, 0.5)
+    for rib in range(1, 7):
+        var part = TorsoBone(RIB_1.value + rib)
+        assert_true(torso_bone_distance(dims, part, RIGHT, blade) > 0)
+    assert_true(torso_bone_distance(dims, SCAPULA, RIGHT, blade) < 0.01)
+    # The humeral head sits lateral of the glenoid, under the acromion.
+    assert_true(g.shoulder.x > g.glenoid.x)
+    assert_true(g.shoulder.y < g.acromion.y)
+    assert_true(torso_bone_distance(dims, SCAPULA, RIGHT, g.shoulder) > 0)
+    # The arm hangs from the humeral head, turned out from the side.
+    var top = upper_arm_point(dims, 0, 0, 0)
+    assert_almost_equal(top.x, g.shoulder.x, atol=TOLERANCE)
+    var elbow = upper_arm_point(dims, 0, -30, 0)
+    assert_true(elbow.x > g.shoulder.x)
+    assert_true(elbow.y < g.shoulder.y - 0.25)
+    assert_true(ARM_ABDUCTION > 0 and ARM_ABDUCTION < 0.2)
+    # A woman's shoulders are narrower.
+    var woman = shoulder_girdle(torso_dimensions(Length(6.0, FOOT), FEMALE))
+    assert_true(woman.shoulder.x < g.shoulder.x)
+
+
 def test_bone_mass() raises:
     var person = _person()
     var lumbar = torso_bone_mass(person, L3, COARSE)
@@ -360,6 +425,8 @@ def test_bone_mass() raises:
         dims, RIB_7, cortical_tissue(), trabecular_tissue(), COARSE
     )
     assert_true(rib.mass.value > 0.005 and rib.mass.value < 0.1)
+    var scapula = torso_bone_mass(person, SCAPULA, COARSE)
+    assert_true(scapula.mass.value > 0.05 and scapula.mass.value < 0.4)
     assert_equal(
         torso_bone_occupancy(dims, L3, RIGHT, dims.centers[L3.value]),
         TRABECULAR_FILL,
@@ -371,7 +438,7 @@ def test_bone_mass() raises:
 def test_ligaments() raises:
     var dims = torso_dimensions(Length(6.0, FOOT), MALE)
     var parts = named_torso_ligaments()
-    assert_equal(len(parts), 4)
+    assert_equal(len(parts), 7)
     for index in range(len(parts)):
         var part = parts[index]
         assert_true(torso_ligament_label(part) != "torso ligament")
@@ -400,11 +467,34 @@ def test_ligaments() raises:
         torso_ligament_tissue(ANTERIOR_LONGITUDINAL_LIGAMENT).kind, LIGAMENT
     )
     assert_false(TorsoLigament(-1).is_valid())
-    assert_equal(torso_ligament_label(TorsoLigament(4)), "torso ligament")
+    assert_equal(torso_ligament_label(TorsoLigament(7)), "torso ligament")
     with assert_raises(contains="named part"):
-        _ = is_paired_ligament(TorsoLigament(4))
+        _ = is_paired_ligament(TorsoLigament(7))
     with assert_raises(contains="named part"):
-        _ = torso_ligament_tissue(TorsoLigament(4))
+        _ = torso_ligament_tissue(TorsoLigament(7))
+    # The girdle's joints: a disc at each end of the clavicle's run, and
+    # the coracoclavicular ligament between the coracoid and the
+    # clavicle.
+    var girdle = shoulder_girdle(dims)
+    assert_true(is_paired_ligament(ACROMIOCLAVICULAR_JOINT))
+    assert_equal(torso_ligament_tissue(STERNOCLAVICULAR_JOINT).kind, MENISCUS)
+    assert_true(
+        torso_ligament_distance(
+            dims, STERNOCLAVICULAR_JOINT, RIGHT, girdle.sternoclavicular
+        )
+        < 0
+    )
+    assert_true(
+        torso_ligament_distance(
+            dims,
+            ACROMIOCLAVICULAR_JOINT,
+            LEFT,
+            flip_x(girdle.acromioclavicular),
+        )
+        < 0.004
+    )
+    var cc = torso_ligament_field(dims, CORACOCLAVICULAR_LIGAMENT, RIGHT)
+    assert_true(cc.high.y > girdle.coracoid.y)
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_ligament_field(dims, COSTAL_CARTILAGES, BodySide(3))
     var mesh = torso_ligament(_person(), COSTAL_CARTILAGES, RIGHT, 8)
@@ -417,7 +507,7 @@ def test_ligaments() raises:
 def test_muscles() raises:
     var dims = torso_muscle_dimensions(_person())
     var parts = named_torso_muscles()
-    assert_equal(len(parts), 12)
+    assert_equal(len(parts), 15)
     for index in range(len(parts)):
         var part = parts[index]
         assert_true(torso_muscle_label(part) != "torso muscle")
@@ -440,9 +530,27 @@ def test_muscles() raises:
         torso_muscle_occupancy(dims, ERECTOR_SPINAE, RIGHT, inside), SOFT_FILL
     )
     assert_false(TorsoMuscle(-1).is_valid())
-    assert_equal(torso_muscle_label(TorsoMuscle(12)), "torso muscle")
+    assert_equal(torso_muscle_label(TorsoMuscle(15)), "torso muscle")
     with assert_raises(contains="named muscle"):
-        _ = is_paired_muscle(TorsoMuscle(12))
+        _ = is_paired_muscle(TorsoMuscle(15))
+    # The girdle's muscles reach the scapula, the coracoid and the
+    # clavicle; the pectoralis major and the latissimus reach the
+    # humerus.
+    var girdle = shoulder_girdle(dims.torso)
+    assert_true(
+        torso_muscle_distance(dims, PECTORALIS_MINOR, RIGHT, girdle.coracoid)
+        < 0.012
+    )
+    var pectoral = torso_muscle_field(dims, PECTORALIS_MAJOR, RIGHT)
+    assert_true(pectoral.high.x > girdle.shoulder.x)
+    var latissimus = torso_muscle_field(dims, LATISSIMUS_DORSI, RIGHT)
+    assert_true(latissimus.high.x > girdle.shoulder.x)
+    var rhomboids = torso_muscle_field(dims, RHOMBOIDS, RIGHT)
+    assert_true(rhomboids.low.x < 0.01 and rhomboids.high.x < girdle.glenoid.x)
+    var subclavius = torso_muscle_field(dims, SUBCLAVIUS, LEFT)
+    assert_true(subclavius.high.x < 0)
+    var trapezius = torso_muscle_field(dims, TRAPEZIUS, RIGHT)
+    assert_true(trapezius.high.y > girdle.acromion.y)
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_muscle_field(dims, INTERCOSTALS, BodySide(3))
     with assert_raises(contains="athleticism"):
@@ -465,7 +573,7 @@ def test_muscles() raises:
 def test_vessels() raises:
     var dims = torso_muscle_dimensions(_person())
     var parts = named_torso_vessels()
-    assert_equal(len(parts), 8)
+    assert_equal(len(parts), 10)
     var arteries = 0
     for index in range(len(parts)):
         var part = parts[index]
@@ -483,7 +591,14 @@ def test_vessels() raises:
             ).mass.value
             > 0
         )
-    assert_equal(arteries, 5)
+    assert_equal(arteries, 6)
+    # The subclavian vessels run out under the clavicle to the armpit,
+    # where the arm's axillary vessels begin.
+    var girdle = shoulder_girdle(dims.torso)
+    var subclavian = torso_vessel_field(dims, SUBCLAVIAN_ARTERY, RIGHT)
+    assert_true(subclavian.high.x > 0.5 * girdle.shoulder.x)
+    assert_true(is_paired_vessel(SUBCLAVIAN_VEIN))
+    assert_false(is_torso_artery(SUBCLAVIAN_VEIN))
     assert_false(is_paired_vessel(AZYGOS_VEIN))
     assert_true(is_paired_vessel(INTERCOSTAL_VEINS))
     # The thoracic aorta meets the upper abdominal aorta, which meets
@@ -502,11 +617,11 @@ def test_vessels() raises:
         > 0
     )
     assert_false(TorsoVessel(-1).is_valid())
-    assert_equal(torso_vessel_label(TorsoVessel(8)), "torso vessel")
+    assert_equal(torso_vessel_label(TorsoVessel(10)), "torso vessel")
     with assert_raises(contains="artery or vein"):
-        _ = is_torso_artery(TorsoVessel(8))
+        _ = is_torso_artery(TorsoVessel(10))
     with assert_raises(contains="artery or vein"):
-        _ = is_paired_vessel(TorsoVessel(8))
+        _ = is_paired_vessel(TorsoVessel(10))
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_vessel_field(dims, THORACIC_AORTA, BodySide(3))
     var mesh = torso_vessel(_person(), EPIGASTRIC_ARTERY, LEFT, 8)
@@ -518,7 +633,7 @@ def test_vessels() raises:
 def test_nerves() raises:
     var dims = torso_muscle_dimensions(_person())
     var parts = named_torso_nerves()
-    assert_equal(len(parts), 4)
+    assert_equal(len(parts), 5)
     for index in range(len(parts)):
         var part = parts[index]
         assert_true(torso_nerve_label(part) != "torso nerve")
@@ -540,9 +655,14 @@ def test_nerves() raises:
     assert_false(is_paired_nerve(SPINAL_CORD))
     assert_true(is_paired_nerve(SYMPATHETIC_TRUNK))
     assert_false(TorsoNerve(-1).is_valid())
-    assert_equal(torso_nerve_label(TorsoNerve(4)), "torso nerve")
+    assert_equal(torso_nerve_label(TorsoNerve(5)), "torso nerve")
+    # The plexus reaches the armpit, in reach of the humeral head.
+    var plexus = torso_nerve_field(dims, BRACHIAL_PLEXUS, LEFT)
+    var girdle = shoulder_girdle(dims.torso)
+    assert_true(plexus.low.x < -0.5 * girdle.shoulder.x)
+    assert_true(is_paired_nerve(BRACHIAL_PLEXUS))
     with assert_raises(contains="named nerve"):
-        _ = is_paired_nerve(TorsoNerve(4))
+        _ = is_paired_nerve(TorsoNerve(5))
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_nerve_field(dims, SPINAL_CORD, BodySide(3))
     var mesh = torso_nerve(_person(), ILIOHYPOGASTRIC_NERVE, LEFT, 8)
@@ -553,7 +673,7 @@ def test_nerves() raises:
 def test_lymph() raises:
     var dims = torso_muscle_dimensions(_person())
     var parts = named_torso_lymph()
-    assert_equal(len(parts), 4)
+    assert_equal(len(parts), 5)
     for index in range(len(parts)):
         var part = parts[index]
         assert_true(torso_lymph_label(part) != "torso lymph")
@@ -574,9 +694,15 @@ def test_lymph() raises:
     assert_true(is_paired_lymph(PARASTERNAL_NODES))
     assert_false(is_paired_lymph(THORACIC_DUCT))
     assert_false(TorsoLymph(-1).is_valid())
-    assert_equal(torso_lymph_label(TorsoLymph(4)), "torso lymph")
+    assert_equal(torso_lymph_label(TorsoLymph(5)), "torso lymph")
+    # The axillary nodes lie in the armpit, under the humeral head.
+    var axilla = torso_lymph_field(dims, AXILLARY_NODES, RIGHT)
+    var girdle = shoulder_girdle(dims.torso)
+    assert_true(axilla.high.y < girdle.shoulder.y + 0.02)
+    assert_true(axilla.high.x > 0.6 * girdle.shoulder.x)
+    assert_true(is_paired_lymph(AXILLARY_NODES))
     with assert_raises(contains="named part"):
-        _ = is_paired_lymph(TorsoLymph(4))
+        _ = is_paired_lymph(TorsoLymph(5))
     with assert_raises(contains="RIGHT or LEFT"):
         _ = torso_lymph_field(dims, THORACIC_DUCT, BodySide(3))
     var mesh = torso_lymph(_person(), PARASTERNAL_NODES, LEFT, 8)
@@ -662,9 +788,9 @@ def test_add_torso_places_every_layer() raises:
         ALL,
         8,
     )
-    # Forty-two bones, five joint parts, twenty-three muscles, twelve
-    # vessels, six lymphatics, seven nerves and one skin.
-    assert_equal(len(scene.meshes), 96)
+    # Forty-six bones, eleven joint parts, twenty-nine muscles, sixteen
+    # vessels, eight lymphatics, nine nerves and one skin.
+    assert_equal(len(scene.meshes), 120)
     var lymph_scene = Scene()
     var lymph_root = lymph_scene.add(Object3D())
     _ = add_torso(
@@ -684,7 +810,7 @@ def test_add_torso_places_every_layer() raises:
         assets.materials.add(lymph_phong()),
         assets.materials.add(nerve_phong()),
     )
-    assert_equal(len(lymph_scene.meshes), 25)
+    assert_equal(len(lymph_scene.meshes), 33)
     with assert_raises(contains="named layer set"):
         _ = add_torso(
             scene,
@@ -723,8 +849,9 @@ def test_add_body_joins_torso_and_lower_body() raises:
         LYMPH,
         8,
     )
-    # The lower body's twenty-six lymph solids and the torso's six.
-    assert_equal(len(scene.meshes), 32)
+    # The lower body's twenty-six lymph solids, the torso's eight, and
+    # each arm's four and each hand's two.
+    assert_equal(len(scene.meshes), 46)
     var skinned = Scene()
     var skin_root = skinned.add(Object3D())
     _ = add_body(
@@ -741,8 +868,10 @@ def test_add_body_joins_torso_and_lower_body() raises:
         SKIN,
         8,
         8,
+        8,
     )
-    assert_equal(len(skinned.meshes), 1)
+    # One skin down to the wrists, and each hand's own.
+    assert_equal(len(skinned.meshes), 3)
     var painted = Scene()
     var painted_root = painted.add(Object3D())
     _ = add_body(
@@ -759,9 +888,10 @@ def test_add_body_joins_torso_and_lower_body() raises:
         SKIN,
         8,
         8,
+        8,
         skin_paint=assets.materials.add(skin_phong()),
     )
-    assert_equal(len(painted.meshes), 1)
+    assert_equal(len(painted.meshes), 3)
     with assert_raises(contains="named layer set"):
         _ = add_body(
             scene,
@@ -790,6 +920,13 @@ def test_body_skin_is_one_surface() raises:
     assert_true(field.low.y < -0.8)
     assert_true(field.high.y > 0.5)
     assert_true(field.gradient(f.at(0, 14.5, 30.0)).z > 0.3)
+    # Both arms are inside it, down to the wrists.
+    var arm = arm_dimensions(person.stature, MALE).frame
+    assert_true(field.distance(arm.elbow) < 0)
+    assert_true(field.distance(flip_x(arm.elbow)) < 0)
+    assert_true(field.distance(arm.upper(0, -15, 0)) < 0)
+    assert_true(field.distance(flip_x(arm.fore(0, -12, 0))) < 0)
+    assert_true(field.low.x < -arm.wrist.x and field.high.x > arm.wrist.x)
     with assert_raises():
         _ = body_skin_mesh(person, 7)
 

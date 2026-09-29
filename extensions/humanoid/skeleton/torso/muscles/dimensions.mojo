@@ -6,10 +6,11 @@
 """Named muscles of the torso, as implicit solids in the pelvis frame.
 
 The set is the abdominal wall, the deep back, the diaphragm, the
-intercostals, and the trunk's part of the pectoralis major, the
-latissimus dorsi, the trapezius and the serratus anterior. The arm, the
-shoulder girdle and the neck are not modeled yet, so those four end
-where the arm or the scapula would take them.
+intercostals, and the muscles that hold the shoulder girdle to the
+trunk: the serratus anterior, the trapezius, the rhomboids, the
+pectoralis minor and the subclavius. The pectoralis major and the
+latissimus dorsi cross to the humerus, and end on it in a tendon. The
+neck is not modeled, so the trapezius ends at the base of the neck.
 
 Every muscle but the diaphragm is paired, authored on the right and
 mirrored on x for the left. A muscle is one or more sweeps of
@@ -31,6 +32,7 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
     midpoint_path,
     rib_path,
     torso_dimensions,
+    upper_arm_point,
 )
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
@@ -56,7 +58,7 @@ struct TorsoMuscle(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this is a named torso muscle."""
         if self.value < 0:
             return False
-        return self.value <= TRAPEZIUS.value
+        return self.value <= SUBCLAVIUS.value
 
 
 comptime RECTUS_ABDOMINIS = TorsoMuscle(0)
@@ -73,6 +75,10 @@ comptime SERRATUS_ANTERIOR = TorsoMuscle(8)
 comptime PECTORALIS_MAJOR = TorsoMuscle(9)
 comptime LATISSIMUS_DORSI = TorsoMuscle(10)
 comptime TRAPEZIUS = TorsoMuscle(11)
+# The rhomboid minor and major, drawn as one sheet.
+comptime RHOMBOIDS = TorsoMuscle(12)
+comptime PECTORALIS_MINOR = TorsoMuscle(13)
+comptime SUBCLAVIUS = TorsoMuscle(14)
 
 
 struct TorsoMuscleDimensions(Copyable, Movable):
@@ -262,11 +268,16 @@ def torso_muscle_field(
             )
             sweeps.append(tube(mid, f.cm(0.5) * s, f.cm(0.4) * s))
     elif part == SERRATUS_ANTERIOR:
-        # Slips from the side of the upper ribs back toward the scapula,
-        # thin across the chest wall.
-        _slip(sweeps, f, s, 11.0, 44.0, 3.5, 13.0, 44.5, -2.0, 11.0, 44.5, -8.0)
-        _slip(sweeps, f, s, 13.0, 38.0, 4.5, 14.5, 39.5, -1.5, 11.5, 40.0, -8.5)
-        _slip(sweeps, f, s, 14.3, 33.0, 4.0, 15.2, 35.5, -1.0, 11.8, 37.5, -8.8)
+        # Slips from the side of the upper ribs back around the chest
+        # wall, under the scapula, to its medial border.
+        # fmt: off
+        _slip(sweeps, f, s, 11.0, 44.0, 3.5, 13.0, 44.5, -2.0, 10.4, 45.3, -6.0,
+              7.9, 46.0, -9.4)
+        _slip(sweeps, f, s, 13.0, 38.0, 4.5, 14.5, 39.5, -1.5, 11.2, 40.8, -6.4,
+              8.1, 41.5, -9.4)
+        _slip(sweeps, f, s, 14.3, 33.0, 4.0, 15.2, 35.5, -1.0, 11.8, 36.8, -6.6,
+              8.7, 37.6, -9.2)
+        # fmt: on
     elif part == PECTORALIS_MAJOR:
         # From the sternum, the cartilages and the clavicle's line toward
         # the humerus, which ends it at the front fold of the armpit. It
@@ -314,11 +325,11 @@ def torso_muscle_field(
             f,
             s,
             5.0,
-            50.5,
-            5.6,
+            48.7,
+            5.0,
             10.0,
-            49.0,
-            6.2,
+            48.6,
+            5.8,
             14.0,
             47.0,
             5.8,
@@ -328,6 +339,12 @@ def torso_muscle_field(
             1.4,
             1.2,
         )
+        # The tendon: a flat band across the front of the armpit to the
+        # lateral lip of the humerus's groove.
+        var tendon = Sweep(Vector3(0, 0, 1))
+        _station(tendon, f, s, 16.0, 44.2, 4.1, 1.2, 1.6)
+        tendon.add(upper_arm_point(t, 1.6, -6.2, 2.2), f.cm(0.35), f.cm(1.4))
+        sweeps.append(tendon^)
     elif part == LATISSIMUS_DORSI:
         # From the spines and the thoracolumbar fascia toward the humerus,
         # which ends it at the back fold of the armpit.
@@ -388,66 +405,54 @@ def torso_muscle_field(
             1.0,
             1.8,
         )
+        # The tendon twists under the arm, around the teres major, to the
+        # floor of the humerus's groove.
+        var twist = Sweep(Vector3(1, 0, 0))
+        _station(twist, f, s, 15.6, 42.2, -5.4, 0.6, 1.4)
+        twist.add(upper_arm_point(t, -1.4, -5.2, -0.8), f.cm(0.45), f.cm(1.3))
+        twist.add(upper_arm_point(t, 0.5, -5.6, 1.4), f.cm(0.3), f.cm(1.1))
+        sweeps.append(twist^)
+    elif part == TRAPEZIUS:
+        # From the thoracic spines and the base of the neck over the
+        # rhomboids to the scapular spine, the acromion and the lateral
+        # clavicle: the lower, middle and upper fibers.
+        # fmt: off
+        _sheet(sweeps, f, s, 0.6, 27.0, -12.0, 4.0, 34.0, -12.8,
+               7.0, 41.0, -13.0, 8.6, 47.2, -11.8, 1.0, 1.4)
+        _sheet(sweeps, f, s, 0.6, 44.0, -12.9, 5.5, 46.0, -14.3,
+               10.0, 48.2, -12.2, 14.5, 49.4, -10.4, 1.0, 1.4)
+        _sheet(sweeps, f, s, 0.6, 52.5, -10.4, 6.0, 53.0, -9.8,
+               11.5, 51.8, -6.8, 16.6, 50.6, -3.0, 1.0, 1.4)
+        _sheet(sweeps, f, s, 0.6, 54.0, -8.6, 6.5, 53.8, -7.0,
+               11.0, 52.2, -3.8, 14.5, 50.9, -0.2, 1.0, 1.2)
+        # fmt: on
+    elif part == RHOMBOIDS:
+        # The rhomboid minor and major, drawn as one sheet from the
+        # spines of the upper thorax over the erector spinae down and out
+        # to the medial border of the scapula.
+        # fmt: off
+        _band(sweeps, f, s, 0.5, 52.0, -10.2, 3.8, 50.6, -12.0,
+              7.4, 48.6, -10.6)
+        _band(sweeps, f, s, 0.5, 48.5, -11.2, 3.9, 45.8, -13.2,
+              7.5, 43.5, -10.9)
+        _band(sweeps, f, s, 0.5, 44.5, -11.4, 4.0, 41.5, -13.4,
+              8.2, 38.2, -10.5)
+        # fmt: on
+    elif part == PECTORALIS_MINOR:
+        # From the third to fifth ribs under the pectoralis major up to
+        # the coracoid.
+        var fan = Sweep(Vector3(0.3, 0, 1))
+        _station(fan, f, s, 8.0, 39.0, 9.2, 0.5, 2.8)
+        _station(fan, f, s, 11.5, 42.6, 7.0, 0.7, 1.8)
+        _station(fan, f, s, 14.4, 46.0, 2.4, 0.45, 0.6)
+        sweeps.append(fan^)
     else:
-        # The middle and lower trapezius from the thoracic spines toward
-        # the scapular spine and the acromion.
-        _sheet(
-            sweeps,
-            f,
-            s,
-            0.6,
-            27.0,
-            -12.0,
-            4.0,
-            34.0,
-            -12.6,
-            7.5,
-            42.0,
-            -12.0,
-            10.0,
-            46.5,
-            -11.0,
-            1.0,
-            1.4,
-        )
-        _sheet(
-            sweeps,
-            f,
-            s,
-            0.6,
-            44.0,
-            -12.2,
-            5.5,
-            46.0,
-            -12.3,
-            10.0,
-            48.0,
-            -11.2,
-            12.5,
-            49.0,
-            -9.0,
-            1.0,
-            1.4,
-        )
-        _sheet(
-            sweeps,
-            f,
-            s,
-            0.6,
-            52.5,
-            -10.0,
-            6.0,
-            53.0,
-            -9.5,
-            9.5,
-            52.8,
-            -8.0,
-            11.5,
-            51.5,
-            -6.5,
-            1.0,
-            1.4,
-        )
+        # The subclavius, under the clavicle from the first rib out.
+        var strap = Sweep(Vector3(1, 0, 0))
+        _station(strap, f, s, 4.2, 48.3, 3.3, 0.4, 0.4)
+        _station(strap, f, s, 9.0, 48.4, 3.2, 0.6, 0.5)
+        _station(strap, f, s, 13.4, 48.8, 1.0, 0.35, 0.35)
+        sweeps.append(strap^)
     return SweepField(sweeps^, domes^, placed, f.cm(0.5), f.cm(0.15), 0.006)
 
 
@@ -478,13 +483,40 @@ def _slip(
     x2: Float32,
     y2: Float32,
     z2: Float32,
+    x3: Float32,
+    y3: Float32,
+    z3: Float32,
 ):
-    """Append one serratus slip: thin across x, tall along y."""
+    """Append one serratus slip: thin across the chest wall, tall along
+    y, narrowing to the scapula's medial border."""
     var slip = Sweep(Vector3(1, 0, 0))
     _station(slip, f, scale, x0, y0, z0, 0.5, 1.6)
     _station(slip, f, scale, x1, y1, z1, 0.6, 2.0)
     _station(slip, f, scale, x2, y2, z2, 0.5, 1.6)
+    _station(slip, f, scale, x3, y3, z3, 0.4, 1.0)
     sweeps.append(slip^)
+
+
+def _band(
+    mut sweeps: List[Sweep],
+    f: TorsoFrame,
+    scale: Float32,
+    x0: Float32,
+    y0: Float32,
+    z0: Float32,
+    x1: Float32,
+    y1: Float32,
+    z1: Float32,
+    x2: Float32,
+    y2: Float32,
+    z2: Float32,
+):
+    """Append one rhomboid band: thin front to back, tall along y."""
+    var band = Sweep(Vector3(0, 0, 1))
+    _station(band, f, scale, x0, y0, z0, 0.35, 1.5)
+    _station(band, f, scale, x1, y1, z1, 0.4, 1.7)
+    _station(band, f, scale, x2, y2, z2, 0.35, 1.4)
+    sweeps.append(band^)
 
 
 def _sheet(
@@ -581,6 +613,12 @@ def torso_muscle_label(part: TorsoMuscle) -> String:
         return "latissimus dorsi"
     if part == TRAPEZIUS:
         return "trapezius"
+    if part == RHOMBOIDS:
+        return "rhomboids"
+    if part == PECTORALIS_MINOR:
+        return "pectoralis minor"
+    if part == SUBCLAVIUS:
+        return "subclavius"
     return "torso muscle"
 
 
@@ -589,9 +627,10 @@ def named_torso_muscles() -> List[TorsoMuscle]:
 
     Returns:
         The abdominal wall, the deep back, the diaphragm, the
-        intercostals and the four sheets that reach toward the arm.
+        intercostals, the four sheets that reach the arm, then the
+        rhomboids, the pectoralis minor and the subclavius.
     """
     var parts = List[TorsoMuscle]()
-    for index in range(TRAPEZIUS.value + 1):
+    for index in range(SUBCLAVIUS.value + 1):
         parts.append(TorsoMuscle(index))
     return parts^

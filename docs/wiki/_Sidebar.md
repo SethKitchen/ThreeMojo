@@ -80,6 +80,8 @@
 - [Foot](Foot)
 - [Pelvis](Pelvis)
 - [Torso](Torso)
+- [Arm](Arm)
+- [Hand](Hand)
 - [Segment inertia](Segment-inertia)
 
 **Explanation**

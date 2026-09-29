@@ -14,8 +14,11 @@ abdomen than over the chest. A female template carries breast tissue
 over the pectoralis major. A separate shell represents the dermis for
 occupancy and mass.
 
-The arm, the shoulder and the neck are not modeled, so the skin ends
-in a cut at the top of the chest.
+The sections slice the shoulder girdle too, so the skin covers the
+clavicles, the scapulae and the acromia. It leaves out where the
+pectoralis major and the latissimus dorsi reach the humerus: the arm's
+own skin covers the armpit's folds there. The neck is not modeled, so
+the skin ends in a cut at the base of the neck.
 
     var dims = torso_muscle_dimensions(person)
     var d = torso_skin_distance(dims, Vector3(0, 0.3, 0.15))
@@ -39,6 +42,7 @@ from extensions.humanoid.skeleton.loft import (
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     is_paired_bone,
     named_torso_bones,
+    shoulder_girdle,
     torso_bone_field,
 )
 from extensions.humanoid.skeleton.torso.ligaments.dimensions import (
@@ -95,6 +99,10 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         self.dermis = TORSO_DERMIS
         self.epsilon = f.cm(0.15)
         var points = List[LoftSample]()
+        # A station lateral of and below this corner belongs to the
+        # arm's skin: where the chest's muscles reach the humerus.
+        var g = shoulder_girdle(t)
+        var arm = Vector3(g.shoulder.x - f.cm(2.3), g.shoulder.y - f.cm(1.0), 0)
         var bones = named_torso_bones()
         for index in range(len(bones)):
             _append_field(points, torso_bone_field(t, bones[index], RIGHT))
@@ -105,10 +113,12 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         var muscles = named_torso_muscles()
         for index in range(len(muscles)):
             var part = muscles[index]
-            _append_field(points, torso_muscle_field(dimensions, part, RIGHT))
+            _append_field(
+                points, torso_muscle_field(dimensions, part, RIGHT), arm
+            )
             if is_paired_muscle(part):
                 _append_field(
-                    points, torso_muscle_field(dimensions, part, LEFT)
+                    points, torso_muscle_field(dimensions, part, LEFT), arm
                 )
         if t.sex != MALE:
             # Breast tissue over the pectoralis major, on either side.
@@ -219,12 +229,17 @@ def torso_skin_distance(
     return TorsoSkinField(dimensions).distance(point)
 
 
-def _append_field(mut points: List[LoftSample], field: SweepField):
+def _append_field(
+    mut points: List[LoftSample],
+    field: SweepField,
+    arm: Vector3 = Vector3(1.0e9, -1.0e9, 0),
+):
     """Append every station of a field's sweeps, placed on its side.
 
     A sheet that lies thin across the body wall is sliced as a round
     section of its thickness; its breadth comes from the run of its
-    stations.
+    stations. A station farther from the midline than `arm.x` and lower
+    than `arm.y` is left out: it lies under the arm's skin.
     """
     for s in range(len(field.sweeps)):
         var sweep = field.sweeps[s].copy()
@@ -233,6 +248,8 @@ def _append_field(mut points: List[LoftSample], field: SweepField):
         for index in range(len(sweep.stations)):
             var station = sweep.stations[index]
             var p = station.p
+            if p.x > arm.x and p.y < arm.y:
+                continue
             if field.mirror:
                 p = flip_x(p)
             var ml = station.ml
@@ -246,6 +263,8 @@ def _append_field(mut points: List[LoftSample], field: SweepField):
             if index + 1 < len(sweep.stations):
                 var next = sweep.stations[index + 1]
                 var q = next.p
+                if q.x > arm.x and q.y < arm.y:
+                    continue
                 if field.mirror:
                     q = flip_x(q)
                 var next_ap = next.ap
