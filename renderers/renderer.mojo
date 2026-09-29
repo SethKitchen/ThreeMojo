@@ -315,13 +315,13 @@ from render.rasterizer import (
     check_gradient_map,
     check_light_map,
     check_output_kinds,
-    _raise_band_errors,
     edge,
     rasterize_frame,
 )
 from renderers.clip import (
     ClipVertex,
     clip_depth,
+    clip_ordered,
     clip_segment,
     within_any,
     within_depth,
@@ -4505,8 +4505,13 @@ struct _TriangleJob(Movable):
         mut corners: _Slim,
         lights: Lighting,
         assets: Assets,
-    ) raises:
+    ):
         """Append the triangles `first` up to `past` of the drawn run.
+
+        It cannot raise, so a worker thread can run it: the camera's
+        projection has refused a far plane in front of the near one
+        before any job is made, and the index list was checked against
+        the vertex count when the draw was.
 
         Args:
             first: The first triangle to emit, counted from the run's.
@@ -4515,11 +4520,9 @@ struct _TriangleJob(Movable):
             lights: The camera's lights, which a `GOURAUD` corner is lit
                 by.
             assets: The store that holds the geometry.
-
-        Raises:
-            Error: If the clipper refuses a triangle.
         """
-        ref indices = assets.geometries.get(self.geometry).index
+        # Read directly: the draw has already fetched this id.
+        ref indices = assets.geometries.geometries[self.geometry.value].index
         ref vertex_u = self.first_set[0]
         ref vertex_v = self.first_set[1]
         ref vertex_u1 = self.second_set[0]
@@ -4648,7 +4651,7 @@ struct _TriangleJob(Movable):
             ):
                 self.paint.emit(corners, corner_a, corner_b, corner_c)
                 continue
-            var pieces = clip_depth(
+            var pieces = clip_ordered(
                 corner_a,
                 corner_b,
                 corner_c,
@@ -4684,8 +4687,6 @@ async def _emit_pieces(
     past_piece: Int,
     corners: MutPointer[_Slim, MutAnyOrigin],
     ends: MutPointer[Int, MutAnyOrigin],
-    errors: MutPointer[String, MutAnyOrigin],
-    task: Int,
     lights: Pointer[Lighting, ImmutAnyOrigin],
     assets: Pointer[Assets, ImmutAnyOrigin],
 ):
@@ -4696,8 +4697,8 @@ async def _emit_pieces(
     because a coroutine must not borrow from the call that made it;
     `_emit_jobs` keeps everything alive until `TaskGroup.wait` returns.
 
-    A task cannot raise, so an error is written into this task's slot
-    and raised by `_emit_jobs` once every task has finished.
+    A task cannot raise, and nothing it runs does; see
+    `_TriangleJob.emit`.
 
     Args:
         jobs: The pending jobs.
@@ -4706,24 +4707,19 @@ async def _emit_pieces(
         past_piece: One past the last.
         corners: This task's list, appended to.
         ends: Per piece, how long this task's list is once it is done.
-        errors: Per task, the error it met, or empty.
-        task: This task's slot in `errors`.
         lights: The camera's lights, for a `GOURAUD` corner.
         assets: The store that holds the geometries.
     """
-    try:
-        # A task is only made for a run of one piece or more.
-        for index in range(first_piece, past_piece):  # pragma: no branch
-            var piece = pieces[unsafe_offset=index]
-            # Each piece starts surfaces of its own, which the merge
-            # renumbers into the frame's.
-            corners[].new_surface()
-            jobs[unsafe_offset=piece.job].emit(
-                piece.first, piece.past, corners[], lights[], assets[]
-            )
-            ends[unsafe_offset=index] = len(corners[])
-    except error:
-        errors[unsafe_offset=task] = String(error)
+    # A task is only made for a run of one piece or more.
+    for index in range(first_piece, past_piece):  # pragma: no branch
+        var piece = pieces[unsafe_offset=index]
+        # Each piece starts surfaces of its own, which the merge renumbers
+        # into the frame's.
+        corners[].new_surface()
+        jobs[unsafe_offset=piece.job].emit(
+            piece.first, piece.past, corners[], lights[], assets[]
+        )
+        ends[unsafe_offset=index] = len(corners[])
 
 
 async def _place_corners(
@@ -4756,7 +4752,7 @@ def _emit_jobs(
     workers: Int,
     lights: Lighting,
     assets: Assets,
-) raises:
+):
     """Emit the pending jobs in draw order, and record each one's span.
 
     With one worker, each job appends straight to `corners`. With more,
@@ -4773,9 +4769,6 @@ def _emit_jobs(
         workers: How many threads may emit.
         lights: The camera's lights, for a `GOURAUD` corner.
         assets: The store that holds the geometries.
-
-    Raises:
-        Error: If the clipper refuses a triangle.
     """
     if len(jobs) == 0:
         return
@@ -4820,7 +4813,6 @@ def _emit_jobs(
     for _ in range(tasks):  # pragma: no branch
         outputs.append(_Slim())
     var ends = List[Int](length=len(pieces), fill=0)
-    var errors = List[String](length=tasks, fill=String(""))
     var group = TaskGroup()
     for index in range(tasks):  # pragma: no branch
         group.create_task(
@@ -4833,14 +4825,11 @@ def _emit_jobs(
                 .unsafe_offset(index)
                 .unsafe_origin_cast[MutAnyOrigin](),
                 ends.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                index,
                 Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=assets).unsafe_origin_cast[ImmutAnyOrigin](),
             )
         )
     group.wait()
-    _raise_band_errors(errors)
     # Where each task's corners and surfaces start in the frame's lists.
     var base = len(corners)
     var starts = List[Int](length=tasks, fill=base)

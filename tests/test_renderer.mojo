@@ -6389,10 +6389,10 @@ def test_many_workers_prepare_the_frame_one_worker_does() raises:
             assert_equal(now.b, was.b)
 
 
-def test_an_error_on_a_worker_reaches_the_caller() raises:
+def test_a_bad_camera_is_refused_before_the_workers_start() raises:
     # A far plane moved in front of the near one after the camera was
-    # built: the clipper refuses the ball's triangles on whichever worker
-    # emits them, and prepare raises it once every worker has finished.
+    # built: the projection refuses it before any triangle is handed to
+    # a worker, which could not raise it.
     var assets = Assets()
     var paint = assets.materials.add(Material(Color(200, 120, 90)))
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 96, 48))
