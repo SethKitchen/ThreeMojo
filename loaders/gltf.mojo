@@ -3499,23 +3499,6 @@ def _normalize_skin_weights(weights: List[Float32]) -> List[Float32]:
     return out^
 
 
-def _components_of(kind: String) raises -> Int:
-    """Return how many numbers an accessor type holds."""
-    if kind == "SCALAR":
-        return 1
-    if kind == "VEC2":
-        return 2
-    if kind == "VEC3":
-        return 3
-    if kind == "VEC4" or kind == "MAT2":
-        return 4
-    if kind == "MAT3":
-        return 9
-    if kind == "MAT4":
-        return 16
-    raise Error("glTF: an accessor type that is not known: " + kind)
-
-
 def _component_size(component: Int) raises -> Int:
     """Return how many bytes a component type takes."""
     if component == COMPONENT_BYTE or component == COMPONENT_UNSIGNED_BYTE:

@@ -428,7 +428,7 @@ def _apply_sparse_splat(
         component_size,
     )
     var last = -1
-    for slot in range(changed):
+    for slot in range(changed):  # pragma: no branch
         var element = Int(
             _component(
                 buffers[found[0]],
@@ -442,7 +442,7 @@ def _apply_sparse_splat(
                 "glTF: sparse indices must rise and stay inside the accessor"
             )
         last = element
-        for lane in range(width):
+        for lane in range(width):  # pragma: no branch
             values[element * width + lane] = _component(
                 buffers[what[0]],
                 what[1] + (slot * width + lane) * component_size,
@@ -934,7 +934,7 @@ def _node_numbers(
     var values = document.get(node, field)
     if document.length(values) != count:
         raise Error("glTF: a node transform has the wrong length")
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         out.append(Float32(document.number(document.at(values, index))))
     return out^
 
@@ -1049,7 +1049,7 @@ def load_gltf_gaussian_splat_scene(
         if mesh_map[mesh] < 0:
             continue
         ref primitives = meshes[mesh_map[mesh]].primitives
-        for primitive in range(len(primitives)):
+        for primitive in range(len(primitives)):  # pragma: no branch
             var attached = id
             if len(primitives) > 1:
                 var child = Object3D()

@@ -80,7 +80,7 @@ struct AccessorLayout(ImplicitlyCopyable):
     def offsets(self) -> List[Int]:
         """Return each component's byte offset in an element."""
         var out = List[Int](capacity=self.width)
-        for lane in range(self.width):
+        for lane in range(self.width):  # pragma: no branch
             out.append(
                 (lane // self.rows) * self.column_stride
                 + (lane % self.rows) * self.size

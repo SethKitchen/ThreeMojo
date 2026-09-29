@@ -5,7 +5,7 @@
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import Object3D, NodeId
+from core.object3d import Object3D, NodeId, NO_PARENT
 from core.scene import Scene
 from core.scene_optimizer import _carries
 from exporters.gltf import export_gltf
@@ -26,14 +26,17 @@ from render.framebuffer import Color
 from render.raster_state import STANDARD_DEPTH
 from render.rasterizer import DRAW_SPLATS, DRAW_TRIANGLES, Draw, check_draws
 from render.rasterizer import check_output_kinds
+from render.rasterizer import Corner, RasterVertex, Surface, rasterize_frame
 from render.rect import Rect
 from render.splat_raster import prepare_gaussian_splat, draw_gaussian_splat
 from render.target import RenderTarget
+from renderers.draw_filter import snap_to_pixels
 from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,
     assert_equal,
     assert_true,
+    assert_false,
     assert_almost_equal,
     assert_raises,
 )
@@ -218,6 +221,215 @@ def test_exporters_refuse_to_silently_drop_registered_splats() raises:
         _ = object_to_json(scene, assets)
     with assert_raises(contains="cannot serialize Gaussian splats"):
         _ = export_gltf(scene, assets)
+
+
+def test_empty_draws_and_frames_draw_nothing() raises:
+    var corners = List[Corner]()
+    var surfaces = List[Surface]()
+    var draws: List[Draw] = [
+        Draw(DRAW_TRIANGLES, 0, 0),
+        Draw(DRAW_SPLATS, 0, 0),
+    ]
+    for workers in range(1, 3):
+        var target = RenderTarget(4, 4, Color(0, 0, 0, 255))
+        rasterize_frame(
+            corners,
+            surfaces,
+            List[RasterVertex](),
+            draws,
+            target,
+            workers=workers,
+        )
+        assert_equal(target.color_at(1, 1).r, 0)
+    snap_to_pixels(corners, 4, 4)
+    assert_equal(len(corners), 0)
+    var frame = Renderer(4, 4).prepare_frame(Scene(), Assets(), camera())
+    assert_equal(len(frame.whole_corners()), 0)
+
+
+def test_a_splat_behind_the_camera_is_left_out_of_the_frame() raises:
+    var scene = Scene()
+    var behind = Object3D()
+    behind.set_position(0, 0, 10)
+    var node = scene.add(behind^)
+    scene.update()
+    scene.add_gaussian_splat(one_red_splat(scene, node))
+    var frame = Renderer(16, 16).prepare_frame(scene, Assets(), camera())
+    assert_equal(len(frame.splats), 0)
+
+
+def test_a_clone_leaves_splats_on_other_nodes_alone() raises:
+    var scene = Scene()
+    var carrier = scene.add(Object3D())
+    var bare = scene.add(Object3D())
+    scene.update()
+    scene.add_gaussian_splat(one_red_splat(scene, carrier))
+    assert_false(_carries(scene, bare))
+    _ = scene.clone(bare)
+    assert_equal(len(scene.gaussian_splats), 1)
+
+
+def test_a_layout_refuses_an_unknown_component_size() raises:
+    with assert_raises(contains="component size"):
+        _ = AccessorLayout("SCALAR", 3)
+
+
+def sparse_refusal(
+    sparse: String,
+    views: String = '[{"buffer":0,"byteLength":2},{"buffer":0,"byteOffset":4,"byteLength":8}]',
+    first: UInt8 = 0,
+    second: UInt8 = 0,
+) raises -> String:
+    """Return why a SCALAR UNSIGNED_INT accessor of three is refused, with
+    `sparse` over twelve bytes whose first two are `first` and `second`."""
+    var document = parse_json(
+        '{"accessors":[{"componentType":5125,"count":3,"type":"SCALAR",'
+        + '"sparse":'
+        + sparse
+        + '}],"bufferViews":'
+        + views
+        + "}"
+    )
+    var bytes = zeros(12)
+    bytes[0] = first
+    bytes[1] = second
+    var buffers: List[List[UInt8]] = [bytes^]
+    try:
+        _ = _read_accessor(document, buffers, 0)
+    except reason:
+        return String(reason)
+    return "accepted"
+
+
+def test_malformed_sparse_splat_accessors_are_refused() raises:
+    var indices = '"indices":{"bufferView":0,"componentType":5121}'
+    var values = '"values":{"bufferView":1}'
+    var parts = indices + "," + values + "}"
+    assert_true("needs count" in sparse_refusal("1"))
+    assert_true("invalid count" in sparse_refusal('{"count":0,' + parts))
+    assert_true("invalid count" in sparse_refusal('{"count":4,' + parts))
+    assert_true(
+        "unsigned"
+        in sparse_refusal(
+            '{"count":1,"indices":{"bufferView":0,"componentType":5126},'
+            + values
+            + "}"
+        )
+    )
+    var one = '{"count":1,' + parts
+    for buffer in [-1, 1]:
+        assert_true(
+            "missing buffer"
+            in sparse_refusal(
+                one,
+                '[{"buffer":'
+                + String(buffer)
+                + ',"byteLength":2},{"buffer":0,"byteLength":4}]',
+            )
+        )
+    assert_true(
+        "packed"
+        in sparse_refusal(
+            one,
+            (
+                '[{"buffer":0,"byteLength":2,"byteStride":4},'
+                '{"buffer":0,"byteOffset":4,"byteLength":8}]'
+            ),
+        )
+    )
+    assert_true(
+        "packed"
+        in sparse_refusal(
+            one,
+            (
+                '[{"buffer":0,"byteLength":2},'
+                '{"buffer":0,"byteOffset":2,"byteLength":4}]'
+            ),
+        )
+    )
+    assert_true(
+        "must rise" in sparse_refusal('{"count":2,' + parts, first=1, second=1)
+    )
+
+
+def placed(text: String) raises -> Scene:
+    """Return a scene with a splat document's default scene placed in it."""
+    var scene = Scene()
+    _ = load_gltf_gaussian_splat_scene(text, List[UInt8](), "", scene)
+    return scene^
+
+
+def with_nodes(nodes: String, extra_mesh: String = "") raises -> String:
+    """Return the splat fixture with its nodes replaced by `nodes`, its
+    first node the one root, and `extra_mesh` before its meshes."""
+    var text = Path("assets/gaussian_splat/splats.gltf").read_text()
+    if extra_mesh != "":
+        text = text.replace('"meshes": [', '"meshes": [' + extra_mesh + ",")
+    var begin = text.find('"nodes": [')
+    return (
+        String(text[byte=:begin])
+        + '"nodes":'
+        + nodes
+        + ',"scenes":[{"nodes":[0]}],"scene":0}'
+    )
+
+
+def test_splat_documents_without_a_hierarchy_place_nothing() raises:
+    var empty: List[String] = [
+        "{}",
+        '{"scenes":[{}]}',
+        '{"scenes":[{"nodes":[]}]}',
+        '{"nodes":[],"scenes":[{"nodes":[]}]}',
+    ]
+    for index in range(len(empty)):
+        assert_equal(len(placed(empty[index]).gaussian_splats), 0)
+    var scene = Scene()
+    var ids = load_gltf_gaussian_splat_scene(
+        '{"nodes":[{"name":"","children":[]}],"scenes":[{"nodes":[0]}]}',
+        List[UInt8](),
+        "",
+        scene,
+    )
+    assert_true(ids[0] != NO_PARENT)
+    assert_equal(scene.get(ids[0]).name, "")
+    for bad in ["[1]", "[-1]"]:
+        with assert_raises(contains="not there"):
+            _ = placed('{"nodes":[{}],"scenes":[{"nodes":' + bad + "}]}")
+    with assert_raises(contains="not there"):
+        _ = placed('{"scenes":[{"nodes":[0]}]}')
+
+
+def test_splat_nodes_take_their_transforms_and_skip_plain_meshes() raises:
+    var scene = placed(
+        with_nodes(
+            (
+                '[{"extras":{"k":1},"matrix":[1,0,0,0,0,1,0,0,0,0,1,0,2,0,0,1],'
+                '"children":[1,2,3]},'
+                '{"rotation":[0,0,0,1],"scale":[2,2,2],"mesh":1},'
+                '{"mesh":0},{"extras":1}]'
+            ),
+            '{"primitives":[{"attributes":{"POSITION":0}}]}',
+        )
+    )
+    assert_equal(len(scene.gaussian_splats), 1)
+    var world = scene.world_matrix(scene.gaussian_splats[0][].node)
+    assert_almost_equal(world.transform_point(Vector3(0, 0, 0)).x, 2)
+    with assert_raises(contains="wrong length"):
+        _ = placed(with_nodes('[{"translation":[1,2]}]'))
+    for mesh in [-1, 99]:
+        with assert_raises(contains="missing mesh"):
+            _ = placed(with_nodes('[{"mesh":' + String(mesh) + "}]"))
+
+
+def test_splat_scenes_read_from_gltf_text_and_short_files() raises:
+    var scene = Scene()
+    var ids = read_gltf_gaussian_splat_scene(
+        "assets/gaussian_splat/splats.gltf", scene
+    )
+    assert_equal(len(ids), 4)
+    Path("out/tiny.gltf").write_text("{}")
+    var none = Scene()
+    assert_equal(len(read_gltf_gaussian_splat_scene("out/tiny.gltf", none)), 0)
 
 
 def main() raises:

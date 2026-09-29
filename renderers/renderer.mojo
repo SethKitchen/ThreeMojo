@@ -739,7 +739,7 @@ def _march_volume(
     bound.apply_matrix4(world)
     # On the surfaces of the corners the draw added: the draw's own.
     if begin < len(corners):
-        for surface in range(
+        for surface in range(  # pragma: no branch
             corners.corners[begin].surface, len(corners.surfaces)
         ):
             corners.surfaces[surface].steps = steps
@@ -4080,7 +4080,7 @@ struct _BackdropRays(ImplicitlyCopyable):
         Raises:
             Error: If a texture the background names cannot be read.
         """
-        for y in range(first, past):
+        for y in range(first, past):  # pragma: no branch
             for x in range(self.width):  # pragma: no branch
                 if not self.kept.contains_pixel(
                     x, y, self.height
