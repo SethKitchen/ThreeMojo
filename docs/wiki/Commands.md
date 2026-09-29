@@ -33,7 +33,7 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 
 ## The cache
 
-Results are cached on a SHA-256 of the source contents, the Makefile and the toolchain version. A task with unchanged inputs is skipped. `make -B <task>` forces one. `test-gpu` and `docs-check` are never cached.
+Results are cached on a SHA-256 of the source contents, the Makefile and the toolchain version. A task with unchanged inputs is skipped. `make -B <task>` forces one. `test-gpu` and `docs-check` are never cached. `test-cpu` also caches each suite: a change runs again only the suites that import a changed file or quote a changed asset. `make -B test-cpu` runs every suite.
 
 ## Variables
 
@@ -43,3 +43,4 @@ Results are cached on a SHA-256 of the source contents, the Makefile and the too
 | `COV_BUDGET` | One second per suite, and a minute at least | Seconds the coverage run gets before it is killed. |
 | `GPU_BUDGET` | 300 | Seconds the GPU suite gets. |
 | `JOBS` | The core count | Suites run in parallel. |
+| `TEST_TIMEOUT` | 5 | Seconds one test can take in `test-cpu`. A slower test fails the suite. Make the code under test faster. Do not make the test smaller or raise the limit. |
