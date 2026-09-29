@@ -8,6 +8,8 @@ from core.assets import Assets
 from core.object3d import Object3D, NodeId
 from core.scene import Scene
 from core.scene_optimizer import _carries
+from exporters.gltf import export_gltf
+from exporters.object_json import object_to_json
 from geometries.plane import plane
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from loaders.gltf_gaussian_splat import (
@@ -202,6 +204,20 @@ def test_gltf_splat_nodes_keep_hierarchy_names_and_instance_geometry() raises:
             "",
             bad,
         )
+
+
+def test_exporters_refuse_to_silently_drop_registered_splats() raises:
+    var scene = Scene()
+    var assets = Assets()
+    _ = object_to_json(scene, assets)
+    _ = export_gltf(scene, assets)
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_gaussian_splat(one_red_splat(scene, node))
+    with assert_raises(contains="cannot serialize Gaussian splats"):
+        _ = object_to_json(scene, assets)
+    with assert_raises(contains="cannot serialize Gaussian splats"):
+        _ = export_gltf(scene, assets)
 
 
 def main() raises:

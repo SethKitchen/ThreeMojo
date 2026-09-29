@@ -113,6 +113,6 @@ SPZ uses the same splat limit in every version. The SPZ v4 parser checks its mag
 ## What is not ported
 
 - Names reserve node names before mesh names. Mesh allocation uses file order; three.js can allocate meshes in node traversal order.
-- Scene JSON and glTF exporters do not serialize the new scene splat list. Ray picking still uses `GaussianSplat.raycast` directly.
+- Scene JSON and glTF exporters reject scenes with registered splats. They cannot serialize this data yet. Ray picking still uses `GaussianSplat.raycast` directly.
 - The GPU sort of three.js runs on the CPU here, as the WebGL fallback of three.js does.
 - A `.ksplat` section that holds more splats than its rows is refused. three.js reads on into the next section.
