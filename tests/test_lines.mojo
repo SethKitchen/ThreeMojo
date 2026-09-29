@@ -35,8 +35,10 @@ from render.volume_texture_store import (
 )
 from render.rasterizer import (
     DRAW_SEGMENTS,
+    Corner,
     Draw,
     RasterVertex,
+    Surface,
     SHADE_LIT,
     _frame_band,
     _raise_band_errors,
@@ -48,7 +50,7 @@ from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureStore
 from render.tonemap import NO_TONE_MAPPING
 from render.transmission import TransmissionTarget
-from std.runtime._asyncrt import TaskGroup
+from render.tasks import TaskGroup
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -509,7 +511,7 @@ def one_band(
     mut target: RenderTarget,
     band: Int,
     bands: Int,
-    corners: List[RasterVertex] = List[RasterVertex](),
+    points: List[RasterVertex] = List[RasterVertex](),
     textures: TextureStore = TextureStore(),
     lighting: Lighting = Lighting.uniform(),
     cubes: CubeTextureStore = CubeTextureStore(),
@@ -523,14 +525,21 @@ def one_band(
     """
     var errors = List[String](length=bands, fill=String(""))
     var no_rows = List[Int]()
+    var no_triangles = List[Corner]()
+    var no_surfaces = List[Surface]()
     var group = TaskGroup()
     group.create_task(
         _frame_band(
-            corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            no_triangles.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
+            no_surfaces.unsafe_ptr()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin](),
             no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-            corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+            points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             no_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
             draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
             len(draws),
@@ -554,6 +563,8 @@ def one_band(
     group.wait()
     # The task reads these through pointers the compiler cannot see.
     _ = len(no_rows)
+    _ = len(no_triangles)
+    _ = len(no_surfaces)
     _ = len(segment_rows)
     return errors^
 

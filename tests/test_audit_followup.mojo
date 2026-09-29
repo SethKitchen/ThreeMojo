@@ -145,10 +145,10 @@ def test_scene_splats_render_in_the_transparent_list_and_clone_independently() r
             assert_equal(a.b, b.b)
     var center = single.get_pixel(8, 8)
     assert_true(center.r > 0 and center.g > 0)
-    frame.corners[0].kind = NORMALS
+    frame.surfaces[frame.corners[0].surface].kind = NORMALS
     with assert_raises(contains="tone-mapped frame"):
-        check_output_kinds(frame.corners, True, splats=True)
-    check_output_kinds(frame.corners, False, splats=True)
+        check_output_kinds(frame.surfaces, True, splats=True)
+    check_output_kinds(frame.surfaces, False, splats=True)
     var copied = scene.clone(node)
     assert_equal(len(scene.gaussian_splats), 2)
     scene.gaussian_splats[1][].splat_geometry.colors[0] = 0

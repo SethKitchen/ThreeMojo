@@ -14,6 +14,7 @@ work the page describes.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
@@ -26,8 +27,8 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/math.png"
 comptime WIDTH = 240
@@ -99,6 +100,8 @@ def main() raises:
     )
     camera.place(Vector3(0, 1.1, 3.6), Vector3(0, 0, 0))
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var angle = Angle(
@@ -106,5 +109,12 @@ def main() raises:
         )
         frames.append(frame_at(renderer, camera, assets, scene, node, angle))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

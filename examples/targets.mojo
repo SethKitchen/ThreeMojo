@@ -14,6 +14,7 @@ bright lamp keeps its color. The bottom band is the view-space normal.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
@@ -34,8 +35,8 @@ from render.target import (
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/targets.png"
 comptime WIDTH = 240
@@ -130,6 +131,8 @@ def main() raises:
     camera.place(Vector3(0.15, 0.2, 2.6), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
         scene.node(node).rotate_y(step)
@@ -139,5 +142,12 @@ def main() raises:
         var normals = held.attachment(1)
         frames.append(show(light^, normals^))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

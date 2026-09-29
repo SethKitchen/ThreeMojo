@@ -29,7 +29,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
 | `prepare_points(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [points](Points-and-sprites). A [sprite](Points-and-sprites#sprites) is two triangles, and `prepare` makes them. |
-| `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
+| `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). The triangles are slim corners and their surfaces; `whole_corners()` gives them whole. See [Slim corners](Rasterization#slim-corners). |
 | `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. A target with `samples` is drawn at its sample grid and resolved into its pixels. See below. |
 | `render_with(hooks, scene, assets, camera)`, `render_into_with(hooks, target, scene, assets, camera)` | The same, with render hooks. See [Renderer hooks and material flags](Renderer-hooks-and-material-flags). |

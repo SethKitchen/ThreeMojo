@@ -541,6 +541,10 @@ def rasterize_depth(
 
 # What a thin film is, in nanometers, when a material names no range:
 # three.js's `iridescenceThicknessRange` of `[ 100, 400 ]`.
+# An origin the borrow checker does not track, for a view that reads a
+# store it knows outlives it; `postprocessing.sampling` names the same.
+comptime _Untracked = UntrackedOrigin[mut=False]
+
 comptime DEFAULT_THICKNESS_MINIMUM = Float32(100)
 comptime DEFAULT_THICKNESS_MAXIMUM = Float32(400)
 # The film's index of refraction when a material names none: three.js's
@@ -1328,6 +1332,503 @@ struct RasterVertex(ImplicitlyCopyable):
         self.lights = 0
         self.steps = DEFAULT_STEPS
         self.model_radius = 0
+
+
+@fieldwise_init
+struct Corner(ImplicitlyCopyable):
+    """The part of a `RasterVertex` that differs from corner to corner: its
+    place on the screen and its varyings, and the index of its draw's
+    `Surface` in the frame's list.
+
+    A draw's corners share one `Surface`, so a frame of many triangles
+    carries each material once rather than once a corner. `joined` puts the
+    two back together.
+    """
+
+    # Screen-space pixel coordinates.
+    var x: Float32
+    var y: Float32
+    # NDC depth, already divided. Interpolated affinely in screen space, which
+    # is correct: the projection makes depth linear in screen space precisely
+    # so that a depth buffer can work this way. Do not put this through
+    # `inv_w` as well.
+    var z: Float32
+    # The reciprocal of the clip-space w this corner was divided by.
+    var inv_w: Float32
+    # The surface's own color, in linear light, with the material's opacity
+    # already in its alpha. Not lit: lighting happens per fragment now, so
+    # what a corner carries is what the material says rather than what that
+    # one corner caught.
+    var color: FloatColor
+    # The world-space normal. Interpolated across the triangle and normalized
+    # again at every fragment, which is what makes the shading per-fragment
+    # rather than per-vertex. Already flipped by `Renderer.prepare` if this
+    # triangle is being seen from behind.
+    var normal: Vector3
+    # Texture coordinates, interpolated the same perspective-correct way the
+    # color is. They reach the fragment rather than being folded into the
+    # color at the vertex, because that is what sampling a texture will need.
+    # Raw: the geometry's `uv`, not moved by any map. Each map places them
+    # at the fragment by its own `UvPlacement`.
+    var u: Float32
+    var v: Float32
+    # Where this corner is in the world, for lights that have a position. A
+    # directional light needs only the normal; a point light needs to know
+    # how far the surface is from the bulb and in which direction, and the
+    # projection threw that away. Interpolated perspective-correctly like the
+    # normal, so a fragment knows where *it* is.
+    var world: Vector3
+    # Light this surface gives off, linear, added after the lights and
+    # untouched by them: three.js's `emissive`. Interpolated like the color,
+    # and multiplied per fragment by `emissive_map` when there is one.
+    var emissive: FloatColor
+    # How far in front of the camera this corner is, in meters: three.js's
+    # `vFogDepth`, minus the camera-space z, taken from the clipped
+    # position as it is projected. Interpolated with perspective correction
+    # like the color, so a fragment reads its fog off a small number
+    # rather than recovering it from a large world coordinate, which
+    # rounds the depth away far from the origin. Read only by the fog.
+    var view_depth: Float32
+    # How far along its line this corner is, three.js's `vLineDistance`,
+    # already scaled by the material. A varying, interpolated with
+    # perspective correction like the color, and read by a dashed line
+    # alone; a triangle's corners carry zero.
+    var line_distance: Float32
+    # How many pixels across a point is, on the image, with any
+    # attenuation already applied: three.js's `gl_PointSize`. Read by a
+    # point alone, which is one corner rather than three or two; a
+    # triangle's corners and a segment's ends carry zero.
+    var point_size: Float32
+    # The second texture coordinates, raw: the geometry's `uv1`, or its
+    # `uv` when it has none. A map whose texture's `channel` is
+    # `UV_CHANNEL_1` is sampled here, placed by its own transform. A
+    # varying, interpolated like `u` and `v`.
+    var u1: Float32
+    var v1: Float32
+    # Whether the triangle is seen from its back, and whether its material
+    # is `BACK_SIDE`, for a node program's facing. Per-triangle, read from
+    # the first corner. Set after construction, by `Renderer.prepare`; the
+    # default is a front seen from the front.
+    var seen_from_behind: Bool
+    # The custom attributes a node program reads, `MAX_ATTRIBUTE_FLOATS`
+    # floats. Set after construction, by `Renderer.prepare`; zeros by
+    # default.
+    var custom: SIMD[DType.float32, 8]
+    # A `GOURAUD` corner's light, three.js's `vLightFront` and
+    # `vIndirectFront`, and the light of its far side, `vLightBack` and
+    # `vIndirectBack`, which `Renderer.prepare` puts in front when the far
+    # side is the one drawn. Set after construction; zeros by default.
+    var gouraud_direct: Vector3
+    var gouraud_indirect: Vector3
+    var gouraud_back_direct: Vector3
+    var gouraud_back_indirect: Vector3
+    # Where this frame's and the last frame's matrices put the corner in
+    # clip space, as x, y and w: what a velocity attachment reads,
+    # three.js's `clipPositionCurrent` and `clipPositionPrevious`. Set
+    # after construction, by `Renderer.prepare`, for a frame that keeps
+    # velocities; zeros by default, which is no motion. See
+    # `fragment_velocity`.
+    var current: Vector3
+    var previous: Vector3
+    # The index of the corner's `Surface` in the frame's list.
+    var surface: Int
+
+
+@fieldwise_init
+struct Surface(ImplicitlyCopyable):
+    """The part of a `RasterVertex` that one draw's corners share: its
+    material, as the rasterizer reads it. See `Corner`."""
+
+    # `OPAQUE` or `BLEND`, resolved from the material by `Renderer.prepare`
+    # rather than guessed at from this vertex's alpha. Per-triangle metadata,
+    # like the texture below: the whole triangle comes from one material, so
+    # all three corners carry the same answer and the first is read.
+    var blend: Blending
+    # Which texture to sample, or `NO_TEXTURE` for none. It travels with the
+    # vertex because `Renderer.prepare` returns one flat list of triangles for
+    # a whole scene, and the meshes in a scene need not share a material.
+    var texture: TextureId
+    # What kind of surface this is: `LAMBERT`, lit by the scene's lights;
+    # `BASIC`, its own color whatever the lights do -- a sky, a sprite, an
+    # overlay; `NORMALS`, the normal written as a color; or `DEPTH`, how
+    # far away it is. The last two show data rather than light, and a
+    # `NORMALS` corner's `normal` is in view space rather than world space,
+    # since it is shown rather than lit. Per-triangle metadata like the
+    # blend policy: read from the first corner, checked to agree.
+    var kind: MaterialKind
+    # Which texture multiplies the emissive, or `NO_TEXTURE`. Per-triangle
+    # metadata like `texture`: read from the first corner, checked to agree.
+    var emissive_map: TextureId
+    # Which texture's green channel thins this surface, or `NO_TEXTURE`:
+    # three.js's `alphaMap`. Per-triangle metadata like `texture`.
+    var alpha_map: TextureId
+    # The alpha a fragment must reach to be drawn, three.js's `alphaTest`.
+    # Zero draws every fragment. Per-triangle metadata rather than a
+    # varying, and the only float among it: all three corners carry the
+    # material's number and the first is read.
+    var alpha_test: Float32
+    # How much light this surface sends toward the camera, linear: a
+    # `PHONG` material's `specular`. Interpolated like the emissive, which
+    # is also one color per material, and for the same reason -- a varying
+    # costs the same as a constant here and needs no second mechanism.
+    var specular: FloatColor
+    # How tight that highlight is, three.js's `shininess`. Per-triangle
+    # like the alpha test, and read from the first corner.
+    var shininess: Float32
+    # Which image a `MATCAP` surface is looked up in, or `NO_TEXTURE`
+    # for three.js's gray gradient. Per-triangle metadata like `texture`,
+    # and sampled at a coordinate the normal decides rather than at the
+    # surface's own, so its transform never applies.
+    var matcap: TextureId
+    # Which texture's top row is the ramp a `TOON` surface steps through,
+    # or `NO_TEXTURE` for three.js's fallback: three.js's `gradientMap`.
+    # Per-triangle metadata like `texture`, and read at no surface
+    # coordinate, so its own transform never applies.
+    var gradient_map: TextureId
+    # How long each dash is and how long the gap after it, in the units
+    # the distance is measured in: three.js's `dashSize` and `gapSize`.
+    # Per-segment metadata like the blend policy, read from the first end
+    # and checked to agree. A gap of zero is a solid line.
+    var dash_size: Float32
+    var gap_size: Float32
+    # Which cube texture this surface reflects, or `NO_CUBE_TEXTURE` for
+    # none: three.js's `envMap`, already resolved from `SCENE_ENVIRONMENT`
+    # by `Renderer.prepare`. Per-triangle metadata like `texture`, read
+    # from the first corner and checked to agree. Sampled by the camera's
+    # view turned back through the normal, so no surface coordinate and
+    # no transform applies to it.
+    var env_map: CubeTextureId
+    # How much of the reflection joins the surface's light, three.js's
+    # `reflectivity`, and how it joins, three.js's `combine`. Per-triangle
+    # like the shininess and the blend policy, read from the first corner.
+    var reflectivity: Float32
+    var combine: Combine
+    # How rough a physical surface is and how much of a metal, three.js's
+    # `roughness` and `metalness`, and what its environment is multiplied
+    # by, three.js's `envMapIntensity`. Per-triangle like the shininess,
+    # read from the first corner; only a `STANDARD` or `PHYSICAL` triangle
+    # reads them. The two maps multiply them per texel: green for the
+    # roughness, blue for the metalness, as three.js reads them.
+    var roughness: Float32
+    var metalness: Float32
+    var env_map_intensity: Float32
+    var roughness_map: TextureId
+    var metalness_map: TextureId
+    # What a `PHYSICAL` surface's reflectance is scaled by at a grazing
+    # angle, three.js's `specularIntensity`; its reflectance head on rides
+    # in `specular`, as a `PHONG` triangle's does. How much clear coat
+    # lies over it and how rough that coat is. Per-triangle, read from the
+    # first corner.
+    var specular_intensity: Float32
+    var clearcoat: Float32
+    var clearcoat_roughness: Float32
+    # A texture of tangent-space normals and what its x and y are scaled
+    # by, or a texture of heights and what they are scaled by: three.js's
+    # `normalMap`, `normalScale`, `bumpMap` and `bumpScale`. Per-triangle.
+    # The renderer negates both scales when it turns a corner around, so
+    # a back face is perturbed the way three.js's `faceDirection` perturbs
+    # it; see `mapped_normal`.
+    var normal_map: TextureId
+    var normal_scale: Vector2
+    var bump_map: TextureId
+    var bump_scale: Float32
+    # Whether the lights' shadows fall on this surface, three.js's
+    # `receiveShadow`. Per-triangle, read from the first corner. On by
+    # default here, where a mesh's is off: a hand-built corner asks for
+    # every shadow the lighting holds, and the renderer says otherwise.
+    var receives_shadow: Bool
+    # The depth, color and stencil state, three.js's `depthTest`,
+    # `colorWrite`, `stencilFunc` and the rest; see `render.raster_state`.
+    # Per-primitive metadata like the blend policy: read from the first
+    # corner, checked to agree. Any polygon offset is already in `z`.
+    var state: RasterState
+    # A texture whose red channel dims the indirect light and how strongly,
+    # three.js's `aoMap` and `aoMapIntensity`, and a texture of baked light
+    # and what it is scaled by, three.js's `lightMap` and
+    # `lightMapIntensity`. Per-triangle, read from the first corner.
+    var ao_map: TextureId
+    var ao_map_intensity: Float32
+    var light_map: TextureId
+    var light_map_intensity: Float32
+    # Which texture's red channel scales the highlight and the reflection,
+    # or `NO_TEXTURE`: three.js's `specularMap`. Per-triangle like
+    # `texture`, and read by a `BASIC`, `LAMBERT` or `PHONG` triangle only.
+    var specular_map: TextureId
+    # How much of a `PHYSICAL` surface's diffuse light is the opaque scene
+    # seen through it, three.js's `transmission`, and the texture whose red
+    # multiplies it. How deep the volume is along each world axis: the
+    # material's thickness times the length of each axis of the draw's
+    # world matrix, three.js's `thickness * modelScale`, and the texture
+    # whose green multiplies it. The color white light becomes inside,
+    # linear, and how far it travels to become it, infinite for never. How
+    # far the channels bend apart, and the index they bend at. All
+    # per-triangle, read from the first corner. See `render.transmission`.
+    var transmission: Float32
+    var transmission_map: TextureId
+    var thickness: Vector3
+    var thickness_map: TextureId
+    var attenuation_color: FloatColor
+    var attenuation_distance: Float32
+    var dispersion: Float32
+    var ior: Float32
+    # Whether the scene's fog veils this primitive, three.js's `fog`.
+    # Per-primitive metadata like the blend policy: read from the first
+    # corner, checked to agree. A data triangle is never fogged, whatever
+    # this says.
+    var fog: Bool
+    # How a `DEPTH` triangle writes its depth, three.js's `depthPacking`.
+    # Per-triangle metadata like the kind; see `render.packing`.
+    var depth_packing: DepthPacking
+    # Where a `DISTANCE` triangle measures from, in world space, and the
+    # distances, in meters, that map to zero and to one: three.js's
+    # `referencePosition`, `nearDistance` and `farDistance`. Per-triangle,
+    # read from the first corner; no other kind reads them.
+    var reference: Vector3
+    var near_distance: Float32
+    var far_distance: Float32
+    # A `PHYSICAL` triangle's sheen, iridescence and anisotropy, and their
+    # maps. Per-triangle, read from the first corner.
+    var layers: LayerFactors
+    # Which compiled node graph replaces parts of this triangle's shading,
+    # or `NO_NODES`: a node material's program, in the store the
+    # rasterizer is handed. Per-triangle like `texture`, read from the
+    # first corner. See `materials.nodes`.
+    var nodes: NodeProgramId
+    # The frames the environment and the normal map are read in. Set after
+    # construction, by `Renderer.prepare`; the defaults are three.js's.
+    var frames: TextureFrames
+    var flip_sided: Bool
+    # A `PHONG` triangle's light through from behind, three.js's
+    # `SubsurfaceScatteringShader`: the thickness map, or `NO_TEXTURE` for
+    # none; the color, linear; and the distortion, ambient, attenuation,
+    # power and scale. Per-triangle, read from the first corner. Set after
+    # construction, by `Renderer.prepare`; off by default.
+    var scatter_map: TextureId
+    var scatter_color: FloatColor
+    var scatter_distortion: Float32
+    var scatter_ambient: Float32
+    var scatter_attenuation: Float32
+    var scatter_power: Float32
+    var scatter_scale: Float32
+    # Which of the frame's lightings lights the triangle, read from the
+    # first corner: zero for the frame's own, every light the camera sees,
+    # and one past that for each `LightMask` a material names, in
+    # `Renderer.light_masks` order. See `rasterize_frame`'s `lightings`.
+    var lights: Int
+    # A `VOLUME` triangle's ray: how many steps it takes, three.js's
+    # `steps`, and the mesh's bounding radius in world space, three.js's
+    # `modelRadius`. Per-triangle, read from the first corner. Set after
+    # construction, by `Renderer.prepare`; see
+    # `materials.volume_node_material`.
+    var steps: Int
+    var model_radius: Float32
+
+
+def joined(corner: Corner, surface: Surface) -> RasterVertex:
+    """Return the `RasterVertex` a corner and its surface make together.
+
+    Args:
+        corner: The corner's own values.
+        surface: Its draw's material.
+
+    Returns:
+        The whole vertex.
+    """
+    var vertex = RasterVertex(
+        corner.x, corner.y, corner.z, corner.inv_w, corner.color
+    )
+    vertex.normal = corner.normal
+    vertex.u = corner.u
+    vertex.v = corner.v
+    vertex.world = corner.world
+    vertex.emissive = corner.emissive
+    vertex.view_depth = corner.view_depth
+    vertex.line_distance = corner.line_distance
+    vertex.point_size = corner.point_size
+    vertex.u1 = corner.u1
+    vertex.v1 = corner.v1
+    vertex.seen_from_behind = corner.seen_from_behind
+    vertex.custom = corner.custom
+    vertex.gouraud_direct = corner.gouraud_direct
+    vertex.gouraud_indirect = corner.gouraud_indirect
+    vertex.gouraud_back_direct = corner.gouraud_back_direct
+    vertex.gouraud_back_indirect = corner.gouraud_back_indirect
+    vertex.current = corner.current
+    vertex.previous = corner.previous
+    vertex.blend = surface.blend
+    vertex.texture = surface.texture
+    vertex.kind = surface.kind
+    vertex.emissive_map = surface.emissive_map
+    vertex.alpha_map = surface.alpha_map
+    vertex.alpha_test = surface.alpha_test
+    vertex.specular = surface.specular
+    vertex.shininess = surface.shininess
+    vertex.matcap = surface.matcap
+    vertex.gradient_map = surface.gradient_map
+    vertex.dash_size = surface.dash_size
+    vertex.gap_size = surface.gap_size
+    vertex.env_map = surface.env_map
+    vertex.reflectivity = surface.reflectivity
+    vertex.combine = surface.combine
+    vertex.roughness = surface.roughness
+    vertex.metalness = surface.metalness
+    vertex.env_map_intensity = surface.env_map_intensity
+    vertex.roughness_map = surface.roughness_map
+    vertex.metalness_map = surface.metalness_map
+    vertex.specular_intensity = surface.specular_intensity
+    vertex.clearcoat = surface.clearcoat
+    vertex.clearcoat_roughness = surface.clearcoat_roughness
+    vertex.normal_map = surface.normal_map
+    vertex.normal_scale = surface.normal_scale
+    vertex.bump_map = surface.bump_map
+    vertex.bump_scale = surface.bump_scale
+    vertex.receives_shadow = surface.receives_shadow
+    vertex.state = surface.state
+    vertex.ao_map = surface.ao_map
+    vertex.ao_map_intensity = surface.ao_map_intensity
+    vertex.light_map = surface.light_map
+    vertex.light_map_intensity = surface.light_map_intensity
+    vertex.specular_map = surface.specular_map
+    vertex.transmission = surface.transmission
+    vertex.transmission_map = surface.transmission_map
+    vertex.thickness = surface.thickness
+    vertex.thickness_map = surface.thickness_map
+    vertex.attenuation_color = surface.attenuation_color
+    vertex.attenuation_distance = surface.attenuation_distance
+    vertex.dispersion = surface.dispersion
+    vertex.ior = surface.ior
+    vertex.fog = surface.fog
+    vertex.depth_packing = surface.depth_packing
+    vertex.reference = surface.reference
+    vertex.near_distance = surface.near_distance
+    vertex.far_distance = surface.far_distance
+    vertex.layers = surface.layers
+    vertex.nodes = surface.nodes
+    vertex.frames = surface.frames
+    vertex.flip_sided = surface.flip_sided
+    vertex.scatter_map = surface.scatter_map
+    vertex.scatter_color = surface.scatter_color
+    vertex.scatter_distortion = surface.scatter_distortion
+    vertex.scatter_ambient = surface.scatter_ambient
+    vertex.scatter_attenuation = surface.scatter_attenuation
+    vertex.scatter_power = surface.scatter_power
+    vertex.scatter_scale = surface.scatter_scale
+    vertex.lights = surface.lights
+    vertex.steps = surface.steps
+    vertex.model_radius = surface.model_radius
+    return vertex^
+
+
+def corner_of(vertex: RasterVertex, surface: Int) -> Corner:
+    """Return the part of a vertex that is its own, naming its surface.
+
+    Args:
+        vertex: The whole vertex.
+        surface: The index of its `Surface` in the frame's list.
+
+    Returns:
+        The corner.
+    """
+    return Corner(
+        vertex.x,
+        vertex.y,
+        vertex.z,
+        vertex.inv_w,
+        vertex.color,
+        vertex.normal,
+        vertex.u,
+        vertex.v,
+        vertex.world,
+        vertex.emissive,
+        vertex.view_depth,
+        vertex.line_distance,
+        vertex.point_size,
+        vertex.u1,
+        vertex.v1,
+        vertex.seen_from_behind,
+        vertex.custom,
+        vertex.gouraud_direct,
+        vertex.gouraud_indirect,
+        vertex.gouraud_back_direct,
+        vertex.gouraud_back_indirect,
+        vertex.current,
+        vertex.previous,
+        surface,
+    )
+
+
+def surface_of(vertex: RasterVertex) -> Surface:
+    """Return the part of a vertex its draw's other corners share.
+
+    Args:
+        vertex: The whole vertex.
+
+    Returns:
+        Its surface.
+    """
+    return Surface(
+        vertex.blend,
+        vertex.texture,
+        vertex.kind,
+        vertex.emissive_map,
+        vertex.alpha_map,
+        vertex.alpha_test,
+        vertex.specular,
+        vertex.shininess,
+        vertex.matcap,
+        vertex.gradient_map,
+        vertex.dash_size,
+        vertex.gap_size,
+        vertex.env_map,
+        vertex.reflectivity,
+        vertex.combine,
+        vertex.roughness,
+        vertex.metalness,
+        vertex.env_map_intensity,
+        vertex.roughness_map,
+        vertex.metalness_map,
+        vertex.specular_intensity,
+        vertex.clearcoat,
+        vertex.clearcoat_roughness,
+        vertex.normal_map,
+        vertex.normal_scale,
+        vertex.bump_map,
+        vertex.bump_scale,
+        vertex.receives_shadow,
+        vertex.state,
+        vertex.ao_map,
+        vertex.ao_map_intensity,
+        vertex.light_map,
+        vertex.light_map_intensity,
+        vertex.specular_map,
+        vertex.transmission,
+        vertex.transmission_map,
+        vertex.thickness,
+        vertex.thickness_map,
+        vertex.attenuation_color,
+        vertex.attenuation_distance,
+        vertex.dispersion,
+        vertex.ior,
+        vertex.fog,
+        vertex.depth_packing,
+        vertex.reference,
+        vertex.near_distance,
+        vertex.far_distance,
+        vertex.layers,
+        vertex.nodes,
+        vertex.frames,
+        vertex.flip_sided,
+        vertex.scatter_map,
+        vertex.scatter_color,
+        vertex.scatter_distortion,
+        vertex.scatter_ambient,
+        vertex.scatter_attenuation,
+        vertex.scatter_power,
+        vertex.scatter_scale,
+        vertex.lights,
+        vertex.steps,
+        vertex.model_radius,
+    )
 
 
 @fieldwise_init
@@ -2521,6 +3022,35 @@ def _is_unit_fraction(value: Float32) -> Bool:
 
 
 def check_output_kinds(
+    surfaces: List[Surface],
+    mapped: Bool,
+    segments: List[RasterVertex] = List[RasterVertex](),
+    points: List[RasterVertex] = List[RasterVertex](),
+    splats: Bool = False,
+) raises:
+    """`check_output_kinds` for a frame held as slim corners: each surface
+    counts as a triangle of it, since the corners of a draw share it.
+
+    Args:
+        surfaces: What the frame's triangles wear, each used by one or more.
+        mapped: Whether this frame resolves through a tone mapping curve.
+        segments: Raster vertices, two per segment.
+        points: Raster vertices, one per point.
+        splats: Whether projected splats add blended light.
+
+    Raises:
+        Error: As the other overload.
+    """
+    var faces = List[RasterVertex](capacity=len(surfaces) * 3)
+    for surface in range(len(surfaces)):
+        var face = _surface_vertex(surfaces[surface])
+        faces.append(face)
+        faces.append(face)
+        faces.append(face)
+    check_output_kinds(faces, mapped, segments, points, splats)
+
+
+def check_output_kinds(
     corners: List[RasterVertex],
     mapped: Bool,
     segments: List[RasterVertex] = List[RasterVertex](),
@@ -3257,6 +3787,7 @@ def rasterize_shaded(
     programs: NodeProgramStore = NodeProgramStore(),
     volumes: Data3DTextureStore = Data3DTextureStore(),
     arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    checked: Bool = False,
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -3334,6 +3865,10 @@ def rasterize_shaded(
             `materials.nodes`.
         volumes: Where the node program's 3D textures live.
         arrays: Where the node program's array textures live.
+        checked: True when the caller has already asked the triangle's
+            state, maps and transmission of its surface, as
+            `rasterize_frame` asks them once a surface; False, the default,
+            to ask them here.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -3350,15 +3885,18 @@ def rasterize_shaded(
     """
     if not mode.is_valid():
         raise Error("A shading mode that is none of the four")
-    check_triangle_state(a, b, c)
+    # A frame that asked these of each surface already passes `checked`.
+    if not checked:
+        check_triangle_state(a, b, c)
     # A view of the fog can be built by hand, and its fields are open:
     # refused here, before a fragment reads it, as the GPU refuses it
     # before the launch.
     fog.validate()
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
-    check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
-    check_transmission(a, mode, transmission.is_ready(), programs)
+    if not checked:
+        check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
+        check_transmission(a, mode, transmission.is_ready(), programs)
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -5027,6 +5565,35 @@ def rasterize_shaded(
         row = row + down
 
 
+def _code_of(
+    programs: NodeProgramStore, program: Int
+) -> Pointer[Float32, _Untracked]:
+    """Return where a program's code starts, for a view that reads it word
+    by word. With no program there is no code to read, and a fragment
+    without one asks for none, so the store's own storage stands in.
+
+    Args:
+        programs: The store, which outlives the view.
+        program: The program's index, or one outside the store for none.
+
+    Returns:
+        The first word of the code.
+    """
+    if program < 0 or program >= len(programs.programs):
+        return (
+            programs.programs.unsafe_ptr()
+            .unsafe_bitcast[Float32]()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[_Untracked]()
+        )
+    return (
+        programs.programs[program]
+        .code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[_Untracked]()
+    )
+
+
 struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
@@ -5034,6 +5601,10 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5072,6 +5643,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         pixels, at the pixel (0, 0), and the opaque scene behind it."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5089,7 +5661,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) for this fragment, as
@@ -5213,6 +5785,10 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5242,6 +5818,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5255,7 +5832,7 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) at the level the point's size
@@ -5370,6 +5947,10 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     var programs: Pointer[NodeProgramStore, Self.origin]
     var program: Int
+    # The program's code, held once so that each word the interpreter reads
+    # is one load and not a walk through the store. The store outlives this
+    # view, as `ScreenNodes` holds its code.
+    var code: Pointer[Float32, _Untracked]
     var textures: Pointer[TextureStore, Self.origin]
     var cubes: Pointer[CubeTextureStore, Self.origin]
     var volumes: Pointer[Data3DTextureStore, Self.origin]
@@ -5401,6 +5982,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         pixels, at the pixel (0, 0)."""
         self.programs = programs
         self.program = program
+        self.code = _code_of(programs[], program)
         self.textures = textures
         self.cubes = cubes
         self.volumes = volumes
@@ -5415,7 +5997,7 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
 
     def word(self, at: Int) -> Float32:
         """Return one float of the program."""
-        return self.programs[].programs[self.program].code[at]
+        return self.code[unsafe_offset=at]
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return a texture read at (u, v) from its full-size level: a line
@@ -6373,7 +6955,8 @@ def _lit_by(
 
 
 async def _frame_band(
-    corners: Pointer[RasterVertex, ImmutAnyOrigin],
+    corners: Pointer[Corner, ImmutAnyOrigin],
+    surfaces: Pointer[Surface, ImmutAnyOrigin],
     triangle_rows: MutPointer[Int, MutAnyOrigin],
     segments: Pointer[RasterVertex, ImmutAnyOrigin],
     segment_rows: MutPointer[Int, MutAnyOrigin],
@@ -6441,18 +7024,19 @@ async def _frame_band(
                         < first_row
                     ):
                         continue
+                    # The whole corners are put together here, where they
+                    # stay in the cache for the one triangle, from the slim
+                    # ones the frame holds.
+                    ref first = corners[unsafe_offset=triangle * 3]
+                    ref look = surfaces[unsafe_offset=first.surface]
                     rasterize_shaded(
-                        corners[unsafe_offset=triangle * 3],
-                        corners[unsafe_offset=triangle * 3 + 1],
-                        corners[unsafe_offset=triangle * 3 + 2],
+                        joined(first, look),
+                        joined(corners[unsafe_offset=triangle * 3 + 1], look),
+                        joined(corners[unsafe_offset=triangle * 3 + 2], look),
                         target[],
                         mode,
                         textures[],
-                        _lit_by(
-                            corners[unsafe_offset=triangle * 3].lights,
-                            lighting,
-                            lightings,
-                        )[],
+                        _lit_by(look.lights, lighting, lightings)[],
                         first_row,
                         last_row,
                         fog,
@@ -6461,6 +7045,7 @@ async def _frame_band(
                         programs[],
                         volumes[],
                         arrays[],
+                        checked=True,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -6532,6 +7117,132 @@ def _raise_band_errors(errors: List[String]) raises:
     for band in range(len(errors)):
         if errors[band] != "":
             raise Error(errors[band])
+
+
+def _split_triangles(
+    corners: List[RasterVertex],
+) -> Tuple[List[Corner], List[Surface]]:
+    """Return whole corners as slim ones and a surface a triangle, each
+    triangle's taken from its first corner, as the checks read it."""
+    var slim = List[Corner](capacity=len(corners))
+    var surfaces = List[Surface](capacity=len(corners) // 3)
+    for triangle in range(len(corners) // 3):
+        surfaces.append(surface_of(corners[triangle * 3]))
+        for corner in range(3):  # pragma: no branch
+            slim.append(corner_of(corners[triangle * 3 + corner], triangle))
+    return (slim^, surfaces^)
+
+
+def _surface_vertex(surface: Surface) -> RasterVertex:
+    """Return a whole corner at the origin wearing `surface`, for the checks
+    that read only what a surface holds."""
+    return joined(
+        corner_of(RasterVertex(0, 0, 0, 1, FloatColor(0.0, 0.0, 0.0)), 0),
+        surface,
+    )
+
+
+def _rows_of_corners(corners: List[Corner]) -> List[Int]:
+    """Return each triangle's top and bottom rows, as `_rows_of` does for
+    whole corners three a triangle."""
+    var rows = List[Int]()
+    var count = len(corners) // 3
+    rows.reserve(count * 2)
+    for index in range(count):
+        var top = corners[index * 3].y
+        var bottom = top
+        for corner in range(1, 3):  # pragma: no branch
+            var y = corners[index * 3 + corner].y
+            top = min(top, y)
+            bottom = max(bottom, y)
+        rows.append(Int(floor(top)))
+        rows.append(Int(ceil(bottom)))
+    return rows^
+
+
+def _check_frame(
+    corners: List[RasterVertex],
+    segments: List[RasterVertex],
+    draws: List[Draw],
+    mode: ShadeMode,
+    textures: TextureStore,
+    workers: Int,
+    fog: FogView,
+    points: List[RasterVertex],
+    cubes: CubeTextureStore,
+    transmission: TransmissionTarget,
+    programs: NodeProgramStore,
+    volumes: Data3DTextureStore,
+    arrays: DataArrayTextureStore,
+    lightings: List[Lighting],
+    splats: Int = 0,
+) raises:
+    """Refuse a frame before any of it is drawn: the checks of
+    `rasterize_frame`, on whole corners, with `splats` projected splats."""
+    if len(corners) % 3 != 0:
+        raise Error("Rasterizing needs whole triangles")
+    if len(segments) % 2 != 0:
+        raise Error("Rasterizing needs whole segments")
+    if workers < 1:
+        raise Error("Rasterizing needs at least one worker")
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the four")
+    # Refused here, before any band starts, for the reason the triangle
+    # state is: whether or not a triangle is visible, and however many
+    # workers there are.
+    fog.validate()
+    var triangles = len(corners) // 3
+    var lines = len(segments) // 2
+    for triangle in range(triangles):
+        check_triangle_state(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+        )
+        # And its maps, for the same reason: a band skips a triangle its
+        # rows miss before `rasterize_shaded` can open them, so without
+        # this a bad map on a triangle above the image was refused on one
+        # worker and drawn around on four.
+        check_triangle_maps(
+            corners[triangle * 3],
+            mode,
+            textures,
+            cubes,
+            programs,
+            volumes,
+            arrays,
+        )
+        var named = corners[triangle * 3].lights
+        if named < 0 or named > len(lightings):
+            raise Error("A triangle names a lighting the frame does not have")
+    for segment in range(lines):
+        check_line_state(segments[segment * 2], segments[segment * 2 + 1])
+        check_program_maps(
+            segments[segment * 2].nodes,
+            mode,
+            textures,
+            cubes,
+            programs,
+            volumes,
+            arrays,
+        )
+    for point in range(len(points)):
+        check_point_state(points[point])
+        check_point_maps(
+            points[point], mode, textures, cubes, programs, volumes, arrays
+        )
+    check_draws(draws, triangles, lines, len(points), splats)
+    # Asked of the triangles a draw names rather than of the whole list:
+    # the transmission pass draws the opaque runs of a frame that holds
+    # transmissive triangles too, before there is a scene for them to
+    # look through.
+    var ready = transmission.is_ready()
+    for index in range(len(draws)):
+        ref draw = draws[index]
+        if draw.kind != DRAW_TRIANGLES:
+            continue
+        for triangle in range(draw.first, draw.first + draw.count):
+            check_transmission(corners[triangle * 3], mode, ready, programs)
 
 
 def rasterize_frame(
@@ -6625,71 +7336,206 @@ def rasterize_frame(
             refused as it is drawn -- on a worker that error is carried
             back and raised here.
     """
+    _check_frame(
+        corners,
+        segments,
+        draws,
+        mode,
+        textures,
+        workers,
+        fog,
+        points,
+        cubes,
+        transmission,
+        programs,
+        volumes,
+        arrays,
+        lightings,
+        len(splats),
+    )
+    var split = _split_triangles(corners)
+    _draw_frame(
+        corners=split[0],
+        surfaces=split[1],
+        segments=segments,
+        draws=draws,
+        target=target,
+        mode=mode,
+        textures=textures,
+        lighting=lighting,
+        workers=workers,
+        fog=fog,
+        points=points,
+        cubes=cubes,
+        line_width=line_width,
+        transmission=transmission,
+        programs=programs,
+        volumes=volumes,
+        arrays=arrays,
+        lightings=lightings,
+        splats=splats,
+    )
+
+
+def rasterize_frame(
+    corners: List[Corner],
+    surfaces: List[Surface],
+    segments: List[RasterVertex],
+    draws: List[Draw],
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+    points: List[RasterVertex] = List[RasterVertex](),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    line_width: Int = 1,
+    transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    lightings: List[Lighting] = List[Lighting](),
+    splats: List[ProjectedSplat] = List[ProjectedSplat](),
+) raises:
+    """Draw a frame held as slim corners and the surfaces they name, as
+    `Renderer.prepare_frame` holds it: `rasterize_frame` on whole corners,
+    with each surface asked once rather than each triangle.
+
+    Args:
+        corners: Three a triangle, each naming its surface.
+        surfaces: What the corners of each draw share.
+        segments: Raster vertices, two per segment.
+        draws: The order, as for the other overload.
+        target: What is drawn into.
+        mode: The shading mode.
+        textures: The textures the corners name.
+        lighting: The frame's lights.
+        workers: How many bands to draw at once.
+        fog: The scene's fog.
+        points: Raster vertices, one per point.
+        cubes: The cube textures the corners name.
+        line_width: The width of a segment, in pixels.
+        transmission: The opaque scene behind, for transmission.
+        programs: The node programs the corners name.
+        volumes: The 3D textures the programs name.
+        arrays: The array textures the programs name.
+        lightings: The lightings a surface's `lights` names, past the
+            frame's own.
+        splats: Projected Gaussian splats referenced by DRAW_SPLATS runs.
+
+    Raises:
+        Error: As the other overload, and also if a triangle's corners name
+            different surfaces or a corner names one the list does not have.
+    """
     if len(corners) % 3 != 0:
         raise Error("Rasterizing needs whole triangles")
-    if len(segments) % 2 != 0:
-        raise Error("Rasterizing needs whole segments")
-    if workers < 1:
-        raise Error("Rasterizing needs at least one worker")
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
-    # Refused here, before any band starts, for the reason the triangle
-    # state is: whether or not a triangle is visible, and however many
-    # workers there are.
-    fog.validate()
     var triangles = len(corners) // 3
-    var lines = len(segments) // 2
     for triangle in range(triangles):
-        check_triangle_state(
-            corners[triangle * 3],
-            corners[triangle * 3 + 1],
-            corners[triangle * 3 + 2],
-        )
-        # And its maps, for the same reason: a band skips a triangle its
-        # rows miss before `rasterize_shaded` can open them, so without
-        # this a bad map on a triangle above the image was refused on one
-        # worker and drawn around on four.
-        check_triangle_maps(
-            corners[triangle * 3],
-            mode,
-            textures,
-            cubes,
-            programs,
-            volumes,
-            arrays,
-        )
-        var named = corners[triangle * 3].lights
-        if named < 0 or named > len(lightings):
-            raise Error("A triangle names a lighting the frame does not have")
-    for segment in range(lines):
-        check_line_state(segments[segment * 2], segments[segment * 2 + 1])
-        check_program_maps(
-            segments[segment * 2].nodes,
-            mode,
-            textures,
-            cubes,
-            programs,
-            volumes,
-            arrays,
-        )
-    for point in range(len(points)):
-        check_point_state(points[point])
-        check_point_maps(
-            points[point], mode, textures, cubes, programs, volumes, arrays
-        )
-    check_draws(draws, triangles, lines, len(points), len(splats))
-    # Asked of the triangles a draw names rather than of the whole list:
-    # the transmission pass draws the opaque runs of a frame that holds
-    # transmissive triangles too, before there is a scene for them to
-    # look through.
-    var ready = transmission.is_ready()
+        var named = corners[triangle * 3].surface
+        if named < 0 or named >= len(surfaces):
+            raise Error("A corner names a surface the frame does not have")
+        if (
+            corners[triangle * 3 + 1].surface != named
+            or corners[triangle * 3 + 2].surface != named
+        ):
+            raise Error("A triangle's corners name different surfaces")
+    # One whole corner a surface asks what each triangle of it would: its
+    # corners share everything the checks read.
+    var faces = List[RasterVertex]()
+    for surface in range(len(surfaces)):
+        var face = _surface_vertex(surfaces[surface])
+        faces.append(face)
+        faces.append(face)
+        faces.append(face)
+    # The checks of the other overload, and the draws against these
+    # triangles; the transmission of each surface a drawn triangle names.
+    var drawn = List[Draw]()
+    for index in range(len(draws)):
+        if draws[index].kind != DRAW_TRIANGLES:
+            drawn.append(draws[index])
+    var uses = List[Bool](length=len(surfaces), fill=False)
     for index in range(len(draws)):
         ref draw = draws[index]
         if draw.kind != DRAW_TRIANGLES:
             continue
         for triangle in range(draw.first, draw.first + draw.count):
-            check_transmission(corners[triangle * 3], mode, ready, programs)
+            uses[corners[triangle * 3].surface] = True
+    var faced = List[Draw]()
+    for surface in range(len(surfaces)):
+        if uses[surface]:
+            faced.append(Draw(DRAW_TRIANGLES, surface, 1))
+    for index in range(len(drawn)):
+        faced.append(drawn[index])
+    _check_frame(
+        faces,
+        segments,
+        faced,
+        mode,
+        textures,
+        workers,
+        fog,
+        points,
+        cubes,
+        transmission,
+        programs,
+        volumes,
+        arrays,
+        lightings,
+        len(splats),
+    )
+    check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
+    _draw_frame(
+        corners=corners,
+        surfaces=surfaces,
+        segments=segments,
+        draws=draws,
+        target=target,
+        mode=mode,
+        textures=textures,
+        lighting=lighting,
+        workers=workers,
+        fog=fog,
+        points=points,
+        cubes=cubes,
+        line_width=line_width,
+        transmission=transmission,
+        programs=programs,
+        volumes=volumes,
+        arrays=arrays,
+        lightings=lightings,
+        splats=splats,
+    )
 
+
+def _draw_frame(
+    corners: List[Corner],
+    surfaces: List[Surface],
+    segments: List[RasterVertex],
+    draws: List[Draw],
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+    points: List[RasterVertex] = List[RasterVertex](),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    line_width: Int = 1,
+    transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
+    volumes: Data3DTextureStore = Data3DTextureStore(),
+    arrays: DataArrayTextureStore = DataArrayTextureStore(),
+    lightings: List[Lighting] = List[Lighting](),
+    splats: List[ProjectedSplat] = List[ProjectedSplat](),
+) raises:
+    """Draw a frame whose triangles, segments and points have been checked:
+    the second half of `rasterize_frame`, on the slim corners.
+
+    Each triangle's three whole corners are put together from the slim ones
+    and their surface as it is drawn, so they live in the cache for the one
+    triangle and the frame's list is a quarter of the size.
+    """
     var bands = min(workers, target.height)
     if bands == 1:
         for index in range(len(draws)):
@@ -6701,15 +7547,17 @@ def rasterize_frame(
                 continue
             if draw.kind == DRAW_TRIANGLES:
                 for triangle in range(draw.first, past):
+                    ref first = corners[triangle * 3]
+                    ref look = surfaces[first.surface]
                     rasterize_shaded(
-                        corners[triangle * 3],
-                        corners[triangle * 3 + 1],
-                        corners[triangle * 3 + 2],
+                        joined(first, look),
+                        joined(corners[triangle * 3 + 1], look),
+                        joined(corners[triangle * 3 + 2], look),
                         target,
                         mode,
                         textures,
                         _lit_by(
-                            corners[triangle * 3].lights,
+                            look.lights,
                             Pointer(to=lighting).unsafe_origin_cast[
                                 ImmutAnyOrigin
                             ](),
@@ -6723,6 +7571,7 @@ def rasterize_frame(
                         programs=programs,
                         volumes=volumes,
                         arrays=arrays,
+                        checked=True,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -6758,7 +7607,7 @@ def rasterize_frame(
     # Every pointer below is to an argument or a local that outlives `wait`,
     # which is what makes handing it to a coroutine sound.
     var errors = List[String](length=bands, fill=String(""))
-    var triangle_rows = _rows_of(corners, 3)
+    var triangle_rows = _rows_of_corners(corners)
     var segment_rows = _rows_of(segments, 2, max(0, line_width - 1))
     var point_rows = _point_rows(points)
     var group = TaskGroup()
@@ -6768,6 +7617,7 @@ def rasterize_frame(
         group.create_task(
             _frame_band(
                 corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                surfaces.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 triangle_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),

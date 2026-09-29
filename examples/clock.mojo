@@ -26,8 +26,8 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER, RADIAN, SECOND
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, RADIAN, SECOND, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/units.png"
 comptime WIDTH = 240
@@ -111,6 +111,8 @@ def main() raises:
 
     var clock = Clock(auto_start=False)
     clock.start_at(0)
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         frames.append(
@@ -125,5 +127,12 @@ def main() raises:
             )
         )
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

@@ -5,9 +5,27 @@
 
 """Tests for `render.framebuffer`."""
 
-from std.math import inf
-from render.framebuffer import Color, FloatColor, Framebuffer, HSL
-from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, srgb_to_linear
+from std.math import inf, nan
+from std.memory import bitcast
+from render.color_spaces import (
+    LINEAR_SRGB_COLOR_SPACE,
+    OutputEncoding,
+    output_encoding,
+)
+from render.framebuffer import (
+    Color,
+    FloatColor,
+    Framebuffer,
+    HSL,
+    SrgbBytes,
+    _encoded,
+)
+from render.srgb import (
+    LINEAR,
+    SRGB,
+    UNKNOWN_SPACE,
+    srgb_to_linear,
+)
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -530,6 +548,59 @@ def test_adopting_with_bad_dimensions_is_rejected() raises:
     var more_depth = List[Float32](length=1, fill=0.0)
     with assert_raises():
         _ = Framebuffer(1, -3, more_pixels^, more_depth^)
+
+
+def test_each_srgb_threshold_is_the_least_light_that_reaches_its_byte() raises:
+    var table = SrgbBytes()
+    assert_equal(len(table.thresholds), 255)
+    for byte in range(1, 256):
+        var bits = Int(bitcast[DType.uint32](table.thresholds[byte - 1]))
+        assert_true(_encoded(bits) >= UInt8(byte))
+        assert_true(_encoded(bits - 1) < UInt8(byte))
+
+
+def test_the_srgb_table_gives_the_byte_the_encoding_gives() raises:
+    var table = SrgbBytes()
+    # Every bucket's edge, a point inside it, and the light around 1.
+    for step in range(SrgbBytes.BUCKETS * 2 + 4):
+        var light = Float32(step) / Float32(SrgbBytes.BUCKETS * 2)
+        assert_equal(table.byte(light), _to_byte_of(light))
+    for light in [
+        Float32(-1),
+        Float32(-0.0),
+        Float32(0.9999),
+        Float32(1),
+        Float32(3),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        assert_equal(table.byte(light), _to_byte_of(light))
+    var missing = nan[DType.float32]()
+    assert_equal(table.byte(missing), _to_byte_of(missing))
+
+
+def test_encoding_with_the_table_matches_encoding() raises:
+    var table = SrgbBytes()
+    var light = FloatColor(0.2, 0.55, 0.003, 0.4)
+    _assert_same(light.encode_with(table), light.encode())
+    var srgb_out = OutputEncoding()
+    _assert_same(srgb_out.encode_with(light, table), srgb_out.encode(light))
+    # A linear output quantizes, and never reads the table.
+    var linear_out = output_encoding(LINEAR_SRGB_COLOR_SPACE)
+    _assert_same(linear_out.encode_with(light, table), linear_out.encode(light))
+
+
+def _assert_same(left: Color, right: Color) raises:
+    """Fail unless the two colors hold the same four bytes."""
+    assert_equal(left.r, right.r)
+    assert_equal(left.g, right.g)
+    assert_equal(left.b, right.b)
+    assert_equal(left.a, right.a)
+
+
+def _to_byte_of(light: Float32) -> UInt8:
+    """The encoding the table stands in for, worked out with the power."""
+    return FloatColor(light, 0, 0, 1).encode().r
 
 
 def main() raises:

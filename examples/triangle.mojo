@@ -12,13 +12,15 @@ actually display. Pass a path ending in `.ppm` to get the human-readable text
 format instead.
 """
 
+from core.clock import Clock
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from render.ppm import encode as encode_ppm
 from render.rasterizer import Triangle, rasterize
 from std.pathlib import Path
-from std.sys import argv
+from std.sys import argv, stderr
+from units.si import MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/triangle.png"
 
@@ -38,9 +40,18 @@ def main() raises:
         Vector2(275, 190),
     )
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var target = Framebuffer(320, 240, background)
     rasterize(triangle, target, foreground)
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     if destination.endswith(".ppm"):
         var text = String("")
         encode_ppm(target, text)

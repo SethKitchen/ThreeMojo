@@ -58,6 +58,7 @@ from render.srgb import (
     srgb_to_linear,
 )
 from std.math import floor, inf
+from std.memory import bitcast
 
 
 struct Color(ImplicitlyCopyable):
@@ -624,6 +625,23 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             _to_byte(self.a),
         )
 
+    def encode_with(self, bytes: SrgbBytes) -> Color:
+        """Return what `encode` returns, read from a table of thresholds
+        rather than worked out with a power for each channel.
+
+        Args:
+            bytes: The thresholds, from `SrgbBytes()`.
+
+        Returns:
+            The same bytes `encode` gives.
+        """
+        return Color(
+            bytes.byte(self.r),
+            bytes.byte(self.g),
+            bytes.byte(self.b),
+            _to_byte(self.a),
+        )
+
     def quantize(self) -> Color:
         """Return the eight-bit color nearest this one.
 
@@ -650,6 +668,91 @@ def _to_byte(value: Float32) -> UInt8:
     if scaled >= 255:
         return 255
     return UInt8(scaled)
+
+
+struct SrgbBytes(Movable):
+    """The byte `FloatColor.encode` gives each amount of light, as the least
+    light that reaches each byte.
+
+    Encoding a channel is `_to_byte(linear_to_srgb(value))`, a power and a
+    rounding. The byte never falls as the light rises: every float from zero
+    to one was checked. So the byte is how many of the 255 thresholds the
+    light reaches. The light from zero to one is cut into `BUCKETS` equal
+    buckets, and the byte at each bucket's lower edge is kept; the curve is
+    never steep enough to pass two thresholds in one bucket, so at most one
+    comparison finishes the answer. Each threshold is found with the
+    encoding itself, so the table gives the byte the power does, on
+    whatever machine builds it.
+    """
+
+    comptime BUCKETS = 8192
+
+    # The least light that encodes to each byte from 1 to 255, rising.
+    var thresholds: List[Float32]
+    # The byte at the lower edge of each bucket.
+    var buckets: List[UInt8]
+
+    def __init__(out self):
+        """Find the 255 thresholds, each by halving the floats around where
+        the inverse puts it, then each bucket's byte."""
+        self.thresholds = List[Float32](capacity=255)
+        var top = Int(bitcast[DType.uint32](Float32(1)))
+        for byte in range(1, 256):  # pragma: no branch
+            # A byte starts where the encoding reaches the middle of the
+            # step below it, which the inverse puts within a few floats;
+            # the search runs over 64 floats either side of that. `high`
+            # reaches `byte` and `low` does not, which the tests check for
+            # every byte against the encoding itself.
+            var guess = Int(
+                bitcast[DType.uint32](
+                    srgb_to_linear((Float32(byte) - 0.5) / 255)
+                )
+            )
+            var low = max(0, guess - 64)
+            var high = min(top, guess + 64)
+            while high - low > 1:
+                var middle = (low + high) // 2
+                if _encoded(middle) >= UInt8(byte):
+                    high = middle
+                else:
+                    low = middle
+            self.thresholds.append(bitcast[DType.float32](UInt32(high)))
+        self.buckets = List[UInt8](capacity=Self.BUCKETS)
+        var reached = 0
+        for bucket in range(Self.BUCKETS):  # pragma: no branch
+            var edge = Float32(bucket) / Float32(Self.BUCKETS)
+            while reached < 255 and self.thresholds[reached] <= edge:
+                reached += 1
+            self.buckets.append(UInt8(reached))
+
+    def byte(self, value: Float32) -> UInt8:
+        """Return `_to_byte(linear_to_srgb(value))`.
+
+        Args:
+            value: A linear channel.
+
+        Returns:
+            The encoded byte.
+        """
+        if value >= 1:
+            return 255
+        if not (value > 0):
+            # Zero or less encodes to zero. A NaN reaches no threshold, and
+            # the table leaves it to the encoding.
+            if value != value:
+                return _to_byte(linear_to_srgb(value))
+            return 0
+        var reached = Int(
+            self.buckets.unsafe_get(Int(value * Float32(Self.BUCKETS)))
+        )
+        if reached < 255 and self.thresholds.unsafe_get(reached) <= value:
+            reached += 1
+        return UInt8(reached)
+
+
+def _encoded(bits: Int) -> UInt8:
+    """Return the byte the float with these bits encodes to."""
+    return _to_byte(linear_to_srgb(bitcast[DType.float32](UInt32(bits))))
 
 
 struct Framebuffer(Movable):

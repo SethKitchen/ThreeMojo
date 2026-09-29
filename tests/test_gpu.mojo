@@ -1157,7 +1157,7 @@ def test_both_backends_agree_through_an_offset_viewport_and_a_scissor() raises:
     var cpu = renderer.render(scene, assets, camera)
 
     var frame = renderer.prepare_frame(scene, assets, camera)
-    assert_true(len(frame.corners) > 0, "nothing was prepared")
+    assert_true(len(frame.whole_corners()) > 0, "nothing was prepared")
     assert_true(len(frame.segments) > 0, "no segment was prepared")
     var lighting = Lighting(
         scene,
@@ -1166,7 +1166,7 @@ def test_both_backends_agree_through_an_offset_viewport_and_a_scissor() raises:
         toward_camera(scene, camera),
     )
     var gpu = render_triangles(
-        frame.corners,
+        frame.whole_corners(),
         48,
         36,
         renderer.background,
@@ -2109,7 +2109,7 @@ def test_both_backends_draw_a_frame_in_its_one_order() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene),
@@ -2126,11 +2126,11 @@ def test_both_backends_draw_a_frame_in_its_one_order() raises:
     # Without an order the device draws every triangle and then every
     # segment, which is what the two-pass host functions draw.
     var target = RenderTarget(48, 36, BACKGROUND)
-    rasterize_all(frame.corners, target, SHADE_TEXTURE, assets.textures)
+    rasterize_all(frame.whole_corners(), target, SHADE_TEXTURE, assets.textures)
     rasterize_lines_all(frame.segments, target)
     var two_passes = target.resolve()
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene),
@@ -2151,7 +2151,7 @@ def test_both_backends_draw_a_frame_in_its_one_order() raises:
     # And a draw the frame cannot hold is refused before the launch.
     with assert_raises():
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene),
@@ -2212,7 +2212,7 @@ def test_both_backends_draw_each_group_in_its_own_material() raises:
     var device = GpuRenderer(40, 40)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene),
@@ -2318,7 +2318,7 @@ def test_both_backends_honor_a_draw_range() raises:
     var device = GpuRenderer(40, 40)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -6077,7 +6077,7 @@ def test_both_backends_draw_wide_lines_in_a_scene() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -6198,7 +6198,7 @@ def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -6230,7 +6230,7 @@ def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
     )
     with assert_raises(contains="has not been uploaded"):
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene),
@@ -6253,7 +6253,7 @@ def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
     masked.append(a_point(4.5, 4.5, 3, 0.5, Color(255, 0, 0), alpha_map=wrong))
     with assert_raises(contains="holds data"):
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene),
@@ -6275,7 +6275,7 @@ def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
     masked[0].alpha_map = not_ignoring
     with assert_raises(contains="ignore its own alpha"):
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene),
@@ -6292,7 +6292,7 @@ def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
     masked[0].kind = LAMBERT
     with assert_raises(contains="unlit"):
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_LIT,
             Lighting(scene),
@@ -8949,7 +8949,7 @@ def test_both_backends_agree_on_a_stencil_mask_and_a_polygon_offset() raises:
     var frame = renderer.prepare_frame(scene, assets, camera)
     var device = GpuRenderer(32, 32)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene),
@@ -9165,7 +9165,7 @@ def test_both_backends_agree_under_every_depth_mode() raises:
         var frame = renderer.prepare_frame(scene, assets, camera)
         var device = GpuRenderer(32, 32)
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene),
@@ -9841,7 +9841,7 @@ def test_both_backends_draw_a_ground_mirror_for_ssr_alike() raises:
     var device = GpuRenderer(24, 24)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -9991,7 +9991,7 @@ def test_both_backends_draw_wood_and_a_post_processing_material_alike() raises:
         var device = GpuRenderer(48, 36)
         device.set_textures(assets.textures)
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene, eye=camera_position(scene, camera)),
@@ -10078,7 +10078,7 @@ def test_both_backends_run_the_tsl_function_library_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -10130,7 +10130,7 @@ def test_both_backends_draw_a_materialx_surface_alike() raises:
     device.set_textures(assets.textures)
     var capture = renderer.transmission_target(scene, assets, camera)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -10171,7 +10171,7 @@ def test_both_backends_draw_a_light_map_in_texture_space_alike() raises:
     var device = GpuRenderer(48, 48)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -10217,7 +10217,7 @@ def test_both_backends_keep_the_same_velocities() raises:
     var frame = prepares.prepare_frame(scene, assets, camera, True)
     var gpu = GpuRenderer(32, 32)
     gpu.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -10257,7 +10257,7 @@ def test_both_backends_keep_the_same_metalness_and_roughness() raises:
     var frame = renderer.prepare_frame(scene, assets, camera)
     var gpu = GpuRenderer(32, 32)
     gpu.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -10310,7 +10310,7 @@ def test_both_backends_shape_received_shadows_alike() raises:
         )
         var device = GpuRenderer(48, 36)
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             lighting,
@@ -10351,7 +10351,7 @@ def test_both_backends_read_transmitted_shadows_alike() raises:
         )
         var device = GpuRenderer(48, 36)
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             lighting,
@@ -10361,7 +10361,7 @@ def test_both_backends_read_transmitted_shadows_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
         # The shadow pass's own mode is the host's alone.
         with assert_raises(contains="drawn on the host"):
-            device.draw(frame.corners, BACKGROUND, SHADE_SHADOW)
+            device.draw(frame.whole_corners(), BACKGROUND, SHADE_SHADOW)
 
 
 def test_both_backends_light_each_material_by_its_own_lights() raises:
@@ -10387,7 +10387,7 @@ def test_both_backends_light_each_material_by_its_own_lights() raises:
         lightings.append(Lighting(scene, eye=eye, chosen=masks[index]))
     var device = GpuRenderer(16, 16)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=eye),
@@ -10398,7 +10398,7 @@ def test_both_backends_light_each_material_by_its_own_lights() raises:
     assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
     # A triangle that names a lighting the frame lacks is refused.
     with assert_raises(contains="names a lighting the frame does not have"):
-        device.draw(frame.corners, BACKGROUND, SHADE_TEXTURE)
+        device.draw(frame.whole_corners(), BACKGROUND, SHADE_TEXTURE)
 
 
 def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
@@ -10450,7 +10450,7 @@ def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -11662,7 +11662,7 @@ def test_both_backends_draw_a_node_material_scene_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -12769,7 +12769,7 @@ def test_both_backends_draw_a_glsl_shader_material_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -12841,7 +12841,7 @@ def test_both_backends_draw_a_glsl_shader_material_on_points_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -12912,7 +12912,7 @@ def test_both_backends_draw_a_glsl_shader_material_on_a_line_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -12967,7 +12967,7 @@ def test_both_backends_draw_the_toon_shaders_alike() raises:
         var device = GpuRenderer(32, 32)
         device.set_textures(assets.textures)
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene, eye=camera_position(scene, camera)),
@@ -13007,7 +13007,7 @@ def test_both_backends_march_a_volume_alike() raises:
             assets.data_array_textures,
         )
         device.draw(
-            frame.corners,
+            frame.whole_corners(),
             BACKGROUND,
             SHADE_TEXTURE,
             Lighting(scene, eye=camera_position(scene, camera)),
@@ -13698,7 +13698,7 @@ def test_both_backends_draw_the_texture_and_probe_helpers_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -13751,7 +13751,7 @@ def test_both_backends_draw_the_shadow_map_viewer_alike() raises:
     var device = GpuRenderer(48, 36)
     device.set_textures(hud.assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         lines=frame.segments,
@@ -13833,7 +13833,7 @@ def _flags_on_both(
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene),
@@ -14497,7 +14497,7 @@ def _models_on_both(
     var device = GpuRenderer(48, 36)
     device.set_textures(assets.textures)
     device.draw(
-        frame.corners,
+        frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
         Lighting(scene, eye=camera_position(scene, camera)),
@@ -14774,7 +14774,7 @@ def test_scene_splats_mix_with_transparent_meshes_on_both_backends() raises:
     var frame = renderer.prepare_frame(scene, assets, camera)
     assert_true(len(frame.splats) > 0)
     var device = render_triangles(
-        frame.corners,
+        frame.whole_corners(),
         40,
         30,
         BACKGROUND,

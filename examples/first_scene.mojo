@@ -15,6 +15,7 @@ what the tutorial shows.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -26,7 +27,8 @@ from render.framebuffer import Color
 from render.png import encode
 from renderers.renderer import Renderer
 from std.pathlib import Path
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 
 def main() raises:
@@ -56,6 +58,15 @@ def main() raises:
 
     var renderer = Renderer(320, 240)
     renderer.set_background(Color(16, 18, 26))
+    var frame_clock = Clock()
+    frame_clock.start()
     var image = renderer.render(scene, assets, camera)
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path("out/first_scene.png").write_bytes(encode(image))
     print("Wrote out/first_scene.png")

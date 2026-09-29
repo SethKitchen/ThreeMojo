@@ -15,6 +15,7 @@ turn together.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.plane import plane
@@ -27,8 +28,8 @@ from render.framebuffer import Color, Framebuffer
 from render.ktx2 import read
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
-from units.si import DEGREE, METER, Angle, Length
+from std.sys import argv, stderr
+from units.si import DEGREE, METER, Angle, Length, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/ktx2.png"
 comptime WIDTH = 320
@@ -105,9 +106,18 @@ def main() raises:
     camera.place(Vector3(0, 0, 3.2), Vector3(0, 0, 0))
 
     var step = Angle(Float32(20) / Float32(FRAMES), DEGREE)
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

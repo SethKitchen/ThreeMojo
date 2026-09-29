@@ -13,6 +13,7 @@ numbers would speed up in the middle and stop being a rotation.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -26,8 +27,8 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
 from std.pathlib import Path
-from std.sys import argv
-from units.si import Angle, DEGREE, Length, METER
+from std.sys import argv, stderr
+from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/rotations.png"
 comptime WIDTH = 240
@@ -105,6 +106,8 @@ def main() raises:
     axis.normalize()
     var finish = Quaternion.from_axis_angle(axis, Angle(160.0, DEGREE))
 
+    var frame_clock = Clock()
+    frame_clock.start()
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var turn = Float32(2) * Float32(pi) * Float32(index) / Float32(FRAMES)
@@ -113,5 +116,12 @@ def main() raises:
             frame_at(renderer, camera, assets, scene, node, start, finish, t)
         )
 
+    print(
+        '{"frames_ms": ',
+        frame_clock.elapsed().to(MILLISECOND),
+        "}",
+        sep="",
+        file=stderr,
+    )
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

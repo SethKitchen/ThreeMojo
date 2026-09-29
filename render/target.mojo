@@ -99,7 +99,7 @@ from render.raster_state import (
     test_fragment,
     window_depth,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.rect import Rect
 from render.texture import (
     BILINEAR,
@@ -551,6 +551,7 @@ def _encode_run(
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
     output: OutputEncoding,
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
 ):
     """Encode the pixels in `[first, past)` from linear light to bytes.
 
@@ -586,9 +587,9 @@ def _encode_run(
             # and depth materials skip `linearToOutputTexel`: it is stored
             # so that sRGB's curve gives back its bytes.
             if data[unsafe_offset=slot]:
-                shown = mapped.encode()
+                shown = mapped.encode_with(bytes[])
             else:
-                shown = output.encode(mapped)
+                shown = output.encode_with(mapped, bytes[])
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -608,6 +609,7 @@ async def _encode_band(
     clear_shown: Color,
     program: Pointer[List[Float32], ImmutAnyOrigin],
     output: OutputEncoding,
+    bytes: Pointer[SrgbBytes, ImmutAnyOrigin],
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
     _encode_run(
@@ -622,6 +624,7 @@ async def _encode_band(
         clear_shown,
         program,
         output,
+        bytes,
     )
 
 
@@ -815,16 +818,35 @@ struct RenderTarget(Movable, SampleSource):
             self.depth_mode = depth_mode
         var far = cleared_depth(self.depth_mode)
         var top = rect.top(self.height)
-        for y in range(top, top + rect.height):  # pragma: no branch
-            for x in range(rect.x, rect.x + rect.width):  # pragma: no branch
-                var slot = y * self.width + x
-                if color:
-                    self.colors[slot] = self.clear
-                    self.data[slot] = False
-                if depth:
-                    self.depth[slot] = far
-                if stencil:
-                    self.stencil[slot] = 0
+        # `fits` has put every slot inside the target, so each buffer is
+        # written row by row with no bounds check: a clear touches every
+        # pixel of every frame.
+        if color:
+            var colors = self.colors.unsafe_ptr()
+            var data = self.data.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    colors[unsafe_offset=row + x] = self.clear
+                    data[unsafe_offset=row + x] = False
+        if depth:
+            var depths = self.depth.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    depths[unsafe_offset=row + x] = far
+        if stencil:
+            var stencils = self.stencil.unsafe_ptr()
+            for y in range(top, top + rect.height):  # pragma: no branch
+                var row = y * self.width
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    stencils[unsafe_offset=row + x] = 0
         if color and self.has_normals():
             for y in range(top, top + rect.height):  # pragma: no branch
                 for x in range(
@@ -1521,6 +1543,13 @@ struct RenderTarget(Movable, SampleSource):
                 ProgramCurve(words),
             )
         )
+        # Read by every band, and alive until the last one has finished.
+        var srgb_bytes = SrgbBytes()
+        var table = (
+            Pointer(to=srgb_bytes)
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[ImmutAnyOrigin]()
+        )
         var bands = min(workers, count)
         if bands == 1:
             _encode_run(
@@ -1535,6 +1564,7 @@ struct RenderTarget(Movable, SampleSource):
                 clear_shown,
                 words,
                 output,
+                table,
             )
         else:
             var group = TaskGroup()
@@ -1557,9 +1587,11 @@ struct RenderTarget(Movable, SampleSource):
                         clear_shown,
                         words,
                         output,
+                        table,
                     )
                 )
             group.wait()
+        _ = len(srgb_bytes.thresholds)
         return Framebuffer(self.width, self.height, pixels^, self.depth.copy())
 
     def texture(

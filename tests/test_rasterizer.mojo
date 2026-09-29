@@ -84,6 +84,11 @@ from render.packing import (
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
+    Corner,
+    Surface,
+    corner_of,
+    joined,
+    surface_of,
     DRAW_SEGMENTS,
     DRAW_TRIANGLES,
     Draw,
@@ -5909,6 +5914,99 @@ def test_a_specular_map_must_be_stored_as_data() raises:
     )
     with assert_raises():
         rasterize_all(missing, target, SHADE_TEXTURE, textures)
+
+
+def _slim(
+    corners: List[RasterVertex],
+) raises -> Tuple[List[Corner], List[Surface]]:
+    """Return whole corners slim, one surface for them all."""
+    var slim = List[Corner]()
+    var surfaces: List[Surface] = [surface_of(corners[0])]
+    for index in range(len(corners)):
+        slim.append(corner_of(corners[index], 0))
+    return (slim^, surfaces^)
+
+
+def test_a_corner_and_its_surface_join_into_the_whole_vertex() raises:
+    var whole = stated_corner(Vector3(2, 3, 0.25), NO_TEXTURE, BLEND)
+    whole.roughness = 0.4
+    whole.u1 = 0.75
+    whole.steps = 9
+    whole.seen_from_behind = True
+    var corner = corner_of(whole, 5)
+    assert_equal(corner.surface, 5)
+    var back = joined(corner, surface_of(whole))
+    assert_equal(back.x, whole.x)
+    assert_equal(back.y, whole.y)
+    assert_equal(back.z, whole.z)
+    assert_equal(back.u1, whole.u1)
+    assert_equal(back.roughness, whole.roughness)
+    assert_equal(back.steps, whole.steps)
+    assert_true(back.seen_from_behind)
+    assert_true(back.blend == BLEND)
+
+
+def test_a_slim_frame_draws_what_the_whole_one_does() raises:
+    var textures = TextureStore()
+    var pane = List[RasterVertex]()
+    for point in covering(0.2):
+        pane.append(stated_corner(point, NO_TEXTURE, OPAQUE))
+    var none = List[RasterVertex]()
+    var order: List[Draw] = [Draw(DRAW_TRIANGLES, 0, 1)]
+    var whole = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(pane, none, order, whole, SHADE_LIT, textures)
+    var split = _slim(pane)
+    var slim = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(split[0], split[1], none, order, slim, SHADE_LIT, textures)
+    for y in range(8):
+        for x in range(8):
+            assert_equal(slim.shown(x, y).r, whole.shown(x, y).r)
+            assert_equal(slim.shown(x, y).g, whole.shown(x, y).g)
+    # On two workers, and with a surface no draw names, it draws the same.
+    var unused = split[1].copy()
+    unused.append(surface_of(pane[0]))
+    var banded = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(
+        split[0], unused, none, order, banded, SHADE_LIT, textures, workers=2
+    )
+    assert_equal(banded.shown(4, 4).r, whole.shown(4, 4).r)
+
+
+def test_a_slim_frame_refuses_corners_that_do_not_name_one_surface() raises:
+    var textures = TextureStore()
+    var pane = List[RasterVertex]()
+    for point in covering(0.2):
+        pane.append(stated_corner(point, NO_TEXTURE, OPAQUE))
+    var none = List[RasterVertex]()
+    var order: List[Draw] = [Draw(DRAW_TRIANGLES, 0, 1)]
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var split = _slim(pane)
+    # Not whole triangles.
+    var short = split[0].copy()
+    _ = short.pop()
+    with assert_raises(contains="whole triangles"):
+        rasterize_frame(
+            short, split[1], none, List[Draw](), target, SHADE_LIT, textures
+        )
+    # A surface past the end of the list, and one before it.
+    for named in [1, -1]:
+        var lost = split[0].copy()
+        for index in range(3):
+            lost[index].surface = named
+        with assert_raises(contains="does not have"):
+            rasterize_frame(
+                lost, split[1], none, order, target, SHADE_LIT, textures
+            )
+    # The second corner, or the third, naming another surface.
+    var two = split[1].copy()
+    two.append(surface_of(pane[0]))
+    for corner in [1, 2]:
+        var mixed = split[0].copy()
+        mixed[corner].surface = 1
+        with assert_raises(contains="different surfaces"):
+            rasterize_frame(
+                mixed, two, none, order, target, SHADE_LIT, textures
+            )
 
 
 def main() raises:
