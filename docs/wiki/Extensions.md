@@ -6,7 +6,7 @@ The first subject is the humanoid. The leg bones are the femur, tibia, fibula an
 
 The water subject ports Clearwater. See [Water](Water).
 
-The CARLA subject ports the engine-independent half of the CARLA driving simulator: OpenDRIVE roads, frames, camera encodings and LiDAR. See [CARLA](CARLA).
+The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
 
@@ -71,13 +71,15 @@ extensions/
     pebbles.mojo   the pebble photograph
     filter.mojo    mipmaps and anisotropy
   carla/
-    transform.mojo   CARLA's left-handed frame
-    polynomial.mojo  OpenDRIVE cubics
-    geometry.mojo    line, arc, spiral, poly3, paramPoly3
-    road.mojo        lanes, lane transforms and meshes
-    sensor.mojo      depth, palette and intrinsics
-    capture.mojo     ray-cast depth and semantic images
-    lidar.mojo       ray-cast LiDAR
+    transform.mojo, math.mojo, geo.mojo, ...   frames and geometry
+    opendrive.mojo, map.mojo, mesh_factory.mojo  OpenDRIVE maps
+    physics/                                     rigid bodies, vehicles, walkers
+    world.mojo, actor.mojo, blueprint.mojo, ...  the world and its actors
+    radar.mojo, imu.mojo, sensor_manager.mojo, ... sensors
+    traffic_manager*.mojo                        the traffic manager
+    agents*.mojo, navigation*.mojo               agents and walker navigation
+    recorder*.mojo, replayer*.mojo               the recorder
+    town.mojo, render_*.mojo, camera_render.mojo rendering
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

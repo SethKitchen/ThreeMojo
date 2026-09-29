@@ -1,12 +1,28 @@
 # CARLA
 
-The `extensions/carla/` modules port the parts of the CARLA driving simulator that do not need CARLA's simulator plugin and its game engine. They build OpenDRIVE roads as meshes. They also give CARLA's frame, camera encodings and ray-cast LiDAR.
+The `extensions/carla/` modules port the CARLA driving simulator: everything that CARLA runs without its game engine and its network transport. This port adds its own physics and its own renderer. It loads OpenDRIVE maps and simulates vehicles, walkers, traffic lights and signs. It drives the traffic manager and the agents, and reads every CARLA sensor. It records, replays and renders towns in CARLA's weathers.
 
-![A road with cars, seen as an RGB image with LiDAR points, a semantic image and a depth image](out/carla.png)
+![The town at clear noon, wet sunset, in rain and at night, each at 800 x 600](out/carla_town.png)
 
-CARLA is by the Computer Vision Center at the Universitat Autonoma de Barcelona (MIT). This port follows the `LibCarla` source at commit `1360bb9`. See [Extensions](Extensions).
+![An RGB image with LiDAR points, a semantic image and a depth image](out/carla.png)
 
-To render the image, run `mojo run -I . examples/carla.mojo out/carla.png`.
+CARLA is by the Computer Vision Center at the Universitat Autonoma de Barcelona (MIT). This port follows CARLA's source at commit `1360bb9`. See [Extensions](Extensions).
+
+To render the images, run `mojo run -I . examples/carla_town.mojo out/carla_town.png` and `mojo run -I . examples/carla.mojo out/carla.png`. Each view is 800 x 600, the size of CARLA's default RGB camera.
+
+## Parts
+
+| Page | What it covers |
+|---|---|
+| [CARLA geometry](CARLA-geometry) | CARLA's vector and arc math, bounding boxes, geo-projections, the R-tree, meshes, point clouds and image converters |
+| [CARLA maps](CARLA-maps) | The OpenDRIVE parser, the road map and its queries, and the road meshes |
+| [CARLA physics](CARLA-physics) | The rigid-body solver, the vehicle model and the walker controller |
+| [CARLA world](CARLA-world) | Actors, the tick, snapshots, traffic lights, signs, blueprints and weather |
+| [CARLA sensors](CARLA-sensors) | Every CARLA sensor, its raw data and the sensor manager |
+| [CARLA traffic manager](CARLA-traffic-manager) | The local traffic manager and its stages |
+| [CARLA agents](CARLA-agents) | The route planner, the navigation agents and walker navigation |
+| [CARLA recorder](CARLA-recorder) | The recorder, the replayer and the recorder queries |
+| [CARLA rendering](CARLA-rendering) | Towns, materials, weather and camera effects |
 
 ## Build a road
 
@@ -89,4 +105,8 @@ The random numbers come from a seeded generator, so one seed gives the same scan
 
 ## Not ported
 
-The simulator half is not here: the traffic manager, weather, the server and the client.
+These parts are not ported:
+
+- The network transport: the RPC server and client, streaming, ROS 2 and multi-GPU.
+- The RSS sensor. It wraps a third-party library.
+- CARLA's game engine and its assets. This port has its own physics and its own renderer. A physics step and an image are therefore not the same as CARLA's.

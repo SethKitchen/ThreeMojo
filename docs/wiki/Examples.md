@@ -1,6 +1,6 @@
 # Examples
 
-`examples/`. Each example is one program that renders one image or animation into `out/`. `make animation` renders all of them except `carla.mojo`.
+`examples/`. Each example is one program that renders one image or animation into `out/`. `make animation` renders all of them except `carla.mojo` and `carla_town.mojo`.
 
 Run one by hand:
 
@@ -114,6 +114,7 @@ mkdir -p out
 | `game_humanoid.mojo` | `game_humanoid.png` | [Game humanoid](Game-humanoid) |
 | `water.mojo` | `water.png` | [Water](Water) |
 | `carla.mojo` | `carla.png` | [CARLA](CARLA) |
+| `carla_town.mojo` | `carla_town.png` | [CARLA rendering](CARLA-rendering) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
@@ -123,7 +124,7 @@ mkdir -p out
 .venv/bin/mojo run -I . examples/torso.mojo out/torso.png low
 ```
 
-`make animation` does not render `carla.mojo`. Run it by hand: `mojo run -I . examples/carla.mojo out/carla.png`.
+`make animation` does not render the two CARLA examples. Run them by hand: `mojo run -I . examples/carla.mojo out/carla.png` and `mojo run -I . examples/carla_town.mojo out/carla_town.png`.
 
 `viewer.mojo` writes no file. It opens a window in the terminal, and `make viewer` runs it. See [Windowing and controls](Windowing-and-controls).
 
