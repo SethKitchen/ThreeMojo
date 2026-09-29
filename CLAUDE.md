@@ -12,6 +12,7 @@ ThreeMojo ports three.js to Mojo. Read the [README](README.md) first and [CONTRI
 ## Code
 
 - `make check` must pass before a commit. `make coverage` must stay at 100%.
+- Each test must run in 5 seconds or less (`TEST_TIMEOUT`). When a test is slower, make the library faster. Do not change the test.
 - Every id, mode and kind is a type with `is_valid`. Every boundary that reads one checks it. Add a `tests/compile_fail/` file for each new type.
 - Every quantity carries a unit type. A length is a `Length`, an angle is an `Angle`.
 - The CPU and GPU rasterizers share their arithmetic and agree in the parity tests.

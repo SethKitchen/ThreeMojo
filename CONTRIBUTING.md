@@ -13,6 +13,7 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 
 - `make check` must pass before you commit.
 - `make coverage` must stay at 100% for lines, branches, conditions and MC/DC.
+- Each test must run in 5 seconds or less. `make test-cpu` fails a slower test. Make the code under test faster. Do not change the test.
 - Every public symbol must have a docstring with `Args`, `Returns` and `Raises` sections.
 - Every id, mode and kind must be a type, not a bare integer. Add a file to `tests/compile_fail/` that proves the compiler rejects the integer.
 - Every value that a type can hold but the code does not accept must be refused at the boundary. Add a test that constructs the wrong value.

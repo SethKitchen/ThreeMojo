@@ -43,3 +43,4 @@ Results are cached on a SHA-256 of the source contents, the Makefile and the too
 | `COV_BUDGET` | One second per suite, and a minute at least | Seconds the coverage run gets before it is killed. |
 | `GPU_BUDGET` | 300 | Seconds the GPU suite gets. |
 | `JOBS` | The core count | Suites run in parallel. |
+| `TEST_TIMEOUT` | 5 | Seconds one test can take in `test-cpu`. A slower test fails the suite. Make the code under test faster. Do not make the test smaller or raise the limit. |
