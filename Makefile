@@ -684,6 +684,7 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
            $(OUT_DIR)/pelvis.png $(OUT_DIR)/torso.png \
            $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
+           $(OUT_DIR)/head.png \
            $(OUT_DIR)/water.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
@@ -1183,6 +1184,12 @@ $(OUT_DIR)/arm.png: $(LIB_SOURCES) examples/arm.mojo
 $(OUT_DIR)/hand.png: $(LIB_SOURCES) examples/hand.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/hand.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A neck and a head, with skin and without.
+$(OUT_DIR)/head.png: $(LIB_SOURCES) examples/head.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/head.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo

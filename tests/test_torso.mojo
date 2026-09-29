@@ -866,9 +866,9 @@ def test_add_body_joins_torso_and_lower_body() raises:
         LYMPH,
         8,
     )
-    # The lower body's twenty-six lymph solids, the torso's eight, and
-    # each arm's four and each hand's two.
-    assert_equal(len(scene.meshes), 46)
+    # The lower body's twenty-six lymph solids, the torso's eight, each
+    # arm's four and each hand's two, and the head's five groups a side.
+    assert_equal(len(scene.meshes), 56)
     var skinned = Scene()
     var skin_root = skinned.add(Object3D())
     _ = add_body(
@@ -887,7 +887,7 @@ def test_add_body_joins_torso_and_lower_body() raises:
         8,
         8,
     )
-    # One skin down to the wrists, and each hand's own.
+    # One skin from the head down to the wrists, and each hand's own.
     assert_equal(len(skinned.meshes), 3)
     var painted = Scene()
     var painted_root = painted.add(Object3D())

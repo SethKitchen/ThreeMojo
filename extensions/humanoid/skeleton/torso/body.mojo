@@ -3,15 +3,18 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The torso, the pelvis, both legs and feet, and both arms and hands.
+"""The whole body: the torso, the pelvis, both legs and feet, both arms
+and hands, and the neck and the head.
 
 The torso and the pelvis share a frame; the legs and feet hang from
-the pelvis, and the arms and hands hang from the torso's scapulae. The
-lower body's skin and the torso's skin overlap over the waist. Across
-that band one surface morphs into the other. Each arm's skin joins that
-surface in a smooth union at the shoulder, so the whole body below the
-neck, down to the wrists, has one skin. Each hand's skin is meshed on
-its own, at its own detail, and overlaps the arm's across the wrist.
+the pelvis, the arms and hands hang from the torso's scapulae, and the
+neck stands on the torso's first thoracic vertebra. The lower body's
+skin and the torso's skin overlap over the waist. Across that band one
+surface morphs into the other. Each arm's skin joins that surface in a
+smooth union at the shoulder, and the head's skin joins it at the base
+of the neck, so the whole body, down to the wrists, has one skin. Each
+hand's skin is meshed on its own, at its own detail, and overlaps the
+arm's across the wrist.
 
 The solid lives in the pelvis frame. The origin is the midpoint of the
 two hip joint centers. Plus y is proximal. Plus x is body-right. Plus z
@@ -38,6 +41,10 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from extensions.humanoid.skeleton.hand.assembly import add_hand
+from extensions.humanoid.skeleton.head.assembly import add_head
+from extensions.humanoid.skeleton.head.contents import HeadContents
+from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
+from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
@@ -71,14 +78,20 @@ comptime UNSET_PAINT = MaterialId(-1)
 
 struct BodySkinField(Copyable, DistanceField, Movable):
     """The lower body's skin morphing into the torso's over the waist,
-    joined by both arms' skins at the shoulders."""
+    joined by both arms' skins at the shoulders and the head's at the
+    base of the neck."""
 
     var lower: LowerBodySkinField
     var torso: TorsoSkinField
     var right_arm: ArmSkinField
     var left_arm: ArmSkinField
+    var head: HeadSkinField
     # How wide the fold is where an arm's skin meets the torso's.
     var arm_blend: Float32
+    # How wide the fold is where the head's skin meets the torso's, and
+    # the height below which the head's skin cannot reach the surface.
+    var neck_blend: Float32
+    var neck_floor: Float32
     # Below `band_bottom` the lower body's skin is the surface; above
     # `band_top` the torso's is.
     var band_bottom: Float32
@@ -103,7 +116,10 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         var arms = arm_muscle_dimensions(spec)
         self.right_arm = ArmSkinField(arms, RIGHT)
         self.left_arm = ArmSkinField(arms, LEFT)
+        self.head = HeadSkinField(head_muscle_dimensions(spec))
         self.arm_blend = f.cm(1.2)
+        self.neck_blend = f.cm(1.5)
+        self.neck_floor = self.head.low.y - self.neck_blend
         # From the top of the iliac crest to a little above it: both
         # skins hold the whole waist there.
         self.band_bottom = f.at(0, 12.0, 0).y
@@ -116,7 +132,9 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         )
         self.high = Vector3(
             max(self.lower.high.x, self.right_arm.high.x),
-            max(self.torso.high.y, self.right_arm.high.y),
+            max(
+                self.head.high.y, max(self.torso.high.y, self.right_arm.high.y)
+            ),
             max(
                 self.lower.high.z, max(self.torso.high.z, self.right_arm.high.z)
             ),
@@ -128,9 +146,16 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         Negative is inside. Zero is the surface.
         """
         var trunk = self._trunk(point)
+        var arm: Float32
         if point.x < 0:
-            return smin(trunk, self.left_arm.distance(point), self.arm_blend)
-        return smin(trunk, self.right_arm.distance(point), self.arm_blend)
+            arm = self.left_arm.distance(point)
+        else:
+            arm = self.right_arm.distance(point)
+        var body = smin(trunk, arm, self.arm_blend)
+        # Below the neck the head's skin is far off, and costs a lot.
+        if point.y < self.neck_floor:
+            return body
+        return smin(body, self.head.distance(point), self.neck_blend)
 
     def _trunk(self, point: Vector3) -> Float32:
         """Return the distance to the torso's and the lower body's skin."""
@@ -153,8 +178,8 @@ struct BodySkinField(Copyable, DistanceField, Movable):
 def body_skin_mesh(
     spec: HumanoidSpec, detail: Int = 56
 ) raises -> BufferGeometry:
-    """Return one skin over the torso, the pelvis, both legs and both
-    arms, down to the wrists.
+    """Return one skin over the torso, the pelvis, both legs, both arms,
+    the neck and the head, down to the wrists.
 
     Args:
         spec: Standing height, osteological sex and athleticism.
@@ -195,8 +220,8 @@ def add_body(
     nerve_paint: MaterialId = UNSET_PAINT,
     skin_paint: MaterialId = UNSET_PAINT,
 ) raises -> NodeId:
-    """Attach the torso, the pelvis, both legs and feet, and both arms
-    and hands.
+    """Attach the torso, the pelvis, both legs and feet, both arms and
+    hands, and the neck and the head.
 
     Every part draws the same layers. The skin is one surface down to
     the wrists; each hand's skin is its own mesh.
@@ -317,6 +342,23 @@ def add_body(
                 lymph_paint=lymph_paint,
                 nerve_paint=nerve_paint,
             )
+        # The neck and the head use the torso's bits too.
+        _ = add_head(
+            scene,
+            assets,
+            root_id,
+            spec,
+            bone_paint,
+            ligament_paint,
+            cartilage_paint,
+            muscle_paint,
+            HeadContents(inner),
+            detail,
+            artery_paint=artery_paint,
+            vein_paint=vein_paint,
+            lymph_paint=lymph_paint,
+            nerve_paint=nerve_paint,
+        )
     if contents.includes_skin():
         var skin = skin_paint
         if skin.value < 0:

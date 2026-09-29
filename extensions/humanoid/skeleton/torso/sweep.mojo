@@ -181,10 +181,15 @@ struct Dome(ImplicitlyCopyable):
 
 
 struct SweepField(Copyable, DistanceField, Movable):
-    """The implicit solid of a torso part: sweeps, and perhaps a dome."""
+    """The implicit solid of a torso part: sweeps, and perhaps a dome.
+
+    A part may also carry cuts: sweeps taken away from the union, such
+    as the orbits of a skull. See `cut`.
+    """
 
     var sweeps: List[Sweep]
     var domes: List[Dome]
+    var cuts: List[Sweep]
     var mirror: Bool
     var k: Float32
     var epsilon: Float32
@@ -212,6 +217,7 @@ struct SweepField(Copyable, DistanceField, Movable):
         """
         self.sweeps = sweeps^
         self.domes = domes^
+        self.cuts = List[Sweep]()
         self.mirror = side == LEFT
         self.k = k
         self.epsilon = epsilon
@@ -231,6 +237,17 @@ struct SweepField(Copyable, DistanceField, Movable):
             )
         self.low = box.low
         self.high = box.high
+
+    def cut(mut self, var hole: Sweep):
+        """Take `hole` away from the part, with the part's smooth blend.
+
+        The hole is authored on the right, as the sweeps are. It does
+        not change the part's box, and `volume` does not subtract it.
+
+        Args:
+            hole: The sweep to take away.
+        """
+        self.cuts.append(hole^)
 
     def distance(self, point: Vector3) -> Float32:
         """Return how far `point` lies outside the part, in meters.
@@ -252,6 +269,8 @@ struct SweepField(Copyable, DistanceField, Movable):
             d = smin(
                 d, smax(shell - dome.half, dome.floor - local.y, self.k), self.k
             )
+        for index in range(len(self.cuts)):
+            d = smax(d, -self.cuts[index].distance(local, self.k), self.k)
         return d
 
     def gradient(self, point: Vector3) -> Vector3:
@@ -262,7 +281,8 @@ struct SweepField(Copyable, DistanceField, Movable):
         """Return the analytic volume of every sweep and dome, in m^3.
 
         Overlapping sweeps count twice. A dome counts its whole shell
-        above the floor as half of the ellipsoid's shell.
+        above the floor as half of the ellipsoid's shell. Cuts are not
+        subtracted.
         """
         var volume = Float32(0)
         for index in range(len(self.sweeps)):  # pragma: no branch

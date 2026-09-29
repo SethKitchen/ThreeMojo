@@ -95,6 +95,7 @@ Look something up.
 - [Torso](Torso)
 - [Arm](Arm)
 - [Hand](Hand)
+- [Head](Head)
 - [Mesh quality](Mesh-quality)
 - [Segment inertia](Segment-inertia)
 

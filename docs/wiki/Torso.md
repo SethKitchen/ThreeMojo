@@ -2,7 +2,7 @@
 
 `add_torso` attaches the vertebrae, the ribs, the sternum, the shoulder girdle, their joint tissues and the torso's muscles, vessels, nerves, lymphatics and skin.
 
-![A six-foot male body below the neck, arms included, turns twice: bones, joint tissues and muscles on the left, the skin on the right](out/torso.png)
+![A six-foot male body, arms and head included, turns twice: bones, joint tissues and muscles on the left, the skin on the right](out/torso.png)
 
 The torso shares the pelvis frame. The origin is the midpoint of the two hip joint centers. Plus y is proximal, plus x is body-right and plus z is anterior. The package is `extensions/humanoid/skeleton/torso/`. See [Pelvis](Pelvis) for the base it stands on.
 
@@ -22,7 +22,7 @@ from units.si import FOOT, Length
 var person = HumanoidSpec(Length(6.0, FOOT), MALE)
 ```
 
-`add_torso` attaches the torso's layers under a parent node. Hang it from the same node as the pelvis. `add_body` attaches the torso, the pelvis, both legs and feet, and both arms and hands. It draws one skin down to the wrists, and a skin for each hand. Pass `contents` to pick the layers. Combine layers with `plus`.
+`add_torso` attaches the torso's layers under a parent node. Hang it from the same node as the pelvis. `add_body` attaches the torso, the pelvis, both legs and feet, both arms and hands, and the neck and the head. It draws one skin from the head down to the wrists, and a skin for each hand. Pass `contents` to pick the layers. Combine layers with `plus`.
 
 | Value | Draws |
 |---|---|
@@ -36,7 +36,7 @@ var person = HumanoidSpec(Length(6.0, FOOT), MALE)
 | `BOTH` | Bones, ligaments and muscles. |
 | `ALL` | Every named layer. |
 
-A bare integer is a compile error. The neck and the head are not modeled. The thoracic and abdominal organs are not modeled either. The arms hang from the shoulder girdle; see [Arm](Arm).
+A bare integer is a compile error. The neck and the head are on their own page; see [Head](Head). The thoracic and abdominal organs are not modeled. The arms hang from the shoulder girdle; see [Arm](Arm).
 
 ## Size
 
@@ -95,7 +95,7 @@ A thin cortical shell wraps trabecular bone, and the red marrow lives in its por
 | Pectoralis minor | From the third to fifth ribs to the coracoid. |
 | Subclavius | Under the clavicle, from the first rib out. |
 
-The diaphragm is unpaired; the other fourteen are paired. The neck is not modeled, so the trapezius ends at the base of the neck. The waist narrows between the rib cage and the crest. The arm's own muscles are on the [Arm](Arm) page.
+The diaphragm is unpaired; the other fourteen are paired. The trapezius ends at the base of the neck, where the head's upper trapezius goes on. The waist narrows between the rib cage and the crest. The arm's own muscles are on the [Arm](Arm) page.
 
 ## Vessels, nerves and lymph
 
@@ -115,11 +115,11 @@ The torso's skin uses the leg's method. See [Integument](Integument#envelope). T
 
 For a male the fat is 14 mm over the abdomen and 8 mm over the chest. For a female it is 24 mm and 15 mm. A female template carries breast tissue over the pectoralis major.
 
-`body_skin_mesh` morphs the lower body's skin into the torso's across the waist. Each arm's skin joins that surface in a smooth union at the shoulder. The body below the neck then has one surface, down to the wrists. The skin ends in a cut at the base of the neck. `add_body` meshes each hand's skin on its own, at its own detail, because a finger is too slim for a grid that spans the body. The hand's skin overlaps the arm's across the wrist.
+`body_skin_mesh` morphs the lower body's skin into the torso's across the waist. Each arm's skin joins that surface in a smooth union at the shoulder. The head's skin joins it in a smooth union at the base of the neck. The body then has one surface, from the head down to the wrists. `add_body` meshes each hand's skin on its own, at its own detail, because a finger is too slim for a grid that spans the body. The hand's skin overlaps the arm's across the wrist.
 
 ## Examples
 
-`examples/torso.mojo` draws a six-foot male body below the neck twice and writes `out/torso.png`. The left copy shows bones, joint tissues and muscles. The right copy shows the skin. The program also prints the mass of several torso parts.
+`examples/torso.mojo` draws a six-foot male body twice and writes `out/torso.png`. The left copy shows bones, joint tissues and muscles. The right copy shows the skin. The program also prints the mass of several torso parts.
 
 ```bash
 .venv/bin/mojo run -I . examples/torso.mojo out/torso.png

@@ -3,20 +3,20 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A whole body, with skin and without it, in a lit studio.
+"""A neck and a head, with skin and without it, in a lit studio.
 
-    mojo run -I . examples/torso.mojo [path.png] [quality]
+    mojo run -I . examples/head.mojo [path.png] [quality]
 
-The page is Torso. A six-foot male stands twice on a floor. The left
-copy shows the bones, the joint tissues and the muscles of the torso
-and its shoulder girdle, the pelvis, both legs and feet, both arms and
-hands, and the neck and the head. The right copy shows one skin from
-the head down to the wrists, and each hand's own. The program also
-prints the mass of several torso parts.
+The page is Head. A six-foot male neck and head stand twice, each
+turning about its own axis. The left copy shows the cervical vertebrae,
+the skull, the mandible, the teeth and the hyoid, the joint tissues and
+the cartilages of the larynx, and the muscles of the neck, the jaw and
+the face. The right copy shows the skin and the hair. The program also
+prints the mass of several head parts.
 
 The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. Each level has about twice the triangles of the
-level below it. The default is `high`.
+level below it. The default is `xhigh`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -24,9 +24,9 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
+from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.quality import (
     anatomy_detail,
-    hand_skin_detail,
     quality_named,
     skin_detail,
     triangle_budget,
@@ -35,35 +35,32 @@ from extensions.humanoid.skeleton.simplify import (
     fit_triangle_budget,
 )
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.head.assembly import add_head
+from extensions.humanoid.skeleton.head.bones.dimensions import (
+    C2,
+    MANDIBLE,
+    SKULL,
+)
+from extensions.humanoid.skeleton.head.bones.mass import head_bone_mass
+from extensions.humanoid.skeleton.head.contents import BOTH, HAIR, SKIN
+from extensions.humanoid.skeleton.head.frame import head_dimensions
+from extensions.humanoid.skeleton.head.muscles.dimensions import (
+    MASSETER,
+    STERNOCLEIDOMASTOID,
+    TEMPORALIS,
+)
+from extensions.humanoid.skeleton.head.muscles.mass import head_muscle_mass
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
-from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.look import (
     cartilage_physical,
+    hair_phong,
     ligament_physical,
     muscle_albedo,
     muscle_physical,
     skin_albedo,
     skin_physical,
-    tendon_physical,
 )
-from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
-from extensions.humanoid.skeleton.torso.body import add_body
-from extensions.humanoid.skeleton.torso.bones.dimensions import (
-    L3,
-    RIB_7,
-    SCAPULA,
-    STERNUM,
-)
-from extensions.humanoid.skeleton.torso.bones.mass import torso_bone_mass
-from extensions.humanoid.skeleton.torso.contents import BOTH, SKIN
-from extensions.humanoid.skeleton.torso.muscles.dimensions import (
-    DIAPHRAGM,
-    ERECTOR_SPINAE,
-    PECTORALIS_MAJOR,
-)
-from extensions.humanoid.skeleton.torso.muscles.mass import torso_muscle_mass
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
@@ -79,13 +76,13 @@ from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
 
-comptime DEFAULT_OUTPUT = "out/torso.png"
+comptime DEFAULT_OUTPUT = "out/head.png"
 comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DEFAULT_QUALITY = "high"
-comptime SPACING = Float32(0.44)
+comptime DEFAULT_QUALITY = "xhigh"
+comptime SPACING = Float32(0.16)
 
 
 def frame_at(
@@ -93,17 +90,19 @@ def frame_at(
     camera: PerspectiveCamera,
     assets: Assets,
     mut scene: Scene,
-    node: NodeId,
+    left: NodeId,
+    right: NodeId,
     step: Angle,
 ) raises -> Framebuffer:
-    """Turn both bodies by `step` and render one frame.
+    """Turn both heads by `step` and render one frame.
 
     Args:
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
         scene: The persistent scene, edited in place.
-        node: The parent of both bodies.
+        left: The turning node of the anatomy.
+        right: The turning node of the skin.
         step: How much further to turn this frame.
 
     Returns:
@@ -112,31 +111,38 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    scene.node(node).rotate_y(step)
+    scene.node(left).rotate_y(step)
+    scene.node(right).rotate_y(step)
     scene.update()
     return renderer.render(scene, assets, camera)
 
 
-def _stand(
-    mut scene: Scene, parent: NodeId, x: Float32, ground: Float32
-) raises -> NodeId:
-    """Return a node that stands a body at `x` with its soles on the floor.
+def _hang(
+    mut scene: Scene, x: Float32, height: Float32, center: Vector3
+) raises -> Tuple[NodeId, NodeId]:
+    """Return a turning node at `x` and the node a head stands on.
+
+    The head stands so that its middle, `center` in the pelvis frame,
+    sits on the turning node's axis.
 
     Args:
-        scene: The scene that receives the node.
-        parent: Shared parent that turns both bodies.
+        scene: The scene that receives the nodes.
         x: Position along the row, in meters.
-        ground: Height of the hip joint centers above the soles.
+        height: Height of the head's middle above the floor.
+        center: The head's middle in the pelvis frame, in meters.
 
     Returns:
-        The body's node.
+        The turning node, then the node to stand the head on.
 
     Raises:
-        Error: If the scene refuses the node.
+        Error: If the scene refuses a node.
     """
+    var pivot = Object3D()
+    pivot.set_position(x, height, 0)
+    var pivot_id = scene.add(pivot^)
     var holder = Object3D()
-    holder.set_position(x, ground, 0)
-    return scene.attach(holder^, parent)
+    holder.set_position(-center.x, -center.y, -center.z)
+    return (pivot_id, scene.attach(holder^, pivot_id))
 
 
 def main() raises:
@@ -150,27 +156,20 @@ def main() raises:
     var budget = triangle_budget(level)
     var detail = anatomy_detail(level)
     var covering = skin_detail(level)
-    var hand_covering = hand_skin_detail(level)
 
-    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var S = person.stature.value
-    print("Torso tissue for a six-foot male:")
-    print("  L3", torso_bone_mass(person, L3).mass.to(GRAM), "g")
-    print("  seventh rib", torso_bone_mass(person, RIB_7).mass.to(GRAM), "g")
-    print("  sternum", torso_bone_mass(person, STERNUM).mass.to(GRAM), "g")
-    print("  scapula", torso_bone_mass(person, SCAPULA).mass.to(GRAM), "g")
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
+    print("Head tissue for a six-foot toned male:")
+    print("  skull", head_bone_mass(person, SKULL).mass.to(GRAM), "g")
+    print("  mandible", head_bone_mass(person, MANDIBLE).mass.to(GRAM), "g")
+    print("  axis", head_bone_mass(person, C2).mass.to(GRAM), "g")
+    print("  masseter", head_muscle_mass(person, MASSETER).mass.to(GRAM), "g")
     print(
-        "  erector spinae",
-        torso_muscle_mass(person, ERECTOR_SPINAE).mass.to(GRAM),
-        "g",
+        "  temporalis", head_muscle_mass(person, TEMPORALIS).mass.to(GRAM), "g"
     )
     print(
-        "  pectoralis major",
-        torso_muscle_mass(person, PECTORALIS_MAJOR).mass.to(GRAM),
+        "  sternocleidomastoid",
+        head_muscle_mass(person, STERNOCLEIDOMASTOID).mass.to(GRAM),
         "g",
-    )
-    print(
-        "  diaphragm", torso_muscle_mass(person, DIAPHRAGM).mass.to(GRAM), "g"
     )
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
@@ -188,10 +187,10 @@ def main() raises:
     var muscle = assets.materials.add(
         muscle_physical(assets.textures.add(muscle_albedo(64)))
     )
-    var tendon = assets.materials.add(tendon_physical())
     var skin = assets.materials.add(
         skin_physical(assets.textures.add(skin_albedo(64)))
     )
+    var hair = assets.materials.add(hair_phong())
 
     # Image-based light: three.js's RoomEnvironment through a PMREM.
     var room = room_environment(assets)
@@ -202,49 +201,41 @@ def main() raises:
     scene.environment = assets.cube_textures.add(lighting^)
     scene.environment_intensity = 0.55
 
-    # The soles' height below the hip joint centers: the leg's origin,
-    # its plafond, and the foot's ankle height.
-    var pose = assemble_pelvis(person)
-    var leg = assemble_leg(person, RIGHT)
-    var ground = -(
-        pose.leg_origin(RIGHT).y + leg.ankle_center().y - Float32(0.048) * S
-    )
-    var pivot = scene.add(Object3D())
+    # The head's middle: between the ears, a little below the eyes. The
+    # floor meets the neck at its base, where the torso would go on.
+    var center = head_dimensions(person.stature, person.sex).at(0, 70.0, 0)
+    var height = Float32(0.17)
     var first = len(scene.meshes)
-    var anatomy = _stand(scene, pivot, -SPACING, ground)
-    _ = add_body(
+    var anatomy = _hang(scene, -SPACING, height, center)
+    _ = add_head(
         scene,
         assets,
-        anatomy,
+        anatomy[1],
         person,
         bone,
-        cartilage,
-        cartilage,
         ligament,
+        cartilage,
         muscle,
-        tendon,
         BOTH,
         detail,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
     first = len(scene.meshes)
-    var covered = _stand(scene, pivot, SPACING, ground)
-    _ = add_body(
+    var covered = _hang(scene, SPACING, height, center)
+    _ = add_head(
         scene,
         assets,
-        covered,
+        covered[1],
         person,
         bone,
-        cartilage,
-        cartilage,
         ligament,
+        cartilage,
         muscle,
-        tendon,
-        SKIN,
+        SKIN.plus(HAIR),
         detail,
         covering,
-        hand_covering,
         skin_paint=skin,
+        hair_paint=hair,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
     for index in range(len(scene.meshes)):
@@ -264,14 +255,14 @@ def main() raises:
     )
 
     var lamp = Object3D()
-    lamp.set_position(1.4, 2.6, 2.2)
+    lamp.set_position(1.2, 2.2, 2.0)
     var lamp_node = scene.add(lamp^)
     var sun = directional_light(Color(255, 244, 228), lamp_node, 2.2)
     sun.cast_shadow = True
     sun.shadow.map_size = 1024
     sun.shadow.bias = -0.0005
     sun.shadow.normal_bias = 0.01
-    sun.shadow.set_extent(Length(1.8, METER))
+    sun.shadow.set_extent(Length(0.6, METER))
     sun.shadow.near = Length(0.5, METER)
     sun.shadow.far = Length(8.0, METER)
     scene.add_light(sun)
@@ -282,12 +273,16 @@ def main() raises:
         Length(0.05, METER),
         Length(30.0, METER),
     )
-    camera.place(Vector3(0.0, 1.05, 5.3), Vector3(0.0, 0.88, 0.0))
+    camera.place(Vector3(0.0, 0.26, 1.05), Vector3(0.0, 0.2, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(
+            frame_at(
+                renderer, camera, assets, scene, anatomy[0], covered[0], step
+            )
+        )
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")
