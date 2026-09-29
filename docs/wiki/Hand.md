@@ -8,6 +8,8 @@ The hand shares the pelvis frame. The origin is the midpoint of the two hip join
 
 This is not a three.js port. See [Extensions](Extensions).
 
+A quality level sets how many triangles the body holds. See [Mesh quality](Mesh-quality).
+
 ## Call it
 
 ```mojo

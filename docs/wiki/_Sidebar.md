@@ -82,6 +82,7 @@
 - [Torso](Torso)
 - [Arm](Arm)
 - [Hand](Hand)
+- [Mesh quality](Mesh-quality)
 - [Segment inertia](Segment-inertia)
 
 **Explanation**

@@ -5,13 +5,17 @@
 
 """An arm and its hand, with skin and without it, in a lit studio.
 
-    mojo run -I . examples/arm.mojo [path.png]
+    mojo run -I . examples/arm.mojo [path.png] [quality]
 
 The page is Arm. A six-foot male right arm and hand hang twice, each
 turning about its own length. The left copy shows the bones, the joint
 tissues and the muscles, and the clavicle and the scapula the arm hangs
 from. The right copy shows the skin and the hair. The program also
 prints the mass of several arm parts.
+
+The optional second argument is the mesh quality: `low`, `medium`,
+`high` or `xhigh`. Each level has about twice the triangles of the
+level below it. The default is `xhigh`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -20,6 +24,16 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.athleticism import TONED
+from extensions.humanoid.quality import (
+    anatomy_detail,
+    hand_skin_detail,
+    quality_named,
+    skin_detail,
+    triangle_budget,
+)
+from extensions.humanoid.skeleton.simplify import (
+    fit_triangle_budget,
+)
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.arm.assembly import place_mesh
@@ -78,9 +92,7 @@ comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime ANATOMY_DETAIL = 16
-comptime SKIN_DETAIL = 48
-comptime HAND_SKIN_DETAIL = 48
+comptime DEFAULT_QUALITY = "xhigh"
 comptime SPACING = Float32(0.22)
 
 
@@ -149,6 +161,13 @@ def main() raises:
     var destination = String(DEFAULT_OUTPUT)
     if len(args) > 1:
         destination = String(args[1])
+    var level = quality_named(String(DEFAULT_QUALITY))
+    if len(args) > 2:
+        level = quality_named(String(args[2]))
+    var budget = triangle_budget(level)
+    var detail = anatomy_detail(level)
+    var covering = skin_detail(level)
+    var hand_covering = hand_skin_detail(level)
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
     print("Arm tissue for a six-foot toned male:")
@@ -202,6 +221,7 @@ def main() raises:
     var tip = f.hand(0, -20, 0)
     var center = (f.shoulder + tip) * Float32(0.5)
     var height = Float32(0.62)
+    var first = len(scene.meshes)
     var anatomy = _hang(scene, -SPACING, height, center)
     _ = add_upper_limb(
         scene,
@@ -214,7 +234,7 @@ def main() raises:
         muscle,
         RIGHT,
         BOTH,
-        ANATOMY_DETAIL,
+        detail,
         tendon_paint=tendon,
     )
     # The clavicle and the scapula the arm hangs from.
@@ -223,16 +243,18 @@ def main() raises:
         scene,
         assets,
         anatomy[1],
-        torso_bone_from_dimensions(torso, CLAVICLE, RIGHT, ANATOMY_DETAIL),
+        torso_bone_from_dimensions(torso, CLAVICLE, RIGHT, detail),
         bone,
     )
     place_mesh(
         scene,
         assets,
         anatomy[1],
-        torso_bone_from_dimensions(torso, SCAPULA, RIGHT, ANATOMY_DETAIL),
+        torso_bone_from_dimensions(torso, SCAPULA, RIGHT, detail),
         bone,
     )
+    fit_triangle_budget(scene, assets, first, budget, available_workers())
+    first = len(scene.meshes)
     var covered = _hang(scene, SPACING, height, center)
     _ = add_upper_limb(
         scene,
@@ -245,12 +267,13 @@ def main() raises:
         muscle,
         RIGHT,
         SKIN.plus(HAIR),
-        ANATOMY_DETAIL,
-        SKIN_DETAIL,
-        HAND_SKIN_DETAIL,
+        detail,
+        covering,
+        hand_covering,
         skin_paint=skin,
         hair_paint=hair,
     )
+    fit_triangle_budget(scene, assets, first, budget, available_workers())
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
         scene.meshes[index].receive_shadow = True

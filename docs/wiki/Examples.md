@@ -109,6 +109,12 @@ mkdir -p out
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
+`pelvis.mojo`, `torso.mojo`, `arm.mojo` and `hand.mojo` take a mesh quality after the path: `low`, `medium`, `high` or `xhigh`. See [Mesh quality](Mesh-quality).
+
+```bash
+.venv/bin/mojo run -I . examples/torso.mojo out/torso.png low
+```
+
 `viewer.mojo` writes no file. It opens a window in the terminal, and `make viewer` runs it. See [Windowing and controls](Windowing-and-controls).
 
 Animated outputs are APNG files. A browser or VS Code plays them. A viewer that does not know APNG shows the first frame.

@@ -8,6 +8,8 @@ The origin is the midpoint of the two hip joint centers. Plus y is proximal. Plu
 
 This is not a three.js port. See [Extensions](Extensions).
 
+A quality level sets how many triangles the body holds. See [Mesh quality](Mesh-quality).
+
 ## Call it
 
 ```mojo

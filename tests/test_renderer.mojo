@@ -6356,6 +6356,59 @@ def test_a_specular_map_is_carried_checked_and_read_in_the_renderer() raises:
                 )
 
 
+def test_many_workers_prepare_the_frame_one_worker_does() raises:
+    # A ball of more triangles than one piece holds, and a box: four
+    # workers share the triangles out between them, and the corners come
+    # back in the order one worker emits them, as does the image.
+    var assets = Assets()
+    var paint = assets.materials.add(Material(Color(200, 120, 90)))
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 96, 48))
+    var box = assets.geometries.add(cube(Length(0.5, METER)))
+    var scene = unlit_scene_with_a_node()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(ball, paint, NodeId(0)))
+    meshes.append(Mesh(box, paint, NodeId(0)))
+    var one = Renderer(WIDTH, HEIGHT)
+    var four = Renderer(WIDTH, HEIGHT, workers=4)
+    var alone = prepared(one, scene, assets, meshes, a_camera())
+    var shared = prepared(four, scene, assets, meshes, a_camera())
+    assert_equal(len(shared), len(alone))
+    for index in range(len(alone)):  # pragma: no branch
+        assert_equal(shared[index].x, alone[index].x)
+        assert_equal(shared[index].y, alone[index].y)
+        assert_equal(shared[index].z, alone[index].z)
+        assert_equal(shared[index].u, alone[index].u)
+    var first = rendered(one, scene, assets, meshes, a_camera())
+    var second = rendered(four, scene, assets, meshes, a_camera())
+    for y in range(HEIGHT):  # pragma: no branch
+        for x in range(WIDTH):  # pragma: no branch
+            var was = first.get_pixel(x, y)
+            var now = second.get_pixel(x, y)
+            assert_equal(now.r, was.r)
+            assert_equal(now.g, was.g)
+            assert_equal(now.b, was.b)
+
+
+def test_an_error_on_a_worker_reaches_the_caller() raises:
+    # A far plane moved in front of the near one after the camera was
+    # built: the clipper refuses the ball's triangles on whichever worker
+    # emits them, and prepare raises it once every worker has finished.
+    var assets = Assets()
+    var paint = assets.materials.add(Material(Color(200, 120, 90)))
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 96, 48))
+    var scene = unlit_scene_with_a_node()
+    var meshes = List[Mesh]()
+    var shown = Mesh(ball, paint, NodeId(0))
+    shown.frustum_culled = False
+    meshes.append(shown^)
+    var camera = a_camera()
+    camera.far = Length(0.05, METER)
+    with assert_raises(contains="far plane"):
+        _ = prepared(
+            Renderer(WIDTH, HEIGHT, workers=2), scene, assets, meshes, camera
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 

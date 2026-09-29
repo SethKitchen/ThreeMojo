@@ -239,6 +239,8 @@ var image = target.resolve(renderer.workers, renderer.tone_curve(), renderer.ton
 
 With more than one worker, the image is cut into horizontal bands. Each band is drawn on its own thread. The result is byte for byte the same as one thread. See [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands).
 
+`prepare` also uses the workers. Each draw's vertices are transformed on one thread. The draw's triangles are then cut into pieces of at most 2,048. The workers emit the pieces in parallel, each into a list of its own. The lists are copied into the frame in draw order, so the corners are the same as on one thread.
+
 The default is one worker. The coverage tool needs probe records in order.
 
 ## Errors
@@ -260,7 +262,7 @@ A mesh the camera's layers or frustum leave out is not checked.
 
 ## Performance
 
-`make bench-scene` times each stage on its own on a sphere of twelve thousand triangles. At 1280 by 720 with 16 workers a frame takes about 6 milliseconds on an Apple M4 Max. The rasterizer is the largest stage. `prepare` is single threaded and takes about half a millisecond. A triangle wholly inside the depth range skips the clipper, and the corner list is sized once per draw.
+`make bench-scene` times each stage on its own on a sphere of twelve thousand triangles. At 1280 by 720 with 16 workers a frame takes about 6 milliseconds on an Apple M4 Max. The rasterizer is the largest stage. `prepare` takes about half a millisecond. A triangle wholly inside the depth range skips the clipper, and the corner list is sized once per draw.
 
 The resolve encodes the clear color once and copies it to every pixel that still holds it. A frame that is mostly background pays for the pixels that are not.
 

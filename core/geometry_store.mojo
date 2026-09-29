@@ -84,3 +84,20 @@ struct GeometryStore(Movable):
         if id.value < 0 or id.value >= len(self.geometries):
             raise Error("No geometry has that id")
         return self.geometries[id.value]
+
+    def replace(mut self, id: GeometryId, var geometry: BufferGeometry) raises:
+        """Put `geometry` in place of the one that `id` names.
+
+        Every mesh that names `id` draws the new geometry. The id stays
+        valid.
+
+        Args:
+            id: Which geometry to replace.
+            geometry: The new geometry; moved in, not copied.
+
+        Raises:
+            Error: If no geometry has that id.
+        """
+        if id.value < 0 or id.value >= len(self.geometries):
+            raise Error("No geometry has that id")
+        self.geometries[id.value] = geometry^

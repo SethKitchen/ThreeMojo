@@ -381,6 +381,18 @@ def _march_cube(
 
 
 def _lerp_zero(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
+    """Return the zero of the field along the segment from `a` to `b`.
+
+    Worked from the end that comes first in x, then y, then z. Two
+    tetrahedra that share an edge then compute the same bits for its
+    zero, so `simplify.weld` joins their corners exactly.
+    """
+    if b.x < a.x or (b.x == a.x and (b.y < a.y or (b.y == a.y and b.z < a.z))):
+        return _lerp_ordered(b, a, db, da)
+    return _lerp_ordered(a, b, da, db)
+
+
+def _lerp_ordered(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
     """Return the zero of the field along the segment from `a` to `b`."""
     var span = da - db
     var t = Float32(0.5)

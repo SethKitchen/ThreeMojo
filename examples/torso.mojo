@@ -5,7 +5,7 @@
 
 """A body below the neck, with skin and without it, in a lit studio.
 
-    mojo run -I . examples/torso.mojo [path.png]
+    mojo run -I . examples/torso.mojo [path.png] [quality]
 
 The page is Torso. A six-foot male stands twice on a floor, without
 the neck or the head. The left copy shows the bones, the joint tissues
@@ -13,6 +13,10 @@ and the muscles of the torso and its shoulder girdle, the pelvis, both
 legs and feet, and both arms and hands. The right copy shows one skin
 down to the wrists, and each hand's own. The program also prints the
 mass of several torso parts.
+
+The optional second argument is the mesh quality: `low`, `medium`,
+`high` or `xhigh`. Each level has about twice the triangles of the
+level below it. The default is `high`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -20,6 +24,16 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
+from extensions.humanoid.quality import (
+    anatomy_detail,
+    hand_skin_detail,
+    quality_named,
+    skin_detail,
+    triangle_budget,
+)
+from extensions.humanoid.skeleton.simplify import (
+    fit_triangle_budget,
+)
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
@@ -70,8 +84,7 @@ comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime ANATOMY_DETAIL = 16
-comptime SKIN_DETAIL = 56
+comptime DEFAULT_QUALITY = "high"
 comptime SPACING = Float32(0.44)
 
 
@@ -131,6 +144,13 @@ def main() raises:
     var destination = String(DEFAULT_OUTPUT)
     if len(args) > 1:
         destination = String(args[1])
+    var level = quality_named(String(DEFAULT_QUALITY))
+    if len(args) > 2:
+        level = quality_named(String(args[2]))
+    var budget = triangle_budget(level)
+    var detail = anatomy_detail(level)
+    var covering = skin_detail(level)
+    var hand_covering = hand_skin_detail(level)
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var S = person.stature.value
@@ -190,6 +210,7 @@ def main() raises:
         pose.leg_origin(RIGHT).y + leg.ankle_center().y - Float32(0.048) * S
     )
     var pivot = scene.add(Object3D())
+    var first = len(scene.meshes)
     var anatomy = _stand(scene, pivot, -SPACING, ground)
     _ = add_body(
         scene,
@@ -203,8 +224,10 @@ def main() raises:
         muscle,
         tendon,
         BOTH,
-        ANATOMY_DETAIL,
+        detail,
     )
+    fit_triangle_budget(scene, assets, first, budget, available_workers())
+    first = len(scene.meshes)
     var covered = _stand(scene, pivot, SPACING, ground)
     _ = add_body(
         scene,
@@ -218,10 +241,12 @@ def main() raises:
         muscle,
         tendon,
         SKIN,
-        ANATOMY_DETAIL,
-        SKIN_DETAIL,
+        detail,
+        covering,
+        hand_covering,
         skin_paint=skin,
     )
+    fit_triangle_budget(scene, assets, first, budget, available_workers())
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
         scene.meshes[index].receive_shadow = True
