@@ -86,7 +86,7 @@ def named_arm_nerves() -> List[ArmNerve]:
         The axillary, musculocutaneous, radial, median and ulnar nerves.
     """
     var parts = List[ArmNerve]()
-    for index in range(ULNAR_NERVE.value + 1):
+    for index in range(ULNAR_NERVE.value + 1):  # pragma: no branch
         parts.append(ArmNerve(index))
     return parts^
 

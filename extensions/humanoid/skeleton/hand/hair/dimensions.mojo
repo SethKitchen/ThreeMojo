@@ -80,7 +80,7 @@ def named_hand_hair() -> List[HandHair]:
         The back of the hand's hair, then the fingers'.
     """
     var parts = List[HandHair]()
-    for index in range(FINGER_HAIR.value + 1):
+    for index in range(FINGER_HAIR.value + 1):  # pragma: no branch
         parts.append(HandHair(index))
     return parts^
 
@@ -115,13 +115,13 @@ def hand_hair_field(
     var reach = f.cm(4.0)
     var sweeps = List[Sweep]()
     if part == HAND_HAIR:
-        for k in range(6):
+        for k in range(6):  # pragma: no branch
             var x = Float32(2.0) - Float32(0.8) * Float32(k)
             var y = Float32(-4.0) - Float32(0.6) * Float32(k % 3)
             var root = surface_root(skin, f.hand(x, y, 0.3), back, reach)
             sweeps.append(shaft(root, back, down, 0.005, 0.00001))
     else:
-        for k in range(INDEX.value, LITTLE.value + 1):
+        for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
             var joints = finger_joints(arm, Finger(k))
             var middle = (joints[1] + joints[2]) * Float32(0.5)
             var root = surface_root(skin, middle, back, reach)

@@ -281,7 +281,7 @@ def add_body(
         var sides = List[BodySide]()
         sides.append(RIGHT)
         sides.append(LEFT)
-        for s in range(2):
+        for s in range(2):  # pragma: no branch
             _ = add_arm(
                 scene,
                 assets,
@@ -325,7 +325,7 @@ def add_body(
         var nid = scene.attach(Object3D(), root_id)
         scene.add_mesh(Mesh(shape, skin, nid))
         var arms = arm_muscle_dimensions(spec)
-        for s in range(2):
+        for s in range(2):  # pragma: no branch
             var side = RIGHT
             if s == 1:
                 side = LEFT

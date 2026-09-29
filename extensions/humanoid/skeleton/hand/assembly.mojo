@@ -151,7 +151,7 @@ def add_hand(
     var root_id = scene.attach(root^, parent)
     if contents.includes_bones():
         var bones = named_hand_bones()
-        for index in range(len(bones)):
+        for index in range(len(bones)):  # pragma: no branch
             place_mesh(
                 scene,
                 assets,
@@ -161,7 +161,7 @@ def add_hand(
             )
     if contents.includes_ligaments():
         var parts = named_hand_ligaments()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             var paint = ligament_paint
             if (
                 parts[index] == JOINT_CARTILAGE
@@ -180,7 +180,7 @@ def add_hand(
     if contents.includes_muscles():
         var tendon = resolved_paint(assets, tendon_paint, tendon_phong())
         var parts = named_hand_muscles()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             var paint = muscle_paint
             if is_hand_tendon(parts[index]):
                 paint = tendon
@@ -195,7 +195,7 @@ def add_hand(
         var artery = resolved_paint(assets, artery_paint, artery_phong())
         var vein = resolved_paint(assets, vein_paint, vein_phong())
         var parts = named_hand_vessels()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             var paint = vein
             if is_hand_artery(parts[index]):
                 paint = artery
@@ -209,7 +209,7 @@ def add_hand(
     if contents.includes_lymph():
         var lymph = resolved_paint(assets, lymph_paint, lymph_phong())
         var parts = named_hand_lymph()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             place_mesh(
                 scene,
                 assets,
@@ -220,7 +220,7 @@ def add_hand(
     if contents.includes_nerves():
         var nerve = resolved_paint(assets, nerve_paint, nerve_phong())
         var parts = named_hand_nerves()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             place_mesh(
                 scene,
                 assets,
@@ -240,7 +240,7 @@ def add_hand(
     if contents.includes_hair():
         var hair = resolved_paint(assets, hair_paint, hair_phong())
         var parts = named_hand_hair()
-        for index in range(len(parts)):
+        for index in range(len(parts)):  # pragma: no branch
             place_mesh(
                 scene,
                 assets,

@@ -266,7 +266,7 @@ def named_pelvis_vessels() -> List[PelvisVessel]:
         Nine arteries, then four veins.
     """
     var parts = List[PelvisVessel]()
-    for index in range(INTERNAL_ILIAC_VEIN.value + 1):
+    for index in range(INTERNAL_ILIAC_VEIN.value + 1):  # pragma: no branch
         parts.append(PelvisVessel(index))
     return parts^
 

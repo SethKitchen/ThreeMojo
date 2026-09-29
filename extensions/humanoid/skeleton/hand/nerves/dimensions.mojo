@@ -98,7 +98,7 @@ def named_hand_nerves() -> List[HandNerve]:
         The median, ulnar and radial branches, then the digital nerves.
     """
     var parts = List[HandNerve]()
-    for index in range(DIGITAL_NERVES.value + 1):
+    for index in range(DIGITAL_NERVES.value + 1):  # pragma: no branch
         parts.append(HandNerve(index))
     return parts^
 
@@ -130,7 +130,7 @@ def hand_nerve_field(
     if part == DIGITAL_NERVES:
         var sweeps = List[Sweep]()
         var digits = named_fingers()
-        for index in range(len(digits)):
+        for index in range(len(digits)):  # pragma: no branch
             var joints = finger_joints(arm, digits[index])
             var s = finger_scale(digits[index])
             var front = palmar_direction(arm, digits[index])
@@ -139,12 +139,12 @@ def hand_nerve_field(
             along.normalize()
             var aside = cross(along, front)
             aside.normalize()
-            for k in range(2):
+            for k in range(2):  # pragma: no branch
                 var sign = Float32(1)
                 if k == 1:
                     sign = Float32(-1)
                 var run = Sweep(Vector3(1, 0, 0))
-                for j in range(1, last):
+                for j in range(1, last):  # pragma: no branch
                     var r = f.cm((0.45 - 0.05 * Float32(j)) * s)
                     run.round(
                         joints[j] + aside * (sign * r) + front * f.cm(0.45),

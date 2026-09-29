@@ -155,7 +155,7 @@ struct PelvisSkinField(Copyable, DistanceField, Movable):
         _append_sphere(points, coccyx.coccyx0, coccyx.coccyx_ml)
         _append_sphere(points, coccyx.coccyx2, coccyx.coccyx_ml)
         var muscles = named_pelvis_muscles()
-        for index in range(len(muscles)):
+        for index in range(len(muscles)):  # pragma: no branch
             var right = PelvisMuscleField(dimensions, muscles[index], RIGHT)
             _append_chains(points, right, False)
             _append_chains(points, right, True)
@@ -164,7 +164,7 @@ struct PelvisSkinField(Copyable, DistanceField, Movable):
         var bottom = p.symphysis_bottom.y - 0.034 * S
         var top = p.crest_top.y + 0.025 * S
         var covers = List[Float32]()
-        for _ in range(PELVIS_SKIN_SECTIONS):
+        for _ in range(PELVIS_SKIN_SECTIONS):  # pragma: no branch
             covers.append(self.subcutaneous + self.dermis)
         # Three passes fill a groove between one muscle's belly and the
         # next, as the fat over them does.
@@ -292,7 +292,7 @@ def _append_hip_bone(
     mut points: List[LoftSample], shape: HipBoneShape, mirror: Bool
 ):
     """Append a hip bone's capsules, its wing plates' edges and its cup."""
-    for index in range(len(shape.capsules)):
+    for index in range(len(shape.capsules)):  # pragma: no branch
         var capsule = shape.capsules[index]
         _append_segment(
             points,
@@ -303,7 +303,7 @@ def _append_hip_bone(
         )
     # The fan's blades share their edges, and the hub lies inside the
     # bone, so the rim edges carry the wing's outline.
-    for index in range(len(shape.plates)):
+    for index in range(len(shape.plates)):  # pragma: no branch
         var plate = shape.plates[index]
         _append_segment(
             points,
@@ -418,7 +418,7 @@ def _append_leg(
     parts.append(BICEPS_FEMORIS)
     parts.append(SEMITENDINOSUS)
     parts.append(SEMIMEMBRANOSUS)
-    for index in range(len(parts)):
+    for index in range(len(parts)):  # pragma: no branch
         var m = MuscleField(legs, parts[index])
         var first = len(points)
         _append_leg_station(

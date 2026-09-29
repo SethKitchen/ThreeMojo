@@ -313,7 +313,7 @@ def _section_support(
 def _least(values: List[Float32]) -> Float32:
     """Return the smallest value."""
     var least = values[0]
-    for index in range(1, len(values)):
+    for index in range(1, len(values)):  # pragma: no branch
         least = min(least, values[index])
     return least
 
@@ -579,7 +579,7 @@ def _centroid(slices: List[List[_Ellipse]]) -> Tuple[Float32, Float32]:
     An empty section returns the origin; `fit_loft` replaces it.
     """
     var all = List[_Ellipse]()
-    for sub in range(len(slices)):
+    for sub in range(len(slices)):  # pragma: no branch
         for index in range(len(slices[sub])):
             all.append(slices[sub][index])
     if len(all) > 0:
@@ -617,7 +617,7 @@ def _extend(
     way, measured from the center. It is exact for every ellipse, so no
     solid can fall between two rays.
     """
-    for ray in range(LOFT_RAYS):
+    for ray in range(LOFT_RAYS):  # pragma: no branch
         var angle = _ray_angle(ray)
         var ux = cos(angle)
         var uz = sin(angle)
@@ -648,12 +648,12 @@ def _polygon_radii(support: List[Float32]) -> List[Float32]:
     """
     var quarter = LOFT_RAYS // 4
     var facing = List[Float32]()
-    for turn in range(quarter):
+    for turn in range(quarter):  # pragma: no branch
         facing.append(cos(_ray_angle(turn)))
     var radii = List[Float32](length=LOFT_RAYS, fill=0)
-    for ray in range(LOFT_RAYS):
+    for ray in range(LOFT_RAYS):  # pragma: no branch
         var nearest = support[ray]
-        for turn in range(1, quarter):
+        for turn in range(1, quarter):  # pragma: no branch
             nearest = min(
                 nearest,
                 min(

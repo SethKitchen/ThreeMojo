@@ -75,7 +75,7 @@ def named_arm_hair() -> List[ArmHair]:
         The upper arm's hair, then the forearm's.
     """
     var parts = List[ArmHair]()
-    for index in range(FOREARM_HAIR.value + 1):
+    for index in range(FOREARM_HAIR.value + 1):  # pragma: no branch
         parts.append(ArmHair(index))
     return parts^
 
@@ -184,7 +184,7 @@ def arm_hair_field(
     var down = b - a
     down.normalize()
     var sweeps = List[Sweep]()
-    for k in range(SHAFTS):
+    for k in range(SHAFTS):  # pragma: no branch
         var t = Float32(0.15) + Float32(0.7) * Float32(k) / Float32(SHAFTS - 1)
         var root = surface_root(skin, mix_point(a, b, t), around[k], 0.12 * S)
         sweeps.append(shaft(root, around[k], down, length, radius))

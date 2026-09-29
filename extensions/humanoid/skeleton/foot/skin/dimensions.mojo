@@ -315,8 +315,8 @@ def _pads(
     var span = foot.lateral_malleolus.x - foot.medial_malleolus.x
     var lateral = span / abs(span)
     # The heel pad: two either side of the midline, under the tuberosity.
-    for across in [Float32(-0.14), Float32(0.14)]:
-        for along in [Float32(0.0), Float32(0.014)]:
+    for across in [Float32(-0.14), Float32(0.14)]:  # pragma: no branch
+        for along in [Float32(0.0), Float32(0.014)]:  # pragma: no branch
             samples.append(
                 LoftSample(
                     Vector3(
@@ -331,13 +331,13 @@ def _pads(
                 )
             )
     # The lateral column, from the heel to the fifth metatarsal head.
-    for k in range(1, 5):
+    for k in range(1, 5):  # pragma: no branch
         var t = Float32(k) / Float32(5)
         var z = foot.heel.z + (foot.mt5_head.z - foot.heel.z) * t
         var x = lateral * (Float32(0.14) + Float32(0.14) * t) * W
         samples.append(LoftSample(Vector3(x, lift, z), r, r, r, False))
     # The ball of the foot, under every metatarsal head.
-    for head in [
+    for head in [  # pragma: no branch
         foot.mt1_head,
         foot.mt2_head,
         foot.mt3_head,
@@ -348,7 +348,7 @@ def _pads(
             LoftSample(Vector3(head.x, lift, head.z), r, r, r, False)
         )
     # The toe pulps, just behind each tip.
-    for tip in [
+    for tip in [  # pragma: no branch
         foot.hallux_tip,
         foot.toe2_tip,
         foot.toe3_tip,

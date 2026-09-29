@@ -108,7 +108,7 @@ def hair_mesh_from_field(
     var side = RIGHT
     if field.mirror:
         side = LEFT
-    for index in range(len(field.sweeps)):
+    for index in range(len(field.sweeps)):  # pragma: no branch
         var one = List[Sweep]()
         one.append(field.sweeps[index].copy())
         var single = SweepField(

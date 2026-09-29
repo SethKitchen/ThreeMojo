@@ -770,7 +770,7 @@ def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
     var shifts = SIMD[DType.float32, BELLY_SLOTS](0)
     var stations = List[_Station]()
     var parts = named_muscle_parts()
-    for index in range(len(parts)):
+    for index in range(len(parts)):  # pragma: no branch
         var part = parts[index]
         if not _packs(part):
             continue
@@ -779,22 +779,22 @@ def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
         stations.append(_Station(at, chain.p1, chain.r1, chain.a1, 0))
         stations.append(_Station(at + 4, chain.p2, chain.r2, chain.a2, 0))
         stations.append(_Station(at + 8, chain.p3, chain.r3, chain.a3, 0))
-    for index in range(len(stations)):
+    for index in range(len(stations)):  # pragma: no branch
         var axis = _nearest_bone(d, stations[index].center)
         stations[index].reach = _flat(stations[index].center - axis).length()
     _sort_by_reach(stations)
     # First every belly packs in as it is.
     var packed = List[_Station]()
-    for index in range(len(stations)):
+    for index in range(len(stations)):  # pragma: no branch
         var station = stations[index]
         station.center = _pull_in(d, station, packed)
         packed.append(station)
     # Then each muscle spreads as far as its tightest station allows, so
     # it widens evenly along its length instead of in ridges.
     var spread = SIMD[DType.float32, BELLY_SLOTS](SPREAD_LIMIT)
-    for index in range(len(packed)):
+    for index in range(len(packed)):  # pragma: no branch
         var others = List[_Station]()
-        for other in range(len(packed)):
+        for other in range(len(packed)):  # pragma: no branch
             if other != index:
                 others.append(packed[other])
         var part = packed[index].slot // 12
@@ -803,7 +803,7 @@ def _pack(d: MuscleDimensions) -> SIMD[DType.float32, BELLY_SLOTS]:
         )
     # Last, each muscle packs in again at its spread.
     var placed = List[_Station]()
-    for index in range(len(stations)):
+    for index in range(len(stations)):  # pragma: no branch
         var station = stations[index]
         var start = station.center
         var ml = station.ml
@@ -831,7 +831,7 @@ def _pull_in(
     var toward = inward * (1 / max(room, Float32(1.0e-6)))
     var low = Float32(0)
     var high = room
-    for _ in range(10):
+    for _ in range(10):  # pragma: no branch
         var middle = Float32(0.5) * (low + high)
         if _fits(d, station, station.center + toward * middle, placed):
             low = middle
@@ -852,7 +852,7 @@ def _spread_factor(
     var widen_z = _widens_z(d, station)
     var low = Float32(1)
     var high = SPREAD_LIMIT
-    for _ in range(8):
+    for _ in range(8):  # pragma: no branch
         var middle = Float32(0.5) * (low + high)
         if _fits(d, _widened(station, middle, widen_z), station.center, placed):
             low = middle
@@ -909,13 +909,13 @@ def _fits(
     """Return whether a station centered at `center` presses too hard."""
     var S = d.stature.value
     var bones = _bones_at(d, center.y)
-    for index in range(len(bones)):
+    for index in range(len(bones)):  # pragma: no branch
         var bone = bones[index]
         var gap = _flat(center - bone)
         var reach = _reach(station.ml, station.ap, gap) + bone.y
         if gap.length() < (1 - PACK_OVERLAP) * reach:
             return False
-    for index in range(len(placed)):
+    for index in range(len(placed)):  # pragma: no branch
         var other = placed[index]
         var rise = abs(other.center.y - center.y)
         if rise < Float32(0.5) * (station.ap + other.ap) + Float32(0.01) * S:
@@ -990,7 +990,7 @@ def _along(
 
 def _sort_by_reach(mut stations: List[_Station]):
     """Sort stations nearest the bone first; an insertion sort."""
-    for index in range(1, len(stations)):
+    for index in range(1, len(stations)):  # pragma: no branch
         var held = stations[index]
         var k = index - 1
         while k >= 0 and stations[k].reach > held.reach:

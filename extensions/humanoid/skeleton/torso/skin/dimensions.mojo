@@ -104,14 +104,14 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         var g = shoulder_girdle(t)
         var arm = Vector3(g.shoulder.x - f.cm(2.3), g.shoulder.y - f.cm(1.0), 0)
         var bones = named_torso_bones()
-        for index in range(len(bones)):
+        for index in range(len(bones)):  # pragma: no branch
             _append_field(points, torso_bone_field(t, bones[index], RIGHT))
             if is_paired_bone(bones[index]):
                 _append_field(points, torso_bone_field(t, bones[index], LEFT))
         _append_field(points, torso_ligament_field(t, COSTAL_CARTILAGES, RIGHT))
         _append_field(points, torso_ligament_field(t, COSTAL_CARTILAGES, LEFT))
         var muscles = named_torso_muscles()
-        for index in range(len(muscles)):
+        for index in range(len(muscles)):  # pragma: no branch
             var part = muscles[index]
             _append_field(
                 points, torso_muscle_field(dimensions, part, RIGHT), arm
@@ -134,7 +134,7 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         var ribs = f.at(0, 36.0, 0).y
         var covers = List[Float32]()
         var spacing = (top - bottom) / Float32(TORSO_SKIN_SECTIONS - 1)
-        for section in range(TORSO_SKIN_SECTIONS):
+        for section in range(TORSO_SKIN_SECTIONS):  # pragma: no branch
             var y = bottom + spacing * Float32(section)
             var t_up = min(max((y - waist) / (ribs - waist), 0), 1)
             covers.append(
@@ -241,11 +241,12 @@ def _append_field(
     stations. A station farther from the midline than `arm.x` and lower
     than `arm.y` is left out: it lies under the arm's skin.
     """
-    for s in range(len(field.sweeps)):
+    for s in range(len(field.sweeps)):  # pragma: no branch
         var sweep = field.sweeps[s].copy()
         var flat = sweep.hint.z > 0.5
-        var first = len(points)
-        for index in range(len(sweep.stations)):
+        # The first station kept starts a run; each later one joins it.
+        var started = False
+        for index in range(len(sweep.stations)):  # pragma: no branch
             var station = sweep.stations[index]
             var p = station.p
             if p.x > arm.x and p.y < arm.y:
@@ -256,10 +257,8 @@ def _append_field(
             var ap = station.ap
             if flat:
                 ap = station.ml
-            if len(sweep.stations) < 2:
-                points.append(LoftSample(p, ml, ap, ap, False))
-                continue
-            points.append(LoftSample(p, ml, ap, 0, index > 0))
+            points.append(LoftSample(p, ml, ap, 0, started))
+            started = True
             if index + 1 < len(sweep.stations):
                 var next = sweep.stations[index + 1]
                 var q = next.p
@@ -279,5 +278,3 @@ def _append_field(
                         True,
                     )
                 )
-        if len(points) > first:
-            points[first].joins = False

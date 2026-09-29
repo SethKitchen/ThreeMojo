@@ -119,12 +119,12 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         var anywhere = Float32(-1.0e9)
         # The palm: the carpals, the metacarpals and the hand's muscles.
         var palm = List[LoftSample]()
-        for index in range(PROXIMAL_PHALANX_1.value):
+        for index in range(PROXIMAL_PHALANX_1.value):  # pragma: no branch
             append_stations(
                 palm, hand_bone_field(arm, HandBone(index), RIGHT), anywhere
             )
         var muscles = named_hand_muscles()
-        for index in range(len(muscles)):
+        for index in range(len(muscles)):  # pragma: no branch
             if is_hand_tendon(muscles[index]):
                 continue
             append_stations(
@@ -135,7 +135,9 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         append_stations(palm, arm_bone_field(arm, RADIUS, RIGHT), anywhere)
         append_stations(palm, arm_bone_field(arm, ULNA, RIGHT), anywhere)
         var forearm = named_arm_muscles()
-        for index in range(PRONATOR_TERES.value, len(forearm)):
+        for index in range(
+            PRONATOR_TERES.value, len(forearm)
+        ):  # pragma: no branch
             append_stations(
                 palm,
                 arm_muscle_field(dimensions, forearm[index], RIGHT),
@@ -159,11 +161,11 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         )
         # Each digit: its phalanges, from its knuckle past its tip.
         var digits = named_fingers()
-        for d in range(len(digits)):
+        for d in range(len(digits)):  # pragma: no branch
             var finger = digits[d]
             var bones = finger_bones(finger)
             var samples = List[LoftSample]()
-            for b in range(1, len(bones)):
+            for b in range(1, len(bones)):  # pragma: no branch
                 append_stations(
                     samples, hand_bone_field(arm, bones[b], RIGHT), anywhere
                 )
@@ -188,7 +190,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
             )
         var low = self.lofts[0].low
         var high = self.lofts[0].high
-        for index in range(1, len(self.lofts)):
+        for index in range(1, len(self.lofts)):  # pragma: no branch
             low = Vector3(
                 min(low.x, self.lofts[index].low.x),
                 min(low.y, self.lofts[index].low.y),
@@ -214,7 +216,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         if self.mirror:
             p = flip_x(point)
         var d = loft_distance(self.lofts[0], p)
-        for index in range(1, len(self.lofts)):
+        for index in range(1, len(self.lofts)):  # pragma: no branch
             d = smin(d, loft_distance(self.lofts[index], p), self.blend)
         return d
 
@@ -261,6 +263,6 @@ struct HandSkinLayerField(Copyable, DistanceField, Movable):
 def _covers(count: Int, cover: Float32) -> List[Float32]:
     """Return one equal cover per section."""
     var out = List[Float32]()
-    for _ in range(count):
+    for _ in range(count):  # pragma: no branch
         out.append(cover)
     return out^

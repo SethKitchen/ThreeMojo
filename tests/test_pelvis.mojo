@@ -328,6 +328,9 @@ def test_frame_and_sacrum_helpers() raises:
     var male_point = male_frame.template(10, 10, 10)
     var female_point = female_frame.template(10, 10, 10)
     assert_true(female_point.x > male_point.x)
+    # A woman's sacrum is broader, and solid along its curve.
+    var her_sacrum = PelvisBoneField(woman, SACRUM)
+    assert_true(her_sacrum.distance(her_sacrum.sacrum.c1) < 0)
     assert_true(female_point.y < male_point.y)
     assert_equal(female_point.z, male_point.z)
     assert_true(female_frame.arched(0.1, 0, 0).x > female_frame.at(0.1, 0, 0).x)
@@ -872,6 +875,21 @@ def test_add_pelvis_places_every_layer() raises:
             BONES,
             7,
         )
+    # The bones alone: no layer after them is drawn.
+    var bare = Scene()
+    _ = add_pelvis(
+        bare,
+        assets,
+        bare.add(Object3D()),
+        person,
+        bone,
+        ligament,
+        cartilage,
+        muscle,
+        BONES,
+        8,
+    )
+    assert_equal(len(bare.meshes), 4)
 
 
 def test_add_lower_body_joins_pelvis_legs_and_feet() raises:

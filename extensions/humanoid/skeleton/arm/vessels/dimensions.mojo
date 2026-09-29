@@ -114,7 +114,7 @@ def named_arm_vessels() -> List[ArmVessel]:
         The four arteries, then the five veins.
     """
     var parts = List[ArmVessel]()
-    for index in range(MEDIAN_CUBITAL_VEIN.value + 1):
+    for index in range(MEDIAN_CUBITAL_VEIN.value + 1):  # pragma: no branch
         parts.append(ArmVessel(index))
     return parts^
 

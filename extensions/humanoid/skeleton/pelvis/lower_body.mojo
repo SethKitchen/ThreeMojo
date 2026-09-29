@@ -260,7 +260,7 @@ def add_lower_body(
     var sides = List[BodySide]()
     sides.append(RIGHT)
     sides.append(LEFT)
-    for s in range(2):
+    for s in range(2):  # pragma: no branch
         var side = sides[s]
         var at = dims.leg_origin_at(side)
         var holder = Object3D()

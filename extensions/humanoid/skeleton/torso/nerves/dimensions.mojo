@@ -115,19 +115,19 @@ def torso_nerve_field(
     var sweeps = List[Sweep]()
     if part == SPINAL_CORD:
         var cord = List[Vector3]()
-        for index in range(L1.value + 1):
+        for index in range(L1.value + 1):  # pragma: no branch
             cord.append(canal_center(t, index))
         # The conus ends at the disc below the first lumbar vertebra.
         cord.append(canal_center(t, L1.value + 1) + Vector3(0, f.cm(1.2), 0))
         sweeps.append(tube(cord, f.cm(0.5), f.cm(0.3)))
     elif part == SYMPATHETIC_TRUNK:
         var chain = List[Vector3]()
-        for index in range(1, 11, 3):
+        for index in range(1, 11, 3):  # pragma: no branch
             var c = t.centers[index]
             chain.append(
                 Vector3(t.widths[index] + f.cm(0.8), c.y, c.z + f.cm(0.2))
             )
-        for index in range(13, 16, 2):
+        for index in range(13, 16, 2):  # pragma: no branch
             var c = t.centers[index]
             chain.append(
                 Vector3(
@@ -138,10 +138,10 @@ def torso_nerve_field(
             )
         sweeps.append(tube(chain, f.cm(0.15), f.cm(0.15)))
     elif part == INTERCOSTAL_NERVES:
-        for rib in range(11):
+        for rib in range(11):  # pragma: no branch
             var path = rib_path(t, rib)
             var run = List[Vector3]()
-            for k in range(9):
+            for k in range(9):  # pragma: no branch
                 var at = along_path(path, 0.08 + 0.1 * Float32(k))
                 run.append(at - Vector3(0, f.cm(0.8), 0))
             sweeps.append(tube(run, f.cm(0.12), f.cm(0.1)))
@@ -180,9 +180,9 @@ def torso_nerve_field(
             5.2, 51.2, -1.4, 7.4, 50.6, -0.6, 10.8, 48.7, -0.2, 13.8, 46.3, -0.4,
         )
         # fmt: on
-        for k in range(3):
+        for k in range(3):  # pragma: no branch
             var run = List[Vector3]()
-            for j in range(4):
+            for j in range(4):  # pragma: no branch
                 var at = 12 * k + 3 * j
                 run.append(f.at(trunks[at], trunks[at + 1], trunks[at + 2]))
             run.append(f.at(14.8, 45.2, -0.1))
@@ -249,6 +249,6 @@ def named_torso_nerves() -> List[TorsoNerve]:
         iliohypogastric nerve and the brachial plexus.
     """
     var parts = List[TorsoNerve]()
-    for index in range(BRACHIAL_PLEXUS.value + 1):
+    for index in range(BRACHIAL_PLEXUS.value + 1):  # pragma: no branch
         parts.append(TorsoNerve(index))
     return parts^

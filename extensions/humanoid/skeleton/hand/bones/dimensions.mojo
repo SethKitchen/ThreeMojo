@@ -144,7 +144,7 @@ def named_fingers() -> List[Finger]:
         The thumb, then the index, middle, ring and little fingers.
     """
     var out = List[Finger]()
-    for index in range(LITTLE.value + 1):
+    for index in range(LITTLE.value + 1):  # pragma: no branch
         out.append(Finger(index))
     return out^
 
@@ -192,7 +192,7 @@ def named_hand_bones() -> List[HandBone]:
         The carpals, the metacarpals, then the phalanges.
     """
     var parts = List[HandBone]()
-    for index in range(DISTAL_PHALANX_5.value + 1):
+    for index in range(DISTAL_PHALANX_5.value + 1):  # pragma: no branch
         parts.append(HandBone(index))
     return parts^
 
@@ -267,7 +267,7 @@ def finger_joints(
     var p = Vector3(row[0], row[1], row[2])
     var out = List[Vector3]()
     out.append(f.hand(p.x, p.y, p.z))
-    for k in range(4):
+    for k in range(4):  # pragma: no branch
         var length = row[6 + k]
         if length == 0:
             continue
@@ -414,7 +414,7 @@ def _long_bone(
     var joints = finger_joints(dimensions, finger)
     var bones = finger_bones(finger)
     var at = 0
-    for index in range(len(bones)):
+    for index in range(len(bones)):  # pragma: no branch
         if bones[index] == part:
             at = index
     var a = joints[at]

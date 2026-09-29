@@ -126,7 +126,7 @@ def named_hand_muscles() -> List[HandMuscle]:
         interossei, then the long tendons.
     """
     var parts = List[HandMuscle]()
-    for index in range(THUMB_EXTENSOR_TENDONS.value + 1):
+    for index in range(THUMB_EXTENSOR_TENDONS.value + 1):  # pragma: no branch
         parts.append(HandMuscle(index))
     return parts^
 
@@ -292,12 +292,12 @@ def hand_muscle_field(
         if part == LUMBRICALS:
             _lumbricals(sweeps, arm, dimensions.scale)
         elif part == FLEXOR_TENDONS:
-            for k in range(INDEX.value, LITTLE.value + 1):
+            for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
                 sweeps.append(_digit_tendon(arm, Finger(k), True))
         elif part == FLEXOR_POLLICIS_LONGUS_TENDON:
             sweeps.append(_digit_tendon(arm, THUMB, True))
         elif part == EXTENSOR_TENDONS:
-            for k in range(INDEX.value, LITTLE.value + 1):
+            for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
                 sweeps.append(_digit_tendon(arm, Finger(k), False))
         else:
             sweeps.append(_digit_tendon(arm, THUMB, False))
@@ -322,7 +322,7 @@ def _lumbricals(
     var f = dimensions.frame
     var palm = f.hand_direction(0, 0, 1)
     var lateral = f.hand_direction(1, 0, 0)
-    for k in range(INDEX.value, LITTLE.value + 1):
+    for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
         var joints = finger_joints(dimensions, Finger(k))
         var base = joints[0]
         var knuckle = joints[1]
@@ -361,7 +361,7 @@ def _digit_tendon(
         r = Float32(0.2)
     tendon.round(wrist + face * f.cm(1.4), f.cm(r))
     var count = len(joints)
-    for index in range(1, count - 1):
+    for index in range(1, count - 1):  # pragma: no branch
         # Clear the bone: its radius, and a little more over a joint.
         var clear = f.cm((0.75 - 0.08 * Float32(index)) * s)
         var fade = Float32(1) - Float32(0.18) * Float32(index)

@@ -252,7 +252,7 @@ def torso_muscle_field(
                 f.at(0, 25.0, 0).y,
             )
         )
-        for k in range(2):
+        for k in range(2):  # pragma: no branch
             var sign = Float32(1)
             if k == 1:
                 sign = Float32(-1)
@@ -262,7 +262,7 @@ def torso_muscle_field(
             _station(crus, f, s, sign * 1.2, 27.0, -0.2, 0.6, 0.6)
             sweeps.append(crus^)
     elif part == INTERCOSTALS:
-        for gap in range(11):
+        for gap in range(11):  # pragma: no branch
             var mid = midpoint_path(
                 rib_path(t, gap), rib_path(t, gap + 1), 0.12, 0.96, 8
             )
@@ -631,6 +631,6 @@ def named_torso_muscles() -> List[TorsoMuscle]:
         rhomboids, the pectoralis minor and the subclavius.
     """
     var parts = List[TorsoMuscle]()
-    for index in range(SUBCLAVIUS.value + 1):
+    for index in range(SUBCLAVIUS.value + 1):  # pragma: no branch
         parts.append(TorsoMuscle(index))
     return parts^

@@ -105,7 +105,9 @@ def named_hand_ligaments() -> List[HandLigament]:
         triangular fibrocartilage.
     """
     var parts = List[HandLigament]()
-    for index in range(TRIANGULAR_FIBROCARTILAGE.value + 1):
+    for index in range(
+        TRIANGULAR_FIBROCARTILAGE.value + 1
+    ):  # pragma: no branch
         parts.append(HandLigament(index))
     return parts^
 
@@ -189,7 +191,7 @@ def hand_ligament_field(
         sweeps.append(band^)
     elif part == PALMAR_APONEUROSIS:
         var apex = f.hand(0.0, -2.5, 1.9)
-        for k in range(INDEX.value, LITTLE.value + 1):
+        for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
             var joints = finger_joints(dimensions, Finger(k))
             var reach = joints[1] - joints[0]
             var band = Sweep(palm)
@@ -212,10 +214,10 @@ def hand_ligament_field(
             joint_pad(f.hand(0.8, 0.05, 0.45), down, f.cm(0.1), f.cm(1.6))
         )
         var digits = named_fingers()
-        for index in range(len(digits)):
+        for index in range(len(digits)):  # pragma: no branch
             var joints = finger_joints(dimensions, digits[index])
             var s = finger_scale(digits[index])
-            for j in range(1, len(joints) - 1):
+            for j in range(1, len(joints) - 1):  # pragma: no branch
                 var along = joints[j + 1] - joints[j]
                 along.normalize()
                 sweeps.append(
@@ -223,7 +225,7 @@ def hand_ligament_field(
                 )
     else:
         var digits = named_fingers()
-        for index in range(len(digits)):
+        for index in range(len(digits)):  # pragma: no branch
             _digit_joints(sweeps, dimensions, digits[index], part)
     return SweepField(
         sweeps^, List[Dome](), side, f.cm(0.08), f.cm(0.02), f.cm(0.3)
@@ -241,7 +243,7 @@ def _digit_joints(
     var joints = finger_joints(dimensions, finger)
     var s = finger_scale(finger)
     var front = palmar_direction(dimensions, finger)
-    for j in range(1, len(joints) - 1):
+    for j in range(1, len(joints) - 1):  # pragma: no branch
         var along = joints[j + 1] - joints[j - 1]
         along.normalize()
         # The joint narrows out toward the fingertip.
@@ -258,7 +260,7 @@ def _digit_joints(
             continue
         var aside = cross(along, front)
         aside.normalize()
-        for k in range(2):
+        for k in range(2):  # pragma: no branch
             var sign = Float32(1)
             if k == 1:
                 sign = Float32(-1)

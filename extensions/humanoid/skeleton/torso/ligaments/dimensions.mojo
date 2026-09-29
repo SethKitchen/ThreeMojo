@@ -106,7 +106,7 @@ def torso_ligament_field(
         _girdle_joint(sweeps, dimensions, part)
     elif paired:
         placed = side
-        for rib in range(10):
+        for rib in range(10):  # pragma: no branch
             var path = rib_path(dimensions, rib)
             var start = path[len(path) - 1]
             var end = cartilage_end(dimensions, rib)
@@ -123,14 +123,14 @@ def torso_ligament_field(
     elif part == ANTERIOR_LONGITUDINAL_LIGAMENT:
         # A wide thin band down the front of the bodies.
         var band = Sweep(Vector3(1, 0, 0))
-        for index in range(VERTEBRAE):
+        for index in range(VERTEBRAE):  # pragma: no branch
             var c = dimensions.centers[index]
             var front = Vector3(0, c.y, c.z + dimensions.depths[index])
             band.add(front + Vector3(0, 0, f.cm(0.1)), f.cm(0.9), f.cm(0.13))
         sweeps.append(band^)
     else:
         var tips = List[Vector3]()
-        for index in range(VERTEBRAE):
+        for index in range(VERTEBRAE):  # pragma: no branch
             tips.append(
                 spinous_tip(dimensions, index) - Vector3(0, 0, f.cm(0.3))
             )
@@ -174,7 +174,7 @@ def _girdle_joint(
 def _discs(mut sweeps: List[Sweep], dimensions: TorsoDimensions):
     """Append the disc between each two bodies, and L5 on the sacrum."""
     var f = dimensions.frame
-    for index in range(VERTEBRAE):
+    for index in range(VERTEBRAE):  # pragma: no branch
         var c = dimensions.centers[index]
         var w = dimensions.widths[index]
         var d = dimensions.depths[index]
@@ -300,6 +300,8 @@ def named_torso_ligaments() -> List[TorsoLigament]:
         shoulder girdle's three joint tissues.
     """
     var parts = List[TorsoLigament]()
-    for index in range(CORACOCLAVICULAR_LIGAMENT.value + 1):
+    for index in range(
+        CORACOCLAVICULAR_LIGAMENT.value + 1
+    ):  # pragma: no branch
         parts.append(TorsoLigament(index))
     return parts^

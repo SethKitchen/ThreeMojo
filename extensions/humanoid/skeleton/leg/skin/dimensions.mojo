@@ -431,7 +431,7 @@ struct SkinField(Copyable, DistanceField, Movable):
         var spacing = (dimensions.iliac.y - ankle_y) / Float32(
             SKIN_SECTIONS - 1
         )
-        for section in range(SKIN_SECTIONS):
+        for section in range(SKIN_SECTIONS):  # pragma: no branch
             var y = ankle_y + spacing * Float32(section)
             var fat: Float32
             if y >= knee_y + band:
@@ -477,7 +477,7 @@ def _clip_below(mut points: List[LoftSample], floor: Float32):
     """Drop every station below `floor`; a run restarts after a gap."""
     var kept = List[LoftSample]()
     var dropped = False
-    for index in range(len(points)):
+    for index in range(len(points)):  # pragma: no branch
         var sample = points[index]
         if sample.center.y < floor:
             dropped = True

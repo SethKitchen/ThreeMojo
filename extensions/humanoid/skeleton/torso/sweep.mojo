@@ -113,7 +113,7 @@ struct Sweep(Copyable, Movable):
                 point, first.p, Vector3(first.ml, first.ap, first.ap)
             )
         var d = FAR
-        for index in range(count - 1):
+        for index in range(count - 1):  # pragma: no branch
             var a = self.stations[index]
             var b = self.stations[index + 1]
             d = smin(
@@ -151,7 +151,7 @@ struct Sweep(Copyable, Movable):
         if count < 2:
             return Float32(4.0 / 3.0) * pi * cap * sqrt(cap)
         var volume = Float32(0)
-        for index in range(count - 1):
+        for index in range(count - 1):  # pragma: no branch
             var a = self.stations[index]
             var b = self.stations[index + 1]
             var area_a = a.ml * a.ap
@@ -216,7 +216,7 @@ struct SweepField(Copyable, DistanceField, Movable):
         self.k = k
         self.epsilon = epsilon
         var box = empty_bounds()
-        for index in range(len(self.sweeps)):
+        for index in range(len(self.sweeps)):  # pragma: no branch
             box.include_sphere(self.sweeps[index].low, 0)
             box.include_sphere(self.sweeps[index].high, 0)
         for index in range(len(self.domes)):
@@ -241,7 +241,7 @@ struct SweepField(Copyable, DistanceField, Movable):
         if self.mirror:
             local = flip_x(point)
         var d = FAR
-        for index in range(len(self.sweeps)):
+        for index in range(len(self.sweeps)):  # pragma: no branch
             # A sweep farther than the blend cannot change the union.
             if self.sweeps[index].gap(local) > d + self.k:
                 continue
@@ -265,7 +265,7 @@ struct SweepField(Copyable, DistanceField, Movable):
         above the floor as half of the ellipsoid's shell.
         """
         var volume = Float32(0)
-        for index in range(len(self.sweeps)):
+        for index in range(len(self.sweeps)):  # pragma: no branch
             volume += self.sweeps[index].volume()
         for index in range(len(self.domes)):
             var r = self.domes[index].radii
@@ -283,8 +283,10 @@ struct SweepField(Copyable, DistanceField, Movable):
             A wider copy with a larger blend and box.
         """
         var field = self.copy()
-        for s in range(len(field.sweeps)):
-            for index in range(len(field.sweeps[s].stations)):
+        for s in range(len(field.sweeps)):  # pragma: no branch
+            for index in range(
+                len(field.sweeps[s].stations)
+            ):  # pragma: no branch
                 field.sweeps[s].stations[index].ml = max(
                     field.sweeps[s].stations[index].ml, least
                 )
@@ -329,7 +331,7 @@ def floats(*values: Float32) -> List[Float32]:
         The list.
     """
     var out = List[Float32]()
-    for value in values:
+    for value in values:  # pragma: no branch
         out.append(value)
     return out^
 
@@ -348,12 +350,12 @@ def spline_points(points: List[Vector3], steps: Int) -> List[Vector3]:
     var out = List[Vector3]()
     var last = len(points) - 1
     out.append(points[0])
-    for span in range(last):
+    for span in range(last):  # pragma: no branch
         var p0 = points[max(span - 1, 0)]
         var p1 = points[span]
         var p2 = points[span + 1]
         var p3 = points[min(span + 2, last)]
-        for step in range(1, steps + 1):
+        for step in range(1, steps + 1):  # pragma: no branch
             var t = Float32(step) / Float32(steps)
             var t2 = t * t
             var t3 = t2 * t
@@ -378,7 +380,7 @@ def tube(points: List[Vector3], first: Float32, last: Float32) -> Sweep:
     """
     var sweep = Sweep(Vector3(1, 0, 0))
     var count = len(points)
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         var t = Float32(index) / Float32(max(count - 1, 1))
         sweep.round(points[index], first + (last - first) * t)
     return sweep^

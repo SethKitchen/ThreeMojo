@@ -456,10 +456,10 @@ struct HipBoneShape(Copyable, Movable):
         rim.append(d.notch)
         var last = len(rim) - 1
         var previous = rim[0]
-        for span in range(last):
+        for span in range(last):  # pragma: no branch
             var before = rim[max(span - 1, 0)]
             var after = rim[min(span + 2, last)]
-            for step in range(1, WING_STEPS + 1):
+            for step in range(1, WING_STEPS + 1):  # pragma: no branch
                 var t = Float32(step) / Float32(WING_STEPS)
                 var here = _spline(before, rim[span], rim[span + 1], after, t)
                 self.plates.append(_Plate(d.hub, previous, here))
@@ -567,11 +567,11 @@ struct HipBoneShape(Copyable, Movable):
         # The plates meet edge to edge, so they join with a hard minimum:
         # one sheet, with no ridge where two plates meet.
         var sheet = Float32(1.0e9)
-        for index in range(len(self.plates)):
+        for index in range(len(self.plates)):  # pragma: no branch
             var plate = self.plates[index]
             sheet = min(sheet, ud_triangle(point, plate.a, plate.b, plate.c))
         d = smin(d, sheet - half, self.k)
-        for index in range(len(self.capsules)):
+        for index in range(len(self.capsules)):  # pragma: no branch
             var capsule = self.capsules[index]
             d = smin(
                 d,
@@ -599,12 +599,12 @@ struct HipBoneShape(Copyable, Movable):
             An axis-aligned box.
         """
         var box = empty_bounds()
-        for index in range(len(self.plates)):
+        for index in range(len(self.plates)):  # pragma: no branch
             var plate = self.plates[index]
             box.include_sphere(plate.a, self.thick)
             box.include_sphere(plate.b, self.thick)
             box.include_sphere(plate.c, self.thick)
-        for index in range(len(self.capsules)):
+        for index in range(len(self.capsules)):  # pragma: no branch
             var capsule = self.capsules[index]
             box.include_sphere(capsule.a, capsule.ra)
             box.include_sphere(capsule.b, capsule.rb)

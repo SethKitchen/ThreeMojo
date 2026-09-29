@@ -244,7 +244,7 @@ struct TorsoDimensions(Copyable, Movable):
             or len(self.heights) != VERTEBRAE
         ):
             raise Error("A torso needs seventeen vertebrae, T1 to L5")
-        for index in range(VERTEBRAE):
+        for index in range(VERTEBRAE):  # pragma: no branch
             finite_point(self.centers[index], "vertebral body", "torso")
             if not (
                 self.widths[index] > 0
@@ -380,7 +380,7 @@ def torso_dimensions(stature: Length, sex: Sex) raises -> TorsoDimensions:
     var widths = List[Float32]()
     var depths = List[Float32]()
     var heights = List[Float32]()
-    for index in range(VERTEBRAE):
+    for index in range(VERTEBRAE):  # pragma: no branch
         centers.append(f.at(0, y[index], z[index]))
         widths.append(f.cm(w[index]) * wide)
         depths.append(f.cm(d[index]) * deep)
@@ -454,7 +454,7 @@ def named_torso_bones() -> List[TorsoBone]:
         scapula.
     """
     var parts = List[TorsoBone]()
-    for index in range(SCAPULA.value + 1):
+    for index in range(SCAPULA.value + 1):  # pragma: no branch
         parts.append(TorsoBone(index))
     return parts^
 
@@ -762,7 +762,7 @@ def _clavicle(dimensions: TorsoDimensions) -> Sweep:
     # The flat end lies in the horizontal plane, so the hint runs up.
     var bone = Sweep(Vector3(0, 1, 0))
     var count = len(path)
-    for index in range(count):
+    for index in range(count):  # pragma: no branch
         var t = Float32(index) / Float32(count - 1)
         var tall = f.cm(1.0) + (f.cm(0.42) - f.cm(1.0)) * min(2 * t, 1)
         var wide = f.cm(1.1) + (f.cm(0.6) - f.cm(1.1)) * min(3 * t, 1)
@@ -790,7 +790,7 @@ def _scapula(mut sweeps: List[Sweep], dimensions: TorsoDimensions):
         8.5, 37.2, -9.8, 9.6, 37.0, -9.2, 1.0,
     )
     # fmt: on
-    for band in range(len(bands) // 7):
+    for band in range(len(bands) // 7):  # pragma: no branch
         var at = 7 * band
         var a = f.at(bands[at], bands[at + 1], bands[at + 2])
         var b = f.at(bands[at + 3], bands[at + 4], bands[at + 5])
@@ -871,7 +871,7 @@ def _vertebra(mut sweeps: List[Sweep], dimensions: TorsoDimensions, index: Int):
         spine.add(joint, f.cm(0.4), f.cm(0.5))
         spine.add(tip, f.cm(0.35), f.cm(0.4))
     sweeps.append(spine^)
-    for s in range(2):
+    for s in range(2):  # pragma: no branch
         var sign = Float32(1)
         if s == 1:
             sign = Float32(-1)
@@ -983,7 +983,7 @@ def template_points(f: TorsoFrame, coords: List[Float32]) -> List[Vector3]:
         One point per triple, in meters.
     """
     var out = List[Vector3]()
-    for index in range(len(coords) // 3):
+    for index in range(len(coords) // 3):  # pragma: no branch
         out.append(
             f.at(
                 coords[3 * index], coords[3 * index + 1], coords[3 * index + 2]
@@ -1038,7 +1038,7 @@ def midpoint_path(
         The midpoints, in meters.
     """
     var out = List[Vector3]()
-    for k in range(n):
+    for k in range(n):  # pragma: no branch
         var t = start + (end - start) * Float32(k) / Float32(max(n - 1, 1))
         out.append(mix_point(_along(a, t), _along(b, t), 0.5))
     return out^

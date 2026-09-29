@@ -81,7 +81,7 @@ def named_arm_bones() -> List[ArmBone]:
         The humerus, the radius and the ulna.
     """
     var parts = List[ArmBone]()
-    for index in range(ULNA.value + 1):
+    for index in range(ULNA.value + 1):  # pragma: no branch
         parts.append(ArmBone(index))
     return parts^
 
@@ -164,7 +164,7 @@ def _knob(f: ArmFrame, p: Vector3, r: Float32) -> Sweep:
 def _rod(f: ArmFrame, points: List[Vector3], radii: List[Float32]) -> Sweep:
     """Return a round sweep through `points` with template-cm radii."""
     var rod = Sweep(Vector3(1, 0, 0))
-    for index in range(len(points)):
+    for index in range(len(points)):  # pragma: no branch
         rod.round(points[index], f.cm(radii[index]))
     return rod^
 

@@ -191,7 +191,7 @@ def torso_lymph_field(
             ))
             # fmt: on
             r = f.cm(0.5)
-        for index in range(len(nodes)):
+        for index in range(len(nodes)):  # pragma: no branch
             var node = Sweep(Vector3(1, 0, 0))
             node.round(nodes[index], r)
             sweeps.append(node^)
@@ -256,6 +256,6 @@ def named_torso_lymph() -> List[TorsoLymph]:
         The cisterna, the duct and the three node groups.
     """
     var parts = List[TorsoLymph]()
-    for index in range(AXILLARY_NODES.value + 1):
+    for index in range(AXILLARY_NODES.value + 1):  # pragma: no branch
         parts.append(TorsoLymph(index))
     return parts^

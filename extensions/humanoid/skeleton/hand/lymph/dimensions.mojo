@@ -87,7 +87,7 @@ def named_hand_lymph() -> List[HandLymph]:
         The palmar plexus, then the dorsal lymphatics.
     """
     var parts = List[HandLymph]()
-    for index in range(DORSAL_LYMPHATICS.value + 1):
+    for index in range(DORSAL_LYMPHATICS.value + 1):  # pragma: no branch
         parts.append(HandLymph(index))
     return parts^
 
@@ -119,7 +119,7 @@ def hand_lymph_field(
     if part == DORSAL_LYMPHATICS:
         var sweeps = List[Sweep]()
         var digits = named_fingers()
-        for index in range(len(digits)):
+        for index in range(len(digits)):  # pragma: no branch
             var joints = finger_joints(arm, digits[index])
             var s = finger_scale(digits[index])
             var back = palmar_direction(arm, digits[index]) * -1

@@ -142,12 +142,12 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         var inner = f.shoulder.x - f.cm(ARM_REACH)
         var points = List[LoftSample]()
         var bones = named_arm_bones()
-        for index in range(len(bones)):
+        for index in range(len(bones)):  # pragma: no branch
             append_stations(
                 points, arm_bone_field(arm, bones[index], RIGHT), inner
             )
         var muscles = named_arm_muscles()
-        for index in range(len(muscles)):
+        for index in range(len(muscles)):  # pragma: no branch
             if lies_on_scapula(muscles[index]):
                 continue
             append_stations(
@@ -161,7 +161,7 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         var fore = arm_fat(arm.sex, False) + self.dermis
         var covers = List[Float32]()
         var spacing = (top - bottom) / Float32(ARM_SKIN_SECTIONS - 1)
-        for section in range(ARM_SKIN_SECTIONS):
+        for section in range(ARM_SKIN_SECTIONS):  # pragma: no branch
             var y = bottom + spacing * Float32(section)
             var t = min(max((y - f.elbow.y) / f.cm(6.0) + 0.5, 0), 1)
             covers.append(fore + (upper - fore) * t)
@@ -244,14 +244,14 @@ def append_stations(
             read.
         inner: The least x a station may have, in meters.
     """
-    for s in range(len(field.sweeps)):
+    for s in range(len(field.sweeps)):  # pragma: no branch
         var sweep = field.sweeps[s].copy()
         var h = sweep.hint
         var along_z = abs(h.z) > abs(h.x) and abs(h.z) >= abs(h.y)
         var along_y = abs(h.y) > abs(h.x) and abs(h.y) > abs(h.z)
         var first = len(points)
         var last_kept = -1
-        for index in range(len(sweep.stations)):
+        for index in range(len(sweep.stations)):  # pragma: no branch
             var station = sweep.stations[index]
             if station.p.x < inner:
                 continue

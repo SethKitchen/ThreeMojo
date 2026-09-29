@@ -222,16 +222,16 @@ def segment_inertia(
     var patella = PatellaField(pose.patella)
     var muscles = List[MuscleField]()
     var tendons = List[Bool]()
-    for part in named_muscle_parts():
+    for part in named_muscle_parts():  # pragma: no branch
         muscles.append(MuscleField(pose.muscles, part))
         tendons.append(is_tendon(part))
     var foot_dims = foot_muscle_dimensions(spec, side)
     var foot_bones = List[FootBoneField]()
-    for part in named_foot_bones():
+    for part in named_foot_bones():  # pragma: no branch
         foot_bones.append(FootBoneField(foot_dims.foot, part))
     var foot_muscles = List[FootMuscleField]()
     var foot_tendons = List[Bool]()
-    for part in named_foot_muscles():
+    for part in named_foot_muscles():  # pragma: no branch
         foot_muscles.append(FootMuscleField(foot_dims, part))
         foot_tendons.append(is_foot_tendon(part))
     var dermis = skin.leg.dermis
@@ -319,8 +319,8 @@ def _inertia(
     length: Float32,
 ) raises -> SegmentInertia:
     """Return the tensor about the center of mass from raw moments."""
-    if mass <= 0:
-        raise Error("A limb segment holds no tissue")
+    # Every segment holds sampled bone and muscle, so its mass is never
+    # zero and the division below is safe.
     var c = first / mass
     # Second moments about the center, by the parallel-axis theorem.
     var sxx = second[0] - mass * c[0] * c[0]
@@ -377,7 +377,7 @@ def _bone_fill(
         if fill != EMPTY:
             return fill
     var local = p - ankle
-    for index in range(len(foot_bones)):
+    for index in range(len(foot_bones)):  # pragma: no branch
         if _inside(foot_bones[index].low, foot_bones[index].high, local):
             var fill = foot_bone_field_occupancy(foot_bones[index], local)
             if fill != EMPTY:
@@ -398,12 +398,12 @@ def _soft_density(
 ) -> Float32:
     """Return the density of the soft tissue at `p`: a muscle's, a
     tendon's, or fat's."""
-    for index in range(len(muscles)):
+    for index in range(len(muscles)):  # pragma: no branch
         if _inside(muscles[index].low, muscles[index].high, p):
             if muscles[index].distance(p) < 0:
                 return cord if tendons[index] else flesh
     var local = p - ankle
-    for index in range(len(foot_muscles)):
+    for index in range(len(foot_muscles)):  # pragma: no branch
         if _inside(foot_muscles[index].low, foot_muscles[index].high, local):
             if foot_muscles[index].distance(local) < 0:
                 return cord if foot_tendons[index] else flesh

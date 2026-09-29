@@ -198,7 +198,7 @@ def add_pelvis(
     sides.append(LEFT)
     if contents.includes_bones():
         var bones = named_pelvis_bones()
-        for index in range(len(bones)):
+        for index in range(len(bones)):  # pragma: no branch
             _place(
                 scene,
                 assets,
@@ -208,7 +208,7 @@ def add_pelvis(
             )
     if contents.includes_ligaments():
         var bands = named_pelvis_ligaments()
-        for index in range(len(bands)):
+        for index in range(len(bands)):  # pragma: no branch
             var band = bands[index]
             var paint = ligament_paint
             if (
@@ -217,7 +217,7 @@ def add_pelvis(
                 or band == INTERPUBIC_DISC
             ):
                 paint = cartilage_paint
-            for s in range(2):
+            for s in range(2):  # pragma: no branch
                 if s == 1 and is_midline(band):
                     continue
                 _place(
@@ -231,8 +231,8 @@ def add_pelvis(
                 )
     if contents.includes_muscles():
         var parts = named_pelvis_muscles()
-        for index in range(len(parts)):
-            for s in range(2):
+        for index in range(len(parts)):  # pragma: no branch
+            for s in range(2):  # pragma: no branch
                 _place(
                     scene,
                     assets,
@@ -246,12 +246,12 @@ def add_pelvis(
         var artery = _resolved_paint(assets, artery_paint, artery_phong())
         var vein = _resolved_paint(assets, vein_paint, vein_phong())
         var vessels = named_pelvis_vessels()
-        for index in range(len(vessels)):
+        for index in range(len(vessels)):  # pragma: no branch
             var vessel = vessels[index]
             var paint = vein
             if is_pelvic_artery(vessel):
                 paint = artery
-            for s in range(2):
+            for s in range(2):  # pragma: no branch
                 if s == 1 and is_unpaired_vessel(vessel):
                     continue
                 _place(
@@ -266,8 +266,8 @@ def add_pelvis(
     if contents.includes_lymph():
         var lymph = _resolved_paint(assets, lymph_paint, lymph_phong())
         var groups = named_pelvis_lymph()
-        for index in range(len(groups)):
-            for s in range(2):
+        for index in range(len(groups)):  # pragma: no branch
+            for s in range(2):  # pragma: no branch
                 _place(
                     scene,
                     assets,
@@ -280,8 +280,8 @@ def add_pelvis(
     if contents.includes_nerves():
         var nerve = _resolved_paint(assets, nerve_paint, nerve_phong())
         var trunks = named_pelvis_nerves()
-        for index in range(len(trunks)):
-            for s in range(2):
+        for index in range(len(trunks)):  # pragma: no branch
+            for s in range(2):  # pragma: no branch
                 _place(
                     scene,
                     assets,

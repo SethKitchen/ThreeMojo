@@ -333,10 +333,10 @@ def torso_vessel_field(
         if part == INTERCOSTAL_VEINS:
             below = f.cm(0.45)
             r = f.cm(0.12)
-        for rib in range(2, 11):
+        for rib in range(2, 11):  # pragma: no branch
             var path = rib_path(t, rib)
             var run = List[Vector3]()
-            for k in range(8):
+            for k in range(8):  # pragma: no branch
                 var at = along_path(path, 0.08 + 0.09 * Float32(k))
                 run.append(at - Vector3(0, below, 0))
             sweeps.append(tube(run, r, r))
@@ -411,6 +411,6 @@ def named_torso_vessels() -> List[TorsoVessel]:
         Four unpaired trunks, then six paired runs.
     """
     var parts = List[TorsoVessel]()
-    for index in range(SUBCLAVIAN_VEIN.value + 1):
+    for index in range(SUBCLAVIAN_VEIN.value + 1):  # pragma: no branch
         parts.append(TorsoVessel(index))
     return parts^

@@ -104,7 +104,7 @@ def named_arm_ligaments() -> List[ArmLigament]:
         The shoulder's parts, then the elbow's, then the membrane.
     """
     var parts = List[ArmLigament]()
-    for index in range(INTEROSSEOUS_MEMBRANE.value + 1):
+    for index in range(INTEROSSEOUS_MEMBRANE.value + 1):  # pragma: no branch
         parts.append(ArmLigament(index))
     return parts^
 
@@ -164,7 +164,7 @@ def arm_ligament_field(
     if part == GLENOID_LABRUM:
         var ring = List[Vector3]()
         var rim = g.glenoid + face * t.cm(0.25)
-        for k in range(13):
+        for k in range(13):  # pragma: no branch
             var a = Float32(2) * pi * Float32(k) / Float32(12)
             ring.append(
                 rim + up * (t.cm(1.9) * cos(a)) + across * (t.cm(1.4) * sin(a))
@@ -230,7 +230,7 @@ def arm_ligament_field(
         sweeps.append(band^)
     elif part == ANNULAR_LIGAMENT:
         var ring = List[Vector3]()
-        for k in range(13):
+        for k in range(13):  # pragma: no branch
             var a = Float32(2) * pi * Float32(k) / Float32(12)
             ring.append(f.fore(1.7 + 1.2 * cos(a), -2.4, 0.5 + 1.2 * sin(a)))
         sweeps.append(tube(ring, f.cm(0.22), f.cm(0.22)))

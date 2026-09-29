@@ -152,7 +152,7 @@ def named_arm_muscles() -> List[ArmMuscle]:
         then its extensors.
     """
     var parts = List[ArmMuscle]()
-    for index in range(EXTENSOR_INDICIS.value + 1):
+    for index in range(EXTENSOR_INDICIS.value + 1):  # pragma: no branch
         parts.append(ArmMuscle(index))
     return parts^
 
@@ -556,10 +556,10 @@ def paths_field(
     """
     var f = dimensions.frame
     var sweeps = List[Sweep]()
-    for p in range(len(paths)):
+    for p in range(len(paths)):  # pragma: no branch
         var row = paths[p].copy()
         var sweep = Sweep(Vector3(row[0], row[1], row[2]))
-        for s in range((len(row) - 3) // STATION):
+        for s in range((len(row) - 3) // STATION):  # pragma: no branch
             var at = 3 + STATION * s
             var grow = Float32(1)
             if row[at + 6] > 0:

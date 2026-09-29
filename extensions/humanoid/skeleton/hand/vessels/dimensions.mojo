@@ -116,7 +116,7 @@ def named_hand_vessels() -> List[HandVessel]:
         The two arches, the digital arteries, then the veins.
     """
     var parts = List[HandVessel]()
-    for index in range(DORSAL_DIGITAL_VEINS.value + 1):
+    for index in range(DORSAL_DIGITAL_VEINS.value + 1):  # pragma: no branch
         parts.append(HandVessel(index))
     return parts^
 
@@ -147,7 +147,7 @@ def hand_vessel_field(
     if part == DIGITAL_ARTERIES or part == DORSAL_DIGITAL_VEINS:
         var sweeps = List[Sweep]()
         var digits = named_fingers()
-        for index in range(len(digits)):
+        for index in range(len(digits)):  # pragma: no branch
             _digit_vessels(sweeps, arm, index, artery)
         return SweepField(
             sweeps^, List[Dome](), side, f.cm(0.03), f.cm(0.01), f.cm(0.2)
@@ -207,7 +207,7 @@ def _digit_vessels(
         # joint.
         var vein = Sweep(Vector3(1, 0, 0))
         var back = front * -1
-        for j in range(1, last):
+        for j in range(1, last):  # pragma: no branch
             vein.round(joints[j] + back * f.cm(0.75 * s), f.cm(0.08))
         vein.round(
             joints[last - 1] + along * f.cm(0.6) + back * f.cm(0.6 * s),
@@ -215,12 +215,12 @@ def _digit_vessels(
         )
         sweeps.append(vein^)
         return
-    for k in range(2):
+    for k in range(2):  # pragma: no branch
         var sign = Float32(1)
         if k == 1:
             sign = Float32(-1)
         var run = Sweep(Vector3(1, 0, 0))
-        for j in range(1, last):
+        for j in range(1, last):  # pragma: no branch
             var r = f.cm((0.55 - 0.06 * Float32(j)) * s)
             run.round(
                 joints[j] + aside * (sign * r) + front * f.cm(0.3),

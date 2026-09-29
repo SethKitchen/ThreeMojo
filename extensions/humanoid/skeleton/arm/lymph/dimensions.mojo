@@ -79,7 +79,7 @@ def named_arm_lymph() -> List[ArmLymph]:
         The two node groups, then the two bundles.
     """
     var parts = List[ArmLymph]()
-    for index in range(LATERAL_LYMPHATICS.value + 1):
+    for index in range(LATERAL_LYMPHATICS.value + 1):  # pragma: no branch
         parts.append(ArmLymph(index))
     return parts^
 
@@ -110,7 +110,7 @@ def arm_lymph_paths(part: ArmLymph) raises -> List[List[Float32]]:
         paths.append(floats(1, 0, 0, 0, 15.6, 46.4, 4.2, 0.3, 0.26, 0))
         paths.append(floats(1, 0, 0, 0, 15.2, 47.6, 3.6, 0.26, 0.22, 0))
     elif part == MEDIAL_LYMPHATICS:
-        for k in range(2):
+        for k in range(2):  # pragma: no branch
             var o = Float32(0.4) * Float32(k) - Float32(0.2)
             paths.append(floats(
                 1, 0, 0,
@@ -124,7 +124,7 @@ def arm_lymph_paths(part: ArmLymph) raises -> List[List[Float32]]:
                 0, 15.0, 42.5, -1.0, 0.08, 0.08, 0,
             ))
     else:
-        for k in range(2):
+        for k in range(2):  # pragma: no branch
             var o = Float32(0.4) * Float32(k) - Float32(0.2)
             paths.append(floats(
                 1, 0, 0,

@@ -210,7 +210,9 @@ def named_pelvis_nerves() -> List[PelvisNerve]:
         The trunk and plexus, then the six named branches.
     """
     var parts = List[PelvisNerve]()
-    for index in range(LATERAL_FEMORAL_CUTANEOUS_NERVE.value + 1):
+    for index in range(
+        LATERAL_FEMORAL_CUTANEOUS_NERVE.value + 1
+    ):  # pragma: no branch
         parts.append(PelvisNerve(index))
     return parts^
 

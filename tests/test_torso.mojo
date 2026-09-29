@@ -271,6 +271,8 @@ def test_sweeps_measure_themselves() raises:
     assert_true(field.distance(Vector3(0, 0.1, 0)) < 0)
     assert_true(field.distance(Vector3(0, -0.1, 0)) > 0)
     assert_true(field.distance(Vector3(0.5, 0.5, 0.5)) > 0.3)
+    # Straight above the dome, the surface faces up.
+    assert_true(field.gradient(Vector3(0, 0.3, 0)).y > 0.5)
     assert_true(field.volume() > 0)
     var wide = field.widened(0.02)
     assert_true(wide.distance(Vector3(0.015, 0.05, 0)) < 0)
@@ -811,6 +813,21 @@ def test_add_torso_places_every_layer() raises:
         assets.materials.add(nerve_phong()),
     )
     assert_equal(len(lymph_scene.meshes), 33)
+    # The skin alone: no layer before it is drawn.
+    var skin_scene = Scene()
+    _ = add_torso(
+        skin_scene,
+        assets,
+        skin_scene.add(Object3D()),
+        person,
+        bone,
+        ligament,
+        cartilage,
+        muscle,
+        SKIN,
+        8,
+    )
+    assert_equal(len(skin_scene.meshes), 1)
     with assert_raises(contains="named layer set"):
         _ = add_torso(
             scene,

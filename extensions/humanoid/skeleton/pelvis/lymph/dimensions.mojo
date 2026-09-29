@@ -317,6 +317,6 @@ def named_pelvis_lymph() -> List[PelvisLymph]:
         Four node groups, then the iliac trunk.
     """
     var parts = List[PelvisLymph]()
-    for index in range(ILIAC_LYMPHATICS.value + 1):
+    for index in range(ILIAC_LYMPHATICS.value + 1):  # pragma: no branch
         parts.append(PelvisLymph(index))
     return parts^

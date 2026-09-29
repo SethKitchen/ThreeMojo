@@ -151,6 +151,9 @@ def test_empty_sections_taper_to_their_cover() raises:
     var empty = fit_loft(far, AXIS_Y, 0, 1, 4, _covers(4, 0.01))
     assert_almost_equal(empty.center_u[2], 0, atol=1.0e-6)
     assert_almost_equal(empty.section_radius(2, 0), 0.01, atol=1.0e-4)
+    # With no samples at all, every section is its cover alone.
+    var none = fit_loft(List[LoftSample](), AXIS_Y, 0, 1, 4, _covers(4, 0.01))
+    assert_almost_equal(none.section_radius(1, 5), 0.01, atol=1.0e-4)
 
 
 def test_a_section_keeps_its_own_center_when_smoothing_leaves_it() raises:
