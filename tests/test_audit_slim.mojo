@@ -90,15 +90,14 @@ def test_renderer_selects_surface_for_each_face_in_one_draw() raises:
     var geometry = assets.geometries.add(
         box(Length(2, METER), Length(2, METER), Length(2, METER))
     )
-    var material = assets.materials.add(
-        Material(
-            Color(255, 255, 255),
-            kind=PHYSICAL,
-            side=DOUBLE_SIDE,
-            normal_scale=Vector2(2, 3),
-            bump_scale=4,
-        )
+    # The constructor ties each scale to its map, and refuses both maps at
+    # once; the corners only carry the scales, so set them afterward.
+    var surface = Material(
+        Color(255, 255, 255), kind=PHYSICAL, side=DOUBLE_SIDE
     )
+    surface.normal_scale = Vector2(2, 3)
+    surface.bump_scale = 4
+    var material = assets.materials.add(surface^)
     scene.add_mesh(Mesh(geometry, material, node))
     scene.update()
     var frame = Renderer(16, 16).prepare_frame(scene, assets, camera())
