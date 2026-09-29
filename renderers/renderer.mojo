@@ -242,8 +242,9 @@ from materials.nodes import (
 from render.pointrule import attenuated_size
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
+from render.srgb import srgb_to_linear
 from render.target import RenderTarget, check_samples, sample_grid
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
@@ -4169,14 +4170,19 @@ def _scaled(rect: Rect, factor: Int) -> Rect:
 
 
 def _set_backdrop(
-    mut image: Framebuffer, x: Int, y: Int, color: FloatColor
+    mut image: Framebuffer,
+    x: Int,
+    y: Int,
+    color: FloatColor,
+    bytes: SrgbBytes,
 ) raises:
     """Write one backdrop pixel: the color encoded to sRGB bytes, opaque.
 
     Opaque whatever the texture's alpha said, as three.js's background
     plane is drawn opaque: a background hides nothing but the clear color.
+    `bytes` encodes it, as `encode` would.
     """
-    var shown = color.encode()
+    var shown = color.encode_with(bytes)
     image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
 
 
@@ -4340,12 +4346,27 @@ def _paint_backdrop(
     Nothing is claimed in depth: a background is behind everything.
     """
     var top = kept.top(target.height)
+    # What `FloatColor(srgb=...)` makes of each byte, worked out once for
+    # the 256 of them rather than three times a pixel.
+    var decoded = List[Float32](capacity=256)
+    for byte in range(256):  # pragma: no branch
+        decoded.append(srgb_to_linear(Float32(byte) / 255))
     for y in range(top, top + kept.height):  # pragma: no branch
         for x in range(kept.x, kept.x + kept.width):  # pragma: no branch
             var pixel = image.get_pixel(x, y)
             if pixel.a != 255:
                 continue
-            target.write(x, y, FloatColor(srgb=pixel), False)
+            target.write(
+                x,
+                y,
+                FloatColor(
+                    decoded[Int(pixel.r)],
+                    decoded[Int(pixel.g)],
+                    decoded[Int(pixel.b)],
+                    Float32(pixel.a) / 255,
+                ),
+                False,
+            )
 
 
 def available_workers() -> Int:
@@ -8520,6 +8541,8 @@ struct Renderer(Movable):
         # three.js's `backgroundIntensity`, on every background image.
         var shown = scene.background_intensity
         var image = Framebuffer(self.width, self.height, Color(0, 0, 0, 0))
+        # Every pixel is encoded through one table; see `SrgbBytes`.
+        var bytes = SrgbBytes()
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -8551,6 +8574,7 @@ struct Renderer(Movable):
                             x,
                             y,
                             _brightened(picture.sample(u, v), shown),
+                            bytes,
                         )
                 return image^
         elif backdrop.cube.value >= assets.cube_textures.count():
@@ -8598,7 +8622,7 @@ struct Renderer(Movable):
                     seen = _sky_seen(
                         assets.cube_textures.get(backdrop.cube), looked, blur
                     )
-                _set_backdrop(image, x, y, _brightened(seen, shown))
+                _set_backdrop(image, x, y, _brightened(seen, shown), bytes)
         return image^
 
     def render_cube(
