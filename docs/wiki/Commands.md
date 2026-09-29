@@ -33,7 +33,7 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 
 ## The cache
 
-Results are cached on a SHA-256 of the source contents, the Makefile and the toolchain version. A task with unchanged inputs is skipped. `make -B <task>` forces one. `test-gpu` and `docs-check` are never cached.
+Results are cached on a SHA-256 of the source contents, the Makefile and the toolchain version. A task with unchanged inputs is skipped. `make -B <task>` forces one. `test-gpu` and `docs-check` are never cached. `test-cpu` also caches each suite: a change runs again only the suites that import a changed file or quote a changed asset. `make -B test-cpu` runs every suite.
 
 ## Variables
 

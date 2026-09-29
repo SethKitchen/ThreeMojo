@@ -293,6 +293,15 @@ ci:
 # --- cached tasks -----------------------------------------------------------
 test: test-cpu test-gpu
 
+# Each suite also has its own stamp, in $(SUITE_STAMPS), named by a key
+# over the files the suite imports and the assets it quotes: see
+# tools/suite_key.py. A change to one module builds and runs only the
+# suites that reach it, and `make -B` drops every stamp. CI starts with no
+# cache, so this is for local runs; CI narrows the suites with AFFECTED.
+SUITE_STAMPS := $(CACHE_DIR)/suites
+# `make -B` puts a B in the first word of MAKEFLAGS.
+FORCED := $(findstring B,$(firstword -$(MAKEFLAGS)))
+
 # Each suite is built once, with warnings as errors, and the program is
 # run. The build is the suite's lint, so `lint-cpu` leaves the suites to
 # this: building a suite to check it and again to run it compiled the
@@ -300,15 +309,25 @@ test: test-cpu test-gpu
 BIN_DIR := $(CACHE_DIR)/bin
 test-cpu: $(TEST_CPU_STAMP)
 $(TEST_CPU_STAMP):
-	@mkdir -p $(BIN_DIR)
-	@printf '%s\n' $(TEST_SUITES) \
-	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'bin=$(BIN_DIR)/$$(basename "$$1" .mojo); \
+	@mkdir -p $(BIN_DIR) $(SUITE_STAMPS)
+	@$(if $(FORCED),rm -f $(SUITE_STAMPS)/*)
+	@python3 tools/suite_key.py --stamps $(SUITE_STAMPS) \
+	    --setting=$(call quote,$(MOJO)) \
+	    --setting=$(call quote,$(MOJOFLAGS)) \
+	    --setting=$(call quote,$(TOOLCHAIN)) \
+	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
+	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
+	@xargs -n 2 -P $(JOBS) \
+	      sh -c 'name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
 	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1 && python3 tools/run_suite.py \
 	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"); \
 	             rc=$$?; rm -f "$$bin"; \
-	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
+	             printf "%s\n" "$$out" | sed "/Crashpad/d"; \
+	             if [ $$rc -eq 0 ]; then \
+	               rm -f $(SUITE_STAMPS)/"$$name"-*; \
+	               touch $(SUITE_STAMPS)/"$$name-$$2"; \
+	             fi; exit $$rc' _ < $(CACHE_DIR)/suites-to-run \
 	  || { echo "Some CPU suites FAILED."; exit 1; }
 	@echo "All $(words $(TEST_SUITES)) CPU suites passed."
 	@$(call stamp,test-cpu)
