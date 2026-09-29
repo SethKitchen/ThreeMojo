@@ -1,10 +1,12 @@
 # Extensions
 
-`extensions/` holds content that is not a three.js port. Core stays a port of three.js. Water, plants, buildings and a humanoid live here, in a folder per subject.
+`extensions/` holds content that is not a three.js port. Core stays a port of three.js. Water, plants, buildings, a humanoid and driving simulation live here, in a folder per subject.
 
 The first subject is the humanoid. The leg bones are the femur, tibia, fibula and patella, plus the knee tissues. Named muscles, vessels, lymph, nerves, skin and hair complete that limb. `assemble_leg` connects the limb. The foot adds twenty-six bones and the soft tissues distal to the plafond. `assemble_foot` connects that foot.
 
 The water subject ports Clearwater. See [Water](Water).
+
+The CARLA subject ports the engine-independent half of the CARLA driving simulator: OpenDRIVE roads, frames, camera encodings and LiDAR. See [CARLA](CARLA).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
 
@@ -68,6 +70,14 @@ extensions/
     frame.mojo     one shaded picture
     pebbles.mojo   the pebble photograph
     filter.mojo    mipmaps and anisotropy
+  carla/
+    transform.mojo   CARLA's left-handed frame
+    polynomial.mojo  OpenDRIVE cubics
+    geometry.mojo    line, arc, spiral, poly3, paramPoly3
+    road.mojo        lanes, lane transforms and meshes
+    sensor.mojo      depth, palette and intrinsics
+    capture.mojo     ray-cast depth and semantic images
+    lidar.mojo       ray-cast LiDAR
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

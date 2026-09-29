@@ -748,3 +748,48 @@ ThreeMojo's own license alone.
 The Mojo toolchain and standard library are products of Modular Inc. and are
 not redistributed by this project; they are installed separately by the user
 under Modular's own terms.
+
+---
+
+## CARLA
+
+<https://github.com/carla-simulator/carla>
+
+`extensions/carla/` ports CARLA's `geom::Rotation` and `geom::Transform`
+math, its OpenDRIVE plan-view geometry, lane transforms and lane meshes, its
+depth and CityScapes palette encodings, and its ray-cast LiDAR model, from
+`LibCarla` and from the sensor, walker and vehicle sources of CARLA's
+simulator plugin, at commit `1360bb9`. The Mojo implementation is
+original work. No game-engine source code is ported. The spiral is integrated here with
+Gauss-Legendre quadrature; CARLA's third-party odrSpiral code is not
+included. CARLA is distributed under the MIT License, reproduced in full
+below.
+
+Anyone may obtain CARLA directly from its authors under the MIT License. The
+noncommercial restriction in ThreeMojo's own license applies only to
+ThreeMojo's code and has no effect whatsoever on your rights in CARLA.
+
+```
+MIT License
+
+Copyright (c) 2024 Computer Vision Center (CVC) at the Universitat Autonoma de
+Barcelona (UAB).
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
