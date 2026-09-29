@@ -8,27 +8,20 @@
     mojo run -I . examples/carla.mojo [path.png]
 
 The road is a line, a spiral and an arc, with two lanes each way, built
-with CARLA's `MapBuilder`. Its surface and paint come from CARLA's
-`MeshFactory`. Cars sit in lanes at CARLA's waypoint transforms. One
-camera sees the scene three ways, side by side: the RGB render with one
-LiDAR sweep on top, the CityScapes semantic image, and the logarithmic
-depth image. The page is CARLA.
+with CARLA's `MapBuilder`. A `World` stands on it, with cars in its lanes
+at CARLA's waypoint transforms. `CarlaRenderer` builds the town around
+the road and draws what one camera on the ego car's roof sees, three ways
+side by side, each 800 by 600 as CARLA's cameras are: the RGB image with
+one LiDAR sweep on top, the CityScapes semantic image, and the
+logarithmic depth image. Each image is also written alone beside the
+page, as `_rgb`, `_semantic` and `_depth`. The page is CARLA.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
-from core.assets import Assets
-from core.object3d import Object3D
-from core.scene import Scene
-from extensions.carla.capture import depth_frame, semantic_frame
-from extensions.carla.geometry import RoadGeometry, arc, line, spiral
+from extensions.carla.camera_render import CarlaRenderer
+from extensions.carla.geometry import RoadGeometry, line, spiral
 from extensions.carla.lidar import LidarDescription, scan_lidar
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.map_builder import MapBuilder
-from extensions.carla.mesh_factory import (
-    LaneMarkMesh,
-    MeshFactory,
-    to_three_frame,
-)
 from extensions.carla.road_info import (
     JuncId,
     LANE_DRIVING,
@@ -38,32 +31,17 @@ from extensions.carla.road_info import (
     SectionId,
 )
 from extensions.carla.sensor import (
-    BUILDING,
-    CAR,
     CameraIntrinsics,
-    ROAD,
-    ROAD_LINE,
-    SKY,
-    SemanticTag,
-    TERRAIN,
     logarithmic_gray,
     normalized_depth,
 )
-from extensions.carla.transform import (
-    CarlaRotation,
-    CarlaTransform,
-    carla_to_three,
-)
-from geometries.box import box
-from geometries.plane import plane
-from lights.light import ambient_light, directional_light
-from materials.material import Material
-from math.vector3 import Vector3
-from objects.mesh import Mesh
+from extensions.carla.town import TownSettings
+from extensions.carla.transform import CarlaRotation, CarlaTransform
+from extensions.carla.weather import weather_preset
+from extensions.carla.world import EpisodeSettings, World
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
-from renderers.renderer import Renderer, available_workers
-from std.math import atan, tan
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import (
@@ -79,8 +57,8 @@ from units.si import (
 )
 
 comptime DEFAULT_OUTPUT = "out/carla.png"
-comptime WIDTH = 400
-comptime HEIGHT = 240
+comptime WIDTH = 800
+comptime HEIGHT = 600
 comptime FOV = Float32(90)
 
 
@@ -163,17 +141,21 @@ def _lane_transform(map: Map, s: Float64, lane: Int) raises -> CarlaTransform:
     )
 
 
-def place(mut node: Object3D, transform: CarlaTransform, lift: Float32):
-    """Put a three.js node where CARLA puts an actor.
+def sibling(destination: String, suffix: String) -> String:
+    """Return the path of one panel's image beside the page.
 
     Args:
-        node: The node to move.
-        transform: The actor's transform, in CARLA's frame.
-        lift: How far above the transform the node's center sits.
+        destination: The page's path, such as `out/carla.png`.
+        suffix: The panel's name, such as `rgb`.
+
+    Returns:
+        The page's path with `_` and the suffix before its extension, such
+        as `out/carla_rgb.png`.
     """
-    var at = carla_to_three(transform.location + Vector3(0, 0, lift))
-    node.set_position(at.x, at.y, at.z)
-    node.set_rotation_from_matrix(transform.three_matrix())
+    if destination.endswith(".png"):
+        var stem = destination.byte_length() - 4
+        return String(destination[byte=:stem]) + "_" + suffix + ".png"
+    return destination + "_" + suffix + ".png"
 
 
 def main() raises:
@@ -182,72 +164,29 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
-    var map = build_map()
-    ref road = map.road(RoadId(1))
-    var factory = MeshFactory()
-    factory.road_param.resolution = _m(2)
-    var assets = Assets()
-    var scene = Scene()
-    var tags = List[SemanticTag]()
-
-    var asphalt = assets.materials.add(Material(Color(70, 72, 78)))
-    var paint = assets.materials.add(Material(Color(235, 235, 225)))
-    var grass = assets.materials.add(Material(Color(96, 128, 72)))
-    var concrete = assets.materials.add(Material(Color(176, 168, 158)))
-    var body = assets.materials.add(Material(Color(180, 30, 36)))
-    var other_body = assets.materials.add(Material(Color(40, 90, 170)))
-
-    var ground = plane(_m(400), _m(400))
-    var ground_id = assets.geometries.add(ground^)
-    var ground_node = Object3D()
-    ground_node.rotate_x(Angle(-90, DEGREE))
-    ground_node.set_position(60, -0.02, 30)
-    scene.add_mesh(Mesh(ground_id, grass, scene.add(ground_node^)))
-    tags.append(TERRAIN)
-
-    for lane in range(len(road.sections[0].lanes)):
-        if road.sections[0].lanes[lane].id.value == 0:
-            continue
-        var surface = assets.geometries.add(
-            to_three_frame(factory.generate_whole_lane(road, 0, lane))
-        )
-        scene.add_mesh(Mesh(surface, asphalt, scene.add(Object3D())))
-        tags.append(ROAD)
-    var marks = List[LaneMarkMesh]()
-    var colors = List[String]()
-    factory.generate_lane_mark_for_road(road, marks, colors)
-    for i in range(len(marks)):
-        var mark = assets.geometries.add(to_three_frame(marks[i].geometry))
-        scene.add_mesh(Mesh(mark, paint, scene.add(Object3D())))
-        tags.append(ROAD_LINE)
-
-    var car = assets.geometries.add(box(_m(4.5), _m(1.5), _m(1.8)))
-    var cars: List[Tuple[Float64, Int, Int]] = [
-        (30.0, -1, 0),
-        (52.0, -2, 1),
-        (70.0, 1, 1),
-        (95.0, -1, 0),
-        (44.0, 2, 0),
+    var world = World(build_map())
+    var settings = EpisodeSettings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = Duration(0.05, SECOND)
+    _ = world.apply_settings(settings)
+    var library = world.get_blueprint_library()
+    # (s, lane, blueprint, color)
+    var cars: List[Tuple[Float64, Int, String, String]] = [
+        (30.0, -1, "vehicle.lincoln.mkz", "180,30,36"),
+        (52.0, -2, "vehicle.mini.cooper", "40,90,170"),
+        (70.0, 1, "vehicle.nissan.patrol", "230,230,228"),
+        (95.0, -1, "vehicle.dodge.charger", "30,30,34"),
+        (44.0, 2, "vehicle.sprinter.mercedes", "210,212,215"),
     ]
     for c in cars:
-        var node = Object3D()
-        place(node, _lane_transform(map, c[0], c[1]), 0.75)
-        var paint_id = body if c[2] == 0 else other_body
-        scene.add_mesh(Mesh(car, paint_id, scene.add(node^)))
-        tags.append(CAR)
-
-    var block = assets.geometries.add(box(_m(12), _m(14), _m(10)))
-    for s in [Float32(20), Float32(58), Float32(96), Float32(122)]:
-        for side in [Float32(-1), Float32(1)]:
-            var edge = road.directed_point(Float64(s))
-            edge.apply_lateral_offset(_m(side * 16))
-            var node = Object3D()
-            place(node, edge.to_carla(), 7)
-            scene.add_mesh(Mesh(block, concrete, scene.add(node^)))
-            tags.append(BUILDING)
+        var blueprint = library.at(c[2])
+        blueprint.set_attribute("color", c[3])
+        var pose = _lane_transform(world.map, c[0], c[1])
+        pose.location.z += 0.3
+        _ = world.spawn_actor(blueprint, pose)
 
     # The ego car drives lane -1. Its camera sits on the roof.
-    var ego = _lane_transform(map, 16.0, -1)
+    var ego = _lane_transform(world.map, 16.0, -1)
     var camera_pose = CarlaTransform(
         _m(ego.location.x),
         _m(ego.location.y),
@@ -256,35 +195,23 @@ def main() raises:
             Angle(0, DEGREE), Angle(ego.rotation.yaw, DEGREE), Angle(0, DEGREE)
         ),
     )
-    var eye = Object3D()
-    var pose = camera_pose.camera_matrix()
-    eye.set_position(pose.elements[12], pose.elements[13], pose.elements[14])
-    eye.set_rotation_from_matrix(pose)
-    var eye_node = scene.add(eye^)
-    var lamp = Object3D()
-    lamp.set_position(-30, 60, -40)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.55))
-    scene.add_light(directional_light(Color(255, 250, 240), lamp_node, 2.2))
-    scene.update()
+    var rgb_blueprint = library.at("sensor.camera.rgb")
+    rgb_blueprint.set_attribute("image_size_x", String(WIDTH))
+    rgb_blueprint.set_attribute("image_size_y", String(HEIGHT))
+    rgb_blueprint.set_attribute("fov", String(Int(FOV)))
+    var camera = world.spawn_actor(rgb_blueprint, camera_pose)
+    var weather = weather_preset("ClearNoon")
+    weather.sun_azimuth_angle = Angle(230, DEGREE)
+    world.set_weather(weather)
+    # A second lets the cars settle on their wheels.
+    for _ in range(20):
+        _ = world.tick()
 
-    # CARLA's fov is horizontal. A three.js camera's fov is vertical.
-    var half = Float32(FOV) * 0.5 * Float32(0.017453292519943295)
-    var vertical = 2.0 * atan(tan(half) * Float32(HEIGHT) / Float32(WIDTH))
-    var camera = PerspectiveCamera(
-        Angle(vertical, RADIAN),
-        Float32(WIDTH) / Float32(HEIGHT),
-        _m(0.1),
-        _m(1000),
-    )
-    camera.attach(eye_node)
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(70, 130, 180))
-    var rgb = renderer.render(scene, assets, camera)
-
-    var k = CameraIntrinsics(WIDTH, HEIGHT, Angle(FOV, DEGREE))
-    var semantic = semantic_frame(scene, assets, tags, SKY, camera_pose, k)
-    var depth = depth_frame(scene, assets, camera_pose, k)
+    var view = CarlaRenderer(world, TownSettings(), available_workers())
+    view.update(world)
+    var rgb = view.render_rgb(world, camera)
+    var semantic = view.render_semantic(world, camera)
+    var depth = view.render_depth(world, camera)
 
     var lidar = LidarDescription()
     lidar.range = _m(60)
@@ -295,20 +222,38 @@ def main() raises:
         _m(ego.location.x), _m(ego.location.y), _m(2.4), ego.rotation
     )
     var sweep = scan_lidar(
-        scene, assets, sensor, lidar, Duration(0.1, SECOND), Angle(0, DEGREE), 1
+        view.scene,
+        view.assets,
+        sensor,
+        lidar,
+        Duration(0.1, SECOND),
+        Angle(0, DEGREE),
+        1,
     )
+
+    var gray_depth = Framebuffer(WIDTH, HEIGHT, Color(0, 0, 0))
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var gray = logarithmic_gray(normalized_depth(depth.get_pixel(x, y)))
+            var level = UInt8(Int(gray * 255.0 + 0.5))
+            gray_depth.set_pixel(x, y, Color(level, level, level))
+    var panels: List[String] = ["rgb", "semantic", "depth"]
+    Path(sibling(destination, panels[0])).write_bytes(encode(rgb))
+    Path(sibling(destination, panels[1])).write_bytes(encode(semantic))
+    Path(sibling(destination, panels[2])).write_bytes(encode(gray_depth))
+    for name in panels:
+        print("Wrote", sibling(destination, name), WIDTH, "x", HEIGHT)
 
     var out = Framebuffer(WIDTH * 3, HEIGHT, Color(0, 0, 0))
     for y in range(HEIGHT):
         for x in range(WIDTH):
             out.set_pixel(x, y, rgb.get_pixel(x, y))
             out.set_pixel(WIDTH + x, y, semantic.get_pixel(x, y))
-            var gray = logarithmic_gray(normalized_depth(depth.get_pixel(x, y)))
-            var level = UInt8(Int(gray * 255.0 + 0.5))
-            out.set_pixel(2 * WIDTH + x, y, Color(level, level, level))
+            out.set_pixel(2 * WIDTH + x, y, gray_depth.get_pixel(x, y))
+    var k = CameraIntrinsics(WIDTH, HEIGHT, Angle(FOV, DEGREE))
     for p in sweep.points:
-        var world = sensor.transform_point(p.point)
-        var pixel = k.project(camera_pose, world)
+        var world_point = sensor.transform_point(p.point)
+        var pixel = k.project(camera_pose, world_point)
         var px = Int(pixel.x)
         var py = Int(pixel.y)
         if pixel.z > 0.0 and px >= 0 and px < WIDTH and py >= 0 and py < HEIGHT:
@@ -325,4 +270,13 @@ def main() raises:
             )
 
     Path(destination).write_bytes(encode(out))
-    print("Wrote", destination, "-", len(sweep.points), "LiDAR points")
+    print(
+        "Wrote",
+        destination,
+        WIDTH * 3,
+        "x",
+        HEIGHT,
+        "-",
+        len(sweep.points),
+        "LiDAR points",
+    )
