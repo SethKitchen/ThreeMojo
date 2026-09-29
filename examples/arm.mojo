@@ -9,8 +9,9 @@
 
 The page is Arm. A six-foot male right arm and hand hang twice, each
 turning about its own length. The left copy shows the bones, the joint
-tissues and the muscles. The right copy shows the skin and the hair.
-The program also prints the mass of several arm parts.
+tissues and the muscles, and the clavicle and the scapula the arm hangs
+from. The right copy shows the skin and the hair. The program also
+prints the mass of several arm parts.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -21,7 +22,7 @@ from environments.room_environment import room_environment
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
-from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.arm.assembly import place_mesh
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     HUMERUS,
     RADIUS,
@@ -48,6 +49,15 @@ from extensions.humanoid.skeleton.look import (
     skin_physical,
     tendon_physical,
 )
+from extensions.humanoid.skeleton.torso.bones.dimensions import (
+    CLAVICLE,
+    SCAPULA,
+    torso_dimensions,
+)
+from extensions.humanoid.skeleton.torso.bones.geometry import (
+    torso_bone_from_dimensions,
+)
+from extensions.humanoid.spec import HumanoidSpec
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
@@ -68,7 +78,7 @@ comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime ANATOMY_DETAIL = 24
+comptime ANATOMY_DETAIL = 16
 comptime SKIN_DETAIL = 48
 comptime HAND_SKIN_DETAIL = 48
 comptime SPACING = Float32(0.22)
@@ -206,6 +216,22 @@ def main() raises:
         BOTH,
         ANATOMY_DETAIL,
         tendon_paint=tendon,
+    )
+    # The clavicle and the scapula the arm hangs from.
+    var torso = torso_dimensions(person.stature, person.sex)
+    place_mesh(
+        scene,
+        assets,
+        anatomy[1],
+        torso_bone_from_dimensions(torso, CLAVICLE, RIGHT, ANATOMY_DETAIL),
+        bone,
+    )
+    place_mesh(
+        scene,
+        assets,
+        anatomy[1],
+        torso_bone_from_dimensions(torso, SCAPULA, RIGHT, ANATOMY_DETAIL),
+        bone,
     )
     var covered = _hang(scene, SPACING, height, center)
     _ = add_upper_limb(

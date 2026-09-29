@@ -101,7 +101,7 @@ Eight shafts stand for the hair of the upper arm, and eight for the forearm's. E
 
 ## Examples
 
-`examples/arm.mojo` draws a six-foot male right arm and hand twice and writes `out/arm.png`. The left copy shows bones, joint tissues and muscles. The right copy shows the skin and the hair. The program also prints the mass of several arm parts.
+`examples/arm.mojo` draws a six-foot male right arm and hand twice and writes `out/arm.png`. The left copy shows bones, joint tissues and muscles, with the clavicle and the scapula. The right copy shows the skin and the hair. The program also prints the mass of several arm parts.
 
 ```bash
 .venv/bin/mojo run -I . examples/arm.mojo out/arm.png
