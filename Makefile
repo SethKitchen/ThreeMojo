@@ -140,6 +140,12 @@ COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES))
 JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
           || nproc 2> /dev/null || echo 4)
 
+# The time limit for one test, in seconds. tools/run_suite.py fails a test
+# that takes longer, and stops a suite that hangs. A test over the limit
+# means the code under test is slow: make the library faster, not the test
+# smaller. It is a performance gate, so do not raise it to get a test green.
+TEST_TIMEOUT := 5
+
 # One second per test suite, as a *hang* detector. The instrumenter once
 # emitted a construct that sent the compiler superlinear and turned a
 # five-second run into a ten-minute one, and a tight budget catches that
@@ -194,6 +200,7 @@ HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
+          --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
           --setting=$(call quote,cpu-entries:$(CPU_ENTRY_POINTS)) \
           --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
           --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
@@ -298,7 +305,9 @@ $(TEST_CPU_STAMP):
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'bin=$(BIN_DIR)/$$(basename "$$1" .mojo); \
 	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
-	                    2>&1 && "$$bin" 2>&1); rc=$$?; rm -f "$$bin"; \
+	                    2>&1 && python3 tools/run_suite.py \
+	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"); \
+	             rc=$$?; rm -f "$$bin"; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some CPU suites FAILED."; exit 1; }
 	@echo "All $(words $(TEST_SUITES)) CPU suites passed."
