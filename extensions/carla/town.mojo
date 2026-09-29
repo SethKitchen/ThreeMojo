@@ -70,6 +70,12 @@ from extensions.carla.mesh_factory import (
     to_three_frame,
     trees_transform,
 )
+from extensions.carla.assets import (
+    AssetRegistry,
+    ModelPlacement,
+    repeat_model,
+    surface_key,
+)
 from extensions.carla.render_textures import (
     BRICK,
     FACADE_TILE,
@@ -169,6 +175,8 @@ comptime STRIPE_GAP = Float32(0.5)
 comptime LAMP_KELVIN = Float32(3000)
 comptime LAMP_INTENSITY = Float32(160)
 comptime LAMP_GLOW = Float32(6)
+# How tall a scanned tree model stands.
+comptime TREE_HEIGHT = Float32(8)
 # How bright the lit windows are at night.
 comptime WINDOW_GLOW = Float32(0.45)
 # The dry roughness of each surface kind.
@@ -1016,8 +1024,14 @@ struct Town(Movable):
         mut scene: Scene,
         mut assets: Assets,
         var settings: TownSettings,
+        registry: AssetRegistry = AssetRegistry(),
     ) raises:
         """Build a map's town into a scene.
+
+        A surface or a tree whose key the registry's cache holds wears the
+        photoscanned asset; every other one is procedural. The keys are
+        `assets.surface_key` of each road surface, `ground.grass`,
+        `ground.paving` and `tree`.
 
         Args:
             map: The map.
@@ -1025,9 +1039,11 @@ struct Town(Movable):
             assets: The stores; the town's geometry, textures and
                 materials are added.
             settings: How to build it.
+            registry: The photoscanned assets; none by default.
 
         Raises:
-            Error: If a mesh cannot be made or a map query fails.
+            Error: If a mesh cannot be made, a map query fails, or a
+                cached asset cannot be read.
         """
         self.settings = settings^
         self.materials = TownMaterials()
@@ -1061,7 +1077,16 @@ struct Town(Movable):
             var material = standard_material(
                 color, roughness=rough, env_map=SCENE_ENVIRONMENT
             )
-            if kind == ROAD_SURFACE:
+            var scanned = registry.cached_entry(surface_key(kind))
+            if scanned:
+                var set = registry.texture_set(scanned.value())
+                material = set.dress(assets, material^, set.per_meter())
+                if kind == ROAD_SURFACE and set.has_roughness:
+                    # The puddles are drawn over the scanned roughness.
+                    self.asphalt_roughness = Texture(copy=set.maps.roughness)
+                    self.asphalt_roughness.repeat = set.per_meter()
+                    self.asphalt_roughness_id = material.roughness_map
+            elif kind == ROAD_SURFACE:
                 material.map = asphalt_color
                 material.roughness_map = self.asphalt_roughness_id
                 material.normal_map = asphalt_normal
@@ -1134,12 +1159,12 @@ struct Town(Movable):
                 ),
             )
         var bounds = self.bounds
-        self._add_ground(bounds, scene, assets)
+        self._add_ground(bounds, scene, assets, registry)
         if self.settings.buildings:
             self.lots = building_lots(map, self.settings)
             self._add_buildings(scene, assets)
         if self.settings.trees:
-            self._add_trees(map, scene, assets)
+            self._add_trees(map, scene, assets, registry)
         if self.settings.lamps:
             self.posts = lamp_posts(map, self.settings.lamp_spacing)
             self._add_lamps(scene, assets)
@@ -1153,7 +1178,11 @@ struct Town(Movable):
         self.tags.append(tag)
 
     def _add_ground(
-        mut self, bounds: Box3, mut scene: Scene, mut assets: Assets
+        mut self,
+        bounds: Box3,
+        mut scene: Scene,
+        mut assets: Assets,
+        registry: AssetRegistry,
     ) raises:
         """Pave the town `PAVING_MARGIN` past its roads, and lay a lawn
         `LAWN_MARGIN` past them under everything."""
@@ -1177,7 +1206,20 @@ struct Town(Movable):
             var surface = standard_material(
                 Color(255, 255, 255), roughness=1, env_map=SCENE_ENVIRONMENT
             )
-            if k == 0:
+            var scanned = registry.cached_entry(
+                "ground.grass" if k == 0 else "ground.paving"
+            )
+            if scanned:
+                var set = registry.texture_set(scanned.value())
+                var per = set.per_meter()
+                surface = set.dress(
+                    assets, surface^, Vector2(across * per.x, along * per.y)
+                )
+                if k == 0:
+                    self.materials.ground = assets.materials.add(surface)
+                else:
+                    self.materials.paving = assets.materials.add(surface)
+            elif k == 0:
                 grass.color.repeat = repeat
                 grass.normal.repeat = repeat
                 surface.roughness = 0.95
@@ -1287,10 +1329,14 @@ struct Town(Movable):
             )
 
     def _add_trees(
-        mut self, map: Map, mut scene: Scene, mut assets: Assets
+        mut self,
+        map: Map,
+        mut scene: Scene,
+        mut assets: Assets,
+        registry: AssetRegistry,
     ) raises:
         """Add a trunk and a crown where CARLA's `trees_transform` puts
-        each tree."""
+        each tree, or the cached `tree` model, `TREE_HEIGHT` tall."""
         var bounds = road_bounds(map)
         # CARLA's region test reads y the other way round.
         var trees = trees_transform(
@@ -1300,6 +1346,38 @@ struct Town(Movable):
             self.settings.tree_spacing,
             Length(1.3, METER),
         )
+        var scanned = registry.cached_entry("tree")
+        if scanned:
+            var first = Optional[ModelPlacement]()
+            var k = 0
+            for tree in trees:
+                var node = Object3D()
+                var at = tree.transform.location
+                node.set_rotation_from_matrix(
+                    _pose(
+                        at,
+                        Angle(hash2(k, 7, self.settings.seed) * 360, DEGREE),
+                    )
+                )
+                node.set_position(at.x, at.z, at.y)
+                var base = scene.add(node^)
+                scene.update()
+                var placed: ModelPlacement
+                if first:
+                    placed = repeat_model(first.value(), scene, base)
+                else:
+                    placed = registry.place_model(
+                        scanned.value(),
+                        scene,
+                        assets,
+                        base,
+                        Vector3(TREE_HEIGHT, TREE_HEIGHT, TREE_HEIGHT),
+                    )
+                    first = placed
+                for _ in range(placed.mesh_count):
+                    self.tags.append(VEGETATION)
+                k += 1
+            return
         self.materials.trunk = assets.materials.add(
             standard_material(
                 Color(92, 70, 52), roughness=0.95, env_map=SCENE_ENVIRONMENT

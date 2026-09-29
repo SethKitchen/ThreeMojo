@@ -1,0 +1,390 @@
+{
+  "format": 1,
+  "about": "The photoscanned assets the CARLA town can wear. `assets/carla/tools/carla_assets.py` fetches them into .cache/carla-assets/ and checks each sha256; `extensions/carla/assets.mojo` reads them and falls back to the procedural asset for an entry the cache lacks. A binding maps a CARLA blueprint id or a surface key to an entry id, or to null for the procedural asset.",
+  "entries": [
+    {
+      "id": "asphalt_02",
+      "kind": "texture_set",
+      "title": "Asphalt 02",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/asphalt_02",
+      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 4.0,
+      "files": [
+        {
+          "role": "albedo",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg",
+          "sha256": null,
+          "path": "asphalt_02/asphalt_02_diff_2k.jpg"
+        },
+        {
+          "role": "normal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_nor_gl_2k.jpg",
+          "sha256": null,
+          "path": "asphalt_02/asphalt_02_nor_gl_2k.jpg"
+        },
+        {
+          "role": "roughness",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_rough_2k.jpg",
+          "sha256": null,
+          "path": "asphalt_02/asphalt_02_rough_2k.jpg"
+        },
+        {
+          "role": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_ao_2k.jpg",
+          "sha256": null,
+          "path": "asphalt_02/asphalt_02_ao_2k.jpg"
+        },
+        {
+          "role": "displacement",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_disp_2k.png",
+          "sha256": null,
+          "path": "asphalt_02/asphalt_02_disp_2k.png"
+        }
+      ]
+    },
+    {
+      "id": "concrete_pavement",
+      "kind": "texture_set",
+      "title": "Concrete Pavement",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/concrete_pavement",
+      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 3.0,
+      "files": [
+        {
+          "role": "albedo",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_diff_2k.jpg",
+          "sha256": null,
+          "path": "concrete_pavement/concrete_pavement_diff_2k.jpg"
+        },
+        {
+          "role": "normal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_nor_gl_2k.jpg",
+          "sha256": null,
+          "path": "concrete_pavement/concrete_pavement_nor_gl_2k.jpg"
+        },
+        {
+          "role": "roughness",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_rough_2k.jpg",
+          "sha256": null,
+          "path": "concrete_pavement/concrete_pavement_rough_2k.jpg"
+        },
+        {
+          "role": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_ao_2k.jpg",
+          "sha256": null,
+          "path": "concrete_pavement/concrete_pavement_ao_2k.jpg"
+        },
+        {
+          "role": "displacement",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_disp_2k.png",
+          "sha256": null,
+          "path": "concrete_pavement/concrete_pavement_disp_2k.png"
+        }
+      ]
+    },
+    {
+      "id": "concrete_floor_02",
+      "kind": "texture_set",
+      "title": "Concrete Floor 02",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/concrete_floor_02",
+      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 3.0,
+      "files": [
+        {
+          "role": "albedo",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_diff_2k.jpg",
+          "sha256": null,
+          "path": "concrete_floor_02/concrete_floor_02_diff_2k.jpg"
+        },
+        {
+          "role": "normal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg",
+          "sha256": null,
+          "path": "concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg"
+        },
+        {
+          "role": "roughness",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_rough_2k.jpg",
+          "sha256": null,
+          "path": "concrete_floor_02/concrete_floor_02_rough_2k.jpg"
+        },
+        {
+          "role": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_ao_2k.jpg",
+          "sha256": null,
+          "path": "concrete_floor_02/concrete_floor_02_ao_2k.jpg"
+        },
+        {
+          "role": "displacement",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_disp_2k.png",
+          "sha256": null,
+          "path": "concrete_floor_02/concrete_floor_02_disp_2k.png"
+        }
+      ]
+    },
+    {
+      "id": "aerial_grass_rock",
+      "kind": "texture_set",
+      "title": "Aerial Grass Rock",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/aerial_grass_rock",
+      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 6.0,
+      "files": [
+        {
+          "role": "albedo",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_diff_2k.jpg",
+          "sha256": null,
+          "path": "aerial_grass_rock/aerial_grass_rock_diff_2k.jpg"
+        },
+        {
+          "role": "normal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_nor_gl_2k.jpg",
+          "sha256": null,
+          "path": "aerial_grass_rock/aerial_grass_rock_nor_gl_2k.jpg"
+        },
+        {
+          "role": "roughness",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_rough_2k.jpg",
+          "sha256": null,
+          "path": "aerial_grass_rock/aerial_grass_rock_rough_2k.jpg"
+        },
+        {
+          "role": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_ao_2k.jpg",
+          "sha256": null,
+          "path": "aerial_grass_rock/aerial_grass_rock_ao_2k.jpg"
+        },
+        {
+          "role": "displacement",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_disp_2k.png",
+          "sha256": null,
+          "path": "aerial_grass_rock/aerial_grass_rock_disp_2k.png"
+        }
+      ]
+    },
+    {
+      "id": "patterned_paving",
+      "kind": "texture_set",
+      "title": "Patterned Paving",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/patterned_paving",
+      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 4.0,
+      "files": [
+        {
+          "role": "albedo",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_diff_2k.jpg",
+          "sha256": null,
+          "path": "patterned_paving/patterned_paving_diff_2k.jpg"
+        },
+        {
+          "role": "normal",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_nor_gl_2k.jpg",
+          "sha256": null,
+          "path": "patterned_paving/patterned_paving_nor_gl_2k.jpg"
+        },
+        {
+          "role": "roughness",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_rough_2k.jpg",
+          "sha256": null,
+          "path": "patterned_paving/patterned_paving_rough_2k.jpg"
+        },
+        {
+          "role": "ao",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_ao_2k.jpg",
+          "sha256": null,
+          "path": "patterned_paving/patterned_paving_ao_2k.jpg"
+        },
+        {
+          "role": "displacement",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_disp_2k.png",
+          "sha256": null,
+          "path": "patterned_paving/patterned_paving_disp_2k.png"
+        }
+      ]
+    },
+    {
+      "id": "ambientcg_asphalt_025c",
+      "kind": "texture_set",
+      "title": "Asphalt 025 C",
+      "license": "CC0-1.0",
+      "author": "Lennart Demes (ambientCG)",
+      "source": "https://ambientcg.com/view?id=Asphalt025C",
+      "provenance": "ambientCG photoscan, shipped as a zip. An alternative road surface. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "tile_meters": 4.0,
+      "files": [
+        {
+          "role": "archive",
+          "url": "https://ambientcg.com/get?file=Asphalt025C_2K-JPG.zip",
+          "sha256": null,
+          "path": "ambientcg/Asphalt025C_2K-JPG.zip",
+          "extract": [
+            {
+              "role": "albedo",
+              "member": "Asphalt025C_2K-JPG_Color.jpg",
+              "path": "ambientcg/Asphalt025C/color.jpg"
+            },
+            {
+              "role": "normal",
+              "member": "Asphalt025C_2K-JPG_NormalGL.jpg",
+              "path": "ambientcg/Asphalt025C/normal_gl.jpg"
+            },
+            {
+              "role": "roughness",
+              "member": "Asphalt025C_2K-JPG_Roughness.jpg",
+              "path": "ambientcg/Asphalt025C/roughness.jpg"
+            },
+            {
+              "role": "displacement",
+              "member": "Asphalt025C_2K-JPG_Displacement.jpg",
+              "path": "ambientcg/Asphalt025C/displacement.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kloofendal_48d_partly_cloudy_puresky",
+      "kind": "hdri",
+      "title": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal",
+      "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+          "sha256": null,
+          "path": "kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "id": "kloofendal_overcast_puresky",
+      "kind": "hdri",
+      "title": "Kloofendal Overcast (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal",
+      "source": "https://polyhaven.com/a/kloofendal_overcast_puresky",
+      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_overcast_puresky_2k.hdr",
+          "sha256": null,
+          "path": "kloofendal_overcast_puresky/kloofendal_overcast_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "id": "belfast_sunset_puresky",
+      "kind": "hdri",
+      "title": "Belfast Sunset (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal",
+      "source": "https://polyhaven.com/a/belfast_sunset_puresky",
+      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/belfast_sunset_puresky_2k.hdr",
+          "sha256": null,
+          "path": "belfast_sunset_puresky/belfast_sunset_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "id": "island_tree_01",
+      "kind": "model",
+      "title": "Island Tree 01",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "provenance": "Poly Haven photoscanned model. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page. The textures the glTF names must be added as support files once the file list is read.",
+      "forward": "+z",
+      "files": [
+        {
+          "role": "model",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/island_tree_01/island_tree_01_2k.gltf",
+          "sha256": null,
+          "path": "island_tree_01/island_tree_01_2k.gltf"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/island_tree_01/island_tree_01.bin",
+          "sha256": null,
+          "path": "island_tree_01/island_tree_01.bin"
+        }
+      ]
+    },
+    {
+      "id": "concrete_road_barrier",
+      "kind": "model",
+      "title": "Concrete Road Barrier",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/concrete_road_barrier",
+      "provenance": "Poly Haven photoscanned model. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page. The textures the glTF names must be added as support files once the file list is read.",
+      "forward": "+z",
+      "files": [
+        {
+          "role": "model",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/concrete_road_barrier/concrete_road_barrier_2k.gltf",
+          "sha256": null,
+          "path": "concrete_road_barrier/concrete_road_barrier_2k.gltf"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/concrete_road_barrier/concrete_road_barrier.bin",
+          "sha256": null,
+          "path": "concrete_road_barrier/concrete_road_barrier.bin"
+        }
+      ]
+    }
+  ],
+  "bindings": {
+    "surface.road": "asphalt_02",
+    "surface.sidewalk": "concrete_pavement",
+    "surface.curb": "concrete_floor_02",
+    "surface.wall": "concrete_floor_02",
+    "ground.grass": "aerial_grass_rock",
+    "ground.paving": "patterned_paving",
+    "sky.clear": "kloofendal_48d_partly_cloudy_puresky",
+    "sky.low_sun": "belfast_sunset_puresky",
+    "sky.overcast": "kloofendal_overcast_puresky",
+    "sky.night": null,
+    "tree": "island_tree_01",
+    "vehicle.audi.a2": null,
+    "vehicle.audi.etron": null,
+    "vehicle.audi.tt": null,
+    "vehicle.bmw.grandtourer": null,
+    "vehicle.chevrolet.impala": null,
+    "vehicle.citroen.c3": null,
+    "vehicle.dodge.charger": null,
+    "vehicle.ford.mustang": null,
+    "vehicle.jeep.wrangler_rubicon": null,
+    "vehicle.lincoln.mkz": null,
+    "vehicle.mercedes.coupe": null,
+    "vehicle.mini.cooper": null,
+    "vehicle.nissan.micra": null,
+    "vehicle.nissan.patrol": null,
+    "vehicle.seat.leon": null,
+    "vehicle.sprinter.mercedes": null,
+    "vehicle.taxi.ford": null,
+    "vehicle.tesla.model3": null,
+    "vehicle.toyota.prius": null,
+    "vehicle.volkswagen.t2": null,
+    "vehicle.*": null,
+    "walker.*": null
+  }
+}

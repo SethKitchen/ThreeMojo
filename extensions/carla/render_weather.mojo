@@ -19,6 +19,19 @@ horizon to `NOON_KELVIN` high in the sky. Cloud cover takes up to
 `CLOUD_SHADE` of the direct light away. Below the horizon the sun fades
 out over `TWILIGHT` and a moon lights the town instead.
 
+**Physical daylight.** The sun and the sky are lit in lux, from the
+well-known daylight availability formulas of lighting engineering. The
+sun gives `SOLAR_ILLUMINANCE` outside the air, less `exp(-c m)` through an
+air mass `m` with the clear-sky extinction `c` of `CLEAR_EXTINCTION`. A
+clear sky gives `0.8 + 15.5 sqrt(sin h)` kilolux on the ground at a sun
+altitude `h`, and an overcast sky `0.3 + 21 sin h` kilolux; the cloud
+cover moves the sky from one to the other. `LUX_PER_UNIT` turns lux into
+the renderer's light: a white wall under one unit shines `1 / pi` units,
+and one unit of shine is `NITS_PER_UNIT` candela per square meter, so one
+unit of light is `pi` times that in lux. `render_sky` scales its sky so
+that the ground under it gets `sky_illuminance`, which makes the sky, an
+HDRI and the sun agree.
+
 **The sky.** The sky is Preetham's model, three.js's `Sky`. Its
 turbidity rises with the clouds and the dust, its Rayleigh term follows
 the Rayleigh scale over CARLA's default of 0.0331, and its Mie term
@@ -51,16 +64,36 @@ from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.color_utils import kelvin_color
 from render.framebuffer import FloatColor
-from std.math import cos, exp, pow, sin
-from units.si import DEGREE, METER, PER_METER, Angle, InverseLength, Length
+from std.math import cos, exp, pow, sin, sqrt
+from units.si import (
+    DEGREE,
+    METER,
+    PER_METER,
+    RADIAN,
+    Angle,
+    InverseLength,
+    Length,
+)
 from units.temperature import KELVIN, Temperature
 
 # The sun's azimuth when a weather keeps the town's, as a preset's -1 does.
 comptime TOWN_SUN_AZIMUTH = Angle(150, DEGREE)
-# How bright the sun is overhead in a clear sky, before the air mass.
-comptime SUN_INTENSITY = Float32(4.2)
-# The share of the direct light each unit of air mass takes away.
-comptime AIR_EXTINCTION = Float32(0.22)
+# Candela per square meter in one unit of the renderer's shine.
+comptime NITS_PER_UNIT = Float32(4000)
+# Lux in one unit of the renderer's light: pi times `NITS_PER_UNIT`,
+# since a white diffuse surface under E lux shines E / pi nits.
+comptime LUX_PER_UNIT = Float32(3.141592653589793) * NITS_PER_UNIT
+# The sun's illuminance outside the air, in lux, and the clear sky's
+# extinction per unit of air mass.
+comptime SOLAR_ILLUMINANCE = Float32(127500)
+comptime CLEAR_EXTINCTION = Float32(0.21)
+# The daylight availability formulas' terms, in lux: a clear sky's
+# `CLEAR_SKY_BASE + CLEAR_SKY_GAIN sqrt(sin h)` and an overcast sky's
+# `OVERCAST_BASE + OVERCAST_GAIN sin h`.
+comptime CLEAR_SKY_BASE = Float32(800)
+comptime CLEAR_SKY_GAIN = Float32(15500)
+comptime OVERCAST_BASE = Float32(300)
+comptime OVERCAST_GAIN = Float32(21000)
 # The sun's color at the horizon and high in the sky.
 comptime SUNRISE_KELVIN = Float32(1900)
 comptime NOON_KELVIN = Float32(5800)
@@ -224,19 +257,78 @@ def sun_color(weather: WeatherParameters) raises -> FloatColor:
     return _mix(warm, FloatColor(0.9, 0.92, 1.0), gray)
 
 
-def sun_intensity(weather: WeatherParameters) -> Float32:
-    """Return how bright the direct sunlight is.
+def direct_normal_illuminance(altitude: Angle) -> Float32:
+    """Return the clear sky's direct sunlight on a surface facing the sun.
+
+    Args:
+        altitude: The sun's altitude.
+
+    Returns:
+        `SOLAR_ILLUMINANCE exp(-CLEAR_EXTINCTION m)` in lux, with `m` the
+        air mass.
+    """
+    return SOLAR_ILLUMINANCE * exp(-CLEAR_EXTINCTION * air_mass(altitude))
+
+
+def sun_illuminance(weather: WeatherParameters) -> Float32:
+    """Return the direct sunlight on a surface facing the sun.
 
     Args:
         weather: The weather.
 
     Returns:
-        `SUN_INTENSITY` through the air mass, less the cloud shade, times
-        `daylight`.
+        `direct_normal_illuminance`, less the cloud shade, times
+        `daylight`, in lux.
     """
-    var through = exp(-AIR_EXTINCTION * air_mass(weather.sun_altitude_angle))
     var shade = 1 - CLOUD_SHADE * _percent(weather.cloudiness)
-    return SUN_INTENSITY * through * shade * daylight(weather)
+    return (
+        direct_normal_illuminance(weather.sun_altitude_angle)
+        * shade
+        * daylight(weather)
+    )
+
+
+def sky_illuminance(weather: WeatherParameters) -> Float32:
+    """Return the sky's light on level ground, the sun's disk left out.
+
+    Args:
+        weather: The weather.
+
+    Returns:
+        The clear sky's `0.8 + 15.5 sqrt(sin h)` kilolux mixed toward the
+        overcast sky's `0.3 + 21 sin h` kilolux by the cloud cover, at
+        the sun's altitude `h` held at zero or more, times `daylight`, in
+        lux.
+    """
+    var h = max(weather.sun_altitude_angle.to(RADIAN), 0)
+    var clear = CLEAR_SKY_BASE + CLEAR_SKY_GAIN * sqrt(sin(h))
+    var overcast = OVERCAST_BASE + OVERCAST_GAIN * sin(h)
+    var cover = _percent(weather.cloudiness)
+    return (clear + (overcast - clear) * cover) * daylight(weather)
+
+
+def light_units(lux: Float32) -> Float32:
+    """Return an illuminance in the renderer's units of light.
+
+    Args:
+        lux: The illuminance, in lux.
+
+    Returns:
+        `lux / LUX_PER_UNIT`.
+    """
+    return lux / LUX_PER_UNIT
+
+
+def sun_intensity(weather: WeatherParameters) -> Float32:
+    """Return how bright the direct sunlight is, in the renderer's units.
+
+    Args:
+        weather: The weather.
+
+    Returns:
+        `light_units(sun_illuminance(weather))`.
+    """
+    return light_units(sun_illuminance(weather))
 
 
 def moon_intensity(weather: WeatherParameters) -> Float32:

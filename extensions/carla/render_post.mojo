@@ -124,19 +124,33 @@ struct ViewRays(ImplicitlyCopyable):
         self.eye = Vector3.from_matrix_position(self.world)
 
     def view_point(self, x: Int, y: Int, depth: Float32) -> Vector3:
-        """Return the camera-space point of a pixel at a window depth.
+        """Return the camera-space point of a pixel at a stored depth.
 
         Args:
             x: The column.
             y: The row, down from the top.
-            depth: The window depth, zero to one.
+            depth: The depth a render target stores: the NDC depth, -1 at
+                the near plane and 1 at the far.
 
         Returns:
             The point, minus z in front of the camera.
         """
         var u = (Float32(x) + 0.5) / Float32(self.width) * 2 - 1
         var v = 1 - (Float32(y) + 0.5) / Float32(self.height) * 2
-        return self.unproject.transform_point(Vector3(u, v, depth * 2 - 1))
+        return self.unproject.transform_point(Vector3(u, v, depth))
+
+    def world_point(self, x: Int, y: Int, depth: Float32) -> Vector3:
+        """Return the world point of a pixel at a stored depth.
+
+        Args:
+            x: The column.
+            y: The row, down from the top.
+            depth: The NDC depth, as `view_point` reads it.
+
+        Returns:
+            The point, in three.js's frame.
+        """
+        return self.world.transform_point(self.view_point(x, y, depth))
 
     def direction(self, x: Int, y: Int) -> Vector3:
         """Return the unit world direction through a pixel.
@@ -158,8 +172,7 @@ struct ViewRays(ImplicitlyCopyable):
         Args:
             x: The column.
             y: The row, down from the top.
-            depth: The window depth; one or more, or not finite, for the
-                sky.
+            depth: The NDC depth; one or more, or not finite, for the sky.
 
         Returns:
             The distance, or `SKY_DISTANCE` for the sky.
@@ -211,11 +224,14 @@ def apply_height_fog(
     sun: Vector3,
     sun_light: FloatColor,
     ground: Length,
+    lit: List[Float32] = List[Float32](),
 ):
     """Mix every pixel toward the fog by the light its ray loses.
 
     The fog takes the sky's color low in the ray's own direction, so it
-    glows warm toward a low sun and stays blue away from it.
+    glows warm toward a low sun and stays blue away from it. The sunlight
+    it scatters is scaled by the share of the ray the sun reaches, so a
+    shadow cuts a dark shaft through it.
 
     Args:
         frame: The frame, changed in place.
@@ -225,6 +241,8 @@ def apply_height_fog(
         sun: The unit direction toward the sun.
         sun_light: The sunlight's color times its intensity.
         ground: The height of the fog's base.
+        lit: The share of each pixel's ray in sunlight, from
+            `render_light.fog_light_shafts`; empty for all of it.
     """
     if not fog.is_on():
         return
@@ -242,7 +260,18 @@ def apply_height_fog(
             var low = sky.sample(
                 Vector3(direction.x, FOG_SKY_RISE, direction.z)
             )
-            var tint = fog_color(low, sun, sun_light, fog, direction)
+            var share = lit[slot] if len(lit) > 0 else Float32(1)
+            var tint = fog_color(
+                low,
+                sun,
+                FloatColor(
+                    sun_light.r * share,
+                    sun_light.g * share,
+                    sun_light.b * share,
+                ),
+                fog,
+                direction,
+            )
             var seen = frame.colors[slot]
             frame.colors[slot] = FloatColor(
                 seen.r * keep + tint.r * (1 - keep),

@@ -43,6 +43,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from extensions.carla.assets import AssetRegistry
 from extensions.carla.actor import Actor, ActorId, VEHICLE_ACTOR, WALKER_ACTOR
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.render_textures import hash2
@@ -866,11 +867,12 @@ struct ActorVisuals(Movable):
         id: ActorId,
         mut scene: Scene,
         mut assets: Assets,
+        registry: AssetRegistry,
     ) raises:
-        """Build a vehicle's model into the scene."""
+        """Build a vehicle's model into the scene: the cached model of its
+        blueprint, or the procedural one."""
         var box = world.get_bounding_box(id)
-        var style = body_style_of(world.actor(id).type_id, box.extent.z * 2)
-        var model = self._model(assets, box, style)
+        var type_id = world.actor(id).type_id
         var first = len(scene.meshes)
         var node = scene.add(Object3D())
         var paint = assets.materials.add(
@@ -894,35 +896,52 @@ struct ActorVisuals(Movable):
                 env_map=SCENE_ENVIRONMENT,
             )
         )
-        scene.add_mesh(
-            Mesh(
-                model.cabin,
-                [paint, self.glass],
+        var front = box.extent.x
+        var scanned = registry.cached_entry(registry.model_key(type_id))
+        if scanned:
+            scene.update()
+            var placed = registry.place_model(
+                scanned.value(),
+                scene,
+                assets,
                 node,
-                cast_shadow=True,
-                receive_shadow=True,
+                Vector3(box.extent.x * 2, box.extent.z * 2, box.extent.y * 2),
             )
-        )
-        var parts: List[Tuple[GeometryId, MaterialId]] = [
-            (model.body, paint),
-            (model.tires, self.rubber),
-            (model.rims, self.chrome),
-            (model.grille, self.grille),
-            (model.heads, heads),
-            (model.tails, tails),
-        ]
-        # The list is a constant and not empty.
-        for part in parts:  # pragma: no branch
+            first = placed.first_mesh
+        else:
+            var model = self._model(
+                assets, box, body_style_of(type_id, box.extent.z * 2)
+            )
             scene.add_mesh(
                 Mesh(
-                    part[0],
-                    part[1],
+                    model.cabin,
+                    [paint, self.glass],
                     node,
                     cast_shadow=True,
                     receive_shadow=True,
                 )
             )
-        var front = model.extent.x / 2
+            var parts: List[Tuple[GeometryId, MaterialId]] = [
+                (model.body, paint),
+                (model.tires, self.rubber),
+                (model.rims, self.chrome),
+                (model.grille, self.grille),
+                (model.heads, heads),
+                (model.tails, tails),
+            ]
+            # The list is a constant and not empty.
+            for part in parts:  # pragma: no branch
+                scene.add_mesh(
+                    Mesh(
+                        part[0],
+                        part[1],
+                        node,
+                        cast_shadow=True,
+                        receive_shadow=True,
+                    )
+                )
+            front = model.extent.x / 2
+        var count = len(scene.meshes) - first
         var bulb = Object3D()
         bulb.set_position(front + 0.2, 0.62, 0)
         var aim = Object3D()
@@ -950,14 +969,44 @@ struct ActorVisuals(Movable):
                 tails,
                 index,
                 first,
-                len(scene.meshes) - first,
+                count,
             )
         )
 
     def _add_walker(
-        mut self, id: ActorId, mut scene: Scene, mut assets: Assets
+        mut self,
+        world: World,
+        id: ActorId,
+        mut scene: Scene,
+        mut assets: Assets,
+        registry: AssetRegistry,
     ) raises:
-        """Build a walker's model into the scene."""
+        """Build a walker's model into the scene: the cached model of its
+        blueprint, still, or the procedural one, whose limbs swing."""
+        var scanned = registry.cached_entry(
+            registry.model_key(world.actor(id).type_id)
+        )
+        if scanned:
+            var box = world.get_bounding_box(id)
+            var holder = scene.add(Object3D())
+            scene.update()
+            var placed = registry.place_model(
+                scanned.value(),
+                scene,
+                assets,
+                holder,
+                Vector3(box.extent.x * 2, box.extent.z * 2, box.extent.y * 2),
+            )
+            self.walkers.append(
+                WalkerVisual(
+                    id,
+                    holder,
+                    List[NodeId](),
+                    placed.first_mesh,
+                    placed.mesh_count,
+                )
+            )
+            return
         var colors = clothing(id)
         var shirt = assets.materials.add(
             standard_material(
@@ -1074,30 +1123,39 @@ struct ActorVisuals(Movable):
         )
 
     def sync(
-        mut self, world: World, mut scene: Scene, mut assets: Assets
+        mut self,
+        world: World,
+        mut scene: Scene,
+        mut assets: Assets,
+        registry: AssetRegistry = AssetRegistry(),
     ) raises:
         """Give each live vehicle and walker a model, and pose every model
         as its actor is now.
 
-        A model whose actor is gone is hidden, and its beam put out.
+        A blueprint whose key the registry's cache holds, by its id or by
+        its family's wildcard, gets the cached model; every other one gets
+        the procedural model. A model whose actor is gone is hidden, and
+        its beam put out.
 
         Args:
             world: The world.
             scene: The scene; models are added and moved.
             assets: The stores; geometry and materials are added, and the
                 lamp materials change.
+            registry: The photoscanned assets; none by default.
 
         Raises:
-            Error: If the world refuses an actor.
+            Error: If the world refuses an actor, or a cached model cannot
+                be read.
         """
         self._shared(assets)
         # A world always has its spectator.
         for id in world.get_actors():  # pragma: no branch
             var kind = world.actor(id).kind
             if kind == VEHICLE_ACTOR and self._vehicle_index(id) < 0:
-                self._add_vehicle(world, id, scene, assets)
+                self._add_vehicle(world, id, scene, assets, registry)
             if kind == WALKER_ACTOR and self._walker_index(id) < 0:
-                self._add_walker(id, scene, assets)
+                self._add_walker(world, id, scene, assets, registry)
         for v in self.vehicles:
             var alive = world.is_alive(v.actor)
             scene.node(v.node).visible = alive
@@ -1116,8 +1174,8 @@ struct ActorVisuals(Movable):
                 continue
             self._pose(world, w.actor, w.node, scene)
             var swing = stride(world.get_velocity(w.actor).length())
-            # Four limbs.
-            for k in range(4):  # pragma: no branch
+            # A procedural walker has four limbs, and a cached model none.
+            for k in range(len(w.limbs)):
                 var sign = Float32(1) if k == 0 or k == 3 else Float32(-1)
                 scene.node(w.limbs[k]).set_rotation_from_axis_angle(
                     Vector3(0, 0, 1), Angle(swing.to(DEGREE) * sign, DEGREE)

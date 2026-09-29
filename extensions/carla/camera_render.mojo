@@ -16,18 +16,28 @@ actors, and `render_rgb` draws what a camera actor sees:
 2. The camera stands at the actor's transform. CARLA's `fov` is the
    horizontal field of view, so the three.js camera's vertical one is
    `2 atan(tan(fov / 2) h / w)`.
-3. ThreeMojo's renderer draws the scene through its supersampling, with
-   cascaded sun shadows. On a wet road a screen-space reflection pass adds
-   what the puddles mirror.
-4. `render_post` lays the height fog, the haze and the rain over the
-   light.
-5. The composer adds the motion blur, the bloom, the lens flare and the
-   chromatic aberration.
+3. ThreeMojo's renderer draws the scene through its supersampling,
+   `supersample` times the size each way, with cascaded sun shadows. On a
+   wet road a screen-space reflection pass adds what the puddles mirror.
+4. `render_light` splits each pixel's light into the sun's share and the
+   sky's, from the sun's shadow maps. Ground-truth ambient occlusion
+   darkens the sky's share, and the cloud layer's shadows move the sun's.
+5. `render_post` lays the height fog, the haze and the rain over the
+   light. The fog scatters the sun only where `render_light`'s light
+   shafts say the sun reaches.
 6. The exposure is metered from the light (`exposure_mode` "histogram") or
-   set by the shutter, the aperture and the ISO ("manual"). The white
-   balance scales the light, and the output pass tone maps it with ACES
-   filmic at the exposure.
-7. The gamma and the lens distortion finish the image.
+   set by the shutter, the aperture and the ISO ("manual").
+7. The composer adds the motion blur, the bloom, the lens flare and the
+   chromatic aberration. The bloom's and the flare's thresholds are set
+   against the exposure, so the same parts of the image glow by day and
+   by night.
+8. The white balance scales the light, and the output pass tone maps it
+   with ACES filmic at the exposure.
+9. The gamma and the lens distortion finish the image.
+
+**Photoscanned assets.** An `AssetRegistry` gives the town, the actors
+and the sky what the asset cache holds, and each keeps its procedural
+asset for a key the cache lacks. See `assets`.
 
 `render_semantic` and `render_depth` draw CARLA's ground-truth images
 through the same rasterizer: every mesh flat in the CityScapes color of
@@ -42,6 +52,12 @@ frame and clamps its EV100 to `exposure_min_bright` and
 `exposure_max_bright`; the manual mode takes the camera's EV100.
 `exposure_compensation` adds stops to both. `LUMINANCE_SCALE` says how
 many candela per square meter one unit of the renderer's light is.
+
+The town is lit by physical daylight, and a clear noon meters near EV100
+15. CARLA's default limits, 10 to 12, frame CARLA's own scenes, which are
+dimmer. So the port reads the limits and the manual EV100
+`CAMERA_EV_OFFSET` stops higher: a default camera then exposes a physical
+noon as CARLA's default camera exposes CARLA's noon.
 
 **White balance** divides by the color of a black body at `temp` and
 multiplies by the color at 6500 K, and `tint` moves the green channel.
@@ -91,7 +107,24 @@ from extensions.carla.render_post import (
     luminance,
     metered_luminance,
 )
-from extensions.carla.render_sky import SkyLighting, build_sky
+from extensions.carla.assets import AssetRegistry
+from extensions.carla.render_light import (
+    DaylightSplit,
+    ambient_occlusion,
+    apply_ambient_occlusion,
+    apply_cloud_shadows,
+    direct_shares,
+    fog_light_shafts,
+    sun_maps,
+    town_gtao,
+)
+from extensions.carla.render_sky import (
+    SkyLighting,
+    build_sky,
+    ground_light,
+    hdri_sky,
+    sky_key,
+)
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
@@ -100,8 +133,12 @@ from extensions.carla.sensor_attributes import (
 )
 from extensions.carla.render_weather import (
     HeightFog,
+    NITS_PER_UNIT,
     daylight,
     height_fog,
+    light_units,
+    sky_illuminance,
+    sky_settings,
     moon_color,
     moon_direction,
     moon_intensity,
@@ -121,8 +158,14 @@ from objects.mesh import Mesh
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from lights.sun_light import SunLight
 from math.vector3 import Vector3
+from lights.shadow import ShadowMap
+from math.noise import ImprovedNoise
+from postprocessing.screen_space import DepthView
+from render.target import OUTPUT_NORMAL
 from postprocessing.composer import (
+    BLOOM,
     EffectComposer,
+    LENSFLARE,
     MOTION_BLUR,
     Pass,
     SSR_NODE,
@@ -159,7 +202,9 @@ from units.temperature import KELVIN, Temperature
 # How many semantic tags CARLA names.
 comptime SEMANTIC_TAGS = 30
 # Candela per square meter in one unit of the renderer's light.
-comptime LUMINANCE_SCALE = Float32(4000)
+comptime LUMINANCE_SCALE = NITS_PER_UNIT
+# The stops a camera's EV100 limits and manual EV100 are read higher by.
+comptime CAMERA_EV_OFFSET = Float32(3)
 # The gray a meter aims the mean at.
 comptime MIDDLE_GRAY = Float32(0.18)
 # What CARLA's bloom and lens-flare intensities are scaled by.
@@ -167,8 +212,11 @@ comptime BLOOM_GAIN = Float32(0.35)
 comptime FLARE_GAIN = Float32(0.15)
 # What CARLA's chromatic aberration intensity is scaled by.
 comptime ABERRATION_GAIN = Float32(1)
-# The luminance, in the renderer's light, a pixel must pass to bloom.
-comptime BLOOM_THRESHOLD = Float32(1.0)
+# The exposed luminance a pixel must pass to bloom, and to cast ghosts.
+comptime BLOOM_THRESHOLD = Float32(1.2)
+comptime FLARE_THRESHOLD = Float32(9)
+# How much of the ambient occlusion counts.
+comptime AO_STRENGTH = Float32(1)
 # How strongly a wet road mirrors in the screen-space reflections.
 comptime WET_REFLECTION = Float32(0.9)
 # How near and far a camera sees.
@@ -494,16 +542,17 @@ def camera_exposure(settings: RgbCameraSettings, metered: Float32) -> Float32:
 
     Returns:
         The histogram mode's exposure, the metered EV100 clamped to the
-        camera's bright limits, or the manual mode's, the camera's EV100.
+        camera's bright limits, or the manual mode's, the camera's EV100;
+        the limits and the camera's EV100 each `CAMERA_EV_OFFSET` higher.
     """
-    var ev = camera_ev100(settings)
+    var ev = camera_ev100(settings) + CAMERA_EV_OFFSET
     if settings.exposure_mode == HISTOGRAM_EXPOSURE:
         ev = min(
             max(
                 metered_ev100(metered, settings.calibration_constant),
-                settings.exposure_min_bright,
+                settings.exposure_min_bright + CAMERA_EV_OFFSET,
             ),
-            settings.exposure_max_bright,
+            settings.exposure_max_bright + CAMERA_EV_OFFSET,
         )
     return ev100_exposure(
         ev, settings.calibration_constant, settings.exposure_compensation
@@ -608,11 +657,50 @@ def _color_of(linear: FloatColor) -> Color:
     )
 
 
+def set_thresholds(mut composer: EffectComposer, exposure: Float32):
+    """Set the bloom's and the lens flare's thresholds against an exposure.
+
+    Args:
+        composer: The composer; its bloom and lens flare passes change.
+        exposure: What the light is scaled by before the tone curve.
+
+    The thresholds become `BLOOM_THRESHOLD` and `FLARE_THRESHOLD` over the
+    exposure, so a pixel blooms when its exposed light passes them.
+    """
+    for index in range(len(composer.passes)):
+        if composer.passes[index].kind == BLOOM:
+            composer.passes[index].threshold = BLOOM_THRESHOLD / exposure
+        elif composer.passes[index].kind == LENSFLARE:
+            composer.passes[index].display.flare_threshold = (
+                FLARE_THRESHOLD / exposure
+            )
+
+
+def daylight_split(weather: WeatherParameters) -> DaylightSplit:
+    """Return the sun's and the sky's light of a weather.
+
+    Args:
+        weather: The weather.
+
+    Returns:
+        `sun_intensity`, the sky's `sky_illuminance` in the renderer's
+        units, the light on level ground from `render_sky.ground_light`,
+        and the sun's direction.
+    """
+    return DaylightSplit(
+        sun_intensity(weather),
+        light_units(sky_illuminance(weather)),
+        ground_light(weather),
+        sun_direction(weather),
+    )
+
+
 struct CarlaRenderer(Movable):
     """A world's town and actors in a scene, and the cameras that see it."""
 
     var scene: Scene
     var assets: Assets
+    var registry: AssetRegistry
     var town: Town
     var props: Props
     var actors: ActorVisuals
@@ -625,7 +713,8 @@ struct CarlaRenderer(Movable):
     var sky_weather: WeatherParameters
     var sky_size: Int
     var workers: Int
-    var antialias: Bool
+    # How many times the size each way an image is drawn at; one for none.
+    var supersample: Int
     var frame_count: Int
     var renderer: Renderer
 
@@ -636,6 +725,8 @@ struct CarlaRenderer(Movable):
         workers: Int = 1,
         sky_size: Int = 128,
         antialias: Bool = True,
+        supersample: Int = SUPERSAMPLE,
+        var registry: AssetRegistry = AssetRegistry(),
     ) raises:
         """Build a world's town into a new scene.
 
@@ -645,13 +736,23 @@ struct CarlaRenderer(Movable):
             workers: How many threads the renderer draws with.
             sky_size: Texels on a side of each face of the sky's cube.
             antialias: Whether to supersample each image.
+            supersample: How many times the size each way to draw at when
+                antialiased: 2 for speed, 3 or 4 for stills.
+            registry: The photoscanned assets; none by default, so every
+                asset is procedural.
 
         Raises:
-            Error: If the town cannot be built.
+            Error: If the supersampling is less than one, or the town
+                cannot be built.
         """
+        if supersample < 1:
+            raise Error("A camera supersamples by one or more")
         self.scene = Scene()
         self.assets = Assets()
-        self.town = Town(world.map, self.scene, self.assets, settings^)
+        self.registry = registry^
+        self.town = Town(
+            world.map, self.scene, self.assets, settings^, self.registry
+        )
         self.props = Props(world.map, self.scene, self.assets)
         self.actors = ActorVisuals()
         self.sun = SunLight(self.scene)
@@ -668,7 +769,7 @@ struct CarlaRenderer(Movable):
         self.sky_weather = WeatherParameters()
         self.sky_size = sky_size
         self.workers = workers
-        self.antialias = antialias
+        self.supersample = supersample if antialias else 1
         self.frame_count = 0
         self.renderer = Renderer(8, 8, workers)
 
@@ -676,7 +777,9 @@ struct CarlaRenderer(Movable):
         """Bring the scene to the world's state: the weather, the traffic
         lights and the actors.
 
-        The sky is drawn again only when the weather changes.
+        The sky is drawn again only when the weather changes. It is the
+        cached HDRI of `render_sky.sky_key` when the registry holds one,
+        and Preetham's sky otherwise.
 
         Args:
             world: The world.
@@ -687,11 +790,21 @@ struct CarlaRenderer(Movable):
         var weather = world.get_weather()
         self.town.set_weather(self.scene, self.assets, weather)
         self.props.set_states(self.assets, world)
-        self.actors.sync(world, self.scene, self.assets)
+        self.actors.sync(world, self.scene, self.assets, self.registry)
         if not Bool(self.sky) or not (self.sky_weather == weather):
-            var sky = build_sky(
-                self.renderer, self.assets, weather, self.sky_size
-            )
+            var scanned = self.registry.cached_entry(sky_key(weather))
+            var sky: SkyLighting
+            if scanned:
+                sky = hdri_sky(
+                    self.assets,
+                    self.registry.hdri(scanned.value()),
+                    weather,
+                    self.sky_size,
+                )
+            else:
+                sky = build_sky(
+                    self.renderer, self.assets, weather, self.sky_size
+                )
             self.scene.background = cube_background(sky.background)
             self.scene.environment = sky.environment
             self.sky = sky
@@ -713,11 +826,9 @@ struct CarlaRenderer(Movable):
 
     def _renderer_for(mut self, settings: RgbCameraSettings) raises:
         """Keep one renderer for the camera's size, so the motion blur can
-        see the frame before. It draws at `SUPERSAMPLE` times the size
-        when the images are antialiased."""
-        var scale = SUPERSAMPLE if self.antialias else 1
-        var width = settings.image_width * scale
-        var height = settings.image_height * scale
+        see the frame before. It draws at `supersample` times the size."""
+        var width = settings.image_width * self.supersample
+        var height = settings.image_height * self.supersample
         if self.renderer.width != width or self.renderer.height != height:
             self.renderer = Renderer(width, height, self.workers)
         self.renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
@@ -753,15 +864,26 @@ struct CarlaRenderer(Movable):
         var flat = PerspectiveCamera(
             Angle(60, DEGREE), 1, CAMERA_NEAR, CAMERA_FAR
         )
+        var fisheye = Bool(settings.wide_angle)
+        var view = self._pose_camera(world, camera, settings)
         var frame: RenderTarget
-        if Bool(settings.wide_angle):
+        var first_effect = 1
+        if fisheye:
             frame = self._wide_angle(
                 settings.wide_angle.value(),
                 world.get_transform(camera),
                 weather,
             )
-            # A cube has no depth and no motion: only the image effects.
-            for index in range(1, len(passes)):
+        else:
+            frame = self._perspective(weather, settings, composer, view)
+            if len(passes) > 1 and passes[1].kind == SSR_NODE:
+                first_effect = 2
+        var exposure = camera_exposure(settings, metered_luminance(frame))
+        set_thresholds(composer, exposure)
+        for index in range(first_effect, len(passes)):
+            if fisheye:
+                # A cube has no depth and no motion: only the image
+                # effects.
                 var kind = passes[index].kind
                 if kind != MOTION_BLUR and kind != SSR_NODE:
                     composer.run_step(
@@ -773,9 +895,16 @@ struct CarlaRenderer(Movable):
                         flat,
                         0.05,
                     )
-        else:
-            frame = self._perspective(world, camera, settings, composer)
-        var exposure = camera_exposure(settings, metered_luminance(frame))
+            else:
+                composer.run_step(
+                    index,
+                    frame,
+                    self.renderer,
+                    self.scene,
+                    self.assets,
+                    view,
+                    0.05,
+                )
         apply_gains(frame, white_balance(settings.temp, settings.tint))
         self.renderer.tone_mapping_exposure = exposure
         composer.add_pass(output_pass())
@@ -801,18 +930,23 @@ struct CarlaRenderer(Movable):
 
     def _perspective(
         mut self,
-        world: World,
-        camera: ActorId,
+        weather: WeatherParameters,
         settings: RgbCameraSettings,
         mut composer: EffectComposer,
+        view: PerspectiveCamera,
     ) raises -> RenderTarget:
         """Return a pinhole camera's light: the scene drawn, reflected,
-        fogged and rained on, and the composer's effects run."""
-        var view = self._pose_camera(world, camera, settings)
-        var weather = world.get_weather()
+        occluded, shadowed by the clouds, fogged and rained on. The
+        composer's effects are left to the caller."""
         self.sun.update(self.scene, view)
         var outputs = frame_outputs(composer.passes)
-        var scale = SUPERSAMPLE if self.antialias else 1
+        var has_normals = False
+        for o in outputs:
+            if o == OUTPUT_NORMAL:
+                has_normals = True
+        if not has_normals:
+            outputs.append(OUTPUT_NORMAL)
+        var scale = self.supersample
         var frame = RenderTarget(
             settings.image_width * scale,
             settings.image_height * scale,
@@ -820,31 +954,67 @@ struct CarlaRenderer(Movable):
             outputs=outputs,
         )
         self.renderer.render_into(frame, self.scene, self.assets, view)
-        if self.antialias:
-            frame = frame.downsampled(SUPERSAMPLE)
-        var first_effect = 1
+        if scale > 1:
+            frame = frame.downsampled(scale)
         if len(composer.passes) > 1 and composer.passes[1].kind == SSR_NODE:
             composer.run_step(
                 1, frame, self.renderer, self.scene, self.assets, view, 0.05
             )
-            first_effect = 2
         var rays = ViewRays(
             settings.image_width,
             settings.image_height,
             view.projection_matrix(),
             view.view_matrix_in(self.scene),
         )
+        var maps = List[ShadowMap]()
+        if self.sun.cast_shadow:
+            maps = sun_maps(
+                self.renderer.shadow_maps(self.scene, self.assets),
+                self.sun.lights,
+            )
+        var light = daylight_split(weather)
+        var shares = direct_shares(frame, rays, maps, light)
+        var depth = DepthView(
+            frame.depth,
+            frame.width,
+            frame.height,
+            view.projection_matrix(),
+            CAMERA_NEAR,
+            CAMERA_FAR,
+            frame.depth_mode,
+            frame.normals,
+        )
+        apply_ambient_occlusion(
+            frame,
+            ambient_occlusion(frame, depth, town_gtao()),
+            shares,
+            AO_STRENGTH,
+        )
+        apply_cloud_shadows(
+            frame,
+            rays,
+            shares,
+            ImprovedNoise(),
+            light.direction,
+            sky_settings(weather).cloud_cover,
+        )
+        var fog = height_fog(weather)
+        var lit = List[Float32]()
+        if len(maps) > 0 and fog.is_on():
+            lit = fog_light_shafts(frame, rays, fog, maps, light.direction)
         var tint = sun_color(weather)
-        var strength = sun_intensity(weather)
         var horizon = self.sky.value().horizon
         apply_height_fog(
             frame,
             rays,
-            height_fog(weather),
+            fog,
             self.assets.cube_textures.get(self.sky.value().background),
-            sun_direction(weather),
-            FloatColor(tint.r * strength, tint.g * strength, tint.b * strength),
+            light.direction,
+            FloatColor(
+                tint.r * light.sun, tint.g * light.sun, tint.b * light.sun
+            ),
             Length(0, METER),
+            lit,
         )
         var rain = rain_settings(weather)
         if rain.is_on():
@@ -854,10 +1024,6 @@ struct CarlaRenderer(Movable):
                 horizon.b * 0.3 + 0.012,
             )
             draw_rain(frame, rays, rain, catch, self.frame_count + 1)
-        for index in range(first_effect, len(composer.passes)):
-            composer.run_step(
-                index, frame, self.renderer, self.scene, self.assets, view, 0.05
-            )
         return frame^
 
     def semantic_tags(self, world: World) raises -> List[SemanticTag]:
