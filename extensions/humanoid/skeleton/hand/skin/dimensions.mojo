@@ -14,7 +14,8 @@ included, and the lower radius, ulna and forearm tendons, so the
 palm's skin meets the forearm's at the same girth. Each
 digit's sections run from its knuckle to a little past its fingertip
 and slice its phalanges. Every section is closed as a convex hull and
-pushed out by its cover.
+pushed out by its cover. The palm's pad thins over its last sections,
+so its cut at the knuckles tucks inside the fingers' bases.
 
 A smooth union joins the palm and the five digits, so the web between
 two fingers rises only where the fingers meet the palm. A separate
@@ -78,6 +79,8 @@ comptime DIGIT_SECTIONS = 14
 # Soft tissue over the palm's hull and over a finger's bones, in
 # template cm: the palm's pad and the finger's pulp and skin.
 comptime PALM_COVER = Float32(0.45)
+# Sections over which the palm's pad thins toward the knuckles.
+comptime PALM_TAPER = 4
 comptime DIGIT_COVER = Float32(0.5)
 
 
@@ -155,7 +158,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
                 palm_bottom,
                 palm_top,
                 PALM_SECTIONS,
-                _covers(PALM_SECTIONS, f.cm(PALM_COVER) + self.dermis),
+                _palm_covers(f.cm(PALM_COVER), self.dermis),
                 2,
             )
         )
@@ -258,6 +261,19 @@ struct HandSkinLayerField(Copyable, DistanceField, Movable):
         """
         var d = self.outer.distance(point)
         return max(d, -d - self.thickness)
+
+
+def _palm_covers(cover: Float32, dermis: Float32) -> List[Float32]:
+    """Return the palm's covers, thinning over its last sections.
+
+    At the knuckles the palm's cut must tuck inside the fingers' bases,
+    so the pad thins to a quarter of `cover` there.
+    """
+    var out = List[Float32]()
+    for section in range(PALM_SECTIONS):  # pragma: no branch
+        var t = min(Float32(section) / Float32(PALM_TAPER), 1)
+        out.append(dermis + cover * (0.25 + 0.75 * t))
+    return out^
 
 
 def _covers(count: Int, cover: Float32) -> List[Float32]:

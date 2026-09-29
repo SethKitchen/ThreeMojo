@@ -87,7 +87,7 @@ A fine plexus drains the palm around to the back of the hand. A collecting vesse
 
 ## Skin and hair
 
-The palm and each digit fit their own loft. The palm's loft runs from a few centimeters above the wrist to the knuckles. It also slices the lower forearm, so it meets the arm's skin at the same girth. Each digit's loft runs from its knuckle to a little past its fingertip.
+The palm and each digit fit their own loft. The palm's loft runs from a few centimeters above the wrist to the knuckles. It also slices the lower forearm, so it meets the arm's skin at the same girth. Each digit's loft runs from its knuckle to a little past its fingertip. The palm's pad thins toward the knuckles, so no ledge shows there.
 
 A smooth union joins the palm and the five digits. The web between two fingers rises only where the fingers meet the palm. Six shafts stand for the hair on the back of the hand, and one for each finger's.
 
