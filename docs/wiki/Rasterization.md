@@ -46,6 +46,7 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `rasterize_point(point, target, mode, textures, first_row, last_row, fog)` | Draw one [point](Points-and-sprites), a square of pixels. |
 | `rasterize_points_all(points, target, mode, textures, workers, fog)` | Draw a whole list of points, on one or more threads. |
 | `rasterize_frame(corners, segments, draws, target, mode, textures, lighting, workers, fog, points)` | Draw triangles, segments and points in one order. `rasterize_all`, `rasterize_lines_all` and `rasterize_points_all` are each one draw of it. |
+| `rasterize_frame(corners, surfaces, segments, draws, target, ...)` | The same, with slim triangles: each `Corner` names its `Surface`. See [Slim corners](#slim-corners). |
 | `Draw(kind, first, count)` | One run of `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or `DRAW_POINTS` in a frame's order. |
 | `check_draws(draws, triangles, segments, points)` | Refuse a draw that names a run the frame does not hold. |
 | `check_point_state(point)`, `check_point_maps(point, mode, textures)` | Refuse a point that is lit, has no size, or whose alpha map is not stored as data. |
@@ -174,6 +175,15 @@ The direction toward the camera is measured from where the camera stands, under 
 `rasterize_frame` splits the image into horizontal bands and runs one task per band. Every draw is offered to every band, and a primitive whose rows miss the band is skipped on two integer compares. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
 
 The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version. Mojo 1.0 has no `_asyncrt` and 1.1 has no `asyncrt`, so one source cannot serve both.
+
+
+### Slim corners
+
+A `RasterVertex` holds a corner's own values and its whole material: 1024 bytes. A `Corner` holds only what differs from corner to corner, such as its place, its color, its normal and its texture coordinates: 256 bytes. It names a `Surface`, which holds the material that every corner of one draw shares.
+
+`Renderer.prepare_frame` keeps the triangles this way, so a frame writes and reads a quarter of the memory. `rasterize_frame` asks each surface its checks once. Then, as it draws each triangle, it joins the three corners to their surface again with `joined`. The whole corners stay in the cache for that one triangle.
+
+`corner_of(vertex, surface)` and `surface_of(vertex)` split a whole corner. `Frame.whole_corners()` gives the frame's corners whole, as `prepare` returns them and `GpuRenderer.draw` takes them.
 
 ## Two output representations
 

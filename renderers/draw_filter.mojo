@@ -22,7 +22,7 @@ is drawn.
 """
 
 from materials.material import BLEND, Material
-from render.rasterizer import RasterVertex
+from render.rasterizer import Corner, RasterVertex
 from std.math import floor
 
 
@@ -115,6 +115,23 @@ def kept_draws(
 
 
 def snap_to_pixels(mut corners: List[RasterVertex], width: Int, height: Int):
+    """Round each corner's place on the screen to a whole pixel from the
+    screen's center: three.js's `RetroPassNode` vertex node, which rounds
+    `xy / (2 w) * size` and scales it back.
+
+    Args:
+        corners: The frame's corners, in pixels, changed in place.
+        width: The target's width in pixels.
+        height: The target's height in pixels.
+    """
+    var half_w = Float32(width) * 0.5
+    var half_h = Float32(height) * 0.5
+    for at in range(len(corners)):
+        corners[at].x = floor(corners[at].x - half_w + 0.5) + half_w
+        corners[at].y = floor(corners[at].y - half_h + 0.5) + half_h
+
+
+def snap_to_pixels(mut corners: List[Corner], width: Int, height: Int):
     """Round each corner's place on the screen to a whole pixel from the
     screen's center: three.js's `RetroPassNode` vertex node, which rounds
     `xy / (2 w) * size` and scales it back.

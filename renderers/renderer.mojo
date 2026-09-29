@@ -273,6 +273,11 @@ from renderers.draw_filter import (
     snap_to_pixels,
 )
 from render.rasterizer import (
+    Corner,
+    Surface,
+    corner_of,
+    joined,
+    surface_of,
     DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
@@ -692,7 +697,7 @@ def _light_at_corner(
 
 
 def _march_volume(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     begin: Int,
     steps: Int,
     geometry: BufferGeometry,
@@ -715,9 +720,13 @@ def _march_volume(
     check_steps(steps)
     var bound = geometry.bounding_sphere()
     bound.apply_matrix4(world)
-    for index in range(begin, len(corners)):
-        corners[index].steps = steps
-        corners[index].model_radius = bound.radius
+    # On the surfaces of the corners the draw added: the draw's own.
+    if begin < len(corners):
+        for surface in range(
+            corners.corners[begin].surface, len(corners.surfaces)
+        ):
+            corners.surfaces[surface].steps = steps
+            corners.surfaces[surface].model_radius = bound.radius
 
 
 def _customs(
@@ -2580,6 +2589,91 @@ def _whole_in_view(
     return within_sides(c.position, sides)
 
 
+struct _Slim(Movable, Sized):
+    """A frame's triangles as they are prepared: each corner slim, and each
+    draw's material once, as `Corner` and `Surface`.
+
+    The emitters append whole corners, as they always have; each is split
+    here, so the frame's list holds a quarter of what it did. A draw calls
+    `new_surface` first, and its first corner's surface is the one every
+    corner of the draw names.
+    """
+
+    var corners: List[Corner]
+    var surfaces: List[Surface]
+    # Whether the next corner starts a surface.
+    var fresh: Bool
+
+    def __init__(out self):
+        """Hold nothing yet."""
+        self.corners = List[Corner]()
+        self.surfaces = List[Surface]()
+        self.fresh = True
+
+    def __len__(self) -> Int:
+        """Return how many corners there are.
+
+        Returns:
+            The count, three a triangle.
+        """
+        return len(self.corners)
+
+    def reserve(mut self, count: Int):
+        """Make room for `count` corners in all.
+
+        Args:
+            count: The corners the list should hold without growing.
+        """
+        self.corners.reserve(count)
+
+    def new_surface(mut self):
+        """Start a draw: its first corner starts a surface of its own."""
+        self.fresh = True
+
+    def append(mut self, vertex: RasterVertex):
+        """Add a corner, and its surface when it is the draw's first.
+
+        Args:
+            vertex: The whole corner.
+        """
+        if self.fresh:
+            self.surfaces.append(surface_of(vertex))
+            self.fresh = False
+        self.corners.append(corner_of(vertex, len(self.surfaces) - 1))
+
+    def take_corners(mut self) -> List[Corner]:
+        """Give up the corners, for a `Frame`, and hold none.
+
+        Returns:
+            The corners.
+        """
+        var taken = self.corners^
+        self.corners = List[Corner]()
+        return taken^
+
+    def take_surfaces(mut self) -> List[Surface]:
+        """Give up the surfaces, for a `Frame`, and hold none.
+
+        Returns:
+            The surfaces the corners named.
+        """
+        var taken = self.surfaces^
+        self.surfaces = List[Surface]()
+        return taken^
+
+    def whole(self) -> List[RasterVertex]:
+        """Return every corner whole again, in order.
+
+        Returns:
+            The whole corners.
+        """
+        var out = List[RasterVertex](capacity=len(self.corners))
+        for index in range(len(self.corners)):
+            ref corner = self.corners[index]
+            out.append(joined(corner, self.surfaces[corner.surface]))
+        return out^
+
+
 @fieldwise_init
 struct _Paint(ImplicitlyCopyable):
     """What every corner of one filled draw carries besides its own
@@ -2673,7 +2767,7 @@ struct _Paint(ImplicitlyCopyable):
 
     def emit_in_uv_space(
         self,
-        mut corners: List[RasterVertex],
+        mut corners: _Slim,
         a: ClipVertex,
         b: ClipVertex,
         c: ClipVertex,
@@ -2711,7 +2805,7 @@ struct _Paint(ImplicitlyCopyable):
 
     def emit(
         self,
-        mut corners: List[RasterVertex],
+        mut corners: _Slim,
         a: ClipVertex,
         b: ClipVertex,
         c: ClipVertex,
@@ -3289,7 +3383,7 @@ def _frames_of(
 
 
 def _emit_sprite(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     assets: Assets,
     sprite: Sprite,
     draw: _Draw,
@@ -3472,7 +3566,7 @@ def _emit_sprite(
 
 def _emit_clipped(
     paint: _Paint,
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     a: ClipVertex,
     b: ClipVertex,
     c: ClipVertex,
@@ -3685,7 +3779,7 @@ struct _Ribbon(ImplicitlyCopyable):
 def _emit_cap(
     ribbon: _Ribbon,
     paint: _Paint,
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     end: ClipVertex,
     outward: Float32,
     near: Float32,
@@ -3727,7 +3821,7 @@ def _emit_cap(
 
 
 def _emit_wide_line(
-    mut corners: List[RasterVertex],
+    mut corners: _Slim,
     assets: Assets,
     draw: _Draw,
     view: Matrix4,
@@ -4188,7 +4282,7 @@ def _reads_scene(assets: Assets, nodes: NodeProgramId) raises -> Bool:
 def _looks_behind(frame: Frame, triangle: Int) raises -> Bool:
     """Return True if a triangle of a prepared frame transmits, or its
     node program reads the scene behind it."""
-    ref first = frame.corners[triangle * 3]
+    ref first = frame.surfaces[frame.corners[triangle * 3].surface]
     return first.transmission > 0 or (
         first.nodes != NO_NODES and frame.programs.get(first.nodes).reads_scene
     )
@@ -4215,7 +4309,9 @@ def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
     if draw.kind == DRAW_TRIANGLES:
         return (
             _looks_behind(frame, draw.first)
-            or frame.corners[draw.first * 3].blend.mixes()
+            or frame.surfaces[
+                frame.corners[draw.first * 3].surface
+            ].blend.mixes()
         )
     if draw.kind == DRAW_SEGMENTS:
         return frame.segments[draw.first * 2].blend.mixes()
@@ -4271,8 +4367,11 @@ struct Frame(Movable):
     identical output -- the property `prepare` alone gave the triangles.
     """
 
-    # Raster vertices, three per triangle, as `prepare` returns them.
-    var corners: List[RasterVertex]
+    # The triangles' corners, three each, slim: each names its surface.
+    # `whole_corners` gives them as `prepare` returns them.
+    var corners: List[Corner]
+    # What the corners of each draw share, named by index.
+    var surfaces: List[Surface]
     # Raster vertices, two per segment, as `prepare_lines` returns them.
     var segments: List[RasterVertex]
     # Raster vertices, one per point, as `prepare_points` returns them.
@@ -4289,7 +4388,8 @@ struct Frame(Movable):
 
     def __init__(
         out self,
-        var corners: List[RasterVertex],
+        var corners: List[Corner],
+        var surfaces: List[Surface],
         var segments: List[RasterVertex],
         var draws: List[Draw],
         var points: List[RasterVertex] = List[RasterVertex](),
@@ -4299,7 +4399,8 @@ struct Frame(Movable):
         """Hold a prepared frame.
 
         Args:
-            corners: The triangles' corners, three each.
+            corners: The triangles' corners, three each, slim.
+            surfaces: What the corners name.
             segments: The segments' corners, two each.
             draws: The order to draw them in.
             points: The points, one corner each. None by default.
@@ -4308,11 +4409,25 @@ struct Frame(Movable):
             items: What drew each draw. None by default.
         """
         self.corners = corners^
+        self.surfaces = surfaces^
         self.segments = segments^
         self.draws = draws^
         self.points = points^
         self.programs = programs^
         self.items = items^
+
+    def whole_corners(self) -> List[RasterVertex]:
+        """Return the triangles' corners whole, three each: what `prepare`
+        returns, and what `render.gpu.GpuRenderer.draw` takes.
+
+        Returns:
+            Each corner joined to its surface.
+        """
+        var out = List[RasterVertex](capacity=len(self.corners))
+        for index in range(len(self.corners)):
+            ref corner = self.corners[index]
+            out.append(joined(corner, self.surfaces[corner.surface]))
+        return out^
 
 
 struct Renderer(Movable):
@@ -4948,6 +5063,25 @@ struct Renderer(Movable):
             return STANDARD_DEPTH
         return self.depth_mode
 
+    def _encode_depth[C: Camera](self, mut vertices: _Slim, camera: C) raises:
+        """`_encode_depth` on the surfaces of slim corners, which hold the
+        depth mode the camera writes.
+
+        Args:
+            vertices: The frame's triangles.
+            camera: The camera the frame is drawn through.
+
+        Raises:
+            Error: As the other overload.
+        """
+        var mode = self.depth_mode_for(camera)
+        var scale = Float32(0)
+        if mode == LOGARITHMIC_DEPTH:
+            scale = log_depth_factor(camera.far_distance())
+        for index in range(len(vertices.surfaces)):
+            vertices.surfaces[index].state.depth_mode = mode
+            vertices.surfaces[index].state.log_depth_scale = scale
+
     def _encode_depth[
         C: Camera
     ](self, mut vertices: List[RasterVertex], camera: C) raises:
@@ -5035,6 +5169,34 @@ struct Renderer(Movable):
         transmissive_backs: Bool = False,
         distance_casters: Bool = False,
     ) raises -> List[RasterVertex]:
+        """`_prepared_slim`, each corner whole: what `prepare` returns and
+        what a pass that reads whole corners takes."""
+        return self._prepared_slim(
+            scene,
+            assets,
+            camera,
+            wireframe,
+            spans,
+            casters_only,
+            receivers_cast,
+            transmissive_backs,
+            distance_casters,
+        ).whole()
+
+    def _prepared_slim[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        wireframe: Bool,
+        mut spans: List[_Span],
+        casters_only: Bool = False,
+        receivers_cast: Bool = False,
+        transmissive_backs: Bool = False,
+        distance_casters: Bool = False,
+    ) raises -> _Slim:
         """Turn a scene into the triangles a rasterizer can fill.
 
         Everything that is not filling pixels happens here: world transforms,
@@ -5115,7 +5277,7 @@ struct Renderer(Movable):
                 checks are made on the draws that are made: a mesh the
                 camera's layers or frustum leave out is not read.
         """
-        var corners = List[RasterVertex]()
+        var corners = _Slim()
         # Asked of the scene as well as the camera: a camera riding a node
         # looks from wherever the scene put that node.
         var view = camera.view_matrix_in(scene)
@@ -5170,6 +5332,8 @@ struct Renderer(Movable):
         # see `light_masks`.
         var masks = light_masks(assets)
         for slot in range(len(draws)):
+            # Each draw's corners share one surface.
+            corners.new_surface()
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled
                 # surface and is left out of the wireframe half. Its
@@ -6900,9 +7064,11 @@ struct Renderer(Movable):
             self._state[].advance_camera(
                 camera.view_matrix_in(scene), camera.projection_matrix()
             )
-        var corners: List[RasterVertex]
+        var corners: _Slim
         try:
-            corners = self._prepared(scene, assets, camera, False, corner_spans)
+            corners = self._prepared_slim(
+                scene, assets, camera, False, corner_spans
+            )
         finally:
             # Each object drawn keeps its matrix for the next frame, even
             # when this one is refused, and no later frame keeps
@@ -6968,7 +7134,15 @@ struct Renderer(Movable):
         # three.js updates its `time` and camera nodes before a frame.
         var programs = assets.programs.copy()
         programs.set_frame(self.time, camera.view_matrix_in(scene))
-        return Frame(corners^, segments^, draws^, points^, programs^, items^)
+        return Frame(
+            corners.take_corners(),
+            corners.take_surfaces(),
+            segments^,
+            draws^,
+            points^,
+            programs^,
+            items^,
+        )
 
     def render[
         C: Camera
@@ -7400,7 +7574,7 @@ struct Renderer(Movable):
         # asks it before a launch. The uv view is data throughout and is
         # never tone mapped, so it is never refused; see below.
         check_output_kinds(
-            frame.corners,
+            frame.surfaces,
             self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
             frame.segments,
             frame.points,
@@ -7488,6 +7662,7 @@ struct Renderer(Movable):
         # `render.rasterizer.rasterize_frame` and `prepare_frame`.
         rasterize_frame(
             frame.corners,
+            frame.surfaces,
             frame.segments,
             frame.draws,
             target,
@@ -7698,6 +7873,7 @@ struct Renderer(Movable):
             _paint_backdrop(drawn, kept, backdrop.value())
         rasterize_frame(
             frame.corners,
+            frame.surfaces,
             frame.segments,
             _opaque_draws(frame),
             drawn,
