@@ -315,6 +315,7 @@ def test_bones_are_named_and_solid() raises:
     assert_equal(head_bone_label(TEETH), "teeth")
     assert_equal(head_bone_label(HYOID), "hyoid")
     assert_equal(head_bone_label(HeadBone(11)), "head bone")
+    assert_equal(head_bone_label(HeadBone(-1)), "head bone")
     assert_false(HeadBone(-1).is_valid())
     for index in range(len(bones)):  # pragma: no branch
         var field = head_bone_field(dims, bones[index])
@@ -511,6 +512,7 @@ def test_vessels() raises:
         )
         assert_true(report.mass.value > 0 and report.mass.value < 0.1)
     assert_equal(head_vessel_label(HeadVessel(6)), "head vessel")
+    assert_false(HeadVessel(-1).is_valid())
     assert_true(is_head_artery(COMMON_CAROTID_ARTERY))
     assert_false(is_head_artery(INTERNAL_JUGULAR_VEIN))
     var h = dims.head.copy()
@@ -563,6 +565,7 @@ def test_nerves() raises:
         var report = head_nerve_mass_from_dimensions(dims, part, nerve_tissue())
         assert_true(report.mass.value > 0 and report.mass.value < 0.1)
     assert_equal(head_nerve_label(HeadNerve(5)), "head nerve")
+    assert_false(HeadNerve(-1).is_valid())
     assert_false(is_paired_head_nerve(CERVICAL_SPINAL_CORD))
     assert_true(is_paired_head_nerve(VAGUS_NERVE))
     var h = dims.head.copy()
@@ -611,6 +614,7 @@ def test_lymph() raises:
         var report = head_lymph_mass_from_dimensions(dims, part, lymph_tissue())
         assert_true(report.mass.value > 0 and report.mass.value < 0.05)
     assert_equal(head_lymph_label(HeadLymph(5)), "head lymph")
+    assert_false(HeadLymph(-1).is_valid())
     var h = dims.head.copy()
     assert_true(
         head_lymph_distance(
@@ -675,6 +679,7 @@ def test_hair() raises:
     assert_equal(head_hair_label(SCALP_HAIR), "scalp hair")
     assert_equal(head_hair_label(EYEBROWS), "eyebrow")
     assert_equal(head_hair_label(HeadHair(2)), "head hair")
+    assert_false(HeadHair(-1).is_valid())
     assert_true(is_paired_head_hair(EYEBROWS))
     assert_false(is_paired_head_hair(SCALP_HAIR))
     var h = dims.head.copy()
