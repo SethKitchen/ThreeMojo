@@ -32,6 +32,7 @@ from core.assets import Assets
 from core.scene import Scene
 from postprocessing.screen_space import DepthView
 from render.framebuffer import Color, FloatColor
+from render.rasterizer import DRAW_SPLATS
 from render.target import FLOAT_TARGET, RenderTarget
 from renderers.draw_filter import NO_OIT_DRAWS, ONE_OIT_DRAW, oit_capable
 from renderers.renderer import Renderer
@@ -136,6 +137,8 @@ def oit_draw_count[
     var prepared = renderer.prepare_frame(scene, assets, camera)
     var count = 0
     for index in range(len(prepared.items)):
+        if prepared.items[index].kind == DRAW_SPLATS:
+            continue
         if oit_capable(assets.materials.get(prepared.items[index].material)):
             count += 1
     return count

@@ -2427,24 +2427,28 @@ def _whole_in_view(
 
 struct _Slim(Movable, Sized):
     """A frame's triangles as they are prepared: each corner slim, and each
-    draw's material once, as `Corner` and `Surface`.
+    draw's material once per facing, as `Corner` and `Surface`.
 
     The emitters append whole corners, as they always have; each is split
     here, so the frame's list holds a quarter of what it did. A draw calls
-    `new_surface` first, and its first corner's surface is the one every
-    corner of the draw names.
+    `new_surface` first. Front and back faces each share one surface, so
+    their normal and bump map scales keep the correct sign.
     """
 
     var corners: List[Corner]
     var surfaces: List[Surface]
-    # Whether the next corner starts a surface.
-    var fresh: Bool
+    # One surface for each facing in the current draw.
+    var front_surface: Int
+    var back_surface: Int
+    var turned: Bool
 
     def __init__(out self):
         """Hold nothing yet."""
         self.corners = List[Corner]()
         self.surfaces = List[Surface]()
-        self.fresh = True
+        self.front_surface = -1
+        self.back_surface = -1
+        self.turned = False
 
     def __len__(self) -> Int:
         """Return how many corners there are.
@@ -2472,18 +2476,25 @@ struct _Slim(Movable, Sized):
 
     def new_surface(mut self):
         """Start a draw: its first corner starts a surface of its own."""
-        self.fresh = True
+        self.front_surface = -1
+        self.back_surface = -1
+        self.turned = False
 
     def append(mut self, vertex: RasterVertex):
-        """Add a corner, and its surface when it is the draw's first.
+        """Add a corner, and its surface when it is the facing's first.
 
         Args:
             vertex: The whole corner.
         """
-        if self.fresh:
+        var surface = self.back_surface if self.turned else self.front_surface
+        if surface < 0:
+            surface = len(self.surfaces)
             self.surfaces.append(surface_of(vertex))
-            self.fresh = False
-        self.corners.append(corner_of(vertex, len(self.surfaces) - 1))
+            if self.turned:
+                self.back_surface = surface
+            else:
+                self.front_surface = surface
+        self.corners.append(corner_of(vertex, surface))
 
     def take_corners(mut self) -> List[Corner]:
         """Give up the corners, for a `Frame`, and hold none.
@@ -2688,7 +2699,10 @@ struct _Paint(ImplicitlyCopyable):
             return
         if self.side == BACK_SIDE and not away:
             return
-        if self.side == BACK_SIDE or (self.side == DOUBLE_SIDE and away):
+        corners.turned = self.side == BACK_SIDE or (
+            self.side == DOUBLE_SIDE and away
+        )
+        if corners.turned:
             # A two-sided surface seen from behind is lit on the side being
             # looked at: three.js's `normal *= faceDirection`, which its
             # shader applies under `DOUBLE_SIDED`. A `BACK_SIDE` surface is
@@ -4257,6 +4271,8 @@ def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
                 frame.corners[draw.first * 3].surface
             ].blend.mixes()
         )
+    if draw.kind == DRAW_SPLATS:
+        return True
     if draw.kind == DRAW_SEGMENTS:
         return frame.segments[draw.first * 2].blend.mixes()
     return frame.points[draw.first].blend.mixes()
@@ -5295,7 +5311,7 @@ struct Renderer(Movable):
         # see `light_masks`.
         var masks = light_masks(assets)
         for slot in range(len(draws)):
-            # Each draw's corners share one surface.
+            # Each draw shares one surface per facing.
             corners.new_surface()
             if draws[slot].wide_line >= 0:
                 # A wide line is drawn as triangles, so it is a filled

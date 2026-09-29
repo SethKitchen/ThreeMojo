@@ -1430,14 +1430,19 @@ struct Corner(ImplicitlyCopyable):
     # `fragment_velocity`.
     var current: Vector3
     var previous: Vector3
+    # How much light this surface sends toward the camera, linear: a
+    # `PHONG` material's `specular`. Interpolated like the emissive, which
+    # is also one color per material, and for the same reason -- a varying
+    # costs the same as a constant here and needs no second mechanism.
+    var specular: FloatColor
     # The index of the corner's `Surface` in the frame's list.
     var surface: Int
 
 
 @fieldwise_init
 struct Surface(ImplicitlyCopyable):
-    """The part of a `RasterVertex` that one draw's corners share: its
-    material, as the rasterizer reads it. See `Corner`."""
+    """The part of a `RasterVertex` shared by corners with the same
+    material and facing, as the rasterizer reads it. See `Corner`."""
 
     # `OPAQUE` or `BLEND`, resolved from the material by `Renderer.prepare`
     # rather than guessed at from this vertex's alpha. Per-triangle metadata,
@@ -1467,11 +1472,6 @@ struct Surface(ImplicitlyCopyable):
     # varying, and the only float among it: all three corners carry the
     # material's number and the first is read.
     var alpha_test: Float32
-    # How much light this surface sends toward the camera, linear: a
-    # `PHONG` material's `specular`. Interpolated like the emissive, which
-    # is also one color per material, and for the same reason -- a varying
-    # costs the same as a constant here and needs no second mechanism.
-    var specular: FloatColor
     # How tight that highlight is, three.js's `shininess`. Per-triangle
     # like the alpha test, and read from the first corner.
     var shininess: Float32
@@ -1661,7 +1661,7 @@ def joined(corner: Corner, surface: Surface) -> RasterVertex:
     vertex.emissive_map = surface.emissive_map
     vertex.alpha_map = surface.alpha_map
     vertex.alpha_test = surface.alpha_test
-    vertex.specular = surface.specular
+    vertex.specular = corner.specular
     vertex.shininess = surface.shininess
     vertex.matcap = surface.matcap
     vertex.gradient_map = surface.gradient_map
@@ -1753,6 +1753,7 @@ def corner_of(vertex: RasterVertex, surface: Int) -> Corner:
         vertex.gouraud_back_indirect,
         vertex.current,
         vertex.previous,
+        vertex.specular,
         surface,
     )
 
@@ -1773,7 +1774,6 @@ def surface_of(vertex: RasterVertex) -> Surface:
         vertex.emissive_map,
         vertex.alpha_map,
         vertex.alpha_test,
-        vertex.specular,
         vertex.shininess,
         vertex.matcap,
         vertex.gradient_map,
@@ -7431,6 +7431,7 @@ def rasterize_frame(
     if len(corners) % 3 != 0:
         raise Error("Rasterizing needs whole triangles")
     var triangles = len(corners) // 3
+    check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
     for triangle in range(triangles):
         var named = corners[triangle * 3].surface
         if named < 0 or named >= len(surfaces):
@@ -7484,7 +7485,6 @@ def rasterize_frame(
         lightings,
         len(splats),
     )
-    check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
     _draw_frame(
         corners=corners,
         surfaces=surfaces,
