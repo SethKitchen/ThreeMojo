@@ -112,7 +112,7 @@ Each town package holds one CARLA town as CARLA builds it: its buildings, street
 
 A package is one glTF file with its buffer and its textures, and the town's OpenDRIVE map, `<town>.xodr`. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
 
-The meshes are merged by tile, by kind and by material. A tile is 64 meters square. Each node has two tags in its `extras`:
+The meshes are merged by tile, by kind and by material. A tile is 32 meters square. Each node has two tags in its `extras`:
 
 | Tag | Values |
 |---|---|

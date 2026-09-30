@@ -67,7 +67,7 @@ Buildings stand on lots beside each road, outside the junctions. A lot that come
 
 A CARLA town can be drawn from CARLA's own content: its buildings, streets, plants, poles, props and parked vehicles, each where CARLA puts them. Set `TownSettings.package` to the town's name, such as `Town02`, and load its OpenDRIVE map. When the registry's cache holds `town.Town02`, the package stands in for the procedural roads, lane marks, ground, buildings, trees and lamps. See [CARLA assets](CARLA-assets) for what a package holds.
 
-- Each tile of the package is an LOD. Its near meshes show when the camera is nearer than `TownSettings.near_distance` (50 m by default) to the tile's center. Its far meshes show otherwise. Each camera chooses the levels before it draws.
+- Each tile of the package is an LOD. Its near meshes show when the camera is nearer than `TownSettings.near_distance` (50 m by default) to the middle of the tile's ground. Its far meshes show otherwise. Each camera chooses the levels before it draws.
 - A far tree is an impostor: two crossed quads that show a picture of the tree.
 - The package's traffic lights and signs are hidden. The props draw the map's signals, which change with the world.
 - Each mesh takes the semantic tag of its kind: a building is `BUILDING`, a parked vehicle is `CAR`, and a prop is `STATIC`.

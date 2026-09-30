@@ -12,7 +12,7 @@ and draws few meshes. Each mesh node names its kind in its extras, as
 `{"carla_kind": "building"}`, so the renderer can leave out what it
 draws itself.
 
-    python build_towns.py [TOWN ...] [--max-size 512] [--tile 64]
+    python build_towns.py [TOWN ...] [--max-size 512] [--tile 32]
 
 It writes `town_packages/carla.town.<town>/`, with the town's OpenDRIVE
 map, `<town>.xodr`, beside the glTF. The package names no engine
@@ -99,8 +99,16 @@ def kind_of(mesh_path):
     return KINDS.get(folder, "prop")
 
 
+# Kinds that lie flat on the ground. A road's paint is a decal a few
+# triangles deep, which simplifying breaks, and each is cheap, so each
+# keeps every triangle at both levels.
+FLAT = ("road", "road_line", "sidewalk", "ground", "terrain", "water", "rail")
+
+
 def budget(kind, triangles, mesh_path):
     """Return the most triangles one copy of a mesh keeps."""
+    if kind in FLAT:
+        return triangles
     if kind == "building":
         return max(min(triangles, 2500), triangles // 6)
     if kind == "parked_vehicle":
@@ -258,18 +266,20 @@ def area_normals(points, faces):
 
 def simplify(primitive, target, borders=True, small=False):
     """Return a primitive lowered to about `target` triangles by quadric
-    collapses. With `borders`, its open edges (the texture seams) stay in
-    place; the far level of detail lets them move, since a seam that
-    opens a crack does not show at a distance."""
+    collapses. With `borders`, its open edges, the texture seams among
+    them, stay in place, so its textures do not tear. Without, it is
+    welded first; see `simplify_welded`."""
     import fast_simplification
     faces = primitive["triangles"]
-    floor = fix.KEEP // 2 if borders and not small else 8
-    if len(faces) <= max(target, floor) or (borders and not small and len(faces) < fix.KEEP):
+    if not borders:
+        return simplify_welded(primitive, target)
+    floor = fix.KEEP // 2 if not small else 8
+    if len(faces) <= max(target, floor) or (not small and len(faces) < fix.KEEP):
         return primitive
     points = primitive["positions"]
     _, _, collapses = fast_simplification.simplify(
         points, faces.astype(numpy.int32), target_count=max(floor, target),
-        return_collapses=True, preserve_border=borders)
+        return_collapses=True, preserve_border=True)
     new_points, new_faces, mapping = fast_simplification.replay_simplification(
         points, faces.astype(numpy.int32), collapses)
     if len(new_faces) == 0:
@@ -279,6 +289,109 @@ def simplify(primitive, target, borders=True, small=False):
     return {"positions": new_points, "normals": area_normals(new_points, new_faces),
             "uvs": primitive["uvs"][source], "triangles": new_faces.astype(numpy.int64),
             "material": primitive["material"]}
+
+
+# A far mesh's corners are gathered into cells this fraction of its size.
+CLUSTER_DIVISIONS = 200
+# The smallest cell, in meters.
+CLUSTER_CELL = 0.25
+
+
+def simplify_welded(primitive, target):
+    """Return a primitive lowered to about `target` triangles for the far
+    level of detail.
+
+    A merged building is cut into many texture islands, each a piece of
+    its own, and it is also thousands of separate trims and frames. A
+    quadric collapse never removes a piece, so it stops far short. So the
+    corners are first gathered into cells, a `CLUSTER_DIVISIONS`th of the
+    mesh's size and at least `CLUSTER_CELL` wide, and each cell's corners
+    become one at their mean: a small piece collapses to nothing, and a
+    wall stays a wall. Then the joined mesh is collapsed to the target
+    with its edges free to move.
+
+    Each new triangle is flat, its corners apart, and takes its texture
+    coordinates from one original triangle, by `transfer_uvs`.
+    """
+    import fast_simplification
+    faces = primitive["triangles"]
+    if len(faces) <= max(target, 8):
+        return primitive
+    positions = primitive["positions"]
+    size = numpy.linalg.norm(positions.max(axis=0) - positions.min(axis=0))
+    cell = max(CLUSTER_CELL, size / CLUSTER_DIVISIONS)
+    _, gathered = numpy.unique(numpy.floor(positions / cell).astype(numpy.int64), axis=0, return_inverse=True)
+    gathered = gathered.reshape(-1)
+    sums = numpy.zeros((gathered.max() + 1, 3))
+    numpy.add.at(sums, gathered, positions)
+    points = sums / numpy.bincount(gathered)[:, None]
+    joined = gathered[faces]
+    whole = (joined[:, 0] != joined[:, 1]) & (joined[:, 1] != joined[:, 2]) & (joined[:, 0] != joined[:, 2])
+    joined = joined[whole]
+    # Two pieces that met in the same cells leave the same triangle twice.
+    _, once = numpy.unique(numpy.sort(joined, axis=1), axis=0, return_index=True)
+    joined = joined[numpy.sort(once)]
+    if len(joined) == 0:
+        return None
+    if len(joined) > max(target, 8):
+        _, _, collapses = fast_simplification.simplify(
+            points, joined.astype(numpy.int32), target_count=max(8, target),
+            return_collapses=True, preserve_border=False)
+        points, joined, _ = fast_simplification.replay_simplification(
+            points, joined.astype(numpy.int32), collapses)
+        if len(joined) == 0:
+            return None
+    corners = points[joined]
+    face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
+    uvs = transfer_uvs(primitive, corners, face)
+    return {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
+            "uvs": uvs.reshape(-1, 2), "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3),
+            "material": primitive["material"]}
+
+
+def transfer_uvs(primitive, corners, normals, candidates=8):
+    """Return texture coordinates for new triangles `corners` (n, 3, 3)
+    with unit normals `normals`, from the primitive they were simplified
+    from.
+
+    Each new triangle takes one original triangle: of the `candidates`
+    whose centers are nearest its own, the one that faces most its way
+    and lies nearest its plane. Its three corners are projected into that
+    triangle's plane and take the texture coordinates its own corners
+    would give there, so the new triangle reads one texture island, not
+    three.
+    """
+    from scipy.spatial import cKDTree
+    faces = primitive["triangles"]
+    source = primitive["positions"][faces]
+    centers = source.mean(axis=1)
+    normal = numpy.cross(source[:, 1] - source[:, 0], source[:, 2] - source[:, 0])
+    normal /= numpy.maximum(numpy.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
+    count = min(candidates, len(faces))
+    _, near = cKDTree(centers).query(corners.mean(axis=1), k=count)
+    near = near.reshape(len(corners), count)
+    facing = numpy.einsum("nkd,nd->nk", normal[near], normals)
+    offset = numpy.abs(numpy.einsum("nkd,nkd->nk", normal[near],
+                                    corners.mean(axis=1)[:, None, :] - centers[near]))
+    best = near[numpy.arange(len(corners)), numpy.argmin(offset - facing, axis=1)]
+    a, b, c = source[best, 0], source[best, 1], source[best, 2]
+    uv = primitive["uvs"][faces[best]]
+    e0, e1 = b - a, c - a
+    d00 = numpy.einsum("nd,nd->n", e0, e0)
+    d01 = numpy.einsum("nd,nd->n", e0, e1)
+    d11 = numpy.einsum("nd,nd->n", e1, e1)
+    denominator = d00 * d11 - d01 * d01
+    denominator = numpy.where(numpy.abs(denominator) > 1e-18, denominator, 1e-18)
+    out = numpy.zeros((len(corners), 3, 2))
+    for k in range(3):
+        e2 = corners[:, k] - a
+        d20 = numpy.einsum("nd,nd->n", e2, e0)
+        d21 = numpy.einsum("nd,nd->n", e2, e1)
+        v = (d11 * d20 - d01 * d21) / denominator
+        w = (d00 * d21 - d01 * d20) / denominator
+        out[:, k] = (1 - v - w)[:, None] * uv[:, 0] + v[:, None] * uv[:, 1] + w[:, None] * uv[:, 2]
+    return out
 
 
 def thin_cards(primitive, keep, seed):
@@ -529,7 +642,7 @@ def far_budget(kind, triangles, mesh_path):
     if kind == "vegetation":
         return min(triangles, max(150, triangles // 5)) if "/trees/" in low else 0
     if kind == "building":
-        return max(min(triangles, 600), triangles // 25)
+        return max(min(triangles, 300), triangles // 60)
     if kind in ("pole", "traffic_light"):
         return 0 if "glass" in low or "leds" in low else min(triangles, max(120, triangles // 12))
     if kind in ("wall", "fence"):
@@ -746,7 +859,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("towns", nargs="*")
     parser.add_argument("--max-size", type=int, default=512)
-    parser.add_argument("--tile", type=float, default=64.0)
+    parser.add_argument("--tile", type=float, default=32.0)
     parser.add_argument("--top", type=int, default=0, help="list the meshes that add the most triangles")
     args = parser.parse_args(argv)
     for town in args.towns or TOWNS:

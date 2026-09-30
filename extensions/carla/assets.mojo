@@ -1244,7 +1244,7 @@ struct AssetRegistry(Movable):
         A town package is in the scene's frame already, so it takes no
         turn and no scale. Each of its tiles becomes an LOD: the tile's
         near meshes show when the camera is nearer than `near` to the
-        tile's center, and its far meshes show otherwise. Call
+        middle of the tile's ground, and its far meshes show otherwise. Call
         `Scene.update_lods` with the camera's position before a frame.
         Every mesh casts and receives shadows, and each material that
         reflects no cube reflects the scene's environment.
@@ -1316,7 +1316,10 @@ struct AssetRegistry(Movable):
         var first_lod = len(scene.lods)
         var groups = List[NodeId]()
         for k in range(len(tiles)):
+            # The tile's middle, at its ground: a tower's tile is measured
+            # from the street, not from halfway up the tower.
             var center = boxes[k].center()
+            center.y = boxes[k].min.y
             var holder = Object3D()
             holder.set_position(center.x, center.y, center.z)
             var tile_node = scene.attach(holder^, parent)
