@@ -125,7 +125,9 @@ A female template has breasts over the pectoralis major. Each breast is an ellip
 
 The neck's skin is a column, and the shoulders' is nearly flat on top. A ridge on each side follows the upper trapezius from the side of the neck down to the acromion. It is a tapered capsule in a smooth union with the body, and it slopes the line from the neck to the shoulder.
 
-Each arm's skin joins that surface in a smooth union at the shoulder. The head's skin joins it in a smooth union at the base of the neck. The body then has one surface, from the head down to the wrists. `add_body` meshes each hand's skin on its own, at its own detail, because a finger is too slim for a grid that spans the body. The hand's skin overlaps the arm's across the wrist.
+Each arm's skin joins that surface in a smooth union at the shoulder. The head's skin joins it in a smooth union at the base of the neck. The body then has one surface, from the head down to the wrists. `add_body` meshes each hand's skin on its own, at its own detail, because a finger is too slim for a grid that spans the body.
+
+Across the wrist the hand's skin turns into the arm's, so the two meshes lie on one surface where they overlap. Past the overlap the hand's skin sinks under the arm's. The body's mesh leaves out the arm's skin past the wrist, where the hand's mesh draws it. So the two skins never cross, and the wrist shows no seam.
 
 ## Examples
 

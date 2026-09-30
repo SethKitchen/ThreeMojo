@@ -39,6 +39,7 @@ from extensions.humanoid.skeleton.arm.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.arm.skin.dimensions import (
     LIMB_DERMIS,
+    ArmSkinField,
     append_stations,
 )
 from extensions.humanoid.skeleton.field import (
@@ -70,11 +71,26 @@ from extensions.humanoid.skeleton.loft import (
     fit_loft,
     loft_distance,
 )
+from extensions.humanoid.skeleton.morph import smoothstep
 from math.vector3 import Vector3
 from std.math import max, min
 
 # Sections of the palm and of each digit.
 comptime PALM_SECTIONS = 18
+# Across the wrist the hand's skin turns into the arm's, from the first
+# height to the second, in centimeters above the wrist; past the third
+# it sinks under the arm's own mesh. See `JOIN_LAP`.
+comptime JOIN_FROM = Float32(-0.5)
+comptime JOIN_TO = Float32(0.5)
+comptime JOIN_TOP = Float32(2.5)
+# How far above the wrist the arm's mesh reaches down to, in
+# centimeters: the two meshes overlap between this and `JOIN_TOP`, on
+# the same surface.
+comptime JOIN_LAP = Float32(1.5)
+# How steeply the hand's skin sinks past its top, and how far above it
+# the hand's mesh reaches, in centimeters, which is where it has closed.
+comptime JOIN_SINK = Float32(3.0)
+comptime JOIN_CLOSE = Float32(1.5)
 comptime DIGIT_SECTIONS = 14
 # Soft tissue over the palm's hull and over a finger's bones, in
 # template cm: the palm's pad and the finger's pulp and skin.
@@ -92,6 +108,13 @@ struct HandSkinField(Copyable, DistanceField, Movable):
     # The palm's loft first, then the thumb's and each finger's.
     var lofts: List[Loft]
     var blend: Float32
+    # The arm's skin, which the hand's turns into across the wrist, and
+    # the heights where it starts to, where it has, and where the hand's
+    # skin is cut off.
+    var arm: ArmSkinField
+    var join_from: Float32
+    var join_to: Float32
+    var top: Float32
     var epsilon: Float32
     var low: Vector3
     var high: Vector3
@@ -118,6 +141,10 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         self.dermis = LIMB_DERMIS
         self.epsilon = f.cm(0.08)
         self.blend = f.cm(0.5)
+        self.arm = ArmSkinField(dimensions, side)
+        self.join_from = f.wrist.y + f.cm(JOIN_FROM)
+        self.join_to = f.wrist.y + f.cm(JOIN_TO)
+        self.top = f.wrist.y + f.cm(JOIN_TOP)
         self.lofts = List[Loft]()
         var anywhere = Float32(-1.0e9)
         # The palm: the carpals, the metacarpals and the hand's muscles.
@@ -204,6 +231,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
                 max(high.y, self.lofts[index].high.y),
                 max(high.z, self.lofts[index].high.z),
             )
+        high.y = min(high.y, self.top + f.cm(JOIN_CLOSE))
         self.low = low
         self.high = high
         if self.mirror:
@@ -221,7 +249,15 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         var d = loft_distance(self.lofts[0], p)
         for index in range(1, len(self.lofts)):  # pragma: no branch
             d = smin(d, loft_distance(self.lofts[index], p), self.blend)
-        return d
+        if point.y <= self.join_from:
+            return d
+        # Across the wrist the hand's skin becomes the arm's, so the two
+        # meshes lie on one surface where they overlap.
+        var w = smoothstep(self.join_from, self.join_to, point.y)
+        d = d + (self.arm.distance(point) - d) * w
+        # Past its top it sinks under the arm's skin, and closes there,
+        # with no rim to stand out of it.
+        return d + JOIN_SINK * max(Float32(0), point.y - self.top)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""

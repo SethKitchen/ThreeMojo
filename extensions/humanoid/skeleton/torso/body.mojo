@@ -13,8 +13,9 @@ skin and the torso's skin overlap over the waist. Across that band one
 surface morphs into the other. Each arm's skin joins that surface in a
 smooth union at the shoulder, and the head's skin joins it at the base
 of the neck, so the whole body, down to the wrists, has one skin. Each
-hand's skin is meshed on its own, at its own detail, and overlaps the
-arm's across the wrist.
+hand's skin is meshed on its own, at its own detail. Across the wrist
+it turns into the arm's, and past the wrist the body's mesh leaves the
+arm's skin to it, so the two never cross.
 
 The solid lives in the pelvis frame. The origin is the midpoint of the
 two hip joint centers. Plus y is proximal. Plus x is body-right. Plus z
@@ -26,7 +27,7 @@ is anterior.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
@@ -57,6 +58,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     scan_skin_mesh,
 )
 from extensions.humanoid.skeleton.hand.contents import HandContents
+from extensions.humanoid.skeleton.hand.skin.dimensions import JOIN_LAP
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
@@ -132,6 +134,9 @@ struct BodySkinField(Copyable, DistanceField, Movable):
     # the chin, and how far each reaches past it.
     var head_split: Float32
     var head_lap: Float32
+    # Below this height an arm's skin is the hand's to draw; see
+    # `hand_draws`.
+    var wrist_lap: Float32
     # Below `band_bottom` the lower body's skin is the surface; above
     # `band_top` the torso's is. Across the band, each skin past its last
     # full section is that section drawn straight on: the torso's below
@@ -179,6 +184,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         )
         self.head_split = f.at(0, HEAD_SPLIT, 0).y
         self.head_lap = f.cm(0.6)
+        self.wrist_lap = arms.arm.frame.wrist.y + arms.arm.frame.cm(JOIN_LAP)
         # From the widest of the hips to the waist, so the flank narrows
         # over a hand's breadth and not in a step. Below its fourteenth
         # centimeter the torso's loft tapers to its cut end, and above
@@ -228,6 +234,26 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         ):
             return body
         return smin(body, self.head.distance(point), self.neck_blend)
+
+    def hand_draws(self, point: Vector3) -> Bool:
+        """Return True if `point` is on an arm's skin past the wrist,
+        which the hand's own mesh draws.
+
+        Args:
+            point: A point on the skin, in the pelvis frame.
+
+        Returns:
+            True below the wrist's lap, where the arm's skin is nearer
+            than the trunk's.
+        """
+        if point.y >= self.wrist_lap:
+            return False
+        var arm: Float32
+        if point.x < 0:
+            arm = self.left_arm.distance(point)
+        else:
+            arm = self.right_arm.distance(point)
+        return arm < self._trunk(point)
 
     def _trunk(self, point: Vector3) -> Float32:
         """Return the distance to the torso's and the lower body's skin."""
@@ -307,10 +333,31 @@ def body_skin_mesh(
             field.epsilon,
         )
     )
+    # Past each wrist the hand's own mesh draws the skin.
+    _leave_hands_out(parts[0], field)
     var skin = merge_geometries(parts)
     share_height(skin, field.low.y, field.high.y - field.low.y)
     tint_head_skin(skin, head_muscle_dimensions(spec), field.head)
     return skin^
+
+
+def _leave_hands_out(mut geometry: BufferGeometry, field: BodySkinField) raises:
+    """Drop each triangle the hands' own meshes draw."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    var kept = List[Int]()
+    for t in range(0, len(geometry.index), 3):  # pragma: no branch
+        var a = geometry.index[t]
+        var b = geometry.index[t + 1]
+        var c = geometry.index[t + 2]
+        var middle = (
+            positions.vector3(a) + positions.vector3(b) + positions.vector3(c)
+        ) / 3
+        if field.hand_draws(middle):
+            continue
+        kept.append(a)
+        kept.append(b)
+        kept.append(c)
+    geometry.set_index(kept^)
 
 
 def add_body(
