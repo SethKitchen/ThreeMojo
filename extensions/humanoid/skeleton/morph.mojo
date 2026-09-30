@@ -22,7 +22,8 @@ the morph is the identity, so the neck still meets the torso. The
 template genome gives the identity everywhere.
 
 The strengths are authored. At an expression of one each trait sits
-near the edge of the adult range, not beyond it.
+near the edge of the adult range, not beyond it. The ears are skin
+alone, so the skin shapes them itself; see `ear_frame`.
 """
 
 from extensions.humanoid.genome import (
@@ -31,8 +32,6 @@ from extensions.humanoid.genome import (
     BROW_RIDGE,
     CHEEKBONES,
     CHIN,
-    EAR_PROTRUSION,
-    EAR_SIZE,
     EYE_DEPTH,
     EYE_SIZE,
     EYE_SPACING,
@@ -51,6 +50,7 @@ from extensions.humanoid.genome import (
     NOSE_WIDTH,
     check_genome,
 )
+from extensions.humanoid.sex import MALE, Sex
 from math.vector3 import Vector3
 from std.math import cos, max, min, sin
 
@@ -147,8 +147,6 @@ struct HeadMorph(ImplicitlyCopyable):
     var nose_bridge: Float32
     var mouth_width: Float32
     var lip_fullness: Float32
-    var ear_size: Float32
-    var ear_protrusion: Float32
     var neck_length: Float32
 
     def __init__(out self):
@@ -173,15 +171,19 @@ struct HeadMorph(ImplicitlyCopyable):
         self.nose_bridge = 0
         self.mouth_width = 0
         self.lip_fullness = 0
-        self.ear_size = 0
-        self.ear_protrusion = 0
         self.neck_length = 0
 
-    def __init__(out self, genome: Genome) raises:
-        """Read the head's genes from `genome`.
+    def __init__(out self, genome: Genome, sex: Sex = MALE) raises:
+        """Read the head's genes from `genome`, on the template of `sex`.
+
+        The female template's face differs from the male one's the way
+        the averages of the two differ: a smaller brow ridge and nose, a
+        narrower jaw and a smaller chin, slightly larger eyes and fuller
+        lips, and a longer neck. Those offsets are added to the genes.
 
         Args:
             genome: The genome to read.
+            sex: `MALE` or `FEMALE`. `MALE` by default.
 
         Raises:
             Error: If `genome` is not valid.
@@ -206,9 +208,20 @@ struct HeadMorph(ImplicitlyCopyable):
         self.nose_bridge = genome.get(NOSE_BRIDGE)
         self.mouth_width = genome.get(MOUTH_WIDTH)
         self.lip_fullness = genome.get(LIP_FULLNESS)
-        self.ear_size = genome.get(EAR_SIZE)
-        self.ear_protrusion = genome.get(EAR_PROTRUSION)
         self.neck_length = genome.get(NECK_LENGTH)
+        if sex != MALE:
+            self.brow_ridge -= 0.8
+            self.nose_length -= 0.25
+            self.nose_width -= 0.3
+            self.nose_projection -= 0.2
+            self.nose_bridge -= 0.2
+            self.jaw_width -= 0.45
+            self.chin -= 0.25
+            self.eye_size += 0.15
+            self.lip_fullness += 0.25
+            self.cheekbones += 0.1
+            self.brow_height += 0.3
+            self.neck_length += 0.2
         self.active = False
         var fields: List[Float32] = [
             self.head_width,
@@ -230,8 +243,6 @@ struct HeadMorph(ImplicitlyCopyable):
             self.nose_bridge,
             self.mouth_width,
             self.lip_fullness,
-            self.ear_size,
-            self.ear_protrusion,
             self.neck_length,
         ]
         for index in range(len(fields)):  # pragma: no branch
@@ -290,7 +301,6 @@ struct HeadMorph(ImplicitlyCopyable):
             return point
         var p = point
         var side = _side(p.x)
-        var ax = abs(p.x)
         var d = Vector3(0, 0, 0)
         # The face's features, each in its own region. The weights are
         # taken at the authored point, so the displacements add.
@@ -361,17 +371,6 @@ struct HeadMorph(ImplicitlyCopyable):
         w = bump(p, Vector3(side * 4.9, 63.8, 0.5), 4.2)
         if w > 0:
             d.x += side * Float32(0.6) * self.jaw_width * w
-        # The ears: size about where each joins the head, and
-        # protrusion swings the back of the ear out.
-        var root = Vector3(side * 7.7, 71.4, -1.1)
-        w = bump(p, root, 4.0) * smoothstep(6.8, 7.6, ax)
-        if w > 0:
-            var k = Float32(0.18) * self.ear_size * w
-            d = d + Vector3(
-                (p.x - root.x) * k, (p.y - root.y) * k, (p.z - root.z) * k
-            )
-            var behind = max(Float32(0), -(p.z + 0.4))
-            d.x += side * Float32(0.55) * self.ear_protrusion * behind * w
         p = p + d
         # The whole head: breadth and length of the cranium, and the
         # height of the vault, fading out down the neck.

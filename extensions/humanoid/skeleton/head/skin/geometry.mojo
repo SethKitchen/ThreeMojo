@@ -18,6 +18,7 @@ from extensions.humanoid.skeleton.head.frame import (
     head_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
+from extensions.humanoid.skeleton.head.skin.tint import tint_head_skin
 from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
@@ -34,7 +35,8 @@ def head_skin_mesh(
             32 by default.
 
     Returns:
-        A geometry with `position`, `normal` and `uv` attributes.
+        A geometry with `position`, `normal`, `uv` and `color`
+        attributes.
 
     Raises:
         Error: If `spec` is refused, if `detail` is out of range, or if
@@ -54,7 +56,9 @@ def head_skin_from_dimensions(
         detail: Cells along the solid.
 
     Returns:
-        A geometry with `position`, `normal` and `uv` attributes.
+        A geometry with `position`, `normal`, `uv` and `color`
+        attributes. The colors are the face's zones; see
+        `tint_head_skin`.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `detail` is
@@ -62,4 +66,6 @@ def head_skin_from_dimensions(
     """
     check_detail(detail, "head skin")
     var field = HeadSkinField(dimensions)
-    return mesh_surface(field, field.low, field.high, detail, "head skin")
+    var skin = mesh_surface(field, field.low, field.high, detail, "head skin")
+    tint_head_skin(skin, dimensions)
+    return skin^

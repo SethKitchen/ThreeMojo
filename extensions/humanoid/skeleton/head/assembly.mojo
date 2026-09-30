@@ -252,7 +252,7 @@ def add_head(
                 )
     if contents.includes_skin():
         var skin = resolved_paint(
-            assets, skin_paint, skin_phong(genome=spec.genome)
+            assets, skin_paint, skin_phong(genome=spec.genome, tinted=True)
         )
         place_mesh(
             scene,

@@ -33,11 +33,13 @@ from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
 from std.collections import Dict
+from std.sys import num_logical_cores
 from std.math import atan2, ceil, max, min, pi, sqrt
 
 # Fine cells per unit of `detail` along the long axis.
-comptime REFINE = 3
+comptime REFINE = 4
 # Fine cells along each side of a coarse block.
 comptime BLOCK = 4
 # How many Newton steps walk a vertex onto the surface.
@@ -118,18 +120,6 @@ def _u_of(point: Vector3) -> Float32:
     `u` is one half straight ahead, so the seam falls at the back.
     """
     return atan2(point.x, point.z) / (pi * Float32(2)) + Float32(0.5)
-
-
-def _sample_block[
-    F: DistanceField
-](field: F, grid: _Grid, mut values: List[Float32], i: Int, j: Int, k: Int):
-    """Sample every lattice point of block `(i, j, k)` not yet sampled."""
-    for fk in range(k * BLOCK, (k + 1) * BLOCK + 1):  # pragma: no branch
-        for fj in range(j * BLOCK, (j + 1) * BLOCK + 1):  # pragma: no branch
-            for fi in range(i * BLOCK, (i + 1) * BLOCK + 1):  # pragma: no branch
-                var at = grid.index(fi, fj, fk)
-                if values[at] == UNSAMPLED:
-                    values[at] = field.distance(grid.point(fi, fj, fk))
 
 
 def _near(values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int, reach: Float32) -> Bool:
@@ -251,12 +241,121 @@ def _edge_quad(
     return q
 
 
+async def _sample_task[
+    F: DistanceField
+](
+    field: Pointer[F, ImmutAnyOrigin],
+    grid: _Grid,
+    values: MutPointer[Float32, MutAnyOrigin],
+    blocks: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+    bx: Int,
+    by: Int,
+):
+    """Sample every lattice point of a run of near blocks.
+
+    Two blocks share the points on their common face. Both tasks write
+    the same value there, so the order does not matter.
+
+    Args:
+        field: The implicit solid.
+        grid: The fine lattice.
+        values: The samples, written in place.
+        blocks: The near blocks' indices.
+        first: This task's first block in `blocks`.
+        past: One past its last.
+        bx: Blocks along x.
+        by: Blocks along y.
+    """
+    for slot in range(first, past):  # pragma: no branch
+        var block = blocks[unsafe_offset=slot]
+        var i = block % bx
+        var j = (block // bx) % by
+        var k = block // (bx * by)
+        for fk in range(k * BLOCK, (k + 1) * BLOCK + 1):  # pragma: no branch
+            for fj in range(j * BLOCK, (j + 1) * BLOCK + 1):  # pragma: no branch
+                for fi in range(i * BLOCK, (i + 1) * BLOCK + 1):  # pragma: no branch
+                    var at = grid.index(fi, fj, fk)
+                    if values[unsafe_offset=at] == UNSAMPLED:
+                        values[unsafe_offset=at] = field[].distance(
+                            grid.point(fi, fj, fk)
+                        )
+
+
+async def _vertex_task[
+    F: DistanceField
+](
+    field: Pointer[F, ImmutAnyOrigin],
+    grid: _Grid,
+    values: Pointer[List[Float32], MutAnyOrigin],
+    crossed: MutPointer[Int, MutAnyOrigin],
+    positions: MutPointer[Float32, MutAnyOrigin],
+    normals: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Place the vertex of each of a run of crossed cells.
+
+    Args:
+        field: The implicit solid.
+        grid: The fine lattice.
+        values: The samples.
+        crossed: The crossed cells' indices.
+        positions: Three floats per vertex, written in place.
+        normals: Three floats per vertex, written in place.
+        first: This task's first cell in `crossed`.
+        past: One past its last.
+    """
+    var cell = grid.cell
+    var step = cell * Float32(0.25)
+    var half = Vector3(cell * 0.5, cell * 0.5, cell * 0.5)
+    for slot in range(first, past):  # pragma: no branch
+        var index = crossed[unsafe_offset=slot]
+        var i = index % grid.nx
+        var j = (index // grid.nx) % grid.ny
+        var k = index // (grid.nx * grid.ny)
+        var guess = _cell_guess(values[], grid, i, j, k)
+        var p = _project(
+            field[],
+            guess,
+            grid.point(i, j, k) - half,
+            grid.point(i + 1, j + 1, k + 1) + half,
+            step,
+        )
+        var normal = surface_gradient(field[], p, step)
+        normal.normalize()
+        positions[unsafe_offset=slot * 3] = p.x
+        positions[unsafe_offset=slot * 3 + 1] = p.y
+        positions[unsafe_offset=slot * 3 + 2] = p.z
+        normals[unsafe_offset=slot * 3] = normal.x
+        normals[unsafe_offset=slot * 3 + 1] = normal.y
+        normals[unsafe_offset=slot * 3 + 2] = normal.z
+
+
+def _crosses(values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int) -> Bool:
+    """Return True if the surface crosses cell `(i, j, k)`."""
+    var inside = 0
+    for c in range(8):  # pragma: no branch
+        if values[grid.index(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))] < 0:
+            inside += 1
+    return inside != 0 and inside != 8
+
+
 def mesh_surface[
     F: DistanceField
 ](
-    field: F, low: Vector3, high: Vector3, detail: Int, name: String
+    field: F,
+    low: Vector3,
+    high: Vector3,
+    detail: Int,
+    name: String,
+    workers: Int = 0,
 ) raises -> BufferGeometry:
     """Return a smooth mesh of `field`'s zero set inside a box.
+
+    The field is sampled and the vertices are placed on `workers`
+    threads. The mesh is the same for any number of them.
 
     Args:
         field: The implicit solid.
@@ -265,6 +364,8 @@ def mesh_surface[
         detail: Eight through sixty-four. `detail * REFINE` cells run
             along the box's y.
         name: Name used in the error text.
+        workers: How many threads share the work. Zero, the default,
+            means one per logical core.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -274,6 +375,9 @@ def mesh_surface[
             surface in the box.
     """
     check_detail(detail, name)
+    var threads = workers
+    if threads < 1:
+        threads = num_logical_cores()
     var span_y = high.y - low.y
     var cell = span_y / Float32(detail * REFINE)
     # Room round the solid, so its surface closes inside the grid.
@@ -296,19 +400,33 @@ def mesh_surface[
     # diagonal, with room for a field that is not an exact distance.
     var reach = Float32(BLOCK) * cell * Float32(2.2)
     var active = List[Bool](length=bx * by * bz, fill=False)
+    var near = List[Int]()
     for k in range(bz):  # pragma: no branch
         for j in range(by):  # pragma: no branch
             for i in range(bx):  # pragma: no branch
                 if _near(values, grid, i, j, k, reach):
                     active[i + bx * (j + by * k)] = True
-                    _sample_block(field, grid, values, i, j, k)
+                    near.append(i + bx * (j + by * k))
+    var tasks = max(1, min(threads, len(near)))
+    var samplers = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        samplers.create_task(
+            _sample_task(
+                Pointer(to=field).unsafe_origin_cast[ImmutAnyOrigin](),
+                grid,
+                values.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                near.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * len(near) // tasks,
+                (task + 1) * len(near) // tasks,
+                bx,
+                by,
+            )
+        )
+    samplers.wait()
+    _ = len(near)
     # One vertex in each crossed cell, walked onto the surface.
     var cells = List[Int32](length=grid.nx * grid.ny * grid.nz, fill=-1)
-    var positions = List[Float32]()
-    var normals = List[Float32]()
-    var step = cell * Float32(0.25)
-    var half = Vector3(cell * 0.5, cell * 0.5, cell * 0.5)
-    var count = 0
+    var crossed = List[Int]()
     for k in range(grid.nz):  # pragma: no branch
         for j in range(grid.ny):  # pragma: no branch
             for i in range(grid.nx):  # pragma: no branch
@@ -316,26 +434,29 @@ def mesh_surface[
                     i // BLOCK + bx * (j // BLOCK + by * (k // BLOCK))
                 ]:
                     continue
-                var guess = _cell_guess(values, grid, i, j, k)
-                if guess.x == UNSAMPLED:
-                    continue
-                var p = _project(
-                    field,
-                    guess,
-                    grid.point(i, j, k) - half,
-                    grid.point(i + 1, j + 1, k + 1) + half,
-                    step,
-                )
-                var normal = surface_gradient(field, p, step)
-                normal.normalize()
-                cells[grid.cell_index(i, j, k)] = Int32(count)
-                positions.append(p.x)
-                positions.append(p.y)
-                positions.append(p.z)
-                normals.append(normal.x)
-                normals.append(normal.y)
-                normals.append(normal.z)
-                count += 1
+                if _crosses(values, grid, i, j, k):
+                    cells[grid.cell_index(i, j, k)] = Int32(len(crossed))
+                    crossed.append(grid.cell_index(i, j, k))
+    var count = len(crossed)
+    var positions = List[Float32](length=count * 3, fill=0)
+    var normals = List[Float32](length=count * 3, fill=0)
+    tasks = max(1, min(threads, count))
+    var placers = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        placers.create_task(
+            _vertex_task(
+                Pointer(to=field).unsafe_origin_cast[ImmutAnyOrigin](),
+                grid,
+                Pointer(to=values).unsafe_origin_cast[MutAnyOrigin](),
+                crossed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                positions.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                normals.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * count // tasks,
+                (task + 1) * count // tasks,
+            )
+        )
+    placers.wait()
+    _ = len(crossed)
     # One quad for each crossed edge, from the four cells round it.
     var indices = List[Int]()
     for k in range(1, grid.nz):  # pragma: no branch

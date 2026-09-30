@@ -61,10 +61,13 @@ from extensions.humanoid.quality import (
     anatomy_detail,
     quality_named,
     skin_detail,
-    triangle_budget,
 )
 from extensions.humanoid.sex import FEMALE, MALE, Sex
-from extensions.humanoid.skeleton.complexion import iris_albedo, skin_relief
+from extensions.humanoid.skeleton.complexion import (
+    hair_albedo,
+    iris_albedo,
+    skin_relief,
+)
 from extensions.humanoid.skeleton.head.assembly import add_head
 from extensions.humanoid.skeleton.head.contents import EYES, HAIR, SKIN
 from extensions.humanoid.skeleton.head.frame import head_dimensions
@@ -74,13 +77,13 @@ from extensions.humanoid.skeleton.look import (
     skin_albedo,
     skin_physical,
 )
-from extensions.humanoid.skeleton.simplify import fit_triangle_budget
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.athleticism import UNTONED
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import MaterialId, standard_material
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
@@ -189,7 +192,6 @@ def main() raises:
     var count = DEFAULT_FRAMES
     if len(args) > 3:
         count = max(1, Int(String(args[3])))
-    var budget = triangle_budget(level)
     var detail = anatomy_detail(level)
     var covering = skin_detail(level)
 
@@ -207,19 +209,28 @@ def main() raises:
     scene.environment = assets.cube_textures.add(lighting^)
     scene.environment_intensity = 0.6
 
-    var relief = assets.textures.add(skin_relief(128))
+    var relief_map = skin_relief(256)
+    relief_map.repeat = Vector2(6, 5)
+    var relief = assets.textures.add(relief_map^)
     var people = _people()
     var turners = List[NodeId]()
     for index in range(len(people)):
         var person = people[index]
+        var albedo = skin_albedo(256, person.genome)
+        albedo.repeat = Vector2(3, 2.5)
         var skin = assets.materials.add(
             skin_physical(
-                assets.textures.add(skin_albedo(128, person.genome)),
+                assets.textures.add(albedo^),
                 person.genome,
                 relief,
+                tinted=True,
             )
         )
-        var hair = assets.materials.add(hair_physical(person.genome))
+        var strands = hair_albedo(256, person.genome)
+        strands.repeat = Vector2(6, 2)
+        var hair = assets.materials.add(
+            hair_physical(person.genome, assets.textures.add(strands^))
+        )
         var eye = assets.materials.add(
             eye_physical(assets.textures.add(iris_albedo(64, person.genome)))
         )
@@ -236,7 +247,6 @@ def main() raises:
         var holder = Object3D()
         holder.set_position(-center.x, -center.y, -center.z)
         var holder_id = scene.attach(holder^, pivot_id)
-        var first = len(scene.meshes)
         _ = add_head(
             scene,
             assets,
@@ -253,7 +263,6 @@ def main() raises:
             hair_paint=hair,
             eye_paint=eye,
         )
-        fit_triangle_budget(scene, assets, first, budget, available_workers())
         turners.append(pivot_id)
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True

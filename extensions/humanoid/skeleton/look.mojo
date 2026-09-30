@@ -266,7 +266,9 @@ def skin_albedo(size: Int = 64, genome: Genome = Genome()) raises -> Texture:
 
 
 def skin_phong(
-    map: TextureId = NO_TEXTURE, genome: Genome = Genome()
+    map: TextureId = NO_TEXTURE,
+    genome: Genome = Genome(),
+    tinted: Bool = False,
 ) raises -> Material:
     """Return a Phong material for dermis.
 
@@ -276,6 +278,9 @@ def skin_phong(
     Args:
         map: Id of a skin albedo texture, or `NO_TEXTURE`.
         genome: Reads the skin's genes. The template genome by default.
+        tinted: Whether the mesh's `color` attribute tints the skin, as
+            `tint_head_skin` writes it. Every mesh the material paints
+            then needs one.
 
     Returns:
         A `PHONG` material.
@@ -287,13 +292,15 @@ def skin_phong(
     var color = skin_tone(genome)
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
-    return phong_material(
+    var material = phong_material(
         color,
         map=map,
         specular=Color(58, 50, 46),
         shininess=18.0,
         side=DOUBLE_SIDE,
     )
+    material.vertex_colors = tinted
+    return material^
 
 
 def hair_phong(genome: Genome = Genome()) raises -> Material:
@@ -319,7 +326,9 @@ def hair_phong(genome: Genome = Genome()) raises -> Material:
     )
 
 
-def hair_physical(genome: Genome = Genome()) raises -> Material:
+def hair_physical(
+    genome: Genome = Genome(), map: TextureId = NO_TEXTURE
+) raises -> Material:
     """Return a physically based material for a mass of hair.
 
     Hair is a bundle of glossy cylinders. Its highlight stretches across
@@ -329,6 +338,7 @@ def hair_physical(genome: Genome = Genome()) raises -> Material:
 
     Args:
         genome: Reads the hair's genes. The template genome by default.
+        map: Id of a `hair_albedo` texture, or `NO_TEXTURE`.
 
     Returns:
         A `PHYSICAL` material.
@@ -338,8 +348,12 @@ def hair_physical(genome: Genome = Genome()) raises -> Material:
             `genome` is not valid.
     """
     var tone = hair_tone(genome)
+    var color = tone
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
     return physical_material(
-        tone,
+        color,
+        map=map,
         roughness=0.5,
         ior=1.55,
         specular_intensity=0.5,
@@ -471,6 +485,7 @@ def skin_physical(
     map: TextureId = NO_TEXTURE,
     genome: Genome = Genome(),
     relief: TextureId = NO_TEXTURE,
+    tinted: Bool = False,
 ) raises -> Material:
     """Return a physically based material for dermis.
 
@@ -485,6 +500,9 @@ def skin_physical(
         map: Id of a skin albedo texture, or `NO_TEXTURE`.
         genome: Reads the skin's genes. The template genome by default.
         relief: Id of a `skin_relief` height map, or `NO_TEXTURE`.
+        tinted: Whether the mesh's `color` attribute tints the skin, as
+            `tint_head_skin` writes it. Every mesh the material paints
+            then needs one.
 
     Returns:
         A `PHYSICAL` material.
@@ -496,7 +514,7 @@ def skin_physical(
     var color = skin_tone(genome)
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
-    return physical_material(
+    var material = physical_material(
         color,
         map=map,
         roughness=0.5,
@@ -511,3 +529,5 @@ def skin_physical(
         bump_scale=0.35,
         side=DOUBLE_SIDE,
     )
+    material.vertex_colors = tinted
+    return material^

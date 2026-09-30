@@ -195,7 +195,7 @@ def head_dimensions(
         torso.frame.wide,
         torso.frame.deep,
         torso.frame.anchor,
-        morph=HeadMorph(genome),
+        morph=HeadMorph(genome, sex),
     )
     # Centers (y, z), half-width, half-depth and height, C1 to C7. The
     # atlas's center is its ring's.

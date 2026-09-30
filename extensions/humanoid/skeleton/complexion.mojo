@@ -231,19 +231,25 @@ def _wrap(value: Int, period: Int) -> Int:
 
 
 def value_noise(
-    x: Float32, y: Float32, period: Int, seed: Int
+    x: Float32, y: Float32, period: Int, seed: Int, period_y: Int = 0
 ) -> Float32:
     """Return smooth lattice noise that repeats every `period` cells.
 
     Args:
         x: Across, in cells.
         y: Up, in cells.
-        period: Cells before the pattern repeats, in both directions.
+        period: Cells before the pattern repeats across, and up too
+            unless `period_y` is given.
         seed: Picks the pattern.
+        period_y: Cells before the pattern repeats up, or zero for
+            `period`.
 
     Returns:
         A value in 0 through 1.
     """
+    var up = period_y
+    if up <= 0:
+        up = period
     var fx = floor(x)
     var fy = floor(y)
     var ix = Int(fx)
@@ -254,33 +260,45 @@ def value_noise(
     ty = ty * ty * (3 - 2 * ty)
     var x0 = _wrap(ix, period)
     var x1 = _wrap(ix + 1, period)
-    var y0 = _wrap(iy, period)
-    var y1 = _wrap(iy + 1, period)
+    var y0 = _wrap(iy, up)
+    var y1 = _wrap(iy + 1, up)
     var a = _lerp(_hash(x0, y0, seed), _hash(x1, y0, seed), tx)
     var b = _lerp(_hash(x0, y1, seed), _hash(x1, y1, seed), tx)
     return _lerp(a, b, ty)
 
 
 def _fbm(
-    x: Float32, y: Float32, size: Int, base: Int, octaves: Int, seed: Int
+    x: Float32,
+    y: Float32,
+    size: Int,
+    base: Int,
+    octaves: Int,
+    seed: Int,
+    base_y: Int = 0,
 ) -> Float32:
     """Return tiling fractal noise centered on zero, about -0.5 to 0.5.
 
     `x` and `y` are in texels of a `size` map. The first octave has
-    `base` cells across the map; each next one has twice as many.
+    `base` cells across the map, and `base_y` up it, or `base` when that
+    is zero; each next octave has twice as many.
     """
     var total = Float32(0)
     var weight = Float32(0.5)
     var norm = Float32(0)
     var cells = base
+    var rows = base_y
+    if rows <= 0:
+        rows = base
     for octave in range(octaves):  # pragma: no branch
-        var scale = Float32(cells) / Float32(size)
+        var sx = Float32(cells) / Float32(size)
+        var sy = Float32(rows) / Float32(size)
         total += weight * (
-            value_noise(x * scale, y * scale, cells, seed + octave * 31) - 0.5
+            value_noise(x * sx, y * sy, cells, seed + octave * 31, rows) - 0.5
         )
         norm += weight
         weight *= 0.5
         cells *= 2
+        rows *= 2
     return total / norm
 
 
@@ -356,15 +374,16 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
     check_genome(genome, "skin")
     var melanin = genome.get(MELANIN)
     var tone = _skin_tone(melanin, genome.get(UNDERTONE))
-    var freckle = (genome.get(FRECKLES) + 1) / 2
-    # Pigment spots show less on darker skin, which is already dark.
+    # Freckles only where the gene asks for them, and fewer on darker
+    # skin, which is already dark.
+    var freckle = max(Float32(0), genome.get(FRECKLES))
     var fair = 1 - _clamp(melanin + Float32(0.2), 0, 1)
-    var freckle_chance = freckle * freckle * Float32(0.55) * (
+    var freckle_chance = freckle * Float32(0.6) * (
         Float32(0.3) + Float32(0.7) * fair
     )
-    var pore_cell = max(3, size // 48)
-    var freckle_cell = max(4, size // 20)
-    var mole_cell = max(8, size // 4)
+    var pore_cell = max(3, size // 64)
+    var freckle_cell = max(4, size // 32)
+    var mole_cell = max(8, size // 6)
     var pixels = List[UInt8](capacity=size * size * 4)
     for y in range(size):  # pragma: no branch
         var fy = Float32(y) + Float32(0.5)
@@ -374,13 +393,13 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
             var blood = _fbm(fx, fy, size, 3, 3, 11)
             var pigment = _fbm(fx, fy, size, 4, 4, 23)
             var fine = _fbm(fx, fy, size, 32, 2, 37)
-            var shade = 1 + Float32(0.10) * pigment + Float32(0.05) * fine
+            var shade = 1 + Float32(0.08) * pigment + Float32(0.03) * fine
             var r = tone.r * shade * (1 + Float32(0.07) * blood)
             var g = tone.g * shade * (1 - Float32(0.03) * blood)
             var b = tone.b * shade * (1 - Float32(0.015) * blood)
             # Pores: a slight darkening at each opening.
             var pore = _spots(fx, fy, size, pore_cell, 0.7, 41)
-            var dim = 1 - Float32(0.10) * pore
+            var dim = 1 - Float32(0.05) * pore
             r *= dim
             g *= dim
             b *= dim
@@ -389,10 +408,10 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                 r = _lerp(r, r * Float32(0.80), spot)
                 g = _lerp(g, g * Float32(0.68), spot)
                 b = _lerp(b, b * Float32(0.58), spot)
-            var mole = _spots(fx, fy, size, mole_cell, 0.06, 67)
-            r = _lerp(r, r * Float32(0.52), mole)
-            g = _lerp(g, g * Float32(0.44), mole)
-            b = _lerp(b, b * Float32(0.40), mole)
+            var mole = _spots(fx, fy, size, mole_cell, 0.02, 67)
+            r = _lerp(r, r * Float32(0.55), mole)
+            g = _lerp(g, g * Float32(0.45), mole)
+            b = _lerp(b, b * Float32(0.42), mole)
             pixels.append(_byte(r))
             pixels.append(_byte(g))
             pixels.append(_byte(b))
@@ -501,7 +520,7 @@ def iris_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
         var v = 1 - (Float32(y) + Float32(0.5)) / Float32(size)
         for x in range(size):  # pragma: no branch
             var fx = Float32(x) + Float32(0.5)
-            var fibers = _fbm(fx, Float32(y) * 0.05, size, 48, 2, 97)
+            var fibers = _fbm(fx, Float32(y), size, 48, 2, 97, 2)
             var tone: Tone
             if v < EYE_PUPIL:
                 tone = Tone(8, 8, 10)
@@ -554,3 +573,59 @@ def iris_albedo(size: Int = 64, genome: Genome = Genome()) raises -> Texture:
         Error: If `size` is out of range or `genome` is not valid.
     """
     return Texture(size, size, iris_pixels(size, genome), REPEAT, color_space=SRGB)
+
+
+def hair_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
+    """Return the RGBA bytes of a tiling map of hair's strands.
+
+    The strands run up and down the map: `v` is along them. Each column
+    is a strand a little lighter or darker than its neighbors, with a
+    slow wave, and the lighter strands catch the light.
+
+    Args:
+        size: Width and height in texels, eight through 512.
+        genome: Reads the hair's genes.
+
+    Returns:
+        `size * size * 4` bytes, row by row from the top.
+
+    Raises:
+        Error: If `size` is out of range or `genome` is not valid.
+    """
+    check_map_size(size, "hair")
+    var mean = hair_tone(genome)
+    var base = Tone(Float32(mean.r), Float32(mean.g), Float32(mean.b))
+    var pixels = List[UInt8](capacity=size * size * 4)
+    for y in range(size):  # pragma: no branch
+        var fy = Float32(y) + Float32(0.5)
+        for x in range(size):  # pragma: no branch
+            var fx = Float32(x) + Float32(0.5)
+            # Strands: fine across, long along, and a slow sway.
+            var sway = _fbm(fx, fy, size, 2, 2, 131) * Float32(6)
+            var strand = _fbm(fx + sway, fy, size, 64, 3, 137, 2)
+            var clump = _fbm(fx + sway, fy, size, 12, 2, 139, 2)
+            var shade = 1 + Float32(1.1) * strand + Float32(0.5) * clump
+            pixels.append(_byte(base.r * shade))
+            pixels.append(_byte(base.g * shade))
+            pixels.append(_byte(base.b * shade))
+            pixels.append(255)
+    return pixels^
+
+
+def hair_albedo(size: Int = 128, genome: Genome = Genome()) raises -> Texture:
+    """Return a tiling map of hair's strands in the color `genome` asks
+    for.
+
+    Args:
+        size: Width and height in texels, eight through 512.
+        genome: Reads `HAIR_MELANIN` and `HAIR_REDNESS`.
+
+    Returns:
+        An sRGB texture whose strands run along `v`.
+
+    Raises:
+        Error: If `size` is out of range or `genome` is not valid.
+    """
+    return Texture(
+        size, size, hair_pixels(size, genome), REPEAT, color_space=SRGB
+    )

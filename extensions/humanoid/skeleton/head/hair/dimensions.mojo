@@ -8,7 +8,9 @@
 A head of hair is drawn as its volume, not as its shafts: a shell about
 nine millimeters thick over the cranium's skin, cut back to a hairline
 at the forehead and cut away round the ears, down to the nape. Each
-eyebrow is a short arc over its orbit. The scalp's hair crosses the
+eyebrow is an arc laid on the skin over its orbit, thick at its head
+and thin at its tail; `BROW_THICKNESS` makes it fuller or finer, and
+the brow's genes that move the skin move it with the skin. The scalp's hair crosses the
 midline; the eyebrows are paired. The shapes are authored in template
 centimeters. They are not a cited hair density table; see
 `HAIR_PACKING` for the mass.
@@ -17,14 +19,17 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
+from extensions.humanoid.genome import BROW_THICKNESS
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
+from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
     Sweep,
     SweepField,
 )
 from math.vector3 import Vector3
+from std.math import max
 
 # How much of the hair's volume is hair rather than air: an authored
 # value for short hair.
@@ -126,10 +131,28 @@ def head_hair_field(
     var sweeps = List[Sweep]()
     var domes = List[Dome]()
     if paired:
+        # Each station of the brow is laid on the skin: authored in
+        # front of the face, then walked back onto it.
+        var skin = HeadSkinField(dimensions)
+        var full = max(
+            Float32(0.45),
+            1 + Float32(0.45) * h.torso.genome.get(BROW_THICKNESS),
+        )
         var brow = Sweep(Vector3(0, 1, 0))
-        brow.add(h.at(1.1, 74.6, 9.3), h.cm(0.3), h.cm(0.2))
-        brow.add(h.at(2.7, 75.0, 9.1), h.cm(0.32), h.cm(0.2))
-        brow.add(h.at(4.6, 74.6, 7.9), h.cm(0.22), h.cm(0.15))
+        var rows: List[Float32] = [
+            1.2, 74.15, 0.3,
+            2.2, 74.45, 0.3,
+            3.4, 74.6, 0.25,
+            4.4, 74.35, 0.17,
+            5.2, 73.85, 0.1,
+        ]
+        for index in range(len(rows) // 3):  # pragma: no branch
+            var p = _on_skin(
+                skin, h.at(rows[index * 3], rows[index * 3 + 1], 10.5)
+            )
+            brow.add(
+                p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.1) * full
+            )
         sweeps.append(brow^)
         return SweepField(
             sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2)
@@ -143,8 +166,10 @@ def head_hair_field(
             h.at(0, 67.5, 0).y,
         )
     )
+    # A soft blend, so the hair thins to nothing at the hairline
+    # instead of ending in a cliff.
     var field = SweepField(
-        sweeps^, domes^, RIGHT, f.cm(0.3), f.cm(0.05), f.cm(0.3)
+        sweeps^, domes^, RIGHT, f.cm(0.8), f.cm(0.05), f.cm(0.3)
     )
     # The face below the hairline, and round each ear.
     var face = Sweep(Vector3(1, 0, 0))
@@ -156,6 +181,16 @@ def head_hair_field(
         ear.add(h.at(x * 8.6, 71.2, -1.2), h.cm(2.2), h.cm(2.8))
         field.cut(ear^)
     return field^
+
+
+def _on_skin(skin: HeadSkinField, start: Vector3) -> Vector3:
+    """Return `start` walked onto the skin along the field's gradient."""
+    var p = start
+    for _ in range(6):  # pragma: no branch
+        var d = skin.distance(p)
+        var g = skin.gradient(p)
+        p = p - g * d
+    return p
 
 
 def head_hair_distance(
