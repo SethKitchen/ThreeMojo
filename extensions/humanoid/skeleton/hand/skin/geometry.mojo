@@ -19,7 +19,8 @@ from extensions.humanoid.skeleton.arm.frame import (
     arm_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.hand.skin.dimensions import HandSkinField
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -64,4 +65,4 @@ def hand_skin_from_dimensions(
     """
     check_detail(detail, "hand skin")
     var field = HandSkinField(dimensions, side)
-    return mesh_field(field, field.low, field.high, detail, "hand skin")
+    return mesh_surface(field, field.low, field.high, detail, "hand skin")

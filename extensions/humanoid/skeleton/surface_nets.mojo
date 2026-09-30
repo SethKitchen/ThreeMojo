@@ -138,33 +138,30 @@ def _corner(grid: _Grid, i: Int, j: Int, k: Int, c: Int) -> Vector3:
     return grid.point(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))
 
 
+# The cell's twelve edges, as pairs of corners: bit 0 of a corner is x,
+# bit 1 is y and bit 2 is z.
+comptime _EDGES = SIMD[DType.int8, 32](
+    0, 1, 2, 3, 4, 5, 6, 7,
+    0, 2, 1, 3, 4, 6, 5, 7,
+    0, 4, 1, 5, 2, 6, 3, 7,
+    0, 0, 0, 0, 0, 0, 0, 0,
+)
+
+
 def _cell_guess(
     values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int
 ) -> Vector3:
-    """Return the mean of the crossings on a cell's twelve edges, or a
-    point with `x` not finite if the surface does not cross the cell."""
+    """Return the mean of the crossings on a crossed cell's edges."""
     var corner = SIMD[DType.float32, 8](0)
-    var inside = 0
     for c in range(8):  # pragma: no branch
         corner[c] = values[
             grid.index(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))
         ]
-        if corner[c] < 0:
-            inside += 1
-    if inside == 0 or inside == 8:
-        return Vector3(UNSAMPLED, 0, 0)
     var sum = Vector3(0, 0, 0)
     var crossings = 0
     for edge in range(12):  # pragma: no branch
-        var axis = edge // 4
-        var rest = edge % 4
-        var bit = 1 << axis
-        # The corner with this axis's bit clear, and the other two bits
-        # from `rest`.
-        var low_bit = 1 if axis != 0 else 2
-        var high_bit = 4 if axis != 2 else 2
-        var c = (rest & 1) * low_bit + ((rest >> 1) & 1) * high_bit
-        var other = c | bit
+        var c = Int(_EDGES[edge * 2])
+        var other = Int(_EDGES[edge * 2 + 1])
         if (corner[c] < 0) == (corner[other] < 0):
             continue
         sum = sum + _crossing(
@@ -206,35 +203,33 @@ def _edge_quad(
     axis: Int,
 ) -> SIMD[DType.int64, 4]:
     """Return the four vertices round the edge from `(i, j, k)` along
-    `axis`, in order round it, or minus ones if it makes no quad."""
+    `axis`, in order round it, or minus ones if it makes no quad.
+
+    The edge must end inside the lattice."""
     var none = SIMD[DType.int64, 4](-1)
-    var ni = i + (1 if axis == 0 else 0)
-    var nj = j + (1 if axis == 1 else 0)
-    var nk = k + (1 if axis == 2 else 0)
-    if ni > grid.nx or nj > grid.ny or nk > grid.nz:
-        return none
+    var step = SIMD[DType.int64, 4](0)
+    step[axis] = 1
     var here = values[grid.index(i, j, k)]
-    var there = values[grid.index(ni, nj, nk)]
-    if here == UNSAMPLED or there == UNSAMPLED or (here < 0) == (there < 0):
+    if here == UNSAMPLED:
         return none
+    var there = values[
+        grid.index(i + Int(step[0]), j + Int(step[1]), k + Int(step[2]))
+    ]
+    if there == UNSAMPLED:
+        return none
+    if (here < 0) == (there < 0):
+        return none
+    # The two axes across the edge, and the four cells round it in
+    # order: (0, 0), (1, 0), (1, 1), (0, 1).
+    var first = (axis + 1) % 3
+    var second = (axis + 2) % 3
+    var turns = SIMD[DType.int64, 8](0, 0, 1, 0, 1, 1, 0, 1)
     var q = SIMD[DType.int64, 4](-1)
     for n in range(4):  # pragma: no branch
-        # Round the edge: (0, 0), (1, 0), (1, 1), (0, 1).
-        var s = 1 if (n == 1 or n == 2) else 0
-        var t = 1 if n >= 2 else 0
-        var ci = i
-        var cj = j
-        var ck = k
-        if axis == 0:
-            cj -= s
-            ck -= t
-        elif axis == 1:
-            ck -= s
-            ci -= t
-        else:
-            ci -= s
-            cj -= t
-        var v = cells[grid.cell_index(ci, cj, ck)]
+        var at = SIMD[DType.int64, 4](Int64(i), Int64(j), Int64(k), 0)
+        at[first] -= turns[n * 2]
+        at[second] -= turns[n * 2 + 1]
+        var v = cells[grid.cell_index(Int(at[0]), Int(at[1]), Int(at[2]))]
         if v < 0:
             return none
         q[n] = Int64(v)
@@ -333,13 +328,17 @@ async def _vertex_task[
         normals[unsafe_offset=slot * 3 + 2] = normal.z
 
 
-def _crosses(values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int) -> Bool:
+def _crosses(
+    values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int
+) -> Bool:
     """Return True if the surface crosses cell `(i, j, k)`."""
     var inside = 0
     for c in range(8):  # pragma: no branch
         if values[grid.index(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))] < 0:
             inside += 1
-    return inside != 0 and inside != 8
+    if inside == 0:
+        return False
+    return inside != 8
 
 
 def mesh_surface[
@@ -350,7 +349,7 @@ def mesh_surface[
     high: Vector3,
     detail: Int,
     name: String,
-    workers: Int = 0,
+    workers: Int = 1,
 ) raises -> BufferGeometry:
     """Return a smooth mesh of `field`'s zero set inside a box.
 
@@ -364,8 +363,9 @@ def mesh_surface[
         detail: Eight through sixty-four. `detail * REFINE` cells run
             along the box's y.
         name: Name used in the error text.
-        workers: How many threads share the work. Zero, the default,
-            means one per logical core.
+        workers: How many threads share the work. One by default; zero
+            means one per logical core. The coverage run needs one: two
+            threads' probes would interleave.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.

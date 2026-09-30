@@ -112,6 +112,7 @@ def add_head(
     skin_paint: MaterialId = UNSET_PAINT,
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
+    workers: Int = 1,
 ) raises -> NodeId:
     """Attach the neck and the head under `parent` and return their node.
 
@@ -140,8 +141,10 @@ def add_head(
             the spec's genome asks for.
         hair_paint: Hair look, or the default hair Phong in the color
             the spec's genome asks for.
-        eye_paint: Eyeball look, or the default eye look with a plain
-            iris in the color the spec's genome asks for.
+        eye_paint: Eyeball look, or the default eye look with an iris
+            in the color the spec's genome asks for.
+        workers: How many threads mesh the skin and the hair. One by
+            default.
 
     Returns:
         The head's node.
@@ -258,7 +261,7 @@ def add_head(
             scene,
             assets,
             root_id,
-            head_skin_from_dimensions(dims, skin_detail),
+            head_skin_from_dimensions(dims, skin_detail, workers),
             skin,
         )
     if contents.includes_hair():
@@ -274,7 +277,7 @@ def add_head(
                     assets,
                     root_id,
                     head_hair_from_dimensions(
-                        dims, parts[index], sides[s], detail
+                        dims, parts[index], sides[s], detail, workers
                     ),
                     hair,
                 )

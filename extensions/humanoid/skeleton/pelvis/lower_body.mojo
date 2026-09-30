@@ -32,7 +32,8 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.foot.assembly import add_foot
 from extensions.humanoid.skeleton.foot.contents import FootContents
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import LegContents
 from extensions.humanoid.skeleton.limb.skin import LimbSkinField
@@ -169,7 +170,7 @@ def lower_body_skin_mesh(
     """
     check_detail(detail, "lower body skin")
     var field = LowerBodySkinField(spec)
-    return mesh_field(field, field.low, field.high, detail, "lower body skin")
+    return mesh_surface(field, field.low, field.high, detail, "lower body skin")
 
 
 def add_lower_body(

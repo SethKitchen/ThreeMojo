@@ -42,14 +42,21 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.hand.assembly import add_hand
 from extensions.humanoid.skeleton.head.assembly import add_head
-from extensions.humanoid.skeleton.head.contents import HeadContents
+from extensions.humanoid.skeleton.head.contents import (
+    EYES,
+    HAIR,
+    HeadContents,
+)
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.head.skin.tint import tint_head_skin, untinted
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
+from geometries.utils import merge_geometries
 from extensions.humanoid.skeleton.look import skin_phong
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
 from extensions.humanoid.skeleton.pelvis.lower_body import (
@@ -92,6 +99,10 @@ struct BodySkinField(Copyable, DistanceField, Movable):
     # the height below which the head's skin cannot reach the surface.
     var neck_blend: Float32
     var neck_floor: Float32
+    # Where the body's mesh hands over to the head's finer one, under
+    # the chin, and how far each reaches past it.
+    var head_split: Float32
+    var head_lap: Float32
     # Below `band_bottom` the lower body's skin is the surface; above
     # `band_top` the torso's is.
     var band_bottom: Float32
@@ -120,6 +131,8 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.arm_blend = f.cm(1.2)
         self.neck_blend = f.cm(1.5)
         self.neck_floor = self.head.low.y - self.neck_blend
+        self.head_split = f.at(0, 58.5, 0).y
+        self.head_lap = f.cm(0.6)
         # From the top of the iliac crest to a little above it: both
         # skins hold the whole waist there.
         self.band_bottom = f.at(0, 12.0, 0).y
@@ -176,18 +189,26 @@ struct BodySkinField(Copyable, DistanceField, Movable):
 
 
 def body_skin_mesh(
-    spec: HumanoidSpec, detail: Int = 56
+    spec: HumanoidSpec, detail: Int = 56, workers: Int = 1
 ) raises -> BufferGeometry:
     """Return one skin over the torso, the pelvis, both legs, both arms,
     the neck and the head, down to the wrists.
 
+    The head's small forms need finer cells than the body's, so the
+    surface is meshed in two boxes that meet under the chin, each with
+    `detail` cells along its height, and joined. The two overlap by a
+    few millimeters. The face's zones of color are in its `color`
+    attribute; see `tint_head_skin`.
+
     Args:
-        spec: Standing height, osteological sex and athleticism.
+        spec: Standing height, osteological sex, athleticism and genome.
         detail: Cells along the body, eight through sixty-four,
             fifty-six by default.
+        workers: How many threads mesh it. One by default.
 
     Returns:
-        A geometry with `position`, `normal` and `uv` attributes.
+        A geometry with `position`, `normal`, `uv` and `color`
+        attributes.
 
     Raises:
         Error: If `spec` is refused, if `detail` is out of range, or if
@@ -195,7 +216,32 @@ def body_skin_mesh(
     """
     check_detail(detail, "body skin")
     var field = BodySkinField(spec)
-    return mesh_field(field, field.low, field.high, detail, "body skin")
+    var parts = List[BufferGeometry]()
+    parts.append(
+        mesh_surface(
+            field,
+            field.low,
+            Vector3(field.high.x, field.head_split + field.head_lap, field.high.z),
+            detail,
+            "body skin",
+            workers,
+        )
+    )
+    # The head's box: wide enough for the ears, no wider.
+    var reach = max(-field.head.ears.low.x, field.head.ears.high.x) + field.head_lap
+    parts.append(
+        mesh_surface(
+            field,
+            Vector3(-reach, field.head_split - field.head_lap, field.head.low.z),
+            Vector3(reach, field.high.y, field.head.high.z),
+            detail,
+            "body skin",
+            workers,
+        )
+    )
+    var skin = merge_geometries(parts)
+    tint_head_skin(skin, head_muscle_dimensions(spec))
+    return skin^
 
 
 def add_body(
@@ -219,12 +265,16 @@ def add_body(
     lymph_paint: MaterialId = UNSET_PAINT,
     nerve_paint: MaterialId = UNSET_PAINT,
     skin_paint: MaterialId = UNSET_PAINT,
+    hair_paint: MaterialId = UNSET_PAINT,
+    eye_paint: MaterialId = UNSET_PAINT,
+    workers: Int = 1,
 ) raises -> NodeId:
     """Attach the torso, the pelvis, both legs and feet, both arms and
     hands, and the neck and the head.
 
     Every part draws the same layers. The skin is one surface down to
-    the wrists; each hand's skin is its own mesh.
+    the wrists; each hand's skin is its own mesh. The skin comes with
+    the eyes, the scalp's hair and the brows.
 
     Args:
         scene: The scene that receives the nodes and the meshes.
@@ -248,7 +298,14 @@ def add_body(
         vein_paint: Venous look, or the default vein Phong.
         lymph_paint: Lymph look, or the default lymph Phong.
         nerve_paint: Nerve look, or the default nerve Phong.
-        skin_paint: Skin look, or the default skin Phong.
+        skin_paint: Skin look, or the default skin Phong in the tone
+            the spec's genome asks for, tinted by the face's zones.
+        hair_paint: Hair look for the scalp and the brows, drawn with
+            the skin, or the default hair Phong.
+        eye_paint: Eyeball look, drawn with the skin, or the default eye
+            look.
+        workers: How many threads mesh the skin and the hair. One by
+            default.
 
     Returns:
         The pelvis origin node.
@@ -362,8 +419,12 @@ def add_body(
     if contents.includes_skin():
         var skin = skin_paint
         if skin.value < 0:
-            skin = assets.materials.add(skin_phong(genome=spec.genome))
-        var shape = assets.geometries.add(body_skin_mesh(spec, skin_detail))
+            skin = assets.materials.add(
+                skin_phong(genome=spec.genome, tinted=True)
+            )
+        var shape = assets.geometries.add(
+            body_skin_mesh(spec, skin_detail, workers)
+        )
         var nid = scene.attach(Object3D(), root_id)
         scene.add_mesh(Mesh(shape, skin, nid))
         var arms = arm_muscle_dimensions(spec)
@@ -371,8 +432,30 @@ def add_body(
             var side = RIGHT
             if s == 1:
                 side = LEFT
-            var hand = assets.geometries.add(
-                hand_skin_from_dimensions(arms, side, hand_skin_detail)
+            var hand_skin = hand_skin_from_dimensions(
+                arms, side, hand_skin_detail
             )
+            # The hands have no zones of color, but a tinted skin needs
+            # the attribute on every mesh it paints.
+            untinted(hand_skin)
+            var hand = assets.geometries.add(hand_skin^)
             scene.add_mesh(Mesh(hand, skin, scene.attach(Object3D(), root_id)))
+        # The skin's lids open on the eyes, and the scalp's hair and the
+        # brows lie on it: they come with it.
+        _ = add_head(
+            scene,
+            assets,
+            root_id,
+            spec,
+            bone_paint,
+            ligament_paint,
+            cartilage_paint,
+            muscle_paint,
+            HAIR.plus(EYES),
+            detail,
+            skin_detail,
+            hair_paint=hair_paint,
+            eye_paint=eye_paint,
+            workers=workers,
+        )
     return root_id

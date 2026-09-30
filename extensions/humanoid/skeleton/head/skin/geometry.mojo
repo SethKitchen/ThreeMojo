@@ -25,7 +25,7 @@ from extensions.humanoid.spec import HumanoidSpec
 
 
 def head_skin_mesh(
-    spec: HumanoidSpec, detail: Int = 32
+    spec: HumanoidSpec, detail: Int = 32, workers: Int = 1
 ) raises -> BufferGeometry:
     """Return the neck's and the head's skin envelope sized for `spec`.
 
@@ -33,6 +33,7 @@ def head_skin_mesh(
         spec: Standing height, osteological sex and athleticism.
         detail: Cells along the solid, eight through sixty-four,
             32 by default.
+        workers: How many threads mesh it. One by default.
 
     Returns:
         A geometry with `position`, `normal`, `uv` and `color`
@@ -42,11 +43,13 @@ def head_skin_mesh(
         Error: If `spec` is refused, if `detail` is out of range, or if
             the field produces no surface.
     """
-    return head_skin_from_dimensions(head_muscle_dimensions(spec), detail)
+    return head_skin_from_dimensions(
+        head_muscle_dimensions(spec), detail, workers
+    )
 
 
 def head_skin_from_dimensions(
-    dimensions: HeadMuscleDimensions, detail: Int = 32
+    dimensions: HeadMuscleDimensions, detail: Int = 32, workers: Int = 1
 ) raises -> BufferGeometry:
     """Return the neck's and the head's skin mesh for already-computed
     dimensions.
@@ -54,6 +57,7 @@ def head_skin_from_dimensions(
     Args:
         dimensions: Landmarks from `head_muscle_dimensions`.
         detail: Cells along the solid.
+        workers: How many threads mesh it. One by default.
 
     Returns:
         A geometry with `position`, `normal`, `uv` and `color`
@@ -66,6 +70,8 @@ def head_skin_from_dimensions(
     """
     check_detail(detail, "head skin")
     var field = HeadSkinField(dimensions)
-    var skin = mesh_surface(field, field.low, field.high, detail, "head skin")
+    var skin = mesh_surface(
+        field, field.low, field.high, detail, "head skin", workers
+    )
     tint_head_skin(skin, dimensions)
     return skin^

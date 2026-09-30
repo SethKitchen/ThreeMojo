@@ -32,7 +32,8 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
 from extensions.humanoid.skeleton.foot.skin.dimensions import (
     SkinField as FootSkinField,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
     SkinField as LegSkinField,
@@ -122,7 +123,7 @@ def limb_skin_mesh(
     """
     check_detail(detail, "limb skin")
     var field = LimbSkinField(spec, side)
-    return mesh_field(field, field.low, field.high, detail, "limb skin")
+    return mesh_surface(field, field.low, field.high, detail, "limb skin")
 
 
 def add_limb_skin(

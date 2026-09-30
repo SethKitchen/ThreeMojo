@@ -29,7 +29,11 @@ from extensions.humanoid.spec import HumanoidSpec
 
 
 def head_hair(
-    spec: HumanoidSpec, part: HeadHair, side: BodySide, detail: Int = 16
+    spec: HumanoidSpec,
+    part: HeadHair,
+    side: BodySide,
+    detail: Int = 16,
+    workers: Int = 1,
 ) raises -> BufferGeometry:
     """Return one head hair group sized for `spec`.
 
@@ -39,6 +43,7 @@ def head_hair(
         side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
         detail: Cells along the solid, eight through sixty-four,
             sixteen by default.
+        workers: How many threads mesh it. One by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -48,7 +53,7 @@ def head_hair(
             out of range, or if the field produces no surface.
     """
     return head_hair_from_dimensions(
-        head_muscle_dimensions(spec), part, side, detail
+        head_muscle_dimensions(spec), part, side, detail, workers
     )
 
 
@@ -57,6 +62,7 @@ def head_hair_from_dimensions(
     part: HeadHair,
     side: BodySide,
     detail: Int = 16,
+    workers: Int = 1,
 ) raises -> BufferGeometry:
     """Return one hair group's mesh for already-computed dimensions.
 
@@ -65,6 +71,7 @@ def head_hair_from_dimensions(
         part: Which group to mesh.
         side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
         detail: Cells along the solid.
+        workers: How many threads mesh it. One by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -77,4 +84,4 @@ def head_hair_from_dimensions(
     var field = HairShape(dimensions, part, side)
     var label = head_hair_label(part)
     check_detail(detail, label)
-    return mesh_surface(field, field.low, field.high, detail, label)
+    return mesh_surface(field, field.low, field.high, detail, label, workers)

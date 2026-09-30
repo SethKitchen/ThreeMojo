@@ -15,7 +15,8 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
@@ -63,4 +64,4 @@ def skin_from_dimensions(
     dimensions.validate()
     check_detail(detail, "skin")
     var field = SkinField(dimensions)
-    return mesh_field(field, field.low, field.high, detail, "skin")
+    return mesh_surface(field, field.low, field.high, detail, "skin")
