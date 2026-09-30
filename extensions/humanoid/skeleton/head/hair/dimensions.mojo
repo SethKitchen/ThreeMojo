@@ -161,7 +161,7 @@ def head_hair_field(
             var p = _on_skin(
                 skin, h.at(rows[index * 3], rows[index * 3 + 1], 10.5)
             )
-            brow.add(p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.1) * full)
+            brow.add(p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.07) * full)
         sweeps.append(brow^)
         return SweepField(
             sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2)

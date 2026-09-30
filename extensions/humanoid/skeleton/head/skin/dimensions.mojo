@@ -515,21 +515,13 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
         self.features.capsule(
             h.at(0, 68.3, 10.3), h.at(0, 67.7, 9.45), 0.26 * c, 0.28 * c
         )
-        # The lips' middle: the tubercle of the upper lip, and the
-        # philtrum's groove above it.
+        # The lips' middle: the tubercle of the upper lip.
         self.features.ellipsoid(
             h.at(0, 65.0, 9.5), Vector3(0.45 * c, 0.36 * lip * c, 0.4 * lip * c)
-        )
-        self.features.hollow_ellipsoid(
-            h.at(0, 66.35, 9.6), Vector3(0.28 * c, 0.75 * c, 0.2 * c)
         )
         # The line where the lips meet.
         self.features.hollow_ellipsoid(
             h.at(0, 64.8, 9.9), Vector3(2.2 * c, 0.05 * c, 0.55 * c)
-        )
-        # The fold under the lower lip.
-        self.features.hollow_capsule(
-            h.at(-1.3, 63.35, 9.25), h.at(1.3, 63.35, 9.25), 0.2 * c, 0.2 * c
         )
         if h.sex == MALE:
             # The laryngeal prominence.
@@ -628,7 +620,7 @@ def _face_side(
     clay.chain(under, under_r)
     # The cheek's soft mass between the cheekbone and the jaw.
     clay.ellipsoid(
-        h.at(side * 4.4, 66.6, 5.4), Vector3(1.8 * c, 2.1 * c, 2.0 * c)
+        h.at(side * 4.3, 67.0, 5.2), Vector3(1.5 * c, 1.8 * c, 1.8 * c)
     )
     # The angle of the jaw, under the ear.
     clay.ellipsoid(
@@ -654,9 +646,9 @@ def _nose_side(h: HeadDimensions, mut clay: Sculpt, side: Float32):
         h.at(side * 0.85, 70.3, 9.25), Vector3(0.55 * c, 1.7 * c, 0.75 * c)
     )
     clay.hollow_ellipsoid(
-        h.at(side * 0.55, 67.85, 9.85),
-        Vector3(0.3 * c, 0.18 * c, 0.5 * c),
-        Vector3(side * 0.25, -0.35, 1),
+        h.at(side * 0.52, 67.95, 9.65),
+        Vector3(0.26 * c, 0.15 * c, 0.42 * c),
+        Vector3(side * 0.2, -0.5, 1),
     )
 
 

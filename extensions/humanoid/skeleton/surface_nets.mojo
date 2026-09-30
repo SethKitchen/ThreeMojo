@@ -397,6 +397,7 @@ def mesh_surface[
     detail: Int,
     name: String,
     workers: Int = 1,
+    smoothing: Int = 1,
 ) raises -> BufferGeometry:
     """Return a smooth mesh of `field`'s zero set inside a box.
 
@@ -413,6 +414,8 @@ def mesh_surface[
         workers: How many threads share the work. One by default; zero
             means one per logical core. The coverage run needs one: two
             threads' probes would interleave.
+        smoothing: How many times each normal is averaged with its
+            neighbors'. One by default; zero keeps the exact gradient.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -515,7 +518,36 @@ def mesh_surface[
                         _emit_quad(indices, positions, normals, q)
     if len(indices) == 0:
         raise Error("The " + name + " field produced no surface")
+    _smooth_normals(normals, indices, smoothing)
     return _finish(positions^, normals^, indices^, low.y, span_y)
+
+
+def _smooth_normals(
+    mut normals: List[Float32], indices: List[Int], passes: Int
+):
+    """Average each normal with its neighbors' `passes` times.
+
+    A field made of fitted sections can wave by a fraction of a
+    millimeter between them; the exact gradient shows that as bands.
+    One or two passes take the bands out and leave the forms.
+    """
+    var count = len(normals) // 3
+    for _ in range(passes):
+        var sums = normals.copy()
+        var corner = 0
+        while corner < len(indices):  # pragma: no branch
+            for n in range(3):  # pragma: no branch
+                var a = indices[corner + n]
+                var b = indices[corner + (n + 1) % 3]
+                for axis in range(3):  # pragma: no branch
+                    sums[a * 3 + axis] += normals[b * 3 + axis]
+            corner += 3
+        for vertex in range(count):  # pragma: no branch
+            var n = _vertex(sums, vertex)
+            n.normalize()
+            normals[vertex * 3] = n.x
+            normals[vertex * 3 + 1] = n.y
+            normals[vertex * 3 + 2] = n.z
 
 
 def _vertex(positions: List[Float32], index: Int) -> Vector3:

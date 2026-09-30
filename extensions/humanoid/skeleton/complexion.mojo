@@ -384,7 +384,7 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
         freckle * Float32(0.6) * (Float32(0.3) + Float32(0.7) * fair)
     )
     var pore_cell = max(3, size // 64)
-    var freckle_cell = max(4, size // 32)
+    var freckle_cell = max(4, size // 56)
     var mole_cell = max(8, size // 6)
     var pixels = List[UInt8](capacity=size * size * 4)
     for y in range(size):  # pragma: no branch
@@ -409,9 +409,9 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                 var spot = _spots(
                     fx, fy, size, freckle_cell, freckle_chance, 53
                 )
-                r = _lerp(r, r * Float32(0.80), spot)
-                g = _lerp(g, g * Float32(0.68), spot)
-                b = _lerp(b, b * Float32(0.58), spot)
+                r = _lerp(r, r * Float32(0.86), spot)
+                g = _lerp(g, g * Float32(0.74), spot)
+                b = _lerp(b, b * Float32(0.64), spot)
             var mole = _spots(fx, fy, size, mole_cell, 0.02, 67)
             r = _lerp(r, r * Float32(0.55), mole)
             g = _lerp(g, g * Float32(0.45), mole)
