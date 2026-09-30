@@ -26,7 +26,8 @@ is anterior.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry, POSITION, UV
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
@@ -38,6 +39,7 @@ from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
+    flip_x,
     smin,
 )
 from extensions.humanoid.skeleton.hand.assembly import add_hand
@@ -48,6 +50,7 @@ from extensions.humanoid.skeleton.head.contents import (
     HeadContents,
 )
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
+from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.geometry import (
@@ -81,6 +84,16 @@ from std.math import max, min
 # Optional `add_body` paint. A negative id asks the assembler to create
 # the default look for that layer.
 comptime UNSET_PAINT = MaterialId(-1)
+# The ridge of the upper trapezius, in template centimeters: its ends at
+# the neck and at the shoulder, their radii, its depth, and its fold.
+comptime RIDGE_NECK_X = Float32(4.5)
+comptime RIDGE_NECK_Y = Float32(57.0)
+comptime RIDGE_SHOULDER_X = Float32(17.0)
+comptime RIDGE_SHOULDER_Y = Float32(50.0)
+comptime RIDGE_Z = Float32(-4.0)
+comptime RIDGE_NECK_RADIUS = Float32(2.5)
+comptime RIDGE_SHOULDER_RADIUS = Float32(1.6)
+comptime RIDGE_BLEND = Float32(3.0)
 
 
 struct BodySkinField(Copyable, DistanceField, Movable):
@@ -99,14 +112,22 @@ struct BodySkinField(Copyable, DistanceField, Movable):
     # the height below which the head's skin cannot reach the surface.
     var neck_blend: Float32
     var neck_floor: Float32
+    # The ridge of each upper trapezius, from the side of the neck to
+    # the acromion, and how wide its fold into the body is.
+    var ridges: Sculpt
+    var ridge_blend: Float32
     # Where the body's mesh hands over to the head's finer one, under
     # the chin, and how far each reaches past it.
     var head_split: Float32
     var head_lap: Float32
     # Below `band_bottom` the lower body's skin is the surface; above
-    # `band_top` the torso's is.
+    # `band_top` the torso's is. Across the band, each skin past its last
+    # full section is that section drawn straight on: the torso's below
+    # `torso_floor`, the lower body's above `lower_ceiling`.
     var band_bottom: Float32
     var band_top: Float32
+    var torso_floor: Float32
+    var lower_ceiling: Float32
     var epsilon: Float32
     var low: Vector3
     var high: Vector3
@@ -130,13 +151,29 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.head = HeadSkinField(head_muscle_dimensions(spec))
         self.arm_blend = f.cm(1.2)
         self.neck_blend = f.cm(1.5)
-        self.neck_floor = self.head.low.y - self.neck_blend
+        self.ridge_blend = f.cm(RIDGE_BLEND)
+        self.neck_floor = self.head.low.y - self.ridge_blend
+        self.ridges = Sculpt(f.cm(1.0), f.cm(0.5))
+        var neck_end = f.at(RIDGE_NECK_X, RIDGE_NECK_Y, RIDGE_Z)
+        var shoulder_end = f.at(RIDGE_SHOULDER_X, RIDGE_SHOULDER_Y, RIDGE_Z)
+        var neck_radius = f.cm(RIDGE_NECK_RADIUS)
+        var shoulder_radius = f.cm(RIDGE_SHOULDER_RADIUS)
+        self.ridges.capsule(
+            neck_end, shoulder_end, neck_radius, shoulder_radius
+        )
+        self.ridges.capsule(
+            flip_x(neck_end), flip_x(shoulder_end), neck_radius, shoulder_radius
+        )
         self.head_split = f.at(0, 58.5, 0).y
         self.head_lap = f.cm(0.6)
-        # From the top of the iliac crest to a little above it: both
-        # skins hold the whole waist there.
-        self.band_bottom = f.at(0, 12.0, 0).y
-        self.band_top = f.at(0, 17.0, 0).y
+        # From the widest of the hips to the waist, so the flank narrows
+        # over a hand's breadth and not in a step. Below its fourteenth
+        # centimeter the torso's loft tapers to its cut end, and above
+        # the seventeenth and a half the lower body's does.
+        self.band_bottom = f.at(0, 7.0, 0).y
+        self.band_top = f.at(0, 17.5, 0).y
+        self.torso_floor = f.at(0, 14.0, 0).y
+        self.lower_ceiling = f.at(0, 17.5, 0).y
         self.epsilon = self.torso.epsilon
         self.low = Vector3(
             min(self.lower.low.x, self.left_arm.low.x),
@@ -165,6 +202,8 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         else:
             arm = self.right_arm.distance(point)
         var body = smin(trunk, arm, self.arm_blend)
+        if point.y > self.neck_floor:
+            body = smin(body, self.ridges.distance(point), self.ridge_blend)
         # Below the neck the head's skin is far off, and costs a lot.
         if point.y < self.neck_floor:
             return body
@@ -174,14 +213,19 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         """Return the distance to the torso's and the lower body's skin."""
         if point.y >= self.band_top:
             return self.torso.distance(point)
-        var below = self.lower.distance(point)
         if point.y <= self.band_bottom:
-            return below
+            return self.lower.distance(point)
+        var below = self.lower.distance(
+            Vector3(point.x, min(point.y, self.lower_ceiling), point.z)
+        )
+        var above = self.torso.distance(
+            Vector3(point.x, max(point.y, self.torso_floor), point.z)
+        )
         var t = (point.y - self.band_bottom) / (
             self.band_top - self.band_bottom
         )
         var w = t * t * (3 - 2 * t)
-        return below + (self.torso.distance(point) - below) * w
+        return below + (above - below) * w
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -247,8 +291,27 @@ def body_skin_mesh(
         )
     )
     var skin = merge_geometries(parts)
+    _share_height(skin, field.low.y, field.high.y - field.low.y)
     tint_head_skin(skin, head_muscle_dimensions(spec))
     return skin^
+
+
+def _share_height(
+    mut geometry: BufferGeometry, low: Float32, span: Float32
+) raises:
+    """Set each vertex's v from its height over the whole skin.
+
+    Each box measures v over its own height, so the head's pores would
+    be shorter than the body's and would not meet them under the chin.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref uvs = geometry.attribute_view(String(UV))
+    var shared = List[Float32]()
+    for index in range(positions.count()):  # pragma: no branch
+        shared.append(uvs.component(index, 0))
+        var v = (positions.vector3(index).y - low) / span
+        shared.append(max(Float32(0), min(Float32(1), v)))
+    geometry.set_attribute(String(UV), BufferAttribute(shared^, 2))
 
 
 def add_body(

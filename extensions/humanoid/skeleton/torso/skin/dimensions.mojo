@@ -31,6 +31,7 @@ from extensions.humanoid.skeleton.field import (
     field_gradient,
     flip_x,
     mix_point,
+    smin,
 )
 from extensions.humanoid.skeleton.loft import (
     AXIS_Y,
@@ -55,6 +56,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     named_torso_muscles,
     torso_muscle_field,
 )
+from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from math.vector3 import Vector3
 from std.math import max, min
@@ -69,6 +71,18 @@ comptime MALE_CHEST_FAT = Float32(0.0080)
 comptime FEMALE_BELLY_FAT = Float32(0.0240)
 comptime FEMALE_CHEST_FAT = Float32(0.0150)
 comptime TORSO_DERMIS = Float32(0.0018)
+# A female template's breast, in template centimeters: its center, its
+# semi-axes across, up and forward, how far it turns out and down, and
+# the fold where it meets the chest.
+comptime BREAST_X = Float32(10.0)
+comptime BREAST_Y = Float32(37.5)
+comptime BREAST_Z = Float32(10.8)
+comptime BREAST_ACROSS = Float32(6.4)
+comptime BREAST_TALL = Float32(6.0)
+comptime BREAST_DEEP = Float32(5.6)
+comptime BREAST_TURN = Float32(0.25)
+comptime BREAST_DROOP = Float32(0.15)
+comptime BREAST_FOLD = Float32(2.5)
 
 
 struct TorsoSkinField(Copyable, DistanceField, Movable):
@@ -78,6 +92,11 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
     var chest: Float32
     var dermis: Float32
     var loft: Loft
+    # A female template's breasts, each its own form over the
+    # pectoralis major, and the fold where they meet the chest. A
+    # male template's is empty.
+    var breasts: Sculpt
+    var breast_fold: Float32
     var epsilon: Float32
     var low: Vector3
     var high: Vector3
@@ -120,14 +139,22 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
                 _append_field(
                     points, torso_muscle_field(dimensions, part, LEFT), arm
                 )
+        # A section's outline is one closed curve around its center, so
+        # it cannot dip between two breasts: they are forms of their
+        # own, each turned a little out and down, as they sit.
+        self.breasts = Sculpt(f.cm(1.0), f.cm(0.5))
+        self.breast_fold = f.cm(BREAST_FOLD)
         if t.sex != MALE:
-            # Breast tissue over the pectoralis major, on either side.
-            var center = f.at(9.8, 38.5, 10.8)
-            var ml = f.cm(6.2) * f.wide
-            var ap = f.cm(4.0)
-            var tall = f.cm(5.6)
-            points.append(LoftSample(center, ml, ap, tall, False))
-            points.append(LoftSample(flip_x(center), ml, ap, tall, False))
+            var center = f.at(BREAST_X, BREAST_Y, BREAST_Z)
+            var radii = Vector3(
+                f.cm(BREAST_ACROSS) * f.wide,
+                f.cm(BREAST_TALL),
+                f.cm(BREAST_DEEP),
+            )
+            var facing = Vector3(BREAST_TURN, -BREAST_DROOP, 1)
+            facing.normalize()
+            self.breasts.ellipsoid(center, radii, facing)
+            self.breasts.ellipsoid(flip_x(center), radii, flip_x(facing))
         var bottom = f.at(0, 10.0, 0).y
         var top = f.at(0, 53.5, 0).y
         var waist = f.at(0, 30.0, 0).y
@@ -147,13 +174,19 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         )
         self.low = self.loft.low
         self.high = self.loft.high
+        if len(self.breasts.pieces) > 0:
+            self.high.z = max(self.high.z, self.breasts.high.z)
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the anatomy-derived outer surface.
 
         Negative is inside. Zero is the surface.
         """
-        return loft_distance(self.loft, point)
+        return smin(
+            loft_distance(self.loft, point),
+            self.breasts.distance(point),
+            self.breast_fold,
+        )
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""

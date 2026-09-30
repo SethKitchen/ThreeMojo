@@ -628,17 +628,24 @@ def add_complexion(
     Raises:
         Error: If `genome` is not valid or a store refuses an entry.
     """
+    # Each tile is about as wide around the skin as it is tall, so a
+    # pore is round: a head is about one and a half times as far round
+    # as it is tall, and a body's trunk half as far round.
+    var around = Float32(4)
     var up = Float32(2.5)
+    var relief_around = Float32(7)
     var relief_up = Float32(5)
     if whole_body:
+        around = Float32(7)
         up = Float32(14)
+        relief_around = Float32(14)
         relief_up = Float32(28)
     var albedo = Texture(
         512, 512, skin_albedo_pixels(512, genome), REPEAT, color_space=SRGB
     )
-    albedo.repeat = Vector2(3, up)
+    albedo.repeat = Vector2(around, up)
     var relief = skin_relief(256)
-    relief.repeat = Vector2(6, relief_up)
+    relief.repeat = Vector2(relief_around, relief_up)
     var strands = hair_albedo(256, genome)
     strands.repeat = Vector2(6, 2)
     var look = skin_physical(
