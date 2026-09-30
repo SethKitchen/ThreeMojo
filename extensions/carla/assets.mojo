@@ -67,6 +67,7 @@ from loaders.json import (
 )
 from materials.material import Material
 from math.bounds import Box3
+from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.cube_texture_store import NO_CUBE_TEXTURE, SCENE_ENVIRONMENT
@@ -1017,7 +1018,7 @@ struct AssetRegistry(Movable):
         )
         var node = scene.attach(pivot^, parent)
         for n in model.nodes:
-            if n != NO_PARENT and scene.node(n).parent == NO_PARENT:
+            if n != NO_PARENT and scene.get(n).parent == NO_PARENT:
                 scene.add(n, parent=node)
         scene.update()
         return ModelPlacement(node, model.first_mesh, model.mesh_count, scale)
@@ -1044,19 +1045,24 @@ def repeat_model(
         Error: If a node of the first is not in the scene, or the scene
             has changed since its last update.
     """
-    var pivot_local = scene.node(placement.pivot).local_matrix()
+    var pivot_local = scene.get(placement.pivot).local_matrix()
     var into_pivot = scene.world_matrix(placement.pivot)
     into_pivot.invert()
+    # Each mesh's place under the pivot, read while the scene is still
+    # up to date: attaching a node makes its world matrices stale.
+    var relatives = List[Matrix4]()
+    for m in range(
+        placement.first_mesh, placement.first_mesh + placement.mesh_count
+    ):
+        relatives.append(into_pivot * scene.world_matrix(scene.meshes[m].node))
     var pivot = Object3D()
     pivot.set_from_matrix(pivot_local)
     var node = scene.attach(pivot^, parent)
     var first = len(scene.meshes)
-    for m in range(
-        placement.first_mesh, placement.first_mesh + placement.mesh_count
-    ):
-        var relative = into_pivot * scene.world_matrix(scene.meshes[m].node)
+    for k in range(placement.mesh_count):
+        var m = placement.first_mesh + k
         var holder = Object3D()
-        holder.set_from_matrix(relative)
+        holder.set_from_matrix(relatives[k])
         var mesh = scene.meshes[m].copy()
         mesh.node = scene.attach(holder^, node)
         scene.add_mesh(mesh^)

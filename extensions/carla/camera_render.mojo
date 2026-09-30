@@ -197,11 +197,12 @@ from units.si import (
     InverseLength,
     Length,
 )
+from units.photometry import NIT
 from units.temperature import KELVIN, Temperature
 
 # How many semantic tags CARLA names.
 comptime SEMANTIC_TAGS = 30
-# Candela per square meter in one unit of the renderer's light.
+# The luminance of one unit of the renderer's light.
 comptime LUMINANCE_SCALE = NITS_PER_UNIT
 # The stops a camera's EV100 limits and manual EV100 are read higher by.
 comptime CAMERA_EV_OFFSET = Float32(3)
@@ -512,7 +513,7 @@ def metered_ev100(luminance: Float32, calibration: Float32) -> Float32:
     Returns:
         `log2(L 100 / K)`, with L in candela per square meter.
     """
-    return log2(luminance * LUMINANCE_SCALE * 100 / calibration)
+    return log2(luminance * LUMINANCE_SCALE.to(NIT) * 100 / calibration)
 
 
 def ev100_exposure(
@@ -529,7 +530,9 @@ def ev100_exposure(
         Middle gray over the luminance the EV100 puts at middle gray,
         times two to the compensation.
     """
-    var target = pow(Float32(2), ev100) * calibration / 100 / LUMINANCE_SCALE
+    var target = (
+        pow(Float32(2), ev100) * calibration / 100 / LUMINANCE_SCALE.to(NIT)
+    )
     return MIDDLE_GRAY / target * pow(Float32(2), compensation)
 
 
@@ -865,7 +868,11 @@ struct CarlaRenderer(Movable):
             Angle(60, DEGREE), 1, CAMERA_NEAR, CAMERA_FAR
         )
         var fisheye = Bool(settings.wide_angle)
-        var view = self._pose_camera(world, camera, settings)
+        # A wide-angle lens draws a cube and has no pinhole camera: its
+        # field of view can pass 180 degrees.
+        var view = PerspectiveCamera(
+            Angle(60, DEGREE), 1, CAMERA_NEAR, CAMERA_FAR
+        ) if fisheye else self._pose_camera(world, camera, settings)
         var frame: RenderTarget
         var first_effect = 1
         if fisheye:

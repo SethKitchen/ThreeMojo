@@ -74,26 +74,29 @@ from units.si import (
     InverseLength,
     Length,
 )
+from units.photometry import LUX, NIT, Illuminance, Luminance
 from units.temperature import KELVIN, Temperature
 
 # The sun's azimuth when a weather keeps the town's, as a preset's -1 does.
 comptime TOWN_SUN_AZIMUTH = Angle(150, DEGREE)
-# Candela per square meter in one unit of the renderer's shine.
-comptime NITS_PER_UNIT = Float32(4000)
-# Lux in one unit of the renderer's light: pi times `NITS_PER_UNIT`,
-# since a white diffuse surface under E lux shines E / pi nits.
-comptime LUX_PER_UNIT = Float32(3.141592653589793) * NITS_PER_UNIT
-# The sun's illuminance outside the air, in lux, and the clear sky's
-# extinction per unit of air mass.
-comptime SOLAR_ILLUMINANCE = Float32(127500)
+# The luminance of one unit of the renderer's shine.
+comptime NITS_PER_UNIT = Luminance(4000, NIT)
+# The illuminance of one unit of the renderer's light: the light under
+# which a white diffuse surface shines `NITS_PER_UNIT`, pi times it.
+comptime LUX_PER_UNIT = Illuminance(
+    Float32(3.141592653589793) * NITS_PER_UNIT.to(NIT), LUX
+)
+# The sun's illuminance outside the air, and the clear sky's extinction
+# per unit of air mass.
+comptime SOLAR_ILLUMINANCE = Illuminance(127500, LUX)
 comptime CLEAR_EXTINCTION = Float32(0.21)
-# The daylight availability formulas' terms, in lux: a clear sky's
+# The daylight availability formulas' terms: a clear sky's
 # `CLEAR_SKY_BASE + CLEAR_SKY_GAIN sqrt(sin h)` and an overcast sky's
 # `OVERCAST_BASE + OVERCAST_GAIN sin h`.
-comptime CLEAR_SKY_BASE = Float32(800)
-comptime CLEAR_SKY_GAIN = Float32(15500)
-comptime OVERCAST_BASE = Float32(300)
-comptime OVERCAST_GAIN = Float32(21000)
+comptime CLEAR_SKY_BASE = Illuminance(800, LUX)
+comptime CLEAR_SKY_GAIN = Illuminance(15500, LUX)
+comptime OVERCAST_BASE = Illuminance(300, LUX)
+comptime OVERCAST_GAIN = Illuminance(21000, LUX)
 # The sun's color at the horizon and high in the sky.
 comptime SUNRISE_KELVIN = Float32(1900)
 comptime NOON_KELVIN = Float32(5800)
@@ -257,20 +260,20 @@ def sun_color(weather: WeatherParameters) raises -> FloatColor:
     return _mix(warm, FloatColor(0.9, 0.92, 1.0), gray)
 
 
-def direct_normal_illuminance(altitude: Angle) -> Float32:
+def direct_normal_illuminance(altitude: Angle) -> Illuminance:
     """Return the clear sky's direct sunlight on a surface facing the sun.
 
     Args:
         altitude: The sun's altitude.
 
     Returns:
-        `SOLAR_ILLUMINANCE exp(-CLEAR_EXTINCTION m)` in lux, with `m` the
-        air mass.
+        `SOLAR_ILLUMINANCE exp(-CLEAR_EXTINCTION m)`, with `m` the air
+        mass.
     """
     return SOLAR_ILLUMINANCE * exp(-CLEAR_EXTINCTION * air_mass(altitude))
 
 
-def sun_illuminance(weather: WeatherParameters) -> Float32:
+def sun_illuminance(weather: WeatherParameters) -> Illuminance:
     """Return the direct sunlight on a surface facing the sun.
 
     Args:
@@ -278,7 +281,7 @@ def sun_illuminance(weather: WeatherParameters) -> Float32:
 
     Returns:
         `direct_normal_illuminance`, less the cloud shade, times
-        `daylight`, in lux.
+        `daylight`.
     """
     var shade = 1 - CLOUD_SHADE * _percent(weather.cloudiness)
     return (
@@ -288,7 +291,7 @@ def sun_illuminance(weather: WeatherParameters) -> Float32:
     )
 
 
-def sky_illuminance(weather: WeatherParameters) -> Float32:
+def sky_illuminance(weather: WeatherParameters) -> Illuminance:
     """Return the sky's light on level ground, the sun's disk left out.
 
     Args:
@@ -297,8 +300,7 @@ def sky_illuminance(weather: WeatherParameters) -> Float32:
     Returns:
         The clear sky's `0.8 + 15.5 sqrt(sin h)` kilolux mixed toward the
         overcast sky's `0.3 + 21 sin h` kilolux by the cloud cover, at
-        the sun's altitude `h` held at zero or more, times `daylight`, in
-        lux.
+        the sun's altitude `h` held at zero or more, times `daylight`.
     """
     var h = max(weather.sun_altitude_angle.to(RADIAN), 0)
     var clear = CLEAR_SKY_BASE + CLEAR_SKY_GAIN * sqrt(sin(h))
@@ -307,16 +309,16 @@ def sky_illuminance(weather: WeatherParameters) -> Float32:
     return (clear + (overcast - clear) * cover) * daylight(weather)
 
 
-def light_units(lux: Float32) -> Float32:
+def light_units(illuminance: Illuminance) -> Float32:
     """Return an illuminance in the renderer's units of light.
 
     Args:
-        lux: The illuminance, in lux.
+        illuminance: The illuminance.
 
     Returns:
-        `lux / LUX_PER_UNIT`.
+        `illuminance / LUX_PER_UNIT`.
     """
-    return lux / LUX_PER_UNIT
+    return illuminance / LUX_PER_UNIT
 
 
 def sun_intensity(weather: WeatherParameters) -> Float32:

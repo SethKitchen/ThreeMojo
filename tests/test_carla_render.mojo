@@ -12,8 +12,8 @@ from outside this port:
 - The Kasten-Young air mass, the smooth step and the closed-form integral
   of an exponential height fog, worked in a short Python script from
   their textbook forms.
-- This port's documented constants, such as `SUN_INTENSITY`, applied by
-  hand.
+- The daylight availability formulas and this port's documented
+  constants, such as `SOLAR_ILLUMINANCE`, applied by hand.
 - Hand geometry for the lens, the metering histogram and the textures.
 """
 
@@ -61,7 +61,6 @@ from extensions.carla.render_weather import (
     MOON_INTENSITY,
     RAIN_STREAKS,
     RainSettings,
-    SUN_INTENSITY,
     TOWN_SUN_AZIMUTH,
     WET_DARKENING,
     WET_ROUGHNESS,
@@ -69,17 +68,21 @@ from extensions.carla.render_weather import (
     air_mass,
     carla_direction,
     daylight,
+    direct_normal_illuminance,
     height_fog,
     is_night,
+    light_units,
     moon_color,
     moon_direction,
     moon_intensity,
     rain_settings,
+    sky_illuminance,
     sky_settings,
     street_lights_on,
     sun_azimuth,
     sun_color,
     sun_direction,
+    sun_illuminance,
     sun_intensity,
     wet_surface,
 )
@@ -93,7 +96,7 @@ from render.framebuffer import Color, FloatColor
 from render.cube_texture import CubeTexture
 from render.target import RenderTarget
 from render.texture import Texture, float_texture
-from std.math import cos, exp, inf, nan, sin, sqrt
+from std.math import cos, exp, inf, nan, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -102,6 +105,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from units.photometry import LUX, Illuminance
 from units.si import (
     DEGREE,
     METER,
@@ -175,17 +179,38 @@ def test_daylight_and_night() raises:
     assert_false(street_lights_on(weather_preset("ClearNoon")))
 
 
-def test_sun_intensity() raises:
-    # 4.2 exp(-0.22 m) (1 - 0.82 c) daylight, worked in Python.
-    assert_almost_equal(sun_intensity(_weather(45, 5)), 2.95190099, atol=1e-4)
-    assert_almost_equal(sun_intensity(_weather(30, 50)), 1.59792731, atol=1e-4)
-    assert_almost_equal(sun_intensity(_weather(-10)), 0, atol=1e-7)
-    # Clouds past 100 percent count as 100.
+def test_sun_and_sky_illuminance() raises:
+    # 127500 exp(-0.21 m) (1 - 0.82 c) lux for the sun, and the daylight
+    # availability formulas for the sky, worked in Python.
     assert_almost_equal(
-        sun_intensity(_weather(90, 250)),
-        SUN_INTENSITY * Float32(exp(-0.22 * 0.99971199)) * (1 - CLOUD_SHADE),
-        atol=1e-4,
+        sun_illuminance(_weather(45, 5)).to(LUX), 90886.108, atol=0.5
     )
+    assert_almost_equal(
+        sun_illuminance(_weather(30, 50)).to(LUX), 49485.620, atol=0.5
+    )
+    assert_almost_equal(sun_illuminance(_weather(-10)).to(LUX), 0, atol=1e-3)
+    assert_almost_equal(
+        sky_illuminance(_weather(45, 5)).to(LUX), 13899.662, atol=0.5
+    )
+    # Clouds past 100 percent count as 100: the overcast sky.
+    assert_almost_equal(
+        sun_illuminance(_weather(90, 250)).to(LUX), 18604.034, atol=0.5
+    )
+    assert_almost_equal(
+        sky_illuminance(_weather(90, 250)).to(LUX), 21300, atol=0.5
+    )
+    assert_almost_equal(
+        direct_normal_illuminance(Angle(90, DEGREE)).to(LUX),
+        Float32(127500 * exp(-0.21 * 0.99971199)),
+        atol=0.5,
+    )
+
+
+def test_the_renderers_light_is_pi_times_its_shine_in_lux() raises:
+    assert_almost_equal(
+        light_units(Illuminance(Float32(pi) * 4000, LUX)), 1, atol=1e-6
+    )
+    assert_almost_equal(sun_intensity(_weather(45, 5)), 7.2324866, atol=1e-4)
 
 
 def test_moon_intensity_and_color() raises:
@@ -514,9 +539,10 @@ def test_view_rays() raises:
     var rays = _rays(1)
     var d = rays.direction(0, 0)
     assert_almost_equal(d.z, -1, atol=1e-6)
-    # A point 10 m in front sits at window depth 0.9090...: with n = 1
-    # and f = 100, ndc z = (101 / 99 * 10 - 200 / 99) / 10.
-    assert_almost_equal(rays.distance(0, 0, 0.9090909).to(METER), 10, atol=1e-2)
+    # A point 10 m in front sits at the NDC depth a render target stores,
+    # 0.8181...: with n = 1 and f = 100, ndc z = (101 / 99 * 10 - 200 / 99)
+    # / 10.
+    assert_almost_equal(rays.distance(0, 0, 0.8181818).to(METER), 10, atol=1e-2)
     assert_equal(rays.distance(0, 0, 1).to(METER), SKY_DISTANCE.to(METER))
     assert_equal(
         rays.distance(0, 0, inf[DType.float32]()).to(METER),
@@ -540,7 +566,7 @@ def test_fog_color_and_height_fog() raises:
     var phase = henyey_greenstein(1, FOG_PHASE_G)
     assert_almost_equal(tint.r, 0.2 + phase * 0.08, atol=1e-6)
     # A surface 10 m away keeps exp(-1) of its light.
-    var frame = _frame(FloatColor(1, 1, 1), 0.9090909)
+    var frame = _frame(FloatColor(1, 1, 1), 0.8181818)
     apply_height_fog(
         frame,
         _rays(1),
@@ -566,7 +592,7 @@ def test_fog_color_and_height_fog() raises:
         Length(0, METER),
     )
     assert_almost_equal(sky.colors[0].r, 1, atol=1e-6)
-    var hazed = _frame(FloatColor(1, 1, 1), 0.9090909)
+    var hazed = _frame(FloatColor(1, 1, 1), 0.8181818)
     apply_height_fog(
         hazed,
         _rays(1),
@@ -611,8 +637,9 @@ def test_rain() raises:
         5,
     )
     assert_true(left.colors[0].r >= 0)
-    # A wall 0.5 m away hides every streak, which falls 1.5 m or more away.
-    var hidden = _frame(FloatColor(0, 0, 0), 0.0, 8)
+    # A wall on the near plane, 1 m away, hides every streak, which falls
+    # 1.5 m or more away.
+    var hidden = _frame(FloatColor(0, 0, 0), -1.0, 8)
     draw_rain(hidden, _rays(8), rain, FloatColor(1, 1, 1), 3)
     for c in hidden.colors:
         assert_equal(c.r, 0)

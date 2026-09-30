@@ -155,7 +155,6 @@ from extensions.carla.render_weather import WetSurface
 from extensions.carla.render_sky import (
     GROUND,
     NIGHT_ZENITH,
-    SKY_SCALE,
     cloud_density,
     sky_texel,
 )
@@ -183,7 +182,7 @@ from postprocessing.composer import (
 )
 from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
-from std.math import atan, log2, pow, sqrt
+from std.math import atan, log2, pi, pow, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -192,6 +191,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from units.photometry import NIT
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 from units.temperature import KELVIN, Temperature
 
@@ -857,7 +857,8 @@ def test_clouds_and_sky_texels() raises:
     # Full cover is cloud everywhere high enough.
     assert_almost_equal(cloud_density(noise, Vector3(0, 1, 0), 1), 1, atol=1e-6)
     var settings = SkySettings(2, 3, 0.005, 0.8, Vector3(0, 1, 0), 0)
-    # Straight up on a clear day: the sky scaled, plus the night's zenith.
+    # Straight up on a clear day: the sky times its gain, plus the night's
+    # zenith.
     var up = sky_texel(
         FloatColor(1, 1, 1),
         Vector3(0, 1, 0),
@@ -865,9 +866,12 @@ def test_clouds_and_sky_texels() raises:
         FloatColor(0, 0, 0),
         1,
         0,
+        0.15,
+        0,
     )
-    assert_almost_equal(up.r, SKY_SCALE + NIGHT_ZENITH.r, atol=1e-6)
-    # Straight down: the ground, lit by day.
+    assert_almost_equal(up.r, 0.15 + NIGHT_ZENITH.r, atol=1e-6)
+    # Straight down: the ground, a diffuse surface, shines its light over
+    # pi.
     var down = sky_texel(
         FloatColor(1, 1, 1),
         Vector3(0, -1, 0),
@@ -875,8 +879,10 @@ def test_clouds_and_sky_texels() raises:
         FloatColor(0, 0, 0),
         1,
         0,
+        0.15,
+        Float32(pi),
     )
-    assert_almost_equal(down.r, GROUND.r * 1.05, atol=1e-6)
+    assert_almost_equal(down.r, GROUND.r, atol=1e-6)
 
 
 # The camera.
@@ -980,22 +986,25 @@ def test_field_of_view_and_exposure() raises:
     # At that EV100 a luminance of 1 is exposed to middle gray.
     assert_almost_equal(ev100_exposure(14.6096405, 16, 0), 0.18, atol=1e-4)
     assert_almost_equal(ev100_exposure(14.6096405, 16, 1), 0.36, atol=1e-4)
-    # The histogram mode clamps to the bright limits: 10 to 12.
+    # The histogram mode clamps to the bright limits, CARLA's 10 to 12 read
+    # `CAMERA_EV_OFFSET` (3) stops higher: 13 to 15.
     s = rgb_camera_settings(List[ActorAttributeValue]())
-    var at_12 = ev100_exposure(12, 16, 0)
-    assert_almost_equal(camera_exposure(s, 1), at_12, atol=1e-6)
     assert_almost_equal(
-        camera_exposure(s, 0.0001), ev100_exposure(10, 16, 0), atol=1e-6
+        camera_exposure(s, 100), ev100_exposure(15, 16, 0), atol=1e-6
     )
-    # EV 11: 2^11 16 / 100 / 4000 = 0.08192 metered.
     assert_almost_equal(
-        camera_exposure(s, 0.08192), ev100_exposure(11, 16, 0), atol=1e-5
+        camera_exposure(s, 0.0001), ev100_exposure(13, 16, 0), atol=1e-6
     )
+    # EV 14: 2^14 16 / 100 / 4000 = 0.65536 metered, inside the limits.
+    assert_almost_equal(
+        camera_exposure(s, 0.65536), ev100_exposure(14, 16, 0), atol=1e-5
+    )
+    # The manual mode takes the camera's EV100, 3 stops higher.
     s.exposure_mode = MANUAL_EXPOSURE
     assert_almost_equal(
-        camera_exposure(s, 1), ev100_exposure(8.61470984, 16, 0), atol=1e-4
+        camera_exposure(s, 1), ev100_exposure(11.61470984, 16, 0), atol=1e-4
     )
-    assert_almost_equal(LUMINANCE_SCALE, 4000, atol=1e-3)
+    assert_almost_equal(LUMINANCE_SCALE.to(NIT), 4000, atol=1e-3)
 
 
 def test_white_balance() raises:
@@ -1092,7 +1101,7 @@ def test_render_through_the_weathers() raises:
     var walker = ActorId(0)
     var world = _world(camera, cars, walker)
     var view = _renderer(world)
-    view.antialias = True
+    view.supersample = 2
     var rain = weather_preset("HardRainNoon")
     world.set_weather(rain)
     view.update(world)

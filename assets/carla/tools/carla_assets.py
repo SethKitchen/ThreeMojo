@@ -276,7 +276,8 @@ def _download(url, destination):
             raise FetchError(f'{url}: {error}') from error
         except OSError as error:
             # A dropped connection or a timeout: try again from the start.
-            if attempt + 1 == ATTEMPTS:
+            # A local file that is not there will not be there next time.
+            if attempt + 1 == ATTEMPTS or not url.startswith('https://'):
                 raise FetchError(f'{url}: {error}') from error
             time.sleep(BACKOFF_SECONDS * (attempt + 1))
 

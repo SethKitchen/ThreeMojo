@@ -17,9 +17,15 @@ clear night with the lamps lit. Each image is 800 by 600, CARLA's camera
 default. The four make one page, two by two, and each is also written
 alone beside the page, as `_clear_noon`, `_wet_sunset`, `_rain` and
 `_night`.
+
+The town wears the assets in `.cache/carla-assets/` that
+`assets/carla/tools/carla_assets.py fetch` downloads: photoscanned roads,
+sidewalks and grass, an HDRI sky, and CARLA's own vehicle models. An asset
+the cache lacks is procedural, so the example runs without a download.
 """
 
 from extensions.carla.actor import ActorId
+from extensions.carla.assets import AssetRegistry
 from extensions.carla.camera_render import CarlaRenderer
 from extensions.carla.map import Waypoint
 from extensions.carla.opendrive import load_opendrive_file
@@ -52,6 +58,8 @@ from units.si import (
 comptime DEFAULT_OUTPUT = "out/carla_town.png"
 comptime WIDTH = 800
 comptime HEIGHT = 600
+comptime MANIFEST = "assets/carla/manifest.json"
+comptime CACHE = ".cache/carla-assets/"
 
 
 def _lane_pose(
@@ -169,7 +177,12 @@ def main() raises:
     var camera = ActorId(0)
     var cars = List[ActorId]()
     var world = build_world(camera, cars)
-    var view = CarlaRenderer(world, TownSettings(), available_workers())
+    var view = CarlaRenderer(
+        world,
+        TownSettings(),
+        available_workers(),
+        registry=AssetRegistry.open(MANIFEST, CACHE),
+    )
     print("Town built in", Float64(perf_counter_ns() - start) / 1e9, "s")
 
     # One frame first, so the motion blur of the first still sees the
