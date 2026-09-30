@@ -75,6 +75,7 @@ A bare integer for a gene is a compile error, and so is a bare float for an expr
 | `ARM_LENGTH` | Short | Long | The upper arm and the forearm |
 | `HAIR_LENGTH` | Cropped close | A bob to the jaw | The scalp's hair |
 | `FACE_SHAPE_1` to `FACE_SHAPE_8` | -2.2 standard deviations | +2.2 standard deviations | The whole face, along one mode of the scanned face model each |
+| `HAIR_CURL` | Straight | Tightly coiled | The scalp's hair: straight to zero, wavy at a third, curly at two thirds |
 
 `named_genes()` returns every gene in this order. Hair is cut as well as grown, so `HAIR_LENGTH` is a look more than a trait. `gene_label(gene)` returns its lowercase name.
 
@@ -96,7 +97,7 @@ The female template's face differs from the male one's as the averages of the tw
 
 ## Inheritance
 
-`random_genome(seed)` draws a plausible genome. The same seed always gives the same genome. Most traits land near the template. The pigment genes are linked as they are in people: dark skin rarely comes with blond hair, freckles or blue eyes.
+`random_genome(seed)` draws a plausible genome. The same seed always gives the same genome. Most traits land near the template. The pigment genes are linked as they are in people: dark skin rarely comes with blond hair, freckles or blue eyes. Very dark skin often comes with tightly curled hair.
 
 `offspring(mother, father, seed)` returns a child. Each gene lands between the two parents' expressions, with a small mutation of at most 0.1. It raises if a parent's genome is not valid.
 

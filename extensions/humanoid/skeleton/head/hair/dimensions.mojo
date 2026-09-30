@@ -19,7 +19,7 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
-from extensions.humanoid.genome import BROW_THICKNESS, HAIR_LENGTH
+from extensions.humanoid.genome import BROW_THICKNESS, HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
@@ -372,8 +372,12 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.length = h.torso.genome.get(HAIR_LENGTH)
         # Shorter than the template crops the hair close.
         var crop = 1 + Float32(0.35) * min(Float32(0), self.length)
-        self.side_depth = h.cm(0.55) * crop
-        self.crown_depth = h.cm(1.0) * crop
+        # Curled hair stands fuller off the head than straight hair.
+        var volume = 1 + Float32(1.2) * max(
+            Float32(0), h.torso.genome.get(HAIR_CURL)
+        )
+        self.side_depth = h.cm(0.55) * crop * volume
+        self.crown_depth = h.cm(1.0) * crop * volume
         # Longer grows a fall from the cranium's own ellipsoid out to a
         # bob that reaches the jaw.
         var grow = max(Float32(0), self.length)

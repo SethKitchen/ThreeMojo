@@ -158,9 +158,15 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `LAYERED` | Sintel's hair: a layered cut to the jaw, with a fringe. From Sintel Lite by BenDansie, (c) the Blender Foundation, CC-BY 3.0. |
 | `MOHAWK` | A crest from the brow to the nape, and shaved sides. From AMD TressFX's Ratboy, MIT license. |
 
-An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`. A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
+An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`.
+
+A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 
 A mohawk's shell covers only a strip along the midline, so the sides are bare.
+
+`HAIR_CURL` curls the hair of every style. Zero and below is straight. A third is wavy, two thirds curly, and one tightly coiled.
+
+Each guide is sampled at eight points a turn and wound round its own line. It swings across the hair and out off it, never in under it. The swing grows in over the first half turn, so the root stays where it grew. The tighter the curl, the shorter each turn and the fuller the hair stands off the head. See [Genome](Genome).
 
 `HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 

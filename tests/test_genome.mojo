@@ -15,6 +15,7 @@ from extensions.humanoid.genome import (
     Gene,
     Genome,
     FACE_SHAPE_8,
+    HAIR_CURL,
     HAIR_LENGTH,
     HAIR_MELANIN,
     IRIS_MELANIN,
@@ -42,11 +43,12 @@ def test_genes_are_named() raises:
     var genes = named_genes()
     assert_equal(len(genes), GENE_COUNT)
     assert_true(genes[0] == MELANIN)
-    assert_true(genes[GENE_COUNT - 1] == FACE_SHAPE_8)
+    assert_true(genes[GENE_COUNT - 1] == HAIR_CURL)
     assert_equal(gene_label(MELANIN), "melanin")
     assert_equal(gene_label(ARM_LENGTH), "arm length")
     assert_equal(gene_label(HAIR_LENGTH), "hair length")
     assert_equal(gene_label(FACE_SHAPE_8), "face shape 8")
+    assert_equal(gene_label(HAIR_CURL), "hair curl")
     assert_equal(gene_label(Gene(GENE_COUNT)), "gene")
     assert_false(Gene(-1).is_valid())
     for index in range(len(genes)):  # pragma: no branch
@@ -109,6 +111,7 @@ def test_random_genomes_are_plausible() raises:
         if skin > 0.9:
             assert_true(genome.get(IRIS_MELANIN) > 0.5)
             assert_true(genome.get(FRECKLES) < -0.5)
+            assert_true(genome.get(HAIR_CURL) > 0.6)
     assert_equal(dark_blond, 0)
 
 

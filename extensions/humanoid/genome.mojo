@@ -22,7 +22,7 @@ and development and environment change them too.
 from std.math import isfinite
 
 # How many genes a genome holds.
-comptime GENE_COUNT = 42
+comptime GENE_COUNT = 43
 
 
 @fieldwise_init
@@ -124,6 +124,10 @@ comptime FACE_SHAPE_7 = Gene(40)
 comptime FACE_SHAPE_8 = Gene(41)
 # How many face shape genes there are, from `FACE_SHAPE_1` on.
 comptime FACE_SHAPES = 8
+# The hair's curl: zero and below is straight, a third wavy, two thirds
+# curly and 1 tightly coiled. It is a trait of the follicle, unlike the
+# cut.
+comptime HAIR_CURL = Gene(42)
 
 
 @fieldwise_init
@@ -197,6 +201,7 @@ def gene_label(gene: Gene) -> String:
         "face shape 6",
         "face shape 7",
         "face shape 8",
+        "hair curl",
     ]
     return names[gene.value]
 
@@ -205,7 +210,7 @@ def named_genes() -> List[Gene]:
     """Return every named gene in a stable order.
 
     Returns:
-        `MELANIN` through `FACE_SHAPE_8`.
+        `MELANIN` through `HAIR_CURL`.
     """
     var genes = List[Gene]()
     for index in range(GENE_COUNT):  # pragma: no branch
@@ -331,7 +336,8 @@ def random_genome(seed: Int) -> Genome:
 
     The same seed always gives the same genome. Most traits land near
     the template. Pigment genes are linked the way they are in people:
-    dark skin rarely comes with blond hair, freckles or blue eyes.
+    dark skin rarely comes with blond hair, freckles or blue eyes, and
+    very dark skin often comes with tightly curled hair.
 
     Args:
         seed: Any integer.
@@ -356,6 +362,9 @@ def random_genome(seed: Int) -> Genome:
     genome.expressions[FRECKLES.value] = freckles - (1 + freckles) * dark
     var red = genome.expressions[HAIR_REDNESS.value]
     genome.expressions[HAIR_REDNESS.value] = red - (1 + red) * dark
+    # Very dark skin often comes with tightly curled hair.
+    var curl = genome.expressions[HAIR_CURL.value]
+    genome.expressions[HAIR_CURL.value] = curl + (1 - curl) * dark * dark
     return genome
 
 

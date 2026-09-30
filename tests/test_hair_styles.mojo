@@ -5,6 +5,7 @@
 
 """Tests for the hairstyles artists groomed, laid on any head."""
 
+from extensions.humanoid.genome import Expression, Genome, HAIR_CURL
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.head.frame import (
@@ -157,6 +158,35 @@ def test_a_style_is_laid_on_the_head() raises:
                 assert_true(skin.distance(groom.points[index]) > 0)
     with assert_raises(contains="named style"):
         _ = groom_hair(dims, spec, 1, HairStyle(5))
+
+
+def _curled(curl: Float32) raises -> HeadMuscleDimensions:
+    """Return the template's head with hair of `curl`."""
+    var genome = Genome().with_gene(HAIR_CURL, Expression(curl))
+    return head_muscle_dimensions(
+        HumanoidSpec(Length(6.0, FOOT), MALE, genome=genome)
+    )
+
+
+def test_curled_hair_winds_round_its_line() raises:
+    var straight = _dims()
+    var coiled = _curled(1)
+    assert_equal(GroomSpec(straight, 8, 0).curl, 0)
+    var spec = GroomSpec(coiled, 8, 0)
+    assert_true(spec.curl > 0)
+    assert_true(spec.curl_length < GroomSpec(_curled(0.3), 8, 0).curl_length)
+    # A curled guide is sampled finer, to hold its turns, and every style
+    # curls.
+    var plain = groom_hair(straight, GroomSpec(straight, 8, 0), 1)
+    var curly = groom_hair(coiled, spec, 1)
+    assert_true(len(curly.points) > 2 * len(plain.points))
+    var laid = groom_hair(coiled, spec, 1, LAYERED)
+    assert_true(len(laid.points) > 8 * 16)
+    # Curled hair stands fuller off the scalp.
+    var skin = HeadSkinField(straight)
+    var flat = HairShape(straight, SCALP_HAIR, RIGHT, skin)
+    var full = HairShape(coiled, SCALP_HAIR, RIGHT)
+    assert_true(full.crown_depth > flat.crown_depth)
 
 
 def test_a_mohawk_shaves_the_sides() raises:

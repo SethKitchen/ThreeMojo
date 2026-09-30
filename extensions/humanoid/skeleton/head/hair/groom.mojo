@@ -34,7 +34,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from extensions.humanoid.genome import HAIR_LENGTH
+from extensions.humanoid.genome import HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.field import DistanceField, smin
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
@@ -50,7 +50,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
 )
 from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from math.vector3 import Vector3
-from std.math import cos, max, min, pi, sin, sqrt
+from std.math import cos, max, min, pi, pow, sin, sqrt
 
 # The most guides one groom has.
 comptime MAX_GUIDES = 20000
@@ -58,6 +58,8 @@ comptime MAX_GUIDES = 20000
 comptime MAX_FOLLOWERS = 64
 # How many roots are tried for each guide before it is given up.
 comptime ROOT_TRIES = 8
+# How many points a guide takes over one turn of its curl.
+comptime CURL_POINTS = Float32(8)
 # How many Newton steps lift a laid strand's point out of the skin.
 comptime LIFT_STEPS = 6
 
@@ -162,6 +164,10 @@ struct GroomSpec(ImplicitlyCopyable):
     var fringe_ragged: Float32
     # How many roots are tried for each guide before it is given up.
     var root_tries: Int
+    # The curl, from `HAIR_CURL`: how far a strand swings off its line,
+    # and how long one turn of it is. No swing is straight hair.
+    var curl: Float32
+    var curl_length: Float32
 
     def __init__(
         out self,
@@ -208,6 +214,12 @@ struct GroomSpec(ImplicitlyCopyable):
         self.fringe_line = h.at(0, 75.4 + 2.0 * (1 - grow), 0).y
         self.fringe_ragged = h.cm(0.9)
         self.root_tries = ROOT_TRIES
+        # A wave swings wide over a long turn; a coil tightly over a
+        # short one, and stands the hair up off the head.
+        var coil = max(Float32(0), h.torso.genome.get(HAIR_CURL))
+        self.curl = h.cm(0.9) * pow(coil, Float32(0.8)) * (1 - coil / 2)
+        self.curl_length = h.cm(5.0) * (1 - Float32(0.75) * coil)
+        self.rise += h.cm(1.5) * coil * coil
 
 
 struct HairGroom(Movable, Sized):
@@ -515,6 +527,7 @@ def groom_hair(
         var depths = List[Float32]()
         for index in range(len(levels)):  # pragma: no branch
             depths.append(max(Float32(0), top - levels[index]))
+        _curl(points, normals, depths, spec, key)
         groom.add(points, normals, depths, _shade(key, 0))
         for follower in range(spec.followers):  # pragma: no branch
             _follow(groom, spec, points, normals, depths, key, follower + 1)
@@ -556,9 +569,14 @@ def _laid(
         var depths = List[Float32]()
         for k in range(len(strand)):  # pragma: no branch
             var p = strand[k] + shift
-            var n = _unit_vector(
-                surface_gradient(skin, p, probe), Vector3(0, 1, 0)
+            points.append(p)
+            normals.append(
+                _unit_vector(surface_gradient(skin, p, probe), Vector3(0, 1, 0))
             )
+            depths.append(0)
+        _curl(points, normals, depths, spec, key)
+        for k in range(len(points)):  # pragma: no branch
+            var p = points[k]
             var d = skin.distance(p)
             if k > 0:
                 for _ in range(LIFT_STEPS):  # pragma: no branch
@@ -567,16 +585,69 @@ def _laid(
                     var g = surface_gradient(skin, p, probe)
                     p = p + g * ((spec.lift - d) / max(g.dot(g), 1e-12))
                     d = skin.distance(p)
-                n = _unit_vector(
+                normals[k] = _unit_vector(
                     surface_gradient(skin, p, probe), Vector3(0, 1, 0)
                 )
-            points.append(p)
-            normals.append(n)
-            depths.append(max(Float32(0), top - d))
+            points[k] = p
+            depths[k] = max(Float32(0), top - d)
         groom.add(points, normals, depths, _shade(key, 0))
         for follower in range(spec.followers):  # pragma: no branch
             _follow(groom, spec, points, normals, depths, key, follower + 1)
     return groom^
+
+
+def _curl(
+    mut points: List[Vector3],
+    mut normals: List[Vector3],
+    mut depths: List[Float32],
+    spec: GroomSpec,
+    key: Int,
+):
+    """Wind a guide into its curl, if its hair curls.
+
+    The guide is first resampled finely enough to hold its turns, eight
+    points a turn. Each point then swings about the guide's line, across
+    the hair and out off it, never in under it, by the curl's swing. The
+    swing grows in over the first half turn from the root, so the root
+    stays where it grew.
+    """
+    if spec.curl <= 0:
+        return
+    var spacing = spec.curl_length / CURL_POINTS
+    var along = List[Float32](capacity=len(points))
+    along.append(0)
+    for k in range(1, len(points)):  # pragma: no branch
+        along.append(along[k - 1] + (points[k] - points[k - 1]).length())
+    var total = along[len(along) - 1]
+    var count = max(len(points), Int(total / spacing) + 1)
+    var phase = Float32(2 * pi) * _unit(key, 31)
+    var fine = List[Vector3](capacity=count)
+    var ups = List[Vector3](capacity=count)
+    var deep = List[Float32](capacity=count)
+    var j = 0
+    for i in range(count):  # pragma: no branch
+        var s = total * Float32(i) / Float32(count - 1)
+        while j < len(points) - 2 and along[j + 1] < s:
+            j += 1
+        var span = max(along[j + 1] - along[j], Float32(1e-9))
+        var t = min(Float32(1), max(Float32(0), (s - along[j]) / span))
+        var p = points[j] + (points[j + 1] - points[j]) * t
+        var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
+        var n = normals[j]
+        var out = _unit_vector(n - tangent * n.dot(tangent), n)
+        var across = _cross(out, tangent)
+        var angle = phase + Float32(2 * pi) * s / spec.curl_length
+        var swing = spec.curl * min(Float32(1), 2 * s / spec.curl_length)
+        fine.append(
+            p
+            + across * (swing * cos(angle))
+            + out * (swing * Float32(0.5) * (1 + sin(angle)))
+        )
+        ups.append(n)
+        deep.append(depths[j] + (depths[j + 1] - depths[j]) * t)
+    points = fine^
+    normals = ups^
+    depths = deep^
 
 
 def _shade(key: Int, follower: Int) -> Float32:
