@@ -84,6 +84,10 @@ from std.math import max, min
 # Optional `add_body` paint. A negative id asks the assembler to create
 # the default look for that layer.
 comptime UNSET_PAINT = MaterialId(-1)
+# Where the body's mesh hands over to the head's, in template
+# centimeters: on the neck, below the chin, where the skin is upright
+# and a level cut crosses it cleanly.
+comptime HEAD_SPLIT = Float32(56.5)
 # The ridge of the upper trapezius, in template centimeters: its ends at
 # the neck and at the shoulder, their radii, its depth, and its fold.
 comptime RIDGE_NECK_X = Float32(4.5)
@@ -166,7 +170,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.ridges.capsule(
             flip_x(neck_end), flip_x(shoulder_end), neck_radius, shoulder_radius
         )
-        self.head_split = f.at(0, 58.5, 0).y
+        self.head_split = f.at(0, HEAD_SPLIT, 0).y
         self.head_lap = f.cm(0.6)
         # From the widest of the hips to the waist, so the flank narrows
         # over a hand's breadth and not in a step. Below its fourteenth
@@ -248,7 +252,7 @@ def body_skin_mesh(
     the neck and the head, down to the wrists.
 
     The head's small forms need finer cells than the body's, so the
-    surface is meshed in two boxes that meet under the chin, each with
+    surface is meshed in two boxes that meet on the neck, each with
     `detail` cells along its height, and joined. The two overlap by a
     few millimeters. The face's zones of color are in its `color`
     attribute; see `tint_head_skin`.
@@ -311,7 +315,7 @@ def _share_height(
     """Set each vertex's v from its height over the whole skin.
 
     Each box measures v over its own height, so the head's pores would
-    be shorter than the body's and would not meet them under the chin.
+    be shorter than the body's and would not meet them on the neck.
     """
     ref positions = geometry.attribute_view(String(POSITION))
     ref uvs = geometry.attribute_view(String(UV))
