@@ -29,13 +29,19 @@ Rules the fetch keeps:
   the manifest, so every later fetch must match it.
 - An archive (a `.zip`) is verified as a whole, and its members are then
   extracted to the paths the manifest names.
+- A file whose URL is null is not hosted yet; its sum is in the manifest.
+  It is not fetched. Put the file at its cache path by hand, and the
+  next fetch verifies it and extracts it.
+- A Google Drive share link is downloaded through Drive's download link.
+  A web page sent in place of a file is refused.
 """
 
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import shutil
 import sys
 import tempfile
@@ -84,8 +90,8 @@ def _check_path(path, where):
     """Refuse a cache path that is absolute or climbs out of the cache."""
     if not isinstance(path, str) or not path:
         raise ManifestError(f'{where}: a path must be a non-empty string')
-    parts = Path(path).parts
-    if Path(path).is_absolute() or '..' in parts or '\\' in path:
+    parts = PurePosixPath(path).parts
+    if PurePosixPath(path).is_absolute() or '..' in parts or '\\' in path:
         raise ManifestError(f'{where}: the path {path!r} must stay inside the cache')
 
 
@@ -101,10 +107,12 @@ def _check_file(entry_id, kind, item, members):
             raise ManifestError(f'{where}: an archive member needs its name in the archive')
         return
     url = item.get('url')
-    if not isinstance(url, str) or not url.startswith(SCHEMES):
-        raise ManifestError(f'{where}: the URL must be https:// or file://')
+    if url is not None and (not isinstance(url, str) or not url.startswith(SCHEMES)):
+        raise ManifestError(f'{where}: the URL must be https://, file:// or null')
     if item.get('sha256') is not None and not _is_sum(item['sha256']):
         raise ManifestError(f'{where}: sha256 must be 64 hex digits or null')
+    if url is None and item.get('sha256') is None:
+        raise ManifestError(f'{where}: a file that is not hosted yet needs its sum')
     if role == 'archive':
         extract = item.get('extract')
         if not isinstance(extract, list) or not extract:
@@ -226,11 +234,32 @@ def sha256_of(path):
     return digest.hexdigest()
 
 
+def direct_url(url):
+    """Return the URL that downloads a file.
+
+    A Google Drive share link, `https://drive.google.com/file/d/ID/view`
+    or `https://drive.google.com/open?id=ID`, opens a web page; it becomes
+    the link that downloads the file, past the page Drive shows before a
+    large file. Any other URL is returned as it is.
+    """
+    match = re.match(r'https://drive\.google\.com/(?:file/d/([\w-]+)|(?:open|uc)\?(?:.*&)?id=([\w-]+))', url)
+    if not match:
+        return url
+    return ('https://drive.usercontent.google.com/download?export=download&confirm=t&id='
+            + (match.group(1) or match.group(2)))
+
+
 def _download(url, destination):
-    """Copy a URL's bytes into `destination`."""
+    """Copy a URL's bytes into `destination`. A web page sent in place of
+    the file, which is what a host sends for a file it does not share, is
+    refused."""
     try:
-        with urllib.request.urlopen(url, timeout=60) as response, open(destination, 'wb') as out:
-            shutil.copyfileobj(response, out, CHUNK)
+        with urllib.request.urlopen(direct_url(url), timeout=60) as response:
+            if response.headers.get_content_type() == 'text/html':
+                raise FetchError(f'{url}: the host sent a web page, not the file; '
+                                 'check the file is shared with anyone who has the link')
+            with open(destination, 'wb') as out:
+                shutil.copyfileobj(response, out, CHUNK)
     except OSError as error:
         raise FetchError(f'{url}: {error}') from error
 
@@ -257,9 +286,9 @@ def fetch_file(item, cache, pin=False):
     """Bring one manifest file into the cache, and return what happened.
 
     Returns one of "kept" (already there and matching), "fetched",
-    "pinned" (fetched and its sum recorded in `item`), "unpinned" (no sum
-    and no `--pin`, so not fetched) or "mismatch" (a cached file whose sum
-    differs, left alone). A download whose sum differs raises `FetchError`
+    "pinned" (fetched and its sum recorded in `item`), "unhosted" (no URL
+    and not in the cache), "unpinned" (no sum and no `--pin`, so not
+    fetched) or "mismatch" (a cached file whose sum differs, left alone). A download whose sum differs raises `FetchError`
     and leaves nothing behind.
     """
     target = cache / item['path']
@@ -278,6 +307,8 @@ def fetch_file(item, cache, pin=False):
         if item['role'] == 'archive':
             _extract(target, item, cache)
         return status
+    if item['url'] is None:
+        return 'unhosted'
     if expected is None and not pin:
         return 'unpinned'
     target.parent.mkdir(parents=True, exist_ok=True)

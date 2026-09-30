@@ -350,6 +350,2832 @@
           "path": "concrete_road_barrier/concrete_road_barrier.bin"
         }
       ]
+    },
+    {
+      "id": "carla.vehicle.audi.a2",
+      "kind": "model",
+      "title": "Audi A2 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "e02e0474a2c60832674ff5f39004c73ab6562d80d1ccd5e07b3b9b6cf4a3a247",
+          "path": "carla/vehicles/vehicle.audi.a2.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.audi.a2.bin",
+              "path": "carla/vehicles/vehicle.audi.a2/vehicle.audi.a2.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.audi.a2.gltf",
+              "path": "carla/vehicles/vehicle.audi.a2/vehicle.audi.a2.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_ClothContainer_d.jpg",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/T_ClothContainer_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_ClothContainer_n.png",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/T_ClothContainer_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_ClothContainer_orm.png",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/T_ClothContainer_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_LightBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_LightBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_LightBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_LightBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_LightFrontMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_LightFrontMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_AudiA2_LightFrontMat_Normal.png",
+              "path": "carla/vehicles/vehicle.audi.a2/textures/Vh_Car_AudiA2_LightFrontMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.audi.etron",
+      "kind": "model",
+      "title": "Audi Etron (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "928c1011ef8ee3efb583b8eeae75ecdb0db8f5a181aa59be11a0c3275d4ec5b5",
+          "path": "carla/vehicles/vehicle.audi.etron.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.audi.etron.bin",
+              "path": "carla/vehicles/vehicle.audi.etron/vehicle.audi.etron.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.audi.etron.gltf",
+              "path": "carla/vehicles/vehicle.audi.etron/vehicle.audi.etron.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Details_D.jpg",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Details_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Details_N.png",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Details_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Details_ORM.png",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Details_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Wheels_D.jpg",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Wheels_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Wheels_N.png",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Wheels_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_AudiETron_Wheels_ORM.png",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_AudiETron_Wheels_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.audi.etron/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.audi.tt",
+      "kind": "model",
+      "title": "Audi TT (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "bf1479262f46168f9bedf891020446da33daff7be6f6373efd3d6537acb35c8c",
+          "path": "carla/vehicles/vehicle.audi.tt.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.audi.tt.bin",
+              "path": "carla/vehicles/vehicle.audi.tt/vehicle.audi.tt.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.audi.tt.gltf",
+              "path": "carla/vehicles/vehicle.audi.tt/vehicle.audi.tt.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.audi.tt/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Wheels_AudiTT_d.jpg",
+              "path": "carla/vehicles/vehicle.audi.tt/textures/T_Wheels_AudiTT_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Wheels_AudiTT_n.png",
+              "path": "carla/vehicles/vehicle.audi.tt/textures/T_Wheels_AudiTT_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Wheels_AudiTT_orm.png",
+              "path": "carla/vehicles/vehicle.audi.tt/textures/T_Wheels_AudiTT_orm.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.bh.crossbike",
+      "kind": "model",
+      "title": "BH Crossbike (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "f2112a0d186bb5a502d32da0de2d470b06ce3890fc66e20024ec4a6959511fe9",
+          "path": "carla/vehicles/vehicle.bh.crossbike.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.bh.crossbike.bin",
+              "path": "carla/vehicles/vehicle.bh.crossbike/vehicle.bh.crossbike.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.bh.crossbike.gltf",
+              "path": "carla/vehicles/vehicle.bh.crossbike/vehicle.bh.crossbike.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/BodyMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/BodyMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/MetalMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/MetalMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_ORM.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/MetalMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/SeatMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/SeatMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/SeatMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/SeatMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/SeatMat_ORM.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/SeatMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/WheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/WheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_ORM.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/WheelMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/road_bicy_low_WHEELS_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_Normal.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/road_bicy_low_WHEELS_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_ORM.png",
+              "path": "carla/vehicles/vehicle.bh.crossbike/textures/road_bicy_low_WHEELS_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.bmw.grandtourer",
+      "kind": "model",
+      "title": "BMW Grand Tourer (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "a6deea75b7af34a08feb6fa2339eba9a3d2dce98b35bf6ce41db3bc9b3f138d2",
+          "path": "carla/vehicles/vehicle.bmw.grandtourer.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.bmw.grandtourer.bin",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/vehicle.bmw.grandtourer.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.bmw.grandtourer.gltf",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/vehicle.bmw.grandtourer.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/BMW_logo.jpg",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/BMW_logo.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_BmwMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_BmwMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_GrillMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_GrillMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_GrillMat_ORM.png",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_GrillMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_LightMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_LightMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_TyreMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_TyreMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_BmwGranTourer_TyreMat_Normal.png",
+              "path": "carla/vehicles/vehicle.bmw.grandtourer/textures/Vh_Car_BmwGranTourer_TyreMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.carlamotors.carlacola",
+      "kind": "model",
+      "title": "CarlaCola Truck (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "b107494300e3ddb656831a348b01218f99f03f0fc0fa398f4ea2c0d04d3b314f",
+          "path": "carla/vehicles/vehicle.carlamotors.carlacola.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.carlamotors.carlacola.bin",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/vehicle.carlamotors.carlacola.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.carlamotors.carlacola.gltf",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/vehicle.carlamotors.carlacola.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/textures/T_White_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Truck_CarlaCola_BodyworkMat_Normal.png",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/textures/Vh_Truck_CarlaCola_BodyworkMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Truck_CarlaCola_BodyworkMat_ORM.png",
+              "path": "carla/vehicles/vehicle.carlamotors.carlacola/textures/Vh_Truck_CarlaCola_BodyworkMat_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.carlamotors.european_hgv",
+      "kind": "model",
+      "title": "European HGV (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "de05d52b64d9f13ea3fe8535c8a41ee3375742aa484922c9a7c7f0fbfc4687a3",
+          "path": "carla/vehicles/vehicle.carlamotors.european_hgv.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.carlamotors.european_hgv.bin",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/vehicle.carlamotors.european_hgv.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.carlamotors.european_hgv.gltf",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/vehicle.carlamotors.european_hgv.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details1_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details1_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details1_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details1_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details1_orm.png",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details1_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details2_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details2_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details2_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details2_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Truck_Details2_orm.png",
+              "path": "carla/vehicles/vehicle.carlamotors.european_hgv/textures/T_Truck_Details2_orm.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.carlamotors.firetruck",
+      "kind": "model",
+      "title": "Fire Truck (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "65af2ff44f0e11bec3d70dbb64e5f087b3863918aa134893f804f36e1bc4bd92",
+          "path": "carla/vehicles/vehicle.carlamotors.firetruck.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.carlamotors.firetruck.bin",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/vehicle.carlamotors.firetruck.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.carlamotors.firetruck.gltf",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/vehicle.carlamotors.firetruck.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details1_Firetruck_ORM.png",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details1_Firetruck_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details1_Firetruck_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details1_Firetruck_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details1_Firetruck_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details1_Firetruck_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Firetruck_ORM.png",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details2_Firetruck_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Firetruck_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details2_Firetruck_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Firetruck_n.png",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_Details2_Firetruck_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.carlamotors.firetruck/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.chevrolet.impala",
+      "kind": "model",
+      "title": "Chevrolet Impala (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "be6666547a72bf8580f6c65a2457fbab513f29494f6f05d9803b06ffa2afe103",
+          "path": "carla/vehicles/vehicle.chevrolet.impala.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.chevrolet.impala.bin",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/vehicle.chevrolet.impala.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.chevrolet.impala.gltf",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/vehicle.chevrolet.impala.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Wheels_AudiTT_n_2.png",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/T_Wheels_AudiTT_n_2.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Wheels_Chevrolet.jpg",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/T_Wheels_Chevrolet.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/WindSubsurfaceMaskTrunck.jpg",
+              "path": "carla/vehicles/vehicle.chevrolet.impala/textures/WindSubsurfaceMaskTrunck.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.citroen.c3",
+      "kind": "model",
+      "title": "Citroen C3 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "65d6e6324e2379fa6ee9396feca64402c4a916b2a7c16178fcff413dadc25d69",
+          "path": "carla/vehicles/vehicle.citroen.c3.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.citroen.c3.bin",
+              "path": "carla/vehicles/vehicle.citroen.c3/vehicle.citroen.c3.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.citroen.c3.gltf",
+              "path": "carla/vehicles/vehicle.citroen.c3/vehicle.citroen.c3.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_LightsBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_LightsBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_LightsBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_LightsBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_LightsFrontMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_LightsFrontMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_CitroenC3_LightsFrontMat_Normal.png",
+              "path": "carla/vehicles/vehicle.citroen.c3/textures/Vh_Car_CitroenC3_LightsFrontMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.diamondback.century",
+      "kind": "model",
+      "title": "Diamondback Century (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "71f0f48b5ffb8f6280a5096b810c297a55b27371acc46103d1bf620e726fe9b0",
+          "path": "carla/vehicles/vehicle.diamondback.century.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.diamondback.century.bin",
+              "path": "carla/vehicles/vehicle.diamondback.century/vehicle.diamondback.century.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.diamondback.century.gltf",
+              "path": "carla/vehicles/vehicle.diamondback.century/vehicle.diamondback.century.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/T_White_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/road_bicy_low_WHEELS_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_Normal.png",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/road_bicy_low_WHEELS_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_ORM.png",
+              "path": "carla/vehicles/vehicle.diamondback.century/textures/road_bicy_low_WHEELS_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.dodge.charger_2020",
+      "kind": "model",
+      "title": "Dodge Charger 2020 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "10c4d75c0645dec501d9ea5d126285d6c497dd3abc3616a858cd62ce9266fb37",
+          "path": "carla/vehicles/vehicle.dodge.charger_2020.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.dodge.charger_2020.bin",
+              "path": "carla/vehicles/vehicle.dodge.charger_2020/vehicle.dodge.charger_2020.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.dodge.charger_2020.gltf",
+              "path": "carla/vehicles/vehicle.dodge.charger_2020/vehicle.dodge.charger_2020.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior__DodgeCharger_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_2020/textures/T_Interior__DodgeCharger_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior__DodgeCharger_n.png",
+              "path": "carla/vehicles/vehicle.dodge.charger_2020/textures/T_Interior__DodgeCharger_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_2020/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.dodge.charger_police",
+      "kind": "model",
+      "title": "Dodge Charger Police (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "3512d8962342ed9d482e9d02de111e93128bf291094daa300151d6cd770ceb34",
+          "path": "carla/vehicles/vehicle.dodge.charger_police.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.dodge.charger_police.bin",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/vehicle.dodge.charger_police.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.dodge.charger_police.gltf",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/vehicle.dodge.charger_police.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_D.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/textures/T_Interior_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_N.png",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/textures/T_Interior_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_ORM.png",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/textures/T_Interior_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.dodge.charger_police_2020",
+      "kind": "model",
+      "title": "Dodge Charger Police 2020 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "bb3c8c3d31a6a6faf111c0954c515a86c136a298984adc4adc6aca36b5e9bc21",
+          "path": "carla/vehicles/vehicle.dodge.charger_police_2020.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.dodge.charger_police_2020.bin",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/vehicle.dodge.charger_police_2020.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.dodge.charger_police_2020.gltf",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/vehicle.dodge.charger_police_2020.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Props_ChargerCop_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/M_Props_ChargerCop_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Props_ChargerCop_n.png",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/M_Props_ChargerCop_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior__DodgeCharger_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/T_Interior__DodgeCharger_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior__DodgeCharger_n.png",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/T_Interior__DodgeCharger_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.dodge.charger_police_2020/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.ford.ambulance",
+      "kind": "model",
+      "title": "Ford Ambulance (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "1a9e4b6d7eb7b2c247a360261400f07d183b79602655e30adba57f6cc0783e63",
+          "path": "carla/vehicles/vehicle.ford.ambulance.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.ford.ambulance.bin",
+              "path": "carla/vehicles/vehicle.ford.ambulance/vehicle.ford.ambulance.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.ford.ambulance.gltf",
+              "path": "carla/vehicles/vehicle.ford.ambulance/vehicle.ford.ambulance.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details01_Ambulance_ORM.png",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details01_Ambulance_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details01_Ambulance_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details01_Ambulance_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details01_Ambulance_n.png",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details01_Ambulance_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details02_Ambulance_ORM.png",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details02_Ambulance_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details02_Ambulance_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details02_Ambulance_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details02_Ambulance_n.png",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_Details02_Ambulance_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.ambulance/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.ford.crown",
+      "kind": "model",
+      "title": "Ford Crown (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "026d0471ea26c3c8e160d2b3845342e03d29f658ecf397761a10fba6d092bb07",
+          "path": "carla/vehicles/vehicle.ford.crown.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.ford.crown.bin",
+              "path": "carla/vehicles/vehicle.ford.crown/vehicle.ford.crown.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.ford.crown.gltf",
+              "path": "carla/vehicles/vehicle.ford.crown/vehicle.ford.crown.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_FordCrown_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_Details_FordCrown_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_FordCrown_n.png",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_Details_FordCrown_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_FordCrown_orm.png",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_Details_FordCrown_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.crown/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.ford.mustang",
+      "kind": "model",
+      "title": "Ford Mustang (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "ded40f8a08199b0c0309256b9ccd174777c13687b0ce2e05545a5bd28f174db9",
+          "path": "carla/vehicles/vehicle.ford.mustang.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.ford.mustang.bin",
+              "path": "carla/vehicles/vehicle.ford.mustang/vehicle.ford.mustang.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.ford.mustang.gltf",
+              "path": "carla/vehicles/vehicle.ford.mustang/vehicle.ford.mustang.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.ford.mustang/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.mustang/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Mustang_Details_n.png",
+              "path": "carla/vehicles/vehicle.ford.mustang/textures/T_Mustang_Details_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Mustang_Details_orm.png",
+              "path": "carla/vehicles/vehicle.ford.mustang/textures/T_Mustang_Details_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Mustang_details_d.jpg",
+              "path": "carla/vehicles/vehicle.ford.mustang/textures/T_Mustang_details_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.gazelle.omafiets",
+      "kind": "model",
+      "title": "Gazelle Omafiets (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "c559202833ba11dc8228c63701cbcd17d7e49d6808e14c89c5a14bdb5ecb4fea",
+          "path": "carla/vehicles/vehicle.gazelle.omafiets.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.gazelle.omafiets.bin",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/vehicle.gazelle.omafiets.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.gazelle.omafiets.gltf",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/vehicle.gazelle.omafiets.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/textures/road_bicy_low_WHEELS_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_Normal.png",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/textures/road_bicy_low_WHEELS_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/road_bicy_low_WHEELS_ORM.png",
+              "path": "carla/vehicles/vehicle.gazelle.omafiets/textures/road_bicy_low_WHEELS_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.harley-davidson.low_rider",
+      "kind": "model",
+      "title": "Harley-Davidson Low Rider (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "1be85246dbd98d5a2d2955937ccb008f06a078982f3188e936c4178b5396462f",
+          "path": "carla/vehicles/vehicle.harley-davidson.low_rider.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.harley-davidson.low_rider.bin",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/vehicle.harley-davidson.low_rider.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.harley-davidson.low_rider.gltf",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/vehicle.harley-davidson.low_rider.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_HarleyWheels_c.jpg",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_HarleyWheels_c.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_HarleyWheels_n.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_HarleyWheels_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_HarleyWheels_orm.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_HarleyWheels_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Harley_LSupport_c.jpg",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_Harley_LSupport_c.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Harley_LSupport_n.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_Harley_LSupport_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Harley_LSupport_orm.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_Harley_LSupport_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_T_HarleyBody__D.jpg",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_T_HarleyBody__D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_T_HarleyBody__N.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_T_HarleyBody__N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_T_HarleyBody__ORM.png",
+              "path": "carla/vehicles/vehicle.harley-davidson.low_rider/textures/T_T_HarleyBody__ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.jeep.wrangler_rubicon",
+      "kind": "model",
+      "title": "Jeep Wrangler Rubicon (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "b8143de8bf6c172de911813b5df8f0271b8470642207509f26c9316d25e0f10d",
+          "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.jeep.wrangler_rubicon.bin",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/vehicle.jeep.wrangler_rubicon.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.jeep.wrangler_rubicon.gltf",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/vehicle.jeep.wrangler_rubicon.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Metal_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Metal_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Metal_Normal.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Metal_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Metal_ORM.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Metal_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Black_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Black_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Black_Normal.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Black_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Black_ORM.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Black_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Grey_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Grey_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Grey_Normal.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Grey_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Plastic_Matte_Grey_ORM.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Plastic_Matte_Grey_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Tire_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Tire_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MI_Tire_ORM.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/MI_Tire_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.jeep.wrangler_rubicon/textures/T_White_D.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.kawasaki.ninja",
+      "kind": "model",
+      "title": "Kawasaki Ninja (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "af65a2eb5485163c9bd1b4b6e22597cd17c16e0e2e857164dd4de03dcf8217fe",
+          "path": "carla/vehicles/vehicle.kawasaki.ninja.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.kawasaki.ninja.bin",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/vehicle.kawasaki.ninja.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.kawasaki.ninja.gltf",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/vehicle.kawasaki.ninja.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/MetalMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_Normal.png",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/MetalMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_ORM.png",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/MetalMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/RuedasMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/RuedasMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/RuedasMat_Normal.png",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/RuedasMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/RuedasMat_ORM.png",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/RuedasMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.kawasaki.ninja/textures/T_White_D.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.lincoln.mkz_2017",
+      "kind": "model",
+      "title": "Lincoln MKZ 2017 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "28479c5c2e2eeb634bc3760743228ca3bf6525131b9560a1dbb5bf76b117acc3",
+          "path": "carla/vehicles/vehicle.lincoln.mkz_2017.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.lincoln.mkz_2017.bin",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/vehicle.lincoln.mkz_2017.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.lincoln.mkz_2017.gltf",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/vehicle.lincoln.mkz_2017.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnIntDetails_D.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnIntDetails_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnIntDetails_N.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnIntDetails_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnOutDetails_D.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnOutDetails_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnOutDetails_N.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnOutDetails_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnOutDetails_ORM.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnOutDetails_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnWheels_D.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnWheels_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnWheels_N.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnWheels_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LincolnWheels_ORM.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2017/textures/T_LincolnWheels_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.lincoln.mkz_2020",
+      "kind": "model",
+      "title": "Lincoln MKZ 2020 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "ccc52ec2e3603be89487a6d67ddc07adb1b87b0aa1260c164190a35daaafe9f5",
+          "path": "carla/vehicles/vehicle.lincoln.mkz_2020.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.lincoln.mkz_2020.bin",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/vehicle.lincoln.mkz_2020.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.lincoln.mkz_2020.gltf",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/vehicle.lincoln.mkz_2020.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_Lincoln_d.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/textures/M_Interior_Lincoln_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_Lincoln_n.png",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/textures/M_Interior_Lincoln_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.lincoln.mkz_2020/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mercedes.coupe",
+      "kind": "model",
+      "title": "Mercedes Coupe (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "ba9c5e115e0dff798b6876764a0108b065367b04623e9c7630444f98ebf0e64f",
+          "path": "carla/vehicles/vehicle.mercedes.coupe.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mercedes.coupe.bin",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/vehicle.mercedes.coupe.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mercedes.coupe.gltf",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/vehicle.mercedes.coupe.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_Normal.png",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_ORM.png",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_LightBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_LightBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_LightBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_LightBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_LightFrontMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_LightFrontMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_MercedesTopMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe/textures/Vh_Car_MercedesBenzCoupe_MercedesTopMat_BaseColor.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mercedes.coupe_2020",
+      "kind": "model",
+      "title": "Mercedes Coupe 2020 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "6a5d9786ecdf5980636ea4f36ef68c461efe826afe1248663a194f236b531d0b",
+          "path": "carla/vehicles/vehicle.mercedes.coupe_2020.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mercedes.coupe_2020.bin",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/vehicle.mercedes.coupe_2020.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mercedes.coupe_2020.gltf",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/vehicle.mercedes.coupe_2020.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/textures/M_Interior_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_n.png",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/textures/M_Interior_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.coupe_2020/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mercedes.sprinter",
+      "kind": "model",
+      "title": "Mercedes Sprinter (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "008b18704a3b2a2e9787f4a24fa20a0be223ea0d9745d3701a93d24ad88a48d0",
+          "path": "carla/vehicles/vehicle.mercedes.sprinter.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mercedes.sprinter.bin",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/vehicle.mercedes.sprinter.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mercedes.sprinter.gltf",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/vehicle.mercedes.sprinter.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Sprinter_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details2_Sprinter_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Sprinter_n.png",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details2_Sprinter_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details2_Sprinter_orm.png",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details2_Sprinter_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_Sprinter_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details_Sprinter_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_Sprinter_n.png",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details_Sprinter_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Details_Sprinter_orm.png",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_Details_Sprinter_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mercedes.sprinter/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.micro.microlino",
+      "kind": "model",
+      "title": "Micro Microlino (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "8e886f2e3f67d082b7819d0671156d874b7e3d45d801d2581e9b002332fdc542",
+          "path": "carla/vehicles/vehicle.micro.microlino.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.micro.microlino.bin",
+              "path": "carla/vehicles/vehicle.micro.microlino/vehicle.micro.microlino.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.micro.microlino.gltf",
+              "path": "carla/vehicles/vehicle.micro.microlino/vehicle.micro.microlino.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.micro.microlino/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mini.cooper_s",
+      "kind": "model",
+      "title": "Mini Cooper S (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "bd4f8fd6ab9035abe8dcfbfc4283f9f07e7c5557b44f60ed192c3d49549ce9ee",
+          "path": "carla/vehicles/vehicle.mini.cooper_s.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mini.cooper_s.bin",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/vehicle.mini.cooper_s.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mini.cooper_s.gltf",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/vehicle.mini.cooper_s.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_Lights_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_Lights_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_Lights_Normal.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_Lights_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MiniCooperS_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_MiniCooperS_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MiniCooperS_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_MiniCooperS_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MiniCooperS_LightBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_MiniCooperS_LightBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MiniCooperS_LightBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_MiniCooperS_LightBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MiniCooperS_MiniMat.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s/textures/Vh_Car_MiniCooperS_MiniMat.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mini.cooper_s_2021",
+      "kind": "model",
+      "title": "Mini Cooper S 2021 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "a840222205d7d26599be968355a93aa02924d0549e741790bd5a51129d00ec74",
+          "path": "carla/vehicles/vehicle.mini.cooper_s_2021.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mini.cooper_s_2021.bin",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/vehicle.mini.cooper_s_2021.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mini.cooper_s_2021.gltf",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/vehicle.mini.cooper_s_2021.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_Mini2021_d.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/M_Interior_Mini2021_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Interior_Mini2021_n.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/M_Interior_Mini2021_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_WheelsFixed_d.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/M_WheelsFixed_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_WheelsFixed_n.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/M_WheelsFixed_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mini.cooper_s_2021/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.mitsubishi.fusorosa",
+      "kind": "model",
+      "title": "Mitsubishi Fuso Rosa (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "66c3ae5b505c977d4651fdf95e19985f962034a043f4bd37d6e9012b70c6e2f1",
+          "path": "carla/vehicles/vehicle.mitsubishi.fusorosa.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.mitsubishi.fusorosa.bin",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/vehicle.mitsubishi.fusorosa.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.mitsubishi.fusorosa.gltf",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/vehicle.mitsubishi.fusorosa.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_FusoRosa_D.jpg",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_Interior_FusoRosa_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_FusoRosa_N.png",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_Interior_FusoRosa_N.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_FusoRosa_ORM.png",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_Interior_FusoRosa_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.mitsubishi.fusorosa/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.nissan.micra",
+      "kind": "model",
+      "title": "Nissan Micra (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "e45c0cac510311b30e897ccd9c3e822e5347bd9466a95e3d33639ca579650b65",
+          "path": "carla/vehicles/vehicle.nissan.micra.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.nissan.micra.bin",
+              "path": "carla/vehicles/vehicle.nissan.micra/vehicle.nissan.micra.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.nissan.micra.gltf",
+              "path": "carla/vehicles/vehicle.nissan.micra/vehicle.nissan.micra.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Detail_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Detail_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Detail_n.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Detail_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Detail_orm.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Detail_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Interior_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Interior_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Interior_n.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Interior_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Interior_orm.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Interior_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Wheel_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Wheel_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Wheel_n.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Wheel_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_NissanMicra_Wheel_orm.png",
+              "path": "carla/vehicles/vehicle.nissan.micra/textures/T_NissanMicra_Wheel_orm.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.nissan.patrol",
+      "kind": "model",
+      "title": "Nissan Patrol (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "c51b1ebc55a108e580c04732f91509d042d5e3948c2a1394afbc44fa3c6be294",
+          "path": "carla/vehicles/vehicle.nissan.patrol.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.nissan.patrol.bin",
+              "path": "carla/vehicles/vehicle.nissan.patrol/vehicle.nissan.patrol.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.nissan.patrol.gltf",
+              "path": "carla/vehicles/vehicle.nissan.patrol/vehicle.nissan.patrol.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_Lights.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_Lights.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_LightFrontMat_Normal.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_LightFrontMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_LigthBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_LigthBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_LigthBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_LigthBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_LigthFrontDownMat_Basecolor.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_LigthFrontDownMat_Basecolor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_NissanPatrolST_LigthFrontDownMat_Normal.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol/textures/Vh_Car_NissanPatrolST_LigthFrontDownMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.nissan.patrol_2021",
+      "kind": "model",
+      "title": "Nissan Patrol 2021 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "e41bb899538d75676486839baaf32c74f53eac9edf432f8bb4f7858b045e7444",
+          "path": "carla/vehicles/vehicle.nissan.patrol_2021.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.nissan.patrol_2021.bin",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/vehicle.nissan.patrol_2021.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.nissan.patrol_2021.gltf",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/vehicle.nissan.patrol_2021.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_NissanPatrol2021_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/textures/T_Interior_NissanPatrol2021_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_NissanPatrol2021_n.png",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/textures/T_Interior_NissanPatrol2021_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.nissan.patrol_2021/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.seat.leon",
+      "kind": "model",
+      "title": "Seat Leon (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "83e93038fcc3ad43fb11473b9e14909a9bdf3ccaef0e5642d52a236e51a495fb",
+          "path": "carla/vehicles/vehicle.seat.leon.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.seat.leon.bin",
+              "path": "carla/vehicles/vehicle.seat.leon/vehicle.seat.leon.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.seat.leon.gltf",
+              "path": "carla/vehicles/vehicle.seat.leon/vehicle.seat.leon.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_CoverWheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_GrillMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_GrillMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_GrillMat_Normal.png",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_GrillMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_GrillMat_ORM.png",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_GrillMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_LightBackMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_LightBackMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_LightBackMat_Normal.png",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_LightBackMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_LightFrontMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_LightFrontMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_SeatLeon_LightFrontMat_Normal.png",
+              "path": "carla/vehicles/vehicle.seat.leon/textures/Vh_Car_SeatLeon_LightFrontMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.tesla.cybertruck",
+      "kind": "model",
+      "title": "Tesla Cybertruck (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "9d44a53ec8ec68c2eaf1fa482834c3efbc51c76077a9913de7afd7f17ff9738c",
+          "path": "carla/vehicles/vehicle.tesla.cybertruck.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.tesla.cybertruck.bin",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/vehicle.tesla.cybertruck.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.tesla.cybertruck.gltf",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/vehicle.tesla.cybertruck.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_CyberTruck_bodywork_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/M_CyberTruck_bodywork_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Cybertruck_bodywork_n.png",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/M_Cybertruck_bodywork_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Cybertruck_interior_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/M_Cybertruck_interior_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Cybertruck_interior_n.png",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/M_Cybertruck_interior_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.cybertruck/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.tesla.model3",
+      "kind": "model",
+      "title": "Tesla Model 3 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "e46539362427abc4deea34ef098a6071b5a84efbf3bab28e1f98b63e252e4848",
+          "path": "carla/vehicles/vehicle.tesla.model3.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.tesla.model3.bin",
+              "path": "carla/vehicles/vehicle.tesla.model3/vehicle.tesla.model3.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.tesla.model3.gltf",
+              "path": "carla/vehicles/vehicle.tesla.model3/vehicle.tesla.model3.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Tesla_details_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_Tesla_details_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Tesla_details_n.png",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_Tesla_details_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_Tesla_details_orm.png",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_Tesla_details_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_tesla_wheels_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_tesla_wheels_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_tesla_wheels_n.png",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_tesla_wheels_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/M_tesla_wheels_orm.png",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/M_tesla_wheels_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.tesla.model3/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.toyota.prius",
+      "kind": "model",
+      "title": "Toyota Prius (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "6b1497bd760a7900fb35603fc2c0bc289d4c928fdf917c435f8c9666999473b6",
+          "path": "carla/vehicles/vehicle.toyota.prius.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.toyota.prius.bin",
+              "path": "carla/vehicles/vehicle.toyota.prius/vehicle.toyota.prius.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.toyota.prius.gltf",
+              "path": "carla/vehicles/vehicle.toyota.prius/vehicle.toyota.prius.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Aluminium_2.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/T_Aluminium_2.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/T_White_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_ToyotaPrius_LightFrontDownMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_ToyotaPrius_LightFrontDownMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_ToyotaPrius_LightFrontDownMat_Normal.png",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_ToyotaPrius_LightFrontDownMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_ToyotaPrius_LightMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_ToyotaPrius_LightMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_ToyotaPrius_LightMat_Normal.png",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_ToyotaPrius_LightMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_toyotaPrius_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_toyotaPrius_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_toyotaPrius_CoverWheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.toyota.prius/textures/Vh_Car_toyotaPrius_CoverWheelMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.vespa.zx125",
+      "kind": "model",
+      "title": "Vespa ZX 125 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "a4d420d7f3164f1481c1f71d8839cfc3179cdbc26893e1a555e8556fb3f2abbb",
+          "path": "carla/vehicles/vehicle.vespa.zx125.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.vespa.zx125.bin",
+              "path": "carla/vehicles/vehicle.vespa.zx125/vehicle.vespa.zx125.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.vespa.zx125.gltf",
+              "path": "carla/vehicles/vehicle.vespa.zx125/vehicle.vespa.zx125.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat1_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat1_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat1_Normal.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat1_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat1_ORM.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat1_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat_Normal.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/LightMat_ORM.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/LightMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/MetalMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_Normal.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/MetalMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/MetalMat_ORM.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/MetalMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Flat_orm.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/T_Flat_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_White_D.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/T_White_D.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/VespaSeatMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/VespaSeatMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/VespaSeatMat_Normal.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/VespaSeatMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/VespaSeatMat_ORM.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/VespaSeatMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/WheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_Normal.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/WheelMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/WheelMat_ORM.png",
+              "path": "carla/vehicles/vehicle.vespa.zx125/textures/WheelMat_ORM.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.volkswagen.t2",
+      "kind": "model",
+      "title": "Volkswagen T2 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "8dae6c50241e0de368f46597e11f0bead8d8f8206e35e6faa30f0b6cba6223b8",
+          "path": "carla/vehicles/vehicle.volkswagen.t2.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.volkswagen.t2.bin",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/vehicle.volkswagen.t2.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.volkswagen.t2.gltf",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/vehicle.volkswagen.t2.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_8ColorMask_op.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/T_8ColorMask_op.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_Normal.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_ORM.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/Vh_Car_MercedesBenzCoupe_BackgroungGrillMat_ORM.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Van_VolkswagenT2_CoverWheelMat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/Vh_Van_VolkswagenT2_CoverWheelMat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/Vh_Van_VolkswagenT2_TyreMat_Normal.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2/textures/Vh_Van_VolkswagenT2_TyreMat_Normal.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.volkswagen.t2_2021",
+      "kind": "model",
+      "title": "Volkswagen T2 2021 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "d3423094cdf9eb39c6612badf20872f18eaf78a82af86d75c99addc0fe9bb649",
+          "path": "carla/vehicles/vehicle.volkswagen.t2_2021.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.volkswagen.t2_2021.bin",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/vehicle.volkswagen.t2_2021.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.volkswagen.t2_2021.gltf",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/vehicle.volkswagen.t2_2021.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_d.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_BlinkerTexture_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_BlinkerTexture_n.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_BlinkerTexture_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_d.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_Interior_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_n.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_Interior_n.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_Interior_orm.png",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_Interior_orm.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.volkswagen.t2_2021/textures/T_LicensePlate_d.jpg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.vehicle.yamaha.yzf",
+      "kind": "model",
+      "title": "Yamaha YZF (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own vehicle, from the cooked Windows release (CARLA_0.9.16.zip). UE Viewer (umodel) build 1590 exported the blueprint's skeletal body and its static glass and lights to glTF; assets/carla/tools/export/ merged them and rebuilt the materials. The uncooked carla-content repository holds the same meshes, but UE Viewer cannot read uncooked meshes.",
+      "changes": "Exported from Unreal Engine 4.26 to glTF 2.0; the body and its attachments merged into one file; materials rebuilt as glTF PBR from their Unreal parameters; textures scaled to at most 1024 pixels.",
+      "forward": "+x",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "6045823d09b6d71824246da2eb7005e04986d590647c2cab9d6d557958b070f0",
+          "path": "carla/vehicles/vehicle.yamaha.yzf.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "vehicle.yamaha.yzf.bin",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/vehicle.yamaha.yzf.bin"
+            },
+            {
+              "role": "model",
+              "member": "vehicle.yamaha.yzf.gltf",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/vehicle.yamaha.yzf.gltf"
+            },
+            {
+              "role": "support",
+              "member": "textures/T_LicensePlate_d.jpg",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/textures/T_LicensePlate_d.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/hih_yamahaOthers_mat_BaseColor.jpg",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/textures/hih_yamahaOthers_mat_BaseColor.jpg"
+            },
+            {
+              "role": "support",
+              "member": "textures/hih_yamahaOthers_mat_Normal.png",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/textures/hih_yamahaOthers_mat_Normal.png"
+            },
+            {
+              "role": "support",
+              "member": "textures/hih_yamahaOthers_mat_ORM.png",
+              "path": "carla/vehicles/vehicle.yamaha.yzf/textures/hih_yamahaOthers_mat_ORM.png"
+            }
+          ]
+        }
+      ]
     }
   ],
   "bindings": {
@@ -364,26 +3190,57 @@
     "sky.overcast": "kloofendal_overcast_puresky",
     "sky.night": null,
     "tree": "island_tree_01",
-    "vehicle.audi.a2": null,
-    "vehicle.audi.etron": null,
-    "vehicle.audi.tt": null,
-    "vehicle.bmw.grandtourer": null,
-    "vehicle.chevrolet.impala": null,
-    "vehicle.citroen.c3": null,
-    "vehicle.dodge.charger": null,
-    "vehicle.ford.mustang": null,
-    "vehicle.jeep.wrangler_rubicon": null,
-    "vehicle.lincoln.mkz": null,
-    "vehicle.mercedes.coupe": null,
-    "vehicle.mini.cooper": null,
-    "vehicle.nissan.micra": null,
-    "vehicle.nissan.patrol": null,
-    "vehicle.seat.leon": null,
-    "vehicle.sprinter.mercedes": null,
-    "vehicle.taxi.ford": null,
-    "vehicle.tesla.model3": null,
-    "vehicle.toyota.prius": null,
-    "vehicle.volkswagen.t2": null,
+    "vehicle.ambulance.ford": "carla.vehicle.ford.ambulance",
+    "vehicle.audi.a2": "carla.vehicle.audi.a2",
+    "vehicle.audi.etron": "carla.vehicle.audi.etron",
+    "vehicle.audi.tt": "carla.vehicle.audi.tt",
+    "vehicle.bh.crossbike": "carla.vehicle.bh.crossbike",
+    "vehicle.bmw.grandtourer": "carla.vehicle.bmw.grandtourer",
+    "vehicle.carlacola.actors": "carla.vehicle.carlamotors.carlacola",
+    "vehicle.carlamotors.carlacola": "carla.vehicle.carlamotors.carlacola",
+    "vehicle.carlamotors.european_hgv": "carla.vehicle.carlamotors.european_hgv",
+    "vehicle.carlamotors.firetruck": "carla.vehicle.carlamotors.firetruck",
+    "vehicle.chevrolet.impala": "carla.vehicle.chevrolet.impala",
+    "vehicle.citroen.c3": "carla.vehicle.citroen.c3",
+    "vehicle.diamondback.century": "carla.vehicle.diamondback.century",
+    "vehicle.dodge.charger": "carla.vehicle.dodge.charger_2020",
+    "vehicle.dodge.charger_2020": "carla.vehicle.dodge.charger_2020",
+    "vehicle.dodge.charger_police": "carla.vehicle.dodge.charger_police",
+    "vehicle.dodge.charger_police_2020": "carla.vehicle.dodge.charger_police_2020",
+    "vehicle.dodgecop.charger": "carla.vehicle.dodge.charger_police_2020",
+    "vehicle.firetruck.actors": "carla.vehicle.carlamotors.firetruck",
+    "vehicle.ford.ambulance": "carla.vehicle.ford.ambulance",
+    "vehicle.ford.crown": "carla.vehicle.ford.crown",
+    "vehicle.ford.mustang": "carla.vehicle.ford.mustang",
+    "vehicle.fuso.mitsubishi": "carla.vehicle.mitsubishi.fusorosa",
+    "vehicle.gazelle.omafiets": "carla.vehicle.gazelle.omafiets",
+    "vehicle.harley-davidson.low_rider": "carla.vehicle.harley-davidson.low_rider",
+    "vehicle.jeep.wrangler_rubicon": "carla.vehicle.jeep.wrangler_rubicon",
+    "vehicle.kawasaki.ninja": "carla.vehicle.kawasaki.ninja",
+    "vehicle.lincoln.mkz": "carla.vehicle.lincoln.mkz_2020",
+    "vehicle.lincoln.mkz_2017": "carla.vehicle.lincoln.mkz_2017",
+    "vehicle.lincoln.mkz_2020": "carla.vehicle.lincoln.mkz_2020",
+    "vehicle.mercedes.coupe": "carla.vehicle.mercedes.coupe",
+    "vehicle.mercedes.coupe_2020": "carla.vehicle.mercedes.coupe_2020",
+    "vehicle.mercedes.sprinter": "carla.vehicle.mercedes.sprinter",
+    "vehicle.micro.microlino": "carla.vehicle.micro.microlino",
+    "vehicle.mini.cooper": "carla.vehicle.mini.cooper_s_2021",
+    "vehicle.mini.cooper_s": "carla.vehicle.mini.cooper_s",
+    "vehicle.mini.cooper_s_2021": "carla.vehicle.mini.cooper_s_2021",
+    "vehicle.mitsubishi.fusorosa": "carla.vehicle.mitsubishi.fusorosa",
+    "vehicle.nissan.micra": "carla.vehicle.nissan.micra",
+    "vehicle.nissan.patrol": "carla.vehicle.nissan.patrol",
+    "vehicle.nissan.patrol_2021": "carla.vehicle.nissan.patrol_2021",
+    "vehicle.seat.leon": "carla.vehicle.seat.leon",
+    "vehicle.sprinter.mercedes": "carla.vehicle.mercedes.sprinter",
+    "vehicle.taxi.ford": "carla.vehicle.ford.crown",
+    "vehicle.tesla.cybertruck": "carla.vehicle.tesla.cybertruck",
+    "vehicle.tesla.model3": "carla.vehicle.tesla.model3",
+    "vehicle.toyota.prius": "carla.vehicle.toyota.prius",
+    "vehicle.vespa.zx125": "carla.vehicle.vespa.zx125",
+    "vehicle.volkswagen.t2": "carla.vehicle.volkswagen.t2",
+    "vehicle.volkswagen.t2_2021": "carla.vehicle.volkswagen.t2_2021",
+    "vehicle.yamaha.yzf": "carla.vehicle.yamaha.yzf",
     "vehicle.*": null,
     "walker.*": null
   }

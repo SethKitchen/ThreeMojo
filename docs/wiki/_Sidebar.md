@@ -76,6 +76,7 @@
   - [CARLA agents](CARLA-agents)
   - [CARLA recorder](CARLA-recorder)
   - [CARLA rendering](CARLA-rendering)
+  - [CARLA assets](CARLA-assets)
 - [Femur](Femur)
 - [Tibia](Tibia)
 - [Fibula](Fibula)

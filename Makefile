@@ -1231,3 +1231,4 @@ clean-images:
 # Parser and cache regressions run without the Mojo compiler.
 test-tools:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
+	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'

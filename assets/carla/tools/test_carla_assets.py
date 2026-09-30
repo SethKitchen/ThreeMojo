@@ -92,6 +92,8 @@ class ManifestTests(unittest.TestCase):
         broken(lambda e: e['files'][0].update(path='/abs.jpg'))
         broken(lambda e: e['files'][0].update(url='http://example.org/a.jpg'))
         broken(lambda e: e['files'][0].update(sha256='ABC'))
+        broken(lambda e: e['files'][0].update(url=None))  # no URL and no sum
+        broken(lambda e: e['files'][0].update(url=7))
         cases.append({'format': 2, 'entries': []})
         cases.append(manifest_of(good, copy.deepcopy(good)))
         cases.append(manifest_of(good, bindings={'surface.road': 'nothing'}))
@@ -110,6 +112,17 @@ class ManifestTests(unittest.TestCase):
         for manifest in cases:
             with self.assertRaises(tool.ManifestError):
                 tool.check_manifest(manifest)
+
+    def test_a_file_not_hosted_yet_passes_with_its_sum(self):
+        tool.check_manifest(manifest_of(texture_entry(None, _sum(b'scan'))))
+
+    def test_a_drive_share_link_becomes_its_download(self):
+        download = 'https://drive.usercontent.google.com/download?export=download&confirm=t&id='
+        self.assertEqual(tool.direct_url('https://drive.google.com/file/d/1aB-c_9/view?usp=sharing'),
+                         download + '1aB-c_9')
+        self.assertEqual(tool.direct_url('https://drive.google.com/open?id=1aB-c_9'), download + '1aB-c_9')
+        self.assertEqual(tool.direct_url('https://drive.google.com/uc?export=download&id=XY'), download + 'XY')
+        self.assertEqual(tool.direct_url('https://example.org/a.zip'), 'https://example.org/a.zip')
 
     def test_binding_kinds(self):
         self.assertEqual(tool.binding_kind('surface.road'), 'texture_set')
@@ -180,6 +193,22 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(tool.verify(manifest, self.fixture.cache)[0][1], 'missing')
         with self.assertRaises(tool.ManifestError):
             tool.fetch(manifest, self.fixture.cache, ['nothing'])
+
+    def test_a_file_not_hosted_yet_is_placed_by_hand(self):
+        manifest = manifest_of(texture_entry(None, _sum(self.data)))
+        self.assertEqual(tool.fetch(manifest, self.fixture.cache)[0][2], 'unhosted')
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[0][1], 'missing')
+        target = self.fixture.cache / 'asphalt/color.jpg'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(self.data)
+        self.assertEqual(tool.fetch(manifest, self.fixture.cache)[0][2], 'kept')
+
+    def test_a_web_page_in_place_of_the_file_is_refused(self):
+        url = self.fixture.file('sign-in.html', b'<html>Sign in</html>')
+        manifest = manifest_of(texture_entry(url, None))
+        with self.assertRaises(tool.FetchError):
+            tool.fetch(manifest, self.fixture.cache, pin=True)
+        self.assertEqual(list((self.fixture.cache / 'asphalt').iterdir()), [])
 
     def test_only_named_entries_are_fetched(self):
         other = texture_entry(self.url, _sum(self.data), 'other', 'other/color.jpg')

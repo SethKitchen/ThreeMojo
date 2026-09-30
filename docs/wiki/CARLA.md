@@ -23,6 +23,7 @@ To render the images, run `mojo run -I . examples/carla_town.mojo out/carla_town
 | [CARLA agents](CARLA-agents) | The route planner, the navigation agents and walker navigation |
 | [CARLA recorder](CARLA-recorder) | The recorder, the replayer and the recorder queries |
 | [CARLA rendering](CARLA-rendering) | Towns, materials, weather and camera effects |
+| [CARLA assets](CARLA-assets) | The photoscanned assets and CARLA's own vehicles, and how to fetch them |
 
 ## Build a road
 
