@@ -668,6 +668,9 @@ def wildcard_key(type_id: String) -> String:
 comptime MATERIAL_TAG = "carla"
 # The `extras` key of a town mesh's node that names its kind.
 comptime TOWN_KIND = "carla_kind"
+# The `extras` key of a town's scene that lists its lamp heads, three
+# numbers each.
+comptime TOWN_LAMPS = "carla_lamps"
 
 
 @fieldwise_init
@@ -708,6 +711,12 @@ struct TownPlacement(Copyable, Movable):
     # and how many follow it.
     var first_lod: Int
     var lod_count: Int
+    # Each street lamp's head, in the scene's frame, from the scene's
+    # `carla_lamps`.
+    var lamps: List[Vector3]
+    # The materials its glTF tags `"extras": {"carla": "lamp"}`: the lamps'
+    # glass, which glows when the street lights are on.
+    var lamp_materials: List[MaterialId]
 
 
 def town_tile(name: String) -> Tuple[String, Int]:
@@ -869,6 +878,9 @@ struct AssetRegistry(Movable):
     # The images `preload` decoded, by `_texture_key`.
     var decoded_keys: List[String]
     var decoded: List[Texture]
+    # How many images a model's or a town's glTF decodes at once: the
+    # count `preload` was last given.
+    var workers: Int
 
     def __init__(out self):
         """Start with no manifest: every key falls back."""
@@ -876,6 +888,7 @@ struct AssetRegistry(Movable):
         self.cache = String()
         self.decoded_keys = List[String]()
         self.decoded = List[Texture]()
+        self.workers = 1
 
     def __init__(out self, var manifest: AssetManifest, cache: String):
         """Read a manifest against a cache folder.
@@ -889,6 +902,7 @@ struct AssetRegistry(Movable):
         self.cache = cache if cache.endswith("/") else cache + "/"
         self.decoded_keys = List[String]()
         self.decoded = List[Texture]()
+        self.workers = 1
 
     @staticmethod
     def open(manifest_path: String, cache: String) raises -> AssetRegistry:
@@ -992,6 +1006,9 @@ struct AssetRegistry(Movable):
         and a town reads twenty of them, some twice: a curb and a wall can
         wear one set. After this, `texture_set` copies them.
 
+        The registry keeps `workers`, and `place_model` and `place_town`
+        decode their glTF's images as many at a time.
+
         Args:
             workers: How many images to decode at once; one decodes them in
                 turn.
@@ -999,6 +1016,7 @@ struct AssetRegistry(Movable):
         Raises:
             Error: If an image cannot be read or decoded.
         """
+        self.workers = workers
         var paths = List[String]()
         var spaces = List[ColorSpace]()
         for index in range(len(self.manifest.keys)):
@@ -1163,7 +1181,10 @@ struct AssetRegistry(Movable):
         if entry.kind != MODEL_ASSET:
             raise Error("The entry " + entry.id + " is not a model")
         var model = read_gltf(
-            self.path(entry.file(MODEL_ROLE).value()), scene, assets
+            self.path(entry.file(MODEL_ROLE).value()),
+            scene,
+            assets,
+            self.workers,
         )
         if model.skinned_mesh_count > 0 or model.instanced_mesh_count > 0:
             raise Error("A town model must hold only plain meshes")
@@ -1258,18 +1279,23 @@ struct AssetRegistry(Movable):
             near: How far from a tile's center its near meshes show.
 
         Returns:
-            The town's meshes, each one's kind and level, and its LODs.
+            The town's meshes, each one's kind and level, its LODs, its
+            lamp heads, and its lamps' glass.
 
         Raises:
             Error: If the entry is not a town, `read_gltf` refuses the
-                file, the town adds skinned or instanced meshes, or it
-                has no mesh.
+                file, the town adds skinned or instanced meshes, it has no
+                mesh, or its scene's `carla_lamps` is not a list of
+                numbers three at a time.
         """
         ref entry = self.manifest.entries[index]
         if entry.kind != TOWN_ASSET:
             raise Error("The entry " + entry.id + " is not a town")
         var model = read_gltf(
-            self.path(entry.file(MODEL_ROLE).value()), scene, assets
+            self.path(entry.file(MODEL_ROLE).value()),
+            scene,
+            assets,
+            self.workers,
         )
         if model.skinned_mesh_count > 0 or model.instanced_mesh_count > 0:
             raise Error("A town must hold only plain meshes")
@@ -1337,6 +1363,35 @@ struct AssetRegistry(Movable):
             var node = scene.meshes[model.first_mesh + k].node
             scene.add(node, parent=groups[2 * tile_of[k] + lods[k]])
         scene.update()
+        var lamps = List[Vector3]()
+        if model.scene_extras.has(TOWN_LAMPS):
+            var document = parse_json(model.scene_extras.json(TOWN_LAMPS))
+            var root = document.root()
+            if (
+                document.kind(root) != ARRAY
+                or document.length(root) % 3 != 0
+            ):
+                raise Error("A town's lamps must be three numbers each")
+            var into = scene.world_matrix(parent)
+            for k in range(document.length(root) // 3):
+                var xyz = List[Float32]()
+                for axis in range(3):
+                    var at = document.at(root, 3 * k + axis)
+                    if document.kind(at) != NUMBER:
+                        raise Error("A town's lamps must be three numbers each")
+                    xyz.append(Float32(document.number(at)))
+                var head = Vector3(xyz[0], xyz[1], xyz[2])
+                head.apply_matrix4(into)
+                lamps.append(head)
+        var glass = List[MaterialId]()
+        for m in range(len(model.materials)):
+            ref extras = model.material_extras[m]
+            if (
+                extras.has(MATERIAL_TAG)
+                and extras.kind(MATERIAL_TAG) == STRING
+                and extras.string(MATERIAL_TAG) == "lamp"
+            ):
+                glass.append(model.materials[m])
         return TownPlacement(
             model.first_mesh,
             model.mesh_count,
@@ -1344,6 +1399,8 @@ struct AssetRegistry(Movable):
             lods^,
             first_lod,
             len(tiles),
+            lamps^,
+            glass^,
         )
 
 

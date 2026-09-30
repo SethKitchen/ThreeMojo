@@ -1245,10 +1245,15 @@ struct CarlaRenderer(Movable):
 
     def _choose_detail(mut self, eye: Vector3) raises:
         """Show each town package tile at the level of detail for a camera
-        at `eye`, in the scene's frame. A town with no package has no
-        LODs, and its scene is left as it is."""
+        at `eye`, in the scene's frame, and stand the package's lights at
+        the lamps nearest it. A town with no package has no LODs and no
+        lamps, and its scene is left as it is."""
         if len(self.scene.lods) > 0:
+            # The levels are chosen on the current scene; moving the lamps
+            # leaves it to be updated again.
             self.scene.update_lods(eye)
+            self.town.place_lamps(self.scene, eye)
+            self.scene.update()
 
     def _wide_angle(
         mut self,

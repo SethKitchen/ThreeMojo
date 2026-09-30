@@ -59,6 +59,17 @@ SKIP = {"Sky", "Particles", "Pedestrian", "Hair", "CubeMaps", "HDRi", "Decals", 
 # shape's material is plain.
 GRID = "WorldGridMaterial"
 PLAIN = "BasicShapeMaterial"
+# A street lamp's glass: each connected piece of it is one lamp head.
+LAMP_GLASS = "_glass_ext"
+# Lamps with no glass mesh, whose head is at the top of the mesh.
+LAMP_TOPS = ("/SM_Lights/SM_StreetLightWall", "/Chainbarrier/SM_LightPost")
+# The `extras` tag of a material that glows when the street lights are on.
+LAMP_TAG = {"carla": "lamp"}
+# A town's glass: a dark pane, smooth and partly metal, so it mirrors the
+# sky and the street.
+GLASS_COLOR = (0.05, 0.065, 0.08, 1.0)
+GLASS_METAL = 0.6
+GLASS_ROUGHNESS = 0.06
 # The levels of detail: 0 near, 1 far.
 LODS = (0, 1)
 # The most triangles a town keeps of each kind, near and far.
@@ -342,10 +353,26 @@ def simplify_welded(primitive, target):
             points, joined.astype(numpy.int32), collapses)
         if len(joined) == 0:
             return None
+        # A collapse puts a vertex where its error is least, which on a
+        # thin or flat piece can be far outside the building: a sliver
+        # that casts a long shadow. Every vertex stays in the mesh's box.
+        low, high = positions.min(axis=0), positions.max(axis=0)
+        points = numpy.clip(points, low, high)
     corners = points[joined]
+    # A collapse can leave a vertex that is not finite; its triangles go.
+    corners = corners[numpy.isfinite(corners).all(axis=(1, 2))]
+    if len(corners) == 0:
+        return None
     face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
     face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
-    uvs = transfer_uvs(primitive, corners, face)
+    uvs, facing = transfer_uvs(primitive, corners, face)
+    # Gathering corners can turn a triangle over, and a face turned away
+    # is culled, a hole: each faces as the original it reads its texture
+    # from.
+    over = numpy.einsum("nd,nd->n", face, facing) < 0
+    corners[over] = corners[over][:, ::-1]
+    uvs[over] = uvs[over][:, ::-1]
+    face[over] = -face[over]
     return {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
             "uvs": uvs.reshape(-1, 2), "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3),
             "material": primitive["material"]}
@@ -357,11 +384,12 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     from.
 
     Each new triangle takes one original triangle: of the `candidates`
-    whose centers are nearest its own, the one that faces most its way
-    and lies nearest its plane. Its three corners are projected into that
+    whose centers are nearest its own, the one that lies nearest its
+    plane, facing either way. Its three corners are projected into that
     triangle's plane and take the texture coordinates its own corners
     would give there, so the new triangle reads one texture island, not
-    three.
+    three. Returns the coordinates, three to a triangle, and the normal of
+    each triangle's original.
     """
     from scipy.spatial import cKDTree
     faces = primitive["triangles"]
@@ -375,7 +403,7 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
     facing = numpy.einsum("nkd,nd->nk", normal[near], normals)
     offset = numpy.abs(numpy.einsum("nkd,nkd->nk", normal[near],
                                     corners.mean(axis=1)[:, None, :] - centers[near]))
-    best = near[numpy.arange(len(corners)), numpy.argmin(offset - facing, axis=1)]
+    best = near[numpy.arange(len(corners)), numpy.argmin(offset - numpy.abs(facing), axis=1)]
     a, b, c = source[best, 0], source[best, 1], source[best, 2]
     uv = primitive["uvs"][faces[best]]
     e0, e1 = b - a, c - a
@@ -392,7 +420,7 @@ def transfer_uvs(primitive, corners, normals, candidates=8):
         v = (d11 * d20 - d01 * d21) / denominator
         w = (d00 * d21 - d01 * d20) / denominator
         out[:, k] = (1 - v - w)[:, None] * uv[:, 0] + v[:, None] * uv[:, 1] + w[:, None] * uv[:, 2]
-    return out
+    return out, normal[best]
 
 
 def thin_cards(primitive, keep, seed):
@@ -572,6 +600,192 @@ def impostor(parts, library, out_dir, name):
             "material": tag}, material
 
 
+# ---- Baked far buildings ----------------------------------------------------
+
+# The views a far building's picture is drawn from: toward the viewer, and
+# the image's right and up, in the three.js frame.
+BAKE_VIEWS = (
+    ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
+    ((-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
+    ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    ((0.0, 0.0, -1.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+)
+# Texels a meter each view is drawn at, and the most a side of one view.
+BAKE_DENSITY = 6.0
+BAKE_MOST = 512
+
+
+def _dilate(image, covered, passes=6):
+    """Spread the covered texels' colors into the uncovered ones next to
+    them, so filtering at a view's edge does not bleed the background."""
+    image = image.copy()
+    covered = covered.copy()
+    for _ in range(passes):
+        if covered.all():
+            break
+        grown = covered.copy()
+        total = numpy.zeros_like(image)
+        count = numpy.zeros(covered.shape)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            shifted = numpy.roll(numpy.roll(covered, dy, axis=0), dx, axis=1)
+            colors = numpy.roll(numpy.roll(image, dy, axis=0), dx, axis=1)
+            take = shifted & ~covered
+            total[take] += colors[take]
+            count[take] += 1
+            grown |= take
+        fill = (count > 0) & ~covered
+        image[fill] = total[fill] / count[fill][:, None]
+        covered = grown
+    if not covered.all() and covered.any():
+        image[~covered] = image[covered].mean(axis=0)
+    return image
+
+
+def _view(parts, library, forward, right, up, low_r, low_u, width, height, columns, rows):
+    """Return one orthographic view of a mesh's albedo, `rows` by
+    `columns` texels, looking down `-forward`, as `_splat` draws a tree's,
+    with no light: the renderer lights the far mesh itself."""
+    forward, right, up = numpy.array(forward), numpy.array(right), numpy.array(up)
+    rng = numpy.random.default_rng(11)
+    xs, ys, zs, colors = [], [], [], []
+    scale_u = columns / max(width, 1e-6)
+    scale_v = rows / max(height, 1e-6)
+    for part, material in parts:
+        image, factor = _albedo(library, material)
+        entry = library.gltf["materials"][material]
+        masked = entry.get("alphaMode") == "MASK"
+        cut = entry.get("alphaCutoff", 0.5)
+        tri = part["triangles"]
+        corners = part["positions"][tri]
+        u = (corners @ right - low_r) * scale_u
+        v = (low_u + height - corners @ up) * scale_v
+        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
+        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * 3)), 8192).astype(numpy.int64)
+        owner = numpy.repeat(numpy.arange(len(corners)), counts)
+        a, b = rng.random(len(owner)), rng.random(len(owner))
+        flip = a + b > 1
+        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
+        w = numpy.stack([1 - a - b, a, b], axis=1)
+        depth = numpy.einsum("nk,nk->n", w, (corners @ forward)[owner])
+        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
+        if image is None:
+            rgba = numpy.tile(factor, (len(owner), 1))
+        else:
+            h, wd = image.shape[:2]
+            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
+            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
+            rgba = image[py, px] * factor
+        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
+        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
+        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
+        zs.append(depth[keep])
+        colors.append(rgba[keep, :3])
+    out = numpy.zeros((rows, columns, 3))
+    covered = numpy.zeros((rows, columns), dtype=bool)
+    if sum(len(x) for x in xs):
+        x = numpy.concatenate(xs).astype(numpy.int64)
+        y = numpy.concatenate(ys).astype(numpy.int64)
+        z = numpy.concatenate(zs)
+        color = numpy.concatenate(colors)
+        inside = (x >= 0) & (x < columns) & (y >= 0) & (y < rows)
+        x, y, z, color = x[inside], y[inside], z[inside], color[inside]
+        texel = y * columns + x
+        # The nearest sample to the viewer, who stands at the far end of
+        # `forward`.
+        order = numpy.lexsort((-z, texel))
+        sorted_texel = texel[order]
+        first = numpy.ones(len(order), dtype=bool)
+        first[1:] = sorted_texel[1:] != sorted_texel[:-1]
+        chosen = order[first]
+        out[y[chosen], x[chosen]] = color[chosen]
+        covered[y[chosen], x[chosen]] = True
+    return _dilate(out, covered)
+
+
+def baked_building(parts, library, out_dir, name, target):
+    """Return a building's far level and its material: its mesh gathered
+    and collapsed to about `target` triangles, all its primitives as one,
+    wearing an atlas of five views of its near level, from each side and
+    from above. Each far triangle reads the view that faces it most, so
+    its windows and its trim are pictures, not geometry."""
+    from PIL import Image
+    whole = {
+        "positions": numpy.concatenate([p["positions"] for p, _ in parts]),
+        "normals": numpy.concatenate([p["normals"] for p, _ in parts]),
+        "uvs": numpy.concatenate([p["uvs"] for p, _ in parts]),
+        "triangles": numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q, _ in parts[:i])
+                                        for i, (p, _) in enumerate(parts)]),
+        "material": name,
+    }
+    far = simplify_welded(whole, target)
+    if far is None:
+        return None, None
+    if far is whole:
+        corners = whole["positions"][whole["triangles"]]
+        face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        face /= numpy.maximum(numpy.linalg.norm(face, axis=1, keepdims=True), 1e-12)
+        far = {"positions": corners.reshape(-1, 3), "normals": numpy.repeat(face, 3, axis=0),
+               "triangles": numpy.arange(3 * len(corners)).reshape(-1, 3), "material": name}
+    low, high = whole["positions"].min(axis=0), whole["positions"].max(axis=0)
+    cells = []
+    for forward, right, up in BAKE_VIEWS:
+        r, u = numpy.array(right), numpy.array(up)
+        span_r = sorted([low @ r, high @ r])
+        span_u = sorted([low @ u, high @ u])
+        # The box's corners give each view's extent along its axes.
+        box = numpy.array([[x, y, z] for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])])
+        span_r = (float((box @ r).min()), float((box @ r).max()))
+        span_u = (float((box @ u).min()), float((box @ u).max()))
+        width, height = span_r[1] - span_r[0], span_u[1] - span_u[0]
+        density = min(BAKE_DENSITY, BAKE_MOST / max(width, height, 1e-6))
+        columns = max(4, int(numpy.ceil(width * density)))
+        rows = max(4, int(numpy.ceil(height * density)))
+        image = _view(parts, library, forward, right, up, span_r[0], span_u[0], width, height, columns, rows)
+        cells.append((image, span_r, span_u))
+    # One row of the five views, each at its own size.
+    atlas_w = sum(c[0].shape[1] for c in cells)
+    atlas_h = max(c[0].shape[0] for c in cells)
+    atlas = numpy.zeros((atlas_h, atlas_w, 3))
+    offsets = []
+    x = 0
+    for image, _, _ in cells:
+        atlas[: image.shape[0], x: x + image.shape[1]] = image
+        offsets.append(x)
+        x += image.shape[1]
+    # Each far triangle reads the view whose forward its face meets most.
+    corners = far["positions"].reshape(-1, 3, 3)
+    face = far["normals"].reshape(-1, 3, 3)[:, 0]
+    forwards = numpy.array([f for f, _, _ in BAKE_VIEWS])
+    pick = numpy.argmax(face @ forwards.T, axis=1)
+    uvs = numpy.zeros((len(corners), 3, 2))
+    for k, (forward, right, up) in enumerate(BAKE_VIEWS):
+        mine = pick == k
+        if not mine.any():
+            continue
+        image, span_r, span_u = cells[k]
+        r, u = numpy.array(right), numpy.array(up)
+        fr = (corners[mine] @ r - span_r[0]) / max(span_r[1] - span_r[0], 1e-6)
+        fu = (span_u[1] - corners[mine] @ u) / max(span_u[1] - span_u[0], 1e-6)
+        uvs[mine, :, 0] = (offsets[k] + numpy.clip(fr, 0, 1) * image.shape[1]) / atlas_w
+        uvs[mine, :, 1] = numpy.clip(fu, 0, 1) * image.shape[0] / atlas_h
+    tag = "baked_%08x" % zlib.crc32(name.encode())
+    os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
+    Image.fromarray((numpy.clip(atlas, 0, 1) * 255).astype(numpy.uint8), "RGB").save(
+        os.path.join(out_dir, "textures", tag + ".jpg"), quality=85)
+    gltf = library.gltf
+    gltf["images"].append({"uri": "textures/" + tag + ".jpg"})
+    gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})
+    gltf["materials"].append({
+        "name": tag,
+        "pbrMetallicRoughness": {"baseColorTexture": {"index": len(gltf["textures"]) - 1},
+                                 "metallicFactor": 0.0, "roughnessFactor": 0.85},
+        "doubleSided": True})
+    far["uvs"] = uvs.reshape(-1, 2)
+    far["material"] = tag
+    return far, len(gltf["materials"]) - 1
+
+
 # ---- Materials -------------------------------------------------------------
 
 class Textures(fix.Package):
@@ -607,6 +821,16 @@ class Library:
             fix.rebuild(self.package, material, self.mats, self.props, self.pngs, [])
             # A vehicle's paint and lamp tags do not apply to a town.
             material.pop("extras", None)
+            if material.get("alphaMode") == "BLEND" and "glass" in name.lower():
+                # A town's glass has nothing behind it: a see-through tower
+                # shows the sky through its windows. So it is a dark,
+                # smooth pane that mirrors its surroundings, as CARLA's is.
+                material.pop("alphaMode")
+                pbr = material.setdefault("pbrMetallicRoughness", {})
+                pbr.pop("baseColorTexture", None)
+                pbr["baseColorFactor"] = list(GLASS_COLOR)
+                pbr["metallicFactor"] = GLASS_METAL
+                pbr["roughnessFactor"] = GLASS_ROUGHNESS
         self.gltf["materials"].append(material)
         self.index[name] = len(self.gltf["materials"]) - 1
         self.masked[name] = material.get("alphaMode") == "MASK"
@@ -693,6 +917,37 @@ def place(part, row, rows):
     return points, normals, (part["triangles"][:, ::-1] if flip else part["triangles"])
 
 
+def lamp_heads(primitives, mesh_path):
+    """Return where a lamp mesh's heads are, in its own frame: the middle
+    of each connected piece of its glass, or the top of a lamp with no
+    glass. None for a mesh that is not a lamp."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    if mesh_path.endswith(LAMP_GLASS):
+        points = numpy.concatenate([p["positions"] for p in primitives])
+        faces = numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q in primitives[:i])
+                                   for i, p in enumerate(primitives)])
+        # Corners that share a place are one, so a piece is whole.
+        _, welded = numpy.unique(numpy.round(points * 1000.0).astype(numpy.int64), axis=0, return_inverse=True)
+        welded = welded.reshape(-1)
+        joined = welded[faces]
+        count = welded.max() + 1
+        rows = numpy.concatenate([joined[:, 0], joined[:, 1]])
+        cols = numpy.concatenate([joined[:, 1], joined[:, 2]])
+        pieces, label = connected_components(
+            coo_matrix((numpy.ones(len(rows)), (rows, cols)), shape=(count, count)), directed=False)
+        heads = []
+        for piece in range(pieces):
+            inside = points[label[welded] == piece]
+            heads.append((inside.min(axis=0) + inside.max(axis=0)) / 2)
+        return numpy.array(heads)
+    if mesh_path.endswith(LAMP_TOPS):
+        points = numpy.concatenate([p["positions"] for p in primitives])
+        low, high = points.min(axis=0), points.max(axis=0)
+        return numpy.array([[(low[0] + high[0]) / 2, high[1] - 0.15, (low[2] + high[2]) / 2]])
+    return None
+
+
 def rows_of(town):
     with open(os.path.join(LAYOUT, town + ".jsonl"), encoding="utf-8") as lines:
         return [json.loads(line) for line in lines]
@@ -724,6 +979,9 @@ def build(town, max_size, tile):
     grass = 0
     jobs = []
     planned = {}
+    # Each lamp head, in the three.js frame, and each lamp mesh's heads.
+    lamps = []
+    heads_of = {}
     for row in rows_of(town):
         if not row["visible"]:
             continue
@@ -757,14 +1015,34 @@ def build(town, max_size, tile):
                for key, count in planned.items()}
     for row, mesh_path, kind, primitives, copies in jobs:
         names = slot_materials(row, primitives)
+        if mesh_path not in heads_of:
+            heads_of[mesh_path] = lamp_heads(primitives, mesh_path)
+        heads = heads_of[mesh_path]
+        if heads is not None:
+            for rows in copies:
+                linear, move = to_three(rows)
+                lamps.extend((heads @ linear.T + move).tolist())
         for index, (primitive, material_name) in enumerate(zip(primitives, names)):
             if material_name == GRID:
                 continue
             material = library.material(material_name)
+            if "_glass_" in mesh_path and "/StreetLights/" in mesh_path:
+                library.gltf["materials"][material]["extras"] = dict(LAMP_TAG)
             total = sum(len(p["triangles"]) for p in primitives)
             for lod in LODS:
                 part_material = material
-                if lod == 1 and TREES in mesh_path:
+                if lod == 1 and kind == "building":
+                    # A building's far level is its baked proxy, made once
+                    # for all its primitives.
+                    if index != 0:
+                        continue
+                    key = (mesh_path, "baked")
+                    if key not in lowered:
+                        parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
+                        goal = max(8, int(limit_of(kind, total, mesh_path, 1) * factors[(kind, 1)]))
+                        lowered[key] = baked_building(parts, library, out_dir, mesh_path, goal)
+                    part, part_material = lowered[key]
+                elif lod == 1 and TREES in mesh_path:
                     # A tree's far level is its impostor, drawn once for
                     # all its primitives.
                     if index != 0:
@@ -797,10 +1075,10 @@ def build(town, max_size, tile):
                     group[4] += len(points)
     # The town's own road network, so a package brings the map it stands on.
     shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
-    return write(town, name, out_dir, library, groups)
+    return write(town, name, out_dir, library, groups, lamps)
 
 
-def write(town, name, out_dir, library, groups):
+def write(town, name, out_dir, library, groups, lamps):
     """Write the glTF and its buffer, and return the triangle counts of
     the two levels of detail and the node count."""
     gltf = library.gltf
@@ -834,7 +1112,9 @@ def write(town, name, out_dir, library, groups):
         gltf["meshes"].append({"primitives": [primitive]})
         gltf["nodes"].append({"name": "%s_%d_%d_lod%d" % (kind, cell[0], cell[1], lod), "mesh": len(gltf["meshes"]) - 1,
                               "extras": {"carla_kind": kind, "carla_lod": lod}})
-    gltf["scenes"] = [{"nodes": list(range(len(gltf["nodes"])))}]
+    # Each street lamp's head, three numbers each, for the lights at night.
+    gltf["scenes"] = [{"nodes": list(range(len(gltf["nodes"]))),
+                       "extras": {"carla_lamps": [round(v, 3) for head in lamps for v in head]}}]
     gltf["buffers"] = [{"byteLength": len(blob), "uri": name + ".bin"}]
     open(os.path.join(out_dir, name + ".bin"), "wb").write(blob)
     json.dump(gltf, open(os.path.join(out_dir, name + ".gltf"), "w", encoding="utf-8"), separators=(",", ":"))

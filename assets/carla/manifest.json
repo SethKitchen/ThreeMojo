@@ -3267,7 +3267,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "1621ad903fd0401c7ce58091715e7115c3fb4cc6c9869a1582cd882953cdff32",
+          "sha256": "d412cbd8f67e9cabc3df969d2d1c9fbf2c3237b4e4e45e94328250091a1a728e",
           "path": "carla/towns/carla.town.town01.zip",
           "extract": [
             {
@@ -3297,7 +3297,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "cda909814f5aa8388075327047ce5d5c3a74b9e5d3e6786e63f569a5c71550c4",
+          "sha256": "f68fb7506c639910cac3bcf1be578bd3db72807c2d3363c812a3831e90deacc1",
           "path": "carla/towns/carla.town.town02.zip",
           "extract": [
             {
@@ -3327,7 +3327,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "36d5ae96f214f5728730e033d57aa2c88734acb3de34d07e91320f356f40ab51",
+          "sha256": "6dfd87dab1f76fb4f50e1e61cb949ee82fa9048644e60f78a524ecf6902f7059",
           "path": "carla/towns/carla.town.town03.zip",
           "extract": [
             {
@@ -3357,7 +3357,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "adbc8532471bc3269ae4e43b223ef2758b8cc9dd756e2aef84b741b348ee6ad6",
+          "sha256": "be7f14b73c1b416785e5770de1d4938a6bc98ba6e5f24cb5bf7aa9ec3e0fdc4f",
           "path": "carla/towns/carla.town.town04.zip",
           "extract": [
             {
@@ -3387,7 +3387,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "4c944ebd0f3f502034859fbae7a939c7a3077e5872f60c31e4fcf1e3f011cec5",
+          "sha256": "f9ede71b5facfaad2a6dc49be1ab7a89ae96520934fa08f71e0e0671c4b6b161",
           "path": "carla/towns/carla.town.town05.zip",
           "extract": [
             {
@@ -3417,7 +3417,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "9719402e9f509d22b6c4a548fca5794e32d8df809ac92a7474eb664c80982023",
+          "sha256": "f53d08a5086fe39ebb100c67899be6e75289a6e21566f4b5aecfe4bc4269dc08",
           "path": "carla/towns/carla.town.town10hd.zip",
           "extract": [
             {

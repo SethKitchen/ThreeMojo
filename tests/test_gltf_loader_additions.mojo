@@ -27,12 +27,14 @@ from render.framebuffer import Color
 from render import ktx2
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
+from render.texture_store import TextureId
 from render.webp import decode as decode_webp
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 
@@ -444,6 +446,97 @@ def test_ktx2_is_told_by_its_identifier() raises:
     assert_false(is_ktx2(List[UInt8]()))
     assert_false(is_ktx2(List[UInt8](length=12, fill=0xAB)))
     assert_true(is_ktx2(Path("assets/ktx2/etc1s_rgb.ktx2").read_bytes()))
+
+
+# --- decoding with workers ----------------------------------------------------
+
+
+def maps_doc(images: String, materials: String) -> String:
+    """Return a triangle drawn with material zero of `materials`, with a
+    PNG texture (0) and a KTX 2.0 one (1) over `images`."""
+    return doc(
+        ',"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,'
+        + TRI
+        + '"}]'
+        + ',"bufferViews":[{"buffer":0,"byteLength":36}]'
+        + ',"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}]'
+        + ',"images":'
+        + images
+        + ',"textures":[{"source":0},{"source":0,"extensions":'
+        + '{"KHR_texture_basisu":{"source":1}}}]'
+        + ',"materials":'
+        + materials
+        + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"material":0}]}]'
+        + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
+        + ',"extensionsRequired":["KHR_texture_basisu"]'
+    )
+
+
+# A KTX 2.0 base color, the PNG as the normal, occlusion and metal and
+# roughness maps (one texture as numbers) and as the emissive map (the same
+# texture in sRGB), and a second material with no metal and roughness.
+comptime CORE_MAPS = (
+    '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":1},'
+    '"metallicRoughnessTexture":{"index":0}},"normalTexture":{"index":0},'
+    '"occlusionTexture":{"index":0},"emissiveTexture":{"index":0},'
+    '"emissiveFactor":[1,1,1]},{"normalTexture":{"index":0}}]'
+)
+
+
+def test_workers_decode_the_core_maps_as_one_worker_does() raises:
+    var text = maps_doc(
+        "[" + png_image() + ',{"uri":"' + ktx2_uri("uastc_gradient.ktx2") + '"}]',
+        CORE_MAPS,
+    )
+    var one_scene = Scene()
+    var one_assets = Assets()
+    var one = load_gltf(text, List[UInt8](), "", one_scene, one_assets)
+    var many_scene = Scene()
+    var many_assets = Assets()
+    var many = load_gltf(text, List[UInt8](), "", many_scene, many_assets, 4)
+    # Each texture is decoded once in each space it is read in.
+    assert_equal(many_assets.textures.count(), one_assets.textures.count())
+    var a = one_assets.materials.get(one.materials[0])
+    var b = many_assets.materials.get(many.materials[0])
+    var pairs: List[Tuple[TextureId, TextureId]] = [
+        (a.map, b.map),
+        (a.normal_map, b.normal_map),
+        (a.emissive_map, b.emissive_map),
+        (a.ao_map, b.ao_map),
+    ]
+    for pair in pairs:
+        ref x = one_assets.textures.get(pair[0])
+        ref y = many_assets.textures.get(pair[1])
+        assert_equal(x.width, y.width)
+        assert_equal(x.levels, y.levels)
+        assert_true(x.color_space == y.color_space)
+        assert_equal(x.flip_y, y.flip_y)
+        for at in range(len(x.pixels)):
+            assert_equal(x.pixels[at], y.pixels[at])
+    assert_true(
+        many_assets.textures.get(b.emissive_map).color_space == SRGB
+    )
+
+
+def test_workers_refuse_what_one_worker_refuses() raises:
+    # An image that is not one, in a core slot.
+    var broken = maps_doc(
+        '[{"uri":"data:image/png;base64,AAAA"},{"uri":"'
+        + ktx2_uri("uastc_gradient.ktx2")
+        + '"}]',
+        CORE_MAPS,
+    )
+    var scene = Scene()
+    var assets = Assets()
+    with assert_raises(contains="glTF: "):
+        _ = load_gltf(broken, List[UInt8](), "", scene, assets, 4)
+    # A texture that is not there, which the materials then refuse.
+    var missing = maps_doc(
+        "[" + png_image() + ',{"uri":"' + ktx2_uri("uastc_gradient.ktx2") + '"}]',
+        '[{"normalTexture":{"index":7}}]',
+    )
+    with assert_raises(contains="not there"):
+        _ = load_gltf(missing, List[UInt8](), "", scene, assets, 4)
 
 
 def main() raises:

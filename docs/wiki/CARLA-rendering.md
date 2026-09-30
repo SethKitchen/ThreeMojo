@@ -69,12 +69,13 @@ A CARLA town can be drawn from CARLA's own content: its buildings, streets, plan
 
 - Each tile of the package is an LOD. Its near meshes show when the camera is nearer than `TownSettings.near_distance` (50 m by default) to the middle of the tile's ground. Its far meshes show otherwise. Each camera chooses the levels before it draws.
 - A far tree is an impostor: two crossed quads that show a picture of the tree.
+- A far building is a simplified mesh that wears pictures of its near level, so its windows show at a distance.
 - The package's traffic lights and signs are hidden. The props draw the map's signals, which change with the world.
 - Each mesh takes the semantic tag of its kind: a building is `BUILDING`, a parked vehicle is `CAR`, and a prop is `STATIC`.
 - The rain wets the package's roads, lane marks, sidewalks and ground.
 - Only buildings, walls, plants and parked vehicles cast the sun's shadow. A flat surface only receives it. A pole, a fence or a sign casts a shadow a few texels wide at the cost of a building's.
 
-The package has no street lights, so its lamps do not light at night.
+- At night, `LAMP_POOL` (12) spot lights stand at the package's lamps nearest each camera, and the lamps' glass glows. Every light costs every pixel, and a town has hundreds of lamps.
 
 ## Props
 
@@ -172,7 +173,7 @@ Three things keep it fast:
 - The CARLA vehicles are simplified to about 35,000 triangles. See [CARLA assets](CARLA-assets).
 - The sun's shadows reach 150 m in front of the camera, `SUN_SHADOW_REACH`. Farther out, the light has no shadow.
 
-With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.3 seconds, and the town builds in about 18 seconds. Most of the build decodes the package's textures, one at a time.
+With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.2 seconds by day and 1.1 seconds at night, and the town builds in about 4.5 seconds. Town10HD takes about 4 seconds a view, and builds in about 9 seconds. `read_gltf` decodes the package's textures `workers` at a time: the count `AssetRegistry.preload` was given.
 
 ## Limits
 

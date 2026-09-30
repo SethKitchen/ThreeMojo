@@ -722,12 +722,13 @@ def test_preload_refuses_a_file_that_is_not_an_image() raises:
 
 # A town package of one triangle drawn seven times, as `build_towns.py`
 # names and tags its nodes: two levels of a building's tile, a road's
-# paint and a road that share a material, a traffic light, a node of
-# another name with no tags, and a kind that is not a string at a level
-# past the far one.
+# paint and a road that share a material, a traffic light whose glass is
+# a lamp's, a node of another name with no tags, and a kind that is not a
+# string at a level past the far one. Its scene lists three lamp heads.
 comptime TOWN_GLTF = (
     '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":'
-    '[0,1,2,3,4,5,6]}],"nodes":['
+    '[0,1,2,3,4,5,6],"extras":{"carla_lamps":[0,5,0,10,5,0,100,5,0]}}],'
+    '"nodes":['
     '{"name":"building_0_0_lod0","mesh":0,"extras":{"carla_kind":"building",'
     '"carla_lod":0}},'
     '{"name":"building_0_0_lod1","mesh":1,"extras":{"carla_kind":"building",'
@@ -746,12 +747,13 @@ comptime TOWN_GLTF = (
     '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
     '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
     '"min":[0,0,0],"max":[1,1,0]}],"materials":[{},'
-    '{"pbrMetallicRoughness":{"roughnessFactor":0.5}}],"meshes":['
+    '{"pbrMetallicRoughness":{"roughnessFactor":0.5}},'
+    '{"extras":{"carla":"lamp"}}],"meshes":['
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":1}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":1}]},'
-    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":2}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]}]}'
 )
@@ -819,6 +821,12 @@ def test_a_town_is_placed_as_it_is_in_tiles() raises:
     assert_almost_equal(box.min.x, 0, atol=1e-5)
     assert_almost_equal(box.max.y, 1, atol=1e-5)
     assert_true(scene.meshes[0].cast_shadow)
+    # The scene's lamp heads, and the lamps' glass.
+    assert_equal(len(placed.lamps), 3)
+    assert_almost_equal(placed.lamps[1].x, 10, atol=1e-5)
+    assert_almost_equal(placed.lamps[1].y, 5, atol=1e-5)
+    assert_equal(len(placed.lamp_materials), 1)
+    assert_true(placed.lamp_materials[0] == scene.meshes[4].material)
     assert_true(
         assets.materials.get(scene.meshes[0].material).env_map
         == SCENE_ENVIRONMENT
@@ -858,6 +866,19 @@ def test_a_town_the_renderer_cannot_use_is_refused() raises:
     )
     with assert_raises(contains="has no mesh"):
         _ = bare.place_town(0, scene, assets, parent, near)
+    # Lamps that are not numbers three at a time.
+    for lamps in ["[0,5]", '[0,5,"up"]', '{"a":1}']:
+        Path(folder + "lamps.gltf").write_text(
+            String(TOWN_GLTF).replace("[0,5,0,10,5,0,100,5,0]", lamps)
+        )
+        var odd = AssetRegistry(
+            parse_manifest(
+                _manifest(_entry("odd", "town", _file("model", "lamps.gltf")))
+            ),
+            folder,
+        )
+        with assert_raises(contains="three numbers each"):
+            _ = odd.place_town(0, scene, assets, parent, near)
 
 
 def main() raises:

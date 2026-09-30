@@ -134,6 +134,7 @@ from extensions.carla.sensor import (
 )
 from extensions.carla.town import (
     GROUND_FLOOR,
+    LAMP_GLOW as TOWN_LAMP_GLOW,
     LAMP_INTENSITY,
     PARAPET,
     Town,
@@ -1331,7 +1332,9 @@ def test_a_town_package_stands_in_for_the_dressing() raises:
     assert_true(town.tags[0] == BUILDING)
     assert_true(town.tags[2] == ROAD_LINE)
     assert_false(town.settings.buildings)
-    assert_equal(len(town.lamp_lights), 0)
+    # A light for each of the package's three lamps, the pool being larger.
+    assert_equal(len(town.lamp_lights), 3)
+    assert_equal(len(town.lamp_glass), 1)
     # The package's traffic light is hidden: the props draw the map's.
     var light = town.package.value().first_mesh + 4
     assert_false(view.scene.get(view.scene.meshes[light].node).visible)
@@ -1348,6 +1351,23 @@ def test_a_town_package_stands_in_for_the_dressing() raises:
     # A frame shows each tile at the camera's level of detail.
     var image = view.render_rgb(world, camera)
     assert_equal(image.width, 16)
+    # At night the lamps light, and their glass glows.
+    world.set_weather(weather_preset("ClearNight"))
+    view.update(world)
+    ref lit = view.town
+    assert_equal(
+        view.scene.lights[lit.lamp_lights[0]].intensity, LAMP_INTENSITY
+    )
+    assert_equal(
+        view.assets.materials.get(lit.lamp_glass[0]).emissive_intensity,
+        TOWN_LAMP_GLOW,
+    )
+    # The pool follows the camera: its nearest light stands at the lamp
+    # nearest the eye.
+    view.town.place_lamps(view.scene, Vector3(100, 0, 0))
+    var bulb = view.scene.get(view.town.lamp_bulbs[0]).position
+    assert_equal(bulb.x, 100)
+    assert_equal(bulb.y, 5)
     # A package the cache lacks leaves the town procedural.
     var other = _small()
     other.package = "Town09"

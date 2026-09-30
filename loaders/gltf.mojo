@@ -283,6 +283,7 @@ from render.texture import (
     Wrap,
     texture_from,
 )
+from render.tasks import TaskGroup
 from render.texture_store import TextureId
 from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
@@ -719,8 +720,40 @@ struct GltfModel(Copyable, Movable):
         return found^
 
 
+async def _decode_one(
+    bytes: MutPointer[List[UInt8], MutAnyOrigin],
+    samplings: MutPointer[GltfSampler, MutAnyOrigin],
+    spaces: MutPointer[ColorSpace, MutAnyOrigin],
+    built: MutPointer[Texture, MutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    index: Int,
+):
+    """Decode and mipmap one image as `_Loader.texture` does, as a task of
+    `_Loader.predecode`; an error is carried back as its text."""
+    try:
+        ref image = bytes[unsafe_offset=index]
+        var sampling = samplings[unsafe_offset=index]
+        var space = spaces[unsafe_offset=index]
+        var alpha = IGNORED if space == LINEAR else COVERAGE
+        if is_ktx2(image):
+            built[unsafe_offset=index] = ktx2_texture(
+                image, sampling, space, alpha
+            )
+        else:
+            built[unsafe_offset=index] = texture_from(
+                decode_image(image),
+                sampling.wrap_s,
+                sampling.mag_filter,
+                space,
+                sampling.min_filter.is_mipmap(),
+                alpha=alpha,
+            )
+    except e:
+        errors[unsafe_offset=index] = "glTF: " + String(e)
+
+
 def read_gltf(
-    path: String, mut scene: Scene, mut assets: Assets
+    path: String, mut scene: Scene, mut assets: Assets, workers: Int = 1
 ) raises -> GltfModel:
     """Read a `.gltf` or a `.glb` file into a scene and its assets.
 
@@ -732,6 +765,7 @@ def read_gltf(
         path: The file.
         scene: The scene to add the nodes and meshes to.
         assets: Where the geometries, materials and textures go.
+        workers: How many images to decode at once; see `load_gltf`.
 
     Returns:
         What went where.
@@ -745,9 +779,16 @@ def read_gltf(
     var directory = _slice(path, 0, path.rfind("/") + 1)
     if len(bytes) >= 4 and _le32(bytes, 0) == GLB_MAGIC:
         var parts = split_glb(bytes)
-        return load_gltf(parts[0], parts[1], directory, scene, assets)
+        return load_gltf(
+            parts[0], parts[1], directory, scene, assets, workers
+        )
     return load_gltf(
-        String(unsafe_from_utf8=bytes), List[UInt8](), directory, scene, assets
+        String(unsafe_from_utf8=bytes),
+        List[UInt8](),
+        directory,
+        scene,
+        assets,
+        workers,
     )
 
 
@@ -811,8 +852,15 @@ def load_gltf(
     directory: String,
     mut scene: Scene,
     mut assets: Assets,
+    workers: Int = 1,
 ) raises -> GltfModel:
     """Read a glTF document into a scene and its assets.
+
+    With more than one worker, every texture a material's core slots read
+    (its base color and emissive maps in sRGB, its normal, occlusion and
+    metal and roughness maps as numbers) is decoded and mipmapped first,
+    `workers` at a time, and the materials find them built. A texture an
+    extension reads is decoded when it is read, as with one worker.
 
     Args:
         text: The JSON.
@@ -822,6 +870,7 @@ def load_gltf(
             or empty for the working directory.
         scene: The scene to add the nodes and meshes to.
         assets: Where the geometries, materials and textures go.
+        workers: How many images to decode at once.
 
     Returns:
         What went where.
@@ -859,6 +908,8 @@ def load_gltf(
     var loader = _Loader(document^, bin, directory)
     loader.read_buffers()
     loader.read_textures()
+    if workers > 1:
+        loader.predecode(assets, workers)
     loader.read_materials(assets)
     loader.read_variants()
     loader.read_meshes(assets)
@@ -1655,6 +1706,76 @@ struct _Loader(Movable):
             self.model.color_textures.append(NO_TEXTURE)
             self.model.data_textures.append(NO_TEXTURE)
 
+    def predecode(mut self, mut assets: Assets, workers: Int) raises:
+        """Decode and mipmap each texture a material's core slots read, in
+        the color space the slot reads it in, `workers` at a time, and
+        record each as `texture` would, so the materials find it built.
+        """
+        var textures = List[Int]()
+        var spaces = List[ColorSpace]()
+        for material in range(self.count("materials")):
+            var node = self.entry("materials", material)
+            var slots = List[Tuple[Int, String, ColorSpace]]()
+            var pbr = self.document.get(node, "pbrMetallicRoughness")
+            if pbr != NO_NODE:
+                slots.append((pbr, "baseColorTexture", SRGB))
+                slots.append((pbr, "metallicRoughnessTexture", LINEAR))
+            slots.append((node, "emissiveTexture", SRGB))
+            slots.append((node, "normalTexture", LINEAR))
+            slots.append((node, "occlusionTexture", LINEAR))
+            for slot in slots:
+                var index = self.texture_reference(slot[0], slot[1])
+                if index < 0 or index >= len(self.texture_images):
+                    continue
+                var fresh = True
+                for k in range(len(textures)):
+                    if textures[k] == index and spaces[k] == slot[2]:
+                        fresh = False
+                if fresh:
+                    textures.append(index)
+                    spaces.append(slot[2])
+        var count = len(textures)
+        var bytes = List[List[UInt8]]()
+        var samplings = List[GltfSampler]()
+        var built = List[Texture]()
+        for k in range(count):
+            bytes.append(self.image_bytes(self.texture_images[textures[k]]))
+            samplings.append(self.texture_samplers[textures[k]])
+            var texel: List[UInt8] = [0, 0, 0, 255]
+            built.append(
+                Texture(1, 1, texel^, REPEAT, BILINEAR, LINEAR, False, IGNORED)
+            )
+        var errors = List[String](length=count, fill=String(""))
+        # Every pointer is to a local that outlives `wait`: each is read
+        # again after it, so none is destroyed while a task reads it.
+        var group = TaskGroup()
+        for k in range(count):
+            group.create_task(
+                _decode_one(
+                    bytes.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    samplings.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    spaces.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    built.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    k,
+                )
+            )
+        group.wait()
+        for k in range(count):
+            if errors[k].byte_length() > 0:
+                raise Error(errors[k])
+            var texture = Texture(copy=built[k])
+            texture.wrap_t = samplings[k].wrap_t
+            texture.min_filter = samplings[k].min_filter
+            texture.flip_y = False
+            var id = assets.textures.add(texture^)
+            if spaces[k] == SRGB:
+                self.model.color_textures[textures[k]] = id
+            else:
+                self.model.data_textures[textures[k]] = id
+        # The images the tasks read, kept to here.
+        _ = len(bytes)
+
     def image_of(self, texture: Int) raises -> Int:
         """Return the image a texture reads: its `KHR_texture_basisu`
         source when it has one, as three.js's plugin reads it first, and
@@ -1680,10 +1801,7 @@ struct _Loader(Movable):
         if view_index < 0:
             raise Error("glTF: an image needs a uri or a bufferView")
         var view = self.view_bytes(view_index)
-        var out = List[UInt8]()
-        for at in range(view[1], view[1] + view[2]):
-            out.append(self.buffers[view[0]][at])
-        return out^
+        return List[UInt8](self.buffers[view[0]][view[1] : view[1] + view[2]])
 
     def texture(
         mut self,

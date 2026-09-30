@@ -188,6 +188,11 @@ comptime STRIPE_GAP = Float32(0.5)
 comptime LAMP_KELVIN = Float32(3000)
 comptime LAMP_INTENSITY = Float32(160)
 comptime LAMP_GLOW = Float32(6)
+# How many of a town package's lamps light at once: the ones nearest the
+# camera. Every light costs every pixel, and a town has hundreds of lamps.
+comptime LAMP_POOL = 12
+# How far below a package lamp's head its light points.
+comptime LAMP_AIM = Float32(3)
 # How tall a scanned tree model stands.
 comptime TREE_HEIGHT = Float32(8)
 # How bright the lit windows are at night.
@@ -1047,6 +1052,12 @@ struct Town(Movable):
     var wet_materials: List[MaterialId]
     var dry_colors: List[Color]
     var dry_roughness: List[Float32]
+    # The package's lamp heads, the pool of lights that follows the camera
+    # among them, each light's bulb and aim nodes, and the lamps' glass.
+    var package_lamps: List[Vector3]
+    var lamp_bulbs: List[NodeId]
+    var lamp_aims: List[NodeId]
+    var lamp_glass: List[MaterialId]
 
     def __init__(
         out self,
@@ -1087,6 +1098,10 @@ struct Town(Movable):
         self.wet_materials = List[MaterialId]()
         self.dry_colors = List[Color]()
         self.dry_roughness = List[Float32]()
+        self.package_lamps = List[Vector3]()
+        self.lamp_bulbs = List[NodeId]()
+        self.lamp_aims = List[NodeId]()
+        self.lamp_glass = List[MaterialId]()
         self.lots = List[Lot]()
         self.posts = List[LampPost]()
         self.bounds = road_bounds(map)
@@ -1226,7 +1241,10 @@ struct Town(Movable):
 
         The package's traffic lights and signs are hidden: `Props` draws
         the map's, which change with the world. The procedural dressing
-        is turned off, since the package holds its own.
+        is turned off, since the package holds its own. `LAMP_POOL` spot
+        lights stand at the package's lamps, as the procedural lamps' do,
+        and `place_lamps` moves them to the lamps nearest a camera; the
+        lamps' glass glows when they are lit.
         """
         var placed = registry.place_town(
             index, scene, assets, self.road_node, self.settings.near_distance
@@ -1253,11 +1271,62 @@ struct Town(Movable):
                     self.wet_materials.append(id)
                     self.dry_colors.append(material.color)
                     self.dry_roughness.append(material.roughness)
+        var warm = lamp_color()
+        for id in placed.lamp_materials:
+            var glass = assets.materials.get(id)
+            glass.emissive = warm
+            glass.emissive_intensity = 0
+            assets.materials.materials[id.value] = glass
+            self.lamp_glass.append(id)
+        self.package_lamps = placed.lamps.copy()
+        for k in range(min(LAMP_POOL, len(self.package_lamps))):
+            var head = self.package_lamps[k]
+            var bulb = Object3D()
+            bulb.set_position(head.x, head.y, head.z)
+            var aim = Object3D()
+            aim.set_position(head.x, head.y - LAMP_AIM, head.z)
+            var bulb_node = scene.add(bulb^)
+            var aim_node = scene.add(aim^)
+            self.lamp_bulbs.append(bulb_node)
+            self.lamp_aims.append(aim_node)
+            self.lamp_lights.append(len(scene.lights))
+            scene.add_light(
+                spot_light(
+                    warm, bulb_node, 0, 40, Angle(62, DEGREE), 0.55, 2, aim_node
+                )
+            )
         self.package = placed^
         self.settings.buildings = False
         self.settings.trees = False
         self.settings.lamps = False
         scene.update()
+
+    def place_lamps(mut self, mut scene: Scene, eye: Vector3) raises:
+        """Stand the package's pool of lights at the lamps nearest `eye`.
+
+        Args:
+            scene: The scene; the lights' nodes move, and it is left to be
+                updated.
+            eye: The camera's position, in the scene's frame.
+
+        Raises:
+            Error: If a light's node is gone.
+        """
+        var taken = List[Bool](length=len(self.package_lamps), fill=False)
+        for k in range(len(self.lamp_bulbs)):
+            var best = -1
+            var nearest = Float32(0)
+            for i in range(len(self.package_lamps)):
+                var d = (self.package_lamps[i] - eye).length_sq()
+                if not taken[i] and (best < 0 or d < nearest):
+                    best = i
+                    nearest = d
+            taken[best] = True
+            var head = self.package_lamps[best]
+            scene.node(self.lamp_bulbs[k]).set_position(head.x, head.y, head.z)
+            scene.node(self.lamp_aims[k]).set_position(
+                head.x, head.y - LAMP_AIM, head.z
+            )
 
     def _add(
         mut self, mut scene: Scene, tag: SemanticTag, var mesh: Mesh
@@ -1581,12 +1650,7 @@ struct Town(Movable):
                 env_map=SCENE_ENVIRONMENT,
             )
         )
-        var glow = kelvin_color(Temperature(LAMP_KELVIN, KELVIN))
-        var warm = Color(
-            UInt8(Int(linear_to_srgb(glow.r) * 255)),
-            UInt8(Int(linear_to_srgb(glow.g) * 255)),
-            UInt8(Int(linear_to_srgb(glow.b) * 255)),
-        )
+        var warm = lamp_color()
         self.materials.lamp = assets.materials.add(
             standard_material(
                 Color(200, 200, 190),
@@ -1760,10 +1824,31 @@ struct Town(Movable):
             var lamp = assets.materials.get(self.materials.lamp)
             lamp.emissive_intensity = LAMP_GLOW if lit else 0
             assets.materials.materials[self.materials.lamp.value] = lamp
+        for id in self.lamp_glass:
+            var glass = assets.materials.get(id)
+            glass.emissive_intensity = LAMP_GLOW if lit else 0
+            assets.materials.materials[id.value] = glass
         for id in self.materials.facades:
             var facade = assets.materials.get(id)
             facade.emissive_intensity = WINDOW_GLOW if lit else 0
             assets.materials.materials[id.value] = facade
+
+
+def lamp_color() raises -> Color:
+    """Return a street lamp's color: `LAMP_KELVIN` as an sRGB color.
+
+    Returns:
+        The color.
+
+    Raises:
+        Error: If `kelvin_color` refuses the temperature.
+    """
+    var glow = kelvin_color(Temperature(LAMP_KELVIN, KELVIN))
+    return Color(
+        UInt8(Int(linear_to_srgb(glow.r) * 255)),
+        UInt8(Int(linear_to_srgb(glow.g) * 255)),
+        UInt8(Int(linear_to_srgb(glow.b) * 255)),
+    )
 
 
 def town_kind_casts(kind: String) -> Bool:
