@@ -33,11 +33,14 @@ def _u32(mut bytes: List[UInt8], value: Int):
 
 
 def _file(name: String, counts: List[Int], body: List[UInt8]) raises -> String:
-    """Write a face model file of version 4 with ten `counts` and a
-    `body`, and return its path."""
+    """Write a face model file of version 6 with fourteen `counts` and a
+    `body`, and return its path. With expressions, the body is theirs."""
     var bytes: List[UInt8] = [73, 67, 84, 70]
-    _u32(bytes, 4)
-    for count in counts:  # pragma: no branch
+    _u32(bytes, 6)
+    var header = counts.copy()
+    if header[4] > 0:
+        header[10] = len(body)
+    for count in header:  # pragma: no branch
         _u32(bytes, count)
     bytes.extend(body.copy())
     var path = String("/tmp/threemojo_face_") + name + ".bin"
@@ -61,24 +64,39 @@ def test_the_model_reads_its_file() raises:
     for index in range(model.holes()):  # pragma: no branch
         corners += len(model.hole(index))
     assert_equal(corners, 212)
-    assert_equal(len(model.skin_triangles) % 3, 0)
-    assert_equal(len(model.skin_edges) % 2, 0)
+    assert_equal(len(model.skin_triangles()) % 3, 0)
+    assert_equal(len(model.skin_edges()) % 2, 0)
+    # The coarse copy the skin is fitted on, and how the skin follows it.
+    assert_true(len(model.coarse_vertices()) < FACE_AND_HEAD.end // 2)
+    assert_equal(len(model.coarse_edges()) % 2, 0)
+    assert_equal(len(model.followed()), FACE_AND_HEAD.end * 3)
+    assert_equal(len(model.follow_weights()), FACE_AND_HEAD.end * 2)
     # Only as much is read as is asked for.
     var bare = FaceModel(FACE_MODEL_PATH, 0, False)
     assert_equal(bare.identities(), 0)
     assert_equal(bare.expressions(), 0)
-    assert_equal(len(bare.neutral), len(model.neutral))
+    assert_equal(bare.vertex_count(), model.vertex_count())
     assert_equal(FaceModel(FACE_MODEL_PATH, 5, False).identities(), 5)
     assert_equal(FaceModel(FACE_MODEL_PATH, -1, False).identities(), 60)
     assert_equal(FaceModel(FACE_MODEL_PATH, 99, False).identities(), 60)
-    with assert_raises(contains="every identity mode"):
-        _ = FaceModel(FACE_MODEL_PATH, 3, True)
+    # Expressions and some identity modes, or identity modes alone.
+    var both = FaceModel(FACE_MODEL_PATH, 3, True)
+    assert_equal(both.identities(), 3)
+    assert_equal(both.expressions(), 57)
+    assert_equal(FaceModel(FACE_MODEL_PATH, 0, True).identities(), 0)
 
 
 def test_a_face_takes_an_identity_and_an_expression() raises:
     var model = FaceModel(FACE_MODEL_PATH)
     var mean = model.shape(model.no_identity(), model.no_expression())
-    assert_equal(len(mean), len(model.neutral))
+    assert_equal(len(mean), model.vertex_count())
+    # The first vertices alone.
+    var few = model.shape(model.no_identity(), model.no_expression(), 10)
+    assert_equal(len(few), 10)
+    assert_equal(few[9].x, mean[9].x)
+    var blinked = model.no_expression()
+    blinked[model.expression("eyeBlink_L")] = 1
+    assert_equal(len(model.shape(model.no_identity(), blinked, 10)), 10)
     var identity = model.no_identity()
     identity[0] = 2.0
     var other = model.shape(identity, model.no_expression())
@@ -133,7 +151,7 @@ def test_a_bad_file_is_refused() raises:
     Path(short).write_bytes(junk)
     with assert_raises(contains="Not a face model"):
         _ = FaceModel(short)
-    var zeros = List[Int](length=10, fill=0)
+    var zeros = List[Int](length=14, fill=0)
     var empty = List[UInt8]()
     var wrong = _file("wrong", zeros, empty)
     var bytes = Path(wrong).read_bytes()
@@ -142,7 +160,7 @@ def test_a_bad_file_is_refused() raises:
     with assert_raises(contains="Not a face model"):
         _ = FaceModel(wrong)
     bytes[0] = 73
-    bytes[4] = 3
+    bytes[4] = 5
     Path(wrong).write_bytes(bytes)
     with assert_raises(contains="another version"):
         _ = FaceModel(wrong)
@@ -175,7 +193,7 @@ def test_a_bad_file_is_refused() raises:
     # A hole's length that its corners do not fill.
     var hole = zeros.copy()
     hole[7] = 1
-    var length: List[UInt8] = [1, 0]
+    var length: List[UInt8] = [1, 0, 0, 0]
     with assert_raises(contains="miscount"):
         _ = FaceModel(_file("hole", hole, length))
 

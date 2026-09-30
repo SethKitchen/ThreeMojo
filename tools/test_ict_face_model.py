@@ -70,27 +70,30 @@ class ConverterTests(unittest.TestCase):
             with open(out, "rb") as source:
                 data = source.read()
         self.assertEqual(data[:4], b"ICTF")
-        header = struct.unpack_from("<11I", data, 4)
-        # Version 4; 5 vertices, 6 drawn, 3 triangles, 1 identity mode,
+        header = struct.unpack_from("<15I", data, 4)
+        # Version 6; 5 vertices, 6 drawn, 3 triangles, 1 identity mode,
         # 2 expressions; the skin's 3 triangles, 7 edges, one hole of 5
-        # corners; and a coarse copy of 3 triangles, since every vertex
-        # lies on the hole.
-        self.assertEqual(header, (4, 5, 6, 3, 1, 2, 3, 7, 1, 5, 3))
-        at = 48
+        # corners; a coarse copy of 3 triangles, since every vertex lies
+        # on the hole; 40 bytes of expressions; and the coarse copy's 5
+        # vertices and 7 edges, which the 5 skin vertices follow.
+        self.assertEqual(
+            header, (6, 5, 6, 3, 1, 2, 3, 7, 1, 5, 3, 40, 5, 7, 5)
+        )
+        at = 64
         self.assertEqual(struct.unpack_from("<3f", data, at + 12), (1.0, 0, 0))
         at += 5 * 12 + 6 * 8
         self.assertEqual(
             struct.unpack_from("<6H", data, at), (0, 1, 2, 3, 1, 4)
         )
-        shorts = 6 + 9 + 9 + 14 + 1 + 5 + 9
+        shorts = 6 + 9 + 9 + 14 + 1 + 5 + 9 + 5 + 14 + 15
         self.assertEqual(struct.unpack_from("<H", data, at + 2 * 38), (5,))
+        # Each skin vertex follows itself.
+        follows = struct.unpack_from("<15H", data, at + 2 * (shorts - 15))
+        self.assertEqual(follows[3:6], (1, 1, 1))
         at += shorts * 2
         at += -at % 4
-        scale = struct.unpack_from("<f", data, at)[0]
-        self.assertAlmostEqual(scale, 0.0254 / 127)
-        self.assertEqual(data[at + 4 + 9], 127)
-        at += 4 + 15
-        at += -at % 4
+        self.assertEqual(struct.unpack_from("<2f", data, at), (0.0, 0.0))
+        at += 5 * 8
         # The expressions come sorted by name, each with the vertices it
         # moves, each section on a multiple of four bytes.
         self.assertEqual(data[at : at + 8], b"\x07jawOpen")
@@ -103,7 +106,50 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(data[at : at + 6], b"\x05still")
         at += 8
         self.assertEqual(struct.unpack_from("<If", data, at), (0, 1.0))
-        self.assertEqual(len(data), at + 8)
+        at += 8
+        # Then the identity mode.
+        scale = struct.unpack_from("<f", data, at)[0]
+        self.assertAlmostEqual(scale, 0.0254 / 127)
+        self.assertEqual(data[at + 4 + 9], 127)
+        self.assertEqual(len(data), at + 4 + 16)
+
+    def test_the_skin_follows_its_coarse_copy(self):
+        points, triangles = _grid(4)
+        coarse = ict_face_model.decimate(points, triangles, 12)
+        used, links, followers = ict_face_model.follow(
+            points, coarse, len(points), cell=0.7
+        )
+        self.assertLess(len(used), len(points))
+        self.assertTrue(all(a < b < len(used) for a, b in links))
+        # A vertex of the copy follows itself; any other lies on its
+        # triangle, at weights that rebuild it.
+        for v, (a, b, c, wb, wc) in enumerate(followers):
+            if v in used:
+                self.assertEqual((a, b, c), (used.index(v),) * 3)
+                continue
+            p = [
+                points[used[a]][k] * (1 - wb - wc)
+                + points[used[b]][k] * wb
+                + points[used[c]][k] * wc
+                for k in range(3)
+            ]
+            for k in range(3):
+                self.assertAlmostEqual(p[k], points[v][k], places=6)
+        # Every region of the nearest point: the three corners, the
+        # three edges and the face.
+        a, b, c = (0, 0, 0), (1, 0, 0), (0, 1, 0)
+        for probe, weights in (
+            ((-1, -1, 0), (0.0, 0.0)),
+            ((2, -0.5, 0), (1.0, 0.0)),
+            ((-0.5, 2, 0), (0.0, 1.0)),
+            ((0.5, -1, 0), (0.5, 0.0)),
+            ((-1, 0.5, 0), (0.0, 0.5)),
+            ((1, 1, 0), (0.5, 0.5)),
+            ((0.2, 0.3, 1), (0.2, 0.3)),
+        ):
+            _, wb, wc = ict_face_model._closest(probe, a, b, c)
+            self.assertAlmostEqual(wb, weights[0])
+            self.assertAlmostEqual(wc, weights[1])
 
     def test_quantize_and_displacements(self):
         self.assertEqual(ict_face_model.quantize([0.0, 0.0]), (1.0, b"\0\0"))

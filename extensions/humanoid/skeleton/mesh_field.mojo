@@ -28,12 +28,17 @@ This is not a three.js port. See Extensions.
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
 from std.collections import Dict
-from std.math import acos, max, min, sqrt
+from std.math import acos, iota, max, min
 from std.atomic import Atomic, Ordering
 from std.memory import ArcPointer, bitcast
 
 # How many triangles a leaf of the tree holds, at most.
-comptime LEAF_SIZE = 8
+comptime LEAF_SIZE = 16
+# How many triangles a leaf tests at once: one lane each.
+comptime LANES = 16
+comptime Lanes = SIMD[DType.float32, LANES]
+# A lane with no triangle holds one this far off, with no area.
+comptime FAR = Float32(1.0e18)
 # The most nodes a walk of the tree holds waiting: two a level, for a
 # tree deeper than any mesh that fits in memory.
 comptime STACK_SIZE = 128
@@ -119,6 +124,107 @@ def _box_gap(low: Vector3, high: Vector3, p: Vector3) -> Float32:
     return dx * dx + dy * dy + dz * dz
 
 
+@fieldwise_init
+struct _Leaf(Copyable, Movable):
+    """A leaf's triangles, one a lane, ready to measure against a point.
+
+    For each triangle: its first corner `a`; its edges `ab = b - a`,
+    `bc = c - b` and `ca = a - c`; each edge's inward normal in the
+    triangle's plane; the plane's normal `n`; and the reciprocal squared
+    lengths of the three edges and of `n`, zero where one is zero.
+    """
+
+    var ids: SIMD[DType.int32, LANES]
+    var ax: Lanes
+    var ay: Lanes
+    var az: Lanes
+    var abx: Lanes
+    var aby: Lanes
+    var abz: Lanes
+    var bcx: Lanes
+    var bcy: Lanes
+    var bcz: Lanes
+    var cax: Lanes
+    var cay: Lanes
+    var caz: Lanes
+    var iabx: Lanes
+    var iaby: Lanes
+    var iabz: Lanes
+    var ibcx: Lanes
+    var ibcy: Lanes
+    var ibcz: Lanes
+    var icax: Lanes
+    var icay: Lanes
+    var icaz: Lanes
+    var nx: Lanes
+    var ny: Lanes
+    var nz: Lanes
+    var sab: Lanes
+    var sbc: Lanes
+    var sca: Lanes
+    var sn: Lanes
+
+    def nearest(self, p: Vector3) -> Tuple[Float32, Int]:
+        """Return the least squared distance from `p` to the leaf's
+        triangles, and the lane it is in.
+
+        A point whose foot on a triangle's plane lies inside all three
+        edges is its plane's distance away; any other is its nearest
+        edge's. The test is Inigo Quilez's, on every lane at once.
+        """
+        var pax = p.x - self.ax
+        var pay = p.y - self.ay
+        var paz = p.z - self.az
+        var pbx = pax - self.abx
+        var pby = pay - self.aby
+        var pbz = paz - self.abz
+        var pcx = pbx - self.bcx
+        var pcy = pby - self.bcy
+        var pcz = pbz - self.bcz
+        var inside = (
+            (self.iabx * pax + self.iaby * pay + self.iabz * paz).gt(0)
+            & (self.ibcx * pbx + self.ibcy * pby + self.ibcz * pbz).gt(0)
+            & (self.icax * pcx + self.icay * pcy + self.icaz * pcz).gt(0)
+        )
+        var plane = self.nx * pax + self.ny * pay + self.nz * paz
+        var t1 = (
+            (self.abx * pax + self.aby * pay + self.abz * paz) * self.sab
+        ).clamp(0, 1)
+        var t2 = (
+            (self.bcx * pbx + self.bcy * pby + self.bcz * pbz) * self.sbc
+        ).clamp(0, 1)
+        var t3 = (
+            (self.cax * pcx + self.cay * pcy + self.caz * pcz) * self.sca
+        ).clamp(0, 1)
+        var e1 = _square(
+            self.abx * t1 - pax, self.aby * t1 - pay, self.abz * t1 - paz
+        )
+        var e2 = _square(
+            self.bcx * t2 - pbx, self.bcy * t2 - pby, self.bcz * t2 - pbz
+        )
+        var e3 = _square(
+            self.cax * t3 - pcx, self.cay * t3 - pcy, self.caz * t3 - pcz
+        )
+        var d = inside.select(plane * plane * self.sn, min(e1, min(e2, e3)))
+        var least = d.reduce_min()
+        var lane = (
+            d.eq(least)
+            .select(iota[DType.int32, LANES](), SIMD[DType.int32, LANES](LANES))
+            .reduce_min()
+        )
+        return (least, Int(lane))
+
+
+def _square(x: Lanes, y: Lanes, z: Lanes) -> Lanes:
+    """Return the squared length of each lane's vector."""
+    return x * x + y * y + z * z
+
+
+def _inverse(value: Float32) -> Float32:
+    """Return one over `value`, or zero for zero."""
+    return 1 / value if value > 0 else Float32(0)
+
+
 struct MeshTree(Movable):
     """A triangle mesh and the bounding volume hierarchy over it."""
 
@@ -141,11 +247,10 @@ struct MeshTree(Movable):
     var first: List[Int]
     var end: List[Int]
     var order: List[Int]
-    # Each triangle in the tree's order: its three corners, and the
-    # center and the radius of a ball round it, to leave it out cheaply.
-    var corners: List[Vector3]
-    var balls: List[Vector3]
-    var reach: List[Float32]
+    # Each leaf's triangles, ready to measure, and each node's leaf, or
+    # minus one for a node with children.
+    var leaves: List[_Leaf]
+    var leaf: List[Int]
     # The whole mesh's box.
     var box_low: Vector3
     var box_high: Vector3
@@ -227,9 +332,8 @@ struct MeshTree(Movable):
             )
         self.box_low = Vector3(0, 0, 0)
         self.box_high = Vector3(0, 0, 0)
-        self.corners = List[Vector3]()
-        self.balls = List[Vector3]()
-        self.reach = List[Float32]()
+        self.leaves = List[_Leaf]()
+        self.leaf = List[Int]()
         # Split runs in half until each is a leaf, with no recursion: a
         # run is sorted along its box's longest side and cut at its
         # median, so each half is a compact cluster.
@@ -249,27 +353,11 @@ struct MeshTree(Movable):
             self.right[node] = r
             pending.append(l)
             pending.append(r)
-        for i in range(count):  # pragma: no branch
-            var t = self.order[i]
-            var a = self.points[self.triangles[t * 3]]
-            var b = self.points[self.triangles[t * 3 + 1]]
-            var c = self.points[self.triangles[t * 3 + 2]]
-            self.corners.append(a)
-            self.corners.append(b)
-            self.corners.append(c)
-            var middle = centers[t]
-            self.balls.append(middle)
-            self.reach.append(
-                sqrt(
-                    max(
-                        (a - middle).dot(a - middle),
-                        max(
-                            (b - middle).dot(b - middle),
-                            (c - middle).dot(c - middle),
-                        ),
-                    )
-                )
-            )
+        self.leaf = List[Int](length=len(self.low), fill=-1)
+        for node in range(len(self.low)):  # pragma: no branch
+            if self.left[node] < 0:
+                self.leaf[node] = len(self.leaves)
+                self.leaves.append(self._pack(node))
         self.box_low = self.low[0]
         self.box_high = self.high[0]
 
@@ -288,6 +376,76 @@ struct MeshTree(Movable):
         self.first.append(first)
         self.end.append(end)
         return len(self.low) - 1
+
+    def _pack(self, node: Int) -> _Leaf:
+        """Return a leaf's triangles, one a lane; the lanes past its run
+        hold far triangles with no area."""
+        var ids = SIMD[DType.int32, LANES](0)
+        var v = List[Lanes](length=28, fill=Lanes(0))
+        for lane in range(LANES):  # pragma: no branch
+            var a = Vector3(FAR, FAR, FAR)
+            var b = a
+            var c = a
+            var i = self.first[node] + lane
+            if i < self.end[node]:
+                var t = self.order[i]
+                ids[lane] = Int32(t)
+                a = self.points[self.triangles[t * 3]]
+                b = self.points[self.triangles[t * 3 + 1]]
+                c = self.points[self.triangles[t * 3 + 2]]
+            var ab = b - a
+            var bc = c - b
+            var ca = a - c
+            var n = _cross(ab, c - a)
+            var sides: List[Vector3] = [
+                a,
+                ab,
+                bc,
+                ca,
+                _cross(n, ab),
+                _cross(n, bc),
+                _cross(n, ca),
+                n,
+            ]
+            for k in range(8):  # pragma: no branch
+                v[k * 3][lane] = sides[k].x
+                v[k * 3 + 1][lane] = sides[k].y
+                v[k * 3 + 2][lane] = sides[k].z
+            v[24][lane] = _inverse(ab.dot(ab))
+            v[25][lane] = _inverse(bc.dot(bc))
+            v[26][lane] = _inverse(ca.dot(ca))
+            v[27][lane] = _inverse(n.dot(n))
+        return _Leaf(
+            ids,
+            v[0],
+            v[1],
+            v[2],
+            v[3],
+            v[4],
+            v[5],
+            v[6],
+            v[7],
+            v[8],
+            v[9],
+            v[10],
+            v[11],
+            v[12],
+            v[13],
+            v[14],
+            v[15],
+            v[16],
+            v[17],
+            v[18],
+            v[19],
+            v[20],
+            v[21],
+            v[22],
+            v[23],
+            v[24],
+            v[25],
+            v[26],
+            v[27],
+        )
 
     def pseudo_normal(self, t: Int, part: Int) -> Vector3:
         """Return the normal that signs a distance to part of a triangle.
@@ -342,10 +500,6 @@ struct MeshTree(Movable):
         var gap = first[0] - p
         var best = gap.dot(gap)
         var found = start
-        var at = first[0]
-        var wv = first[1]
-        var ww = first[2]
-        var part = first[3]
         # The walk holds at most two nodes a level of the tree.
         var stack = SIMD[DType.int32, STACK_SIZE](0)
         var top = 1
@@ -355,29 +509,10 @@ struct MeshTree(Movable):
             if _box_gap(self.low[node], self.high[node], p) >= best:
                 continue
             if self.left[node] < 0:
-                for i in range(
-                    self.first[node], self.end[node]
-                ):  # pragma: no branch
-                    # A triangle whose ball is farther than the best is
-                    # farther too.
-                    var off = (p - self.balls[i]).length() - self.reach[i]
-                    if off > 0 and off * off >= best:
-                        continue
-                    var hit = closest_on_triangle(
-                        p,
-                        self.corners[i * 3],
-                        self.corners[i * 3 + 1],
-                        self.corners[i * 3 + 2],
-                    )
-                    var d = hit[0] - p
-                    var d2 = d.dot(d)
-                    if d2 < best:
-                        best = d2
-                        found = self.order[i]
-                        at = hit[0]
-                        wv = hit[1]
-                        ww = hit[2]
-                        part = hit[3]
+                var hit = self.leaves[self.leaf[node]].nearest(p)
+                if hit[0] < best:
+                    best = hit[0]
+                    found = Int(self.leaves[self.leaf[node]].ids[hit[1]])
                 continue
             # The nearer child last, so it is walked first.
             var l = self.left[node]
@@ -391,7 +526,13 @@ struct MeshTree(Movable):
                 stack[top] = Int32(l)
                 stack[top + 1] = Int32(r)
             top += 2
-        return (found, at, wv, ww, part)
+        var hit = closest_on_triangle(
+            p,
+            self.points[self.triangles[found * 3]],
+            self.points[self.triangles[found * 3 + 1]],
+            self.points[self.triangles[found * 3 + 2]],
+        )
+        return (found, hit[0], hit[1], hit[2], hit[3])
 
 
 struct MeshField(Copyable, DistanceField, Movable):

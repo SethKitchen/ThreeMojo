@@ -115,6 +115,10 @@ The torso's skin uses the leg's method. See [Integument](Integument#envelope). T
 
 For a male the fat is 14 mm over the abdomen and 8 mm over the chest. For a female it is 24 mm and 15 mm.
 
+A section that stands out from its neighbors puts a kink in the skin. The kink shows as a band of light across the body.
+
+`fit_loft` can relax the sections after it fills the dips. Each relaxing pass blends a section's reach with its neighbors' reach. The skin can move in by at most half its fat, so no solid comes through. The torso uses eight passes. The pelvis and the arms use four.
+
 A female template has breasts over the pectoralis major. Each breast is an ellipsoid of its own, turned a little out and down, in a smooth union with the loft. A loft section is one closed curve around its center, so it cannot dip between the two breasts.
 
 `body_skin_mesh` morphs the lower body's skin into the torso's across the waist, from the widest part of the hips up to the waist. The band is about 10 cm tall, so the flank narrows gradually and not in a step. Past the last full section of each loft, that section goes on straight, so the morph never reads a loft's tapered end.

@@ -61,6 +61,9 @@ def head_skin_mesh(
     )
 
 
+# How high the modeled solids are meshed, in template cm: past the tops
+# of the shoulders' slopes, which the scan does not draw.
+comptime SOLIDS_TOP = Float32(64.0)
 # How near the scan a triangle of the modeled solids lies, in template
 # cm, when the scan draws the skin there instead.
 comptime COVERED = Float32(0.5)
@@ -129,8 +132,14 @@ def head_skin_from_dimensions(
     # already draws are left out: all above the seam but the tops of the
     # shoulders' slopes, which stand off the scan.
     var parts = List[BufferGeometry]()
+    # Above `SOLIDS_TOP` the scan draws all of the skin.
     var solids = mesh_surface(
-        field, field.low, field.high, detail, "head skin", workers
+        field,
+        field.low,
+        Vector3(field.high.x, h.at(0, SOLIDS_TOP, 0).y, field.high.z),
+        detail,
+        "head skin",
+        workers,
     )
     _leave_covered_out(solids, field.scan, seam + lap, h.cm(COVERED))
     parts.append(solids^)
@@ -147,5 +156,5 @@ def head_skin_from_dimensions(
     )
     var skin = merge_geometries(parts)
     share_height(skin, field.low.y, field.high.y - field.low.y)
-    tint_head_skin(skin, dimensions)
+    tint_head_skin(skin, dimensions, field)
     return skin^

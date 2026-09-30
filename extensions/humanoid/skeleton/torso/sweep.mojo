@@ -254,10 +254,26 @@ struct SweepField(Copyable, DistanceField, Movable):
 
         Negative is inside. Zero is the surface.
         """
+        return self.within(point, FAR)
+
+    def within(self, point: Vector3, limit: Float32) -> Float32:
+        """Return how far `point` lies outside the part, in meters, or
+        `limit` if it lies at least that far.
+
+        A caller that needs the distance only below some bound saves the
+        sweeps farther than it.
+
+        Args:
+            point: A point in the part's frame, in meters.
+            limit: The distance past which the answer may be `limit`.
+
+        Returns:
+            The signed distance, or `limit`.
+        """
         var local = point
         if self.mirror:
             local = flip_x(point)
-        var d = FAR
+        var d = limit
         for index in range(len(self.sweeps)):  # pragma: no branch
             # A sweep farther than the blend cannot change the union.
             if self.sweeps[index].gap(local) > d + self.k:
@@ -269,6 +285,9 @@ struct SweepField(Copyable, DistanceField, Movable):
             d = smin(
                 d, smax(shell - dome.half, dome.floor - local.y, self.k), self.k
             )
+        # A cut only takes away: past the limit it cannot matter.
+        if d >= limit:
+            return limit
         for index in range(len(self.cuts)):
             d = smax(d, -self.cuts[index].distance(local, self.k), self.k)
         return d

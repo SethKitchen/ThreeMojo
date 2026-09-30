@@ -53,6 +53,7 @@ from extensions.humanoid.skeleton.sculpt import box_gap
 from extensions.humanoid.skeleton.surface_nets import (
     finish_surface,
     project_to_surface,
+    surface_gradient,
 )
 from math.vector3 import Vector3
 from std.math import cos, max, min, sin
@@ -60,6 +61,8 @@ from std.math import cos, max, min, sin
 # Where the scan's frame lands on the template, in template cm: the
 # scan's eyeballs' centers on the template's.
 comptime SCAN_Y = Float32(68.48421)
+# How far the upper lids close at rest, as a blink's weight.
+comptime REST_BLINK = Float32(0.2)
 comptime SCAN_Z = Float32(-1.04114)
 # Below this height, in template cm, the scan's neck is left to the
 # modeled one: the scan is cut off above its open edge.
@@ -84,6 +87,10 @@ comptime NECK_SEAM = Float32(56.5)
 # meters, stays where the scan has it: the field is measured on the
 # skin's coarse copy, which lies this near the skin.
 comptime SNAP = Float32(1e-3)
+# How far above the floor, in meters, the mesh is walked exactly onto the
+# field's surface and turns its normals to the field's gradient, where it
+# meets the field's own mesh.
+comptime BLEND_BAND = Float32(0.02)
 # How near the surface a walked vertex must come, in meters.
 comptime ON_SURFACE = Float32(1e-5)
 # How many passes of Newton steps walk a vertex onto the surface.
@@ -103,12 +110,15 @@ comptime SINK_TOP = Float32(58.0)
 # How many passes fit the scan, and how many rounds in each spread the
 # moves that fit it.
 comptime FIT_PASSES = 3
-comptime FIT_ROUNDS = 24
+comptime FIT_ROUNDS = 12
+# How many rounds fill the dents between the ridges the scan is pushed
+# over.
+comptime FILL_ROUNDS = 6
 
 
 def scan_model() raises -> FaceModel:
     """Return as much of the face model as a scanned head needs: the
-    mean head and its mesh, with no identity modes or expressions.
+    mean head, its mesh and its expressions, with no identity modes.
 
     Returns:
         The model.
@@ -116,7 +126,29 @@ def scan_model() raises -> FaceModel:
     Raises:
         Error: If `FACE_MODEL_PATH` cannot be read.
     """
-    return FaceModel(FACE_MODEL_PATH, 0, False)
+    return FaceModel(FACE_MODEL_PATH, 0, True)
+
+
+def rest_expression(model: FaceModel) raises -> List[Float32]:
+    """Return the expression of a face at rest.
+
+    The scan's neutral face holds its eyes wide open, as a face does for
+    a camera, and the whole iris shows. A face at rest lowers its upper
+    lids a little over the top of the iris.
+
+    Args:
+        model: The face model, with its expressions.
+
+    Returns:
+        One weight per expression.
+
+    Raises:
+        Error: If the model has no blinks.
+    """
+    var weights = model.no_expression()
+    weights[model.expression("eyeBlink_L")] = REST_BLINK
+    weights[model.expression("eyeBlink_R")] = REST_BLINK
+    return weights^
 
 
 def scan_to_template(point: Vector3) -> Vector3:
@@ -224,30 +256,26 @@ def fit_over[
             the two blend.
         sink: How far inside the solid a vertex at `sink_low` lies.
     """
-    # The edges between two vertices that move.
-    var pairs = List[Int]()
+    # The edges between two vertices that move, from and to.
+    var froms = List[Int]()
+    var tos = List[Int]()
     var counts = List[Int](length=end, fill=0)
     for e in range(0, len(edges), 2):  # pragma: no branch
         var a = edges[e]
         var b = edges[e + 1]
         if a < end and b < end:
-            pairs.append(a)
-            pairs.append(b)
+            froms.append(a)
+            tos.append(b)
             counts[a] += 1
             counts[b] += 1
+    var start = List[Vector3](capacity=end)
+    for v in range(end):  # pragma: no branch
+        start.append(points[v])
     # Where the solid's surface turns from the mesh's, one push along the
     # normal falls short: each pass measures again and pushes again.
+    var passes = 0
     for _ in range(FIT_PASSES):  # pragma: no branch
-        var directions = List[Vector3](length=end, fill=Vector3(0, 0, 0))
-        for t in range(0, len(triangles), 3):  # pragma: no branch
-            var a = points[triangles[t]]
-            var n = cross(
-                points[triangles[t + 1]] - a, points[triangles[t + 2]] - a
-            )
-            for c in range(3):  # pragma: no branch
-                var v = triangles[t + c]
-                if v < end:
-                    directions[v] = directions[v] + n
+        var directions = _normals(points, triangles, end)
         # How far each vertex must move along its normal: at least
         # `needs`, and no more than `limits`.
         var needs = List[Float32](length=end, fill=0)
@@ -257,7 +285,6 @@ def fit_over[
             var up = smoothstep(sink_low, sink_high, points[v].y)
             var goal = margin * up - sink * (1 - up)
             var need = goal - hull.distance(points[v])
-            directions[v].normalize()
             # A vertex off its goal by more than the margin needs another
             # pass: in the band, either way; above it, inside the solid.
             # Below the band the mesh is cut off, so it follows its
@@ -279,14 +306,15 @@ def fit_over[
         for v in range(end):  # pragma: no branch
             moves[v] = directions[v] * needs[v]
         var sums = List[Vector3](length=end, fill=Vector3(0, 0, 0))
-        for _ in range(FIT_ROUNDS):  # pragma: no branch
+        # The first pass spreads the moves far; later ones only mend.
+        var rounds = FIT_ROUNDS if passes == 0 else FIT_ROUNDS // 2
+        passes += 1
+        for _ in range(rounds):  # pragma: no branch
             for v in range(end):  # pragma: no branch
                 sums[v] = Vector3(0, 0, 0)
-            for e in range(0, len(pairs), 2):  # pragma: no branch
-                var a = pairs[e]
-                var b = pairs[e + 1]
-                sums[a] = sums[a] + moves[b]
-                sums[b] = sums[b] + moves[a]
+            for e in range(len(froms)):  # pragma: no branch
+                sums[froms[e]] = sums[froms[e]] + moves[tos[e]]
+                sums[tos[e]] = sums[tos[e]] + moves[froms[e]]
             for v in range(end):  # pragma: no branch
                 var move = moves[v]
                 if counts[v] > 0:
@@ -299,6 +327,86 @@ def fit_over[
                 moves[v] = move
         for v in range(end):  # pragma: no branch
             points[v] = points[v] + moves[v]
+    # The mesh now follows each ridge of the solid it was pushed over.
+    # Filling the dents between the ridges leaves a smooth sleeve: each
+    # vertex pushed out comes out at least as far as its neighbors do on
+    # the mean. Nothing moves in, so nothing goes back inside.
+    var normals = _normals(points, triangles, end)
+    var outs = List[Float32](length=end, fill=0)
+    for v in range(end):  # pragma: no branch
+        outs[v] = (points[v] - start[v]).dot(normals[v])
+    var filled = outs.copy()
+    var means = List[Float32](length=end, fill=0)
+    for _ in range(FILL_ROUNDS):  # pragma: no branch
+        for v in range(end):  # pragma: no branch
+            means[v] = 0
+        for e in range(len(froms)):  # pragma: no branch
+            means[froms[e]] += filled[tos[e]]
+            means[tos[e]] += filled[froms[e]]
+        for v in range(end):  # pragma: no branch
+            if _fills(outs[v], counts[v], points[v].y, sink_high):
+                filled[v] = max(filled[v], means[v] / Float32(counts[v]))
+    for v in range(end):  # pragma: no branch
+        points[v] = points[v] + normals[v] * (filled[v] - outs[v])
+
+
+def _fills(pushed: Float32, count: Int, y: Float32, sink_high: Float32) -> Bool:
+    """Return True if a vertex is one the fill may move: pushed out, with
+    neighbors, above the band where the mesh sinks."""
+    return pushed > 0 and count > 0 and y > sink_high
+
+
+def _normals(
+    points: List[Vector3], triangles: List[Int], end: Int
+) -> List[Vector3]:
+    """Return the unit normal at each of the first `end` vertices, the
+    mean of the faces round it weighted by their area."""
+    var normals = List[Vector3](length=end, fill=Vector3(0, 0, 0))
+    for t in range(0, len(triangles), 3):  # pragma: no branch
+        var a = points[triangles[t]]
+        var n = cross(
+            points[triangles[t + 1]] - a, points[triangles[t + 2]] - a
+        )
+        for c in range(3):  # pragma: no branch
+            var v = triangles[t + c]
+            if v < end:
+                normals[v] = normals[v] + n
+    for v in range(end):  # pragma: no branch
+        normals[v].normalize()
+    return normals^
+
+
+def carry(
+    mut points: List[Vector3],
+    followed: List[Int],
+    weights: List[Float32],
+    before: List[Vector3],
+    after: List[Vector3],
+):
+    """Move each vertex of a mesh as the coarse triangle it follows moved.
+
+    Args:
+        points: The mesh's vertices, in meters; the first of them follow
+            a coarse triangle each. They are moved.
+        followed: Three corners of a coarse triangle for each follower,
+            numbered among the coarse vertices.
+        weights: Each follower's weights on its triangle's second and
+            third corners.
+        before: The coarse vertices before they moved.
+        after: The coarse vertices after.
+    """
+    for v in range(len(weights) // 2):  # pragma: no branch
+        var a = followed[v * 3]
+        var b = followed[v * 3 + 1]
+        var c = followed[v * 3 + 2]
+        var wb = weights[v * 2]
+        var wc = weights[v * 2 + 1]
+        points[v] = (
+            points[v]
+            + (after[a] - before[a]) * (1 - wb - wc)
+            + (after[b] - before[b]) * wb
+            + (after[c] - before[c]) * wc
+        )
 
 
 def cap_hole(
@@ -353,11 +461,47 @@ def skin_triangles(model: FaceModel) raises -> List[Int]:
     return model.triangles_of(parts)
 
 
-struct ScannedHead(Copyable, Movable):
-    """The face model's head placed on one person's template."""
+def place(
+    h: HeadDimensions, model: FaceModel, count: Int
+) raises -> List[Vector3]:
+    """Return the model's first `count` vertices at rest, placed on the
+    template of `h`: the ear genes warp the ears, and the head's frame
+    places every point.
 
-    # The closed skin as a field, over every vertex of the model in the
-    # pelvis frame; and the height it is cut off at.
+    Args:
+        h: Head landmarks, with the genome.
+        model: The face model, with its expressions.
+        count: How many of the first vertices.
+
+    Returns:
+        The vertices, in the pelvis frame, in meters.
+
+    Raises:
+        Error: If the model has no blinks.
+    """
+    var genome = h.torso.genome
+    var size = genome.get(EAR_SIZE)
+    var protrusion = genome.get(EAR_PROTRUSION)
+    var lobe = genome.get(EAR_LOBE)
+    var shape = model.shape(model.no_identity(), rest_expression(model), count)
+    var points = List[Vector3](capacity=len(shape))
+    for p in shape:  # pragma: no branch
+        var t = warp_ear(scan_to_template(p), size, protrusion, lobe)
+        points.append(h.at(t.x, t.y, t.z))
+    return points^
+
+
+struct ScannedHead(Copyable, Movable):
+    """The face model's head placed on one person's template.
+
+    The field is measured on the skin's coarse copy, fitted over the
+    modeled solids; the whole skin is placed only to be drawn, and
+    follows the coarse copy's fit. See `skin`.
+    """
+
+    var head: HeadDimensions
+    # The coarse copy as a field, closed at its holes, over its own
+    # vertices in the pelvis frame; and the height it is cut off at.
     var mesh: MeshField
     var floor: Float32
     var soft: Float32
@@ -377,53 +521,81 @@ struct ScannedHead(Copyable, Movable):
 
         Args:
             h: Head landmarks, with the genome.
-            model: The face model.
+            model: The face model, with its expressions.
             hull: The modeled solids the skin must cover. The scan is
                 pushed out of them; see `fit_over`.
 
         Raises:
             Error: If the model's shape or its mesh is refused.
         """
-        var genome = h.torso.genome
-        var size = genome.get(EAR_SIZE)
-        var protrusion = genome.get(EAR_PROTRUSION)
-        var lobe = genome.get(EAR_LOBE)
-        var shape = model.shape(model.no_identity(), model.no_expression())
-        var points = List[Vector3](capacity=len(shape))
-        var ear = List[Bool](capacity=len(shape))
-        for index in range(len(shape)):  # pragma: no branch
-            var t = warp_ear(
-                scan_to_template(shape[index]), size, protrusion, lobe
-            )
-            points.append(h.at(t.x, t.y, t.z))
-            ear.append(index < FACE_AND_HEAD.end and ear_weight(t) > 0.5)
+        self.head = h.copy()
         self.floor = h.at(0, SCAN_FLOOR, 0).y
         self.soft = h.cm(1.0)
         self.shoulder_x = h.at(SHOULDER_X, SHOULDER_TOP, 0).x
         self.shoulder_top = h.at(0, SHOULDER_TOP, 0).y
+        # Only the coarse copy's vertices are placed and fitted, numbered
+        # among themselves.
+        var skin = place(h, model, FACE_AND_HEAD.end)
+        var nodes = model.coarse_vertices()
+        var local = List[Int](length=len(skin), fill=-1)
+        var coarse = List[Vector3](capacity=len(nodes))
+        for i in range(len(nodes)):  # pragma: no branch
+            local[nodes[i]] = i
+            coarse.append(skin[nodes[i]])
+        var triangles = List[Int]()
+        for v in model.coarse_triangles():  # pragma: no branch
+            triangles.append(local[v])
         fit_over(
-            points,
-            model.skin_triangles,
-            model.skin_edges,
+            coarse,
+            triangles,
+            model.coarse_edges(),
             hull,
-            FACE_AND_HEAD.end,
+            len(coarse),
             h.cm(FIT_MARGIN),
             self.floor,
             h.at(0, SINK_TOP, 0).y,
             h.cm(SINK),
         )
+        # The ears: the vertices the ear genes move most, where the model
+        # has them.
+        var rest = model.neutral(FACE_AND_HEAD.end)
         self.ears = empty_bounds()
-        for index in range(len(ear)):  # pragma: no branch
-            if ear[index]:
-                self.ears.include_sphere(points[index], 0)
-        # The field searches the skin's coarse copy: it lies within a
-        # fraction of a millimeter of the skin, and is faster to search.
-        var triangles = model.coarse_triangles.copy()
+        for i in range(len(nodes)):  # pragma: no branch
+            if ear_weight(scan_to_template(rest[nodes[i]])) > 0.5:
+                self.ears.include_sphere(coarse[i], 0)
+        # The holes' corners are corners of the coarse copy too.
         for index in range(model.holes()):  # pragma: no branch
-            cap_hole(points, triangles, model.hole(index), self.floor)
-        self.mesh = MeshField(points^, triangles^)
+            var loop = List[Int]()
+            for v in model.hole(index):  # pragma: no branch
+                loop.append(local[v])
+            cap_hole(coarse, triangles, loop, self.floor)
+        self.mesh = MeshField(coarse^, triangles^)
         self.low = Vector3(self.mesh.box_low.x, self.floor, self.mesh.box_low.z)
         self.high = self.mesh.box_high
+
+    def skin(self, model: FaceModel) raises -> List[Vector3]:
+        """Return the skin and its sockets, placed and fitted as the
+        coarse copy was.
+
+        Args:
+            model: The face model the scan was fitted from.
+
+        Returns:
+            The first `EYE_SOCKETS.end` vertices of the model, in the
+            pelvis frame, in meters.
+
+        Raises:
+            Error: If the model has no blinks.
+        """
+        var points = place(self.head, model, EYE_SOCKETS.end)
+        var nodes = model.coarse_vertices()
+        var before = List[Vector3](capacity=len(nodes))
+        var after = List[Vector3](capacity=len(nodes))
+        for i in range(len(nodes)):  # pragma: no branch
+            before.append(points[nodes[i]])
+            after.append(self.mesh.point(i))
+        carry(points, model.followed(), model.follow_weights(), before, after)
+        return points^
 
     def bound(self, point: Vector3) -> Float32:
         """Return a distance the scan's skin is no nearer than, in
@@ -500,7 +672,8 @@ def scan_skin_mesh[
         Error: If no triangle lies above `floor`.
     """
     var triangles = skin_triangles(model)
-    var count = scan.mesh.count()
+    var skin = scan.skin(model)
+    var count = len(skin)
     # Each vertex's place on the field's surface, once it is needed: zero
     # not yet placed, one placed, two lost. A vertex the walk cannot
     # bring onto the surface is off the field's solids, as the scan's
@@ -512,17 +685,22 @@ def scan_skin_mesh[
     var points = List[Vector3]()
     var indices = List[Int]()
     for t in range(0, len(triangles), 3):  # pragma: no branch
-        if not _above(scan.mesh, triangles, t, floor):
+        if not _above(skin, triangles, t, floor):
             continue
         var lost = False
         for c in range(3):  # pragma: no branch
             var v = triangles[t + c]
             if state[v] == 0:
                 state[v] = 1
-                var p = scan.mesh.point(v)
+                var p = skin[v]
                 # The sockets lie inside the closed skin; only the skin
                 # itself is walked onto the field's surface.
-                if v < FACE_AND_HEAD.end and abs(field.distance(p)) > SNAP:
+                # Near the floor the mesh meets the field's own mesh, so
+                # each vertex there is walked onto the surface exactly.
+                var snap = SNAP
+                if p.y < floor + BLEND_BAND:
+                    snap = ON_SURFACE
+                if v < FACE_AND_HEAD.end and abs(field.distance(p)) > snap:
                     p = _walk(field, p, low, high, step)
                     if abs(field.distance(p)) > SNAP:
                         state[v] = 2
@@ -553,6 +731,15 @@ def scan_skin_mesh[
     for v in range(len(sums)):  # pragma: no branch
         var n = sums[v]
         n.normalize()
+        # Near the floor the normal turns to the field's gradient, as the
+        # field's own mesh has it, so the two shade alike where they meet.
+        var rise = (points[v].y - floor) / BLEND_BAND
+        if rise < 1:
+            var g = surface_gradient(field, points[v], step)
+            g.normalize()
+            var w = max(Float32(0), rise)
+            n = n * w + g * (1 - w)
+            n.normalize()
         normals.append(n.x)
         normals.append(n.y)
         normals.append(n.z)
@@ -578,11 +765,11 @@ def _walk[
 
 
 def _above(
-    mesh: MeshField, triangles: List[Int], t: Int, floor: Float32
+    points: List[Vector3], triangles: List[Int], t: Int, floor: Float32
 ) -> Bool:
     """Return True if every corner of triangle `t` lies above `floor`."""
     var bottom = min(
-        mesh.point(triangles[t]).y,
-        min(mesh.point(triangles[t + 1]).y, mesh.point(triangles[t + 2]).y),
+        points[triangles[t]].y,
+        min(points[triangles[t + 1]].y, points[triangles[t + 2]].y),
     )
     return bottom >= floor

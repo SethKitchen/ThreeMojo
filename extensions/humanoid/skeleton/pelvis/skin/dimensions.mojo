@@ -167,9 +167,10 @@ struct PelvisSkinField(Copyable, DistanceField, Movable):
         for _ in range(PELVIS_SKIN_SECTIONS):  # pragma: no branch
             covers.append(self.subcutaneous + self.dermis)
         # Three passes fill a groove between one muscle's belly and the
-        # next, as the fat over them does.
+        # next, as the fat over them does, and four round off each
+        # section that stands proud, so the skin shows no bands.
         self.loft = fit_loft(
-            points, AXIS_Y, bottom, top, PELVIS_SKIN_SECTIONS, covers, 3
+            points, AXIS_Y, bottom, top, PELVIS_SKIN_SECTIONS, covers, 3, 4
         )
         self.low = self.loft.low
         self.high = self.loft.high

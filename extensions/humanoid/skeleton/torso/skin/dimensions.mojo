@@ -168,9 +168,11 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
                 self.belly + (self.chest - self.belly) * t_up + self.dermis
             )
         # Ten passes bridge the dips between the ribs, which skin and
-        # fat span, so the chest reads smooth.
+        # fat span, so the chest reads smooth. Then eight passes round
+        # off each section that stands proud, so the skin shows no
+        # bands where it turns.
         self.loft = fit_loft(
-            points, AXIS_Y, bottom, top, TORSO_SKIN_SECTIONS, covers, 10
+            points, AXIS_Y, bottom, top, TORSO_SKIN_SECTIONS, covers, 10, 8
         )
         self.low = self.loft.low
         self.high = self.loft.high

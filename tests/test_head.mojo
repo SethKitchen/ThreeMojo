@@ -331,7 +331,7 @@ def test_bones_are_named_and_solid() raises:
     assert_true(head_bone_distance(dims, C1, dims.at(1.6, 65.6, -2.1)) < 0)
     assert_true(head_bone_distance(dims, MANDIBLE, dims.at(0, 61.9, 7.7)) < 0)
     assert_true(head_bone_distance(dims, TEETH, dims.at(0, 65.1, 7.0)) < 0)
-    assert_true(head_bone_distance(dims, HYOID, dims.at(0, 59.2, 4.3)) < 0)
+    assert_true(head_bone_distance(dims, HYOID, dims.at(0, 59.2, 3.7)) < 0)
     # The axis's dens rises into the atlas's ring.
     assert_true(head_bone_distance(dims, C2, dims.at(0, 66.0, -1.8)) < 0)
     with assert_raises(contains="cervical"):

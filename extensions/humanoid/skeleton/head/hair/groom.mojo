@@ -193,7 +193,10 @@ struct GroomSpec(ImplicitlyCopyable):
         self.frizz = h.cm(0.12)
         self.sway = Float32(0.25)
         self.wavelength = h.cm(2.5)
-        self.fringe = h.cm(1.0) + h.cm(4.0) * grow
+        # A crop has no fringe: the hair is too short to fall.
+        self.fringe = (
+            h.cm(1.0) * (1 + min(Float32(0), length)) + h.cm(4.0) * grow
+        )
         self.fringe_line = h.at(0, 75.4 + 2.0 * (1 - grow), 0).y
         self.fringe_ragged = h.cm(0.9)
         self.root_tries = ROOT_TRIES

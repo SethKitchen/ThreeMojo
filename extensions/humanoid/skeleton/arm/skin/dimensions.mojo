@@ -165,8 +165,10 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
             var y = bottom + spacing * Float32(section)
             var t = min(max((y - f.elbow.y) / f.cm(6.0) + 0.5, 0), 1)
             covers.append(fore + (upper - fore) * t)
+        # Two passes fill the dips; four round off each section that
+        # stands proud, so the skin shows no bands.
         self.loft = fit_loft(
-            points, AXIS_Y, bottom, top, ARM_SKIN_SECTIONS, covers, 2
+            points, AXIS_Y, bottom, top, ARM_SKIN_SECTIONS, covers, 2, 4
         )
         self.low = self.loft.low
         self.high = self.loft.high

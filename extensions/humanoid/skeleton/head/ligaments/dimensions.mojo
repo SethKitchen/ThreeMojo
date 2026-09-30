@@ -119,8 +119,8 @@ def head_ligament_field(
         _larynx(sweeps, h)
     else:
         var windpipe = List[Vector3]()
-        windpipe.append(h.at(0, 55.3, 2.4))
-        windpipe.append(h.at(0, 52.0, 2.0))
+        windpipe.append(h.at(0, 55.3, 1.4))
+        windpipe.append(h.at(0, 52.0, 1.5))
         windpipe.append(h.at(0, 48.6, 1.4))
         sweeps.append(tube(windpipe, h.cm(0.95), h.cm(0.95)))
     return SweepField(
@@ -161,13 +161,13 @@ def _larynx(mut sweeps: List[Sweep], h: HeadDimensions):
     for s in range(2):  # pragma: no branch
         var x = Float32(1) - Float32(2 * s)
         var plate = Sweep(Vector3(0, 1, 0))
-        plate.add(h.at(x * 2.0, 57.7, 1.8), h.cm(1.1), h.cm(0.18))
-        plate.add(h.at(x * 0.1, 57.9, 4.3), h.cm(1.2), h.cm(0.2))
+        plate.add(h.at(x * 2.0, 57.7, 0.8), h.cm(1.1), h.cm(0.18))
+        plate.add(h.at(x * 0.1, 57.9, 3.3), h.cm(1.2), h.cm(0.2))
         sweeps.append(plate^)
     var ring = List[Vector3]()
     for step in range(13):  # pragma: no branch
         var turn = Float32(2) * pi * Float32(step) / Float32(12)
-        ring.append(h.at(1.25 * sin(turn), 55.9, 2.5 + 1.25 * cos(turn)))
+        ring.append(h.at(1.25 * sin(turn), 55.9, 1.5 + 1.25 * cos(turn)))
     sweeps.append(tube(ring, h.cm(0.32), h.cm(0.32)))
 
 

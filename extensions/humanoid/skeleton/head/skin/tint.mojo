@@ -34,7 +34,10 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     EYEBROWS,
     head_hair_field,
 )
-from extensions.humanoid.skeleton.head.skin.dimensions import EyeLids
+from extensions.humanoid.skeleton.head.skin.dimensions import (
+    EyeLids,
+    HeadSkinField,
+)
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from extensions.humanoid.skeleton.morph import smoothstep
 from math.vector3 import Vector3
@@ -55,12 +58,15 @@ struct _Zone(ImplicitlyCopyable):
     def weight(self, point: Vector3) -> Float32:
         """Return how much of the factor a point takes, 0 through 1."""
         var d = point - self.center
-        var q = sqrt(
+        var q = (
             (d.x / self.radii.x) ** 2
             + (d.y / self.radii.y) ** 2
             + (d.z / self.radii.z) ** 2
         )
-        return 1 - smoothstep(self.core, 1, q)
+        # Most points lie outside most zones.
+        if q >= 1:
+            return 0
+        return 1 - smoothstep(self.core, 1, sqrt(q))
 
 
 # The name of the attribute that says how thin the skin is: one where
@@ -266,24 +272,29 @@ struct _Brows(Movable):
     var low: Vector3
     var high: Vector3
 
-    def __init__(out self, dimensions: HeadMuscleDimensions) raises:
+    def __init__(
+        out self, dimensions: HeadMuscleDimensions, skin: HeadSkinField
+    ) raises:
         """Find the brows and the color their hair gives the skin.
 
         Args:
             dimensions: The head the brows lie on.
+            skin: The head's skin, from the same dimensions.
 
         Raises:
             Error: If the genome or the brows are refused.
         """
-        self.right = _painted(head_hair_field(dimensions, EYEBROWS, RIGHT))
-        self.left = _painted(head_hair_field(dimensions, EYEBROWS, LEFT))
+        self.right = _painted(
+            head_hair_field(dimensions, EYEBROWS, RIGHT, skin)
+        )
+        self.left = _painted(head_hair_field(dimensions, EYEBROWS, LEFT, skin))
         var genome = dimensions.head.torso.genome
-        var skin = skin_tone(genome)
+        var tone = skin_tone(genome)
         var hair = hair_tone(genome)
         self.factor = Vector3(
-            min(Float32(1.5), _linear(hair.r) / _linear(skin.r)),
-            min(Float32(1.5), _linear(hair.g) / _linear(skin.g)),
-            min(Float32(1.5), _linear(hair.b) / _linear(skin.b)),
+            min(Float32(1.5), _linear(hair.r) / _linear(tone.r)),
+            min(Float32(1.5), _linear(hair.g) / _linear(tone.g)),
+            min(Float32(1.5), _linear(hair.b) / _linear(tone.b)),
         )
         self.edge = dimensions.head.cm(0.12)
         self.grain = dimensions.head.cm(0.12)
@@ -349,10 +360,32 @@ def tint_head_skin(
             no `position` attribute.
     """
     dimensions.validate()
+    tint_head_skin(geometry, dimensions, HeadSkinField(dimensions))
+
+
+def tint_head_skin(
+    mut geometry: BufferGeometry,
+    dimensions: HeadMuscleDimensions,
+    skin: HeadSkinField,
+) raises:
+    """Write the face's zones of color into a skin mesh, with the brows
+    laid on a skin already built for the same head.
+
+    Args:
+        geometry: A skin mesh in the pelvis frame, with `position`. Its
+            `color` attribute is written, three linear floats a vertex.
+        dimensions: The head the mesh covers.
+        skin: The head's skin, from the same dimensions.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy, or the mesh has
+            no `position` attribute.
+    """
+    dimensions.validate()
     var zones = _zones(dimensions.head)
     var thin = _thin_zones(dimensions.head)
     var lids = EyeLids(dimensions.head)
-    var brows = _Brows(dimensions)
+    var brows = _Brows(dimensions, skin)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var colors = List[Float32](capacity=count * 3)

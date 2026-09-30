@@ -22,6 +22,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     ScannedHead,
     _walk,
     cap_hole,
+    carry,
     fit_over,
     scan_model,
     scan_skin_mesh,
@@ -61,7 +62,7 @@ def test_the_scan_lands_on_the_template() raises:
     assert_equal(scan_to_template(Vector3(0.01, 0, 0)).x, 1)
     var model = scan_model()
     assert_equal(model.identities(), 0)
-    assert_equal(model.expressions(), 0)
+    assert_equal(model.expressions(), 57)
 
 
 def test_a_mesh_is_pulled_over_a_solid() raises:
@@ -93,7 +94,8 @@ def test_a_mesh_is_pulled_over_a_solid() raises:
     var sides: List[Int] = [0, 1, 1, 2, 2, 0]
     fit_over(still, one, sides, _Ball(0.5, False), 2, 0.01, -9, -8, 0.1)
     assert_equal(still[2].z, 0)
-    # Below the sinking band a mesh is pulled in, to lie just inside.
+    # In the sinking band a mesh is pulled in, to lie where the margin
+    # outside and the sink inside blend: here, halfway.
     var high: List[Vector3] = [
         Vector3(-1, -1, 1),
         Vector3(1, -1, 1),
@@ -101,8 +103,29 @@ def test_a_mesh_is_pulled_over_a_solid() raises:
         Vector3(-1, 1, 1),
         Vector3(0, 0, 1),
     ]
-    fit_over(high, triangles, edges, _Ball(0.5, False), 5, 0.01, 8, 9, 0.1)
-    assert_true(abs(high[4].z - 0.4) < 1e-3)
+    fit_over(high, triangles, edges, _Ball(0.5, False), 5, 0.01, -5, 5, 0.1)
+    assert_true(abs(high[4].z - 0.455) < 1e-3)
+
+
+def test_a_mesh_follows_its_coarse_copy() raises:
+    # Two coarse vertices move; the vertex between them follows halfway,
+    # and a vertex on one follows it whole.
+    var before: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+    ]
+    var after: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(1, 0, 3),
+        Vector3(0, 1, 0),
+    ]
+    var points: List[Vector3] = [Vector3(0.5, 0, 0), Vector3(1, 0, 0)]
+    var followed: List[Int] = [0, 1, 2, 1, 1, 1]
+    var weights: List[Float32] = [0.5, 0, 0, 0]
+    carry(points, followed, weights, before, after)
+    assert_equal(points[0].z, 2)
+    assert_equal(points[1].z, 3)
 
 
 def test_a_hole_is_capped_above_the_floor() raises:
@@ -154,11 +177,11 @@ def test_the_scanned_head() raises:
     var rise = h.at(0, SINK_TOP, 0).y
     var inside = 0
     var sunk = 0
-    for v in range(0, 11248, 7):  # pragma: no branch
+    for v in range(scan.mesh.count()):  # pragma: no branch
         var p = scan.mesh.point(v)
         if p.y > rise and hull.distance(p) < -h.cm(0.1):
             inside += 1
-        if abs(p.y - scan.floor) < h.cm(0.3) and hull.distance(p) < 0:
+        if abs(p.y - scan.floor) < h.cm(0.6) and hull.distance(p) < 0:
             sunk += 1
     assert_equal(inside, 0)
     assert_true(sunk > 0)

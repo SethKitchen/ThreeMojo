@@ -156,6 +156,24 @@ def test_empty_sections_taper_to_their_cover() raises:
     assert_almost_equal(none.section_radius(1, 5), 0.01, atol=1.0e-4)
 
 
+def test_relaxing_rounds_off_a_section_that_stands_proud() raises:
+    # A lone ellipsoid in the middle stands proud of its neighbors.
+    # Relaxing pulls it in, by no more than half its cover, and lifts
+    # the sections beside it.
+    var samples = List[LoftSample]()
+    samples.append(LoftSample(Vector3(0, 0.5, 0), 0.1, 0.05, 0.1, False))
+    var sharp = fit_loft(samples, AXIS_Y, 0, 1, 11, _covers(11, 0.01))
+    var soft = fit_loft(samples, AXIS_Y, 0, 1, 11, _covers(11, 0.01), 0, 3)
+    var peak = sharp.section_radius(5, 0)
+    assert_true(soft.section_radius(5, 0) < peak)
+    assert_almost_equal(soft.section_radius(5, 0), peak - 0.005, atol=1.0e-5)
+    assert_true(soft.section_radius(3, 0) > sharp.section_radius(3, 0))
+    # The end sections keep their taper.
+    assert_almost_equal(
+        soft.section_radius(0, 0), sharp.section_radius(0, 0), atol=1.0e-6
+    )
+
+
 def test_a_section_keeps_its_own_center_when_smoothing_leaves_it() raises:
     # A thin rod that jumps sideways: smoothing would move the centers
     # beside the jump off the rod, so those sections keep their own, and

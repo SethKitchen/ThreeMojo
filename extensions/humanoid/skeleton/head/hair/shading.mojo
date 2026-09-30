@@ -285,9 +285,12 @@ def shade_groom(
                     (n.dot(light.direction) + Float32(0.3)) * 2
                 )
                 var shadow = max(1 - look.shadows, facing * buried)
-                var diffuse = kajiya_kay(base, light.direction, t) + scattered(
-                    base, light.direction, to_camera, t
-                )
+                # Light that diffuses through a fiber crosses it twice,
+                # so its pigment tints it twice: pale hair stays golden
+                # and does not wash out to white.
+                var diffuse = kajiya_kay(
+                    _times(base, base), light.direction, t
+                ) + scattered(base, light.direction, to_camera, t)
                 var specular = marschner(
                     strand_look, light.direction, to_camera, t
                 )

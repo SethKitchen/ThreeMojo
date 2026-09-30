@@ -309,7 +309,7 @@ def body_skin_mesh(
     )
     var skin = merge_geometries(parts)
     share_height(skin, field.low.y, field.high.y - field.low.y)
-    tint_head_skin(skin, head_muscle_dimensions(spec))
+    tint_head_skin(skin, head_muscle_dimensions(spec), field.head)
     return skin^
 
 

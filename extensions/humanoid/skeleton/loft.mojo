@@ -43,6 +43,9 @@ comptime LOFT_SHORTCUT = Float32(0.02)
 comptime AXIS_Y = 1
 # The loft runs along plus z: a foot, from the heel to the toes.
 comptime AXIS_Z = 2
+# The share of a section's cover that relaxing may take back: the fat
+# thins over a bump by at most this much, so no solid comes out.
+comptime LOFT_SLACK = Float32(0.5)
 
 
 @fieldwise_init
@@ -131,6 +134,7 @@ def fit_loft(
     count: Int,
     covers: List[Float32],
     fill: Int = 0,
+    relax: Int = 0,
 ) raises -> Loft:
     """Fit sections from `start` to `end` along `axis`.
 
@@ -144,6 +148,10 @@ def fit_loft(
         fill: Passes that fill a dip one section long, so a solid that
             enters one section and not its neighbors leaves no groove.
             Zero by default.
+        relax: Passes that blend each section's reach with its
+            neighbors', after the dips are filled. A section that stands
+            proud of its neighbors is pulled in, by at most half its
+            cover, so the surface has no kink there. Zero by default.
 
     Returns:
         The fitted loft.
@@ -208,6 +216,8 @@ def fit_loft(
     var raw_v = loft.center_v.copy()
     _smooth_centers(loft)
     var box = empty_bounds()
+    # How far in relaxing may pull each ray.
+    var floors = List[Float32]()
     section = 0
     while section < count:
         var at = start + spacing * Float32(section)
@@ -229,6 +239,7 @@ def fit_loft(
         while ray < LOFT_RAYS:
             var r = hull[ray]
             loft.radii.append(r)
+            floors.append(r - LOFT_SLACK * covers[section])
             var angle = _ray_angle(ray)
             _include(
                 box,
@@ -237,6 +248,7 @@ def fit_loft(
             ray += 1
         section += 1
     _fill_dips(loft, fill)
+    _relax(loft, floors, relax)
     var padded = box.padded(max(spacing, Float32(0.004)))
     loft.low = padded.low
     loft.high = padded.high
@@ -256,25 +268,57 @@ def _fill_dips(mut loft: Loft, passes: Int):
         var before = loft.radii.copy()
         var section = 1
         while section < loft.count - 1:
-            var cu = loft.center_u[section]
-            var cv = loft.center_v[section]
             var ray = 0
             while ray < LOFT_RAYS:
-                var angle = _ray_angle(ray)
-                var ux = cos(angle)
-                var uz = sin(angle)
                 var here = section * LOFT_RAYS + ray
-                var below = before[here - LOFT_RAYS] + (
-                    (loft.center_u[section - 1] - cu) * ux
-                    + (loft.center_v[section - 1] - cv) * uz
-                )
-                var above = before[here + LOFT_RAYS] + (
-                    (loft.center_u[section + 1] - cu) * ux
-                    + (loft.center_v[section + 1] - cv) * uz
-                )
-                var mean = Float32(0.5) * (below + above)
+                var near = _neighbors(loft, before, section, ray)
+                var mean = Float32(0.5) * (near[0] + near[1])
                 if mean > loft.radii[here]:
                     loft.radii[here] = mean
+                ray += 1
+            section += 1
+        done += 1
+
+
+def _neighbors(
+    loft: Loft, radii: List[Float32], section: Int, ray: Int
+) -> Tuple[Float32, Float32]:
+    """Return the reach of the sections below and above along one ray
+    of `section`, measured from its own center."""
+    var angle = _ray_angle(ray)
+    var ux = cos(angle)
+    var uz = sin(angle)
+    var cu = loft.center_u[section]
+    var cv = loft.center_v[section]
+    var here = section * LOFT_RAYS + ray
+    var below = radii[here - LOFT_RAYS] + (
+        (loft.center_u[section - 1] - cu) * ux
+        + (loft.center_v[section - 1] - cv) * uz
+    )
+    var above = radii[here + LOFT_RAYS] + (
+        (loft.center_u[section + 1] - cu) * ux
+        + (loft.center_v[section + 1] - cv) * uz
+    )
+    return (below, above)
+
+
+def _relax(mut loft: Loft, floors: List[Float32], passes: Int):
+    """Blend each inner section's reach with its neighbors', a quarter
+    each, but never below its floor. The end sections keep their taper.
+    """
+    var done = 0
+    while done < passes:
+        var before = loft.radii.copy()
+        var section = 1
+        while section < loft.count - 1:
+            var ray = 0
+            while ray < LOFT_RAYS:
+                var here = section * LOFT_RAYS + ray
+                var near = _neighbors(loft, before, section, ray)
+                var blend = Float32(0.25) * (
+                    near[0] + 2 * before[here] + near[1]
+                )
+                loft.radii[here] = max(floors[here], blend)
                 ray += 1
             section += 1
         done += 1

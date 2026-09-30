@@ -118,6 +118,8 @@ The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Eac
 
 `EYES` draws the two eyeballs. Each is a sphere about 24 mm across on the six-foot template, with the cornea proud of it at the front. The lids are a shell round the front of each eyeball, open in an almond-shaped slit. `iris_albedo` maps the pupil, the iris with its fibers and its limbal ring, and the white sclera. `eye_physical` gives the wet cornea a strong clear coat, so the eye catches a glint.
 
+An eyeball goes where its lids go. The face's genes move the lids and the eye's center by different amounts. So `eye_center` takes the center from the ring where the lids rest on the eyeball. No point of the ring lies behind the eyeball, so the eye never stands out in front of its lids.
+
 | Function | Returns |
 |---|---|
 | `eye_center(dimensions, side)` | The center of one eyeball, in meters. |
@@ -143,6 +145,8 @@ The shell lies over the skin itself: about seven millimeters deep at the sides a
 Each strand is drawn as a `LineSegments2` a pixel wide, unlit, in colors worked out at its points. A real hair is far thinner than a pixel, so the line stands in for it.
 
 The colors are strand-space shading, as Frostbite's hair works it out. Kajiya and Kay's diffuse and Marschner's specular read the strand's direction, not a normal. Marschner's R highlight reflects white off the fiber; TRT passes through it and comes back in the pigment's color. Light is also lost with depth into the hair, as the Beer-Lambert law has it. Call `HairStrands.shade` when the head turns or the camera moves: the highlights move with them. The shading is ported from Frostbitten Hair WebGPU, and the follow strands from AMD TressFX.
+
+Light that diffuses through a fiber crosses it twice, so the pigment tints the diffuse twice. Pale hair then stays golden and does not wash out to white.
 
 `HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 

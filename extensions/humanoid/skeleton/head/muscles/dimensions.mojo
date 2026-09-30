@@ -250,10 +250,10 @@ def head_muscle_paths(part: HeadMuscle) raises -> List[List[Float32]]:
         # The straps from the hyoid over the larynx to the manubrium.
         paths.append(floats(
             1, 0, 0,
-            0.8, 59.1, 4.2, 0.5, 0.25, 0,
-            1.0, 57.6, 4.7, 0.7, 0.25, 1,
-            1.1, 55.0, 4.4, 0.75, 0.25, 1,
-            1.2, 52.0, 3.6, 0.7, 0.25, 1,
+            0.8, 59.1, 3.5, 0.5, 0.25, 0,
+            1.0, 57.6, 3.5, 0.7, 0.25, 1,
+            1.1, 55.0, 3.3, 0.75, 0.25, 1,
+            1.2, 52.0, 3.2, 0.7, 0.25, 1,
             1.3, 49.4, 3.0, 0.5, 0.2, 0,
         ))
     elif part == SUPRAHYOID:
@@ -261,8 +261,8 @@ def head_muscle_paths(part: HeadMuscle) raises -> List[List[Float32]]:
         paths.append(floats(
             1, 0, 0,
             0.0, 61.2, 6.6, 1.2, 0.35, 1,
-            0.0, 60.2, 5.0, 2.6, 0.35, 1,
-            0.0, 59.5, 3.2, 2.2, 0.3, 1,
+            0.0, 60.2, 4.6, 2.6, 0.35, 1,
+            0.0, 59.5, 2.6, 2.2, 0.3, 1,
         ))
     elif part == MASSETER:
         # From the zygomatic arch down the ramus to the angle.

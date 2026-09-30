@@ -28,7 +28,7 @@ from extensions.humanoid.skeleton.head.frame import (
 )
 from extensions.humanoid.skeleton.morph import EYE_X, EYE_Y, EYE_Z
 from math.vector3 import Vector3
-from std.math import cos, max, pi, sin, sqrt
+from std.math import cos, max, min, pi, sin, sqrt
 
 # The eyeball's radius on the template, in centimeters.
 comptime EYEBALL_RADIUS = Float32(1.2)
@@ -36,6 +36,10 @@ comptime EYEBALL_RADIUS = Float32(1.2)
 # radius, and the half-angle of the cap it covers.
 comptime CORNEA_RISE = Float32(0.07)
 comptime CORNEA_COS = Float32(0.86)
+# The lids rest on the eyeball round a ring this far from its front
+# pole, as a cosine, and the ring is sampled at this many points.
+comptime LID_RING_COS = Float32(0.7)
+comptime LID_RING_POINTS = 12
 comptime MIN_EYE_DETAIL = 8
 comptime MAX_EYE_DETAIL = 64
 
@@ -52,6 +56,13 @@ def _side_sign(side: BodySide) raises -> Float32:
 def eye_center(dimensions: HeadDimensions, side: BodySide) raises -> Vector3:
     """Return the center of one eyeball in the pelvis frame.
 
+    The eyeball goes where its lids go. The genes that reshape the face
+    move the lids' ring and the eye's center by different amounts: a
+    low brow ridge, say, draws the upper lid back more than the eye.
+    So the center is taken from the ring where the lids rest on the
+    eyeball: across, its middle; in depth, far enough back that no
+    point of the ring lies behind the eyeball.
+
     Args:
         dimensions: Landmarks from `head_dimensions`.
         side: `RIGHT` or `LEFT`.
@@ -63,7 +74,22 @@ def eye_center(dimensions: HeadDimensions, side: BodySide) raises -> Vector3:
         Error: If `side` is not valid.
     """
     var sign = _side_sign(side)
-    return dimensions.at(sign * EYE_X, EYE_Y, EYE_Z)
+    var reach = EYEBALL_RADIUS * dimensions.frame.morph.eye_scale()
+    var across = reach * sqrt(1 - LID_RING_COS * LID_RING_COS)
+    var sum = Vector3(0, 0, 0)
+    var front = Float32(3.0e38)
+    for k in range(LID_RING_POINTS):  # pragma: no branch
+        var angle = Float32(2 * pi) * Float32(k) / Float32(LID_RING_POINTS)
+        var lid = dimensions.at(
+            sign * EYE_X + across * cos(angle),
+            EYE_Y + across * sin(angle),
+            EYE_Z + reach * LID_RING_COS,
+        )
+        sum = sum + lid
+        front = min(front, lid.z)
+    var center = sum * (Float32(1) / Float32(LID_RING_POINTS))
+    center.z = front - eye_radius(dimensions) * LID_RING_COS
+    return center
 
 
 def eye_radius(dimensions: HeadDimensions) -> Float32:
@@ -73,9 +99,14 @@ def eye_radius(dimensions: HeadDimensions) -> Float32:
         dimensions: Landmarks from `head_dimensions`.
 
     Returns:
-        The template's 12 mm, scaled by stature and `EYE_SIZE`.
+        The template's 12 mm, scaled by stature, by `EYE_SIZE` and by
+        the head's own growth, as its lids are.
     """
-    return dimensions.cm(EYEBALL_RADIUS) * dimensions.frame.morph.eye_scale()
+    return (
+        dimensions.cm(EYEBALL_RADIUS)
+        * dimensions.frame.morph.eye_scale()
+        * dimensions.frame.head
+    )
 
 
 def _radius_at(radius: Float32, cosine: Float32) -> Float32:

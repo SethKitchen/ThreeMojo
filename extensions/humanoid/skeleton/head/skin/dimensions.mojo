@@ -34,6 +34,7 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
 )
+from extensions.humanoid.skeleton.sculpt import box_gap
 from extensions.humanoid.skeleton.head.skin.scan import (
     FIT_MARGIN,
     SCAN_BLEND,
@@ -208,9 +209,9 @@ struct HeadHull(Copyable, DistanceField, Movable):
         # in front.
         sweeps.append(_through(h, x, floats(
             0, 50.5, -2.3, 6.4, 7.2,
-            0, 54.0, -2.0, 5.8, 6.8,
-            0, 58.0, -1.4, 5.5, 6.45,
-            0, 62.0, -1.7, 5.4, 6.6,
+            0, 54.0, -2.2, 5.8, 6.6,
+            0, 58.0, -2.0, 5.5, 5.75,
+            0, 62.0, -1.9, 5.4, 6.2,
             0, 66.0, -2.1, 5.6, 6.65,
         )))
         # Behind the ear, over the mastoid and the splenius.
@@ -263,7 +264,13 @@ struct HeadHull(Copyable, DistanceField, Movable):
     def distance(self, point: Vector3) -> Float32:
         """Return the distance to the vault and the neck, in meters,
         negative inside."""
-        return smin(self.vault(point), self.neck.distance(point), self.blend)
+        var d = self.vault(point)
+        # Farther than the blend past the vault, the neck cannot change
+        # the union, and it costs the most.
+        var limit = d + self.blend
+        if box_gap(self.neck.low, self.neck.high, point) > limit:
+            return d
+        return smin(d, self.neck.within(point, limit), self.blend)
 
 
 struct HeadSkinField(Copyable, DistanceField, Movable):

@@ -39,9 +39,23 @@ from std.math import min
 
 # Where the converted model is kept, from the repository's root.
 comptime FACE_MODEL_PATH = "assets/face/ict_face.bin"
-comptime _VERSION = 4
-# The header: the tag, the version and ten counts.
-comptime HEADER = 48
+comptime _VERSION = 6
+# The file's arrays, in its order: see `FaceModel.sections`.
+comptime _NEUTRAL = 0
+comptime _UVS = 1
+comptime _POSITION_OF = 2
+comptime _TRIANGLES = 3
+comptime _SKIN = 4
+comptime _EDGES = 5
+comptime _LENGTHS = 6
+comptime _CORNERS = 7
+comptime _COARSE = 8
+comptime _KEPT = 9
+comptime _LINKS = 10
+comptime _FOLLOWED = 11
+comptime _WEIGHTS = 12
+# The header: the tag, the version and fourteen counts.
+comptime HEADER = 64
 
 
 @fieldwise_init
@@ -92,9 +106,11 @@ def _u32(bytes: List[UInt8], at: Int) -> Int:
     )
 
 
-def _prefix(header: List[UInt8], identities: Int) -> Int:
-    """Return how many bytes after the header hold the mean head, its
-    mesh and the first `identities` identity modes."""
+def _prefix(header: List[UInt8], identities: Int, expressions: Bool) -> Int:
+    """Return how many bytes after the header hold the mean head and its
+    mesh, the expressions if they are wanted or identities follow them,
+    and the first `identities` identity modes, or all for a negative
+    count."""
     var vertices = _u32(header, 8)
     var drawn = _u32(header, 12)
     var shorts = (
@@ -105,13 +121,19 @@ def _prefix(header: List[UInt8], identities: Int) -> Int:
         + _u32(header, 36)
         + _u32(header, 40)
         + _u32(header, 44) * 3
+        + _u32(header, 52)
+        + _u32(header, 56) * 2
+        + _u32(header, 60) * 3
     )
     var modes = _u32(header, 20)
     if identities >= 0:
         modes = min(modes, identities)
-    return _aligned(vertices * 12 + drawn * 8 + shorts * 2) + modes * _aligned(
-        4 + vertices * 3
+    var wanted = (
+        vertices * 12 + drawn * 8 + _aligned(shorts * 2) + _u32(header, 60) * 8
     )
+    if expressions or modes > 0:
+        wanted += _u32(header, 48)
+    return wanted + modes * _aligned(4 + vertices * 3)
 
 
 def _aligned(at: Int) -> Int:
@@ -143,21 +165,12 @@ def _floats(bytes: List[UInt8], at: Int, count: Int) -> List[Float32]:
 struct FaceModel(Movable):
     """The mean head, its identity modes and its expression shapes."""
 
-    var neutral: List[Vector3]
-    # Each drawn vertex's position in `neutral`, and its texture
-    # coordinates: a position on a seam of the texture is drawn twice.
-    var position_of: List[Int]
-    var uvs: List[Float32]
-    # Three drawn vertices a triangle.
-    var triangles: List[Int]
-    # The skin, the face and the head: its triangles, three vertices
-    # each; its edges, two each; and its holes, the mouth, the eyes and
-    # the base of the neck, each a loop of vertices in the order its
-    # triangles run its edges.
-    var skin_triangles: List[Int]
-    var skin_edges: List[Int]
-    # The skin's coarse copy, over its own vertices, for distances.
-    var coarse_triangles: List[Int]
+    # Where each of the file's arrays starts, in bytes, and how many
+    # values it holds; see the `_NEUTRAL` to `_WEIGHTS` sections. Each is
+    # read when it is asked for, so a head that needs a few reads no
+    # more.
+    var sections: List[Int]
+    var sizes: List[Int]
     var hole_starts: List[Int]
     var hole_corners: List[Int]
     # The file, whose shape modes are read where they lie: each identity
@@ -180,9 +193,8 @@ struct FaceModel(Movable):
         """Read a converted model.
 
         The file holds the mean head and its mesh first, then the
-        identity modes, then the expressions. Only as much of it is read
-        as is asked for, so a head that needs no expressions loads in a
-        few milliseconds.
+        expressions, then the identity modes. Only as much of it is read
+        as is asked for, so a head at rest loads in a few milliseconds.
 
         Args:
             path: The file `tools/ict_face_model.py` writes.
@@ -198,15 +210,11 @@ struct FaceModel(Movable):
         with open(path, "r") as source:
             self.bytes = source.read_bytes(HEADER)
             if len(self.bytes) == HEADER:
-                var wanted = -1
-                if not expressions:
-                    wanted = _prefix(self.bytes, identities)
-                elif identities >= 0:
-                    raise Error(
-                        "A face model with its expressions reads every"
-                        " identity mode"
+                self.bytes.extend(
+                    source.read_bytes(
+                        _prefix(self.bytes, identities, expressions)
                     )
-                self.bytes.extend(source.read_bytes(wanted))
+                )
         if (
             len(self.bytes) < HEADER
             or self.bytes[0] != 73
@@ -231,6 +239,10 @@ struct FaceModel(Movable):
         var holes = _u32(self.bytes, 36)
         var corners = _u32(self.bytes, 40)
         var coarse = _u32(self.bytes, 44)
+        var shape_bytes = _u32(self.bytes, 48)
+        var kept = _u32(self.bytes, 52)
+        var links = _u32(self.bytes, 56)
+        var followers = _u32(self.bytes, 60)
         var at = HEADER
         var shorts = (
             drawn
@@ -240,35 +252,44 @@ struct FaceModel(Movable):
             + holes
             + corners
             + coarse * 3
+            + kept
+            + links * 2
+            + followers * 3
         )
-        _need(self.bytes, at, vertices * 12 + drawn * 8 + shorts * 2)
-        var coordinates = _floats(self.bytes, at, vertices * 3)
-        self.neutral = List[Vector3](capacity=vertices)
-        for v in range(vertices):  # pragma: no branch
-            self.neutral.append(
-                Vector3(
-                    coordinates[v * 3],
-                    coordinates[v * 3 + 1],
-                    coordinates[v * 3 + 2],
-                )
-            )
-        at += vertices * 12
-        self.uvs = _floats(self.bytes, at, drawn * 2)
-        at += drawn * 8
-        self.position_of = _shorts(self.bytes, at, drawn)
-        at += drawn * 2
-        self.triangles = _shorts(self.bytes, at, triangle_count * 3)
-        at += triangle_count * 6
-        self.skin_triangles = _shorts(self.bytes, at, skin * 3)
-        at += skin * 6
-        self.skin_edges = _shorts(self.bytes, at, edges * 2)
-        at += edges * 4
-        var lengths = _shorts(self.bytes, at, holes)
-        at += holes * 2
-        self.hole_corners = _shorts(self.bytes, at, corners)
-        at += corners * 2
-        self.coarse_triangles = _shorts(self.bytes, at, coarse * 3)
-        at = _aligned(at + coarse * 6)
+        _need(
+            self.bytes,
+            at,
+            vertices * 12 + drawn * 8 + _aligned(shorts * 2) + followers * 8,
+        )
+        self.sections = List[Int]()
+        self.sizes = List[Int]()
+        var counts: List[Int] = [
+            vertices * 3,
+            drawn * 2,
+            drawn,
+            triangle_count * 3,
+            skin * 3,
+            edges * 2,
+            holes,
+            corners,
+            coarse * 3,
+            kept,
+            links * 2,
+            followers * 3,
+        ]
+        var widths: List[Int] = [4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+        for k in range(len(counts)):  # pragma: no branch
+            self.sections.append(at)
+            self.sizes.append(counts[k])
+            at += counts[k] * widths[k]
+        at = _aligned(at)
+        self.sections.append(at)
+        self.sizes.append(followers * 2)
+        at += followers * 8
+        var lengths = _shorts(self.bytes, self.sections[_LENGTHS], holes)
+        self.hole_corners = _shorts(
+            self.bytes, self.sections[_CORNERS], corners
+        )
         self.hole_starts = [0]
         for length in lengths:  # pragma: no branch
             self.hole_starts.append(
@@ -276,19 +297,12 @@ struct FaceModel(Movable):
             )
         if self.hole_starts[len(self.hole_starts) - 1] != corners:
             raise Error("A face model's holes miscount their corners")
-        var mode = _aligned(4 + vertices * 3)
-        _need(self.bytes, at, modes * mode)
-        self.identity_offsets = List[Int](capacity=modes)
-        self.identity_scales = List[Float32](capacity=modes)
-        for _ in range(modes):  # pragma: no branch
-            self.identity_scales.append(_floats(self.bytes, at, 1)[0])
-            self.identity_offsets.append(at + 4)
-            at += mode
         self.expression_names = List[String]()
         self.expression_scales = List[Float32]()
         self.expression_counts = List[Int]()
         self.expression_vertices = List[Int]()
         self.expression_moves = List[Int]()
+        var identities_at = at + shape_bytes
         for _ in range(shapes):  # pragma: no branch
             _need(self.bytes, at, 1)
             var length = Int(self.bytes[at])
@@ -308,6 +322,93 @@ struct FaceModel(Movable):
             at = _aligned(at + moved * 2)
             self.expression_moves.append(at)
             at = _aligned(at + moved * 3)
+        at = identities_at
+        var mode = _aligned(4 + vertices * 3)
+        if modes > 0:
+            _need(self.bytes, at, modes * mode)
+        self.identity_offsets = List[Int](capacity=modes)
+        self.identity_scales = List[Float32](capacity=modes)
+        for _ in range(modes):  # pragma: no branch
+            self.identity_scales.append(_floats(self.bytes, at, 1)[0])
+            self.identity_offsets.append(at + 4)
+            at += mode
+
+    def _ints(self, section: Int) -> List[Int]:
+        """Return one of the file's arrays of 16-bit integers."""
+        return _shorts(self.bytes, self.sections[section], self.sizes[section])
+
+    def vertex_count(self) -> Int:
+        """Return how many vertices the model has."""
+        return self.sizes[_NEUTRAL] // 3
+
+    def neutral(self, count: Int = -1) -> List[Vector3]:
+        """Return the mean head's first `count` vertices, or all of them.
+
+        Args:
+            count: How many vertices. All of them by default, or for more
+                than the model has.
+
+        Returns:
+            Their positions, in meters.
+        """
+        var n = self.vertex_count()
+        if count >= 0:
+            n = min(n, count)
+        var values = _floats(self.bytes, self.sections[_NEUTRAL], n * 3)
+        var points = List[Vector3](capacity=n)
+        for v in range(n):  # pragma: no branch
+            points.append(
+                Vector3(values[v * 3], values[v * 3 + 1], values[v * 3 + 2])
+            )
+        return points^
+
+    def uvs(self) -> List[Float32]:
+        """Return each drawn vertex's texture coordinates, two floats."""
+        return _floats(self.bytes, self.sections[_UVS], self.sizes[_UVS])
+
+    def position_of(self) -> List[Int]:
+        """Return each drawn vertex's vertex: a vertex on a seam of the
+        texture is drawn once for each side."""
+        return self._ints(_POSITION_OF)
+
+    def triangles(self) -> List[Int]:
+        """Return the triangles, three drawn vertices each."""
+        return self._ints(_TRIANGLES)
+
+    def skin_triangles(self) -> List[Int]:
+        """Return the skin's triangles, three vertices each: the face and
+        the head."""
+        return self._ints(_SKIN)
+
+    def skin_edges(self) -> List[Int]:
+        """Return the skin's edges, two vertices each, each edge once."""
+        return self._ints(_EDGES)
+
+    def coarse_triangles(self) -> List[Int]:
+        """Return the skin's coarse copy's triangles, over the skin's own
+        vertices, three each."""
+        return self._ints(_COARSE)
+
+    def coarse_vertices(self) -> List[Int]:
+        """Return the vertices the coarse copy uses."""
+        return self._ints(_KEPT)
+
+    def coarse_edges(self) -> List[Int]:
+        """Return the coarse copy's edges, two each, numbered among its
+        vertices."""
+        return self._ints(_LINKS)
+
+    def followed(self) -> List[Int]:
+        """Return each skin vertex's coarse triangle, three corners
+        numbered among the coarse vertices."""
+        return self._ints(_FOLLOWED)
+
+    def follow_weights(self) -> List[Float32]:
+        """Return each skin vertex's weights on its coarse triangle's
+        second and third corners."""
+        return _floats(
+            self.bytes, self.sections[_WEIGHTS], self.sizes[_WEIGHTS]
+        )
 
     def holes(self) -> Int:
         """Return how many holes the skin has."""
@@ -365,18 +466,22 @@ struct FaceModel(Movable):
         raise Error("The face model has no expression " + name)
 
     def shape(
-        self, identity: List[Float32], expression: List[Float32]
+        self,
+        identity: List[Float32],
+        expression: List[Float32],
+        count: Int = -1,
     ) raises -> List[Vector3]:
-        """Return every vertex for an identity and an expression, in the
+        """Return the vertices for an identity and an expression, in the
         model's frame.
 
         Args:
             identity: One weight per identity mode, each about a standard
                 normal.
             expression: One weight per expression shape, zero through one.
+            count: How many of the first vertices. All of them by default.
 
         Returns:
-            One position per vertex of the model, in meters.
+            One position per vertex, in meters.
 
         Raises:
             Error: If a list has the wrong length.
@@ -385,15 +490,15 @@ struct FaceModel(Movable):
             raise Error("A face needs one weight per identity mode")
         if len(expression) != self.expressions():
             raise Error("A face needs one weight per expression")
-        var points = self.neutral.copy()
-        var count = len(points)
+        var points = self.neutral(count)
+        var n = len(points)
         for mode in range(len(identity)):  # pragma: no branch
             var w = identity[mode] * self.identity_scales[mode]
             if w == 0:
                 continue
             var moves = self.bytes.unsafe_ptr().unsafe_bitcast[Int8]()
             var first = self.identity_offsets[mode]
-            for v in range(count):  # pragma: no branch
+            for v in range(n):  # pragma: no branch
                 var at = first + v * 3
                 points[v] = (
                     points[v]
@@ -414,6 +519,8 @@ struct FaceModel(Movable):
             var start = self.expression_moves[shape]
             for k in range(self.expression_counts[shape]):  # pragma: no branch
                 var v = Int(words[unsafe_offset=first + k])
+                if v >= n:
+                    continue
                 var at = start + k * 3
                 points[v] = (
                     points[v]
@@ -428,7 +535,7 @@ struct FaceModel(Movable):
 
     def _check(self, part: FacePart) raises:
         """Raise unless `part` is a valid run of the model's vertices."""
-        if not part.is_valid() or part.end > len(self.neutral):
+        if not part.is_valid() or part.end > self.vertex_count():
             raise Error("A face part must be a run of the model's vertices")
 
     def triangles_of(self, parts: List[FacePart]) raises -> List[Int]:
@@ -448,11 +555,13 @@ struct FaceModel(Movable):
         """
         for part in parts:  # pragma: no branch
             self._check(part)
+        var triangles = self.triangles()
+        var position_of = self.position_of()
         var kept = List[Int]()
-        for t in range(0, len(self.triangles), 3):  # pragma: no branch
-            var a = self.position_of[self.triangles[t]]
-            var b = self.position_of[self.triangles[t + 1]]
-            var c = self.position_of[self.triangles[t + 2]]
+        for t in range(0, len(triangles), 3):  # pragma: no branch
+            var a = position_of[triangles[t]]
+            var b = position_of[triangles[t + 1]]
+            var c = position_of[triangles[t + 2]]
             if _in_parts(parts, a, b, c):
                 kept.append(a)
                 kept.append(b)
@@ -479,39 +588,42 @@ struct FaceModel(Movable):
                 no triangles.
         """
         self._check(part)
-        if len(points) != len(self.neutral):
+        if len(points) != self.vertex_count():
             raise Error("A face part needs one point per model vertex")
-        var remap = List[Int](length=len(self.position_of), fill=-1)
+        var triangles = self.triangles()
+        var position_of = self.position_of()
+        var model_uvs = self.uvs()
+        var remap = List[Int](length=len(position_of), fill=-1)
         var positions = List[Float32]()
         var uvs = List[Float32]()
         var owners = List[Int]()
         var indices = List[Int]()
         var parts: List[FacePart] = [part]
-        for t in range(0, len(self.triangles), 3):  # pragma: no branch
+        for t in range(0, len(triangles), 3):  # pragma: no branch
             if not _in_parts(
                 parts,
-                self.position_of[self.triangles[t]],
-                self.position_of[self.triangles[t + 1]],
-                self.position_of[self.triangles[t + 2]],
+                position_of[triangles[t]],
+                position_of[triangles[t + 1]],
+                position_of[triangles[t + 2]],
             ):
                 continue
             for c in range(3):  # pragma: no branch
-                var d = self.triangles[t + c]
+                var d = triangles[t + c]
                 if remap[d] < 0:
                     remap[d] = len(owners)
-                    var p = self.position_of[d]
+                    var p = position_of[d]
                     owners.append(p)
                     positions.append(points[p].x)
                     positions.append(points[p].y)
                     positions.append(points[p].z)
-                    uvs.append(self.uvs[d * 2])
-                    uvs.append(self.uvs[d * 2 + 1])
+                    uvs.append(model_uvs[d * 2])
+                    uvs.append(model_uvs[d * 2 + 1])
                 indices.append(remap[d])
         if len(indices) == 0:
             raise Error("That face part has no triangles")
         # Smooth normals, summed per position so a seam does not show.
         var sums = List[Vector3](
-            length=len(self.neutral), fill=Vector3(0, 0, 0)
+            length=self.vertex_count(), fill=Vector3(0, 0, 0)
         )
         for t in range(0, len(indices), 3):  # pragma: no branch
             var a = points[owners[indices[t]]]

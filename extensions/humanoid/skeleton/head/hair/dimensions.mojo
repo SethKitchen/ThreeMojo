@@ -130,59 +130,97 @@ def head_hair_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
+    if is_paired_head_hair(part):
+        return head_hair_field(
+            dimensions, part, side, HeadSkinField(dimensions)
+        )
+    if not side.is_valid():
+        raise Error("A head side must be RIGHT or LEFT")
+    return _scalp_field(dimensions)
+
+
+def head_hair_field(
+    dimensions: HeadMuscleDimensions,
+    part: HeadHair,
+    side: BodySide,
+    skin: HeadSkinField,
+) raises -> SweepField:
+    """Return the implicit solid of one head hair group, laid on a skin
+    already built for the same head.
+
+    Args:
+        dimensions: Landmarks from `head_muscle_dimensions`.
+        part: A named group.
+        side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
+        skin: The head's skin, from the same dimensions.
+
+    Returns:
+        The group's field.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy, if `part` is
+            not named, or if `side` is not valid.
+    """
+    dimensions.validate()
     var paired = is_paired_head_hair(part)
     if not side.is_valid():
         raise Error("A head side must be RIGHT or LEFT")
+    if not paired:
+        return _scalp_field(dimensions)
     var h = dimensions.head.copy()
     var f = h.frame
     var sweeps = List[Sweep]()
     var domes = List[Dome]()
-    if paired:
-        # Each station of the brow is laid on the skin: authored in
-        # front of the face, then walked back onto it.
-        var skin = HeadSkinField(dimensions)
-        var full = max(
-            Float32(0.45),
-            1 + Float32(0.45) * h.torso.genome.get(BROW_THICKNESS),
+    # Each station of the brow is laid on the skin: authored in
+    # front of the face, then walked back onto it.
+    var full = max(
+        Float32(0.45),
+        1 + Float32(0.45) * h.torso.genome.get(BROW_THICKNESS),
+    )
+    var rows: List[Float32] = [
+        1.2,
+        74.15,
+        0.3,
+        2.2,
+        74.45,
+        0.3,
+        3.4,
+        74.6,
+        0.25,
+        4.5,
+        74.35,
+        0.17,
+        5.4,
+        73.85,
+        0.1,
+    ]
+    var points = List[Vector3]()
+    for index in range(len(rows) // 3):  # pragma: no branch
+        points.append(
+            _on_skin(skin, h.at(rows[index * 3], rows[index * 3 + 1], 12.0))
         )
-        var rows: List[Float32] = [
-            1.2,
-            74.15,
-            0.3,
-            2.2,
-            74.45,
-            0.3,
-            3.4,
-            74.6,
-            0.25,
-            4.5,
-            74.35,
-            0.17,
-            5.4,
-            73.85,
-            0.1,
-        ]
-        var points = List[Vector3]()
-        for index in range(len(rows) // 3):  # pragma: no branch
-            points.append(
-                _on_skin(skin, h.at(rows[index * 3], rows[index * 3 + 1], 12.0))
-            )
-        # The brow's height runs up the skin, not straight up: the brow
-        # ridge leans back, and a band held upright would stand off it.
-        var n = skin.gradient(points[2])
-        var up = Vector3(0, 1, 0) - n * n.y
-        up.normalize()
-        var brow = Sweep(up)
-        for index in range(len(points)):  # pragma: no branch
-            brow.add(
-                points[index],
-                h.cm(rows[index * 3 + 2]) * full,
-                h.cm(0.035) * full,
-            )
-        sweeps.append(brow^)
-        return SweepField(
-            sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2)
+    # The brow's height runs up the skin, not straight up: the brow
+    # ridge leans back, and a band held upright would stand off it.
+    var n = skin.gradient(points[2])
+    var up = Vector3(0, 1, 0) - n * n.y
+    up.normalize()
+    var brow = Sweep(up)
+    for index in range(len(points)):  # pragma: no branch
+        brow.add(
+            points[index],
+            h.cm(rows[index * 3 + 2]) * full,
+            h.cm(0.035) * full,
         )
+    sweeps.append(brow^)
+    return SweepField(sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2))
+
+
+def _scalp_field(dimensions: HeadMuscleDimensions) raises -> SweepField:
+    """Return the scalp's hair's solid: a shell over the cranium."""
+    var h = dimensions.head.copy()
+    var f = h.frame
+    var sweeps = List[Sweep]()
+    var domes = List[Dome]()
     # A shell over the cranium's skin, down to the nape.
     domes.append(
         Dome(
@@ -283,9 +321,31 @@ struct HairShape(Copyable, DistanceField, Movable):
             Error: If `dimensions.validate` refuses the copy, if `part`
                 is not named, or if `side` is not valid.
         """
-        self.group = head_hair_field(dimensions, part, side)
+        self = HairShape(dimensions, part, side, HeadSkinField(dimensions))
+
+    def __init__(
+        out self,
+        dimensions: HeadMuscleDimensions,
+        part: HeadHair,
+        side: BodySide,
+        skin: HeadSkinField,
+    ) raises:
+        """Shape one head hair group on a skin already built for the same
+        head.
+
+        Args:
+            dimensions: Landmarks from `head_muscle_dimensions`.
+            part: A named group.
+            side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
+            skin: The head's skin, from the same dimensions.
+
+        Raises:
+            Error: If `dimensions.validate` refuses the copy, if `part`
+                is not named, or if `side` is not valid.
+        """
+        self.group = head_hair_field(dimensions, part, side, skin)
         self.scalp = not is_paired_head_hair(part)
-        self.skin = HeadSkinField(dimensions)
+        self.skin = skin.copy()
         var h = dimensions.head.copy()
         self.soft = h.cm(0.8)
         self.length = h.torso.genome.get(HAIR_LENGTH)
