@@ -141,19 +141,27 @@ def head_hair_field(
         )
         var brow = Sweep(Vector3(0, 1, 0))
         var rows: List[Float32] = [
-            1.2, 74.15, 0.3,
-            2.2, 74.45, 0.3,
-            3.4, 74.6, 0.25,
-            4.4, 74.35, 0.17,
-            5.2, 73.85, 0.1,
+            1.2,
+            74.15,
+            0.3,
+            2.2,
+            74.45,
+            0.3,
+            3.4,
+            74.6,
+            0.25,
+            4.4,
+            74.35,
+            0.17,
+            5.2,
+            73.85,
+            0.1,
         ]
         for index in range(len(rows) // 3):  # pragma: no branch
             var p = _on_skin(
                 skin, h.at(rows[index * 3], rows[index * 3 + 1], 10.5)
             )
-            brow.add(
-                p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.1) * full
-            )
+            brow.add(p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.1) * full)
         sweeps.append(brow^)
         return SweepField(
             sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2)
@@ -211,7 +219,10 @@ struct HairShape(Copyable, DistanceField, Movable):
     var high: Vector3
 
     def __init__(
-        out self, dimensions: HeadMuscleDimensions, part: HeadHair, side: BodySide
+        out self,
+        dimensions: HeadMuscleDimensions,
+        part: HeadHair,
+        side: BodySide,
     ) raises:
         """Shape one head hair group.
 

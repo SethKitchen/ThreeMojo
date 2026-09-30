@@ -292,7 +292,9 @@ def add_pelvis(
                     nerve,
                 )
     if contents.includes_skin():
-        var skin = _resolved_paint(assets, skin_paint, skin_phong(genome=spec.genome))
+        var skin = _resolved_paint(
+            assets, skin_paint, skin_phong(genome=spec.genome)
+        )
         _place(
             scene,
             assets,

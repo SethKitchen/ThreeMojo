@@ -340,16 +340,20 @@ struct HeadMorph(ImplicitlyCopyable):
         # projection brings the tip forward, and the bridge rises.
         w = bump(p, Vector3(0, 70.0, 9.6), 3.6)
         if w > 0:
-            d.y -= max(Float32(0), 73.4 - p.y) * Float32(0.14) * (
-                self.nose_length * w
+            d.y -= (
+                max(Float32(0), 73.4 - p.y)
+                * Float32(0.14)
+                * (self.nose_length * w)
             )
         w = bump(p, Vector3(0, 68.4, 9.6), 2.4)
         if w > 0:
             d.x += p.x * Float32(0.28) * self.nose_width * w
         w = bump(p, Vector3(0, 69.0, 10.2), 2.8)
         if w > 0:
-            d.z += max(Float32(0), p.z - 8.2) * Float32(0.30) * (
-                self.nose_projection * w
+            d.z += (
+                max(Float32(0), p.z - 8.2)
+                * Float32(0.30)
+                * (self.nose_projection * w)
             )
         w = bump(p, Vector3(0, 72.2, 9.1), 1.8)
         if w > 0:
@@ -382,7 +386,5 @@ struct HeadMorph(ImplicitlyCopyable):
             if p.y > VAULT_Y:
                 p.y = VAULT_Y + (p.y - VAULT_Y) * s.y
         # The neck stretches between its base and the skull.
-        p.y += NECK_STRETCH * self.neck_length * smoothstep(
-            51.5, 64.0, point.y
-        )
+        p.y += NECK_STRETCH * self.neck_length * smoothstep(51.5, 64.0, point.y)
         return p

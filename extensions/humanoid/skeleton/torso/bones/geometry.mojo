@@ -45,7 +45,10 @@ def torso_bone(
             out of range, or if the field produces no surface.
     """
     return torso_bone_from_dimensions(
-        torso_dimensions(spec.stature, spec.sex, spec.genome), part, side, detail
+        torso_dimensions(spec.stature, spec.sex, spec.genome),
+        part,
+        side,
+        detail,
     )
 
 

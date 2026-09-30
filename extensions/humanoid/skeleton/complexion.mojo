@@ -214,8 +214,10 @@ def iris_tone(genome: Genome) raises -> Color:
 
 def _hash(x: Int, y: Int, seed: Int) -> Float32:
     """Return a value in 0 through 1 hashed from a lattice point."""
-    var h = UInt32(x) * 374761393 + UInt32(y) * 668265263 + UInt32(seed) * (
-        2246822519
+    var h = (
+        UInt32(x) * 374761393
+        + UInt32(y) * 668265263
+        + UInt32(seed) * (2246822519)
     )
     h = (h ^ (h >> 13)) * 1274126177
     h = h ^ (h >> 16)
@@ -378,8 +380,8 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
     # skin, which is already dark.
     var freckle = max(Float32(0), genome.get(FRECKLES))
     var fair = 1 - _clamp(melanin + Float32(0.2), 0, 1)
-    var freckle_chance = freckle * Float32(0.6) * (
-        Float32(0.3) + Float32(0.7) * fair
+    var freckle_chance = (
+        freckle * Float32(0.6) * (Float32(0.3) + Float32(0.7) * fair)
     )
     var pore_cell = max(3, size // 64)
     var freckle_cell = max(4, size // 32)
@@ -404,7 +406,9 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
             g *= dim
             b *= dim
             if freckle_chance > 0:
-                var spot = _spots(fx, fy, size, freckle_cell, freckle_chance, 53)
+                var spot = _spots(
+                    fx, fy, size, freckle_cell, freckle_chance, 53
+                )
                 r = _lerp(r, r * Float32(0.80), spot)
                 g = _lerp(g, g * Float32(0.68), spot)
                 b = _lerp(b, b * Float32(0.58), spot)
@@ -539,7 +543,9 @@ def iris_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                 tone = Tone(base.r * shade, base.g * shade, base.b * shade)
             else:
                 var t = _smooth(EYE_IRIS, EYE_IRIS + 0.04, v)
-                var vein = _smooth(0.35, 0.5, _fbm(fx, Float32(y), size, 12, 3, 101))
+                var vein = _smooth(
+                    0.35, 0.5, _fbm(fx, Float32(y), size, 12, 3, 101)
+                )
                 var back = _smooth(0.3, 0.9, v)
                 tone = sclera.mix(Tone(200, 120, 110), vein * back * 0.5)
                 tone = Tone(
@@ -572,7 +578,9 @@ def iris_albedo(size: Int = 64, genome: Genome = Genome()) raises -> Texture:
     Raises:
         Error: If `size` is out of range or `genome` is not valid.
     """
-    return Texture(size, size, iris_pixels(size, genome), REPEAT, color_space=SRGB)
+    return Texture(
+        size, size, iris_pixels(size, genome), REPEAT, color_space=SRGB
+    )
 
 
 def hair_pixels(size: Int, genome: Genome) raises -> List[UInt8]:

@@ -72,8 +72,12 @@ def test_skin_tone_darkens_with_melanin() raises:
     var fair = skin_tone(_with(-1))
     var middle = skin_tone(Genome())
     var dark = skin_tone(_with(1))
-    assert_true(_luma(fair.r, fair.g, fair.b) > _luma(middle.r, middle.g, middle.b))
-    assert_true(_luma(middle.r, middle.g, middle.b) > _luma(dark.r, dark.g, dark.b))
+    assert_true(
+        _luma(fair.r, fair.g, fair.b) > _luma(middle.r, middle.g, middle.b)
+    )
+    assert_true(
+        _luma(middle.r, middle.g, middle.b) > _luma(dark.r, dark.g, dark.b)
+    )
     assert_true(fair.r > 240 and dark.r < 90)
     # A warm undertone is yellower than a cool one.
     var warm = skin_tone(Genome().with_gene(UNDERTONE, Expression(1)))
@@ -149,11 +153,15 @@ def test_map_sizes_are_checked() raises:
 def test_skin_maps() raises:
     var pixels = skin_albedo_pixels(32, Genome())
     assert_equal(len(pixels), 32 * 32 * 4)
-    var freckled = Genome().with_gene(FRECKLES, Expression(1)).with_gene(
-        MELANIN, Expression(-0.8)
+    var freckled = (
+        Genome()
+        .with_gene(FRECKLES, Expression(1))
+        .with_gene(MELANIN, Expression(-0.8))
     )
     var spotted = skin_albedo_pixels(64, freckled)
-    var clear = skin_albedo_pixels(64, freckled.with_gene(FRECKLES, Expression(-1)))
+    var clear = skin_albedo_pixels(
+        64, freckled.with_gene(FRECKLES, Expression(-1))
+    )
     var darker = 0
     for index in range(64 * 64):  # pragma: no branch
         if Int(spotted[index * 4 + 2]) + 6 < Int(clear[index * 4 + 2]):

@@ -229,7 +229,9 @@ def add_hand(
                 nerve,
             )
     if contents.includes_skin():
-        var skin = resolved_paint(assets, skin_paint, skin_phong(genome=spec.genome))
+        var skin = resolved_paint(
+            assets, skin_paint, skin_phong(genome=spec.genome)
+        )
         place_mesh(
             scene,
             assets,

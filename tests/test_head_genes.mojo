@@ -211,7 +211,9 @@ def test_frame_genes_move_the_skeleton() raises:
         shoulder_girdle(broad).acromion.x > shoulder_girdle(plain).acromion.x
     )
     # The waist, low in the frame, keeps its width.
-    assert_true(abs(broad.frame.at(10, 12, 0).x - plain.frame.at(10, 12, 0).x) < 1e-5)
+    assert_true(
+        abs(broad.frame.at(10, 12, 0).x - plain.frame.at(10, 12, 0).x) < 1e-5
+    )
     var deep = torso_dimensions(stature, MALE, _one(CHEST_DEPTH, 1))
     assert_true(deep.frame.at(0, 36, 9).z > plain.frame.at(0, 36, 9).z)
     var long = arm_dimensions(stature, MALE, _one(ARM_LENGTH, 1))
@@ -235,7 +237,9 @@ def test_eyes() raises:
     assert_true(right.x > 0 and abs(right.x + left.x) < 1e-5)
     with assert_raises(contains="RIGHT or LEFT"):
         _ = eye_center(dims.head, BodySide(5))
-    assert_true(abs(eye_radius(dims.head) - dims.head.cm(EYEBALL_RADIUS)) < 1e-6)
+    assert_true(
+        abs(eye_radius(dims.head) - dims.head.cm(EYEBALL_RADIUS)) < 1e-6
+    )
     var big = head_muscle_dimensions(_person(_one(EYE_SIZE, 1)))
     assert_true(eye_radius(big.head) > eye_radius(dims.head))
     var mesh = eyeball_mesh(dims, RIGHT, 8)
@@ -266,7 +270,9 @@ def test_lids_open_on_the_eye() raises:
     # Far off, the lids are far.
     assert_true(lids.distance(eye + Vector3(0, 0, 0.2)) > 0.1)
     var left = eye_center(h, LEFT)
-    assert_true(lids.distance(left + Vector3(0, shell * 0.64, shell * 0.77)) < 0)
+    assert_true(
+        lids.distance(left + Vector3(0, shell * 0.64, shell * 0.77)) < 0
+    )
     # Behind the eyeball's equator there are no lids.
     assert_true(lids.distance(eye + Vector3(0, r + h.cm(0.2), -h.cm(0.5))) > 0)
 
@@ -277,10 +283,19 @@ def test_ears_follow_their_genes() raises:
     assert_true(flared.back.x > plain.back.x)
     assert_true(ear_frame(1, 0).size > plain.size)
     var big = HeadSkinField(head_muscle_dimensions(_person(_one(EAR_SIZE, 1))))
-    var small = HeadSkinField(head_muscle_dimensions(_person(_one(EAR_SIZE, -1))))
-    assert_true(big.ears.high.y - big.ears.low.y > small.ears.high.y - small.ears.low.y)
-    var lobes = HeadSkinField(head_muscle_dimensions(_person(_one(EAR_LOBE, 1))))
-    assert_true(lobes.ears.low.y < HeadSkinField(head_muscle_dimensions(_person())).ears.low.y)
+    var small = HeadSkinField(
+        head_muscle_dimensions(_person(_one(EAR_SIZE, -1)))
+    )
+    assert_true(
+        big.ears.high.y - big.ears.low.y > small.ears.high.y - small.ears.low.y
+    )
+    var lobes = HeadSkinField(
+        head_muscle_dimensions(_person(_one(EAR_LOBE, 1)))
+    )
+    assert_true(
+        lobes.ears.low.y
+        < HeadSkinField(head_muscle_dimensions(_person())).ears.low.y
+    )
     var out = HeadSkinField(
         head_muscle_dimensions(_person(_one(EAR_PROTRUSION, 1)))
     )

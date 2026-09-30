@@ -302,9 +302,7 @@ def main() raises:
             Float32(6.2831853) * Float32(frame) / Float32(count) + 0.6
         )
         for index in range(len(turners)):
-            scene.node(turners[index]).rotate_y(
-                Angle(angle - previous, RADIAN)
-            )
+            scene.node(turners[index]).rotate_y(Angle(angle - previous, RADIAN))
         previous = angle
         scene.update()
         frames.append(renderer.render(scene, assets, camera))

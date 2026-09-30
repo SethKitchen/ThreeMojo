@@ -63,12 +63,12 @@ def _mix(a: Vector3, b: Vector3, t: Float32) -> Vector3:
 def _zones(h: HeadDimensions) raises -> List[_Zone]:
     """Return the face's zones of color for the head `h`."""
     var c = h.cm(1)
-    var dark = max(Float32(0), min(Float32(1), (h.torso.genome.get(MELANIN) + 1) / 2))
+    var dark = max(
+        Float32(0), min(Float32(1), (h.torso.genome.get(MELANIN) + 1) / 2)
+    )
     # Lips: pink and red on fair skin, deeper and a little violet on
     # dark skin.
-    var lips = _mix(
-        Vector3(0.95, 0.60, 0.64), Vector3(0.78, 0.60, 0.70), dark
-    )
+    var lips = _mix(Vector3(0.95, 0.60, 0.64), Vector3(0.78, 0.60, 0.70), dark)
     var flush = _mix(Vector3(1.05, 0.93, 0.93), Vector3(1.02, 0.97, 0.97), dark)
     var lid = Vector3(0.93, 0.87, 0.90)
     var zones = List[_Zone]()
@@ -135,7 +135,9 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         )
     if h.sex == MALE:
         # The beard's shadow over the jaw, the chin and the upper lip.
-        var beard = _mix(Vector3(0.9, 0.9, 0.94), Vector3(0.95, 0.95, 0.96), dark)
+        var beard = _mix(
+            Vector3(0.9, 0.9, 0.94), Vector3(0.95, 0.95, 0.96), dark
+        )
         zones.append(
             _Zone(
                 h.at(0, 63.0, 5.0),
@@ -180,7 +182,9 @@ def _lash_line(lids: EyeLids, point: Vector3) -> Float32:
     return band * upper * (1 - smoothstep(0.85, 1.0, abs(across)))
 
 
-def tint_head_skin(mut geometry: BufferGeometry, dimensions: HeadMuscleDimensions) raises:
+def tint_head_skin(
+    mut geometry: BufferGeometry, dimensions: HeadMuscleDimensions
+) raises:
     """Write the face's zones of color into a skin mesh.
 
     The lips take their own color over whatever else is under them;

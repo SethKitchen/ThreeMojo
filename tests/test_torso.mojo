@@ -6,6 +6,7 @@
 """Tests for the stature-scaled torso and the body it completes."""
 
 from core.assets import Assets
+from core.buffer_geometry import COLOR
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
@@ -887,8 +888,9 @@ def test_add_body_joins_torso_and_lower_body() raises:
         8,
         8,
     )
-    # One skin from the head down to the wrists, and each hand's own.
-    assert_equal(len(skinned.meshes), 3)
+    # One skin from the head down to the wrists, each hand's own, the
+    # two eyes, the scalp's hair and the two brows.
+    assert_equal(len(skinned.meshes), 8)
     var painted = Scene()
     var painted_root = painted.add(Object3D())
     _ = add_body(
@@ -907,8 +909,9 @@ def test_add_body_joins_torso_and_lower_body() raises:
         8,
         8,
         skin_paint=assets.materials.add(skin_phong()),
+        workers=2,
     )
-    assert_equal(len(painted.meshes), 3)
+    assert_equal(len(painted.meshes), 8)
     with assert_raises(contains="named layer set"):
         _ = add_body(
             scene,
@@ -946,6 +949,10 @@ def test_body_skin_is_one_surface() raises:
     assert_true(field.low.x < -arm.wrist.x and field.high.x > arm.wrist.x)
     with assert_raises():
         _ = body_skin_mesh(person, 7)
+    # The head is meshed finer than the body, and the face is tinted.
+    var skin = body_skin_mesh(person, 8)
+    assert_true(skin.has_attribute(String(COLOR)))
+    assert_true(field.head_split > field.head.low.y)
 
 
 def main() raises:

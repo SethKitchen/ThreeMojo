@@ -221,18 +221,24 @@ def body_skin_mesh(
         mesh_surface(
             field,
             field.low,
-            Vector3(field.high.x, field.head_split + field.head_lap, field.high.z),
+            Vector3(
+                field.high.x, field.head_split + field.head_lap, field.high.z
+            ),
             detail,
             "body skin",
             workers,
         )
     )
     # The head's box: wide enough for the ears, no wider.
-    var reach = max(-field.head.ears.low.x, field.head.ears.high.x) + field.head_lap
+    var reach = (
+        max(-field.head.ears.low.x, field.head.ears.high.x) + field.head_lap
+    )
     parts.append(
         mesh_surface(
             field,
-            Vector3(-reach, field.head_split - field.head_lap, field.head.low.z),
+            Vector3(
+                -reach, field.head_split - field.head_lap, field.head.low.z
+            ),
             Vector3(reach, field.high.y, field.head.high.z),
             detail,
             "body skin",

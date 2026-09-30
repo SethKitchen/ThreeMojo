@@ -96,10 +96,18 @@ def surface_gradient[
     Returns:
         The gradient: about a unit vector where the field is a distance.
     """
-    var a = field.distance(Vector3(point.x + step, point.y - step, point.z - step))
-    var b = field.distance(Vector3(point.x - step, point.y - step, point.z + step))
-    var c = field.distance(Vector3(point.x - step, point.y + step, point.z - step))
-    var d = field.distance(Vector3(point.x + step, point.y + step, point.z + step))
+    var a = field.distance(
+        Vector3(point.x + step, point.y - step, point.z - step)
+    )
+    var b = field.distance(
+        Vector3(point.x - step, point.y - step, point.z + step)
+    )
+    var c = field.distance(
+        Vector3(point.x - step, point.y + step, point.z - step)
+    )
+    var d = field.distance(
+        Vector3(point.x + step, point.y + step, point.z + step)
+    )
     var scale = Float32(0.25) / step
     return Vector3(
         (a - b - c + d) * scale,
@@ -122,7 +130,9 @@ def _u_of(point: Vector3) -> Float32:
     return atan2(point.x, point.z) / (pi * Float32(2)) + Float32(0.5)
 
 
-def _near(values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int, reach: Float32) -> Bool:
+def _near(
+    values: List[Float32], grid: _Grid, i: Int, j: Int, k: Int, reach: Float32
+) -> Bool:
     """Return True if a corner of block `(i, j, k)` lies within `reach`."""
     for c in range(8):  # pragma: no branch
         var ci = (i + (c & 1)) * BLOCK
@@ -141,10 +151,38 @@ def _corner(grid: _Grid, i: Int, j: Int, k: Int, c: Int) -> Vector3:
 # The cell's twelve edges, as pairs of corners: bit 0 of a corner is x,
 # bit 1 is y and bit 2 is z.
 comptime _EDGES = SIMD[DType.int8, 32](
-    0, 1, 2, 3, 4, 5, 6, 7,
-    0, 2, 1, 3, 4, 6, 5, 7,
-    0, 4, 1, 5, 2, 6, 3, 7,
-    0, 0, 0, 0, 0, 0, 0, 0,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    0,
+    2,
+    1,
+    3,
+    4,
+    6,
+    5,
+    7,
+    0,
+    4,
+    1,
+    5,
+    2,
+    6,
+    3,
+    7,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
 )
 
 
@@ -176,7 +214,9 @@ def _cell_guess(
 
 def _project[
     F: DistanceField
-](field: F, start: Vector3, low: Vector3, high: Vector3, step: Float32) -> Vector3:
+](
+    field: F, start: Vector3, low: Vector3, high: Vector3, step: Float32
+) -> Vector3:
     """Walk `start` onto the surface along the gradient, inside a box."""
     var p = start
     for _ in range(PROJECT_STEPS):  # pragma: no branch
@@ -269,8 +309,12 @@ async def _sample_task[
         var j = (block // bx) % by
         var k = block // (bx * by)
         for fk in range(k * BLOCK, (k + 1) * BLOCK + 1):  # pragma: no branch
-            for fj in range(j * BLOCK, (j + 1) * BLOCK + 1):  # pragma: no branch
-                for fi in range(i * BLOCK, (i + 1) * BLOCK + 1):  # pragma: no branch
+            for fj in range(
+                j * BLOCK, (j + 1) * BLOCK + 1
+            ):  # pragma: no branch
+                for fi in range(
+                    i * BLOCK, (i + 1) * BLOCK + 1
+                ):  # pragma: no branch
                     var at = grid.index(fi, fj, fk)
                     if values[unsafe_offset=at] == UNSAMPLED:
                         values[unsafe_offset=at] = field[].distance(
@@ -334,7 +378,10 @@ def _crosses(
     """Return True if the surface crosses cell `(i, j, k)`."""
     var inside = 0
     for c in range(8):  # pragma: no branch
-        if values[grid.index(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))] < 0:
+        if (
+            values[grid.index(i + (c & 1), j + ((c >> 1) & 1), k + (c >> 2))]
+            < 0
+        ):
             inside += 1
     if inside == 0:
         return False
@@ -393,9 +440,9 @@ def mesh_surface[
     for k in range(bz + 1):  # pragma: no branch
         for j in range(by + 1):  # pragma: no branch
             for i in range(bx + 1):  # pragma: no branch
-                values[grid.index(i * BLOCK, j * BLOCK, k * BLOCK)] = (
-                    field.distance(grid.point(i * BLOCK, j * BLOCK, k * BLOCK))
-                )
+                values[
+                    grid.index(i * BLOCK, j * BLOCK, k * BLOCK)
+                ] = field.distance(grid.point(i * BLOCK, j * BLOCK, k * BLOCK))
     # A block is near the surface if a corner lies within its
     # diagonal, with room for a field that is not an exact distance.
     var reach = Float32(BLOCK) * cell * Float32(2.2)

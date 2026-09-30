@@ -131,7 +131,6 @@ struct EyeLids(Copyable, Movable):
         return max(shell, -cut)
 
 
-
 def _through(h: HeadDimensions, hint: Vector3, rows: List[Float32]) -> Sweep:
     """Return a sweep through template stations `x, y, z, ml, ap`."""
     var sweep = Sweep(hint)
@@ -172,9 +171,12 @@ def _ear_point(
     `s` runs back along the ear, `t` up it and `n` out of its face, in
     template cm from the root in front of the ear canal.
     """
-    var local = frame.root + frame.back * (s * frame.size) + frame.up * (
-        t * frame.size
-    ) + frame.out * (n * frame.size)
+    var local = (
+        frame.root
+        + frame.back * (s * frame.size)
+        + frame.up * (t * frame.size)
+        + frame.out * (n * frame.size)
+    )
     return h.at(side * local.x, local.y, local.z)
 
 
@@ -242,37 +244,79 @@ def _ear(
     # The helix: a rolled rim from the crus over the top and down the
     # back to the lobe.
     var rim: List[Float32] = [
-        0.35, 1.2, 0.3,
-        0.45, 2.3, 0.3,
-        1.1, 3.05, 0.3,
-        2.0, 2.95, 0.25,
-        2.6, 2.2, 0.2,
-        2.8, 1.0, 0.1,
-        2.7, -0.3, 0.0,
-        2.35, -1.3, 0.0,
-        1.8, -2.0, 0.0,
+        0.35,
+        1.2,
+        0.3,
+        0.45,
+        2.3,
+        0.3,
+        1.1,
+        3.05,
+        0.3,
+        2.0,
+        2.95,
+        0.25,
+        2.6,
+        2.2,
+        0.2,
+        2.8,
+        1.0,
+        0.1,
+        2.7,
+        -0.3,
+        0.0,
+        2.35,
+        -1.3,
+        0.0,
+        1.8,
+        -2.0,
+        0.0,
     ]
     var points = List[Vector3]()
     var radii = List[Float32]()
     for index in range(len(rim) // 3):  # pragma: no branch
         points.append(
-            _ear_point(h, side, frame, rim[index * 3], rim[index * 3 + 1], rim[index * 3 + 2])
+            _ear_point(
+                h,
+                side,
+                frame,
+                rim[index * 3],
+                rim[index * 3 + 1],
+                rim[index * 3 + 2],
+            )
         )
         radii.append(0.34 * k if index > 0 else 0.26 * k)
     clay.chain(points, radii)
     # The antihelix: a lower ridge inside the rim, forked at the top.
     var ridge: List[Float32] = [
-        0.9, 2.2, 0.28,
-        1.6, 1.4, 0.3,
-        1.9, 0.3, 0.3,
-        1.6, -0.8, 0.28,
-        1.1, -1.4, 0.25,
+        0.9,
+        2.2,
+        0.28,
+        1.6,
+        1.4,
+        0.3,
+        1.9,
+        0.3,
+        0.3,
+        1.6,
+        -0.8,
+        0.28,
+        1.1,
+        -1.4,
+        0.25,
     ]
     points = List[Vector3]()
     radii = List[Float32]()
     for index in range(len(ridge) // 3):  # pragma: no branch
         points.append(
-            _ear_point(h, side, frame, ridge[index * 3], ridge[index * 3 + 1], ridge[index * 3 + 2])
+            _ear_point(
+                h,
+                side,
+                frame,
+                ridge[index * 3],
+                ridge[index * 3 + 1],
+                ridge[index * 3 + 2],
+            )
         )
         radii.append(0.26 * k)
     clay.chain(points, radii)
@@ -442,10 +486,16 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
                 lobe,
             )
         # The forehead, broad and flat across, over the frontalis.
-        self.face.ellipsoid(h.at(0, 78.3, 2.4), Vector3(8.0 * c, 4.8 * c, 7.0 * c))
+        self.face.ellipsoid(
+            h.at(0, 78.3, 2.4), Vector3(8.0 * c, 4.8 * c, 7.0 * c)
+        )
         # The middle of the face: the glabella and the chin.
-        self.face.ellipsoid(h.at(0, 74.3, 8.4), Vector3(1.6 * c, 1.0 * c, 1.0 * c))
-        self.face.ellipsoid(h.at(0, 61.2, 7.5), Vector3(1.9 * c, 1.25 * c, 1.5 * c))
+        self.face.ellipsoid(
+            h.at(0, 74.3, 8.4), Vector3(1.6 * c, 1.0 * c, 1.0 * c)
+        )
+        self.face.ellipsoid(
+            h.at(0, 61.2, 7.5), Vector3(1.9 * c, 1.25 * c, 1.5 * c)
+        )
         # The nose's middle: the bridge down to the tip, the tip, and
         # the columella under it.
         var bridge = List[Vector3]()
@@ -530,7 +580,9 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
         return field_gradient(self, point, self.epsilon)
 
 
-def _face_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32):
+def _face_side(
+    h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32
+):
     """Add one side's broad forms of the face, and carve its eye
     socket."""
     var c = h.cm(1)
@@ -548,7 +600,10 @@ def _face_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32)
         Vector3(side * 0.4, 0, 1),
     )
     clay.capsule(
-        h.at(side * 5.7, 70.7, 4.4), h.at(side * 7.0, 71.0, 0.6), 0.9 * c, 0.75 * c
+        h.at(side * 5.7, 70.7, 4.4),
+        h.at(side * 7.0, 71.0, 0.6),
+        0.9 * c,
+        0.75 * c,
     )
     # The temple, over the temporalis.
     clay.ellipsoid(
@@ -581,7 +636,8 @@ def _face_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32)
     )
     # The eye socket, where the lids sit.
     clay.hollow_ellipsoid(
-        h.at(side * 3.35, 72.05, 9.3), Vector3(1.5 * eye * c, 1.0 * eye * c, 1.2 * c)
+        h.at(side * 3.35, 72.05, 9.3),
+        Vector3(1.5 * eye * c, 1.0 * eye * c, 1.2 * c),
     )
 
 
@@ -604,7 +660,9 @@ def _nose_side(h: HeadDimensions, mut clay: Sculpt, side: Float32):
     )
 
 
-def _mouth_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, lip: Float32):
+def _mouth_side(
+    h: HeadDimensions, mut clay: Sculpt, side: Float32, lip: Float32
+):
     """Add one side of the lips: the upper lip's roll with its bow and
     the lower lip's fuller roll."""
     var c = h.cm(1)
