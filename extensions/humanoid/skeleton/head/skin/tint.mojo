@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
 )
+from extensions.humanoid.skeleton.head.skin.dimensions import EyeLids
 from extensions.humanoid.skeleton.morph import smoothstep
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
@@ -154,6 +155,31 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
     return zones^
 
 
+def _lash_line(lids: EyeLids, point: Vector3) -> Float32:
+    """Return how dark the lashes make a point at the lids' margin,
+    0 through 1: most on the upper lid's edge, less on the lower."""
+    var center = lids.right
+    var side = Float32(1)
+    if point.x < 0:
+        center = lids.left
+        side = -1
+    var d = point - center
+    var far = d.length()
+    if d.z <= 0 or far > lids.reach:
+        return 0
+    var ox = d.x * side
+    var qx = ox * lids.cos_tilt - d.y * lids.sin_tilt
+    var qy = ox * lids.sin_tilt + d.y * lids.cos_tilt
+    qy = qy + lids.height * Float32(0.1) - qx * Float32(0.06)
+    var across = qx / lids.width
+    var taper = max(Float32(0.05), 1 - across * across)
+    var open = sqrt(across * across + (qy / lids.height) ** 2 / taper)
+    # A band just outside the slit, on the lid's front.
+    var band = 1 - smoothstep(0.0, 0.35, abs(open - 1.08))
+    var upper = Float32(0.85) if qy > 0 else Float32(0.45)
+    return band * upper * (1 - smoothstep(0.85, 1.0, abs(across)))
+
+
 def tint_head_skin(mut geometry: BufferGeometry, dimensions: HeadMuscleDimensions) raises:
     """Write the face's zones of color into a skin mesh.
 
@@ -171,6 +197,7 @@ def tint_head_skin(mut geometry: BufferGeometry, dimensions: HeadMuscleDimension
     """
     dimensions.validate()
     var zones = _zones(dimensions.head)
+    var lids = EyeLids(dimensions.head)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var colors = List[Float32](capacity=count * 3)
@@ -190,6 +217,9 @@ def tint_head_skin(mut geometry: BufferGeometry, dimensions: HeadMuscleDimension
                     color.y * (1 + (f.y - 1) * w),
                     color.z * (1 + (f.z - 1) * w),
                 )
+        var lash = _lash_line(lids, p)
+        if lash > 0:
+            color = color * (1 - Float32(0.8) * lash)
         colors.append(color.x)
         colors.append(color.y)
         colors.append(color.z)

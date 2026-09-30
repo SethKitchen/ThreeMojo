@@ -377,7 +377,6 @@ def _skull(
     the alveolar arch, the cheekbones' arches, the ear canals, the
     mastoids, the occipital protuberance and condyles, and the
     clivus."""
-    var f = h.frame
     # The vault: a shell of bone about seven millimeters thick, open
     # below the cranial floor, which a slab closes.
     var center = h.at(0, 75.4, -1.0)

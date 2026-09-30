@@ -411,8 +411,8 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
             0, 72.1, 2.8, 7.05, 6.1,
             0, 70.3, 3.0, 7.0, 5.7,
             0, 68.0, 2.8, 6.3, 6.1,
-            0, 66.0, 2.4, 5.7, 6.8,
-            0, 64.2, 2.2, 5.3, 6.9,
+            0, 66.0, 2.3, 5.8, 6.6,
+            0, 64.2, 2.1, 5.4, 6.7,
             0, 62.6, 2.4, 4.6, 6.4,
             0, 60.6, 2.9, 3.4, 5.6,
         )))
@@ -421,11 +421,11 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
             mask^, List[Dome](), RIGHT, self.blend, f.cm(0.05), f.cm(1.0)
         )
         self.mask_top = h.at(0, 76.5, 0).y
-        self.mask_bottom = h.at(0, 60.4, 0).y
+        self.mask_bottom = h.at(0, 60.2, 0).y
         self.mask_soft = f.cm(1.4)
         # The space under the chin, in front of the throat.
-        self.neck.cut(_through(h, x, floats(0, 55.0, 9.5, 5.0, 4.8)))
-        self.face = Sculpt(f.cm(1.2), f.cm(0.5))
+        self.neck.cut(_through(h, x, floats(0, 55.0, 10.0, 5.0, 4.8)))
+        self.face = Sculpt(f.cm(1.5), f.cm(0.5))
         self.features = Sculpt(f.cm(0.3), f.cm(0.12))
         self.ears = Sculpt(f.cm(0.16), f.cm(0.1))
         var c = h.cm(1)
@@ -441,6 +441,8 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
                 ear_frame(genome.get(EAR_SIZE), genome.get(EAR_PROTRUSION)),
                 lobe,
             )
+        # The forehead, broad and flat across, over the frontalis.
+        self.face.ellipsoid(h.at(0, 78.3, 2.4), Vector3(8.0 * c, 4.8 * c, 7.0 * c))
         # The middle of the face: the glabella and the chin.
         self.face.ellipsoid(h.at(0, 74.3, 8.4), Vector3(1.6 * c, 1.0 * c, 1.0 * c))
         self.face.ellipsoid(h.at(0, 61.2, 7.5), Vector3(1.9 * c, 1.25 * c, 1.5 * c))
@@ -466,14 +468,14 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
         # The lips' middle: the tubercle of the upper lip, and the
         # philtrum's groove above it.
         self.features.ellipsoid(
-            h.at(0, 65.0, 9.55), Vector3(0.45 * c, 0.36 * lip * c, 0.4 * lip * c)
+            h.at(0, 65.0, 9.5), Vector3(0.45 * c, 0.36 * lip * c, 0.4 * lip * c)
         )
         self.features.hollow_ellipsoid(
             h.at(0, 66.35, 9.6), Vector3(0.28 * c, 0.75 * c, 0.2 * c)
         )
         # The line where the lips meet.
         self.features.hollow_ellipsoid(
-            h.at(0, 64.8, 9.95), Vector3(2.2 * c, 0.05 * c, 0.55 * c)
+            h.at(0, 64.8, 9.9), Vector3(2.2 * c, 0.05 * c, 0.55 * c)
         )
         # The fold under the lower lip.
         self.features.hollow_capsule(
@@ -548,6 +550,27 @@ def _face_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32)
     clay.capsule(
         h.at(side * 5.7, 70.7, 4.4), h.at(side * 7.0, 71.0, 0.6), 0.9 * c, 0.75 * c
     )
+    # The temple, over the temporalis.
+    clay.ellipsoid(
+        h.at(side * 6.75, 77.8, 0.5), Vector3(1.3 * c, 3.4 * c, 4.5 * c)
+    )
+    # The side of the orbit, round the outer corner of the eye.
+    clay.ellipsoid(
+        h.at(side * 5.4, 72.6, 6.9), Vector3(1.2 * c, 1.8 * c, 1.3 * c)
+    )
+    # The side of the face, over the masseter.
+    clay.ellipsoid(
+        h.at(side * 5.6, 66.2, 1.8), Vector3(1.3 * c, 2.6 * c, 2.4 * c)
+    )
+    # The line of the jaw, from its angle under to the chin, over the
+    # floor of the mouth.
+    var under = List[Vector3]()
+    under.append(h.at(side * 5.2, 63.3, -0.4))
+    under.append(h.at(side * 4.2, 61.5, 3.2))
+    under.append(h.at(side * 2.3, 60.8, 5.8))
+    under.append(h.at(side * 0.4, 60.6, 6.8))
+    var under_r: List[Float32] = [0.95 * c, 0.95 * c, 0.9 * c, 0.9 * c]
+    clay.chain(under, under_r)
     # The cheek's soft mass between the cheekbone and the jaw.
     clay.ellipsoid(
         h.at(side * 4.4, 66.6, 5.4), Vector3(1.8 * c, 2.1 * c, 2.0 * c)
@@ -558,7 +581,7 @@ def _face_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, eye: Float32)
     )
     # The eye socket, where the lids sit.
     clay.hollow_ellipsoid(
-        h.at(side * 3.2, 72.05, 9.3), Vector3(1.6 * eye * c, 1.0 * eye * c, 1.25 * c)
+        h.at(side * 3.35, 72.05, 9.3), Vector3(1.5 * eye * c, 1.0 * eye * c, 1.2 * c)
     )
 
 
@@ -582,14 +605,14 @@ def _nose_side(h: HeadDimensions, mut clay: Sculpt, side: Float32):
 
 
 def _mouth_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, lip: Float32):
-    """Add one side of the lips: the upper lip's roll with its bow, the
-    lower lip's fuller roll, a philtral column, and the corner."""
+    """Add one side of the lips: the upper lip's roll with its bow and
+    the lower lip's fuller roll."""
     var c = h.cm(1)
     var upper = List[Vector3]()
     upper.append(h.at(side * 2.35, 64.9, 8.15))
-    upper.append(h.at(side * 1.55, 65.1, 9.0))
-    upper.append(h.at(side * 0.6, 65.25, 9.5))
-    upper.append(h.at(side * 0.15, 65.12, 9.55))
+    upper.append(h.at(side * 1.55, 65.1, 8.95))
+    upper.append(h.at(side * 0.6, 65.25, 9.45))
+    upper.append(h.at(side * 0.15, 65.12, 9.5))
     var upper_r: List[Float32] = [
         0.16 * c,
         0.38 * lip * c,
@@ -599,9 +622,9 @@ def _mouth_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, lip: Float32
     clay.chain(upper, upper_r)
     var lower = List[Vector3]()
     lower.append(h.at(side * 2.3, 64.72, 8.15))
-    lower.append(h.at(side * 1.5, 64.42, 8.95))
-    lower.append(h.at(side * 0.55, 64.3, 9.35))
-    lower.append(h.at(side * 0.05, 64.3, 9.4))
+    lower.append(h.at(side * 1.5, 64.42, 8.9))
+    lower.append(h.at(side * 0.55, 64.3, 9.3))
+    lower.append(h.at(side * 0.05, 64.3, 9.35))
     var lower_r: List[Float32] = [
         0.16 * c,
         0.45 * lip * c,
@@ -609,10 +632,6 @@ def _mouth_side(h: HeadDimensions, mut clay: Sculpt, side: Float32, lip: Float32
         0.54 * lip * c,
     ]
     clay.chain(lower, lower_r)
-    # A philtral column, from the nostril's sill to the lip's peak.
-    clay.capsule(
-        h.at(side * 0.38, 67.3, 9.2), h.at(side * 0.48, 65.7, 9.45), 0.12 * c, 0.14 * c
-    )
 
 
 struct HeadSkinLayerField(Copyable, DistanceField, Movable):

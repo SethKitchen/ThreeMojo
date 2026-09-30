@@ -19,8 +19,8 @@ from extensions.humanoid.skeleton.head.frame import (
     head_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.head.hair.dimensions import (
+    HairShape,
     HeadHair,
-    head_hair_field,
     head_hair_label,
 )
 from extensions.humanoid.skeleton.isosurface import check_detail
@@ -74,7 +74,7 @@ def head_hair_from_dimensions(
             not named, if `side` is not valid, if `detail` is out of
             range, or if the field produces no surface.
     """
-    var field = head_hair_field(dimensions, part, side)
+    var field = HairShape(dimensions, part, side)
     var label = head_hair_label(part)
     check_detail(detail, label)
     return mesh_surface(field, field.low, field.high, detail, label)

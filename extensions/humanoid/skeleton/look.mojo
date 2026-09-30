@@ -514,6 +514,9 @@ def skin_physical(
     var color = skin_tone(genome)
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
+    var bump = Float32(1)
+    if relief != NO_TEXTURE:
+        bump = Float32(0.35)
     var material = physical_material(
         color,
         map=map,
@@ -526,7 +529,7 @@ def skin_physical(
         sheen_color=skin_glow(genome),
         sheen_roughness=0.55,
         bump_map=relief,
-        bump_scale=0.35,
+        bump_scale=bump,
         side=DOUBLE_SIDE,
     )
     material.vertex_colors = tinted

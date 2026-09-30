@@ -42,6 +42,7 @@ from extensions.humanoid.skeleton.head.bones.mass import (
 from extensions.humanoid.skeleton.head.contents import (
     ALL,
     BONES,
+    EYES,
     HAIR,
     LIGAMENTS,
     LYMPH,
@@ -690,9 +691,14 @@ def test_hair() raises:
     assert_true(
         head_hair_distance(dims, SCALP_HAIR, RIGHT, h.at(0, 76.0, 9.6)) > 0
     )
-    assert_true(
-        head_hair_distance(dims, EYEBROWS, LEFT, h.at(-2.7, 75.0, 9.1)) < 0
-    )
+    # The left brow lies on the skin over the left eye: somewhere on a
+    # line from in front of the face back into it.
+    var inside = False
+    for step in range(40):  # pragma: no branch
+        var z = Float32(11.0) - Float32(step) * Float32(0.1)
+        if head_hair_distance(dims, EYEBROWS, LEFT, h.at(-2.7, 74.5, z)) < 0:
+            inside = True
+    assert_true(inside)
     var scalp = head_hair_mass_from_dimensions(dims, SCALP_HAIR, hair_tissue())
     assert_true(scalp.mass.value > 0.01 and scalp.mass.value < 0.3)
     assert_true(head_hair_mass(_person(), EYEBROWS).mass.value > 0)
@@ -718,7 +724,10 @@ def test_contents_bits() raises:
     assert_false(BONES.includes_hair())
     assert_equal(BONES.plus(HAIR).value, 129)
     assert_false(HeadContents(0).is_valid())
-    assert_false(HeadContents(256).is_valid())
+    assert_false(HeadContents(512).is_valid())
+    assert_true(every.includes_eyes())
+    assert_false(SKIN.includes_eyes())
+    assert_true(EYES.includes_eyes())
     with assert_raises():
         _ = HeadContents(0).includes_bones()
     with assert_raises():
@@ -739,8 +748,8 @@ def test_add_head_places_every_layer() raises:
         scene, assets, root, _person(), paint, paint, paint, paint, ALL, 8, 8
     )
     # 11 bones, 7 joint tissues, 28 muscles, 12 vessels, 9 nerves, 10
-    # node groups, the skin and 3 hair groups.
-    assert_equal(len(scene.meshes), 81)
+    # node groups, the skin, 3 hair groups and 2 eyes.
+    assert_equal(len(scene.meshes), 83)
     var dressed = Scene()
     var top = dressed.add(Object3D())
     _ = add_head(
