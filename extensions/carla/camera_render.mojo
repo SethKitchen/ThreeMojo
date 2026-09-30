@@ -753,6 +753,8 @@ struct CarlaRenderer(Movable):
         self.scene = Scene()
         self.assets = Assets()
         self.registry = registry^
+        # The photoscans decode at once, `workers` at a time.
+        self.registry.preload(workers)
         self.town = Town(
             world.map, self.scene, self.assets, settings^, self.registry
         )
@@ -960,7 +962,10 @@ struct CarlaRenderer(Movable):
             self.renderer.background,
             outputs=outputs,
         )
-        self.renderer.render_into(frame, self.scene, self.assets, view)
+        # The frame's own shadow maps, which the light effects read again.
+        var drawn = self.renderer.render_into_keeping_shadows(
+            frame, self.scene, self.assets, view
+        )
         if scale > 1:
             frame = frame.downsampled(scale)
         if len(composer.passes) > 1 and composer.passes[1].kind == SSR_NODE:
@@ -975,10 +980,7 @@ struct CarlaRenderer(Movable):
         )
         var maps = List[ShadowMap]()
         if self.sun.cast_shadow:
-            maps = sun_maps(
-                self.renderer.shadow_maps(self.scene, self.assets),
-                self.sun.lights,
-            )
+            maps = sun_maps(drawn, self.sun.lights)
         var light = daylight_split(weather)
         var shares = direct_shares(frame, rays, maps, light)
         var depth = DepthView(

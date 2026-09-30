@@ -35,6 +35,8 @@ import sys
 from PIL import Image
 
 PAINT_PARENTS = ("M_CarExterior_Master", "M_CarPaint", "CarPaint")
+# A primitive of fewer triangles is not simplified: a badge, a mirror.
+KEEP = 400
 
 
 def index_files(root, suffix):
@@ -302,6 +304,101 @@ def split_lamps(gltf, data):
     return bytes(out)
 
 
+def _append(out, gltf, values, form, component, kind, target):
+    """Append values to the buffer as a new view and accessor, and return
+    the accessor's index."""
+    out += b"\0" * (-len(out) % 4)
+    raw = struct.pack("<%d%s" % (len(values), form), *values)
+    gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out), "byteLength": len(raw),
+                                "target": target})
+    out += raw
+    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[kind]
+    accessor = {"bufferView": len(gltf["bufferViews"]) - 1, "componentType": component,
+                "count": len(values) // width, "type": kind}
+    if kind == "VEC3" and form == "f":
+        accessor["min"] = [min(values[i::3]) for i in range(3)]
+        accessor["max"] = [max(values[i::3]) for i in range(3)]
+    gltf["accessors"].append(accessor)
+    return len(gltf["accessors"]) - 1
+
+
+def decimate(gltf, data, budget):
+    """Bring a model's triangles down to about `budget`, and return the
+    buffer with the new primitives' data added.
+
+    Each primitive is simplified alone with quadric error collapses (the
+    fast-simplification package), so no material bleeds into another, and
+    its open edges stay put: glTF splits a vertex along a texture seam, so
+    the seams are edges and the textures do not tear. Every primitive
+    gives up the same share; one of fewer than `KEEP` triangles is kept
+    whole. Each new vertex takes the texture coordinates, the normal and
+    the tangent of an old vertex that collapsed into it.
+    """
+    import numpy
+    import fast_simplification
+
+    total = 0
+    for mesh in gltf["meshes"]:
+        for primitive in mesh["primitives"]:
+            total += gltf["accessors"][primitive["indices"]]["count"] // 3
+    if total <= budget:
+        return data
+    keep = budget / total
+    out = bytearray(data)
+    for mesh in gltf["meshes"]:
+        for primitive in mesh["primitives"]:
+            indices, _ = _read(data, gltf, primitive["indices"])
+            count = len(indices) // 3
+            if count < KEEP:
+                continue
+            positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
+            points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
+            faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
+            _, _, collapses = fast_simplification.simplify(
+                points, faces, target_count=max(KEEP // 2, int(count * keep)),
+                return_collapses=True, preserve_border=True)
+            new_points, new_faces, mapping = fast_simplification.replay_simplification(
+                points, faces, collapses)
+            if len(new_faces) == 0:
+                continue
+            source = {}
+            for old, new in enumerate(mapping):
+                source.setdefault(int(new), old)
+            attributes = {"POSITION": _append(out, gltf, [float(v) for v in new_points.reshape(-1)],
+                                              "f", 5126, "VEC3", 34962)}
+            if "NORMAL" in primitive["attributes"]:
+                # The collapses moved the vertices, so an old vertex's normal
+                # no longer fits: each normal is its faces' again, weighted
+                # by their areas. A hard edge is two vertices in glTF, so it
+                # stays hard.
+                corners = new_points[new_faces]
+                face = numpy.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+                normals = numpy.zeros_like(new_points)
+                for k in range(3):
+                    numpy.add.at(normals, new_faces[:, k], face)
+                length = numpy.linalg.norm(normals, axis=1, keepdims=True)
+                normals = numpy.where(length > 1e-12, normals / numpy.maximum(length, 1e-12), [0.0, 1.0, 0.0])
+                attributes["NORMAL"] = _append(out, gltf, [float(v) for v in normals.reshape(-1)],
+                                               "f", 5126, "VEC3", 34962)
+            for name, accessor_index in primitive["attributes"].items():
+                if name in ("POSITION", "NORMAL"):
+                    continue
+                values, width = _read(data, gltf, accessor_index)
+                accessor = gltf["accessors"][accessor_index]
+                if accessor["componentType"] != 5126:
+                    continue
+                picked = []
+                for new in range(len(new_points)):
+                    old = source.get(new, 0)
+                    picked += values[old * width:(old + 1) * width]
+                attributes[name] = _append(out, gltf, picked, "f", 5126, accessor["type"], 34962)
+            primitive["attributes"] = attributes
+            primitive["indices"] = _append(out, gltf, [int(v) for v in new_faces.reshape(-1)],
+                                           "I", 5125, "SCALAR", 34963)
+    gltf["buffers"][0]["byteLength"] = len(out)
+    return compact(gltf, bytes(out))
+
+
 def dedupe_materials(gltf):
     """Keep one material of each name. The merge gives each primitive its
     own copy, so a car's glass is twenty materials."""
@@ -342,6 +439,12 @@ def strip_skin(gltf, data):
             # colors: glTF would multiply them into the paint.
             for key in [k for k in attributes if k.startswith(("JOINTS_", "WEIGHTS_", "COLOR_"))]:
                 del attributes[key]
+    return compact(gltf, data)
+
+
+def compact(gltf, data):
+    """Return the buffer with only the bytes a primitive reads, and point
+    the views and accessors at their new places."""
     # Keep the accessors a primitive reads, and the views they read.
     used = []
     for mesh in gltf["meshes"]:
@@ -385,6 +488,8 @@ def main():
     parser.add_argument("out_dir")
     parser.add_argument("name")
     parser.add_argument("--max-size", type=int, default=1024)
+    parser.add_argument("--budget", type=int, default=35000,
+                        help="the triangles a model is simplified to; 0 keeps them all")
     args = parser.parse_args()
     mats = index_files(args.export_root, ".mat")
     props = index_files(args.export_root, ".props.txt")
@@ -401,6 +506,8 @@ def main():
         rebuild(package, material, mats, props, pngs, report)
     source_bin = os.path.join(os.path.dirname(args.mesh), gltf["buffers"][0]["uri"])
     data = split_lamps(gltf, strip_skin(gltf, open(source_bin, "rb").read()))
+    if args.budget > 0:
+        data = decimate(gltf, data, args.budget)
     with open(os.path.join(args.out_dir, args.name + ".bin"), "wb") as out:
         out.write(data)
     gltf["buffers"][0]["uri"] = args.name + ".bin"

@@ -81,6 +81,7 @@ from render.texture import (
     float_texture_from,
     texture_from,
 )
+from render.tasks import TaskGroup
 from render.texture_store import NO_TEXTURE
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
@@ -772,17 +773,46 @@ def _flat(value: UInt8, space: ColorSpace) raises -> Texture:
     return Texture(1, 1, pixels^, REPEAT, BILINEAR, space, False, IGNORED)
 
 
+async def _read_one(
+    paths: MutPointer[String, MutAnyOrigin],
+    spaces: MutPointer[ColorSpace, MutAnyOrigin],
+    textures: MutPointer[Texture, MutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    index: Int,
+):
+    """Decode one cached image as `AssetRegistry._decode` does, as a task
+    of `AssetRegistry.preload`; an error is carried back as its text."""
+    try:
+        var image = decode_image(Path(paths[unsafe_offset=index]).read_bytes())
+        textures[unsafe_offset=index] = texture_from(
+            image, REPEAT, BILINEAR, spaces[unsafe_offset=index], True, IGNORED
+        )
+    except e:
+        errors[unsafe_offset=index] = String(e)
+
+
+def _texture_key(path: String, space: ColorSpace) -> String:
+    """Return the key a decoded image is kept under: one path can be read
+    in both color spaces."""
+    return path + ("|srgb" if space == SRGB else "|linear")
+
+
 struct AssetRegistry(Movable):
     """A manifest read against a cache folder."""
 
     var manifest: AssetManifest
     # The cache folder, ending in a slash.
     var cache: String
+    # The images `preload` decoded, by `_texture_key`.
+    var decoded_keys: List[String]
+    var decoded: List[Texture]
 
     def __init__(out self):
         """Start with no manifest: every key falls back."""
         self.manifest = AssetManifest()
         self.cache = String()
+        self.decoded_keys = List[String]()
+        self.decoded = List[Texture]()
 
     def __init__(out self, var manifest: AssetManifest, cache: String):
         """Read a manifest against a cache folder.
@@ -794,6 +824,8 @@ struct AssetRegistry(Movable):
         """
         self.manifest = manifest^
         self.cache = cache if cache.endswith("/") else cache + "/"
+        self.decoded_keys = List[String]()
+        self.decoded = List[Texture]()
 
     @staticmethod
     def open(manifest_path: String, cache: String) raises -> AssetRegistry:
@@ -880,9 +912,89 @@ struct AssetRegistry(Movable):
         return wildcard_key(type_id)
 
     def _texture(self, path: String, space: ColorSpace) raises -> Texture:
-        """Read a cached image as a repeating, mipmapped texture."""
+        """Read a cached image as a repeating, mipmapped texture: the one
+        `preload` decoded, or decoded now."""
+        var key = _texture_key(self.path(path), space)
+        for index in range(len(self.decoded_keys)):
+            if self.decoded_keys[index] == key:
+                return Texture(copy=self.decoded[index])
         var image = decode_image(Path(self.path(path)).read_bytes())
         return texture_from(image, REPEAT, BILINEAR, space, True, IGNORED)
+
+    def preload(mut self, workers: Int = 1) raises:
+        """Decode every map of every bound, cached texture set, each once,
+        `workers` at a time.
+
+        A 2048-texel photoscan takes a few tenths of a second to decode,
+        and a town reads twenty of them, some twice: a curb and a wall can
+        wear one set. After this, `texture_set` copies them.
+
+        Args:
+            workers: How many images to decode at once; one decodes them in
+                turn.
+
+        Raises:
+            Error: If an image cannot be read or decoded.
+        """
+        var paths = List[String]()
+        var spaces = List[ColorSpace]()
+        for index in range(len(self.manifest.keys)):
+            var id = self.manifest.values[index]
+            if id.byte_length() == 0:
+                continue
+            ref entry = self.manifest.entries[self.manifest.find(id).value()]
+            if entry.kind != TEXTURE_SET_ASSET or not self.is_cached(entry):
+                continue
+            var normal = Bool(entry.file(NORMAL_ROLE))
+            for f in entry.files:
+                # The maps `texture_set` reads, in the spaces it reads them.
+                if f.role == DISPLACEMENT_ROLE and normal:
+                    continue
+                var space = SRGB if f.role == ALBEDO_ROLE else LINEAR
+                var path = self.path(f.path)
+                var key = _texture_key(path, space)
+                if key in self.decoded_keys:
+                    continue
+                var fresh = True
+                for k in range(len(paths)):
+                    if _texture_key(paths[k], spaces[k]) == key:
+                        fresh = False
+                if fresh:
+                    paths.append(path)
+                    spaces.append(space)
+        var count = len(paths)
+        var textures = List[Texture]()
+        for _ in range(count):
+            textures.append(_flat(0, LINEAR))
+        var errors = List[String](length=count, fill=String(""))
+        if workers <= 1 or count <= 1:
+            for index in range(count):
+                var image = decode_image(Path(paths[index]).read_bytes())
+                textures[index] = texture_from(
+                    image, REPEAT, BILINEAR, spaces[index], True, IGNORED
+                )
+        else:
+            # Every pointer is to a local that outlives `wait`.
+            var group = TaskGroup()
+            for index in range(count):  # pragma: no branch
+                group.create_task(
+                    _read_one(
+                        paths.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        spaces.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        textures.unsafe_ptr().unsafe_origin_cast[
+                            MutAnyOrigin
+                        ](),
+                        errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        index,
+                    )
+                )
+            group.wait()
+            for index in range(count):
+                if errors[index].byte_length() > 0:
+                    raise Error(paths[index] + ": " + errors[index])
+        for index in range(count):
+            self.decoded_keys.append(_texture_key(paths[index], spaces[index]))
+            self.decoded.append(Texture(copy=textures[index]))
 
     def texture_set(self, index: Int) raises -> TextureSet:
         """Read a cached texture set.

@@ -7850,7 +7850,7 @@ struct Renderer(Movable):
                 self.scissor = array.viewports[index]
                 # One frame, however many cameras, as three.js counts an
                 # array camera's `render`.
-                self._draw_into(
+                _ = self._draw_into(
                     hooks,
                     target,
                     scene,
@@ -7954,7 +7954,35 @@ struct Renderer(Movable):
             Error: Everything `_draw_into` raises.
         """
         var hooks = NoHooks()
-        self._draw_into(hooks, target, scene, assets, camera, True)
+        _ = self._draw_into(hooks, target, scene, assets, camera, True)
+
+    def render_into_keeping_shadows[
+        C: Camera
+    ](
+        self, mut target: RenderTarget, scene: Scene, assets: Assets, camera: C
+    ) raises -> List[ShadowMap]:
+        """Draw the scene into `target` as `render_into` does, and return
+        the shadow maps the frame drew.
+
+        A caller that reads the shadows again after the frame -- a
+        screen-space effect that asks which pixels the sun reaches --
+        takes them here rather than drawing every caster into every map a
+        second time with `shadow_maps`.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Returns:
+            The maps, as `shadow_maps` returns them for the camera's layers.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
+        var hooks = NoHooks()
+        return self._draw_into(hooks, target, scene, assets, camera, True)
 
     def render_into_with[
         C: Camera, H: RenderHooks
@@ -7981,7 +8009,7 @@ struct Renderer(Movable):
             Error: Everything `_draw_into` raises, and whatever a hook
                 raises.
         """
-        self._draw_into(hooks, target, scene, assets, camera, True)
+        _ = self._draw_into(hooks, target, scene, assets, camera, True)
 
     def _draw_into[
         C: Camera, H: RenderHooks
@@ -7993,9 +8021,9 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         first: Bool,
-    ) raises:
+    ) raises -> List[ShadowMap]:
         """Draw every mesh in the scene on the CPU into `target`, clearing
-        first, and resolve nothing.
+        first, and resolve nothing, and return the shadow maps it drew.
 
         `render` without the target's creation and its resolution, for a
         caller that draws more than one view into one image: a split
@@ -8049,7 +8077,7 @@ struct Renderer(Movable):
             # target once the draw is done. Only the pixels the draw may
             # touch are resolved, so a scissor keeps the rest.
             var buffer = target.multisample_buffer()
-            self.multisampled(target.samples)._draw_into(
+            var maps = self.multisampled(target.samples)._draw_into(
                 hooks, buffer, scene, assets, camera, first
             )
             var drawn = Rect.whole(self.width, self.height)
@@ -8057,7 +8085,7 @@ struct Renderer(Movable):
                 drawn = self.scissor
             target.resolve_samples(buffer, drawn)
             target.set_scissor(drawn)
-            return
+            return maps^
         hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
@@ -8206,6 +8234,7 @@ struct Renderer(Movable):
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
+        return lighting.shadows.copy()
 
     def _lightings[
         C: Camera

@@ -873,7 +873,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "b21d458284a5b32a36384453bae0d17b55c3a2de7872affbfb1d361455e5a382",
+          "sha256": "660ccd5e7fc19ba742b6709e0d27be039fe7555cfe1807b2d252481cb193dc20",
           "path": "carla/vehicles/vehicle.carlamotors.european_hgv.zip",
           "extract": [
             {
@@ -949,7 +949,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "b81f6bd528b30207e64c793b7735a80765bfab8c3845e72b0bc11c0c1a520441",
+          "sha256": "107cfd4c77d11940353b0a14d1c7669817a0538ce07953f019c122962983a8ac",
           "path": "carla/vehicles/vehicle.carlamotors.firetruck.zip",
           "extract": [
             {
@@ -1218,7 +1218,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "7b17080e68f71db2a21f3cd67375a3e1b3e05f969751761d1898ea85519fdfa5",
+          "sha256": "a56c31bcbb9f36f3b16bec1d1388b428799bdcfce44af10358f90d91dfb836d5",
           "path": "carla/vehicles/vehicle.dodge.charger_2020.zip",
           "extract": [
             {
@@ -1320,7 +1320,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "bdf1757f7b58931d538645dbbb11cae887b5505447919f719c65382af343bdf0",
+          "sha256": "e1e6150251e1e954ed996a68f8db4e1d8c93d4aadb57b0205be3d6f7b61d7c69",
           "path": "carla/vehicles/vehicle.dodge.charger_police_2020.zip",
           "extract": [
             {
@@ -1381,7 +1381,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "f7194871ac64b5c58badc1fbe6e87ccbadd79afceffb3e918887c87749dd5dbc",
+          "sha256": "4ba7f29f04f3887cd9f8f4e5d45d8c5b07218cefee024e0cb7a8a1a51a4c20c1",
           "path": "carla/vehicles/vehicle.ford.ambulance.zip",
           "extract": [
             {
@@ -1462,7 +1462,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "7d89bc93c573b2c92f8ac923e55eef6b3828cc84b92b5505966c2977b442a8e5",
+          "sha256": "776afb77273f4f9a9fb0dc67d2f90703349071e8c39318ecf4658217015d9820",
           "path": "carla/vehicles/vehicle.ford.crown.zip",
           "extract": [
             {
@@ -1979,7 +1979,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "25ed26f56a1c10791e4111d733c2df036c7c99714afc8142ec92b186fae4a08c",
+          "sha256": "d7f6bdcfb1f0661419b27a569205537d3db4f1e43426185a36d532c9663191b6",
           "path": "carla/vehicles/vehicle.lincoln.mkz_2020.zip",
           "extract": [
             {
@@ -2111,7 +2111,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "64529b110562fe93c43699e4b5cfa0c5fa8b49a10345f74c30c8685ddc006ae1",
+          "sha256": "878c5c6af65de19a5b570876c4bd755b3a809540689cec1dc896dcbaee7187ea",
           "path": "carla/vehicles/vehicle.mercedes.coupe_2020.zip",
           "extract": [
             {
@@ -2162,7 +2162,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "6f8dd14221f1f8480bcf73523eb11c21e950289f40554d81850f8411061f996e",
+          "sha256": "38a885c32e10d87a5ba5595ac66ab52fd603391102064470c19de7f8824f1186",
           "path": "carla/vehicles/vehicle.mercedes.sprinter.zip",
           "extract": [
             {
@@ -2345,7 +2345,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "5fcb379389c83a6de996c384baecd220e0534afe18024fb2b9f0613f85c15538",
+          "sha256": "60b3aa16396af76658912046c1ea9cc7cb2e76f91c39324205581c35d72658bd",
           "path": "carla/vehicles/vehicle.mini.cooper_s_2021.zip",
           "extract": [
             {
@@ -2411,7 +2411,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "551d9724706e373b66d95863bc29617c0897a81248cff722dd70bb7aa1796040",
+          "sha256": "6951391c3db50b47f51ca28f4dd649a5602d78f138666c05e8fe4fcd1acaaf00",
           "path": "carla/vehicles/vehicle.mitsubishi.fusorosa.zip",
           "extract": [
             {
@@ -2553,7 +2553,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "512eb741dcc31e432154e9d981f970c0720715cbccbca22914e2e1af6eafd6d8",
+          "sha256": "f18237661dc219083224dc3ab525949aae33de6f4bb6bb58d34802cae6ec1e5b",
           "path": "carla/vehicles/vehicle.nissan.patrol.zip",
           "extract": [
             {
@@ -2629,7 +2629,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "736a1ecc1db076c03a7834f882e14db7ad75d96ca632acce8762dbb5a5d796a1",
+          "sha256": "680fb8af3338f3a422ef7028c6e77f4e173dde07d045185b079c7199a6683245",
           "path": "carla/vehicles/vehicle.nissan.patrol_2021.zip",
           "extract": [
             {
@@ -3156,7 +3156,7 @@
         {
           "role": "archive",
           "url": null,
-          "sha256": "7c449b548262ba43ceff70f5a1d2e5607d8513b6b59cd8534c734cdec1f9fed8",
+          "sha256": "0cb430e2afb3f44e36948a5aace2c4d6d88596b24fd4a372d13005ccf24ca772",
           "path": "carla/vehicles/vehicle.volkswagen.t2_2021.zip",
           "extract": [
             {
