@@ -63,6 +63,19 @@ The road comes from CARLA's mesh factory. Its mesh has one group per surface kin
 
 Buildings stand on lots beside each road, outside the junctions. A lot that comes near a lane or another lot stays empty. A ring of tall buildings far out gives the skyline.
 
+## The town package
+
+A CARLA town can be drawn from CARLA's own content: its buildings, streets, plants, poles, props and parked vehicles, each where CARLA puts them. Set `TownSettings.package` to the town's name, such as `Town02`, and load its OpenDRIVE map. When the registry's cache holds `town.Town02`, the package stands in for the procedural roads, lane marks, ground, buildings, trees and lamps. See [CARLA assets](CARLA-assets) for what a package holds.
+
+- Each tile of the package is an LOD. Its near meshes show when the camera is nearer than `TownSettings.near_distance` (50 m by default) to the tile's center. Its far meshes show otherwise. Each camera chooses the levels before it draws.
+- A far tree is an impostor: two crossed quads that show a picture of the tree.
+- The package's traffic lights and signs are hidden. The props draw the map's signals, which change with the world.
+- Each mesh takes the semantic tag of its kind: a building is `BUILDING`, a parked vehicle is `CAR`, and a prop is `STATIC`.
+- The rain wets the package's roads, lane marks, sidewalks and ground.
+- Only buildings, walls, plants and parked vehicles cast the sun's shadow. A flat surface only receives it. A pole, a fence or a sign casts a shadow a few texels wide at the cost of a building's.
+
+The package has no street lights, so its lamps do not light at night.
+
 ## Props
 
 A traffic light stands at each signal whose type is a traffic light. A stop, yield or speed-limit sign stands where CARLA places one.
@@ -157,10 +170,13 @@ Three things keep it fast:
 - `AssetRegistry.preload` decodes every map of the bound texture sets at the same time, one task for each image, and decodes each image once.
 - The light effects read the shadow maps that the frame drew, from `Renderer.render_into_keeping_shadows`. They do not draw the shadow maps again.
 - The CARLA vehicles are simplified to about 35,000 triangles. See [CARLA assets](CARLA-assets).
+- The sun's shadows reach 150 m in front of the camera, `SUN_SHADOW_REACH`. Farther out, the light has no shadow.
+
+With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.3 seconds, and the town builds in about 18 seconds. Most of the build decodes the package's textures, one at a time.
 
 ## Limits
 
-- The buildings are boxes with textured facades. The trees are noise-shaped spheres, or the cached tree model.
+- Without a town package, the buildings are boxes with textured facades, and the trees are noise-shaped spheres or the cached tree model.
 - A vehicle is CARLA's own model when the cache holds it, and a procedural shape when it does not. The walkers are procedural shapes.
 - The rain is streaks over the image. It does not wet the camera lens.
 - The clouds are one flat layer. Their shadows are a screen-space effect, not a volume.

@@ -36,6 +36,7 @@ from extensions.carla.assets import (
     ROUGHNESS_ROLE,
     SUPPORT_ROLE,
     TEXTURE_SET_ASSET,
+    TOWN_ASSET,
     asset_kind_of,
     asset_license_of,
     asset_role_of,
@@ -44,6 +45,7 @@ from extensions.carla.assets import (
     parse_manifest,
     repeat_model,
     surface_key,
+    town_tile,
     wildcard_key,
 )
 from extensions.carla.mesh_factory import (
@@ -68,7 +70,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, METER
+from units.si import DEGREE, METER, Length
 
 comptime CACHE = "assets"
 
@@ -194,7 +196,8 @@ def test_kinds_roles_and_licenses_are_named() raises:
     assert_true(asset_kind_of("texture_set") == TEXTURE_SET_ASSET)
     assert_true(asset_kind_of("hdri") == HDRI_ASSET)
     assert_true(asset_kind_of("model") == MODEL_ASSET)
-    with assert_raises(contains="texture_set, hdri or model"):
+    assert_true(asset_kind_of("town") == TOWN_ASSET)
+    with assert_raises(contains="texture_set, hdri, model or town"):
         _ = asset_kind_of("sound")
     assert_true(asset_role_of("albedo") == ALBEDO_ROLE)
     assert_true(asset_role_of("support") == SUPPORT_ROLE)
@@ -210,7 +213,8 @@ def test_kinds_roles_and_licenses_are_named() raises:
 
 def test_each_type_knows_its_values() raises:
     assert_true(MODEL_ASSET.is_valid())
-    assert_false(AssetKind(3).is_valid())
+    assert_true(TOWN_ASSET.is_valid())
+    assert_false(AssetKind(4).is_valid())
     assert_false(AssetKind(-1).is_valid())
     assert_true(SUPPORT_ROLE.is_valid())
     assert_false(AssetRole(8).is_valid())
@@ -380,6 +384,10 @@ def test_each_broken_rule_is_refused() raises:
         "does not fit",
     )
     _refused(_manifest(_entry("x", "hdri", "")), "needs its panorama")
+    _refused(
+        _manifest(_entry("x", "town", _file("support", "a.bin"))),
+        "town entry needs its model file",
+    )
     # Two entries with one id, and bindings that break a rule.
     _refused(
         _manifest(_texture_set() + ", " + _texture_set()), "share the id scan"
@@ -418,6 +426,7 @@ def test_binding_keys() raises:
     assert_true(binding_kind("facade.brick") == TEXTURE_SET_ASSET)
     assert_true(binding_kind("sky.overcast") == HDRI_ASSET)
     assert_true(binding_kind("tree") == MODEL_ASSET)
+    assert_true(binding_kind("town.Town02") == TOWN_ASSET)
     assert_equal(surface_key(ROAD_SURFACE), "surface.road")
     assert_equal(surface_key(YELLOW_MARK_SURFACE), "surface.yellow_mark")
     with assert_raises(contains="one of the seven"):
@@ -709,6 +718,146 @@ def test_preload_refuses_a_file_that_is_not_an_image() raises:
         )
         with assert_raises():
             registry.preload(workers)
+
+
+# A town package of one triangle drawn seven times, as `build_towns.py`
+# names and tags its nodes: two levels of a building's tile, a road's
+# paint and a road that share a material, a traffic light, a node of
+# another name with no tags, and a kind that is not a string at a level
+# past the far one.
+comptime TOWN_GLTF = (
+    '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":'
+    '[0,1,2,3,4,5,6]}],"nodes":['
+    '{"name":"building_0_0_lod0","mesh":0,"extras":{"carla_kind":"building",'
+    '"carla_lod":0}},'
+    '{"name":"building_0_0_lod1","mesh":1,"extras":{"carla_kind":"building",'
+    '"carla_lod":1}},'
+    '{"name":"road_line_1_0_lod0","mesh":2,"extras":{"carla_kind":'
+    '"road_line","carla_lod":0}},'
+    '{"name":"road_1_0_lod1","mesh":3,"extras":{"carla_kind":"road",'
+    '"carla_lod":1}},'
+    '{"name":"traffic_light_1_0_lod0","mesh":4,"extras":{"carla_kind":'
+    '"traffic_light","carla_lod":0}},'
+    '{"name":"odd","mesh":5},'
+    '{"name":"stone_0_0_lod9","mesh":6,"extras":{"carla_kind":7}}],'
+    '"buffers":[{"byteLength":36,"uri":'
+    '"data:application/octet-stream;base64,'
+    'AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],'
+    '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
+    '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
+    '"min":[0,0,0],"max":[1,1,0]}],"materials":[{},'
+    '{"pbrMetallicRoughness":{"roughnessFactor":0.5}}],"meshes":['
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":1}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":1}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]}]}'
+)
+
+
+def town_registry() raises -> AssetRegistry:
+    """A registry whose cache holds the town package, as `town.Town02`,
+    and the rigged model as a town that cannot be used."""
+    var folder = "/tmp/threemojo_carla_town/"
+    makedirs(folder, exist_ok=True)
+    Path(folder + "town.gltf").write_text(TOWN_GLTF)
+    Path(folder + "rigged.gltf").write_bytes(
+        Path("assets/gltf/three_export.gltf").read_bytes()
+    )
+    return AssetRegistry(
+        parse_manifest(
+            _manifest(
+                _entry("town", "town", _file("model", "town.gltf"))
+                + ", "
+                + _entry("rigged", "town", _file("model", "rigged.gltf")),
+                '{"town.Town02": "town"}',
+            )
+        ),
+        folder,
+    )
+
+
+def test_a_town_node_names_its_tile() raises:
+    var tile = town_tile("road_line_3_-2_lod1")
+    assert_equal(tile[0], "3_-2")
+    assert_equal(tile[1], 1)
+    for name in ["odd", "a_b_c_lodx", "a_1_2_lod", "a_1_2_near"]:
+        var other = town_tile(name)
+        assert_equal(other[0], "")
+        assert_equal(other[1], 0)
+
+
+def test_a_town_is_placed_as_it_is_in_tiles() raises:
+    var registry = town_registry()
+    var scene = Scene()
+    var assets = Assets()
+    var parent = scene.add(Object3D())
+    scene.update()
+    var index = registry.cached_entry("town.Town02").value()
+    var placed = registry.place_town(
+        index, scene, assets, parent, Length(10, METER)
+    )
+    assert_equal(placed.mesh_count, 7)
+    assert_equal(placed.kinds[0], "building")
+    assert_equal(placed.kinds[2], "road_line")
+    # A node with no kind, or a kind that is not a string, is a prop.
+    assert_equal(placed.kinds[5], "prop")
+    assert_equal(placed.kinds[6], "prop")
+    assert_equal(placed.lods[1], 1)
+    assert_equal(placed.lods[5], 0)
+    # A level past the far one is the far one.
+    assert_equal(placed.lods[6], 1)
+    # Three tiles: 0_0, 1_0, and the one of the node named otherwise.
+    assert_equal(placed.lod_count, 3)
+    assert_equal(len(scene.lods), placed.first_lod + 3)
+    # The package stays where it is: the triangle's corner is at the
+    # origin.
+    var box = assets.geometries.get(scene.meshes[0].geometry).bounding_box()
+    box.apply_matrix4(scene.world_matrix(scene.meshes[0].node))
+    assert_almost_equal(box.min.x, 0, atol=1e-5)
+    assert_almost_equal(box.max.y, 1, atol=1e-5)
+    assert_true(scene.meshes[0].cast_shadow)
+    assert_true(
+        assets.materials.get(scene.meshes[0].material).env_map
+        == SCENE_ENVIRONMENT
+    )
+    # Near a tile, its near level shows; far from it, its far level.
+    scene.update_lods(Vector3(0, 0, 0))
+    assert_equal(scene.lods[placed.first_lod].shown, 0)
+    assert_true(scene.is_shown(scene.meshes[0].node))
+    assert_false(scene.is_shown(scene.meshes[1].node))
+    scene.update_lods(Vector3(100, 0, 0))
+    assert_equal(scene.lods[placed.first_lod].shown, 1)
+    assert_false(scene.is_shown(scene.meshes[0].node))
+    assert_true(scene.is_shown(scene.meshes[1].node))
+
+
+def test_a_town_the_renderer_cannot_use_is_refused() raises:
+    var registry = town_registry()
+    var scene = Scene()
+    var assets = Assets()
+    var parent = scene.add(Object3D())
+    scene.update()
+    var near = Length(10, METER)
+    with assert_raises(contains="only plain meshes"):
+        _ = registry.place_town(1, scene, assets, parent, near)
+    with assert_raises(contains="is not a town"):
+        _ = _registry().place_town(0, scene, assets, parent, near)
+    var folder = "/tmp/threemojo_carla_town/"
+    Path(folder + "bare.gltf").write_text(
+        '{"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes":'
+        ' [0]}], "nodes": [{"name": "marker"}]}'
+    )
+    var bare = AssetRegistry(
+        parse_manifest(
+            _manifest(_entry("bare", "town", _file("model", "bare.gltf")))
+        ),
+        folder,
+    )
+    with assert_raises(contains="has no mesh"):
+        _ = bare.place_town(0, scene, assets, parent, near)
 
 
 def main() raises:

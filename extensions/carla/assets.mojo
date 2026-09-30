@@ -66,6 +66,7 @@ from loaders.json import (
     parse_json,
 )
 from materials.material import Material, MaterialId
+from objects.lod import Lod
 from math.bounds import Box3
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
@@ -89,17 +90,18 @@ from units.si import DEGREE, METER, Angle, Length
 
 @fieldwise_init
 struct AssetKind(Equatable, ImplicitlyCopyable, Writable):
-    """What a manifest entry is: a texture set, an HDRI or a model."""
+    """What a manifest entry is: a texture set, an HDRI, a model or a
+    town."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True for one of the three kinds.
+        """Return True for one of the four kinds.
 
         Returns:
-            Whether the value is from 0 to 2.
+            Whether the value is from 0 to 3.
         """
-        return self.value >= 0 and self.value <= 2
+        return self.value >= 0 and self.value <= 3
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the kind's number.
@@ -113,6 +115,8 @@ struct AssetKind(Equatable, ImplicitlyCopyable, Writable):
 comptime TEXTURE_SET_ASSET = AssetKind(0)
 comptime HDRI_ASSET = AssetKind(1)
 comptime MODEL_ASSET = AssetKind(2)
+# A whole CARLA town, placed as it is: see `AssetRegistry.place_town`.
+comptime TOWN_ASSET = AssetKind(3)
 
 
 @fieldwise_init
@@ -190,13 +194,13 @@ def asset_kind_of(name: String) raises -> AssetKind:
     """Return the kind a manifest names.
 
     Args:
-        name: `texture_set`, `hdri` or `model`.
+        name: `texture_set`, `hdri`, `model` or `town`.
 
     Returns:
         The kind.
 
     Raises:
-        Error: If the name is none of the three.
+        Error: If the name is none of the four.
     """
     if name == "texture_set":
         return TEXTURE_SET_ASSET
@@ -204,7 +208,11 @@ def asset_kind_of(name: String) raises -> AssetKind:
         return HDRI_ASSET
     if name == "model":
         return MODEL_ASSET
-    raise Error("An asset kind is texture_set, hdri or model, not " + name)
+    if name == "town":
+        return TOWN_ASSET
+    raise Error(
+        "An asset kind is texture_set, hdri, model or town, not " + name
+    )
 
 
 def asset_role_of(name: String) raises -> AssetRole:
@@ -441,6 +449,9 @@ def _entry(document: JsonDocument, node: Int) raises -> AssetEntry:
         entry.yaw = forward_yaw(_text(document, node, "forward"))
         if not Bool(entry.file(MODEL_ROLE)):
             raise Error("A model entry needs its model file")
+    elif entry.kind == TOWN_ASSET:
+        if not Bool(entry.file(MODEL_ROLE)):
+            raise Error("A town entry needs its model file")
     elif not Bool(entry.file(HDRI_ROLE)):
         raise Error("An HDRI entry needs its panorama")
     return entry^
@@ -540,8 +551,8 @@ def parse_manifest(text: String) raises -> AssetManifest:
         Error: If the JSON is malformed, the format is not 1, an entry
             breaks a rule (an unknown kind, role or license, a path out of
             the cache, a texture set with no albedo or no positive tile, a
-            model with no model file or forward axis, an HDRI with no
-            panorama), two entries share an id, or a binding names an
+            model with no model file or forward axis, a town with no model
+            file, an HDRI with no panorama), two entries share an id, or a binding names an
             entry that is not there or is of the wrong kind.
     """
     var document = parse_json(text)
@@ -593,8 +604,8 @@ def binding_kind(key: String) -> AssetKind:
 
     Returns:
         A texture set for `surface.`, `ground.` and `facade.` keys, an
-        HDRI for `sky.` keys, and a model for any other key: a blueprint
-        id, a wildcard, or `tree`.
+        HDRI for `sky.` keys, a town for `town.` keys, and a model for
+        any other key: a blueprint id, a wildcard, or `tree`.
     """
     if (
         key.startswith("surface.")
@@ -604,6 +615,8 @@ def binding_kind(key: String) -> AssetKind:
         return TEXTURE_SET_ASSET
     if key.startswith("sky."):
         return HDRI_ASSET
+    if key.startswith("town."):
+        return TOWN_ASSET
     return MODEL_ASSET
 
 
@@ -653,6 +666,8 @@ def wildcard_key(type_id: String) -> String:
 # The key of a glTF material's `extras` that says what the material is on a
 # CARLA vehicle.
 comptime MATERIAL_TAG = "carla"
+# The `extras` key of a town mesh's node that names its kind.
+comptime TOWN_KIND = "carla_kind"
 
 
 @fieldwise_init
@@ -673,6 +688,54 @@ struct ModelPlacement(Copyable, Movable):
     var paint: List[MaterialId]
     var heads: List[MaterialId]
     var tails: List[MaterialId]
+
+
+@fieldwise_init
+struct TownPlacement(Copyable, Movable):
+    """Where a placed town went."""
+
+    # The town's meshes: the first's index in `Scene.meshes`, and how many
+    # follow it.
+    var first_mesh: Int
+    var mesh_count: Int
+    # Each mesh's kind, from its node's `carla_kind`: `building`, `road`,
+    # `vegetation` and the others `build_towns.py` writes.
+    var kinds: List[String]
+    # Each mesh's level of detail, from its node's `carla_lod`: 0 near,
+    # 1 far.
+    var lods: List[Int]
+    # The town's tiles, one LOD each: the first's index in `Scene.lods`,
+    # and how many follow it.
+    var first_lod: Int
+    var lod_count: Int
+
+
+def town_tile(name: String) -> Tuple[String, Int]:
+    """Return a town mesh's tile and level of detail, from its node's name.
+
+    `build_towns.py` names each node `<kind>_<x>_<z>_lod<level>`, where x
+    and z number its tile. A kind can hold underscores, so the name is
+    read from its end.
+
+    Args:
+        name: The node's name.
+
+    Returns:
+        The tile, as `<x>_<z>`, and the level. A name of another form is
+        the tile `""` at level 0.
+    """
+    var parts = name.split("_")
+    if len(parts) < 4 or not String(parts[len(parts) - 1]).startswith("lod"):
+        return (String(""), 0)
+    var value: Int
+    try:
+        value = atol(String(parts[len(parts) - 1]).removeprefix("lod"))
+    except:
+        return (String(""), 0)
+    return (
+        String(parts[len(parts) - 3]) + "_" + String(parts[len(parts) - 2]),
+        value,
+    )
 
 
 struct TextureSet(Movable):
@@ -1165,6 +1228,119 @@ struct AssetRegistry(Movable):
             paint^,
             heads^,
             tails^,
+        )
+
+
+    def place_town(
+        self,
+        index: Int,
+        mut scene: Scene,
+        mut assets: Assets,
+        parent: NodeId,
+        near: Length,
+    ) raises -> TownPlacement:
+        """Read a cached town and hang it, as it is, from a node.
+
+        A town package is in the scene's frame already, so it takes no
+        turn and no scale. Each of its tiles becomes an LOD: the tile's
+        near meshes show when the camera is nearer than `near` to the
+        tile's center, and its far meshes show otherwise. Call
+        `Scene.update_lods` with the camera's position before a frame.
+        Every mesh casts and receives shadows, and each material that
+        reflects no cube reflects the scene's environment.
+
+        Args:
+            index: The entry's index, from `cached_entry`.
+            scene: The scene; the town's nodes, meshes and LODs are added.
+            assets: The stores; its geometry, materials and textures are
+                added.
+            parent: The node the town hangs from.
+            near: How far from a tile's center its near meshes show.
+
+        Returns:
+            The town's meshes, each one's kind and level, and its LODs.
+
+        Raises:
+            Error: If the entry is not a town, `read_gltf` refuses the
+                file, the town adds skinned or instanced meshes, or it
+                has no mesh.
+        """
+        ref entry = self.manifest.entries[index]
+        if entry.kind != TOWN_ASSET:
+            raise Error("The entry " + entry.id + " is not a town")
+        var model = read_gltf(
+            self.path(entry.file(MODEL_ROLE).value()), scene, assets
+        )
+        if model.skinned_mesh_count > 0 or model.instanced_mesh_count > 0:
+            raise Error("A town must hold only plain meshes")
+        if model.mesh_count == 0:
+            raise Error("The town " + entry.id + " has no mesh")
+        scene.update()
+        for id in model.materials:
+            var material = assets.materials.get(id)
+            if material.env_map == NO_CUBE_TEXTURE:
+                material.env_map = SCENE_ENVIRONMENT
+                assets.materials.materials[id.value] = material
+        # Each tile's key, box and meshes, in the order first met.
+        var tiles = List[String]()
+        var boxes = List[Box3]()
+        var kinds = List[String]()
+        var lods = List[Int]()
+        var tile_of = List[Int]()
+        for m in range(model.first_mesh, model.first_mesh + model.mesh_count):
+            scene.meshes[m].cast_shadow = True
+            scene.meshes[m].receive_shadow = True
+            var node = scene.get(scene.meshes[m].node).copy()
+            var kind = String("prop")
+            if node.user_data.has(TOWN_KIND) and node.user_data.kind(
+                TOWN_KIND
+            ) == STRING:
+                kind = node.user_data.string(TOWN_KIND)
+            kinds.append(kind)
+            var tile = town_tile(node.name)
+            lods.append(max(0, min(tile[1], 1)))
+            var box = assets.geometries.get(
+                scene.meshes[m].geometry
+            ).bounding_box()
+            box.apply_matrix4(scene.world_matrix(scene.meshes[m].node))
+            var at = -1
+            for k in range(len(tiles)):
+                if tiles[k] == tile[0]:
+                    at = k
+            if at < 0:
+                at = len(tiles)
+                tiles.append(tile[0])
+                boxes.append(Box3.empty())
+            boxes[at].union(box)
+            tile_of.append(at)
+        var first_lod = len(scene.lods)
+        var groups = List[NodeId]()
+        for k in range(len(tiles)):
+            var center = boxes[k].center()
+            var holder = Object3D()
+            holder.set_position(center.x, center.y, center.z)
+            var tile_node = scene.attach(holder^, parent)
+            var lod = Lod(tile_node)
+            for level in range(2):
+                var group = Object3D()
+                group.set_position(-center.x, -center.y, -center.z)
+                var group_node = scene.add(group^)
+                groups.append(group_node)
+                lod.add_level(
+                    group_node, near if level == 1 else Length(0.0, METER)
+                )
+            scene.add_lod(lod^)
+        for k in range(model.mesh_count):
+            var node = scene.meshes[model.first_mesh + k].node
+            scene.add(node, parent=groups[2 * tile_of[k] + lods[k]])
+        scene.update()
+        return TownPlacement(
+            model.first_mesh,
+            model.mesh_count,
+            kinds^,
+            lods^,
+            first_lod,
+            len(tiles),
         )
 
 

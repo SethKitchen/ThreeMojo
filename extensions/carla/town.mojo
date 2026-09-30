@@ -73,6 +73,7 @@ from extensions.carla.mesh_factory import (
 from extensions.carla.assets import (
     AssetRegistry,
     ModelPlacement,
+    TownPlacement,
     repeat_model,
     surface_key,
 )
@@ -103,12 +104,22 @@ from extensions.carla.render_weather import (
 from extensions.carla.road import Road
 from extensions.carla.sensor import (
     BUILDING,
+    CAR,
+    FENCE,
+    GROUND,
     POLE,
+    RAIL_TRACK,
+    ROAD,
     ROAD_LINE,
     SIDEWALK,
+    STATIC,
     SemanticTag,
     TERRAIN,
+    TRAFFIC_LIGHT,
+    TRAFFIC_SIGN,
     VEGETATION,
+    WALL,
+    WATER,
 )
 from extensions.carla.world import surface_tag
 from extensions.carla.road_info import (
@@ -204,10 +215,17 @@ struct TownSettings(Copyable, Movable):
     var setback: Length
     # Which dressing; the same seed builds the same town.
     var seed: Int
+    # The CARLA town whose package to draw, such as `Town02`, or empty for
+    # none. When the registry's cache holds `town.<package>`, the package
+    # stands in for the procedural roads, ground, buildings, trees and
+    # lamps.
+    var package: String
+    # How far from a package tile's center its near meshes show.
+    var near_distance: Length
 
     def __init__(out self):
-        """Start with a detailed town: 1 m rows, 512-texel textures, and
-        every kind of dressing."""
+        """Start with a detailed town: 1 m rows, 512-texel textures,
+        every kind of dressing, and no package."""
         self.resolution = Length(1, METER)
         self.texture_size = 512
         self.buildings = True
@@ -217,6 +235,8 @@ struct TownSettings(Copyable, Movable):
         self.tree_spacing = Length(12, METER)
         self.setback = Length(4, METER)
         self.seed = 1
+        self.package = String()
+        self.near_distance = Length(50, METER)
 
 
 def surface_color(kind: SurfaceKind) raises -> Color:
@@ -1019,6 +1039,14 @@ struct Town(Movable):
     var wet: WetSurface
     # The semantic tag of each mesh the town added, in order.
     var tags: List[SemanticTag]
+    # The CARLA town's package, when one stands in for the procedural
+    # dressing.
+    var package: Optional[TownPlacement]
+    # The package's road, paint and ground materials, and each one's dry
+    # color and roughness, which the weather wets.
+    var wet_materials: List[MaterialId]
+    var dry_colors: List[Color]
+    var dry_roughness: List[Float32]
 
     def __init__(
         out self,
@@ -1033,7 +1061,10 @@ struct Town(Movable):
         A surface or a tree whose key the registry's cache holds wears the
         photoscanned asset; every other one is procedural. The keys are
         `assets.surface_key` of each road surface, `ground.grass`,
-        `ground.paving` and `tree`.
+        `ground.paving` and `tree`. When the settings name a package and
+        the cache holds `town.<package>`, the package stands in for the
+        roads, the paint, the ground, the buildings, the trees and the
+        lamps; see `AssetRegistry.place_town`.
 
         Args:
             map: The map.
@@ -1052,6 +1083,10 @@ struct Town(Movable):
         self.lamp_lights = List[Int]()
         self.wet = WetSurface(0, 0)
         self.tags = List[SemanticTag]()
+        self.package = None
+        self.wet_materials = List[MaterialId]()
+        self.dry_colors = List[Color]()
+        self.dry_roughness = List[Float32]()
         self.lots = List[Lot]()
         self.posts = List[LampPost]()
         self.bounds = road_bounds(map)
@@ -1099,10 +1134,17 @@ struct Town(Movable):
                 material.normal_map = concrete_normal
             self.materials.surfaces.append(assets.materials.add(material))
 
+        self.road_node = scene.add(Object3D())
+        if self.settings.package.byte_length() > 0:
+            var packaged = registry.cached_entry(
+                "town." + self.settings.package
+            )
+            if Bool(packaged):
+                self._add_package(packaged.value(), scene, assets, registry)
+                return
         # The road, from CARLA's mesh factory.
         # One mesh per surface kind, so that each has its own tag.
         var road = to_three_frame(generate_mesh(map, self.settings.resolution))
-        self.road_node = scene.add(Object3D())
         # A map with lanes has a road surface.
         for group in road.groups:  # pragma: no branch
             var part = road.clone()
@@ -1170,6 +1212,51 @@ struct Town(Movable):
         if self.settings.lamps:
             self.posts = lamp_posts(map, self.settings.lamp_spacing)
             self._add_lamps(scene, assets)
+        scene.update()
+
+    def _add_package(
+        mut self,
+        index: Int,
+        mut scene: Scene,
+        mut assets: Assets,
+        registry: AssetRegistry,
+    ) raises:
+        """Hang the town's package from the road's node, tag its meshes,
+        and keep its road surfaces' dry looks for the weather.
+
+        The package's traffic lights and signs are hidden: `Props` draws
+        the map's, which change with the world. The procedural dressing
+        is turned off, since the package holds its own.
+        """
+        var placed = registry.place_town(
+            index, scene, assets, self.road_node, self.settings.near_distance
+        )
+        # A package has at least one mesh.
+        for k in range(placed.mesh_count):  # pragma: no branch
+            var m = placed.first_mesh + k
+            var kind = placed.kinds[k]
+            self.tags.append(town_kind_tag(kind))
+            if kind == "traffic_light" or kind == "traffic_sign":
+                var node = scene.meshes[m].node
+                scene.node(node).visible = False
+            if not town_kind_casts(kind):
+                scene.meshes[m].cast_shadow = False
+            if (
+                kind == "road"
+                or kind == "road_line"
+                or kind == "sidewalk"
+                or kind == "ground"
+            ):
+                var id = scene.meshes[m].material
+                if id not in self.wet_materials:
+                    var material = assets.materials.get(id)
+                    self.wet_materials.append(id)
+                    self.dry_colors.append(material.color)
+                    self.dry_roughness.append(material.roughness)
+        self.package = placed^
+        self.settings.buildings = False
+        self.settings.trees = False
+        self.settings.lamps = False
         scene.update()
 
     def _add(
@@ -1660,6 +1747,12 @@ struct Town(Movable):
                 self.materials.surface(ROAD_SURFACE).value
             ] = road
             self.wet = wet
+        for k in range(len(self.wet_materials)):
+            var id = self.wet_materials[k]
+            var material = assets.materials.get(id)
+            material.color = wet_color(self.dry_colors[k], wet)
+            material.roughness = wet.roughness(self.dry_roughness[k])
+            assets.materials.materials[id.value] = material
         var lit = street_lights_on(weather)
         for index in self.lamp_lights:
             scene.lights[index].intensity = LAMP_INTENSITY if lit else 0
@@ -1671,6 +1764,72 @@ struct Town(Movable):
             var facade = assets.materials.get(id)
             facade.emissive_intensity = WINDOW_GLOW if lit else 0
             assets.materials.materials[id.value] = facade
+
+
+def town_kind_casts(kind: String) -> Bool:
+    """Return True for a town package's kind of mesh that casts the sun's
+    shadow: a building, a wall, a plant or a parked vehicle.
+
+    A flat surface only receives, since it would fill every texel of the
+    sun's maps and shade nothing. A pole, a fence, a sign or a small prop
+    casts a shadow a few texels wide that costs as much to draw as a
+    building's.
+
+    Args:
+        kind: A node's `carla_kind`.
+
+    Returns:
+        Whether meshes of the kind cast.
+    """
+    return (
+        kind == "building"
+        or kind == "wall"
+        or kind == "vegetation"
+        or kind == "parked_vehicle"
+    )
+
+
+def town_kind_tag(kind: String) -> SemanticTag:
+    """Return the semantic tag of a town package's kind of mesh.
+
+    Args:
+        kind: A node's `carla_kind`, as `build_towns.py` writes it.
+
+    Returns:
+        CARLA's tag for it; `STATIC` for a prop or a kind this does not
+        know.
+    """
+    if kind == "building":
+        return BUILDING
+    if kind == "road":
+        return ROAD
+    if kind == "road_line":
+        return ROAD_LINE
+    if kind == "sidewalk":
+        return SIDEWALK
+    if kind == "ground":
+        return GROUND
+    if kind == "terrain":
+        return TERRAIN
+    if kind == "water":
+        return WATER
+    if kind == "rail":
+        return RAIL_TRACK
+    if kind == "wall":
+        return WALL
+    if kind == "fence":
+        return FENCE
+    if kind == "vegetation":
+        return VEGETATION
+    if kind == "pole":
+        return POLE
+    if kind == "traffic_light":
+        return TRAFFIC_LIGHT
+    if kind == "traffic_sign":
+        return TRAFFIC_SIGN
+    if kind == "parked_vehicle":
+        return CAR
+    return STATIC
 
 
 def road_bounds(map: Map) raises -> Box3:

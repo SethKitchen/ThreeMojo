@@ -119,7 +119,7 @@ The meshes are merged by tile, by kind and by material. A tile is 64 meters squa
 | `carla_kind` | `building`, `road`, `road_line`, `sidewalk`, `ground`, `terrain`, `water`, `rail`, `wall`, `fence`, `vegetation`, `pole`, `traffic_light`, `traffic_sign`, `parked_vehicle`, `prop` |
 | `carla_lod` | `0` for near, `1` for far |
 
-The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It thins the trees and leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
+The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A far tree is an impostor: two quads that cross on its trunk. Each quad shows a picture of the tree, drawn from its near level from the front or from the side, with its leaves cut out. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
 Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. When a town has more than its cap, for example the eight thousand pines of Town04, every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 

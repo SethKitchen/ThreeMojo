@@ -55,7 +55,7 @@ MANIFEST = ROOT / 'assets' / 'carla' / 'manifest.json'
 CACHE = ROOT / '.cache' / 'carla-assets'
 
 FORMAT = 1
-KINDS = {'texture_set', 'hdri', 'model'}
+KINDS = {'texture_set', 'hdri', 'model', 'town'}
 LICENSES = {
     'CC0-1.0': 'https://creativecommons.org/publicdomain/zero/1.0/',
     'CC-BY-4.0': 'https://creativecommons.org/licenses/by/4.0/',
@@ -66,6 +66,7 @@ ROLES = {
     'texture_set': {'albedo', 'normal', 'roughness', 'ao', 'displacement', 'archive'},
     'hdri': {'hdri', 'archive'},
     'model': {'model', 'support', 'archive'},
+    'town': {'model', 'support', 'archive'},
 }
 FORWARDS = {'+x', '-x', '+z', '-z'}
 ENTRY_KEYS = {'id', 'kind', 'license', 'author', 'source', 'provenance', 'files'}
@@ -131,12 +132,15 @@ def _check_file(entry_id, kind, item, members):
 
 def binding_kind(key):
     """Return the kind of entry a binding key takes: a texture set for a
-    surface, the ground or a facade, an HDRI for the sky, and a model for
-    anything else (a vehicle, a walker, a tree or a prop)."""
+    surface, the ground or a facade, an HDRI for the sky, a town for a
+    `town.` key, and a model for anything else (a vehicle, a walker, a
+    tree or a prop)."""
     if key.startswith(('surface.', 'ground.', 'facade.')):
         return 'texture_set'
     if key.startswith('sky.'):
         return 'hdri'
+    if key.startswith('town.'):
+        return 'town'
     return 'model'
 
 
@@ -147,8 +151,8 @@ def check_manifest(manifest):
     a source page and a provenance note; files whose roles fit the kind,
     whose paths stay in the cache, whose URLs are https or file, and whose
     sums are 64 hex digits or null; a texture set with an albedo and a
-    positive tile size; a model with one model file and a forward axis; an
-    HDRI with one HDRI file; and bindings that name null or an entry of
+    positive tile size; a model with one model file and a forward axis; a
+    town with one model file; an HDRI with one HDRI file; and bindings that name null or an entry of
     the kind `binding_kind` gives the key.
     """
     if not isinstance(manifest, dict) or manifest.get('format') != FORMAT:
@@ -204,6 +208,8 @@ def check_manifest(manifest):
                 raise ManifestError(f'{entry_id}: a model needs exactly one model file')
             if entry.get('forward') not in FORWARDS:
                 raise ManifestError(f'{entry_id}: a model needs forward, one of {sorted(FORWARDS)}')
+        if kind == 'town' and roles.count('model') != 1:
+            raise ManifestError(f'{entry_id}: a town needs exactly one model file')
         if kind == 'hdri' and roles.count('hdri') != 1:
             raise ManifestError(f'{entry_id}: an HDRI needs exactly one HDRI file')
     bindings = manifest.get('bindings', {})

@@ -223,6 +223,11 @@ comptime WET_REFLECTION = Float32(0.9)
 # How near and far a camera sees.
 comptime CAMERA_NEAR = Length(0.12, METER)
 comptime CAMERA_FAR = Length(1500, METER)
+# How far in front of the camera the sun's shadows reach. Past it the
+# light has no shadow, as three.js's sun fades its last cascade out. A
+# shorter reach packs the cascades' texels nearer the camera, and a
+# town package's far tiles cast nothing.
+comptime SUN_SHADOW_REACH = Length(150, METER)
 
 
 @fieldwise_init
@@ -764,6 +769,7 @@ struct CarlaRenderer(Movable):
         self.sun.shadow.bias = -0.0004
         self.sun.shadow.normal_bias = 0.04
         self.sun.shadow.map_size = 2048
+        self.sun.shadow.far = SUN_SHADOW_REACH
         self.moon_node = self.scene.add(Object3D())
         self.moon = len(self.scene.lights)
         self.scene.add_light(
@@ -1223,6 +1229,9 @@ struct CarlaRenderer(Movable):
             pose.elements[12], pose.elements[13], pose.elements[14]
         )
         self.scene.update()
+        self._choose_detail(
+            Vector3(pose.elements[12], pose.elements[13], pose.elements[14])
+        )
         var view = PerspectiveCamera(
             vertical_fov(
                 settings.fov, settings.image_width, settings.image_height
@@ -1233,6 +1242,13 @@ struct CarlaRenderer(Movable):
         )
         view.attach(self.eye)
         return view^
+
+    def _choose_detail(mut self, eye: Vector3) raises:
+        """Show each town package tile at the level of detail for a camera
+        at `eye`, in the scene's frame. A town with no package has no
+        LODs, and its scene is left as it is."""
+        if len(self.scene.lods) > 0:
+            self.scene.update_lods(eye)
 
     def _wide_angle(
         mut self,
@@ -1250,6 +1266,7 @@ struct CarlaRenderer(Movable):
                 InverseLength(fog.density.to(PER_METER) * 0.7, PER_METER),
             )
         var at = transform.location
+        self._choose_detail(Vector3(at.x, at.z, at.y))
         var cube = scene_cube(
             self.renderer,
             self.scene,

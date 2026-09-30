@@ -29,6 +29,7 @@ from extensions.carla.blueprint import (
     ActorAttributeValue,
 )
 from extensions.carla.assets import AssetRegistry, parse_manifest
+from test_carla_assets import town_registry
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.camera_render import (
     CarlaRenderer,
@@ -149,6 +150,8 @@ from extensions.carla.town import (
     skyline_lots,
     surface_color,
     surface_roughness,
+    town_kind_casts,
+    town_kind_tag,
     wet_color,
     _clear_of_roads,
 )
@@ -1308,6 +1311,78 @@ def test_render_a_town_from_the_registry() raises:
     var heads = view.assets.materials.get(view.actors.vehicles[0].heads)
     assert_true(heads.emissive_intensity > 0)
     _ = view.render_rgb(world, camera)
+
+
+def test_a_town_package_stands_in_for_the_dressing() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var settings = _small()
+    settings.package = "Town02"
+    settings.near_distance = Length(10, METER)
+    var view = CarlaRenderer(
+        world, settings^, 1, 8, False, registry=town_registry()
+    )
+    ref town = view.town
+    assert_true(Bool(town.package))
+    # The town's meshes are the package's, and no procedural dressing.
+    assert_equal(len(town.tags), 7)
+    assert_true(town.tags[0] == BUILDING)
+    assert_true(town.tags[2] == ROAD_LINE)
+    assert_false(town.settings.buildings)
+    assert_equal(len(town.lamp_lights), 0)
+    # The package's traffic light is hidden: the props draw the map's.
+    var light = town.package.value().first_mesh + 4
+    assert_false(view.scene.get(view.scene.meshes[light].node).visible)
+    # The paint and the road share one material, which the rain wets.
+    assert_equal(len(town.wet_materials), 1)
+    view.update(world)
+    var road = town.wet_materials[0]
+    var dry = view.assets.materials.get(road).color
+    world.set_weather(weather_preset("HardRainNoon"))
+    view.update(world)
+    var wet = view.assets.materials.get(road).color
+    assert_true(wet.r < dry.r)
+    assert_true(view.assets.materials.get(road).roughness < 0.5)
+    # A frame shows each tile at the camera's level of detail.
+    var image = view.render_rgb(world, camera)
+    assert_equal(image.width, 16)
+    # A package the cache lacks leaves the town procedural.
+    var other = _small()
+    other.package = "Town09"
+    var procedural = CarlaRenderer(
+        world, other^, 1, 8, False, registry=town_registry()
+    )
+    assert_false(Bool(procedural.town.package))
+    assert_true(len(procedural.town.tags) > 7)
+
+
+def test_each_town_kind_has_its_tag_and_its_shadow() raises:
+    # Each kind `build_towns.py` writes, its CityScapes tag number, and
+    # whether it casts the sun's shadow.
+    var kinds: List[Tuple[String, Int, Bool]] = [
+        ("building", 3, True),
+        ("road", 1, False),
+        ("road_line", 24, False),
+        ("sidewalk", 2, False),
+        ("ground", 25, False),
+        ("terrain", 10, False),
+        ("water", 23, False),
+        ("rail", 27, False),
+        ("wall", 4, True),
+        ("fence", 5, False),
+        ("vegetation", 9, True),
+        ("pole", 6, False),
+        ("traffic_light", 7, False),
+        ("traffic_sign", 8, False),
+        ("parked_vehicle", 14, True),
+        ("prop", 20, False),
+        ("something_new", 20, False),
+    ]
+    for kind in kinds:
+        assert_equal(town_kind_tag(kind[0]).value, kind[1])
+        assert_equal(town_kind_casts(kind[0]), kind[2])
 
 
 def main() raises:

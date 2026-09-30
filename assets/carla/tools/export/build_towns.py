@@ -68,6 +68,8 @@ CAPS = {
     "parked_vehicle": (200_000, 1),
     "traffic_light": (100_000, 20_000),
 }
+# The folder whose meshes are trees, whose far level is an impostor.
+TREES = "/Vegetation/Trees/"
 # One grass leaf in this many is kept: the ground's texture is the lawn.
 GRASS_KEEP = 10
 # Words that must not appear in a package.
@@ -310,6 +312,150 @@ def thin_cards(primitive, keep, seed):
             "triangles": remap[faces], "material": primitive["material"]}
 
 
+# ---- Impostors -------------------------------------------------------------
+
+# Texels a side of an impostor's view, and samples each covered texel takes.
+IMPOSTOR_SIZE = 256
+IMPOSTOR_SAMPLES = 4
+# The light an impostor's texels are shaded by, three.js frame: high and
+# from the side, as the sun is most of the day.
+IMPOSTOR_LIGHT = numpy.array([0.35, 0.85, 0.4]) / numpy.linalg.norm([0.35, 0.85, 0.4])
+
+
+def _albedo(library, material):
+    """Return a material's base color image as float RGBA, and its
+    factor."""
+    from PIL import Image
+    entry = library.gltf["materials"][material]
+    pbr = entry.get("pbrMetallicRoughness", {})
+    factor = numpy.array(pbr.get("baseColorFactor", [1, 1, 1, 1]), dtype=numpy.float64)
+    texture = pbr.get("baseColorTexture")
+    if texture is None:
+        return None, factor
+    source = library.gltf["textures"][texture["index"]]["source"]
+    path = os.path.join(library.package.out_dir, library.gltf["images"][source]["uri"])
+    return numpy.asarray(Image.open(path).convert("RGBA"), dtype=numpy.float64) / 255.0, factor
+
+
+def _splat(parts, library, across, left, width, top, height, rows):
+    """Return one view of a tree, drawn across axis `across` (0 for x,
+    2 for z) and down y from `top`: RGBA floats, `rows` by
+    `IMPOSTOR_SIZE` texels. Each triangle is sampled at random points, as
+    many as it covers texels times `IMPOSTOR_SAMPLES`, and the nearest
+    sample that the cut-out keeps colors each texel."""
+    depth_axis = 2 if across == 0 else 0
+    scale_u = IMPOSTOR_SIZE / max(width, 1e-6)
+    scale_v = rows / max(height, 1e-6)
+    rng = numpy.random.default_rng(7)
+    xs, ys, zs, colors = [], [], [], []
+    for part, material in parts:
+        image, factor = _albedo(library, material)
+        entry = library.gltf["materials"][material]
+        cut = entry.get("alphaCutoff", 0.5)
+        masked = entry.get("alphaMode") == "MASK"
+        tri = part["triangles"]
+        corners = part["positions"][tri]
+        u = (corners[:, :, across] - left) * scale_u
+        v = (top - corners[:, :, 1]) * scale_v
+        area = 0.5 * numpy.abs((u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0]))
+        counts = numpy.minimum(numpy.maximum(1, numpy.ceil(area * IMPOSTOR_SAMPLES)), 4096).astype(numpy.int64)
+        owner = numpy.repeat(numpy.arange(len(corners)), counts)
+        a, b = rng.random(len(owner)), rng.random(len(owner))
+        flip = a + b > 1
+        a[flip], b[flip] = 1 - a[flip], 1 - b[flip]
+        w = numpy.stack([1 - a - b, a, b], axis=1)
+        depth = numpy.einsum("nk,nk->n", w, corners[owner][:, :, depth_axis])
+        uv = numpy.einsum("nk,nkd->nd", w, part["uvs"][tri][owner])
+        normal = numpy.einsum("nk,nkd->nd", w, part["normals"][tri][owner])
+        normal /= numpy.maximum(numpy.linalg.norm(normal, axis=1, keepdims=True), 1e-9)
+        if image is None:
+            rgba = numpy.tile(factor, (len(owner), 1))
+        else:
+            h, wd = image.shape[:2]
+            px = (numpy.mod(uv[:, 0], 1.0) * (wd - 1)).astype(numpy.int64)
+            py = (numpy.mod(uv[:, 1], 1.0) * (h - 1)).astype(numpy.int64)
+            rgba = image[py, px] * factor
+        keep = rgba[:, 3] >= cut if masked else numpy.ones(len(owner), dtype=bool)
+        rgba[:, :3] *= (0.45 + 0.55 * numpy.abs(normal @ IMPOSTOR_LIGHT))[:, None]
+        xs.append(numpy.einsum("nk,nk->n", w, u[owner])[keep])
+        ys.append(numpy.einsum("nk,nk->n", w, v[owner])[keep])
+        zs.append(depth[keep])
+        colors.append(rgba[keep, :3])
+    out = numpy.zeros((rows, IMPOSTOR_SIZE, 4))
+    if sum(len(x) for x in xs) == 0:
+        return out
+    x = numpy.concatenate(xs).astype(numpy.int64)
+    y = numpy.concatenate(ys).astype(numpy.int64)
+    z = numpy.concatenate(zs)
+    color = numpy.concatenate(colors)
+    inside = (x >= 0) & (x < IMPOSTOR_SIZE) & (y >= 0) & (y < rows)
+    x, y, z, color = x[inside], y[inside], z[inside], color[inside]
+    # The nearest sample of each texel: the view looks down the depth
+    # axis from its positive end.
+    texel = y * IMPOSTOR_SIZE + x
+    order = numpy.lexsort((-z, texel))
+    sorted_texel = texel[order]
+    first = numpy.ones(len(order), dtype=bool)
+    first[1:] = sorted_texel[1:] != sorted_texel[:-1]
+    chosen = order[first]
+    out[y[chosen], x[chosen], :3] = color[chosen]
+    out[y[chosen], x[chosen], 3] = 1.0
+    return out
+
+
+def impostor(parts, library, out_dir, name):
+    """Return a tree's far level, two quads that cross on its trunk, each
+    showing a picture of the tree drawn from its near level; and the
+    picture's material. `parts` are the tree's primitives, each with its
+    material's index."""
+    from PIL import Image
+    points = numpy.concatenate([p["positions"] for p, _ in parts])
+    low, high = points.min(axis=0), points.max(axis=0)
+    height = high[1] - low[1]
+    views = []
+    for across in (0, 2):
+        width = high[across] - low[across]
+        rows = max(8, int(round(IMPOSTOR_SIZE * height / max(width, 1e-6))))
+        view = _splat(parts, library, across, low[across], width, high[1], height, rows)
+        # A texel the tree does not cover takes the mean color of those it
+        # does, so filtering at the edge of a leaf does not darken it.
+        covered = view[:, :, 3] > 0
+        if covered.any():
+            view[~covered, :3] = view[covered, :3].mean(axis=0)
+        picture = Image.fromarray((numpy.clip(view, 0, 1) * 255).astype(numpy.uint8), "RGBA")
+        views.append(picture.resize((IMPOSTOR_SIZE, IMPOSTOR_SIZE), Image.LANCZOS))
+    atlas = Image.new("RGBA", (2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE))
+    atlas.paste(views[0], (0, 0))
+    atlas.paste(views[1], (IMPOSTOR_SIZE, 0))
+    tag = "impostor_%08x" % zlib.crc32(name.encode())
+    os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
+    atlas.save(os.path.join(out_dir, "textures", tag + ".png"), optimize=True)
+    gltf = library.gltf
+    gltf["images"].append({"uri": "textures/" + tag + ".png"})
+    gltf["textures"].append({"sampler": 0, "source": len(gltf["images"]) - 1})
+    gltf["materials"].append({
+        "name": tag,
+        "pbrMetallicRoughness": {"baseColorTexture": {"index": len(gltf["textures"]) - 1},
+                                 "metallicFactor": 0.0, "roughnessFactor": 0.9},
+        "alphaMode": "MASK", "alphaCutoff": 0.5, "doubleSided": True})
+    material = len(gltf["materials"]) - 1
+    center = (low + high) / 2
+    positions, uvs = [], []
+    # Across x at the trunk's z, then across z at its x; each quad takes
+    # its half of the atlas, left to right as its view was drawn.
+    for across, half in ((0, 0.0), (2, 0.5)):
+        start, end = center.copy(), center.copy()
+        start[across], end[across] = low[across], high[across]
+        for base, y, u, v in ((start, low[1], 0.0, 1.0), (end, low[1], 0.5, 1.0),
+                              (end, high[1], 0.5, 0.0), (start, high[1], 0.0, 0.0)):
+            positions.append((base[0], y, base[2]))
+            uvs.append((half + u, v))
+    # Lit from above, as a crown is: the picture holds its own shading.
+    return {"positions": numpy.array(positions), "normals": numpy.tile([0.0, 1.0, 0.0], (8, 1)),
+            "uvs": numpy.array(uvs), "triangles": numpy.array([[0, 1, 2], [0, 2, 3], [4, 5, 6], [4, 6, 7]]),
+            "material": tag}, material
+
+
 # ---- Materials -------------------------------------------------------------
 
 class Textures(fix.Package):
@@ -501,11 +647,23 @@ def build(town, max_size, tile):
             material = library.material(material_name)
             total = sum(len(p["triangles"]) for p in primitives)
             for lod in LODS:
-                key = (mesh_path, index, material_name, lod)
-                if key not in lowered:
-                    lowered[key] = lower(primitive, kind, mesh_path, index, total, library.masked[material_name],
-                                         lod, factors[(kind, lod)])
-                part = lowered[key]
+                part_material = material
+                if lod == 1 and TREES in mesh_path:
+                    # A tree's far level is its impostor, drawn once for
+                    # all its primitives.
+                    if index != 0:
+                        continue
+                    key = (mesh_path, "impostor")
+                    if key not in lowered:
+                        parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
+                        lowered[key] = impostor(parts, library, out_dir, mesh_path)
+                    part, part_material = lowered[key]
+                else:
+                    key = (mesh_path, index, material_name, lod)
+                    if key not in lowered:
+                        lowered[key] = lower(primitive, kind, mesh_path, index, total,
+                                             library.masked[material_name], lod, factors[(kind, lod)])
+                    part = lowered[key]
                 if part is None:
                     continue
                 STATS[mesh_path] = STATS.get(mesh_path, 0) + len(part["triangles"]) * len(copies)
@@ -515,7 +673,7 @@ def build(town, max_size, tile):
                     # detail of a copy fall in the same tile.
                     origin = rows[3, :3] / 100.0
                     cell = (int(numpy.floor(origin[0] / tile)), int(numpy.floor(origin[1] / tile)))
-                    group = groups.setdefault((lod, kind, cell, material), [[], [], [], [], 0])
+                    group = groups.setdefault((lod, kind, cell, part_material), [[], [], [], [], 0])
                     group[0].append(points.astype(numpy.float32))
                     group[1].append(normals.astype(numpy.float32))
                     group[2].append(part["uvs"].astype(numpy.float32))

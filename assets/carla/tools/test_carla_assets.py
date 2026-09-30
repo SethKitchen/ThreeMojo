@@ -105,6 +105,11 @@ class ManifestTests(unittest.TestCase):
                        'sha256': None, 'path': 'car.glb'}],
         }
         cases.append(manifest_of(model))  # no forward axis
+        town = copy.deepcopy(model)
+        town.update(id='town', kind='town')
+        town['files'][0]['role'] = 'support'
+        cases.append(manifest_of(town))  # no model file
+        cases.append(manifest_of(dict(model, forward='+x'), bindings={'town.Town02': 'car'}))
         archive = copy.deepcopy(good)
         archive['files'] = [{'role': 'archive', 'url': 'https://example.org/a.zip',
                              'sha256': None, 'path': 'a.zip', 'extract': []}]
@@ -112,6 +117,15 @@ class ManifestTests(unittest.TestCase):
         for manifest in cases:
             with self.assertRaises(tool.ManifestError):
                 tool.check_manifest(manifest)
+
+    def test_a_town_passes(self):
+        town = {
+            'id': 'carla.town.town02', 'kind': 'town', 'license': 'CC-BY-4.0', 'author': 'B',
+            'source': 'https://example.org/town', 'provenance': 'p',
+            'files': [{'role': 'model', 'url': 'https://example.org/t.gltf',
+                       'sha256': None, 'path': 't.gltf'}],
+        }
+        tool.check_manifest(manifest_of(town, bindings={'town.Town02': 'carla.town.town02'}))
 
     def test_a_file_not_hosted_yet_passes_with_its_sum(self):
         tool.check_manifest(manifest_of(texture_entry(None, _sum(b'scan'))))
@@ -129,6 +143,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(tool.binding_kind('facade.brick'), 'texture_set')
         self.assertEqual(tool.binding_kind('sky.overcast'), 'hdri')
         self.assertEqual(tool.binding_kind('vehicle.tesla.model3'), 'model')
+        self.assertEqual(tool.binding_kind('town.Town02'), 'town')
 
 
 class FetchTests(unittest.TestCase):
