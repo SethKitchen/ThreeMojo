@@ -74,8 +74,11 @@ A bare integer for a gene is a compile error, and so is a bare float for an expr
 | `CHEST_DEPTH` | Shallow | Deep | The rib cage from front to back |
 | `ARM_LENGTH` | Short | Long | The upper arm and the forearm |
 | `HAIR_LENGTH` | Cropped close | A bob to the jaw | The scalp's hair |
+| `FACE_SHAPE_1` to `FACE_SHAPE_8` | -2.2 standard deviations | +2.2 standard deviations | The whole face, along one mode of the scanned face model each |
 
 `named_genes()` returns every gene in this order. Hair is cut as well as grown, so `HAIR_LENGTH` is a look more than a trait. `gene_label(gene)` returns its lowercase name.
+
+The face shape genes weigh the first eight identity modes of the ICT Face Model. Each mode is a direction in which real faces differ. One mode moves many features at once, as a real face does: a longer face, say, with a narrower jaw and a higher brow. The authored genes above still move one feature each, on top of the modes. The modes reshape the head and fade out down the neck, so the body's genes still shape the neck's base. The eyeballs move with the scan's orbits.
 
 The genes are authored controls. They are not a model of the loci that set these traits in people. Many small genes set each trait, and growth and the environment change them too.
 

@@ -27,6 +27,9 @@ from extensions.humanoid.genome import (
     EYE_SIZE,
     EYE_SPACING,
     EYE_TILT,
+    FACE_SHAPE_1,
+    FACE_SHAPE_2,
+    FACE_SHAPES,
     Expression,
     Gene,
     Genome,
@@ -79,7 +82,19 @@ from extensions.humanoid.skeleton.head.skin.tint import (
     tint_head_skin,
     untinted,
 )
-from extensions.humanoid.skeleton.morph import HeadMorph, bump, smoothstep
+from extensions.humanoid.skeleton.head.face_model import (
+    FACE_MODEL_PATH,
+    FaceModel,
+    LEFT_EYEBALL,
+    RIGHT_EYEBALL,
+)
+from extensions.humanoid.skeleton.head.skin.scan import scan_to_template
+from extensions.humanoid.skeleton.morph import (
+    IDENTITY_SPREAD,
+    HeadMorph,
+    bump,
+    smoothstep,
+)
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     shoulder_girdle,
     torso_dimensions,
@@ -181,6 +196,42 @@ def test_each_eye_gene_moves_the_eye() raises:
     var morph = HeadMorph(_one(EYE_SPACING, 1))
     assert_true(morph.eye_center(1).x > 3.2)
     assert_true(morph.eye_center(-1).x < -3.2)
+
+
+def test_face_shape_genes_weigh_the_face_models_modes() raises:
+    var morph = HeadMorph(_one(FACE_SHAPE_2, -0.5))
+    var weights = morph.identity_weights(10)
+    assert_equal(len(weights), 10)
+    assert_equal(weights[1], -0.5 * IDENTITY_SPREAD)
+    assert_equal(weights[0], 0)
+    assert_equal(weights[FACE_SHAPES], 0)
+    assert_equal(len(morph.identity_weights(1)), 1)
+    assert_true(HeadMorph().eye_shift(1) == Vector3(0, 0, 0))
+    # Each eyeball moves as the face model's eyeball moves: the mean of
+    # its vertices, the one at plus x on the right.
+    var model = FaceModel(FACE_MODEL_PATH, FACE_SHAPES, False)
+    var mean = model.shape(model.no_identity(), model.no_expression())
+    for mode in range(FACE_SHAPES):  # pragma: no branch
+        var identity = model.no_identity()
+        identity[mode] = 1
+        var shaped = model.shape(identity, model.no_expression())
+        var genome = _one(FACE_SHAPE_1, 0)
+        genome.expressions[FACE_SHAPE_1.value + mode] = 1 / IDENTITY_SPREAD
+        var shift = HeadMorph(genome).eye_shift(1)
+        var sum = Vector3(0, 0, 0)
+        for v in range(
+            LEFT_EYEBALL.first, LEFT_EYEBALL.end
+        ):  # pragma: no branch
+            sum = sum + (
+                scan_to_template(shaped[v]) - scan_to_template(mean[v])
+            )
+        var measured = sum * (
+            Float32(1) / Float32(LEFT_EYEBALL.end - LEFT_EYEBALL.first)
+        )
+        assert_true((measured - shift).length() < 1e-3)
+        var left = HeadMorph(genome).eye_shift(-1)
+        assert_true(abs(left.x + shift.x) < 1e-6)
+    assert_true(RIGHT_EYEBALL.first == LEFT_EYEBALL.end)
 
 
 def test_head_genes_reshape_the_cranium() raises:

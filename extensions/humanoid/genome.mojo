@@ -22,7 +22,7 @@ and development and environment change them too.
 from std.math import isfinite
 
 # How many genes a genome holds.
-comptime GENE_COUNT = 34
+comptime GENE_COUNT = 42
 
 
 @fieldwise_init
@@ -111,6 +111,19 @@ comptime ARM_LENGTH = Gene(32)
 # to the jaw in a bob. Hair is cut, not only grown, so this is a look
 # more than a trait.
 comptime HAIR_LENGTH = Gene(33)
+# Face. The shape of the whole face along the first eight modes of the
+# scanned face model, from the mean face's -2.2 standard deviations to
+# its +2.2. Each mode moves many features at once, as faces vary.
+comptime FACE_SHAPE_1 = Gene(34)
+comptime FACE_SHAPE_2 = Gene(35)
+comptime FACE_SHAPE_3 = Gene(36)
+comptime FACE_SHAPE_4 = Gene(37)
+comptime FACE_SHAPE_5 = Gene(38)
+comptime FACE_SHAPE_6 = Gene(39)
+comptime FACE_SHAPE_7 = Gene(40)
+comptime FACE_SHAPE_8 = Gene(41)
+# How many face shape genes there are, from `FACE_SHAPE_1` on.
+comptime FACE_SHAPES = 8
 
 
 @fieldwise_init
@@ -176,6 +189,14 @@ def gene_label(gene: Gene) -> String:
         "chest depth",
         "arm length",
         "hair length",
+        "face shape 1",
+        "face shape 2",
+        "face shape 3",
+        "face shape 4",
+        "face shape 5",
+        "face shape 6",
+        "face shape 7",
+        "face shape 8",
     ]
     return names[gene.value]
 
@@ -184,7 +205,7 @@ def named_genes() -> List[Gene]:
     """Return every named gene in a stable order.
 
     Returns:
-        `MELANIN` through `HAIR_LENGTH`.
+        `MELANIN` through `FACE_SHAPE_8`.
     """
     var genes = List[Gene]()
     for index in range(GENE_COUNT):  # pragma: no branch

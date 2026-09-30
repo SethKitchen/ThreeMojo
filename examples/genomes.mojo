@@ -24,6 +24,8 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.genome import (
+    FACE_SHAPES,
+    FACE_SHAPE_1,
     HAIR_LENGTH,
     Expression,
     Gene,
@@ -158,10 +160,26 @@ def _people() raises -> List[HumanoidSpec]:
     # How each one wears the hair: a bob, a crop, short, a bob to the
     # jaw, a longer bob and short.
     var lengths: List[Float32] = [0.9, -0.8, 0.1, 0.7, 1.0, -0.2]
+    # The shape of each whole face, along the face model's first modes.
+    # fmt: off
+    var shapes: List[Float32] = [
+        0.6, -0.2, 0.3, 0.0, -0.3, 0.2, 0.0, 0.1,
+        -0.5, 0.4, 0.0, -0.3, 0.2, 0.0, 0.3, 0.0,
+        0.3, 0.5, -0.4, 0.4, 0.0, -0.2, 0.0, 0.2,
+        -0.4, -0.5, 0.2, -0.4, 0.3, 0.3, -0.2, 0.0,
+        0.1, 0.2, 0.6, 0.0, -0.5, 0.4, 0.1, -0.2,
+        0.4, -0.3, -0.5, 0.3, 0.5, -0.4, 0.3, -0.3,
+    ]
+    # fmt: on
     for index in range(len(people)):
         people[index].genome = people[index].genome.with_gene(
             HAIR_LENGTH, Expression(lengths[index])
         )
+        for mode in range(FACE_SHAPES):
+            people[index].genome = people[index].genome.with_gene(
+                Gene(FACE_SHAPE_1.value + mode),
+                Expression(shapes[index * FACE_SHAPES + mode]),
+            )
     return people^
 
 

@@ -91,7 +91,7 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 
 `ScannedHead` fits the scan to the anatomy, in `extensions/humanoid/skeleton/head/skin/scan.mojo`:
 
-1. The scan's eyes land on the template's eyes. Each vertex then goes through the head's frame, as an authored point does. So the genome's face and head genes move the scan as they move the skull under it. See [Genome](Genome).
+1. The face shape genes weigh the scan's identity modes, so each face is a face of its own. The scan's eyes then land on the template's eyes. Each vertex then goes through the head's frame, as an authored point does. So the genome's face and head genes move the scan as they move the skull under it. See [Genome](Genome).
 2. The ear genes warp the ears. Each ear grows about its root, its back edge stands out, and its lobe hangs lower.
 3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
 4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.

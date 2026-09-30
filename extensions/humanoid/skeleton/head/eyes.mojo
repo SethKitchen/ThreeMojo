@@ -61,7 +61,8 @@ def eye_center(dimensions: HeadDimensions, side: BodySide) raises -> Vector3:
     low brow ridge, say, draws the upper lid back more than the eye.
     So the center is taken from the ring where the lids rest on the
     eyeball: across, its middle; in depth, far enough back that no
-    point of the ring lies behind the eyeball.
+    point of the ring lies behind the eyeball. The face shape genes
+    move the ring as they move the scan's eyeballs.
 
     Args:
         dimensions: Landmarks from `head_dimensions`.
@@ -74,16 +75,19 @@ def eye_center(dimensions: HeadDimensions, side: BodySide) raises -> Vector3:
         Error: If `side` is not valid.
     """
     var sign = _side_sign(side)
-    var reach = EYEBALL_RADIUS * dimensions.frame.morph.eye_scale()
+    var morph = dimensions.frame.morph
+    var reach = EYEBALL_RADIUS * morph.eye_scale()
+    # The face shape genes move the scan's orbit, and the eye with it.
+    var middle = Vector3(sign * EYE_X, EYE_Y, EYE_Z) + morph.eye_shift(sign)
     var across = reach * sqrt(1 - LID_RING_COS * LID_RING_COS)
     var sum = Vector3(0, 0, 0)
     var front = Float32(3.0e38)
     for k in range(LID_RING_POINTS):  # pragma: no branch
         var angle = Float32(2 * pi) * Float32(k) / Float32(LID_RING_POINTS)
         var lid = dimensions.at(
-            sign * EYE_X + across * cos(angle),
-            EYE_Y + across * sin(angle),
-            EYE_Z + reach * LID_RING_COS,
+            middle.x + across * cos(angle),
+            middle.y + across * sin(angle),
+            middle.z + reach * LID_RING_COS,
         )
         sum = sum + lid
         front = min(front, lid.z)

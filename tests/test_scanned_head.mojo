@@ -5,6 +5,12 @@
 
 """Tests for the scanned head fitted over the modeled anatomy."""
 
+from extensions.humanoid.genome import (
+    Expression,
+    FACE_SHAPE_1,
+    FACE_SHAPES,
+    Genome,
+)
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.head.frame import (
@@ -24,6 +30,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     cap_hole,
     carry,
     fit_over,
+    place,
     scan_model,
     scan_skin_mesh,
     scan_to_template,
@@ -61,8 +68,23 @@ def test_the_scan_lands_on_the_template() raises:
     assert_equal(eye.z, SCAN_Z)
     assert_equal(scan_to_template(Vector3(0.01, 0, 0)).x, 1)
     var model = scan_model()
-    assert_equal(model.identities(), 0)
+    assert_equal(model.identities(), FACE_SHAPES)
     assert_equal(model.expressions(), 57)
+
+
+def test_a_face_shape_gene_reshapes_the_scan() raises:
+    var model = scan_model()
+    var mean = place(_dims().head, model, 200)
+    var genome = Genome().with_gene(FACE_SHAPE_1, Expression(1))
+    var shaped = head_muscle_dimensions(
+        HumanoidSpec(Length(6.0, FOOT), MALE, genome=genome)
+    )
+    var other = place(shaped.head, model, 200)
+    var moved = 0
+    for v in range(200):  # pragma: no branch
+        if (other[v] - mean[v]).length() > 1e-4:
+            moved += 1
+    assert_true(moved > 100)
 
 
 def test_a_mesh_is_pulled_over_a_solid() raises:

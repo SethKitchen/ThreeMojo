@@ -14,6 +14,7 @@ from extensions.humanoid.genome import (
     GENE_COUNT,
     Gene,
     Genome,
+    FACE_SHAPE_8,
     HAIR_LENGTH,
     HAIR_MELANIN,
     IRIS_MELANIN,
@@ -41,10 +42,11 @@ def test_genes_are_named() raises:
     var genes = named_genes()
     assert_equal(len(genes), GENE_COUNT)
     assert_true(genes[0] == MELANIN)
-    assert_true(genes[GENE_COUNT - 1] == HAIR_LENGTH)
+    assert_true(genes[GENE_COUNT - 1] == FACE_SHAPE_8)
     assert_equal(gene_label(MELANIN), "melanin")
     assert_equal(gene_label(ARM_LENGTH), "arm length")
     assert_equal(gene_label(HAIR_LENGTH), "hair length")
+    assert_equal(gene_label(FACE_SHAPE_8), "face shape 8")
     assert_equal(gene_label(Gene(GENE_COUNT)), "gene")
     assert_false(Gene(-1).is_valid())
     for index in range(len(genes)):  # pragma: no branch

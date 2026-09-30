@@ -30,7 +30,12 @@ This is not a three.js port. See Extensions.
 """
 
 from core.buffer_geometry import BufferGeometry
-from extensions.humanoid.genome import EAR_LOBE, EAR_PROTRUSION, EAR_SIZE
+from extensions.humanoid.genome import (
+    EAR_LOBE,
+    EAR_PROTRUSION,
+    EAR_SIZE,
+    FACE_SHAPES,
+)
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
@@ -114,11 +119,16 @@ comptime FIT_ROUNDS = 12
 # How many rounds fill the dents between the ridges the scan is pushed
 # over.
 comptime FILL_ROUNDS = 6
+# The face shape genes fade in up the neck, from nothing at the first
+# height to all of it at the second, in template centimeters.
+comptime IDENTITY_FROM = Float32(57.0)
+comptime IDENTITY_TO = Float32(62.0)
 
 
 def scan_model() raises -> FaceModel:
     """Return as much of the face model as a scanned head needs: the
-    mean head, its mesh and its expressions, with no identity modes.
+    mean head, its mesh, its expressions, and the identity modes the
+    face shape genes read.
 
     Returns:
         The model.
@@ -126,7 +136,7 @@ def scan_model() raises -> FaceModel:
     Raises:
         Error: If `FACE_MODEL_PATH` cannot be read.
     """
-    return FaceModel(FACE_MODEL_PATH, 0, True)
+    return FaceModel(FACE_MODEL_PATH, FACE_SHAPES, True)
 
 
 def rest_expression(model: FaceModel) raises -> List[Float32]:
@@ -465,8 +475,9 @@ def place(
     h: HeadDimensions, model: FaceModel, count: Int
 ) raises -> List[Vector3]:
     """Return the model's first `count` vertices at rest, placed on the
-    template of `h`: the ear genes warp the ears, and the head's frame
-    places every point.
+    template of `h`: the face shape genes weigh the model's identity
+    modes above the neck's base, the ear genes warp the ears, and the head's frame places
+    every point.
 
     Args:
         h: Head landmarks, with the genome.
@@ -483,7 +494,21 @@ def place(
     var size = genome.get(EAR_SIZE)
     var protrusion = genome.get(EAR_PROTRUSION)
     var lobe = genome.get(EAR_LOBE)
-    var shape = model.shape(model.no_identity(), rest_expression(model), count)
+    var rest = rest_expression(model)
+    var shape = model.shape(model.no_identity(), rest, count)
+    var identity = h.frame.morph.identity_weights(model.identities())
+    var shaped = False
+    for w in identity:  # pragma: no branch
+        if w != 0:
+            shaped = True
+    if shaped:
+        # The face shape genes shape the head; the neck's base and the
+        # shoulders stay the mean's, which the body's genes shape.
+        var other = model.shape(identity, rest, count)
+        for v in range(len(shape)):  # pragma: no branch
+            var y = scan_to_template(shape[v]).y
+            var k = smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
+            shape[v] = shape[v] + (other[v] - shape[v]) * k
     var points = List[Vector3](capacity=len(shape))
     for p in shape:  # pragma: no branch
         var t = warp_ear(scan_to_template(p), size, protrusion, lobe)

@@ -36,6 +36,9 @@ from extensions.humanoid.genome import (
     EYE_SIZE,
     EYE_SPACING,
     EYE_TILT,
+    FACE_SHAPES,
+    FACE_SHAPE_1,
+    Gene,
     Genome,
     HEAD_HEIGHT,
     HEAD_LENGTH,
@@ -67,6 +70,47 @@ comptime HEAD_LENGTH_SCALE = Float32(0.06)
 comptime HEAD_HEIGHT_SCALE = Float32(0.09)
 comptime NECK_STRETCH = Float32(2.2)
 comptime EYE_SIZE_SCALE = Float32(0.12)
+# How many standard deviations of a face model's mode a face shape gene
+# spans at an expression of one.
+comptime IDENTITY_SPREAD = Float32(2.2)
+# How far the right eyeball moves, in centimeters, for one standard
+# deviation of each of the first face model modes: the mean move of its
+# vertices. The left eyeball's is the mirror image.
+comptime _EYE_SHIFTS = SIMD[DType.float32, 32](
+    -0.1275,
+    -0.0927,
+    -0.0077,
+    0.0272,
+    0.0213,
+    0.0309,
+    -0.0107,
+    0.0397,
+    -0.0340,
+    0.0364,
+    -0.0564,
+    0.0093,
+    0.0162,
+    -0.0133,
+    -0.0395,
+    0.0854,
+    0.0274,
+    0.0626,
+    -0.0472,
+    -0.0101,
+    0.0569,
+    0.0009,
+    0.0544,
+    -0.0541,
+    # Padding to a power of two.
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+)
 
 
 def _clamp01(value: Float32) -> Float32:
@@ -148,9 +192,12 @@ struct HeadMorph(ImplicitlyCopyable):
     var mouth_width: Float32
     var lip_fullness: Float32
     var neck_length: Float32
+    # The face shape genes, one per mode of the face model.
+    var face_shapes: SIMD[DType.float32, FACE_SHAPES]
 
     def __init__(out self):
         """Make the identity morph of the template genome."""
+        self.face_shapes = SIMD[DType.float32, FACE_SHAPES](0)
         self.active = False
         self.head_width = 0
         self.head_length = 0
@@ -209,6 +256,11 @@ struct HeadMorph(ImplicitlyCopyable):
         self.mouth_width = genome.get(MOUTH_WIDTH)
         self.lip_fullness = genome.get(LIP_FULLNESS)
         self.neck_length = genome.get(NECK_LENGTH)
+        self.face_shapes = SIMD[DType.float32, FACE_SHAPES](0)
+        for index in range(FACE_SHAPES):  # pragma: no branch
+            self.face_shapes[index] = genome.get(
+                Gene(FACE_SHAPE_1.value + index)
+            )
         if sex != MALE:
             self.brow_ridge -= 1.0
             self.nose_length -= 0.35
@@ -261,6 +313,44 @@ struct HeadMorph(ImplicitlyCopyable):
             1 + HEAD_HEIGHT_SCALE * self.head_height,
             1 + HEAD_LENGTH_SCALE * self.head_length,
         )
+
+    def identity_weights(self, count: Int) -> List[Float32]:
+        """Return the weights of the face model's first modes.
+
+        Args:
+            count: How many modes the face model holds.
+
+        Returns:
+            One weight per mode, in standard deviations: the face shape
+            genes' for the first, and zero past them.
+        """
+        var weights = List[Float32](length=count, fill=0)
+        for index in range(min(count, FACE_SHAPES)):  # pragma: no branch
+            weights[index] = IDENTITY_SPREAD * self.face_shapes[index]
+        return weights^
+
+    def eye_shift(self, side: Float32) -> Vector3:
+        """Return how far the face shape genes move one eyeball.
+
+        Args:
+            side: One for the right eye, minus one for the left.
+
+        Returns:
+            The move, in template centimeters.
+        """
+        var shift = Vector3(0, 0, 0)
+        for index in range(FACE_SHAPES):  # pragma: no branch
+            var w = IDENTITY_SPREAD * self.face_shapes[index]
+            shift = (
+                shift
+                + Vector3(
+                    side * _EYE_SHIFTS[3 * index],
+                    _EYE_SHIFTS[3 * index + 1],
+                    _EYE_SHIFTS[3 * index + 2],
+                )
+                * w
+            )
+        return shift
 
     def eye_scale(self) -> Float32:
         """Return how much each eye and its opening grow.
