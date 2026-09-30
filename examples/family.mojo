@@ -16,7 +16,7 @@ length of the arms.
 
 The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`. The optional third argument is
-how many frames to draw, one or more. The default is 36.
+how many frames to draw, one or more. The default is 30.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -56,9 +56,9 @@ from std.sys import argv
 from units.si import Angle, DEGREE, INCH, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/family.png"
-comptime WIDTH = 960
-comptime HEIGHT = 540
-comptime DEFAULT_FRAMES = 36
+comptime WIDTH = 800
+comptime HEIGHT = 450
+comptime DEFAULT_FRAMES = 30
 comptime DELAY_MS = 70
 comptime DEFAULT_QUALITY = "high"
 comptime SPACING = Float32(0.8)

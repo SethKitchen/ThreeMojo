@@ -9,8 +9,9 @@
 
 The page is Genome. Each head is the six-foot template with a different
 genome: its skin tone, its hair and eye color, and the shape of its
-head, its eyes, its brows, its nose, its mouth and its ears. The heads
-turn a little to each side, so the shape reads.
+head, its eyes, its brows, its nose, its mouth and its ears. Each is a
+bust, cut off under the chin. The heads turn a little to each side, so
+the shape reads.
 
 The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`. The optional third argument is
@@ -73,6 +74,7 @@ from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import MaterialId, standard_material
+from math.bounds import Plane
 from math.vector3 import Vector3
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
@@ -91,8 +93,10 @@ comptime DEFAULT_FRAMES = 24
 comptime DELAY_MS = 70
 comptime DEFAULT_QUALITY = "high"
 comptime COLUMNS = 3
-comptime SPACING_X = Float32(0.24)
-comptime SPACING_Y = Float32(0.30)
+comptime SPACING_X = Float32(0.27)
+comptime SPACING_Y = Float32(0.3)
+# How far below a head's middle its bust is cut, in meters.
+comptime CUT_BELOW = Float32(0.13)
 
 
 def _genome(values: List[Float32]) raises -> Genome:
@@ -189,6 +193,7 @@ def main() raises:
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
+    renderer.local_clipping_enabled = True
 
     var assets = Assets()
     var room = room_environment(assets)
@@ -203,6 +208,12 @@ def main() raises:
     for index in range(len(people)):
         var person = people[index]
         var looks = add_complexion(assets, person.genome)
+        # A bust: the skin is cut off under the chin, so the neck's base
+        # and the shoulders' slopes do not show.
+        var bust = assets.materials.get(looks.skin)
+        var cut = Float32(0.17) + Float32(1 - index // COLUMNS) * SPACING_Y
+        bust.set_clipping_planes([Plane(Vector3(0, 1, 0), -(cut - CUT_BELOW))])
+        var skin = assets.materials.add(bust^)
         var column = index % COLUMNS
         var row = index // COLUMNS
         var x = (Float32(column) - Float32(COLUMNS - 1) / 2) * SPACING_X
@@ -221,14 +232,14 @@ def main() raises:
             assets,
             holder_id,
             person,
-            looks.skin,
-            looks.skin,
-            looks.skin,
-            looks.skin,
+            skin,
+            skin,
+            skin,
+            skin,
             SKIN.plus(HAIR).plus(EYES),
             detail,
             covering,
-            skin_paint=looks.skin,
+            skin_paint=skin,
             hair_paint=looks.hair,
             eye_paint=looks.eyes,
             workers=available_workers(),
@@ -261,7 +272,7 @@ def main() raises:
         Length(0.05, METER),
         Length(30.0, METER),
     )
-    camera.place(Vector3(0.0, 0.34, 1.32), Vector3(0.0, 0.3, 0.0))
+    camera.place(Vector3(0.0, 0.36, 1.32), Vector3(0.0, 0.335, 0.0))
 
     var frames = List[Framebuffer]()
     var previous = Float32(0)
