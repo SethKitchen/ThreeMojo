@@ -148,6 +148,18 @@ The colors are strand-space shading, as Frostbite's hair works it out. Kajiya an
 
 Light that diffuses through a fiber crosses it twice, so the pigment tints the diffuse twice. Pale hair then stays golden and does not wash out to white.
 
+### Wind
+
+The hair moves. `HairSimulation(groom)` makes every point of every strand a particle. `step(collider, wind)` moves them a thirtieth of a second. Pass the groom to `write` to move its strands, then call `HairStrands.shade` to draw them. Each step works as position-based dynamics does:
+
+1. Each point but the root carries on as it moved, less friction, under gravity and the wind.
+2. Each segment keeps the length it was groomed at.
+3. Each point is pulled back to where it was groomed: fully near the root and less toward the tip, so the style holds.
+4. Each run of three points keeps its bend.
+5. A point inside the head is pushed out of it.
+
+`HairCollider` bakes the head's skin into a grid of distances, because the skin's own field is too slow to read for every point. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
+
 ### Hairstyles
 
 A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_groom` as `style` and to `add_head` or `add_body` as `hair_style`.

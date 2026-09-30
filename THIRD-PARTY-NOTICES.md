@@ -653,7 +653,10 @@ THE SOFTWARE.
 `extensions/humanoid/skeleton/head/hair/shading.mojo` ports Frostbitten's
 strand-space hair shading: Marschner's R, TT and TRT lobes as Brian Karis fit
 them, Kajiya and Kay's diffuse, the fake multiple scattering, and the
-Beer-Lambert falloff with depth. The Mojo implementation is original work.
+Beer-Lambert falloff with depth. `simulation.mojo` beside it ports its hair
+simulation: Verlet integration with friction, gravity and gusting wind, and the
+length, global shape, local shape and distance-field collision constraints,
+with its defaults. The Mojo implementation is original work.
 Frostbitten Hair WebGPU is distributed under the MIT License, reproduced
 below.
 
