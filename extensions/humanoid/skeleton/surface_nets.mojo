@@ -412,7 +412,6 @@ def mesh_surface[
     name: String,
     workers: Int = 1,
     smoothing: Int = 1,
-    height: Float32 = 0,
 ) raises -> BufferGeometry:
     """Return a smooth mesh of `field`'s zero set inside a box.
 
@@ -431,9 +430,6 @@ def mesh_surface[
             threads' probes would interleave.
         smoothing: How many times each normal is averaged with its
             neighbors'. One by default; zero keeps the exact gradient.
-        height: The height the cells are measured along, in meters, for
-            a box that is one part of a taller solid. Zero, the default,
-            means the box's own height.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -447,10 +443,7 @@ def mesh_surface[
     if threads < 1:
         threads = num_logical_cores()
     var span_y = high.y - low.y
-    var along = span_y
-    if height > 0:
-        along = height
-    var cell = along / Float32(detail * REFINE)
+    var cell = span_y / Float32(detail * REFINE)
     # Room round the solid, so its surface closes inside the grid.
     var pad = cell * Float32(2)
     var start = Vector3(low.x - pad, low.y - pad, low.z - pad)

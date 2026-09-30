@@ -310,7 +310,7 @@ struct MeshTree(Movable):
         var size = self.high[node] - self.low[node]
         if size.y > size.x and size.y >= size.z:
             return 1
-        if size.z > size.x and size.z > size.y:
+        if size.z > size.x:
             return 2
         return 0
 

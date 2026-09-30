@@ -25,7 +25,7 @@ the torso's is.
 
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.genome import Genome
-from extensions.humanoid.sex import Sex
+from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import check_spec, finite_point
@@ -41,6 +41,14 @@ from units.si import Length
 
 # Cervical vertebrae, C1 to C7.
 comptime CERVICAL = 7
+# How a head's size grows with stature: as stature to this power. The
+# template's stature, in meters. How much larger a woman's head is than
+# her torso's narrower frame alone makes it.
+comptime HEAD_ALLOMETRY = Float32(0.5)
+comptime TEMPLATE_STATURE = Float32(1.8288)
+comptime FEMALE_HEAD = Float32(1.05)
+# How much slimmer a woman's neck is than her frame alone makes it.
+comptime FEMALE_NECK = Float32(0.9)
 
 
 struct HeadDimensions(Copyable, Movable):
@@ -121,9 +129,9 @@ struct HeadDimensions(Copyable, Movable):
     def cranium(self, x: Float32, y: Float32, z: Float32) -> Vector3:
         """Return the semi-axes of a cranial ellipsoid, in meters.
 
-        The genome's head genes stretch the cranium; `at` moves its
-        center the same way, so the ellipsoid's surface follows the
-        points the morph moves.
+        The genome's head genes stretch the cranium, and the frame's
+        `head` factor grows it; `at` moves its center the same way, so
+        the ellipsoid's surface follows the points the morph moves.
 
         Args:
             x: Half the breadth, in template cm.
@@ -134,7 +142,7 @@ struct HeadDimensions(Copyable, Movable):
             The semi-axes, widened and deepened for the sex.
         """
         var f = self.frame
-        var s = f.morph.cranium_scale()
+        var s = f.morph.cranium_scale() * f.head
         return Vector3(
             f.cm(x) * f.wide * s.x, f.cm(y) * s.y, f.cm(z) * f.deep * s.z
         )
@@ -164,6 +172,30 @@ struct HeadDimensions(Copyable, Movable):
                 and self.heights[index] > 0
             ):
                 raise Error("A cervical vertebra's size must be positive")
+
+
+def head_scale(stature: Length, sex: Sex) -> Float32:
+    """Return how much larger a head is than stature alone makes it.
+
+    A head keeps its size better than a body does: across adults it
+    grows about as stature to the power `HEAD_ALLOMETRY`, not in
+    proportion. The six-foot male template's head is the reference. A
+    woman's head is also less narrowed and shallowed than her torso.
+    The head grows about the base of the jaw, so a shorter person's
+    crown stands a little above the stature: about 2.5 cm at 1.63 m.
+
+    Args:
+        stature: Standing height.
+        sex: `MALE` or `FEMALE`.
+
+    Returns:
+        The factor: one on the template, above one for a shorter person.
+    """
+    var ratio = TEMPLATE_STATURE / Float32(stature.value)
+    var factor = ratio ** (1 - HEAD_ALLOMETRY)
+    if sex != MALE:
+        factor *= FEMALE_HEAD
+    return factor
 
 
 def head_dimensions(
@@ -196,6 +228,8 @@ def head_dimensions(
         torso.frame.deep,
         torso.frame.anchor,
         morph=HeadMorph(genome, sex),
+        head=head_scale(stature, sex),
+        neck=FEMALE_NECK if sex != MALE else Float32(1),
     )
     # Centers (y, z), half-width, half-depth and height, C1 to C7. The
     # atlas's center is its ring's.

@@ -57,6 +57,7 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadMuscleDimensions,
     head_dimensions,
     head_muscle_dimensions,
+    head_scale,
 )
 from extensions.humanoid.skeleton.head.hair.dimensions import (
     EYEBROWS,
@@ -645,6 +646,30 @@ def test_lymph() raises:
         ).triangle_count()
         > 0
     )
+
+
+def test_a_head_keeps_its_size() raises:
+    # The template's head is the reference; a shorter person's is larger
+    # for their height, a taller one's smaller, and a woman's larger.
+    assert_true(abs(head_scale(Length(6.0, FOOT), MALE) - 1) < 1e-5)
+    assert_true(head_scale(Length(1.6, METER), MALE) > 1)
+    assert_true(head_scale(Length(2.0, METER), MALE) < 1)
+    var tall = Length(1.7, METER)
+    assert_true(head_scale(tall, FEMALE) > head_scale(tall, MALE))
+    # A woman's neck is slimmed up its length, not at its base or under
+    # the jaw; a man's is not.
+    var her = head_dimensions(tall, FEMALE).frame
+    assert_true(abs(her.slim(57.0) - 0.9) < 1e-5)
+    assert_equal(her.slim(50.0), 1)
+    assert_equal(her.slim(70.0), 1)
+    assert_equal(head_dimensions(tall, MALE).frame.slim(57.0), 1)
+    # Her head is wider than her frame alone would make it, about the
+    # jaw: the brow moves, the base of the neck does not.
+    var plain = her
+    plain.head = 1
+    plain.neck = 1
+    assert_true(her.at(0, 78.0, 0).y > plain.at(0, 78.0, 0).y)
+    assert_equal(her.at(0, 50.0, 0).y, plain.at(0, 50.0, 0).y)
 
 
 def test_skin() raises:

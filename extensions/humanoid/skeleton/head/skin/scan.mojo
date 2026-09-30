@@ -64,6 +64,10 @@ comptime SCAN_Z = Float32(-1.04114)
 # Below this height, in template cm, the scan's neck is left to the
 # modeled one: the scan is cut off above its open edge.
 comptime SCAN_FLOOR = Float32(55.0)
+# Below this height, in template cm, the scan is also cut off beyond
+# `SHOULDER_X` from the midline, where its shoulders flare out.
+comptime SHOULDER_TOP = Float32(58.0)
+comptime SHOULDER_X = Float32(7.2)
 # The right ear, in template cm: the root in front of the canal it
 # grows about, and the middle of the auricle.
 comptime EAR_ROOT = Vector3(7.4, 71.3, -1.0)
@@ -211,13 +215,14 @@ def fit_over[
         end: Only the vertices before `end` move.
         margin: How far outside the solid each vertex must lie, in
             meters.
-        sink_low: The height below which each vertex must lie `sink`
-            inside the solid instead, in meters. The mesh is cut off
-            there, and its cut stays hidden inside the solid.
+        sink_low: The height where each vertex must lie `sink` inside
+            the solid instead, in meters. The mesh is cut off there, and
+            its cut stays hidden inside the solid. Below it the vertices
+            follow their neighbors.
         sink_high: The height above which each vertex lies `margin`
             outside. Between the two, a vertex must lie exactly where
             the two blend.
-        sink: How far inside the solid a vertex below `sink_low` lies.
+        sink: How far inside the solid a vertex at `sink_low` lies.
     """
     # The edges between two vertices that move.
     var pairs = List[Int]()
@@ -253,16 +258,21 @@ def fit_over[
             var goal = margin * up - sink * (1 - up)
             var need = goal - hull.distance(points[v])
             directions[v].normalize()
+            # A vertex off its goal by more than the margin needs another
+            # pass: in the band, either way; above it, inside the solid.
+            # Below the band the mesh is cut off, so it follows its
+            # neighbors freely.
+            if points[v].y < sink_low:
+                continue
             if up < 1:
                 needs[v] = need
                 limits[v] = need
+                if abs(need) > margin:
+                    short = True
             elif need > 0:
                 needs[v] = need
-            # A vertex inside the solid, or off its goal by as much, needs
-            # another pass; one only nearer than the margin is close
-            # enough.
-            if abs(need) > margin:
-                short = True
+                if need > margin:
+                    short = True
         if not short:
             break
         var moves = List[Vector3](length=end, fill=Vector3(0, 0, 0))
@@ -351,6 +361,10 @@ struct ScannedHead(Copyable, Movable):
     var mesh: MeshField
     var floor: Float32
     var soft: Float32
+    # The scan's shoulders flare out above its floor: below `shoulder_top`
+    # it is also cut off beyond `shoulder_x` from the midline.
+    var shoulder_x: Float32
+    var shoulder_top: Float32
     # The box round both ears.
     var ears: Bounds
     var low: Vector3
@@ -385,6 +399,8 @@ struct ScannedHead(Copyable, Movable):
             ear.append(index < FACE_AND_HEAD.end and ear_weight(t) > 0.5)
         self.floor = h.at(0, SCAN_FLOOR, 0).y
         self.soft = h.cm(1.0)
+        self.shoulder_x = h.at(SHOULDER_X, SHOULDER_TOP, 0).x
+        self.shoulder_top = h.at(0, SHOULDER_TOP, 0).y
         fit_over(
             points,
             model.skin_triangles,
@@ -428,7 +444,8 @@ struct ScannedHead(Copyable, Movable):
 
     def distance(self, point: Vector3) -> Float32:
         """Return the signed distance to the scan's skin, in meters,
-        negative inside. Below the floor every point is outside.
+        negative inside. Below the floor every point is outside, and low
+        on the neck every point off to the side.
 
         Args:
             point: A point in the pelvis frame, in meters.
@@ -436,7 +453,11 @@ struct ScannedHead(Copyable, Movable):
         Returns:
             The distance.
         """
-        return smax(self.mesh.distance(point), self.floor - point.y, self.soft)
+        var d = smax(self.mesh.distance(point), self.floor - point.y, self.soft)
+        var shoulder = max(
+            self.shoulder_x - abs(point.x), point.y - self.shoulder_top
+        )
+        return smax(d, -shoulder, self.soft)
 
 
 def scan_skin_mesh[
@@ -479,22 +500,42 @@ def scan_skin_mesh[
         Error: If no triangle lies above `floor`.
     """
     var triangles = skin_triangles(model)
-    var remap = List[Int](length=scan.mesh.count(), fill=-1)
+    var count = scan.mesh.count()
+    # Each vertex's place on the field's surface, once it is needed: zero
+    # not yet placed, one placed, two lost. A vertex the walk cannot
+    # bring onto the surface is off the field's solids, as the scan's
+    # shoulders are, and its triangles are left out.
+    var state = List[Int](length=count, fill=0)
+    var placed = List[Vector3](length=count, fill=Vector3(0, 0, 0))
+    var remap = List[Int](length=count, fill=-1)
     var positions = List[Float32]()
     var points = List[Vector3]()
     var indices = List[Int]()
     for t in range(0, len(triangles), 3):  # pragma: no branch
         if not _above(scan.mesh, triangles, t, floor):
             continue
+        var lost = False
         for c in range(3):  # pragma: no branch
             var v = triangles[t + c]
-            if remap[v] < 0:
-                remap[v] = len(points)
+            if state[v] == 0:
+                state[v] = 1
                 var p = scan.mesh.point(v)
                 # The sockets lie inside the closed skin; only the skin
                 # itself is walked onto the field's surface.
                 if v < FACE_AND_HEAD.end and abs(field.distance(p)) > SNAP:
                     p = _walk(field, p, low, high, step)
+                    if abs(field.distance(p)) > SNAP:
+                        state[v] = 2
+                placed[v] = p
+            if state[v] == 2:
+                lost = True
+        if lost:
+            continue
+        for c in range(3):  # pragma: no branch
+            var v = triangles[t + c]
+            if remap[v] < 0:
+                remap[v] = len(points)
+                var p = placed[v]
                 points.append(p)
                 positions.append(p.x)
                 positions.append(p.y)

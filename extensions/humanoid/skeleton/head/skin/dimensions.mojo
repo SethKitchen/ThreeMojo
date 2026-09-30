@@ -133,14 +133,16 @@ struct EyeLids(Copyable, Movable):
 
 
 def _through(h: HeadDimensions, hint: Vector3, rows: List[Float32]) -> Sweep:
-    """Return a sweep through template stations `x, y, z, ml, ap`."""
+    """Return a sweep through template stations `x, y, z, ml, ap`. Each
+    section is slimmed as the neck is at its height."""
     var sweep = Sweep(hint)
     for index in range(len(rows) // 5):  # pragma: no branch
         var at = index * 5
+        var slim = h.frame.slim(rows[at + 1])
         sweep.add(
             h.at(rows[at], rows[at + 1], rows[at + 2]),
-            h.cm(rows[at + 3]),
-            h.cm(rows[at + 4]),
+            h.cm(rows[at + 3]) * slim,
+            h.cm(rows[at + 4]) * slim,
         )
     return sweep^
 
@@ -201,13 +203,15 @@ struct HeadHull(Copyable, DistanceField, Movable):
         var x = Vector3(1, 0, 0)
         var sweeps = List[Sweep]()
         # fmt: off
-        # The neck, from its base up to the back of the skull.
+        # The neck, from its base up to the back of the skull: a skin's
+        # thickness round the trapezius behind and the larynx's muscles
+        # in front.
         sweeps.append(_through(h, x, floats(
             0, 50.5, -2.3, 6.4, 7.2,
-            0, 54.0, -2.2, 5.8, 7.1,
-            0, 58.0, -2.0, 5.5, 7.0,
-            0, 62.0, -2.4, 5.4, 7.3,
-            0, 66.0, -2.8, 5.6, 7.4,
+            0, 54.0, -2.0, 5.8, 6.8,
+            0, 58.0, -1.4, 5.5, 6.45,
+            0, 62.0, -1.7, 5.4, 6.6,
+            0, 66.0, -2.1, 5.6, 6.65,
         )))
         # Behind the ear, over the mastoid and the splenius.
         _mirrored(h, sweeps, x, floats(5.6, 68.0, -3.6, 1.3, 1.3))
@@ -224,8 +228,8 @@ struct HeadHull(Copyable, DistanceField, Movable):
         # The trapezius's slope from the back of the neck to the
         # shoulder.
         _mirrored(h, sweeps, x, floats(
-            2.5, 62.0, -7.3, 1.4, 1.4,
-            5.5, 56.0, -6.2, 1.9, 1.9,
+            2.2, 62.0, -6.9, 1.0, 1.0,
+            4.8, 56.2, -6.2, 1.4, 1.4,
             8.5, 55.2, -5.2, 1.9, 1.9,
             7.0, 53.5, -6.6, 1.9, 1.9,
             10.0, 53.0, -4.0, 1.6, 1.6,

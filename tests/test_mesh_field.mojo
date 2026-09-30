@@ -98,6 +98,33 @@ def test_the_nearest_point_of_a_triangle() raises:
             assert_true(q.x >= -1e-6 and q.y >= -1e-6 and q.x + q.y <= 1 + 1e-5)
             for probe in probes:  # pragma: no branch
                 assert_true((q - p).length() <= (probe - p).length() + 1e-5)
+    # Triangles blunt at each corner in turn: the edges' regions reach
+    # round behind the blunt corner.
+    var blunt: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(-0.6, 0.4, 0),
+        Vector3(1.6, 0.4, 0),
+        Vector3(0.5, -0.1, 0),
+        Vector3(0.5, 1, 0),
+    ]
+    for k in range(3):  # pragma: no branch
+        var ta = blunt[0]
+        var tb = blunt[1]
+        var tc = blunt[2]
+        if k == 1:
+            tc = blunt[3]
+        elif k == 2:
+            ta = blunt[4]
+            tb = blunt[5]
+            tc = Vector3(0.3, 0.45, 0)
+        for j in range(-10, 11):  # pragma: no branch
+            for i in range(-10, 11):  # pragma: no branch
+                var p = Vector3(Float32(i) * 0.2, Float32(j) * 0.2, 0.2)
+                var q = closest_on_triangle(p, ta, tb, tc)[0]
+                var corners: List[Vector3] = [ta, tb, tc]
+                for probe in corners:  # pragma: no branch
+                    assert_true((q - p).length() <= (probe - p).length() + 1e-5)
     # The face.
     var face = closest_on_triangle(Vector3(0.2, 0.3, 4), a, b, c)
     assert_true(_near(face[0], Vector3(0.2, 0.3, 0)))

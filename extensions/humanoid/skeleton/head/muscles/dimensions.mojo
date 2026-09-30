@@ -185,14 +185,16 @@ def head_muscle_paths(part: HeadMuscle) raises -> List[List[Float32]]:
         ))
     elif part == UPPER_TRAPEZIUS:
         # From the occiput and the nuchal ligament down and out to the
-        # lateral clavicle, over the torso's upper fibers.
+        # lateral clavicle, over the torso's upper fibers. It hugs the
+        # back of the neck, and turns out to the shoulder at the neck's
+        # base.
         paths.append(floats(
             0, 0, 1,
             1.2, 71.3, -9.1, 0.3, 1.0, 1,
-            1.8, 66.5, -8.0, 0.4, 1.4, 1,
-            3.0, 61.0, -7.4, 0.5, 1.8, 1,
-            6.5, 56.0, -6.5, 0.5, 2.0, 1,
-            11.0, 53.0, -3.8, 0.45, 1.6, 1,
+            1.6, 66.5, -8.0, 0.4, 1.2, 1,
+            2.3, 61.0, -7.3, 0.5, 1.4, 1,
+            4.8, 56.2, -6.6, 0.5, 1.7, 1,
+            10.0, 53.2, -4.2, 0.45, 1.6, 1,
             14.2, 51.3, -0.9, 0.35, 0.8, 0,
         ))
     elif part == SPLENIUS_CAPITIS:

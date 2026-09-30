@@ -38,6 +38,10 @@ The head sits on the atlas with the Frankfort plane level, so the eyes look stra
 
 On the six-foot male template, the top of the skull is 84.4 cm above the hip joint centers. The eyes are at 72.5 cm and the chin is at 60.5 cm. Stature scales every length. A female template is narrower and shallower, as the torso's is. The values are template parameters. They are not a cited anthropometric table.
 
+A head keeps its size better than a body does. Across adults a head grows about as the square root of stature, so a short person's head is larger for their height. `head_scale(stature, sex)` gives the factor over what stature alone makes, and the head's frame grows the head by it about the base of the jaw. A woman's head gets a further 5%, and her neck is 10% slimmer than her frame alone makes it. The neck keeps its own size, so a shorter person's crown stands a little above the stature: about 2.5 cm at 1.63 m.
+
+On a 1.75 m man the head measures about 56 cm round and the neck about 43 cm. On a 1.63 m woman they measure about 53 cm and 36 cm.
+
 ## Bones
 
 | Part | Bones |

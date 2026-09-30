@@ -72,6 +72,21 @@ comptime CHEST_SCALE = Float32(0.08)
 # Where the male template's sacral promontory lies, in centimeters. The
 # torso is authored from it.
 comptime PROMONTORY_Y = Float32(6.2)
+# Where a head frame's `head` factor scales the head about, in template
+# cm: the base of the jaw, so the neck keeps its own size. Below
+# `HEAD_GROWS_TO` the factor fades, and below `HEAD_GROWS_FROM` it is one.
+comptime HEAD_PIVOT_Y = Float32(62.0)
+comptime HEAD_PIVOT_Z = Float32(-1.0)
+comptime HEAD_GROWS_FROM = Float32(56.0)
+comptime HEAD_GROWS_TO = Float32(62.0)
+# Where a head frame's `neck` factor slims the neck, in template cm: from
+# its base it fades in, it holds up the neck, and it fades out under the
+# jaw. It slims toward the neck's axis.
+comptime NECK_SLIM_FROM = Float32(51.0)
+comptime NECK_SLIM_FULL = Float32(54.0)
+comptime NECK_SLIM_UNTIL = Float32(60.0)
+comptime NECK_SLIM_TO = Float32(64.0)
+comptime NECK_AXIS_Z = Float32(-1.5)
 comptime PROMONTORY_Z = Float32(-1.1)
 
 # Vertebrae, from T1 down to L5.
@@ -147,7 +162,10 @@ struct TorsoFrame(ImplicitlyCopyable):
     the shoulders, fading to one at the waist, and `chest` the factor on
     depth through the rib cage. `morph` reshapes the neck and the head.
     On a torso's own frame it is the identity; the head's frame carries
-    the genome's.
+    the genome's. `head` scales the head's points about the base of the
+    jaw, fading to one down the neck: a head keeps its size better than a
+    body does. `neck` slims the neck toward its axis, fading to one at
+    its base and under the jaw. Both are one on a torso's own frame.
     """
 
     var stature: Float32
@@ -157,6 +175,8 @@ struct TorsoFrame(ImplicitlyCopyable):
     var shoulders: Float32
     var chest: Float32
     var morph: HeadMorph
+    var head: Float32
+    var neck: Float32
 
     def __init__(
         out self,
@@ -167,6 +187,8 @@ struct TorsoFrame(ImplicitlyCopyable):
         shoulders: Float32 = 1,
         chest: Float32 = 1,
         morph: HeadMorph = HeadMorph(),
+        head: Float32 = 1,
+        neck: Float32 = 1,
     ):
         """Store the frame's scale, its anchor and its genome's shape.
 
@@ -178,6 +200,8 @@ struct TorsoFrame(ImplicitlyCopyable):
             shoulders: The factor on x at the shoulders. One by default.
             chest: The factor on the rib cage's depth. One by default.
             morph: How the head is reshaped. The identity by default.
+            head: The factor on the head's size. One by default.
+            neck: The factor on the neck's girth. One by default.
         """
         self.stature = stature
         self.wide = wide
@@ -186,6 +210,8 @@ struct TorsoFrame(ImplicitlyCopyable):
         self.shoulders = shoulders
         self.chest = chest
         self.morph = morph
+        self.head = head
+        self.neck = neck
 
     def at(self, x: Float32, y: Float32, z: Float32) -> Vector3:
         """Return one point authored on the six-foot template.
@@ -199,16 +225,46 @@ struct TorsoFrame(ImplicitlyCopyable):
             The point, in meters.
         """
         var p = self.morph.apply(Vector3(x, y, z))
+        if self.neck != 1:
+            var slim = self.slim(y)
+            p.x *= slim
+            p.z = NECK_AXIS_Z + (p.z - NECK_AXIS_Z) * slim
         if self.shoulders != 1:
             p.x *= 1 + (self.shoulders - 1) * smoothstep(18.0, 46.0, y)
         if self.chest != 1:
             var grow = 1 + (self.chest - 1) * smoothstep(14.0, 30.0, y)
             p.z = SPINE_Z + (p.z - SPINE_Z) * grow
         var unit = TEMPLATE_CM * self.stature
-        return self.anchor + Vector3(
+        var placed = self.anchor + Vector3(
             p.x * unit * self.wide,
             (p.y - PROMONTORY_Y) * unit,
             (p.z - PROMONTORY_Z) * unit * self.deep,
+        )
+        if self.head == 1:
+            return placed
+        var grow = 1 + (self.head - 1) * smoothstep(
+            HEAD_GROWS_FROM, HEAD_GROWS_TO, y
+        )
+        var pivot = self.anchor + Vector3(
+            0,
+            (HEAD_PIVOT_Y - PROMONTORY_Y) * unit,
+            (HEAD_PIVOT_Z - PROMONTORY_Z) * unit * self.deep,
+        )
+        return pivot + (placed - pivot) * grow
+
+    def slim(self, y: Float32) -> Float32:
+        """Return the factor the neck is slimmed by at a height.
+
+        Args:
+            y: Centimeters above the hip joint centers, on the template.
+
+        Returns:
+            The factor on the neck's girth there: `neck` up the neck,
+            one at its base, under the jaw, and on a torso's own frame.
+        """
+        return 1 + (self.neck - 1) * (
+            smoothstep(NECK_SLIM_FROM, NECK_SLIM_FULL, y)
+            - smoothstep(NECK_SLIM_UNTIL, NECK_SLIM_TO, y)
         )
 
     def cm(self, value: Float32) -> Float32:
