@@ -839,6 +839,9 @@ def _coordinates(
 # roundings of the same view; a millionth of the range they measure over
 # is several times the rounding and no distance an image can show.
 comptime CULL_SLACK = Float32(1e-6)
+# A wide line this many output pixels wide or thinner is drawn without
+# round caps: they are a fraction of a pixel. See `_emit_wide_line`.
+comptime THIN_LINE = Float32(0.75)
 
 
 def _in_view(
@@ -3679,6 +3682,15 @@ def _emit_cap(
         last = next
 
 
+def _screen_length(
+    to_screen: Matrix4, start: ClipVertex, end: ClipVertex
+) -> Float32:
+    """Return how long a segment is on the image, in raster pixels."""
+    var a = to_screen.transform_point(start.position)
+    var b = to_screen.transform_point(end.position)
+    return Vector2(b.x - a.x, b.y - a.y).length()
+
+
 def _emit_wide_line(
     mut corners: _Slim,
     assets: Assets,
@@ -3696,7 +3708,10 @@ def _emit_wide_line(
     three.js's `LineSegments2` drawn with `LineMaterial`: each segment is
     a quad, and each end of it a round cap, unless the line is dashed.
     A dashed segment is cut into a quad per dash, with no caps, as
-    three.js throws the caps of a dashed line away. The segment is first
+    three.js throws the caps of a dashed line away. A line at most one
+    and a half pixels wide keeps no caps either, save on a segment
+    shorter than it is wide: the caps would each cover a fraction of a
+    pixel, and they would triple the corners a strand of hair needs. The segment is first
     cut to the near and the far planes, as three.js trims it to the near
     plane, so that no corner is placed from a point behind the camera. The
     triangles then go where every triangle goes: through the clipper and
@@ -3809,6 +3824,15 @@ def _emit_wide_line(
         0,
     )
     var no_planes = List[Plane]()
+    # A line no wider than `THIN_LINE` output pixels keeps no caps: they
+    # would be a fraction of a pixel, and they would triple its corners.
+    var thin = not width.world_units and half <= THIN_LINE * Float32(
+        render_scale
+    )
+    var each = 6
+    if not thin and not dashed:
+        each += 6 * cap_steps(half)
+    corners.reserve(len(corners) + segments * each)
     for segment in range(segments):
         var ends = List[ClipVertex]()
         for side in range(2):  # pragma: no branch
@@ -3855,6 +3879,9 @@ def _emit_wide_line(
             _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
             _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
         if dashed:
+            continue
+        # A thin segment's caps are left off, but a dot keeps its own.
+        if thin and _screen_length(to_screen, start, end) > half:
             continue
         _emit_cap(ribbon, paint, corners, start, -1, near, far, sides, any_of)
         _emit_cap(ribbon, paint, corners, end, 1, near, far, sides, any_of)
@@ -8876,7 +8903,9 @@ struct Renderer(Movable):
         # A material's planes cut its shadow under `clip_shadows`, which
         # this renderer's switch decides as it does for the frame.
         square.local_clipping_enabled = self.local_clipping_enabled
-        var corners = square._prepared(
+        # The slim corners, as the frame's pass takes them: a whole corner
+        # is four times the size, and the map is only depth.
+        var frame = square._prepared_slim(
             scene,
             assets,
             camera,
@@ -8907,7 +8936,7 @@ struct Renderer(Movable):
         # the other. Lit shading reads no material map. A node program
         # still runs, and it reads the scene's textures.
         var draws: List[Draw] = [
-            Draw(DRAW_TRIANGLES, 0, len(corners) // 3),
+            Draw(DRAW_TRIANGLES, 0, len(frame) // 3),
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
             Draw(DRAW_POINTS, 0, len(points)),
         ]
@@ -8919,7 +8948,8 @@ struct Renderer(Movable):
             size, size, Color(0, 0, 0, 0) if transmitted else Color(0, 0, 0)
         )
         rasterize_frame(
-            corners,
+            frame.corners,
+            frame.surfaces,
             segments,
             draws,
             target,
