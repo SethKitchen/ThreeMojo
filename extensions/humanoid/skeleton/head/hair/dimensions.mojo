@@ -268,7 +268,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.soft = h.cm(0.8)
         self.length = h.torso.genome.get(HAIR_LENGTH)
         # Shorter than the template crops the hair close.
-        var crop = 1 + Float32(0.45) * min(Float32(0), self.length)
+        var crop = 1 + Float32(0.35) * min(Float32(0), self.length)
         self.side_depth = h.cm(0.55) * crop
         self.crown_depth = h.cm(1.0) * crop
         # Longer grows a fall from the cranium's own ellipsoid out to a

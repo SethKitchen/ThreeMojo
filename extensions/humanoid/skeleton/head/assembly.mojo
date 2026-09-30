@@ -264,14 +264,19 @@ def add_head(
     if contents.includes_hair():
         # The brows are painted into the skin's colors, hair by hair,
         # where a solid strip would stand off the curve of the brow
-        # ridge: only the scalp's hair is a mesh.
+        # ridge: only the scalp's hair is a mesh. It is meshed nearly
+        # as finely as the skin, fine enough for a close crop.
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         place_mesh(
             scene,
             assets,
             root_id,
             head_hair_from_dimensions(
-                dims, SCALP_HAIR, RIGHT, skin_detail, workers
+                dims,
+                SCALP_HAIR,
+                RIGHT,
+                (detail + 2 * skin_detail) // 3,
+                workers,
             ),
             hair,
         )
