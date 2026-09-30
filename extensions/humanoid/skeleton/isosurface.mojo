@@ -67,14 +67,17 @@ def make_grid(low: Vector3, high: Vector3, detail: Int) -> SampleGrid:
         detail: Requested cells along the long axis.
 
     Returns:
-        Cell counts and sizes. The long axis is y.
+        Cell counts and sizes. The cells are near cubes, sized so the
+        longest side of the box takes `detail`'s count: a bone that lies
+        across the body, a clavicle or a rib, is meshed as finely as one
+        that stands up it, and not more finely.
     """
     var span_x = high.x - low.x
     var span_y = high.y - low.y
     var span_z = high.z - low.z
-    var ny = _long_cells(detail)
-    var cell = span_y / Float32(ny)
+    var cell = max(span_y, max(span_x, span_z)) / Float32(_long_cells(detail))
     var nx = _axis_cells(span_x, cell, MIN_CROSS_CELLS)
+    var ny = _axis_cells(span_y, cell, MIN_CROSS_CELLS)
     var nz = _axis_cells(span_z, cell, MIN_CROSS_CELLS)
     var dx = span_x / Float32(nx)
     var dy = span_y / Float32(ny)
