@@ -889,8 +889,8 @@ def test_add_body_joins_torso_and_lower_body() raises:
         8,
     )
     # One skin from the head down to the wrists, each hand's own, the
-    # two eyes, the scalp's hair and the two brows.
-    assert_equal(len(skinned.meshes), 8)
+    # two eyes and the scalp's hair.
+    assert_equal(len(skinned.meshes), 6)
     var painted = Scene()
     var painted_root = painted.add(Object3D())
     _ = add_body(
@@ -911,7 +911,7 @@ def test_add_body_joins_torso_and_lower_body() raises:
         skin_paint=assets.materials.add(skin_phong()),
         workers=2,
     )
-    assert_equal(len(painted.meshes), 8)
+    assert_equal(len(painted.meshes), 6)
     with assert_raises(contains="named layer set"):
         _ = add_body(
             scene,

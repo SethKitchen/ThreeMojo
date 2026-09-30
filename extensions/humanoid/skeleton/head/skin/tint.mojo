@@ -9,7 +9,8 @@ Skin is not one color over a face. The lips are red, because their thin
 skin has no melanin to speak of and blood shows through it. The cheeks,
 the tip of the nose and the ears are a little redder than the forehead.
 The lids and the skin under the eyes are thin and darker. A man's jaw
-and upper lip carry the gray-blue of the beard under the skin.
+and upper lip carry the gray-blue of the beard under the skin. The
+brows' hair is painted into the skin under them, in the hair's color.
 
 `tint_head_skin` writes these into a skin mesh's `color` attribute, one
 linear factor per vertex, which a material with vertex colors multiplies
@@ -27,7 +28,14 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
 )
+from extensions.humanoid.side import LEFT, RIGHT
+from extensions.humanoid.skeleton.complexion import hair_tone, skin_tone
+from extensions.humanoid.skeleton.head.hair.dimensions import (
+    EYEBROWS,
+    head_hair_field,
+)
 from extensions.humanoid.skeleton.head.skin.dimensions import EyeLids
+from extensions.humanoid.skeleton.torso.sweep import SweepField
 from extensions.humanoid.skeleton.morph import smoothstep
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
@@ -231,6 +239,66 @@ def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
     return zones^
 
 
+def _linear(byte: UInt8) -> Float32:
+    """Return an sRGB byte as linear light, near enough."""
+    return (Float32(byte) / 255) ** Float32(2.2)
+
+
+def _painted(var brow: SweepField) -> SweepField:
+    """Return a brow as deep as it is tall, so the skin under all of it
+    lies inside it."""
+    for index in range(len(brow.sweeps[0].stations)):  # pragma: no branch
+        brow.sweeps[0].stations[index].ap = brow.sweeps[0].stations[index].ml
+    return brow^
+
+
+struct _Brows(Movable):
+    """The brows' hair, painted into the skin under them: the hair's
+    color over the skin's, patchy as sparse hairs are."""
+
+    var right: SweepField
+    var left: SweepField
+    var factor: Vector3
+    var edge: Float32
+    var grain: Float32
+
+    def __init__(out self, dimensions: HeadMuscleDimensions) raises:
+        """Find the brows and the color their hair gives the skin.
+
+        Args:
+            dimensions: The head the brows lie on.
+
+        Raises:
+            Error: If the genome or the brows are refused.
+        """
+        self.right = _painted(head_hair_field(dimensions, EYEBROWS, RIGHT))
+        self.left = _painted(head_hair_field(dimensions, EYEBROWS, LEFT))
+        var genome = dimensions.head.torso.genome
+        var skin = skin_tone(genome)
+        var hair = hair_tone(genome)
+        self.factor = Vector3(
+            min(Float32(1.5), _linear(hair.r) / _linear(skin.r)),
+            min(Float32(1.5), _linear(hair.g) / _linear(skin.g)),
+            min(Float32(1.5), _linear(hair.b) / _linear(skin.b)),
+        )
+        self.edge = dimensions.head.cm(0.12)
+        self.grain = dimensions.head.cm(0.12)
+
+    def weight(self, point: Vector3) -> Float32:
+        """Return how much of the hair's color a point takes."""
+        var d = min(self.right.distance(point), self.left.distance(point))
+        if d > self.edge:
+            return 0
+        var cover = 1 - smoothstep(-self.edge, self.edge, d)
+        # Each hair is a streak: a hashed shade on a fine lattice.
+        var qx = Int((point.x / self.grain) * 3)
+        var qy = Int(point.y / self.grain)
+        var h = UInt32(qx) * 374761393 + UInt32(qy) * 668265263
+        h = (h ^ (h >> 13)) * 1274126177
+        var hair = Float32(0.55) + Float32(0.4) * Float32(h & 0xFF) / 255
+        return cover * hair
+
+
 def tint_head_skin(
     mut geometry: BufferGeometry, dimensions: HeadMuscleDimensions
 ) raises:
@@ -255,6 +323,7 @@ def tint_head_skin(
     var zones = _zones(dimensions.head)
     var thin = _thin_zones(dimensions.head)
     var lids = EyeLids(dimensions.head)
+    var brows = _Brows(dimensions)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var colors = List[Float32](capacity=count * 3)
@@ -279,6 +348,7 @@ def tint_head_skin(
                     color.y * (1 + (f.y - 1) * w),
                     color.z * (1 + (f.z - 1) * w),
                 )
+        color = _mix(color, brows.factor, brows.weight(p))
         var lash = _lash_line(lids, p)
         if lash > 0:
             color = color * (1 - Float32(0.8) * lash)

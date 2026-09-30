@@ -31,10 +31,7 @@ from extensions.humanoid.skeleton.head.bones.geometry import (
 )
 from extensions.humanoid.skeleton.head.contents import BOTH, HeadContents
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
-from extensions.humanoid.skeleton.head.hair.dimensions import (
-    is_paired_head_hair,
-    named_head_hair,
-)
+from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
@@ -265,22 +262,17 @@ def add_head(
             skin,
         )
     if contents.includes_hair():
+        # The brows are painted into the skin's colors, hair by hair,
+        # where a solid strip would stand off the curve of the brow
+        # ridge: only the scalp's hair is a mesh.
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-        var parts = named_head_hair()
-        for index in range(len(parts)):  # pragma: no branch
-            var count = 1
-            if is_paired_head_hair(parts[index]):
-                count = 2
-            for s in range(count):  # pragma: no branch
-                place_mesh(
-                    scene,
-                    assets,
-                    root_id,
-                    head_hair_from_dimensions(
-                        dims, parts[index], sides[s], detail, workers
-                    ),
-                    hair,
-                )
+        place_mesh(
+            scene,
+            assets,
+            root_id,
+            head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, detail, workers),
+            hair,
+        )
     if contents.includes_eyes():
         var eye = eye_paint
         if eye.value < 0:

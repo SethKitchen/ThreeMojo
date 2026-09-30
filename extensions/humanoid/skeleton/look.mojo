@@ -538,11 +538,11 @@ def skin_physical(
     var material = physical_material(
         color,
         map=map,
-        roughness=0.5,
+        roughness=0.56,
         ior=1.40,
-        specular_intensity=0.55,
-        clearcoat=0.12,
-        clearcoat_roughness=0.35,
+        specular_intensity=0.5,
+        clearcoat=0.06,
+        clearcoat_roughness=0.4,
         sheen=0.45,
         sheen_color=skin_glow(genome),
         sheen_roughness=0.55,
@@ -610,8 +610,9 @@ def add_complexion(
 ) raises -> Complexion:
     """Store a person's skin, hair and eye looks and return their ids.
 
-    The skin's color map and its relief tile several times across the
-    mesh, so a pore is a fraction of a millimeter on the face. A whole
+    The skin's color map is 512 texels square, and it and its relief
+    tile several times across the mesh, so a pore is a fraction of a
+    millimeter on the face and a freckle is round. A whole
     body's skin is taller than a head's, so it tiles more times up it.
     The skin lets light through where it is thin; see `skin_scatter`.
 
@@ -632,7 +633,9 @@ def add_complexion(
     if whole_body:
         up = Float32(14)
         relief_up = Float32(28)
-    var albedo = skin_albedo(256, genome)
+    var albedo = Texture(
+        512, 512, skin_albedo_pixels(512, genome), REPEAT, color_space=SRGB
+    )
     albedo.repeat = Vector2(3, up)
     var relief = skin_relief(256)
     relief.repeat = Vector2(6, relief_up)

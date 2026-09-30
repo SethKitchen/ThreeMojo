@@ -395,7 +395,7 @@ def test_add_head_draws_the_eyes() raises:
         eye_paint=paint,
         workers=2,
     )
-    assert_equal(len(scene.meshes), 2 + 2 + 1 + 3)
+    assert_equal(len(scene.meshes), 2 + 2 + 1 + 1)
 
 
 def main() raises:

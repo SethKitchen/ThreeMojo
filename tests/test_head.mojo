@@ -694,8 +694,8 @@ def test_hair() raises:
     # The left brow lies on the skin over the left eye: somewhere on a
     # line from in front of the face back into it.
     var inside = False
-    for step in range(40):  # pragma: no branch
-        var z = Float32(11.0) - Float32(step) * Float32(0.1)
+    for step in range(400):  # pragma: no branch
+        var z = Float32(11.0) - Float32(step) * Float32(0.01)
         if head_hair_distance(dims, EYEBROWS, LEFT, h.at(-2.7, 74.5, z)) < 0:
             inside = True
     assert_true(inside)
@@ -748,8 +748,9 @@ def test_add_head_places_every_layer() raises:
         scene, assets, root, _person(), paint, paint, paint, paint, ALL, 8, 8
     )
     # 11 bones, 7 joint tissues, 28 muscles, 12 vessels, 9 nerves, 10
-    # node groups, the skin, 3 hair groups and 2 eyes.
-    assert_equal(len(scene.meshes), 83)
+    # node groups, the skin, the scalp's hair and 2 eyes. The brows are
+    # painted into the skin.
+    assert_equal(len(scene.meshes), 81)
     var dressed = Scene()
     var top = dressed.add(Object3D())
     _ = add_head(

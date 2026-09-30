@@ -11,9 +11,8 @@ The page is Torso. A six-foot male stands twice on a floor. The left
 copy shows the bones, the joint tissues and the muscles of the torso
 and its shoulder girdle, the pelvis, both legs and feet, both arms and
 hands, and the neck and the head. The right copy shows one skin from
-the head down to the wrists, and each hand's own, with the eyes, the
-hair and the brows. The program also prints the mass of several torso
-parts.
+the head down to the wrists, and each hand's own, with the eyes and
+the hair. The program also prints the mass of several torso parts.
 
 The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. Each level has about twice the triangles of the

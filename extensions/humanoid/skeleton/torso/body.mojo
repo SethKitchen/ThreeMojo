@@ -281,7 +281,7 @@ def add_body(
 
     Every part draws the same layers. The skin is one surface down to
     the wrists; each hand's skin is its own mesh. The skin comes with
-    the eyes, the scalp's hair and the brows.
+    the eyes and the scalp's hair; the brows are painted into it.
 
     Args:
         scene: The scene that receives the nodes and the meshes.
@@ -307,8 +307,8 @@ def add_body(
         nerve_paint: Nerve look, or the default nerve Phong.
         skin_paint: Skin look, or the default skin Phong in the tone
             the spec's genome asks for, tinted by the face's zones.
-        hair_paint: Hair look for the scalp and the brows, drawn with
-            the skin, or the default hair Phong.
+        hair_paint: Hair look for the scalp, drawn with the skin, or
+            the default hair Phong.
         eye_paint: Eyeball look, drawn with the skin, or the default eye
             look.
         workers: How many threads mesh the skin and the hair. One by
@@ -447,8 +447,8 @@ def add_body(
             untinted(hand_skin)
             var hand = assets.geometries.add(hand_skin^)
             scene.add_mesh(Mesh(hand, skin, scene.attach(Object3D(), root_id)))
-        # The skin's lids open on the eyes, and the scalp's hair and the
-        # brows lie on it: they come with it.
+        # The skin's lids open on the eyes, and the scalp's hair lies on
+        # it: they come with it.
         _ = add_head(
             scene,
             assets,

@@ -139,7 +139,6 @@ def head_hair_field(
             Float32(0.45),
             1 + Float32(0.45) * h.torso.genome.get(BROW_THICKNESS),
         )
-        var brow = Sweep(Vector3(0, 1, 0))
         var rows: List[Float32] = [
             1.2,
             74.15,
@@ -150,18 +149,30 @@ def head_hair_field(
             3.4,
             74.6,
             0.25,
-            4.4,
+            4.5,
             74.35,
             0.17,
-            5.2,
+            5.4,
             73.85,
             0.1,
         ]
+        var points = List[Vector3]()
         for index in range(len(rows) // 3):  # pragma: no branch
-            var p = _on_skin(
-                skin, h.at(rows[index * 3], rows[index * 3 + 1], 10.5)
+            points.append(
+                _on_skin(skin, h.at(rows[index * 3], rows[index * 3 + 1], 12.0))
             )
-            brow.add(p, h.cm(rows[index * 3 + 2]) * full, h.cm(0.07) * full)
+        # The brow's height runs up the skin, not straight up: the brow
+        # ridge leans back, and a band held upright would stand off it.
+        var n = skin.gradient(points[2])
+        var up = Vector3(0, 1, 0) - n * n.y
+        up.normalize()
+        var brow = Sweep(up)
+        for index in range(len(points)):  # pragma: no branch
+            brow.add(
+                points[index],
+                h.cm(rows[index * 3 + 2]) * full,
+                h.cm(0.035) * full,
+            )
         sweeps.append(brow^)
         return SweepField(
             sweeps^, domes^, side, f.cm(0.1), f.cm(0.03), f.cm(0.2)
@@ -297,12 +308,14 @@ struct HairShape(Copyable, DistanceField, Movable):
 
 
 def _on_skin(skin: HeadSkinField, start: Vector3) -> Vector3:
-    """Return `start` walked onto the skin along the field's gradient."""
+    """Return where a line from `start` straight back meets the skin.
+
+    The walk keeps `start`'s height and its side, so a brow authored at
+    a height lands at that height.
+    """
     var p = start
-    for _ in range(6):  # pragma: no branch
-        var d = skin.distance(p)
-        var g = skin.gradient(p)
-        p = p - g * d
+    for _ in range(40):  # pragma: no branch
+        p.z -= skin.distance(p)
     return p
 
 
