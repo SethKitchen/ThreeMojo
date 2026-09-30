@@ -47,7 +47,7 @@ def arm_bone(
             out of range, or if the field produces no surface.
     """
     return arm_bone_from_dimensions(
-        arm_dimensions(spec.stature, spec.sex), part, side, detail
+        arm_dimensions(spec.stature, spec.sex, spec.genome), part, side, detail
     )
 
 

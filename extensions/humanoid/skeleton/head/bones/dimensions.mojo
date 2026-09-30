@@ -384,7 +384,7 @@ def _skull(
     domes.append(
         Dome(
             center,
-            Vector3(h.cm(7.1) * f.wide, h.cm(8.5), h.cm(9.4) * f.deep),
+            h.cranium(7.1, 8.5, 9.4),
             h.cm(0.35),
             h.at(0, 70.6, 0).y,
         )

@@ -72,7 +72,7 @@ def arm_ligament_mass(spec: HumanoidSpec, part: ArmLigament) raises -> SoftMass:
         Error: If `spec` or `part` is refused.
     """
     return arm_ligament_mass_from_dimensions(
-        arm_dimensions(spec.stature, spec.sex),
+        arm_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         arm_ligament_tissue(part),
     )

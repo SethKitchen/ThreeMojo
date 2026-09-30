@@ -74,7 +74,7 @@ def torso_ligament_mass(
         Error: If `spec` or `part` is refused.
     """
     return torso_ligament_mass_from_dimensions(
-        torso_dimensions(spec.stature, spec.sex),
+        torso_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         torso_ligament_tissue(part),
     )

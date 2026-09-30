@@ -133,7 +133,7 @@ def torso_muscle_dimensions(spec: HumanoidSpec) raises -> TorsoMuscleDimensions:
     if not spec.athleticism.is_valid():
         raise Error("A torso muscle needs a toned or untoned athleticism")
     return TorsoMuscleDimensions(
-        torso_dimensions(spec.stature, spec.sex), spec.athleticism
+        torso_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )
 
 

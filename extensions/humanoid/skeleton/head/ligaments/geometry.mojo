@@ -47,7 +47,7 @@ def head_ligament(
             out of range, or if the field produces no surface.
     """
     return head_ligament_from_dimensions(
-        head_dimensions(spec.stature, spec.sex), part, side, detail
+        head_dimensions(spec.stature, spec.sex, spec.genome), part, side, detail
     )
 
 

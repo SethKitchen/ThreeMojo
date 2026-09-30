@@ -45,7 +45,7 @@ def head_bone(
             range, or if the field produces no surface.
     """
     return head_bone_from_dimensions(
-        head_dimensions(spec.stature, spec.sex), part, detail
+        head_dimensions(spec.stature, spec.sex, spec.genome), part, detail
     )
 
 

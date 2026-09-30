@@ -24,10 +24,12 @@ the torso's is.
 """
 
 from extensions.humanoid.athleticism import Athleticism, radius_scale
+from extensions.humanoid.genome import Genome
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import check_spec, finite_point
+from extensions.humanoid.skeleton.morph import HeadMorph
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     TorsoDimensions,
     TorsoFrame,
@@ -116,6 +118,27 @@ struct HeadDimensions(Copyable, Movable):
         """
         return self.frame.cm(value)
 
+    def cranium(self, x: Float32, y: Float32, z: Float32) -> Vector3:
+        """Return the semi-axes of a cranial ellipsoid, in meters.
+
+        The genome's head genes stretch the cranium; `at` moves its
+        center the same way, so the ellipsoid's surface follows the
+        points the morph moves.
+
+        Args:
+            x: Half the breadth, in template cm.
+            y: Half the height, in template cm.
+            z: Half the length, in template cm.
+
+        Returns:
+            The semi-axes, widened and deepened for the sex.
+        """
+        var f = self.frame
+        var s = f.morph.cranium_scale()
+        return Vector3(
+            f.cm(x) * f.wide * s.x, f.cm(y) * s.y, f.cm(z) * f.deep * s.z
+        )
+
     def validate(self) raises:
         """Refuse dimensions that a field, mesh or mass cannot consume.
 
@@ -143,24 +166,37 @@ struct HeadDimensions(Copyable, Movable):
                 raise Error("A cervical vertebra's size must be positive")
 
 
-def head_dimensions(stature: Length, sex: Sex) raises -> HeadDimensions:
+def head_dimensions(
+    stature: Length, sex: Sex, genome: Genome = Genome()
+) raises -> HeadDimensions:
     """Return the landmarks of a neck and a head for an adult humanoid.
 
     Args:
         stature: Standing height. Must lie in 1.2 m through 2.5 m.
         sex: `MALE` or `FEMALE`.
+        genome: Heritable traits. The head's genes reshape the neck,
+            the cranium and the face; see `HeadMorph`. The template
+            genome by default.
 
     Returns:
         The cervical landmarks in the pelvis frame, and the torso they
         stand on.
 
     Raises:
-        Error: If `sex` is not valid, or stature is not finite or is
-            outside the software range.
+        Error: If `sex` is not valid, stature is not finite or is
+            outside the software range, or `genome` is not valid.
     """
     check_spec(stature, sex, RIGHT, "head")
-    var torso = torso_dimensions(stature, sex)
-    var f = torso.frame
+    var torso = torso_dimensions(stature, sex, genome)
+    # The head's own frame: the torso's, without the shoulders' and the
+    # chest's genes, and with the head's shape.
+    var f = TorsoFrame(
+        torso.frame.stature,
+        torso.frame.wide,
+        torso.frame.deep,
+        torso.frame.anchor,
+        morph=HeadMorph(genome),
+    )
     # Centers (y, z), half-width, half-depth and height, C1 to C7. The
     # atlas's center is its ring's.
     var y = floats(65.6, 63.3, 61.3, 59.45, 57.6, 55.75, 53.85)
@@ -234,5 +270,5 @@ def head_muscle_dimensions(spec: HumanoidSpec) raises -> HeadMuscleDimensions:
     if not spec.athleticism.is_valid():
         raise Error("A head muscle needs a toned or untoned athleticism")
     return HeadMuscleDimensions(
-        head_dimensions(spec.stature, spec.sex), spec.athleticism
+        head_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )

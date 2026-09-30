@@ -362,7 +362,7 @@ def add_body(
     if contents.includes_skin():
         var skin = skin_paint
         if skin.value < 0:
-            skin = assets.materials.add(skin_phong())
+            skin = assets.materials.add(skin_phong(genome=spec.genome))
         var shape = assets.geometries.add(body_skin_mesh(spec, skin_detail))
         var nid = scene.attach(Object3D(), root_id)
         scene.add_mesh(Mesh(shape, skin, nid))

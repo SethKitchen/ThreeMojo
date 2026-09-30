@@ -229,7 +229,7 @@ def add_hand(
                 nerve,
             )
     if contents.includes_skin():
-        var skin = resolved_paint(assets, skin_paint, skin_phong())
+        var skin = resolved_paint(assets, skin_paint, skin_phong(genome=spec.genome))
         place_mesh(
             scene,
             assets,
@@ -238,7 +238,7 @@ def add_hand(
             skin,
         )
     if contents.includes_hair():
-        var hair = resolved_paint(assets, hair_paint, hair_phong())
+        var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_hand_hair()
         for index in range(len(parts)):  # pragma: no branch
             place_mesh(

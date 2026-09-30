@@ -74,7 +74,7 @@ def head_ligament_mass(
         Error: If `spec` or `part` is refused.
     """
     return head_ligament_mass_from_dimensions(
-        head_dimensions(spec.stature, spec.sex),
+        head_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         head_ligament_tissue(part),
     )

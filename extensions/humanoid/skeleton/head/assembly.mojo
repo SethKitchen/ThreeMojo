@@ -76,8 +76,11 @@ from extensions.humanoid.skeleton.head.vessels.dimensions import (
 from extensions.humanoid.skeleton.head.vessels.geometry import (
     head_vessel_from_dimensions,
 )
+from extensions.humanoid.skeleton.complexion import iris_albedo
+from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.look import (
     artery_phong,
+    eye_physical,
     hair_phong,
     lymph_phong,
     nerve_phong,
@@ -108,6 +111,7 @@ def add_head(
     nerve_paint: MaterialId = UNSET_PAINT,
     skin_paint: MaterialId = UNSET_PAINT,
     hair_paint: MaterialId = UNSET_PAINT,
+    eye_paint: MaterialId = UNSET_PAINT,
 ) raises -> NodeId:
     """Attach the neck and the head under `parent` and return their node.
 
@@ -124,7 +128,7 @@ def add_head(
             larynx and the trachea.
         muscle_paint: Material id of the muscle look.
         contents: Named layer bits. Bones, ligaments and muscles are
-            the default.
+            the default. `EYES` draws the eyeballs.
         detail: Cells along each solid.
         skin_detail: Cells along the head for its skin.
         origin: Position of the pelvis origin in the parent, in meters.
@@ -132,8 +136,12 @@ def add_head(
         vein_paint: Venous look, or the default vein Phong.
         lymph_paint: Lymph look, or the default lymph Phong.
         nerve_paint: Nerve look, or the default nerve Phong.
-        skin_paint: Skin look, or the default skin Phong.
-        hair_paint: Hair look, or the default hair Phong.
+        skin_paint: Skin look, or the default skin Phong in the tone
+            the spec's genome asks for.
+        hair_paint: Hair look, or the default hair Phong in the color
+            the spec's genome asks for.
+        eye_paint: Eyeball look, or the default eye look with a plain
+            iris in the color the spec's genome asks for.
 
     Returns:
         The head's node.
@@ -243,7 +251,9 @@ def add_head(
                     nerve,
                 )
     if contents.includes_skin():
-        var skin = resolved_paint(assets, skin_paint, skin_phong())
+        var skin = resolved_paint(
+            assets, skin_paint, skin_phong(genome=spec.genome)
+        )
         place_mesh(
             scene,
             assets,
@@ -252,7 +262,7 @@ def add_head(
             skin,
         )
     if contents.includes_hair():
-        var hair = resolved_paint(assets, hair_paint, hair_phong())
+        var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_head_hair()
         for index in range(len(parts)):  # pragma: no branch
             var count = 1
@@ -268,4 +278,17 @@ def add_head(
                     ),
                     hair,
                 )
+    if contents.includes_eyes():
+        var eye = eye_paint
+        if eye.value < 0:
+            var iris = assets.textures.add(iris_albedo(64, spec.genome))
+            eye = assets.materials.add(eye_physical(iris))
+        for s in range(2):  # pragma: no branch
+            place_mesh(
+                scene,
+                assets,
+                root_id,
+                eyeball_mesh(dims, sides[s], max(8, detail)),
+                eye,
+            )
     return root_id

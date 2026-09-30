@@ -47,7 +47,7 @@ def arm_ligament(
             out of range, or if the field produces no surface.
     """
     return arm_ligament_from_dimensions(
-        arm_dimensions(spec.stature, spec.sex), part, side, detail
+        arm_dimensions(spec.stature, spec.sex, spec.genome), part, side, detail
     )
 
 

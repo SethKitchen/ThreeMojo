@@ -9,7 +9,7 @@
     var skin = head_skin_mesh(person)
 
 The solid lives in `dimensions`. This file extracts the zero set with
-marching tetrahedra.
+narrow-band surface nets, so the face's small forms come out smooth.
 """
 
 from core.buffer_geometry import BufferGeometry
@@ -18,7 +18,8 @@ from extensions.humanoid.skeleton.head.frame import (
     head_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import check_detail
+from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -61,4 +62,4 @@ def head_skin_from_dimensions(
     """
     check_detail(detail, "head skin")
     var field = HeadSkinField(dimensions)
-    return mesh_field(field, field.low, field.high, detail, "head skin")
+    return mesh_surface(field, field.low, field.high, detail, "head skin")

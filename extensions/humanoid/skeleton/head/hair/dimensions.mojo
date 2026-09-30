@@ -138,7 +138,7 @@ def head_hair_field(
     domes.append(
         Dome(
             h.at(0, 75.1, -1.0),
-            Vector3(h.cm(8.55) * f.wide, h.cm(9.75), h.cm(11.05) * f.deep),
+            h.cranium(8.55, 9.75, 11.05),
             h.cm(0.45),
             h.at(0, 67.5, 0).y,
         )

@@ -27,6 +27,12 @@ table. A female template is narrower and shallower through the chest.
     var d = torso_bone_distance(dims, T7, RIGHT, dims.centers[6])
 """
 
+from extensions.humanoid.genome import (
+    CHEST_DEPTH,
+    Genome,
+    SHOULDER_BREADTH,
+    check_genome,
+)
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
@@ -34,6 +40,7 @@ from extensions.humanoid.skeleton.field import (
     finite_point,
     mix_point,
 )
+from extensions.humanoid.skeleton.morph import HeadMorph, smoothstep
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     TEMPLATE_CM,
     pelvis_dimensions,
@@ -54,6 +61,13 @@ from units.si import Length
 # through the chest, the same height.
 comptime FEMALE_WIDTH = Float32(0.92)
 comptime FEMALE_DEPTH = Float32(0.95)
+
+# The thoracic column's depth on the template, in centimeters. A deeper
+# chest grows forward and back from here.
+comptime SPINE_Z = Float32(-4.5)
+# How much the frame genes move the frame at an expression of one.
+comptime SHOULDER_SCALE = Float32(0.07)
+comptime CHEST_SCALE = Float32(0.08)
 
 # Where the male template's sacral promontory lies, in centimeters. The
 # torso is authored from it.
@@ -124,18 +138,54 @@ comptime CLAVICLE = TorsoBone(30)
 comptime SCAPULA = TorsoBone(31)
 
 
-@fieldwise_init
 struct TorsoFrame(ImplicitlyCopyable):
     """Turns template centimeters into points in the torso frame.
 
     A point is authored against the male template's sacral promontory
-    and placed against this pelvis's.
+    and placed against this pelvis's. The genome's frame genes widen the
+    shoulders and deepen the chest: `shoulders` is the factor on x at
+    the shoulders, fading to one at the waist, and `chest` the factor on
+    depth through the rib cage. `morph` reshapes the neck and the head.
+    On a torso's own frame it is the identity; the head's frame carries
+    the genome's.
     """
 
     var stature: Float32
     var wide: Float32
     var deep: Float32
     var anchor: Vector3
+    var shoulders: Float32
+    var chest: Float32
+    var morph: HeadMorph
+
+    def __init__(
+        out self,
+        stature: Float32,
+        wide: Float32,
+        deep: Float32,
+        anchor: Vector3,
+        shoulders: Float32 = 1,
+        chest: Float32 = 1,
+        morph: HeadMorph = HeadMorph(),
+    ):
+        """Store the frame's scale, its anchor and its genome's shape.
+
+        Args:
+            stature: Standing height, in meters.
+            wide: The sex's factor on x.
+            deep: The sex's factor on z.
+            anchor: Where the template's promontory lands, in meters.
+            shoulders: The factor on x at the shoulders. One by default.
+            chest: The factor on the rib cage's depth. One by default.
+            morph: How the head is reshaped. The identity by default.
+        """
+        self.stature = stature
+        self.wide = wide
+        self.deep = deep
+        self.anchor = anchor
+        self.shoulders = shoulders
+        self.chest = chest
+        self.morph = morph
 
     def at(self, x: Float32, y: Float32, z: Float32) -> Vector3:
         """Return one point authored on the six-foot template.
@@ -148,11 +198,17 @@ struct TorsoFrame(ImplicitlyCopyable):
         Returns:
             The point, in meters.
         """
+        var p = self.morph.apply(Vector3(x, y, z))
+        if self.shoulders != 1:
+            p.x *= 1 + (self.shoulders - 1) * smoothstep(18.0, 46.0, y)
+        if self.chest != 1:
+            var grow = 1 + (self.chest - 1) * smoothstep(14.0, 30.0, y)
+            p.z = SPINE_Z + (p.z - SPINE_Z) * grow
         var unit = TEMPLATE_CM * self.stature
         return self.anchor + Vector3(
-            x * unit * self.wide,
-            (y - PROMONTORY_Y) * unit,
-            (z - PROMONTORY_Z) * unit * self.deep,
+            p.x * unit * self.wide,
+            (p.y - PROMONTORY_Y) * unit,
+            (p.z - PROMONTORY_Z) * unit * self.deep,
         )
 
     def cm(self, value: Float32) -> Float32:
@@ -176,6 +232,7 @@ struct TorsoDimensions(Copyable, Movable):
 
     var stature: Length
     var sex: Sex
+    var genome: Genome
     var frame: TorsoFrame
     # Vertebral body centers and their half-width, half-depth and height.
     var centers: List[Vector3]
@@ -191,6 +248,7 @@ struct TorsoDimensions(Copyable, Movable):
         out self,
         stature: Length,
         sex: Sex,
+        genome: Genome,
         frame: TorsoFrame,
         var centers: List[Vector3],
         var widths: List[Float32],
@@ -206,6 +264,7 @@ struct TorsoDimensions(Copyable, Movable):
         Args:
             stature: Standing height.
             sex: Osteological template.
+            genome: Heritable traits.
             frame: The frame that authored the landmarks.
             centers: Vertebral body centers, T1 to L5, in meters.
             widths: Their half-widths, in meters.
@@ -218,6 +277,7 @@ struct TorsoDimensions(Copyable, Movable):
         """
         self.stature = stature
         self.sex = sex
+        self.genome = genome
         self.frame = frame
         self.centers = centers^
         self.widths = widths^
@@ -237,6 +297,7 @@ struct TorsoDimensions(Copyable, Movable):
                 landmark is not finite.
         """
         check_spec(self.stature, self.sex, RIGHT, "torso")
+        check_genome(self.genome, "torso")
         if (
             len(self.centers) != VERTEBRAE
             or len(self.widths) != VERTEBRAE
@@ -258,28 +319,41 @@ struct TorsoDimensions(Copyable, Movable):
         finite_point(self.xiphoid, "xiphoid", "torso")
 
 
-def torso_dimensions(stature: Length, sex: Sex) raises -> TorsoDimensions:
+def torso_dimensions(
+    stature: Length, sex: Sex, genome: Genome = Genome()
+) raises -> TorsoDimensions:
     """Return the landmarks of a torso for an adult humanoid.
 
     Args:
         stature: Standing height. Must lie in 1.2 m through 2.5 m.
         sex: `MALE` or `FEMALE`.
+        genome: Heritable traits. `SHOULDER_BREADTH` widens the rib cage
+            and the shoulders; `CHEST_DEPTH` deepens the rib cage. The
+            template genome by default.
 
     Returns:
         Vertebral and sternal landmarks in the pelvis frame.
 
     Raises:
-        Error: If `sex` is not valid, or stature is not finite or is
-            outside the software range.
+        Error: If `sex` is not valid, stature is not finite or is
+            outside the software range, or `genome` is not valid.
     """
     check_spec(stature, sex, RIGHT, "torso")
+    check_genome(genome, "torso")
     var pelvis = pelvis_dimensions(stature, sex)
     var wide = FEMALE_WIDTH
     var deep = FEMALE_DEPTH
     if sex == MALE:
         wide = Float32(1)
         deep = Float32(1)
-    var f = TorsoFrame(stature.value, wide, deep, pelvis.promontory)
+    var f = TorsoFrame(
+        stature.value,
+        wide,
+        deep,
+        pelvis.promontory,
+        1 + SHOULDER_SCALE * genome.get(SHOULDER_BREADTH),
+        1 + CHEST_SCALE * genome.get(CHEST_DEPTH),
+    )
     # Body centers (y, z), half-width, half-depth and height, T1 to L5.
     var y = floats(
         51.9,
@@ -388,6 +462,7 @@ def torso_dimensions(stature: Length, sex: Sex) raises -> TorsoDimensions:
     return TorsoDimensions(
         stature,
         sex,
+        genome,
         f,
         centers^,
         widths^,

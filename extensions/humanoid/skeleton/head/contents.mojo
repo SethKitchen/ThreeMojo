@@ -6,7 +6,8 @@
 """Which solids `add_head` attaches.
 
 Each named value is a bit. Combine layers with `plus`. `BOTH` is the
-skeleton, the ligaments and the muscles. `ALL` is every layer.
+skeleton, the ligaments and the muscles. `ALL` is every layer, the
+eyes too.
 
     _ = add_head(..., contents=MUSCLES)
     _ = add_head(..., contents=BONES.plus(VESSELS))
@@ -127,6 +128,18 @@ struct HeadContents(Equatable, ImplicitlyCopyable, Writable):
         self._require()
         return (self.value & HAIR.value) != 0
 
+    def includes_eyes(self) raises -> Bool:
+        """Return True if this layer set draws the eyeballs.
+
+        Returns:
+            True when the eyes bit is set.
+
+        Raises:
+            Error: If this value is not a named layer set.
+        """
+        self._require()
+        return (self.value & EYES.value) != 0
+
     def plus(self, other: HeadContents) raises -> HeadContents:
         """Return the union of this set and `other`.
 
@@ -165,9 +178,11 @@ comptime LYMPH = HeadContents(16)
 comptime NERVES = HeadContents(32)
 # Skin envelope.
 comptime SKIN = HeadContents(64)
-# Hair of the scalp.
+# Hair of the scalp and the eyebrows.
 comptime HAIR = HeadContents(128)
+# The two eyeballs: sclera, iris and pupil.
+comptime EYES = HeadContents(256)
 # Skeleton, ligaments and muscles together.
 comptime BOTH = HeadContents(7)
 # Every named layer.
-comptime ALL = HeadContents(255)
+comptime ALL = HeadContents(511)

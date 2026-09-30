@@ -22,7 +22,7 @@ and development and environment change them too.
 from std.math import isfinite
 
 # How many genes a genome holds.
-comptime GENE_COUNT = 34
+comptime GENE_COUNT = 33
 
 
 @fieldwise_init
@@ -107,8 +107,6 @@ comptime SHOULDER_BREADTH = Gene(30)
 comptime CHEST_DEPTH = Gene(31)
 # The length of the arms against the stature.
 comptime ARM_LENGTH = Gene(32)
-# The breadth of the hips against the rib cage.
-comptime HIP_BREADTH = Gene(33)
 
 
 @fieldwise_init
@@ -173,7 +171,6 @@ def gene_label(gene: Gene) -> String:
         "shoulder breadth",
         "chest depth",
         "arm length",
-        "hip breadth",
     ]
     return names[gene.value]
 
@@ -182,7 +179,7 @@ def named_genes() -> List[Gene]:
     """Return every named gene in a stable order.
 
     Returns:
-        `MELANIN` through `HIP_BREADTH`.
+        `MELANIN` through `ARM_LENGTH`.
     """
     var genes = List[Gene]()
     for index in range(GENE_COUNT):  # pragma: no branch

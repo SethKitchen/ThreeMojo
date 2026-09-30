@@ -85,7 +85,7 @@ def head_bone_mass(
             range.
     """
     return head_bone_mass_from_dimensions(
-        head_dimensions(spec.stature, spec.sex),
+        head_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         cortical_tissue(),
         trabecular_tissue(),

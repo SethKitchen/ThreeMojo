@@ -74,7 +74,7 @@ def hand_ligament_mass(
         Error: If `spec` or `part` is refused.
     """
     return hand_ligament_mass_from_dimensions(
-        arm_dimensions(spec.stature, spec.sex),
+        arm_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         hand_ligament_tissue(part),
     )

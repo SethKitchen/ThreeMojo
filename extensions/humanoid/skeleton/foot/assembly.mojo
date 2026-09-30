@@ -254,7 +254,7 @@ def add_foot(
             )
             n_index += 1
     if contents.includes_skin():
-        var skin = _resolved_paint(assets, skin_paint, skin_phong())
+        var skin = _resolved_paint(assets, skin_paint, skin_phong(genome=spec.genome))
         _place(
             scene,
             assets,
@@ -263,7 +263,7 @@ def add_foot(
             skin,
         )
     if contents.includes_hair():
-        var keratin = _resolved_paint(assets, hair_paint, hair_phong())
+        var keratin = _resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var groups = named_foot_hair()
         var h_index = 0
         while h_index < len(groups):

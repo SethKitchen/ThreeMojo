@@ -14,6 +14,13 @@ and read best tone mapped. The maps are visual approximations.
     var paint = muscle_physical(store.add(map))
 """
 
+from extensions.humanoid.genome import Genome
+from extensions.humanoid.skeleton.complexion import (
+    hair_tone,
+    skin_albedo_pixels,
+    skin_glow,
+    skin_tone,
+)
 from materials.material import (
     DOUBLE_SIDE,
     Material,
@@ -232,78 +239,140 @@ def nerve_phong() raises -> Material:
     )
 
 
-def skin_albedo(size: Int = 64) raises -> Texture:
-    """Return a skin texture with pores and a faint hair grain.
+def skin_albedo(size: Int = 64, genome: Genome = Genome()) raises -> Texture:
+    """Return a tiling skin texture in the tone `genome` asks for.
+
+    It carries blotches of redness and pigment, pores, and the freckles
+    and moles the genome asks for. See `skin_albedo_pixels`.
 
     Args:
         size: Width and height in texels. Eight through 256, 64 by default.
+        genome: Reads the skin's genes. The template genome by default.
 
     Returns:
         An sRGB texture that tiles around a limb.
 
     Raises:
-        Error: If `size` is less than eight or more than 256.
+        Error: If `size` is less than eight or more than 256, or if
+            `genome` is not valid.
     """
     if size < MIN_SOFT_LOOK:
         raise Error("A skin map needs a size of at least eight")
     if size > MAX_SOFT_LOOK:
         raise Error("A skin map's size cannot exceed 256")
-    var pixels = List[UInt8]()
-    for y in range(size):  # pragma: no branch
-        for x in range(size):  # pragma: no branch
-            var pore = Float32((x * 13 + y * 29) % 9) / Float32(8)
-            var grain = Float32((x * 19 + y * 7 + (x * y) % 11) & 7) / Float32(
-                7
-            )
-            pixels.append(UInt8(Int(Float32(210) + 18 * pore + 8 * grain)))
-            pixels.append(UInt8(Int(Float32(158) + 14 * pore + 6 * grain)))
-            pixels.append(UInt8(Int(Float32(128) + 10 * pore + 5 * grain)))
-            pixels.append(255)
-    return Texture(size, size, pixels^, REPEAT, color_space=SRGB)
+    return Texture(
+        size, size, skin_albedo_pixels(size, genome), REPEAT, color_space=SRGB
+    )
 
 
-def skin_phong(map: TextureId = NO_TEXTURE) raises -> Material:
+def skin_phong(
+    map: TextureId = NO_TEXTURE, genome: Genome = Genome()
+) raises -> Material:
     """Return a Phong material for dermis.
 
-    The color is light adult skin. With a map the color is white so the
-    albedo arrives unshifted.
+    The color is the tone `genome` asks for. With a map the color is
+    white so the albedo arrives unshifted.
 
     Args:
         map: Id of a skin albedo texture, or `NO_TEXTURE`.
+        genome: Reads the skin's genes. The template genome by default.
 
     Returns:
         A `PHONG` material.
 
     Raises:
-        Error: If the Phong constructor refuses the values.
+        Error: If the Phong constructor refuses the values, or if
+            `genome` is not valid.
     """
-    var color = Color(222, 174, 146)
+    var color = skin_tone(genome)
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
     return phong_material(
         color,
         map=map,
-        specular=Color(90, 70, 60),
-        shininess=12.0,
+        specular=Color(58, 50, 46),
+        shininess=18.0,
         side=DOUBLE_SIDE,
     )
 
 
-def hair_phong() raises -> Material:
+def hair_phong(genome: Genome = Genome()) raises -> Material:
     """Return a Phong material for a keratin hair shaft.
 
-    The color is medium brown terminal hair.
+    The color is the hair tone `genome` asks for: medium brown on the
+    template genome.
+
+    Args:
+        genome: Reads the hair's genes. The template genome by default.
 
     Returns:
         A `PHONG` material.
 
     Raises:
-        Error: If the Phong constructor refuses the values.
+        Error: If the Phong constructor refuses the values, or if
+            `genome` is not valid.
     """
     return phong_material(
-        Color(128, 80, 50),
-        specular=Color(150, 112, 82),
-        shininess=24.0,
+        hair_tone(genome),
+        specular=Color(96, 84, 72),
+        shininess=40.0,
+    )
+
+
+def hair_physical(genome: Genome = Genome()) raises -> Material:
+    """Return a physically based material for a mass of hair.
+
+    Hair is a bundle of glossy cylinders. Its highlight stretches across
+    the shafts, which an anisotropic lobe stands in for, and the light
+    that passes between the shafts softens it, which a sheen stands in
+    for.
+
+    Args:
+        genome: Reads the hair's genes. The template genome by default.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values, or if
+            `genome` is not valid.
+    """
+    var tone = hair_tone(genome)
+    return physical_material(
+        tone,
+        roughness=0.5,
+        ior=1.55,
+        specular_intensity=0.5,
+        sheen=0.6,
+        sheen_color=tone,
+        sheen_roughness=0.5,
+        anisotropy=0.6,
+    )
+
+
+def eye_physical(map: TextureId = NO_TEXTURE) raises -> Material:
+    """Return a physically based material for an eyeball.
+
+    The cornea and the tear film are wet and smooth: a strong clear
+    coat over a softer body gives the eye its bright glint.
+
+    Args:
+        map: Id of an `iris_albedo` texture, or `NO_TEXTURE` for a
+            white sclera.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(255, 255, 255),
+        map=map,
+        roughness=0.35,
+        ior=1.376,
+        clearcoat=1.0,
+        clearcoat_roughness=0.03,
     )
 
 
@@ -398,34 +467,47 @@ def cartilage_physical() raises -> Material:
     )
 
 
-def skin_physical(map: TextureId = NO_TEXTURE) raises -> Material:
+def skin_physical(
+    map: TextureId = NO_TEXTURE,
+    genome: Genome = Genome(),
+    relief: TextureId = NO_TEXTURE,
+) raises -> Material:
     """Return a physically based material for dermis.
 
     Skin reflects about three percent at normal incidence, an index of
-    refraction near 1.4. Light that enters it scatters and leaves warm
-    and soft at grazing angles. The renderer has no subsurface
-    scattering, so a warm sheen stands in for that rim.
+    refraction near 1.4. Its oily film is glossier than the tissue under
+    it, which a faint clear coat stands in for. Light that enters it
+    scatters and leaves warm and soft at grazing angles. The renderer
+    has no subsurface scattering, so a sheen in the color `skin_glow`
+    gives stands in for that rim.
 
     Args:
         map: Id of a skin albedo texture, or `NO_TEXTURE`.
+        genome: Reads the skin's genes. The template genome by default.
+        relief: Id of a `skin_relief` height map, or `NO_TEXTURE`.
 
     Returns:
         A `PHYSICAL` material.
 
     Raises:
-        Error: If the physical constructor refuses the values.
+        Error: If the physical constructor refuses the values, or if
+            `genome` is not valid.
     """
-    var color = Color(222, 174, 146)
+    var color = skin_tone(genome)
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
     return physical_material(
         color,
         map=map,
-        roughness=0.55,
+        roughness=0.5,
         ior=1.40,
-        specular_intensity=0.6,
-        sheen=0.35,
-        sheen_color=Color(230, 140, 120),
-        sheen_roughness=0.6,
+        specular_intensity=0.55,
+        clearcoat=0.12,
+        clearcoat_roughness=0.35,
+        sheen=0.45,
+        sheen_color=skin_glow(genome),
+        sheen_roughness=0.55,
+        bump_map=relief,
+        bump_scale=0.35,
         side=DOUBLE_SIDE,
     )

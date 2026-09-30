@@ -92,7 +92,7 @@ def arm_bone_mass(
             range.
     """
     return arm_bone_mass_from_dimensions(
-        arm_dimensions(spec.stature, spec.sex),
+        arm_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         cortical_tissue(),
         trabecular_tissue(),

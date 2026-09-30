@@ -93,7 +93,7 @@ def torso_bone_mass(
             range.
     """
     return torso_bone_mass_from_dimensions(
-        torso_dimensions(spec.stature, spec.sex),
+        torso_dimensions(spec.stature, spec.sex, spec.genome),
         part,
         cortical_tissue(),
         trabecular_tissue(),

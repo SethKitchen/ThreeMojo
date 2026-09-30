@@ -7,6 +7,7 @@
 
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import (
+    ARM_LENGTH,
     EAR_SIZE,
     Expression,
     FRECKLES,
@@ -14,7 +15,6 @@ from extensions.humanoid.genome import (
     Gene,
     Genome,
     HAIR_MELANIN,
-    HIP_BREADTH,
     IRIS_MELANIN,
     MELANIN,
     NOSE_LENGTH,
@@ -40,9 +40,9 @@ def test_genes_are_named() raises:
     var genes = named_genes()
     assert_equal(len(genes), GENE_COUNT)
     assert_true(genes[0] == MELANIN)
-    assert_true(genes[GENE_COUNT - 1] == HIP_BREADTH)
+    assert_true(genes[GENE_COUNT - 1] == ARM_LENGTH)
     assert_equal(gene_label(MELANIN), "melanin")
-    assert_equal(gene_label(HIP_BREADTH), "hip breadth")
+    assert_equal(gene_label(ARM_LENGTH), "arm length")
     assert_equal(gene_label(Gene(GENE_COUNT)), "gene")
     assert_false(Gene(-1).is_valid())
     for index in range(len(genes)):  # pragma: no branch
