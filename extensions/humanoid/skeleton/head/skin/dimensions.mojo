@@ -559,11 +559,16 @@ struct HeadSkinField(Copyable, DistanceField, Movable):
             self.fine,
         )
         d = smin(d, mask, self.blend)
-        d = smin(d, self.face.union(point), self.face.blend)
+        # Each sculpt is visited only where it can change the result.
+        d = smin(
+            d, self.face.union(point, d + self.face.blend), self.face.blend
+        )
         d = self.face.carved(d, point)
-        d = smin(d, self.features.union(point), self.fine)
+        d = smin(d, self.features.union(point, d + self.fine), self.fine)
         d = self.features.carved(d, point)
-        d = smin(d, self.ears.union(point), self.ears.blend)
+        d = smin(
+            d, self.ears.union(point, d + self.ears.blend), self.ears.blend
+        )
         d = self.ears.carved(d, point)
         return smin(d, self.lids.distance(point), self.lids.blend)
 

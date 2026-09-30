@@ -193,6 +193,13 @@ def test_sculpt_joins_and_carves() raises:
     assert_true(clay.distance(Vector3(0.25, 0, 0)) < 0)
     # Far from every piece, each is skipped and the result is huge.
     assert_true(clay.union(Vector3(5, 5, 5)) > 1)
+    # Past a limit the caller sets, no piece is visited: the distance
+    # to the pieces' box stands in, and it is past the limit. Near the
+    # pieces the limit changes nothing.
+    assert_true(clay.union(Vector3(5, 5, 5), 0.1) > 0.1)
+    assert_equal(
+        clay.union(Vector3(0.05, 0, 0), 0.1), clay.union(Vector3(0.05, 0, 0))
+    )
     # Turned: an ellipsoid long along z when asked to face x.
     var turned = Sculpt(0.01, 0.005)
     turned.ellipsoid(

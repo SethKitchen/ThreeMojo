@@ -92,6 +92,37 @@ def _basis(forward: Vector3, up: Vector3) -> Tuple[Vector3, Vector3, Vector3]:
     return (u, v, w)
 
 
+def _hold(mut low: Vector3, mut high: Vector3, center: Vector3, reach: Float32):
+    """Grow a box to hold a sphere."""
+    low = Vector3(
+        min(low.x, center.x - reach),
+        min(low.y, center.y - reach),
+        min(low.z, center.z - reach),
+    )
+    high = Vector3(
+        max(high.x, center.x + reach),
+        max(high.y, center.y + reach),
+        max(high.z, center.z + reach),
+    )
+
+
+def box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
+    """Return how far `point` lies outside a box.
+
+    Args:
+        low: The box's least corner, in meters.
+        high: The box's greatest corner, in meters.
+        point: The point, in meters.
+
+    Returns:
+        The distance in meters, zero inside the box.
+    """
+    var dx = max(max(low.x - point.x, point.x - high.x), 0)
+    var dy = max(max(low.y - point.y, point.y - high.y), 0)
+    var dz = max(max(low.z - point.z, point.z - high.z), 0)
+    return sqrt(dx * dx + dy * dy + dz * dz)
+
+
 struct Sculpt(Copyable, DistanceField, Movable):
     """Smoothly joined pieces less smoothly carved hollows."""
 
@@ -101,6 +132,9 @@ struct Sculpt(Copyable, DistanceField, Movable):
     var carve: Float32
     var low: Vector3
     var high: Vector3
+    # The box every hollow lies in.
+    var hollow_low: Vector3
+    var hollow_high: Vector3
 
     def __init__(out self, blend: Float32, carve: Float32):
         """Start an empty sculpt.
@@ -116,19 +150,12 @@ struct Sculpt(Copyable, DistanceField, Movable):
         self.carve = carve
         self.low = Vector3(3.0e38, 3.0e38, 3.0e38)
         self.high = Vector3(-3.0e38, -3.0e38, -3.0e38)
+        self.hollow_low = self.low
+        self.hollow_high = self.high
 
     def _grow(mut self, center: Vector3, reach: Float32):
         """Grow the bounds to hold a sphere."""
-        self.low = Vector3(
-            min(self.low.x, center.x - reach),
-            min(self.low.y, center.y - reach),
-            min(self.low.z, center.z - reach),
-        )
-        self.high = Vector3(
-            max(self.high.x, center.x + reach),
-            max(self.high.y, center.y + reach),
-            max(self.high.z, center.z + reach),
-        )
+        _hold(self.low, self.high, center, reach)
 
     @staticmethod
     def _oriented(
@@ -229,7 +256,9 @@ struct Sculpt(Copyable, DistanceField, Movable):
             forward: Where its third axis points. Plus z by default.
             up: Roughly where its second axis points. Plus y by default.
         """
-        self.hollows.append(Self._oriented(center, radii, forward, up))
+        var hollow = Self._oriented(center, radii, forward, up)
+        _hold(self.hollow_low, self.hollow_high, hollow.center, hollow.bound)
+        self.hollows.append(hollow^)
 
     def hollow_capsule(
         mut self, a: Vector3, b: Vector3, ra: Float32, rb: Float32
@@ -242,22 +271,34 @@ struct Sculpt(Copyable, DistanceField, Movable):
             ra: The radius at `a`, in meters.
             rb: The radius at `b`, in meters.
         """
-        self.hollows.append(Self._capsule(a, b, ra, rb))
+        var hollow = Self._capsule(a, b, ra, rb)
+        _hold(self.hollow_low, self.hollow_high, hollow.center, hollow.bound)
+        self.hollows.append(hollow^)
 
-    def union(self, point: Vector3) -> Float32:
+    def union(self, point: Vector3, limit: Float32 = 3.0e38) -> Float32:
         """Return the distance to the smooth union of the pieces.
 
         A piece whose bounding sphere lies farther than the nearest
         piece found so far, and the blend, is skipped: it cannot change
-        the result.
+        the result. When the box round every piece lies farther than
+        `limit` and four blends, no piece is visited, and the distance to
+        the box stands in. It is past `limit`, and it is no more than
+        the distance to the pieces themselves.
 
         Args:
             point: The point, in meters.
+            limit: How far past which the caller has no use for the
+                exact distance, in meters. No limit by default.
 
         Returns:
             The distance in meters, negative inside. A huge value when
             there are no pieces.
         """
+        # Each smooth join can sink the union below its nearest piece by
+        # a quarter of the blend: four blends is room for many joins.
+        var gap = box_gap(self.low, self.high, point)
+        if gap > limit + 4 * self.blend:
+            return min(gap, Float32(3.0e38))
         var d = Float32(3.0e38)
         for index in range(len(self.pieces)):  # pragma: no branch
             ref piece = self.pieces[index]
@@ -278,6 +319,10 @@ struct Sculpt(Copyable, DistanceField, Movable):
             The distance to that solid less the hollows.
         """
         var out = d
+        # Outside the box round every hollow, by more than a carving
+        # reaches, no hollow can touch the point.
+        if box_gap(self.hollow_low, self.hollow_high, point) > self.carve - out:
+            return out
         for index in range(len(self.hollows)):  # pragma: no branch
             ref hollow = self.hollows[index]
             var gap = (point - hollow.center).length() - hollow.bound

@@ -50,7 +50,7 @@ from extensions.humanoid.skeleton.head.contents import (
     HeadContents,
 )
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
-from extensions.humanoid.skeleton.sculpt import Sculpt
+from extensions.humanoid.skeleton.sculpt import Sculpt, box_gap
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.geometry import (
@@ -112,6 +112,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
     # the height below which the head's skin cannot reach the surface.
     var neck_blend: Float32
     var neck_floor: Float32
+    var head_reach: Float32
     # The ridge of each upper trapezius, from the side of the neck to
     # the acromion, and how wide its fold into the body is.
     var ridges: Sculpt
@@ -151,6 +152,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.head = HeadSkinField(head_muscle_dimensions(spec))
         self.arm_blend = f.cm(1.2)
         self.neck_blend = f.cm(1.5)
+        self.head_reach = self.neck_blend + f.cm(1.0)
         self.ridge_blend = f.cm(RIDGE_BLEND)
         self.neck_floor = self.head.low.y - self.ridge_blend
         self.ridges = Sculpt(f.cm(1.0), f.cm(0.5))
@@ -204,8 +206,15 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         var body = smin(trunk, arm, self.arm_blend)
         if point.y > self.neck_floor:
             body = smin(body, self.ridges.distance(point), self.ridge_blend)
-        # Below the neck the head's skin is far off, and costs a lot.
+        # Below the neck, or off the head's box by more than the fold
+        # and the smooth unions within the head reach, the head's skin
+        # cannot change the surface, and it costs a lot.
         if point.y < self.neck_floor:
+            return body
+        if (
+            box_gap(self.head.low, self.head.high, point)
+            > body + self.head_reach
+        ):
             return body
         return smin(body, self.head.distance(point), self.neck_blend)
 
