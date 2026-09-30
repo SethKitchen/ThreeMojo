@@ -908,6 +908,17 @@ struct ActorVisuals(Movable):
                 Vector3(box.extent.x * 2, box.extent.z * 2, box.extent.y * 2),
             )
             first = placed.first_mesh
+            # CARLA paints a car from its blueprint's color and lights its
+            # lamps from its light state: the model wears the procedural
+            # car's paint and lamps.
+            for m in range(first, first + placed.mesh_count):
+                var own = scene.meshes[m].material
+                if own in placed.paint:
+                    scene.meshes[m].material = paint
+                elif own in placed.heads:
+                    scene.meshes[m].material = heads
+                elif own in placed.tails:
+                    scene.meshes[m].material = tails
         else:
             var model = self._model(
                 assets, box, body_style_of(type_id, box.extent.z * 2)

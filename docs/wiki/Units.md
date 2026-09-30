@@ -49,6 +49,25 @@ A `Unit` is a factor to the canonical unit and a symbol.
 
 `STANDARD_GRAVITY` is 9.80665 meters per second squared. Weight on Earth is mass times that acceleration.
 
+## Light
+
+`units/photometry.mojo`. Light has its own two types, because the luminous intensity is not one of the four dimensions of `Quantity`.
+
+| Type | Meaning | Units |
+|---|---|---|
+| `Illuminance` | Light that falls on a surface | `LUX`, `KILOLUX`, `FOOT_CANDLE` |
+| `Luminance` | Light that a surface sends toward the eye | `NIT` (candela per square meter) |
+
+Each type adds, scales and compares with its own type only. The ratio of two of the same type is a `Float32`. `diffuse_luminance(e)` gives the luminance of a white diffuse surface under the illuminance `e`: `e / pi`.
+
+```mojo
+var noon = Illuminance(100, KILOLUX)
+noon.to(LUX)                                 # 100000
+diffuse_luminance(noon).to(NIT)              # 31831
+```
+
+A bare `Float32` in place of either type is a compile error. A `Luminance` in place of an `Illuminance` is a compile error too.
+
 ## Use them
 
 ```mojo

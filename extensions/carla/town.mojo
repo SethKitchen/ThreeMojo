@@ -1373,7 +1373,7 @@ struct Town(Movable):
                         base,
                         Vector3(TREE_HEIGHT, TREE_HEIGHT, TREE_HEIGHT),
                     )
-                    first = placed
+                    first = placed.copy()
                 for _ in range(placed.mesh_count):
                     self.tags.append(VEGETATION)
                 k += 1

@@ -65,7 +65,7 @@ from loaders.json import (
     STRING,
     parse_json,
 )
-from materials.material import Material
+from materials.material import Material, MaterialId
 from math.bounds import Box3
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
@@ -649,8 +649,13 @@ def wildcard_key(type_id: String) -> String:
     return String(type_id[byte=:dot]) + ".*"
 
 
+# The key of a glTF material's `extras` that says what the material is on a
+# CARLA vehicle.
+comptime MATERIAL_TAG = "carla"
+
+
 @fieldwise_init
-struct ModelPlacement(ImplicitlyCopyable):
+struct ModelPlacement(Copyable, Movable):
     """Where a placed model went."""
 
     # The pivot the model hangs from.
@@ -661,6 +666,12 @@ struct ModelPlacement(ImplicitlyCopyable):
     var mesh_count: Int
     # The even scale that fitted it.
     var scale: Float32
+    # The materials the model's glTF tags with `"extras": {"carla": ...}`:
+    # a vehicle's body `"paint"`, which takes the blueprint's color, and
+    # its `"heads"` and `"tails"` lamps, which follow its light state.
+    var paint: List[MaterialId]
+    var heads: List[MaterialId]
+    var tails: List[MaterialId]
 
 
 struct TextureSet(Movable):
@@ -1021,7 +1032,28 @@ struct AssetRegistry(Movable):
             if n != NO_PARENT and scene.get(n).parent == NO_PARENT:
                 scene.add(n, parent=node)
         scene.update()
-        return ModelPlacement(node, model.first_mesh, model.mesh_count, scale)
+        var paint = List[MaterialId]()
+        var heads = List[MaterialId]()
+        var tails = List[MaterialId]()
+        for m in range(len(model.materials)):
+            ref extras = model.material_extras[m]
+            if extras.has(MATERIAL_TAG) and extras.kind(MATERIAL_TAG) == STRING:
+                var tag = extras.string(MATERIAL_TAG)
+                if tag == "paint":
+                    paint.append(model.materials[m])
+                elif tag == "heads":
+                    heads.append(model.materials[m])
+                elif tag == "tails":
+                    tails.append(model.materials[m])
+        return ModelPlacement(
+            node,
+            model.first_mesh,
+            model.mesh_count,
+            scale,
+            paint^,
+            heads^,
+            tails^,
+        )
 
 
 def repeat_model(
@@ -1067,4 +1099,12 @@ def repeat_model(
         mesh.node = scene.attach(holder^, node)
         scene.add_mesh(mesh^)
     scene.update()
-    return ModelPlacement(node, first, placement.mesh_count, placement.scale)
+    return ModelPlacement(
+        node,
+        first,
+        placement.mesh_count,
+        placement.scale,
+        placement.paint.copy(),
+        placement.heads.copy(),
+        placement.tails.copy(),
+    )

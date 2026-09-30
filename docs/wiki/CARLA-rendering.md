@@ -19,6 +19,8 @@ The look comes from ThreeMojo's renderer and well-known techniques: physical mat
 | `render_sky` | `build_sky`: the sky cube with clouds, for the background and the reflections. |
 | `render_textures` | Procedural asphalt, concrete, grass, foliage and facade textures. |
 | `render_post` | The image effects the composer does not have: height fog, rain, metering, gamma and the lens. |
+| `render_light` | The light effects: the sun's and the sky's share of each pixel, ambient occlusion, cloud shadows and light shafts through the fog. |
+| `assets` | `AssetRegistry`: the photoscanned textures, the HDRI skies and CARLA's own vehicle models, from the cache. See [CARLA assets](CARLA-assets). |
 | `camera_render` | `CarlaRenderer`: the RGB, semantic and depth cameras. |
 
 ## Render a camera
@@ -71,7 +73,7 @@ A prop faces the traffic that its signal is for. A traffic light has a head on i
 
 ## Actors
 
-A vehicle is a lofted body with a glass cabin, painted pillars and a roof. Its size comes from the actor's bounding box. Its shape is a `BodyStyle`: sedan, hatchback, SUV or van.
+When the cache holds the blueprint's model, a vehicle is CARLA's own model, fitted to the actor's bounding box. See [CARLA assets](CARLA-assets). Otherwise a vehicle is a lofted body with a glass cabin, painted pillars and a roof. Its size comes from the actor's bounding box. Its shape is a `BodyStyle`: sedan, hatchback, SUV or van.
 
 The body wears car paint: a metallic base under a clear coat, in the color of the `color` attribute. The lamps follow the `VehicleLightState`.
 
@@ -91,7 +93,7 @@ Each mapping is a pure function in `render_weather`. The tests check each one ag
 | Weather parameter | What it drives |
 |---|---|
 | `sun_azimuth_angle`, `sun_altitude_angle` | The sun light's direction, and the sky's sun. A negative azimuth keeps the town's sun. |
-| Sun altitude | The sun's intensity through the Kasten-Young air mass, and its color from 1900 K to 5800 K. Below the horizon the moon lights the town. |
+| Sun altitude | The sun's illuminance, and the sky's, in lux (see [Light](#light)). The sun's color goes from 1900 K to 5800 K. Below the horizon the moon lights the town. |
 | `cloudiness` | Less direct sun, a grayer sun, higher turbidity, and cloud in the sky. |
 | `rayleigh_scattering_scale`, `mie_scattering_scale` | The sky model's Rayleigh and Mie terms, and the haze. |
 | `fog_density`, `fog_distance`, `fog_falloff` | An exponential height fog. |
@@ -102,6 +104,21 @@ Each mapping is a pure function in `render_weather`. The tests check each one ag
 | Sun below the horizon | The street lamps, the lit windows and the car lamps. |
 
 The fog takes the sky's color just above the horizon in each ray's direction. It glows warm toward a low sun and stays blue away from it. The haze dims far surfaces but not the sky.
+
+## Light
+
+The town is lit in physical units. The sun gives 127.5 klx outside the air, less `exp(-0.21 m)` through the Kasten-Young air mass `m`. A clear sky gives `0.8 + 15.5 sqrt(sin h)` klx on level ground at the sun's altitude `h`, and an overcast sky `0.3 + 21 sin h` klx. The cloud cover moves the sky from one to the other. These are the daylight availability formulas of lighting engineering. The sky cube and an HDRI sky are both scaled so that level ground under them gets the sky's illuminance. The sun, the sky and the reflections then agree.
+
+One unit of the renderer's light is `pi` times 4000 lux, so a white wall under one unit shines 4000 nits. The camera meters that light as a real camera does. A clear noon meters near EV100 15, so the camera reads CARLA's exposure limits three stops higher.
+
+`render_light` adds four effects to each pinhole image:
+
+| Effect | What it does |
+|---|---|
+| Direct share | Splits each pixel's light into the sun's part and the sky's part, from the pixel's normal, the sun's shadow maps and the physical sun and sky. |
+| Ambient occlusion | three.js's ground-truth ambient occlusion (`GTAOPass`), on the frame's own depth and normals. It darkens only the sky's part, so a surface in the sun keeps its sunlight. |
+| Cloud shadows | The sun's part dims where the cloud layer over a point is thicker than the mean cover, and brightens where it is thinner. |
+| Light shafts | Each ray through the fog is marched through the sun's shadow maps. The fog scatters sunlight only where the sun reaches it, so a building casts a dark shaft through the haze. |
 
 ## Camera attributes
 
@@ -135,7 +152,7 @@ An 800 by 600 view takes about 5 to 6 seconds on four shared cores. It is drawn 
 
 ## Limits
 
-- The buildings are boxes with textured facades. The trees are noise-shaped spheres.
-- The vehicles and walkers are procedural shapes, not CARLA's models.
+- The buildings are boxes with textured facades. The trees are noise-shaped spheres, or the cached tree model.
+- A vehicle is CARLA's own model when the cache holds it, and a procedural shape when it does not. The walkers are procedural shapes.
 - The rain is streaks over the image. It does not wet the camera lens.
-- The clouds are one flat layer in the sky cube. They do not cast shadows.
+- The clouds are one flat layer. Their shadows are a screen-space effect, not a volume.

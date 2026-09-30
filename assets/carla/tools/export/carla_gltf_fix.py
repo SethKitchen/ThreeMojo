@@ -204,12 +204,122 @@ def rebuild(package, material, mats, props, pngs, report):
             material["occlusionTexture"] = {"index": index}
             pbr["metallicFactor"] = 1.0
             pbr["roughnessFactor"] = 1.0
+    # CARLA paints a car from its blueprint's color and lights its lamps
+    # from its light state; the tags say which materials those are.
+    lamps = "light" in name.lower() and not glass
+    if paint or "bodywork" in name.lower():
+        material["extras"] = {"carla": "paint"}
+    elif lamps:
+        # The lamps' texture is white at the front and red at the back;
+        # UModel's translucency would make them ghosts.
+        material["extras"] = {"carla": "lamps"}
+        blend = False
+        pbr["baseColorFactor"][3] = 1.0
     material["pbrMetallicRoughness"] = pbr
     if blend:
         material["alphaMode"] = "BLEND"
         pbr["baseColorFactor"][3] = min(pbr["baseColorFactor"][3], 0.4)
     material.pop("extensions", None)
     report.append((name, parent.rsplit("/", 1)[-1], sorted(k for k in pbr if k.endswith("Texture")) + sorted(k for k in material if k.endswith("Texture"))))
+
+
+def _read(data, gltf, accessor_index):
+    """Return an accessor's values as a flat list, and its width."""
+    accessor = gltf["accessors"][accessor_index]
+    view = gltf["bufferViews"][accessor["bufferView"]]
+    width = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[accessor["type"]]
+    form = {5121: "B", 5123: "H", 5125: "I", 5126: "f"}[accessor["componentType"]]
+    start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    count = accessor["count"] * width
+    return list(struct.unpack_from("<%d%s" % (count, form), data, start)), width
+
+
+def split_lamps(gltf, data):
+    """Split each lamp primitive into the front lamps and the rear lamps,
+    and return the buffer with their indices added.
+
+    CARLA's lamp material reads an eight-color mask through each lamp's
+    texture coordinates to tell its light apart: position, beams, brake,
+    reverse, blinkers and fog. Which color is which is inside CARLA's
+    master material, which UE Viewer does not export. The model faces plus
+    x, so a triangle in front of the model's middle is a head lamp and one
+    behind it a tail lamp: `"extras": {"carla": "heads"}` and `"tails"`.
+    The lamps then glow white and red, as the town's own cars do.
+    """
+    lamp = [i for i, m in enumerate(gltf.get("materials", []))
+            if m.get("extras", {}).get("carla") == "lamps"]
+    if not lamp:
+        return data
+    xs = []
+    for mesh in gltf["meshes"]:
+        for primitive in mesh["primitives"]:
+            accessor = gltf["accessors"][primitive["attributes"]["POSITION"]]
+            xs += [accessor["min"][0], accessor["max"][0]]
+    middle = (min(xs) + max(xs)) / 2
+    heads = lamp[0]
+    gltf["materials"][heads] = {
+        "name": "CarlaHeadLamps",
+        "pbrMetallicRoughness": {"baseColorFactor": [0.85, 0.85, 0.8, 1], "metallicFactor": 0.0,
+                                 "roughnessFactor": 0.15},
+        "extras": {"carla": "heads"},
+    }
+    gltf["materials"].append({
+        "name": "CarlaTailLamps",
+        "pbrMetallicRoughness": {"baseColorFactor": [0.3, 0.01, 0.01, 1], "metallicFactor": 0.0,
+                                 "roughnessFactor": 0.2},
+        "extras": {"carla": "tails"},
+    })
+    tails = len(gltf["materials"]) - 1
+    out = bytearray(data)
+    for mesh in gltf["meshes"]:
+        split = []
+        for primitive in mesh["primitives"]:
+            if primitive.get("material") not in lamp or "indices" not in primitive:
+                split.append(primitive)
+                continue
+            indices, _ = _read(data, gltf, primitive["indices"])
+            positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
+            parts = ([], [])
+            for t in range(0, len(indices) - 2, 3):
+                corners = indices[t:t + 3]
+                x = sum(positions[3 * c] for c in corners) / 3
+                parts[0 if x >= middle else 1].extend(corners)
+            for material, part in ((heads, parts[0]), (tails, parts[1])):
+                if not part:
+                    continue
+                out += b"\0" * (-len(out) % 4)
+                gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(out),
+                                            "byteLength": 4 * len(part), "target": 34963})
+                out += struct.pack("<%dI" % len(part), *part)
+                gltf["accessors"].append({"bufferView": len(gltf["bufferViews"]) - 1,
+                                          "componentType": 5125, "count": len(part), "type": "SCALAR"})
+                piece = dict(primitive)
+                piece["indices"] = len(gltf["accessors"]) - 1
+                piece["material"] = material
+                split.append(piece)
+        mesh["primitives"] = split
+    gltf["buffers"][0]["byteLength"] = len(out)
+    return bytes(out)
+
+
+def dedupe_materials(gltf):
+    """Keep one material of each name. The merge gives each primitive its
+    own copy, so a car's glass is twenty materials."""
+    first = {}
+    kept = []
+    new_index = []
+    for material in gltf.get("materials", []):
+        name = material.get("name", "")
+        if name not in first:
+            first[name] = len(kept)
+            kept.append(material)
+        new_index.append(first[name])
+    for mesh in gltf["meshes"]:
+        for primitive in mesh["primitives"]:
+            if "material" in primitive:
+                primitive["material"] = new_index[primitive["material"]]
+    if kept:
+        gltf["materials"] = kept
 
 
 def strip_skin(gltf, data):
@@ -228,7 +338,9 @@ def strip_skin(gltf, data):
     for mesh in gltf["meshes"]:
         for primitive in mesh["primitives"]:
             attributes = primitive["attributes"]
-            for key in [k for k in attributes if k.startswith(("JOINTS_", "WEIGHTS_"))]:
+            # Unreal's vertex colors are masks for its materials, not
+            # colors: glTF would multiply them into the paint.
+            for key in [k for k in attributes if k.startswith(("JOINTS_", "WEIGHTS_", "COLOR_"))]:
                 del attributes[key]
     # Keep the accessors a primitive reads, and the views they read.
     used = []
@@ -284,10 +396,11 @@ def main():
     os.makedirs(args.out_dir)
     package = Package(gltf, args.out_dir, args.max_size)
     report = []
+    dedupe_materials(gltf)
     for material in gltf.get("materials", []):
         rebuild(package, material, mats, props, pngs, report)
     source_bin = os.path.join(os.path.dirname(args.mesh), gltf["buffers"][0]["uri"])
-    data = strip_skin(gltf, open(source_bin, "rb").read())
+    data = split_lamps(gltf, strip_skin(gltf, open(source_bin, "rb").read()))
     with open(os.path.join(args.out_dir, args.name + ".bin"), "wb") as out:
         out.write(data)
     gltf["buffers"][0]["uri"] = args.name + ".bin"
