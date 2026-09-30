@@ -45,6 +45,8 @@ import re
 import shutil
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -70,6 +72,12 @@ ENTRY_KEYS = {'id', 'kind', 'license', 'author', 'source', 'provenance', 'files'
 OPTIONAL_KEYS = {'title', 'tile_meters', 'forward', 'changes'}
 SCHEMES = ('https://', 'file://')
 CHUNK = 1 << 16
+# Some hosts refuse Python's own user agent.
+AGENT = 'ThreeMojo-carla-assets/1.0'
+# A download that drops is tried this many times in all, waiting longer
+# before each new try.
+ATTEMPTS = 5
+BACKOFF_SECONDS = 2.0
 
 
 class ManifestError(ValueError):
@@ -253,15 +261,24 @@ def _download(url, destination):
     """Copy a URL's bytes into `destination`. A web page sent in place of
     the file, which is what a host sends for a file it does not share, is
     refused."""
-    try:
-        with urllib.request.urlopen(direct_url(url), timeout=60) as response:
-            if response.headers.get_content_type() == 'text/html':
-                raise FetchError(f'{url}: the host sent a web page, not the file; '
-                                 'check the file is shared with anyone who has the link')
-            with open(destination, 'wb') as out:
-                shutil.copyfileobj(response, out, CHUNK)
-    except OSError as error:
-        raise FetchError(f'{url}: {error}') from error
+    request = urllib.request.Request(direct_url(url), headers={'User-Agent': AGENT})
+    for attempt in range(ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                if response.headers.get_content_type() == 'text/html':
+                    raise FetchError(f'{url}: the host sent a web page, not the file; '
+                                     'check the file is shared with anyone who has the link')
+                with open(destination, 'wb') as out:
+                    shutil.copyfileobj(response, out, CHUNK)
+            return
+        except urllib.error.HTTPError as error:
+            # The host answered: another try gets the same answer.
+            raise FetchError(f'{url}: {error}') from error
+        except OSError as error:
+            # A dropped connection or a timeout: try again from the start.
+            if attempt + 1 == ATTEMPTS:
+                raise FetchError(f'{url}: {error}') from error
+            time.sleep(BACKOFF_SECONDS * (attempt + 1))
 
 
 def _extract(archive, item, cache):

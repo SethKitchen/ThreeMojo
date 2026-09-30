@@ -9,82 +9,82 @@
       "license": "CC0-1.0",
       "author": "Rob Tuytel",
       "source": "https://polyhaven.com/a/asphalt_02",
-      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "tile_meters": 4.0,
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
       "files": [
         {
           "role": "albedo",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg",
-          "sha256": null,
+          "sha256": "28f5ba8690553f192c0e5e1a5ff40f34765b4b93f4cc7059b1a3e9c795b6c28c",
           "path": "asphalt_02/asphalt_02_diff_2k.jpg"
         },
         {
           "role": "normal",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_nor_gl_2k.jpg",
-          "sha256": null,
+          "sha256": "ffe49db71a0fd34c1e259625df66a302a237597d6ef655307987ec4e45bc6f21",
           "path": "asphalt_02/asphalt_02_nor_gl_2k.jpg"
         },
         {
           "role": "roughness",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_rough_2k.jpg",
-          "sha256": null,
+          "sha256": "b9a516b61b7040a9245ac206642d5f767ad9589a0169c4a1668221429e8a998c",
           "path": "asphalt_02/asphalt_02_rough_2k.jpg"
         },
         {
           "role": "ao",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_ao_2k.jpg",
-          "sha256": null,
+          "sha256": "5fe1737cbbcd55f2fec3632d6170762e5733f24bbc7a7816afb22a23c710b11f",
           "path": "asphalt_02/asphalt_02_ao_2k.jpg"
         },
         {
           "role": "displacement",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_disp_2k.png",
-          "sha256": null,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/asphalt_02/asphalt_02_disp_2k.png",
+          "sha256": "b054079f3d7fc876d4aef72ba72b36543213d63fb4c7d71e1c9ccfc903690f40",
           "path": "asphalt_02/asphalt_02_disp_2k.png"
         }
-      ]
+      ],
+      "tile_meters": 3.0
     },
     {
       "id": "concrete_pavement",
       "kind": "texture_set",
       "title": "Concrete Pavement",
       "license": "CC0-1.0",
-      "author": "Rob Tuytel",
+      "author": "Charlotte Baglioni",
       "source": "https://polyhaven.com/a/concrete_pavement",
-      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "tile_meters": 3.0,
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
       "files": [
         {
           "role": "albedo",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_diff_2k.jpg",
-          "sha256": null,
+          "sha256": "e5a1cecfe7765cc0b24a6ab0abf492bd21c9e7af64e97fc46ef6021d0645fbd3",
           "path": "concrete_pavement/concrete_pavement_diff_2k.jpg"
         },
         {
           "role": "normal",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_nor_gl_2k.jpg",
-          "sha256": null,
+          "sha256": "72def937e418ccc9d7736c9b1f51ae22a127fa2a53a54f4d1fe4d3cf828b781c",
           "path": "concrete_pavement/concrete_pavement_nor_gl_2k.jpg"
         },
         {
           "role": "roughness",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_rough_2k.jpg",
-          "sha256": null,
+          "sha256": "e97b7d190dcda5a842813502505bf3d1b2348b4cad57b1d51d1bcc694a92d137",
           "path": "concrete_pavement/concrete_pavement_rough_2k.jpg"
         },
         {
           "role": "ao",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_ao_2k.jpg",
-          "sha256": null,
+          "sha256": "c5c7287990c57336c27ef68353d4cf2599e23977f7426c79c6a1a3a5982fa6be",
           "path": "concrete_pavement/concrete_pavement_ao_2k.jpg"
         },
         {
           "role": "displacement",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_pavement/concrete_pavement_disp_2k.png",
-          "sha256": null,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/concrete_pavement/concrete_pavement_disp_2k.png",
+          "sha256": "3f2e8a4165b36a9d4c6ea789d3c0a9bc7492f1701bce5b61397fcd56b5c09a47",
           "path": "concrete_pavement/concrete_pavement_disp_2k.png"
         }
-      ]
+      ],
+      "tile_meters": 1.8
     },
     {
       "id": "concrete_floor_02",
@@ -93,124 +93,295 @@
       "license": "CC0-1.0",
       "author": "Rob Tuytel",
       "source": "https://polyhaven.com/a/concrete_floor_02",
-      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "tile_meters": 3.0,
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
       "files": [
         {
           "role": "albedo",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_diff_2k.jpg",
-          "sha256": null,
+          "sha256": "b08a20dcb306d08ee7f4a05ec216b19b7fd37e95745998ec5f81ecedaac1f0e9",
           "path": "concrete_floor_02/concrete_floor_02_diff_2k.jpg"
         },
         {
           "role": "normal",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg",
-          "sha256": null,
+          "sha256": "ce12d18f283f884f4be6f6c110f81582376049caada1e226958659d3d5fbaae1",
           "path": "concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg"
         },
         {
           "role": "roughness",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_rough_2k.jpg",
-          "sha256": null,
+          "sha256": "cb539b0f8fdc8c63241683e01c923eb040fa701ec4c60cff27b674294746ae67",
           "path": "concrete_floor_02/concrete_floor_02_rough_2k.jpg"
         },
         {
           "role": "ao",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_ao_2k.jpg",
-          "sha256": null,
+          "sha256": "c224b43f7f6733f1f457ebb1c6bfe95f3bfa58f8a8d2425e2bd1a3bd110d0c06",
           "path": "concrete_floor_02/concrete_floor_02_ao_2k.jpg"
         },
         {
           "role": "displacement",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_disp_2k.png",
-          "sha256": null,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/concrete_floor_02/concrete_floor_02_disp_2k.png",
+          "sha256": "3fb045cf1f939bd88dceec52592c417e7c2685a5c78edd7fef09adf0a6f2d082",
           "path": "concrete_floor_02/concrete_floor_02_disp_2k.png"
         }
-      ]
+      ],
+      "tile_meters": 2.0
     },
     {
-      "id": "aerial_grass_rock",
+      "id": "leafy_grass",
       "kind": "texture_set",
-      "title": "Aerial Grass Rock",
+      "title": "Leafy Grass",
       "license": "CC0-1.0",
-      "author": "Rob Tuytel",
-      "source": "https://polyhaven.com/a/aerial_grass_rock",
-      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "tile_meters": 6.0,
+      "author": "Charlotte Baglioni",
+      "source": "https://polyhaven.com/a/leafy_grass",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
       "files": [
         {
           "role": "albedo",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_diff_2k.jpg",
-          "sha256": null,
-          "path": "aerial_grass_rock/aerial_grass_rock_diff_2k.jpg"
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_diff_2k.jpg",
+          "sha256": "8e1c6d21365d4b89bc5a35ab664da98a78dbc3ab9ba6100474881c8619a5b113",
+          "path": "leafy_grass/leafy_grass_diff_2k.jpg"
         },
         {
           "role": "normal",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_nor_gl_2k.jpg",
-          "sha256": null,
-          "path": "aerial_grass_rock/aerial_grass_rock_nor_gl_2k.jpg"
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_nor_gl_2k.jpg",
+          "sha256": "df0cf0ce96e653f033e5b934d5b12995464bda027aa53bd12e329be889aa9f45",
+          "path": "leafy_grass/leafy_grass_nor_gl_2k.jpg"
         },
         {
           "role": "roughness",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_rough_2k.jpg",
-          "sha256": null,
-          "path": "aerial_grass_rock/aerial_grass_rock_rough_2k.jpg"
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_rough_2k.jpg",
+          "sha256": "34e1733bf4064b6950a575ff57e78c8b7ff71b63749eb48a49221bd65de6fb4f",
+          "path": "leafy_grass/leafy_grass_rough_2k.jpg"
         },
         {
           "role": "ao",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_ao_2k.jpg",
-          "sha256": null,
-          "path": "aerial_grass_rock/aerial_grass_rock_ao_2k.jpg"
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_ao_2k.jpg",
+          "sha256": "bcce4368f6a1affe11b4a643e14cfed7dfb46abf6bb9e6a28a3b87c2de2ddb11",
+          "path": "leafy_grass/leafy_grass_ao_2k.jpg"
         },
         {
           "role": "displacement",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_disp_2k.png",
-          "sha256": null,
-          "path": "aerial_grass_rock/aerial_grass_rock_disp_2k.png"
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/leafy_grass/leafy_grass_disp_2k.png",
+          "sha256": "506ed7d425d9a73f6881e17f03e2a0d2fa57893bb0555a4b86ad905d2cabe510",
+          "path": "leafy_grass/leafy_grass_disp_2k.png"
         }
-      ]
+      ],
+      "tile_meters": 2.0
     },
     {
       "id": "patterned_paving",
       "kind": "texture_set",
       "title": "Patterned Paving",
       "license": "CC0-1.0",
-      "author": "Rob Tuytel",
+      "author": "Charlotte Baglioni",
       "source": "https://polyhaven.com/a/patterned_paving",
-      "provenance": "Poly Haven photoscan. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "tile_meters": 4.0,
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
       "files": [
         {
           "role": "albedo",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_diff_2k.jpg",
-          "sha256": null,
+          "sha256": "b3d553b7724edc5b840c301dc6ccdaacae97071264f2ba17aa4ae91f4fe14159",
           "path": "patterned_paving/patterned_paving_diff_2k.jpg"
         },
         {
           "role": "normal",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_nor_gl_2k.jpg",
-          "sha256": null,
+          "sha256": "bdeb87a4b16a811e6db9052ce75ddce15ef02213e9b9a017956b9f3285817493",
           "path": "patterned_paving/patterned_paving_nor_gl_2k.jpg"
         },
         {
           "role": "roughness",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_rough_2k.jpg",
-          "sha256": null,
+          "sha256": "c1a211e584616efd869bfe7ea0e0696175289f41d422c73e04bee3f0c1cad9e8",
           "path": "patterned_paving/patterned_paving_rough_2k.jpg"
         },
         {
           "role": "ao",
           "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_ao_2k.jpg",
-          "sha256": null,
+          "sha256": "6ad9c71f4d7d9d09352e7bb900c16d7fcab5cfe6f782014ebdbc52489e3438f3",
           "path": "patterned_paving/patterned_paving_ao_2k.jpg"
         },
         {
           "role": "displacement",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/patterned_paving/patterned_paving_disp_2k.png",
-          "sha256": null,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/patterned_paving/patterned_paving_disp_2k.png",
+          "sha256": "06fd2cf807a15d401aaaf53edba59f2945104b79bdcebacf8575d79355812583",
           "path": "patterned_paving/patterned_paving_disp_2k.png"
         }
+      ],
+      "tile_meters": 2.0
+    },
+    {
+      "id": "kloofendal_48d_partly_cloudy_puresky",
+      "kind": "hdri",
+      "title": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal, Jarod Guest",
+      "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
+          "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
+          "path": "kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+        }
       ]
+    },
+    {
+      "id": "kloofendal_overcast_puresky",
+      "kind": "hdri",
+      "title": "Kloofendal Overcast (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal",
+      "source": "https://polyhaven.com/a/kloofendal_overcast_puresky",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_overcast_puresky_2k.hdr",
+          "sha256": "312b1b04b7f10057a4f1418abc59d1166c8933cc93fc72051502edaf8d6b2fcd",
+          "path": "kloofendal_overcast_puresky/kloofendal_overcast_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "id": "belfast_sunset_puresky",
+      "kind": "hdri",
+      "title": "Belfast Sunset (Pure Sky)",
+      "license": "CC0-1.0",
+      "author": "Greg Zaal, Dimitrios Savva, Jarod Guest",
+      "source": "https://polyhaven.com/a/belfast_sunset_puresky",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
+      "files": [
+        {
+          "role": "hdri",
+          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/belfast_sunset_puresky_2k.hdr",
+          "sha256": "273003109ca1cfb798ce6b96e09ac8440f763d0ef0c376bbe77492613540b4a3",
+          "path": "belfast_sunset_puresky/belfast_sunset_puresky_2k.hdr"
+        }
+      ]
+    },
+    {
+      "id": "island_tree_01",
+      "kind": "model",
+      "title": "Island Tree 01",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel, Rico Cilliers",
+      "source": "https://polyhaven.com/a/island_tree_01",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
+      "files": [
+        {
+          "role": "model",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/island_tree_01/island_tree_01_2k.gltf",
+          "sha256": "6024cf385e9e0add29030925f8b891de264b813948f1cb9fb95633e256f50dc7",
+          "path": "island_tree_01/island_tree_01_2k.gltf"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/island_tree_01/island_tree_01.bin",
+          "sha256": "1faa817b46e24ed6fc90d3ec72188a0dc5ac75e82c89b3dd3c5fdaecf7cc005c",
+          "path": "island_tree_01/island_tree_01.bin"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_arm_2k.jpg",
+          "sha256": "c9754d0a62cb6d97eb9bf0f82effbdd81cfba613ba451a27054438e2eba8188f",
+          "path": "island_tree_01/textures/island_tree_01_arm_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_branches_arm_2k.jpg",
+          "sha256": "a39d8291ba54adf1ca42f15abe2f622d0ac59fb13c87087a0fabc755b91dfee8",
+          "path": "island_tree_01/textures/island_tree_01_branches_arm_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_branches_diff_2k.jpg",
+          "sha256": "52cb2c660983836249e3f31ad286ca1bab8033e93070569b23e1867e3ae70b4d",
+          "path": "island_tree_01/textures/island_tree_01_branches_diff_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_branches_nor_gl_2k.jpg",
+          "sha256": "e4cac77b4f35ad47ba4fcdb9061f91acf3318d9889dd259cb5e6e132b0ab60c7",
+          "path": "island_tree_01/textures/island_tree_01_branches_nor_gl_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_diff_2k.jpg",
+          "sha256": "08df798e0cadae17359d480bfda1dba59f757a7b1d03e288d3360c289dd28f78",
+          "path": "island_tree_01/textures/island_tree_01_diff_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_leaves_arm_2k.jpg",
+          "sha256": "cf4d604711d955d74a13b656bdbf840015ac38a71e24821849efade730634cc6",
+          "path": "island_tree_01/textures/island_tree_01_leaves_arm_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_leaves_diff_2k.jpg",
+          "sha256": "e5c56ca13525aed76572852da5f69ae87cbee9e15abe2e1eff23adf92975f14a",
+          "path": "island_tree_01/textures/island_tree_01_leaves_diff_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_leaves_nor_gl_2k.jpg",
+          "sha256": "efa74b8b59a7466a295bf210505560002990183817b6c33663f3ec0dd438dd73",
+          "path": "island_tree_01/textures/island_tree_01_leaves_nor_gl_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/island_tree_01/island_tree_01_nor_gl_2k.jpg",
+          "sha256": "d93014f038fc2dfab942ec89cfc1679345bad2a279a0be63fbe58ef0817900b5",
+          "path": "island_tree_01/textures/island_tree_01_nor_gl_2k.jpg"
+        }
+      ],
+      "forward": "+z"
+    },
+    {
+      "id": "concrete_road_barrier",
+      "kind": "model",
+      "title": "Concrete Road Barrier",
+      "license": "CC0-1.0",
+      "author": "Amal Kumar",
+      "source": "https://polyhaven.com/a/concrete_road_barrier",
+      "provenance": "Poly Haven, 2k. The name, the authors, the size and the files are from api.polyhaven.com, read on 2026-09-29; each file matched the MD5 sum the API gives before its SHA-256 sum was written here.",
+      "files": [
+        {
+          "role": "model",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/concrete_road_barrier/concrete_road_barrier_2k.gltf",
+          "sha256": "9189168735eaf2e91a7d8b9d250f4644f984bf5353a2cc844f8ccef270d743dd",
+          "path": "concrete_road_barrier/concrete_road_barrier_2k.gltf"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/concrete_road_barrier/concrete_road_barrier.bin",
+          "sha256": "64a4f9bc6e4af64d714a252c3c13428c430a60569deba3d52ca6b7dd3aa70d8c",
+          "path": "concrete_road_barrier/concrete_road_barrier.bin"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/concrete_road_barrier/concrete_road_barrier_arm_2k.jpg",
+          "sha256": "8c17f77897138a5ee0f80d0b5d194fd00554371e33b9f62f6d7b6a4e640094d6",
+          "path": "concrete_road_barrier/textures/concrete_road_barrier_arm_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/concrete_road_barrier/concrete_road_barrier_diff_2k.jpg",
+          "sha256": "51832691e0769a04246b61222e5df1ce7dc22e9c7162f786a314409ac76d643c",
+          "path": "concrete_road_barrier/textures/concrete_road_barrier_diff_2k.jpg"
+        },
+        {
+          "role": "support",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/concrete_road_barrier/concrete_road_barrier_nor_gl_2k.jpg",
+          "sha256": "8e48a287ae58a53030635c585d57a2da72660531a907a8e6cd04836bc60bf3a3",
+          "path": "concrete_road_barrier/textures/concrete_road_barrier_nor_gl_2k.jpg"
+        }
+      ],
+      "forward": "+x"
     },
     {
       "id": "ambientcg_asphalt_025c",
@@ -219,13 +390,13 @@
       "license": "CC0-1.0",
       "author": "Lennart Demes (ambientCG)",
       "source": "https://ambientcg.com/view?id=Asphalt025C",
-      "provenance": "ambientCG photoscan, shipped as a zip. An alternative road surface. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
+      "provenance": "ambientCG photoscan, shipped as a zip. An alternative road surface. The URL and the member names were checked against ambientCG's API (api/v2/full_json) on 2026-09-29, and the sum was pinned from that download.",
       "tile_meters": 4.0,
       "files": [
         {
           "role": "archive",
           "url": "https://ambientcg.com/get?file=Asphalt025C_2K-JPG.zip",
-          "sha256": null,
+          "sha256": "55674756668d69657b9b4d13d8aeea02a1519161671304cb41d73d077067c980",
           "path": "ambientcg/Asphalt025C_2K-JPG.zip",
           "extract": [
             {
@@ -244,110 +415,16 @@
               "path": "ambientcg/Asphalt025C/roughness.jpg"
             },
             {
+              "role": "ao",
+              "member": "Asphalt025C_2K-JPG_AmbientOcclusion.jpg",
+              "path": "ambientcg/Asphalt025C/ao.jpg"
+            },
+            {
               "role": "displacement",
               "member": "Asphalt025C_2K-JPG_Displacement.jpg",
               "path": "ambientcg/Asphalt025C/displacement.jpg"
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "kloofendal_48d_partly_cloudy_puresky",
-      "kind": "hdri",
-      "title": "Kloofendal 48d Partly Cloudy (Pure Sky)",
-      "license": "CC0-1.0",
-      "author": "Greg Zaal",
-      "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
-      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "files": [
-        {
-          "role": "hdri",
-          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
-          "sha256": null,
-          "path": "kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
-        }
-      ]
-    },
-    {
-      "id": "kloofendal_overcast_puresky",
-      "kind": "hdri",
-      "title": "Kloofendal Overcast (Pure Sky)",
-      "license": "CC0-1.0",
-      "author": "Greg Zaal",
-      "source": "https://polyhaven.com/a/kloofendal_overcast_puresky",
-      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "files": [
-        {
-          "role": "hdri",
-          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloofendal_overcast_puresky_2k.hdr",
-          "sha256": null,
-          "path": "kloofendal_overcast_puresky/kloofendal_overcast_puresky_2k.hdr"
-        }
-      ]
-    },
-    {
-      "id": "belfast_sunset_puresky",
-      "kind": "hdri",
-      "title": "Belfast Sunset (Pure Sky)",
-      "license": "CC0-1.0",
-      "author": "Greg Zaal",
-      "source": "https://polyhaven.com/a/belfast_sunset_puresky",
-      "provenance": "Poly Haven sky with the ground removed. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page.",
-      "files": [
-        {
-          "role": "hdri",
-          "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/belfast_sunset_puresky_2k.hdr",
-          "sha256": null,
-          "path": "belfast_sunset_puresky/belfast_sunset_puresky_2k.hdr"
-        }
-      ]
-    },
-    {
-      "id": "island_tree_01",
-      "kind": "model",
-      "title": "Island Tree 01",
-      "license": "CC0-1.0",
-      "author": "Rob Tuytel",
-      "source": "https://polyhaven.com/a/island_tree_01",
-      "provenance": "Poly Haven photoscanned model. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page. The textures the glTF names must be added as support files once the file list is read.",
-      "forward": "+z",
-      "files": [
-        {
-          "role": "model",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/island_tree_01/island_tree_01_2k.gltf",
-          "sha256": null,
-          "path": "island_tree_01/island_tree_01_2k.gltf"
-        },
-        {
-          "role": "support",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/island_tree_01/island_tree_01.bin",
-          "sha256": null,
-          "path": "island_tree_01/island_tree_01.bin"
-        }
-      ]
-    },
-    {
-      "id": "concrete_road_barrier",
-      "kind": "model",
-      "title": "Concrete Road Barrier",
-      "license": "CC0-1.0",
-      "author": "Rob Tuytel",
-      "source": "https://polyhaven.com/a/concrete_road_barrier",
-      "provenance": "Poly Haven photoscanned model. Candidate stand-in chosen from memory while the host was unreachable; the URL, the title and the author are unverified, and the sum is not pinned. Pin it with `fetch --pin` after checking the source page. The textures the glTF names must be added as support files once the file list is read.",
-      "forward": "+z",
-      "files": [
-        {
-          "role": "model",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/concrete_road_barrier/concrete_road_barrier_2k.gltf",
-          "sha256": null,
-          "path": "concrete_road_barrier/concrete_road_barrier_2k.gltf"
-        },
-        {
-          "role": "support",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/concrete_road_barrier/concrete_road_barrier.bin",
-          "sha256": null,
-          "path": "concrete_road_barrier/concrete_road_barrier.bin"
         }
       ]
     },
@@ -3183,7 +3260,7 @@
     "surface.sidewalk": "concrete_pavement",
     "surface.curb": "concrete_floor_02",
     "surface.wall": "concrete_floor_02",
-    "ground.grass": "aerial_grass_rock",
+    "ground.grass": "leafy_grass",
     "ground.paving": "patterned_paving",
     "sky.clear": "kloofendal_48d_partly_cloudy_puresky",
     "sky.low_sun": "belfast_sunset_puresky",
