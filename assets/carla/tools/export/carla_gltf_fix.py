@@ -86,7 +86,8 @@ def read_props(path):
     ):
         scalars[name.strip()] = float(value)
     translucent = bool(re.search(r"BlendMode = BLEND_Translucent", text))
-    return parent, vectors, scalars, translucent
+    masked = bool(re.search(r"BlendMode = BLEND_Masked", text))
+    return parent, vectors, scalars, translucent, masked
 
 
 def srgb_to_linear(c):
@@ -131,6 +132,45 @@ class Package:
         self.images[key] = index
         return index
 
+    def masked_texture(self, color, mask):
+        """Return the texture index of an RGBA image: the color of image
+        file `color`, and an alpha from image file `mask`. The mask is its
+        alpha channel when it has one, and otherwise its most black and
+        white channel: CARLA's foliage packs a leaf's cut-out into one
+        channel of an RGB image."""
+        key = (color, mask, "masked")
+        if key in self.images:
+            return self.images[key]
+        rgb = Image.open(color).convert("RGB")
+        source = Image.open(mask)
+        if source.mode in ("RGBA", "LA"):
+            alpha = source.getchannel("A")
+        else:
+            channels = source.convert("RGB").split()
+
+            def crispness(channel):
+                histogram = channel.histogram()
+                return sum(histogram[:16]) + sum(histogram[240:])
+
+            alpha = max(channels, key=crispness)
+        alpha = alpha.resize(rgb.size, Image.LANCZOS)
+        image = rgb.copy()
+        image.putalpha(alpha)
+        if max(image.size) > self.max_size:
+            scale = self.max_size / max(image.size)
+            image = image.resize(
+                (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                Image.LANCZOS,
+            )
+        name = os.path.splitext(os.path.basename(color))[0] + "_masked.png"
+        os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
+        image.save(os.path.join(self.out_dir, "textures", name), optimize=True)
+        self.gltf["images"].append({"uri": "textures/" + name})
+        self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
+        index = len(self.gltf["textures"]) - 1
+        self.images[key] = index
+        return index
+
 
 def by_name(name):
     """Return factors for a material UModel could not describe."""
@@ -162,8 +202,9 @@ def rebuild(package, material, mats, props, pngs, report):
     pbr["roughnessFactor"] = factors[2]
     blend = factors[3]
     parent = ""
+    masked = False
     if name in props:
-        parent, vectors, scalars, translucent = read_props(props[name])
+        parent, vectors, scalars, translucent, masked = read_props(props[name])
         blend = blend or translucent
         paint = any(p in parent for p in PAINT_PARENTS)
         for key in ("Base Color", "BaseColor", "Color", "Tint", "Paint Color"):
@@ -193,12 +234,34 @@ def rebuild(package, material, mats, props, pngs, report):
     if name in mats and not paint and not glass:
         entries = read_mat(mats[name])
         diffuse = entries.get("Diffuse")
+        if not diffuse:
+            # UModel names the color only when the master's parameter is
+            # one it knows; otherwise it is among the others, by its name.
+            named = [o for o in entries["_others"]
+                     if any(w in o.lower() for w in ("basecolor", "diffuse", "albedo"))]
+            diffuse = named[0] if named else None
         if diffuse and diffuse in pngs:
             pbr["baseColorTexture"] = {"index": package.texture(pngs[diffuse], True)}
             pbr["baseColorFactor"] = [1, 1, 1, pbr["baseColorFactor"][3]]
         normal = entries.get("Normal")
         if normal and normal in pngs and "flat" not in normal.lower():
             material["normalTexture"] = {"index": package.texture(pngs[normal], False)}
+        if masked:
+            # A cut-out: a leaf. Its "diffuse" can be the mask itself, with
+            # the color among the others.
+            color = diffuse
+            if not color or any(w in color.lower() for w in ("alpha", "mask")):
+                named = [o for o in entries["_others"]
+                         if any(w in o.lower() for w in ("front", "basecolor", "color"))]
+                color = named[0] if named else color
+            cut = entries.get("Opacity") or diffuse
+            if color in pngs and cut in pngs:
+                pbr["baseColorTexture"] = {"index": package.masked_texture(pngs[color], pngs[cut])}
+                pbr["baseColorFactor"] = [1, 1, 1, 1]
+                material["alphaMode"] = "MASK"
+                # Unreal's default opacity mask clip value.
+                material["alphaCutoff"] = 0.3333
+                material["doubleSided"] = True
         packed = [o for o in entries["_others"] + [entries.get("Specular", "")] if o.lower().endswith("_orm")]
         if packed and packed[0] in pngs:
             index = package.texture(pngs[packed[0]], False)
@@ -330,33 +393,42 @@ def decimate(gltf, data, budget):
     fast-simplification package), so no material bleeds into another, and
     its open edges stay put: glTF splits a vertex along a texture seam, so
     the seams are edges and the textures do not tear. Every primitive
-    gives up the same share; one of fewer than `KEEP` triangles is kept
-    whole. Each new vertex takes the texture coordinates, the normal and
-    the tangent of an old vertex that collapsed into it.
+    gives up the same share. One of fewer than `KEEP` triangles is kept
+    whole, and so is a cut-out one, a tree's leaves: each leaf is a card
+    of two triangles, all edge, which a collapse would tear. Each new
+    vertex takes the texture coordinates and the tangent of an old vertex
+    that collapsed into it.
     """
     import numpy
     import fast_simplification
 
-    total = 0
+    def fixed(primitive):
+        material = gltf["materials"][primitive["material"]] if "material" in primitive else {}
+        count = gltf["accessors"][primitive["indices"]]["count"] // 3
+        return count < KEEP or material.get("alphaMode") == "MASK"
+
+    total = kept = 0
     for mesh in gltf["meshes"]:
         for primitive in mesh["primitives"]:
-            total += gltf["accessors"][primitive["indices"]]["count"] // 3
-    if total <= budget:
+            count = gltf["accessors"][primitive["indices"]]["count"] // 3
+            total += count
+            kept += count if fixed(primitive) else 0
+    if total <= budget or total == kept:
         return data
-    keep = budget / total
+    keep = max(0.05, (budget - kept) / (total - kept))
     out = bytearray(data)
     for mesh in gltf["meshes"]:
         for primitive in mesh["primitives"]:
+            if fixed(primitive):
+                continue
             indices, _ = _read(data, gltf, primitive["indices"])
             count = len(indices) // 3
-            if count < KEEP:
-                continue
             positions, _ = _read(data, gltf, primitive["attributes"]["POSITION"])
             points = numpy.array(positions, dtype=numpy.float64).reshape(-1, 3)
             faces = numpy.array(indices, dtype=numpy.int32).reshape(-1, 3)
+            target = max(KEEP // 2, int(count * keep))
             _, _, collapses = fast_simplification.simplify(
-                points, faces, target_count=max(KEEP // 2, int(count * keep)),
-                return_collapses=True, preserve_border=True)
+                points, faces, target_count=target, return_collapses=True, preserve_border=True)
             new_points, new_faces, mapping = fast_simplification.replay_simplification(
                 points, faces, collapses)
             if len(new_faces) == 0:
