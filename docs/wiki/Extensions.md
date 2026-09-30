@@ -13,7 +13,8 @@ See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee]
 ```text
 extensions/
   humanoid/
-    spec.mojo          HumanoidSpec: stature, sex and athleticism
+    spec.mojo          HumanoidSpec: stature, sex, athleticism and genome
+    genome.mojo        Genome, Gene, Expression, inheritance
     sex.mojo           MALE, FEMALE
     side.mojo          RIGHT, LEFT
     athleticism.mojo   UNTONED, TONED
@@ -22,8 +23,12 @@ extensions/
       bone.mojo        PBR maps and a Phong stand-in
       field.mojo       signed-distance primitives
       isosurface.mojo  marching tetrahedra
+      surface_nets.mojo smooth narrow-band skin meshes
+      sculpt.mojo      clay: ellipsoids, capsules and hollows
+      morph.mojo       how a genome reshapes the head
+      complexion.mojo  skin, hair and iris pigment and maps
       occupancy.mojo   tissue fill and mass tally
-      look.mojo        cartilage, meniscus, ligament, muscle, vessel, lymph, nerve, skin and hair Phong
+      look.mojo        cartilage, meniscus, ligament, muscle, vessel, lymph, nerve, skin, hair and eye looks
       soft_tissue.mojo named hydrated-tissue density
       leg/
         assembly.mojo  one connected limb
