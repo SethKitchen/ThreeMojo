@@ -106,6 +106,60 @@ The simplification needs the `fast-simplification` Python package.
 
 Use the cooked release, not the carla-content repository. The repository holds uncooked assets, and UModel cannot read an uncooked mesh.
 
+## The CARLA towns
+
+Each town package holds one CARLA town as CARLA builds it: its buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
+
+A package is one glTF file with its buffer and its textures. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
+
+The meshes are merged by tile, by kind and by material. A tile is 64 meters square. Each node has two tags in its `extras`:
+
+| Tag | Values |
+|---|---|
+| `carla_kind` | `building`, `road`, `road_line`, `sidewalk`, `ground`, `terrain`, `water`, `rail`, `wall`, `fence`, `vegetation`, `pole`, `traffic_light`, `traffic_sign`, `parked_vehicle`, `prop` |
+| `carla_lod` | `0` for near, `1` for far |
+
+The near level keeps the detail that a camera sees close up. The far level keeps what shows at a distance. It thins the trees and leaves out the grass, the bushes, the props, the parked vehicles, the signs and the lamps' glass. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
+
+Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. When a town has more than its cap, for example the eight thousand pines of Town04, every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
+
+Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
+
+A package names no engine and no engine path. `build_towns.py` stops with an error when it finds one.
+
+## Rebuild the town packages
+
+The towns are made in three steps. They run on Windows, like the vehicle scripts.
+
+1. Dump each town's layout from a running server:
+
+   ```sh
+   python dump_layout.py
+   ```
+
+   The Python API does not say which mesh each object uses, and UModel cannot read the cooked levels. So `dump_layout.py` runs CARLA with UE4SS, a scripting runtime, and a Lua mod, `layout_dump/main.lua`. The mod writes each static mesh component: its mesh, its materials, its transform and its instances. The server runs with `-nullrhi`, so it does not use the GPU. Each run stops after `--limit` seconds, 60 by default.
+
+   Use UE4SS experimental build 3.0.1-1152 or later. Version 3.0.1 stops CARLA 0.9.16 at start.
+
+2. Export every mesh and material that the layouts name:
+
+   ```sh
+   python export_towns.py
+   ```
+
+   It reads the release's own `CarlaUE4/Content`, not `cooked/`. It does not export the engine's own content, which is licensed for use in the engine only. `build_towns.py` draws its own box for the engine's cube.
+
+3. Build and zip the packages:
+
+   ```sh
+   python build_towns.py [--top 20]
+   python zip_packages.py --packages town_packages --index towns.json
+   ```
+
+   `--top` lists the meshes that add the most triangles to each town.
+
+The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python packages.
+
 ## Why not Poly Haven
 
-Poly Haven has no CARLA vehicles. CARLA's own models are in the CARLA release, in Unreal's format, under CC BY 4.0. The manifest still uses Poly Haven and ambientCG for textures, skies and the tree, because CARLA's towns do not ship those as open files.
+Poly Haven has no CARLA vehicles or towns. CARLA's own models are in the CARLA release, in Unreal's format, under CC BY 4.0. The manifest still uses Poly Haven and ambientCG for the procedural town's textures and skies.

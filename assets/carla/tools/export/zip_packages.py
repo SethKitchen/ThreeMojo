@@ -1,13 +1,16 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Zip each vehicle package for upload, and write its sha256 and members.
+"""Zip each package for upload, and write its sha256 and members.
 
-    python zip_packages.py
+    python zip_packages.py                       # the vehicles
+    python zip_packages.py --packages town_packages --index towns.json
 
-Writes `upload/<id>.zip` for each package and `upload/index.json` with
-each zip's sha256, its size and the members to extract.
+Writes `upload/<id>.zip` for each package in the packages folder, and an
+index in `upload/` with each zip's sha256, its size and the members to
+extract.
 """
 
+import argparse
 import hashlib
 import json
 import os
@@ -16,9 +19,13 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The work folder: the cooked content, UModel and every stage's output.
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
-PACKAGES = os.path.join(BASE, "packages")
 UPLOAD = os.path.join(BASE, "upload")
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--packages", default="packages")
+parser.add_argument("--index", default="index.json")
+args = parser.parse_args()
+PACKAGES = os.path.join(BASE, args.packages)
 os.makedirs(UPLOAD, exist_ok=True)
 index = {}
 for vehicle_id in sorted(os.listdir(PACKAGES)):
@@ -44,6 +51,6 @@ for vehicle_id in sorted(os.listdir(PACKAGES)):
         "bytes": os.path.getsize(target),
         "members": members,
     }
-json.dump(index, open(os.path.join(UPLOAD, "index.json"), "w"), indent=1)
+json.dump(index, open(os.path.join(UPLOAD, args.index), "w"), indent=1)
 total = sum(e["bytes"] for e in index.values())
 print(f"{len(index)} zips, {total / 1e6:.1f} MB, largest {max(e['bytes'] for e in index.values()) / 1e6:.1f} MB")

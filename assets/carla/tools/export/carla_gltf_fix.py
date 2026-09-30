@@ -31,10 +31,17 @@ import re
 import shutil
 import struct
 import sys
+import zlib
 
 from PIL import Image
 
 PAINT_PARENTS = ("M_CarExterior_Master", "M_CarPaint", "CarPaint")
+# Textures that show another company's mark, a real person or a real
+# institution, or poster art of unclear origin. CARLA's license covers its
+# own work, not these, so each becomes one flat color: its average.
+NEUTRAL = re.compile(
+    r"^(bmw_logo|vh_car_mercedesbenzcoupe_mercedestopmat_basecolor|vh_car_minicoopers_minimat"
+    r"|t_carlacola_d|vh_truck_carlacola_bodyworkmat_basecolor|t_billboard_d|sm_banner_|t_banner)", re.I)
 # A primitive of fewer triangles is not simplified: a badge, a mirror.
 KEEP = 400
 
@@ -107,15 +114,21 @@ class Package:
         gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
 
     def texture(self, source, color):
-        """Return the texture index for image file `source`, adding it."""
+        """Return the texture index for image file `source`, adding it. A
+        texture that `NEUTRAL` names becomes a small image of its average
+        color, under a plain name."""
         key = (source, color)
         if key in self.images:
             return self.images[key]
         stem = os.path.splitext(os.path.basename(source))[0]
-        name = stem + (".jpg" if color else ".png")
+        neutral = bool(NEUTRAL.search(stem))
+        name = ("plain_%08x.jpg" % zlib.crc32(stem.encode())) if neutral else stem + (".jpg" if color else ".png")
         os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
         target = os.path.join(self.out_dir, "textures", name)
         image = Image.open(source)
+        if neutral:
+            average = image.convert("RGB").resize((1, 1), Image.BOX).getpixel((0, 0))
+            image = Image.new("RGB", (8, 8), average)
         if max(image.size) > self.max_size:
             scale = self.max_size / max(image.size)
             image = image.resize(
@@ -583,7 +596,7 @@ def main():
     with open(os.path.join(args.out_dir, args.name + ".bin"), "wb") as out:
         out.write(data)
     gltf["buffers"][0]["uri"] = args.name + ".bin"
-    gltf["asset"]["generator"] = "UE Viewer (umodel) build 1590, materials by carla_gltf_fix.py"
+    gltf["asset"]["generator"] = "ThreeMojo carla_gltf_fix.py"
     gltf["asset"]["copyright"] = "CARLA Team, CC-BY 4.0"
     if not gltf["images"]:
         for key in ("images", "textures", "samplers"):
