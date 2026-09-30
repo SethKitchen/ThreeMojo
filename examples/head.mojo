@@ -11,7 +11,7 @@ The page is Head. A six-foot male neck and head stand twice, each
 turning about its own axis. The left copy shows the cervical vertebrae,
 the skull, the mandible, the teeth and the hyoid, the joint tissues and
 the cartilages of the larynx, and the muscles of the neck, the jaw and
-the face. The right copy shows the skin and the hair. The program also
+the face. The right copy shows the skin, the hair and the eyes. The program also
 prints the mass of several head parts.
 
 The optional second argument is the mesh quality: `low`, `medium`,
@@ -43,7 +43,7 @@ from extensions.humanoid.skeleton.head.bones.dimensions import (
     SKULL,
 )
 from extensions.humanoid.skeleton.head.bones.mass import head_bone_mass
-from extensions.humanoid.skeleton.head.contents import BOTH, HAIR, SKIN
+from extensions.humanoid.skeleton.head.contents import BOTH, EYES, HAIR, SKIN
 from extensions.humanoid.skeleton.head.frame import head_dimensions
 from extensions.humanoid.skeleton.head.muscles.dimensions import (
     MASSETER,
@@ -53,13 +53,11 @@ from extensions.humanoid.skeleton.head.muscles.dimensions import (
 from extensions.humanoid.skeleton.head.muscles.mass import head_muscle_mass
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
 from extensions.humanoid.skeleton.look import (
+    add_complexion,
     cartilage_physical,
-    hair_phong,
     ligament_physical,
     muscle_albedo,
     muscle_physical,
-    skin_albedo,
-    skin_physical,
 )
 from geometries.plane import plane
 from lights.light import directional_light
@@ -187,10 +185,7 @@ def main() raises:
     var muscle = assets.materials.add(
         muscle_physical(assets.textures.add(muscle_albedo(64)))
     )
-    var skin = assets.materials.add(
-        skin_physical(assets.textures.add(skin_albedo(64)))
-    )
-    var hair = assets.materials.add(hair_phong())
+    var looks = add_complexion(assets, person.genome)
 
     # Image-based light: three.js's RoomEnvironment through a PMREM.
     var room = room_environment(assets)
@@ -220,7 +215,6 @@ def main() raises:
         detail,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
-    first = len(scene.meshes)
     var covered = _hang(scene, SPACING, height, center)
     _ = add_head(
         scene,
@@ -231,13 +225,17 @@ def main() raises:
         ligament,
         cartilage,
         muscle,
-        SKIN.plus(HAIR),
+        SKIN.plus(HAIR).plus(EYES),
         detail,
         covering,
-        skin_paint=skin,
-        hair_paint=hair,
+        skin_paint=looks.skin,
+        hair_paint=looks.hair,
+        eye_paint=looks.eyes,
+        workers=available_workers(),
     )
-    fit_triangle_budget(scene, assets, first, budget, available_workers())
+    # The skin is meshed smooth and lean already, and carries the face's
+    # colors, which decimation would drop: only the anatomy is fitted to
+    # the budget.
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
         scene.meshes[index].receive_shadow = True

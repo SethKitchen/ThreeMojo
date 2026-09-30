@@ -11,8 +11,9 @@ The page is Torso. A six-foot male stands twice on a floor. The left
 copy shows the bones, the joint tissues and the muscles of the torso
 and its shoulder girdle, the pelvis, both legs and feet, both arms and
 hands, and the neck and the head. The right copy shows one skin from
-the head down to the wrists, and each hand's own. The program also
-prints the mass of several torso parts.
+the head down to the wrists, and each hand's own, with the eyes, the
+hair and the brows. The program also prints the mass of several torso
+parts.
 
 The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. Each level has about twice the triangles of the
@@ -40,12 +41,11 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.look import (
+    add_complexion,
     cartilage_physical,
     ligament_physical,
     muscle_albedo,
     muscle_physical,
-    skin_albedo,
-    skin_physical,
     tendon_physical,
 )
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
@@ -189,9 +189,7 @@ def main() raises:
         muscle_physical(assets.textures.add(muscle_albedo(64)))
     )
     var tendon = assets.materials.add(tendon_physical())
-    var skin = assets.materials.add(
-        skin_physical(assets.textures.add(skin_albedo(64)))
-    )
+    var looks = add_complexion(assets, person.genome, whole_body=True)
 
     # Image-based light: three.js's RoomEnvironment through a PMREM.
     var room = room_environment(assets)
@@ -227,7 +225,6 @@ def main() raises:
         detail,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
-    first = len(scene.meshes)
     var covered = _stand(scene, pivot, SPACING, ground)
     _ = add_body(
         scene,
@@ -244,9 +241,14 @@ def main() raises:
         detail,
         covering,
         hand_covering,
-        skin_paint=skin,
+        skin_paint=looks.skin,
+        hair_paint=looks.hair,
+        eye_paint=looks.eyes,
+        workers=available_workers(),
     )
-    fit_triangle_budget(scene, assets, first, budget, available_workers())
+    # The skin is meshed smooth and lean already, and carries the face's
+    # colors, which decimation would drop: only the anatomy is fitted to
+    # the budget.
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
         scene.meshes[index].receive_shadow = True

@@ -65,6 +65,8 @@ A bare integer is a compile error. A value that is not a named level raises.
 
 `share_budget(areas, counts, budget)` does the sharing alone. `simplify(geometry, target)` decimates one geometry.
 
+Do not fit a skin to the budget. The skins are meshed smooth and lean by surface nets already. They carry the face's colors and their thinness, which decimation drops, and a seam in their texture coordinates, which welding closes. Add the skin after `fit_triangle_budget`, as `examples/head.mojo` and `examples/torso.mojo` do.
+
 ## Merge
 
 The merge is quadric-error edge collapse (Garland and Heckbert, 1997):
