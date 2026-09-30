@@ -3253,6 +3253,186 @@
           ]
         }
       ]
+    },
+    {
+      "id": "carla.town.town01",
+      "kind": "town",
+      "title": "Town01 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "1621ad903fd0401c7ce58091715e7115c3fb4cc6c9869a1582cd882953cdff32",
+          "path": "carla/towns/carla.town.town01.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town01.xodr",
+              "path": "carla/towns/carla.town.town01/Town01.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town01.glb",
+              "path": "carla/towns/carla.town.town01/carla.town.town01.glb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.town.town02",
+      "kind": "town",
+      "title": "Town02 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "cda909814f5aa8388075327047ce5d5c3a74b9e5d3e6786e63f569a5c71550c4",
+          "path": "carla/towns/carla.town.town02.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town02.xodr",
+              "path": "carla/towns/carla.town.town02/Town02.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town02.glb",
+              "path": "carla/towns/carla.town.town02/carla.town.town02.glb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.town.town03",
+      "kind": "town",
+      "title": "Town03 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "36d5ae96f214f5728730e033d57aa2c88734acb3de34d07e91320f356f40ab51",
+          "path": "carla/towns/carla.town.town03.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town03.xodr",
+              "path": "carla/towns/carla.town.town03/Town03.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town03.glb",
+              "path": "carla/towns/carla.town.town03/carla.town.town03.glb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.town.town04",
+      "kind": "town",
+      "title": "Town04 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "adbc8532471bc3269ae4e43b223ef2758b8cc9dd756e2aef84b741b348ee6ad6",
+          "path": "carla/towns/carla.town.town04.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town04.xodr",
+              "path": "carla/towns/carla.town.town04/Town04.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town04.glb",
+              "path": "carla/towns/carla.town.town04/carla.town.town04.glb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.town.town05",
+      "kind": "town",
+      "title": "Town05 (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "4c944ebd0f3f502034859fbae7a939c7a3077e5872f60c31e4fcf1e3f011cec5",
+          "path": "carla/towns/carla.town.town05.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town05.xodr",
+              "path": "carla/towns/carla.town.town05/Town05.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town05.glb",
+              "path": "carla/towns/carla.town.town05/carla.town.town05.glb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carla.town.town10hd",
+      "kind": "town",
+      "title": "Town10HD (CARLA)",
+      "license": "CC-BY-4.0",
+      "author": "CARLA Team (Computer Vision Center)",
+      "source": "https://github.com/carla-simulator/carla/releases/tag/0.9.16",
+      "provenance": "CARLA 0.9.16's own town, from the cooked Windows release (CARLA_0.9.16.zip). A running CARLA server, with UE4SS and assets/carla/tools/export/layout_dump/main.lua, wrote where the town places every static mesh; UE Viewer (umodel) build 1590 exported the meshes and their materials; assets/carla/tools/export/build_towns.py placed and merged them. The town's OpenDRIVE map is the release's own.",
+      "changes": "Every static mesh placed as the town places it, in the renderer's frame; merged by 32 m tile, kind and material; a near and a far level of detail, trees far off drawn as impostors; meshes simplified to a triangle budget; materials rebuilt as glTF PBR; textures scaled to at most 512 pixels; textures that show another company's mark, a real person or institution, or poster art of unclear origin replaced by their average color.",
+      "files": [
+        {
+          "role": "archive",
+          "url": null,
+          "sha256": "9719402e9f509d22b6c4a548fca5794e32d8df809ac92a7474eb664c80982023",
+          "path": "carla/towns/carla.town.town10hd.zip",
+          "extract": [
+            {
+              "role": "support",
+              "member": "Town10HD.xodr",
+              "path": "carla/towns/carla.town.town10hd/Town10HD.xodr"
+            },
+            {
+              "role": "model",
+              "member": "carla.town.town10hd.glb",
+              "path": "carla/towns/carla.town.town10hd/carla.town.town10hd.glb"
+            }
+          ]
+        }
+      ]
     }
   ],
   "bindings": {
@@ -3319,6 +3499,12 @@
     "vehicle.volkswagen.t2_2021": "carla.vehicle.volkswagen.t2_2021",
     "vehicle.yamaha.yzf": "carla.vehicle.yamaha.yzf",
     "vehicle.*": null,
-    "walker.*": null
+    "walker.*": null,
+    "town.Town01": "carla.town.town01",
+    "town.Town02": "carla.town.town02",
+    "town.Town03": "carla.town.town03",
+    "town.Town04": "carla.town.town04",
+    "town.Town05": "carla.town.town05",
+    "town.Town10HD": "carla.town.town10hd"
   }
 }

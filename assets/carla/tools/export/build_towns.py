@@ -14,8 +14,9 @@ draws itself.
 
     python build_towns.py [TOWN ...] [--max-size 512] [--tile 32]
 
-It writes `town_packages/carla.town.<town>/`, with the town's OpenDRIVE
-map, `<town>.xodr`, beside the glTF. The package names no engine
+It writes `town_packages/carla.town.<town>/`: one binary glTF,
+`carla.town.<town>.glb`, with its textures inside, and the town's
+OpenDRIVE map, `<town>.xodr`. The package names no engine
 and no engine path: `check_clean` refuses one that does.
 """
 
@@ -838,7 +839,42 @@ def write(town, name, out_dir, library, groups):
     open(os.path.join(out_dir, name + ".bin"), "wb").write(blob)
     json.dump(gltf, open(os.path.join(out_dir, name + ".gltf"), "w", encoding="utf-8"), separators=(",", ":"))
     check_clean(out_dir)
+    to_glb(out_dir, name)
     return triangles, len(gltf["nodes"])
+
+
+def to_glb(out_dir, name):
+    """Pack a package's glTF, its buffer and its textures into one binary
+    glTF, `<name>.glb`, and remove the loose files. A town is then two
+    files, the glb and its OpenDRIVE map, and its manifest entry lists
+    two members, not a thousand."""
+    gltf_path = os.path.join(out_dir, name + ".gltf")
+    gltf = json.load(open(gltf_path, encoding="utf-8"))
+    blob = bytearray(open(os.path.join(out_dir, name + ".bin"), "rb").read())
+    for image in gltf.get("images", []):
+        while len(blob) % 4:
+            blob.append(0)
+        data = open(os.path.join(out_dir, image["uri"]), "rb").read()
+        gltf["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data)})
+        blob.extend(data)
+        mime = "image/png" if image["uri"].endswith(".png") else "image/jpeg"
+        image.clear()
+        image.update({"bufferView": len(gltf["bufferViews"]) - 1, "mimeType": mime})
+    while len(blob) % 4:
+        blob.append(0)
+    gltf["buffers"] = [{"byteLength": len(blob)}]
+    text = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
+    text += b" " * (-len(text) % 4)
+    total = 12 + 8 + len(text) + 8 + len(blob)
+    with open(os.path.join(out_dir, name + ".glb"), "wb") as out:
+        out.write(struct.pack("<III", 0x46546C67, 2, total))
+        out.write(struct.pack("<II", len(text), 0x4E4F534A))
+        out.write(text)
+        out.write(struct.pack("<II", len(blob), 0x004E4942))
+        out.write(blob)
+    os.remove(gltf_path)
+    os.remove(os.path.join(out_dir, name + ".bin"))
+    shutil.rmtree(os.path.join(out_dir, "textures"), ignore_errors=True)
 
 
 def check_clean(out_dir):
