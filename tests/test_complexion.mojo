@@ -213,6 +213,10 @@ def test_looks_follow_the_genome() raises:
     assert_true(hair_phong(black).color.r < 40)
     assert_true(hair_physical(black).color.r < 40)
     assert_equal(hair_physical(black, TextureId(2)).color.r, 255)
+    with assert_raises(contains="depth"):
+        _ = hair_physical(black, NO_TEXTURE, -0.1)
+    with assert_raises(contains="depth"):
+        _ = hair_physical(black, NO_TEXTURE, 1.5)
     assert_true(eye_physical().clearcoat > 0.9)
     assert_true(eye_physical(TextureId(3)).map == TextureId(3))
     assert_true(eye_physical().map == NO_TEXTURE)

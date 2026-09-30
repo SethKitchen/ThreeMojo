@@ -125,6 +125,15 @@ def test_the_nearest_point_of_a_triangle() raises:
                 var corners: List[Vector3] = [ta, tb, tc]
                 for probe in corners:  # pragma: no branch
                     assert_true((q - p).length() <= (probe - p).length() + 1e-5)
+    # Far out past the blunt corner, beside the far edge.
+    var ta = blunt[4]
+    var tb = blunt[5]
+    var tc = Vector3(0.3, 0.45, 0)
+    var p = Vector3(-3.0, 1.8, 0.2)
+    var q = closest_on_triangle(p, ta, tb, tc)[0]
+    var corners: List[Vector3] = [ta, tb, tc]
+    for probe in corners:  # pragma: no branch
+        assert_true((q - p).length() <= (probe - p).length() + 1e-5)
     # The face.
     var face = closest_on_triangle(Vector3(0.2, 0.3, 4), a, b, c)
     assert_true(_near(face[0], Vector3(0.2, 0.3, 0)))

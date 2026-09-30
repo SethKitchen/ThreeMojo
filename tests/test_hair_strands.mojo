@@ -21,6 +21,7 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     HairGroom,
     _Comb,
     _fringe_continues,
+    _grow_guide,
     _stride_ok,
     groom_hair,
     groom_lines,
@@ -96,6 +97,25 @@ def test_a_groom_grows_guides_and_followers() raises:
         assert_true(groom.depths[first] >= 0)
         # Its tangent runs along it.
         assert_true(abs(groom.tangent(first).length() - 1) < 1e-3)
+    # A guide rooted deep in the head: its first step leaps out onto the
+    # hair, far past a stride, and the guide stops there.
+    var points = List[Vector3]()
+    var normals = List[Vector3]()
+    var levels = List[Float32]()
+    _grow_guide(
+        field,
+        GroomSpec(dims, 4, 0),
+        _Comb(crown, 0.25, 0, 1),
+        crown,
+        0,
+        1,
+        crown.z + 1,
+        dims.head.cm(0.08),
+        points,
+        normals,
+        levels,
+    )
+    assert_equal(len(points), 1)
 
 
 def test_a_groom_with_no_roots_is_refused() raises:

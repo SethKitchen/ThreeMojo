@@ -28,6 +28,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
+    smax,
     smin,
 )
 from extensions.humanoid.skeleton.foot.assembly import add_foot
@@ -62,6 +63,12 @@ from std.math import max, min
 # Optional `add_lower_body` paint. A negative id asks the assembler to
 # create the default look for that layer.
 comptime UNSET_PAINT = MaterialId(-1)
+# The crotch, as shares of the stature: how far below the pubic
+# symphysis the thighs part, how wide the crease between them is, and
+# how round the fork is where they part.
+comptime CROTCH_DROP = Float32(0.018)
+comptime CROTCH_HALF = Float32(0.0012)
+comptime CROTCH_ROUND = Float32(0.004)
 
 
 struct LowerBodySkinField(Copyable, DistanceField, Movable):
@@ -83,6 +90,11 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
     # midline.
     var band_dip: Float32
     var band_inner: Float32
+    # Below `crotch_top` a narrow slot parts the thighs: a crease where
+    # they touch, and a gap where they do not.
+    var crotch_top: Float32
+    var crotch_half: Float32
+    var crotch_round: Float32
     var epsilon: Float32
     var low: Vector3
     var high: Vector3
@@ -111,6 +123,9 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         self.band_top = dims.pelvis.hip.y - Float32(0.020) * S
         self.band_dip = Float32(0.35)
         self.band_inner = Float32(0.035) * S
+        self.crotch_top = dims.pelvis.symphysis_bottom.y - CROTCH_DROP * S
+        self.crotch_half = CROTCH_HALF * S
+        self.crotch_round = CROTCH_ROUND * S
         self.epsilon = self.pelvis.epsilon
         var low = self.pelvis.low
         var high = self.pelvis.high
@@ -132,19 +147,33 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         var top = self.band_top - dip
         var bottom = self.band_bottom - dip
         if point.y >= top:
-            return self.pelvis.distance(point)
+            return self._parted(self.pelvis.distance(point), point)
         var limbs = smin(
             self.right.distance(point - self.right_origin),
             self.left.distance(point - self.left_origin),
             self.blend,
         )
         if point.y <= bottom:
-            return limbs
+            return self._parted(limbs, point)
         # Across the band the surface morphs from the two thighs to the
         # one pelvis, so the crotch forms without a seam.
         var t = (point.y - bottom) / (top - bottom)
         var w = t * t * (3 - 2 * t)
-        return limbs + (self.pelvis.distance(point) - limbs) * w
+        return self._parted(
+            limbs + (self.pelvis.distance(point) - limbs) * w, point
+        )
+
+    def _parted(self, d: Float32, point: Vector3) -> Float32:
+        """Return `d` with the crotch's slot cut out below its top.
+
+        A section of the pelvis's loft is one closed curve, and the two
+        thighs' skins blend where they touch, so neither parts the legs.
+        The slot does, in a round fork under the pubic symphysis.
+        """
+        var slot = max(
+            abs(point.x) - self.crotch_half, point.y - self.crotch_top
+        )
+        return smax(d, -slot, self.crotch_round)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""

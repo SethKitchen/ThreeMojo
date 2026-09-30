@@ -34,6 +34,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     scan_model,
     scan_skin_mesh,
     scan_to_template,
+    skin_triangles,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
@@ -207,6 +208,21 @@ def test_the_scanned_head() raises:
             sunk += 1
     assert_equal(inside, 0)
     assert_true(sunk > 0)
+    # On a field whose surface lies above the whole box, no vertex of the
+    # skin can be walked onto it: each is lost, with its triangles. Only
+    # the sockets, which are not walked, are left.
+    var model = scan_model()
+    var rough = scan_skin_mesh(
+        _Ball(skin.high.y + 1, False),
+        scan,
+        model,
+        skin.low.y,
+        skin.low,
+        skin.high,
+        skin.epsilon,
+    )
+    assert_true(rough.triangle_count() > 0)
+    assert_true(rough.triangle_count() * 3 < len(skin_triangles(model)) // 5)
     # The skin's mesh reaches down to the floor asked for, and no part
     # of it lies above the crown.
     with assert_raises(contains="above the floor"):

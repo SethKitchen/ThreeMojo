@@ -439,6 +439,13 @@ def test_hair_follows_the_skin() raises:
     var above = top + skin.gradient(top) * h.cm(0.8)
     assert_true(scalp.distance(above) < 0)
     assert_true(crop.distance(above) > 0)
+    # A woman's hairline recedes less at the temples.
+    var her = HairShape(
+        head_muscle_dimensions(_person(Genome(), FEMALE)), SCALP_HAIR, RIGHT
+    )
+    assert_true(her.line_recess < scalp.line_recess)
+    with assert_raises(contains="RIGHT or LEFT"):
+        _ = head_hair_field(dims, EYEBROWS, BodySide(5), skin)
     var brow = HairShape(dims, EYEBROWS, LEFT)
     var group = head_hair_field(dims, EYEBROWS, LEFT)
     var p = h.at(-2.5, 74.4, 9.5)

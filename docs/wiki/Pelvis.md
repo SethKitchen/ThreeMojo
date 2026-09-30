@@ -168,6 +168,8 @@ The pelvic skin uses the leg's method. See [Integument](Integument#envelope). Th
 
 Below the pubic arch the thighs part, and each leg's own skin covers its thigh. `lower_body_skin_mesh` meshes the smooth union of the pelvic skin and both limbs' skins. The lower body then has one surface.
 
+A section of the pelvic loft is one closed curve, and the two thighs' skins blend where they touch. So neither parts the legs by itself. A narrow slot with a rounded top cuts up between the thighs to about 3 cm below the pubic symphysis. Where the thighs touch, the slot leaves a crease. Where they do not, it leaves a gap.
+
 External genitalia and pubic hair are not modeled. The pelvic organs are not modeled either.
 
 ## Examples

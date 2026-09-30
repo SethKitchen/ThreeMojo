@@ -103,12 +103,16 @@ def closest_on_triangle(
     if d6 >= 0 and d5 <= d6:
         return (c, Float32(0), Float32(1), ON_C)
     var vb = d5 * d2 - d1 * d6
-    if vb <= 0 and d2 >= 0 and d6 <= 0:
-        var w = d2 / (d2 - d6)
+    # Past the tests above, d2 >= 0 here, and on the BC test below both
+    # edge terms are too; the weights are clamped against rounding.
+    if vb <= 0 and d6 <= 0:
+        var w = min(Float32(1), max(Float32(0), d2 / (d2 - d6)))
         return (a + ac * w, Float32(0), w, ON_CA)
     var va = d3 * d6 - d5 * d4
-    if va <= 0 and (d4 - d3) >= 0 and (d5 - d6) >= 0:
-        var w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+    if va <= 0:
+        var w = min(
+            Float32(1), max(Float32(0), (d4 - d3) / ((d4 - d3) + (d5 - d6)))
+        )
         return (b + (c - b) * w, 1 - w, w, ON_BC)
     var denom = 1 / (va + vb + vc)
     var v = vb * denom
