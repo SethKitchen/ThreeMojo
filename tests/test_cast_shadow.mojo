@@ -41,6 +41,7 @@ from objects.points import Points
 from render.framebuffer import Color
 from render.rasterizer import SHADE_SHADOW
 from render.srgb import LINEAR
+from render.target import RenderTarget
 from render.texture import (
     COVERAGE,
     IGNORED,
@@ -58,7 +59,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from test_received_shadow import a_camera, a_shadowed_scene
+from test_received_shadow import HEIGHT, WIDTH, a_camera, a_shadowed_scene
 from test_shadow import ORIGIN, flat_frame
 from units.si import Angle, DEGREE, Length, METER
 
@@ -460,6 +461,28 @@ def test_a_surface_that_receives_no_shadow_is_lit_in_full() raises:
     assert_equal(lighting.shadow_through(0, under, up, False).y, 1)
     # Receiving, the block's shadow falls there.
     assert_true(lighting.shadow_at(0, under, up, True) < 1)
+
+
+def test_a_frame_hands_back_the_shadow_maps_it_drew() raises:
+    # The maps a frame draws for its lighting are the ones `shadow_maps`
+    # draws, so a caller that reads them again need not draw them twice.
+    var assets = Assets()
+    var scene = a_shadowed_scene(
+        assets, Material(Color(200, 200, 200)), Material(Color(200, 60, 60))
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var drawn = renderer.shadow_maps(scene, assets)
+    for samples in [1, 4]:
+        var target = RenderTarget(
+            WIDTH, HEIGHT, Color(0, 0, 0), samples=samples
+        )
+        var kept = renderer.render_into_keeping_shadows(
+            target, scene, assets, a_camera()
+        )
+        assert_equal(len(kept), len(drawn))
+        for index in range(len(kept)):
+            assert_equal(kept[index].light, drawn[index].light)
+            assert_equal(kept[index].size, drawn[index].size)
 
 
 def test_a_red_pane_casts_a_red_shadow() raises:

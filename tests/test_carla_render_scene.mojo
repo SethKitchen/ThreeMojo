@@ -28,6 +28,7 @@ from extensions.carla.blueprint import (
     ATTRIBUTE_STRING,
     ActorAttributeValue,
 )
+from extensions.carla.assets import AssetRegistry, parse_manifest
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.camera_render import (
     CarlaRenderer,
@@ -183,6 +184,8 @@ from postprocessing.composer import (
 from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
 from std.math import atan, log2, pi, pow, sqrt
+from std.os import makedirs
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -1175,6 +1178,136 @@ def test_render_a_fisheye_camera() raises:
     world.set_weather(clear)
     view.update(world)
     assert_equal(view.render_rgb(world, plain).width, 12)
+
+
+# The town from a registry.
+
+# A car of one triangle drawn three times: its paint, its head lamps and
+# its tail lamps, as the vehicle exporter tags them.
+comptime SCANNED_CAR = (
+    '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],'
+    '"nodes":[{"mesh":0}],"buffers":[{"byteLength":36,"uri":'
+    '"data:application/octet-stream;base64,'
+    'AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],'
+    '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
+    '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
+    '"min":[0,0,0],"max":[1,1,0]}],"materials":[{"extras":{"carla":'
+    '"paint"}},{"extras":{"carla":"heads"}},{"extras":{"carla":"tails"}}],'
+    '"meshes":[{"primitives":[{"attributes":{"POSITION":0},"material":0},'
+    '{"attributes":{"POSITION":0},"material":1},{"attributes":'
+    '{"POSITION":0},"material":2}]}]}'
+)
+
+
+def _scanned_file(role: String, path: String) -> String:
+    return (
+        '{"role": "'
+        + role
+        + '", "url": null, "sha256": "'
+        + "0" * 64
+        + '", "path": "'
+        + path
+        + '"}'
+    )
+
+
+def _scanned_entry(id: String, kind: String, files: String, extra: String) -> String:
+    return (
+        '{"id": "'
+        + id
+        + '", "kind": "'
+        + kind
+        + '", "license": "CC0-1.0", "author": "A", "source":'
+        ' "https://example.org", "provenance": "A fixture.", "files": ['
+        + files
+        + "]"
+        + extra
+        + "}"
+    )
+
+
+def _scanned_registry() raises -> AssetRegistry:
+    """A cache in /tmp of the repository's fixtures: a checker for every
+    surface, a Radiance panorama for every sky, a box for the tree and the
+    walkers, and the tagged car for every vehicle."""
+    var folder = "/tmp/threemojo_carla_scanned/"
+    makedirs(folder, exist_ok=True)
+    for name in ["gltf/checker.png", "gltf/box.gltf", "gltf/box.bin"]:
+        Path(folder + name.split("/")[1]).write_bytes(
+            Path("assets/" + name).read_bytes()
+        )
+    Path(folder + "sky.hdr").write_bytes(
+        Path("assets/hdr_cube/px.hdr").read_bytes()
+    )
+    Path(folder + "car.gltf").write_text(SCANNED_CAR)
+    var checker = (
+        _scanned_file("albedo", "checker.png")
+        + ", "
+        + _scanned_file("roughness", "checker.png")
+        + ", "
+        + _scanned_file("normal", "checker.png")
+    )
+    var entries = (
+        _scanned_entry("scan", "texture_set", checker, ', "tile_meters": 2')
+        + ", "
+        + _scanned_entry(
+            "sky", "hdri", _scanned_file("hdri", "sky.hdr"), ""
+        )
+        + ", "
+        + _scanned_entry(
+            "box",
+            "model",
+            _scanned_file("model", "box.gltf")
+            + ", "
+            + _scanned_file("support", "box.bin"),
+            ', "forward": "+z"',
+        )
+        + ", "
+        + _scanned_entry(
+            "car", "model", _scanned_file("model", "car.gltf"), ', "forward": "+x"'
+        )
+    )
+    var bindings = (
+        '{"surface.road": "scan", "surface.sidewalk": "scan", "surface.curb":'
+        ' "scan", "surface.wall": "scan", "ground.grass": "scan",'
+        ' "ground.paving": "scan", "sky.clear": "sky", "sky.low_sun": "sky",'
+        ' "sky.overcast": "sky", "sky.night": "sky", "tree": "box",'
+        ' "vehicle.*": "car", "walker.*": "box"}'
+    )
+    return AssetRegistry(
+        parse_manifest(
+            '{"format": 1, "entries": [' + entries + '], "bindings": '
+            + bindings
+            + "}"
+        ),
+        folder,
+    )
+
+
+def test_render_a_town_from_the_registry() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var view = CarlaRenderer(
+        world, _small(), 1, 8, False, registry=_scanned_registry()
+    )
+    view.sun.shadow.map_size = 64
+    view.update(world)
+    var image = view.render_rgb(world, camera)
+    assert_equal(image.width, 16)
+    # Every vehicle wears the town's paint and lamps on its tagged meshes.
+    for v in view.actors.vehicles:
+        assert_true(view.scene.meshes[v.first_mesh].material == v.paint)
+        assert_true(view.scene.meshes[v.first_mesh + 1].material == v.heads)
+        assert_true(view.scene.meshes[v.first_mesh + 2].material == v.tails)
+    # The lamps glow at night.
+    world.set_weather(weather_preset("ClearNight"))
+    world.set_light_state(cars[0], LIGHT_LOW_BEAM)
+    view.update(world)
+    var heads = view.assets.materials.get(view.actors.vehicles[0].heads)
+    assert_true(heads.emissive_intensity > 0)
+    _ = view.render_rgb(world, camera)
 
 
 def main() raises:

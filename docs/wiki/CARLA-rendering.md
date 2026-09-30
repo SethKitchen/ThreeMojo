@@ -148,7 +148,13 @@ A fisheye camera draws a cube of the scene around the camera, then reads each pi
 
 ## Speed
 
-An 800 by 600 view takes about 5 to 6 seconds on four shared cores. It is drawn at twice the size and averaged down. The town builds in about one second.
+On 24 threads, an 800 by 600 view takes about 2.7 seconds with procedural vehicles and about 4.2 seconds with seven of CARLA's cars. It is drawn at twice the size and averaged down. The town builds in about 0.6 seconds, or about 2.3 seconds with the photoscanned textures.
+
+Three things keep it fast:
+
+- `AssetRegistry.preload` decodes every map of the bound texture sets at the same time, one task for each image, and decodes each image once.
+- The light effects read the shadow maps that the frame drew, from `Renderer.render_into_keeping_shadows`. They do not draw the shadow maps again.
+- The CARLA vehicles are simplified to about 35,000 triangles. See [CARLA assets](CARLA-assets).
 
 ## Limits
 

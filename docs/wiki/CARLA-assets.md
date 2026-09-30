@@ -34,7 +34,11 @@ python3 assets/carla/tools/carla_assets.py credits --output CREDITS.md
 
 ## The CARLA vehicles
 
-The manifest has 41 vehicles from the CARLA 0.9.16 release. Each vehicle is one zip of about 1 to 8 MB, 132 MB in total. The zip holds a glTF file, its buffer and its textures. The model faces plus x, stands on y = 0 and is in meters.
+The manifest has 41 vehicles from the CARLA 0.9.16 release. Each vehicle is one zip of about 1 to 8 MB, 125 MB in total. The zip holds a glTF file, its buffer and its textures. The model faces plus x, stands on y = 0 and is in meters.
+
+Each model is simplified to about 35,000 triangles. CARLA's own models have 5,000 to 140,000. The renderer draws each triangle into the frame and into every shadow cascade, so this halves the time of a view with seven cars.
+
+Each model tags some of its materials in its `extras`, as `{"carla": "paint"}`, `"heads"` or `"tails"`. The town gives the paint the color of the blueprint's `color` attribute, as CARLA does. The head lamps and the tail lamps glow with the vehicle's light state.
 
 The entry id is the blueprint id with the prefix `carla.`, for example `carla.vehicle.audi.a2`. The binding table maps each blueprint id to its entry. It also maps the older names and the Unreal 5 names to the 0.9.16 vehicle that they name:
 
@@ -52,6 +56,8 @@ The entry id is the blueprint id with the prefix `carla.`, for example `carla.ve
 | `vehicle.fuso.mitsubishi` | `carla.vehicle.mitsubishi.fusorosa` |
 
 CARLA 0.9.16 has no mining truck. `vehicle.miningtruck.miningtruck` uses the procedural vehicle.
+
+The `tree` key is bound to null. The Poly Haven tree has 1.6 million triangles, which is too many to plant along a street.
 
 ## Host the vehicle zips
 
@@ -89,7 +95,14 @@ CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/too
    python manifest_vehicles.py
    ```
 
-`export_vehicles.py` reads each vehicle blueprint for the meshes it names. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then rebuilds each material from the parameters that UModel writes beside the mesh. It uses the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
+`export_vehicles.py` reads each vehicle blueprint for the meshes it names. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then does these steps:
+
+1. It rebuilds each material from the parameters that UModel writes beside the mesh: the base color, normal and ORM maps, the car paint's color and translucent glass. It scales each texture to 1024 pixels or less.
+2. It removes the skin, because the town takes plain meshes. It removes Unreal's vertex colors, because they are masks and not colors.
+3. It splits the lamps into head lamps and tail lamps. CARLA's lamp material reads an eight-color mask, and UModel does not export what the colors mean. So a lamp in front of the model's middle is a head lamp, and a lamp behind it is a tail lamp.
+4. It simplifies the model to `--budget` triangles, 35,000 by default, one primitive at a time. The seams stay where they are, so the textures do not tear. The normals are made again from the simplified faces.
+
+The simplification needs the `fast-simplification` Python package.
 
 Use the cooked release, not the carla-content repository. The repository holds uncooked assets, and UModel cannot read an uncooked mesh.
 

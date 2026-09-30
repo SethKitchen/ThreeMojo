@@ -600,5 +600,116 @@ def test_a_model_the_town_cannot_use_is_refused() raises:
         _ = bare.place_model(0, scene, assets, parent, Vector3(1, 1, 1))
 
 
+# A glTF of one triangle drawn six times, each with a material that tags
+# it: paint, head lamps, tail lamps, a tag the town does not use, a tag
+# that is not a string, and none.
+comptime TAGGED_GLTF = (
+    '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],'
+    '"nodes":[{"mesh":0}],"buffers":[{"byteLength":36,"uri":'
+    '"data:application/octet-stream;base64,'
+    'AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],'
+    '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
+    '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
+    '"min":[0,0,0],"max":[1,1,0]}],"materials":[{"extras":{"carla":'
+    '"paint"}},{"extras":{"carla":"heads"}},{"extras":{"carla":"tails"}},'
+    '{"extras":{"carla":"other"}},{"extras":{"carla":7}},{}],"meshes":'
+    '[{"primitives":[{"attributes":{"POSITION":0},"material":0},'
+    '{"attributes":{"POSITION":0},"material":1},{"attributes":'
+    '{"POSITION":0},"material":2},{"attributes":{"POSITION":0},'
+    '"material":3},{"attributes":{"POSITION":0},"material":4},'
+    '{"attributes":{"POSITION":0},"material":5}]}]}'
+)
+
+
+def test_a_model_reports_its_tagged_materials() raises:
+    var folder = "/tmp/threemojo_carla_assets/"
+    makedirs(folder, exist_ok=True)
+    Path(folder + "tagged.gltf").write_text(TAGGED_GLTF)
+    var registry = AssetRegistry(
+        parse_manifest(
+            _manifest(
+                _entry(
+                    "car",
+                    "model",
+                    _file("model", "tagged.gltf"),
+                    ', "forward": "+x"',
+                )
+            )
+        ),
+        folder,
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var parent = scene.add(Object3D())
+    scene.update()
+    var placed = registry.place_model(0, scene, assets, parent, Vector3(4, 2, 2))
+    assert_equal(placed.mesh_count, 6)
+    assert_equal(len(placed.paint), 1)
+    assert_equal(len(placed.heads), 1)
+    assert_equal(len(placed.tails), 1)
+    assert_true(scene.meshes[placed.first_mesh].material == placed.paint[0])
+    assert_true(scene.meshes[placed.first_mesh + 1].material == placed.heads[0])
+    assert_true(scene.meshes[placed.first_mesh + 2].material == placed.tails[0])
+    # A copy keeps the tags.
+    var second = scene.add(Object3D())
+    scene.update()
+    var copy = repeat_model(placed, scene, second)
+    assert_true(copy.paint[0] == placed.paint[0])
+    assert_equal(len(copy.heads), 1)
+    assert_equal(len(copy.tails), 1)
+
+
+def _preload_manifest(albedo: String) -> String:
+    """Two texture sets that share their maps, one bound to null, one
+    whose file is not in the cache, and an HDRI."""
+    var gone = _entry(
+        "gone", "texture_set", _file("albedo", "gltf/none.png"), ', "tile_meters": 1'
+    )
+    var shared = _entry(
+        "shared",
+        "texture_set",
+        _file("albedo", albedo)
+        + ", "
+        + _file("normal", "gltf/checker.png")
+        + ", "
+        + _file("displacement", "gltf/checker.png"),
+        ', "tile_meters": 2',
+    )
+    var sky = _entry("sky", "hdri", _file("hdri", "hdr_cube/px.hdr"))
+    return _manifest(
+        _texture_set() + ", " + shared + ", " + gone + ", " + sky,
+        '{"surface.road": "scan", "surface.curb": "shared", "surface.wall":'
+        ' "shared", "surface.sidewalk": "gone", "ground.grass": null,'
+        ' "sky.clear": "sky"}',
+    )
+
+
+def test_preload_decodes_each_map_once() raises:
+    for workers in [1, 4]:
+        var registry = AssetRegistry(
+            parse_manifest(_preload_manifest("gltf/checker.png")), CACHE
+        )
+        registry.preload(workers)
+        # One checker in sRGB for the albedo and one in linear light for
+        # every other map; the displacement is not read beside a normal
+        # map, and the missing set and the sky are not texture sets read.
+        assert_equal(len(registry.decoded), 2)
+        assert_true(registry.decoded_keys[0].endswith("checker.png|srgb"))
+        # A second preload finds them all decoded.
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 2)
+        var set = registry.texture_set(0)
+        assert_equal(set.maps.color.width, 2)
+
+
+def test_preload_refuses_a_file_that_is_not_an_image() raises:
+    for workers in [1, 4]:
+        var registry = AssetRegistry(
+            parse_manifest(_preload_manifest("gltf/box.gltf")), CACHE
+        )
+        with assert_raises():
+            registry.preload(workers)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
