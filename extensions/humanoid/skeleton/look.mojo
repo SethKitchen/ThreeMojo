@@ -17,6 +17,7 @@ and read best tone mapped. The maps are visual approximations.
 from extensions.humanoid.genome import MELANIN, Genome, check_genome
 from core.assets import Assets
 from extensions.humanoid.skeleton.complexion import (
+    MIN_MAP,
     hair_albedo,
     hair_tone,
     iris_albedo,
@@ -606,11 +607,16 @@ struct Complexion(ImplicitlyCopyable):
 
 
 def add_complexion(
-    mut assets: Assets, genome: Genome, whole_body: Bool = False
+    mut assets: Assets,
+    genome: Genome,
+    whole_body: Bool = False,
+    size: Int = 512,
 ) raises -> Complexion:
     """Store a person's skin, hair and eye looks and return their ids.
 
-    The skin's color map is 512 texels square, and it and its relief
+    The skin's color map is `size` texels square, 512 by default, and
+    its relief and the hair's map are half that. The color map and its
+    relief
     tile several times across the mesh, so a pore is a fraction of a
     millimeter on the face and a freckle is round. A whole
     body's skin is taller than a head's, so it tiles more times up it.
@@ -621,13 +627,17 @@ def add_complexion(
         genome: The person's genome.
         whole_body: True for the body's skin from the head down; False
             for the head's alone.
+        size: The skin color map's width and height in texels, eight
+            through 512. A smaller map is faster to make and blurrier.
 
     Returns:
         The three material ids.
 
     Raises:
-        Error: If `genome` is not valid or a store refuses an entry.
+        Error: If `genome` is not valid, if `size` is out of range, or a
+            store refuses an entry.
     """
+    var half = max(MIN_MAP, size // 2)
     # Each tile is about as wide around the skin as it is tall, so a
     # pore is round: a head is about one and a half times as far round
     # as it is tall, and a body's trunk half as far round.
@@ -641,12 +651,12 @@ def add_complexion(
         relief_around = Float32(14)
         relief_up = Float32(28)
     var albedo = Texture(
-        512, 512, skin_albedo_pixels(512, genome), REPEAT, color_space=SRGB
+        size, size, skin_albedo_pixels(size, genome), REPEAT, color_space=SRGB
     )
     albedo.repeat = Vector2(around, up)
-    var relief = skin_relief(256)
+    var relief = skin_relief(half)
     relief.repeat = Vector2(relief_around, relief_up)
-    var strands = hair_albedo(256, genome)
+    var strands = hair_albedo(half, genome)
     strands.repeat = Vector2(6, 2)
     var look = skin_physical(
         assets.textures.add(albedo^),

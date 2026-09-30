@@ -109,6 +109,8 @@ The female template's face differs from the male one's as the averages of the tw
 
 Pass `whole_body=True` for the skin of `add_body`, which is taller than the head's and tiles more times up it. Each tile is about as wide around the skin as it is tall, so a pore is round and not a streak. `body_skin_mesh` measures every vertex's `v` over the whole body's height. The head's tiles are then the size of the body's, and the two meet under the chin.
 
+Pass `size` to set the skin color map's width in texels, from 8 through 512. The default is 512. The relief and the hair's map are half that size. A smaller map is faster to make and blurrier.
+
 The skin is tinted: every mesh it paints must carry a `color` attribute. The head's skin and the body's skin carry one. `untinted(geometry)` gives another mesh a white one. See [Head](Head#skin-and-hair).
 
 ## Examples

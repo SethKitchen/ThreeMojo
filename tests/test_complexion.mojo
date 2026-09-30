@@ -220,8 +220,10 @@ def test_looks_follow_the_genome() raises:
 
 def test_a_complexion_is_stored() raises:
     var assets = Assets()
-    var head = add_complexion(assets, _with(0.3))
-    var body = add_complexion(assets, _with(0.3), whole_body=True)
+    var head = add_complexion(assets, _with(0.3), size=32)
+    var body = add_complexion(assets, _with(0.3), whole_body=True, size=32)
+    with assert_raises(contains="skin map"):
+        _ = add_complexion(assets, _with(0.3), size=4)
     assert_equal(assets.materials.count(), 6)
     assert_equal(assets.textures.count(), 8)
     var skin = assets.materials.get(head.skin)
