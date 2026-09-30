@@ -24,39 +24,10 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.genome import (
-    BROW_ARCH,
-    BROW_HEIGHT,
-    BROW_RIDGE,
-    BROW_THICKNESS,
-    CHEEKBONES,
-    CHIN,
-    EAR_LOBE,
-    EAR_PROTRUSION,
-    EAR_SIZE,
-    EYE_DEPTH,
-    EYE_SIZE,
-    EYE_SPACING,
-    EYE_TILT,
+    HAIR_LENGTH,
     Expression,
-    FRECKLES,
     Gene,
     Genome,
-    HAIR_MELANIN,
-    HAIR_REDNESS,
-    HEAD_HEIGHT,
-    HEAD_LENGTH,
-    HEAD_WIDTH,
-    IRIS_MELANIN,
-    JAW_WIDTH,
-    LIP_FULLNESS,
-    MELANIN,
-    MOUTH_WIDTH,
-    NECK_LENGTH,
-    NOSE_BRIDGE,
-    NOSE_LENGTH,
-    NOSE_PROJECTION,
-    NOSE_WIDTH,
-    UNDERTONE,
 )
 from extensions.humanoid.quality import (
     anatomy_detail,
@@ -73,7 +44,7 @@ from extensions.humanoid.athleticism import UNTONED
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
-from materials.material import MaterialId, standard_material
+from materials.material import standard_material
 from math.bounds import Plane
 from math.vector3 import Vector3
 from render.apng import encode
@@ -171,6 +142,13 @@ def _people() raises -> List[HumanoidSpec]:
         0.2, 1.0, -0.2, 0.4, 0.8, 0.5, 0.8, 0.6, 1.0, -0.3,
     ])))
     # fmt: on
+    # How each one wears the hair: a bob, a crop, short, a bob to the
+    # jaw, a longer bob and short.
+    var lengths: List[Float32] = [0.9, -0.8, 0.1, 0.7, 1.0, -0.2]
+    for index in range(len(people)):
+        people[index].genome = people[index].genome.with_gene(
+            HAIR_LENGTH, Expression(lengths[index])
+        )
     return people^
 
 

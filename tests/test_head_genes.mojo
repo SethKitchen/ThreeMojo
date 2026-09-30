@@ -30,6 +30,7 @@ from extensions.humanoid.genome import (
     Expression,
     Gene,
     Genome,
+    HAIR_LENGTH,
     HEAD_HEIGHT,
     HEAD_LENGTH,
     HEAD_WIDTH,
@@ -359,6 +360,24 @@ def test_hair_follows_the_skin() raises:
     # A broader head's hair reaches farther out at the side.
     var side = h.at(9.2, 77.0, -1.0)
     assert_true(broad.distance(side) < scalp.distance(side))
+    # A bob hangs over the nape; a crop is thinner on the crown.
+    var nape = h.at(0, 65.0, -10.6)
+    assert_true(scalp.distance(nape) > 0)
+    var bob = HairShape(
+        head_muscle_dimensions(_person(_one(HAIR_LENGTH, 1))), SCALP_HAIR, RIGHT
+    )
+    assert_true(bob.distance(nape) < 0)
+    assert_true(bob.low.y < scalp.low.y)
+    # The bob stays open over the face.
+    assert_true(bob.distance(h.at(0, 66.0, 10.5)) > 0)
+    var crop = HairShape(
+        head_muscle_dimensions(_person(_one(HAIR_LENGTH, -1))),
+        SCALP_HAIR,
+        RIGHT,
+    )
+    var above = top + skin.gradient(top) * h.cm(0.8)
+    assert_true(scalp.distance(above) < 0)
+    assert_true(crop.distance(above) > 0)
     var brow = HairShape(dims, EYEBROWS, LEFT)
     var group = head_hair_field(dims, EYEBROWS, LEFT)
     var p = h.at(-2.5, 74.4, 9.5)

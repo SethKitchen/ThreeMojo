@@ -73,8 +73,9 @@ A bare integer for a gene is a compile error, and so is a bare float for an expr
 | `SHOULDER_BREADTH` | Narrow | Broad | The rib cage and the shoulders |
 | `CHEST_DEPTH` | Shallow | Deep | The rib cage from front to back |
 | `ARM_LENGTH` | Short | Long | The upper arm and the forearm |
+| `HAIR_LENGTH` | Cropped close | A bob to the jaw | The scalp's hair |
 
-`named_genes()` returns every gene in this order. `gene_label(gene)` returns its lowercase name.
+`named_genes()` returns every gene in this order. Hair is cut as well as grown, so `HAIR_LENGTH` is a look more than a trait. `gene_label(gene)` returns its lowercase name.
 
 The genes are authored controls. They are not a model of the loci that set these traits in people. Many small genes set each trait, and growth and the environment change them too.
 

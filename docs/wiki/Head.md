@@ -109,7 +109,9 @@ The skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton
 
 ## Hair
 
-The scalp's hair is a shell over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It is cut back to a hairline over the forehead, away round each ear and off above the nape and the sideburns. It follows every head a genome makes. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
+The scalp's hair is a shell over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It is cut back to a hairline over the forehead, away round each ear and off above the nape and the sideburns. It follows every head a genome makes.
+
+`HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 
 Each eyebrow is an arc on the skin over its orbit, thick at its head and thin at its tail. `BROW_THICKNESS` makes it fuller or finer. `add_head` paints the brows into the skin's colors, hair by hair, in the hair's color. A solid strip stands off the curve of the brow ridge, so the brows are not a mesh. `head_hair` still meshes one, and its mass is its volume.
 

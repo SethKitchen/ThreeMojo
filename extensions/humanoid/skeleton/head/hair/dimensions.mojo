@@ -19,11 +19,16 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
-from extensions.humanoid.genome import BROW_THICKNESS
+from extensions.humanoid.genome import BROW_THICKNESS, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
-from extensions.humanoid.skeleton.field import DistanceField, smax
+from extensions.humanoid.skeleton.field import (
+    DistanceField,
+    sd_ellipsoid,
+    smax,
+    smin,
+)
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
     Sweep,
@@ -209,7 +214,9 @@ struct HairShape(Copyable, DistanceField, Movable):
     The scalp's hair is a shell over the skin itself, so it fits every
     head a genome makes: about seven millimeters deep at the sides and
     a centimeter on the crown, cut back to a hairline over the forehead,
-    away round each ear and off above the nape. An eyebrow is its
+    away round each ear and off above the nape. `HAIR_LENGTH` below
+    zero crops it close; above zero it grows a fall that hangs over the
+    ears and the nape toward the jaw, open over the face. An eyebrow is its
     `head_hair_field`.
     """
 
@@ -226,6 +233,14 @@ struct HairShape(Copyable, DistanceField, Movable):
     var sideburn: Float32
     var ear_line: Float32
     var bury: Float32
+    # The fall of longer hair: an ellipsoid round the head, hanging
+    # below the ears, open over the face. None when `length` is not
+    # positive.
+    var length: Float32
+    var fall_center: Vector3
+    var fall_radii: Vector3
+    var front: Float32
+    var brow: Float32
     var low: Vector3
     var high: Vector3
 
@@ -251,8 +266,20 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.skin = HeadSkinField(dimensions)
         var h = dimensions.head.copy()
         self.soft = h.cm(0.8)
-        self.side_depth = h.cm(0.55)
-        self.crown_depth = h.cm(1.0)
+        self.length = h.torso.genome.get(HAIR_LENGTH)
+        # Shorter than the template crops the hair close.
+        var crop = 1 + Float32(0.45) * min(Float32(0), self.length)
+        self.side_depth = h.cm(0.55) * crop
+        self.crown_depth = h.cm(1.0) * crop
+        # Longer grows a fall from the cranium's own ellipsoid out to a
+        # bob that reaches the jaw.
+        var grow = max(Float32(0), self.length)
+        self.fall_center = h.at(0, 75.1 - 3.1 * grow, -1.0 - 0.5 * grow)
+        self.fall_radii = h.cranium(
+            8.1 + 1.5 * grow, 9.3 + 4.7 * grow, 10.6 + 0.9 * grow
+        )
+        self.front = h.at(0, 0, 3.2).z
+        self.brow = h.at(0, 76.0, 0).y
         self.ears = h.at(0, 75.0, 0).y
         self.crown = h.at(0, 82.0, 0).y
         self.nape = h.at(0, 66.8, 0).y
@@ -274,12 +301,23 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.high = self.group.high
         if self.scalp:
             # The shell follows the skin, which a genome can widen past
-            # the dome the mass is taken from.
+            # the dome the mass is taken from, and the fall hangs below
+            # the nape.
             var reach = self.crown_depth + self.soft
             self.low = Vector3(
-                self.skin.low.x - reach,
-                self.nape - self.soft,
-                self.skin.low.z - reach,
+                min(
+                    self.skin.low.x - reach,
+                    self.fall_center.x - self.fall_radii.x - self.soft,
+                ),
+                min(
+                    self.nape,
+                    self.fall_center.y - self.fall_radii.y,
+                )
+                - self.soft,
+                min(
+                    self.skin.low.z - reach,
+                    self.fall_center.z - self.fall_radii.z - self.soft,
+                ),
             )
             self.high = Vector3(
                 self.skin.high.x + reach,
@@ -304,7 +342,18 @@ struct HairShape(Copyable, DistanceField, Movable):
         d = smax(d, -cheek, self.soft)
         for index in range(len(self.cuts)):  # pragma: no branch
             d = smax(d, -self.cuts[index].distance(point, self.soft), self.soft)
-        return d
+        if self.length <= 0:
+            return d
+        # The fall: outside the skin, inside the hanging ellipsoid, and
+        # open over the face below the brow.
+        var fall = max(
+            sd_ellipsoid(point, self.fall_center, self.fall_radii),
+            -skin - self.bury,
+        )
+        var face = max(point.y - self.brow, self.front - point.z)
+        fall = smax(fall, -face, self.soft)
+        fall = smax(fall, -self.cuts[0].distance(point, self.soft), self.soft)
+        return smin(d, fall, self.soft)
 
 
 def _on_skin(skin: HeadSkinField, start: Vector3) -> Vector3:

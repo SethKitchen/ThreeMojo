@@ -128,7 +128,7 @@ def add_head(
         contents: Named layer bits. Bones, ligaments and muscles are
             the default. `EYES` draws the eyeballs.
         detail: Cells along each solid.
-        skin_detail: Cells along the head for its skin.
+        skin_detail: Cells along the head for its skin and its hair.
         origin: Position of the pelvis origin in the parent, in meters.
         artery_paint: Arterial look, or the default artery Phong.
         vein_paint: Venous look, or the default vein Phong.
@@ -270,7 +270,9 @@ def add_head(
             scene,
             assets,
             root_id,
-            head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, detail, workers),
+            head_hair_from_dimensions(
+                dims, SCALP_HAIR, RIGHT, skin_detail, workers
+            ),
             hair,
         )
     if contents.includes_eyes():
