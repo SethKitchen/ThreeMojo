@@ -799,7 +799,7 @@ struct CarlaRenderer(Movable):
         if not Bool(self.sky) or not (self.sky_weather == weather):
             var scanned = self.registry.cached_entry(sky_key(weather))
             var sky: SkyLighting
-            if scanned:
+            if Bool(scanned):
                 sky = hdri_sky(
                     self.assets,
                     self.registry.hdri(scanned.value()),

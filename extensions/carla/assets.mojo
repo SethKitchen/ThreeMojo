@@ -1020,19 +1020,19 @@ struct AssetRegistry(Movable):
         var bump = entry.file(DISPLACEMENT_ROLE)
         var maps = SurfaceMaps(
             color^,
-            self._texture(rough.value(), LINEAR) if rough else _flat(
+            self._texture(rough.value(), LINEAR) if Bool(rough) else _flat(
                 255, LINEAR
             ),
-            self._texture(normal.value(), LINEAR) if normal else _flat(
+            self._texture(normal.value(), LINEAR) if Bool(normal) else _flat(
                 128, LINEAR
             ),
             _flat(0, SRGB),
         )
         var set = TextureSet(
             maps^,
-            self._texture(ao.value(), LINEAR) if ao else _flat(255, LINEAR),
-            self._texture(bump.value(), LINEAR) if bump
-            and not normal else _flat(0, LINEAR),
+            self._texture(ao.value(), LINEAR) if Bool(ao) else _flat(255, LINEAR),
+            self._texture(bump.value(), LINEAR) if Bool(bump)
+            and not Bool(normal) else _flat(0, LINEAR),
             entry.tile,
         )
         set.has_roughness = Bool(rough)

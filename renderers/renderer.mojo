@@ -6259,6 +6259,8 @@ struct Renderer(Movable):
             # the point of the two accessors.
             ref positions = geometry.attribute_view(String(POSITION))
             var vertex_count = positions.count()
+            world_points.reserve(vertex_count)
+            view_points.reserve(vertex_count)
             # How many of the geometry's morph targets this draw actually
             # wears. Worked out once here rather than per vertex, and zero
             # for everything that is not a morphed mesh, which is the only
@@ -7984,6 +7986,38 @@ struct Renderer(Movable):
         var hooks = NoHooks()
         return self._draw_into(hooks, target, scene, assets, camera, True)
 
+    def render_into_with_shadows[
+        C: Camera
+    ](
+        self,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        shadows: List[ShadowMap],
+    ) raises:
+        """Draw the scene into `target` as `render_into` does, with shadow
+        maps the caller drew rather than drawing them.
+
+        A light's shadow map depends on the light and the casters, not on
+        the camera, so views of one scene at one moment share their maps:
+        the six faces of a cube camera draw them once.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+            shadows: The maps, from `shadow_maps` for the camera's layers.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
+        var hooks = NoHooks()
+        _ = self._draw_into(
+            hooks, target, scene, assets, camera, True, shadows.copy()
+        )
+
     def render_into_with[
         C: Camera, H: RenderHooks
     ](
@@ -8021,6 +8055,7 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         first: Bool,
+        var shadows: Optional[List[ShadowMap]] = None,
     ) raises -> List[ShadowMap]:
         """Draw every mesh in the scene on the CPU into `target`, clearing
         first, and resolve nothing, and return the shadow maps it drew.
@@ -8057,6 +8092,8 @@ struct Renderer(Movable):
             camera: The camera to project through.
             first: Whether this starts a frame of `info`, rather than
                 adding a camera of an array to the one before it.
+            shadows: The shadow maps to light the frame with, or None to
+                draw them.
 
         Raises:
             Error: If the target is not the renderer's size, if a mesh
@@ -8078,7 +8115,7 @@ struct Renderer(Movable):
             # touch are resolved, so a scissor keeps the rest.
             var buffer = target.multisample_buffer()
             var maps = self.multisampled(target.samples)._draw_into(
-                hooks, buffer, scene, assets, camera, first
+                hooks, buffer, scene, assets, camera, first, shadows^
             )
             var drawn = Rect.whole(self.width, self.height)
             if self.scissor_test:
@@ -8140,7 +8177,7 @@ struct Renderer(Movable):
         # the camera goes with them too, for the frame a `MATCAP` surface
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
-        var lighting = self._lighting(scene, assets, camera)
+        var lighting = self._lighting(scene, assets, camera, shadows^)
         # And the lights of each material that names its own, three.js's
         # `lightsNode`.
         var lightings = self._lightings(scene, assets, camera, lighting)
@@ -8281,17 +8318,28 @@ struct Renderer(Movable):
 
     def _lighting[
         C: Camera
-    ](self, scene: Scene, assets: Assets, camera: C) raises -> Lighting:
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        var shadows: Optional[List[ShadowMap]] = None,
+    ) raises -> Lighting:
         """Return the scene's lights as `render_into` resolves them for
         this camera: the ones on its layers, its shadows, and where it
-        stands."""
+        stands. Shadow maps the caller drew are used as they are."""
+        var maps: List[ShadowMap]
+        if Bool(shadows):
+            maps = shadows.take()
+        else:
+            maps = self.shadow_maps(scene, assets, camera.visible_layers())
         return Lighting(
             scene,
             visible=camera.visible_layers(),
             eye=camera_position(scene, camera),
             toward_eye=toward_camera(scene, camera),
             up=camera_up(scene, camera),
-            shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
+            shadows=maps^,
             ltc=self.ltc_tables(),
             spot_maps=self._projected(scene, assets, camera.visible_layers()),
             back=camera_back(scene, camera),

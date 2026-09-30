@@ -107,7 +107,9 @@ The fog takes the sky's color just above the horizon in each ray's direction. It
 
 ## Light
 
-The town is lit in physical units. The sun gives 127.5 klx outside the air, less `exp(-0.21 m)` through the Kasten-Young air mass `m`. A clear sky gives `0.8 + 15.5 sqrt(sin h)` klx on level ground at the sun's altitude `h`, and an overcast sky `0.3 + 21 sin h` klx. The cloud cover moves the sky from one to the other. These are the daylight availability formulas of lighting engineering. The sky cube and an HDRI sky are both scaled so that level ground under them gets the sky's illuminance. The sun, the sky and the reflections then agree.
+The town is lit in physical units. The sun gives 127.5 klx outside the air, less `exp(-0.21 m)` through the Kasten-Young air mass `m`. A clear sky gives `0.8 + 15.5 sqrt(sin h)` klx on level ground at the sun's altitude `h`, and an overcast sky `0.3 + 21 sin h` klx. The cloud cover moves the sky from one to the other. These are the daylight availability formulas of lighting engineering.
+
+The sky cube and an HDRI sky are both scaled so that level ground under them gets the sky's illuminance. The sun, the sky and the reflections then agree.
 
 One unit of the renderer's light is `pi` times 4000 lux, so a white wall under one unit shines 4000 nits. The camera meters that light as a real camera does. A clear noon meters near EV100 15, so the camera reads CARLA's exposure limits three stops higher.
 

@@ -149,6 +149,8 @@ from std.math import atan2, cos, pow, sin, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 from units.temperature import KELVIN, Temperature
 
+# How many procedural trees share a mesh.
+comptime TREES_PER_MESH = 4
 # How many surface kinds the road mesh has, and so how many materials.
 comptime SURFACE_KINDS = 7
 # The meters one asphalt, concrete and lawn tile covers.
@@ -1078,7 +1080,7 @@ struct Town(Movable):
                 color, roughness=rough, env_map=SCENE_ENVIRONMENT
             )
             var scanned = registry.cached_entry(surface_key(kind))
-            if scanned:
+            if Bool(scanned):
                 var set = registry.texture_set(scanned.value())
                 material = set.dress(assets, material^, set.per_meter())
                 if kind == ROAD_SURFACE and set.has_roughness:
@@ -1209,7 +1211,7 @@ struct Town(Movable):
             var scanned = registry.cached_entry(
                 "ground.grass" if k == 0 else "ground.paving"
             )
-            if scanned:
+            if Bool(scanned):
                 var set = registry.texture_set(scanned.value())
                 var per = set.per_meter()
                 surface = set.dress(
@@ -1347,7 +1349,7 @@ struct Town(Movable):
             Length(1.3, METER),
         )
         var scanned = registry.cached_entry("tree")
-        if scanned:
+        if Bool(scanned):
             var first = Optional[ModelPlacement]()
             var k = 0
             for tree in trees:
@@ -1363,7 +1365,7 @@ struct Town(Movable):
                 var base = scene.add(node^)
                 scene.update()
                 var placed: ModelPlacement
-                if first:
+                if Bool(first):
                     placed = repeat_model(first.value(), scene, base)
                 else:
                     placed = registry.place_model(
@@ -1397,6 +1399,7 @@ struct Town(Movable):
         self.materials.leaves = assets.materials.add(leaves)
         var trunks = List[BufferGeometry]()
         var crowns = List[BufferGeometry]()
+        var node = scene.add(Object3D())
         var n = 0
         for tree in trees:
             var at = tree.transform.location
@@ -1441,9 +1444,22 @@ struct Town(Movable):
                     )
                 )
             n += 1
-        if n == 0:
-            return
-        var node = scene.add(Object3D())
+            # A few neighbors to a mesh, so a camera culls the trees it
+            # does not see: one mesh for every tree was in every view.
+            if n % TREES_PER_MESH == 0 or n == len(trees):
+                self._add_tree_meshes(scene, assets, node, trunks, crowns)
+                trunks = List[BufferGeometry]()
+                crowns = List[BufferGeometry]()
+
+    def _add_tree_meshes(
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        node: NodeId,
+        trunks: List[BufferGeometry],
+        crowns: List[BufferGeometry],
+    ) raises:
+        """Add a group of trees' trunks and crowns as two meshes."""
         self._add(
             scene,
             VEGETATION,

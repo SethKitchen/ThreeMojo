@@ -898,7 +898,7 @@ struct ActorVisuals(Movable):
         )
         var front = box.extent.x
         var scanned = registry.cached_entry(registry.model_key(type_id))
-        if scanned:
+        if Bool(scanned):
             scene.update()
             var placed = registry.place_model(
                 scanned.value(),
@@ -997,7 +997,7 @@ struct ActorVisuals(Movable):
         var scanned = registry.cached_entry(
             registry.model_key(world.actor(id).type_id)
         )
-        if scanned:
+        if Bool(scanned):
             var box = world.get_bounding_box(id)
             var holder = scene.add(Object3D())
             scene.update()
