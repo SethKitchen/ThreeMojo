@@ -10,7 +10,8 @@
 The page is Genome. Each head is the six-foot template with a different
 genome: its skin tone, its hair and eye color, and the shape of its
 head, its eyes, its brows, its nose, its mouth and its ears. Two wear
-Sintel's layered cut and one a mohawk; see Head's hairstyles. Each is a
+Sintel's layered cut and one a mohawk, and their hair runs from straight
+to tightly coiled; see Head's hairstyles. Each is a
 bust, cut off under the chin. The heads turn a little to each side, so
 the shape reads.
 
@@ -31,6 +32,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     HairStyle,
 )
 from extensions.humanoid.genome import (
+    HAIR_CURL,
     FACE_SHAPES,
     FACE_SHAPE_1,
     HAIR_LENGTH,
@@ -178,9 +180,14 @@ def _people() raises -> List[HumanoidSpec]:
         0.4, -0.3, -0.5, 0.3, 0.5, -0.4, 0.3, -0.3,
     ]
     # fmt: on
+    # Wavy, straight, coiled, curly, curly and straight.
+    var curls: List[Float32] = [0.35, 0.0, 1.0, 0.7, 0.6, 0.0]
     for index in range(len(people)):
         people[index].genome = people[index].genome.with_gene(
             HAIR_LENGTH, Expression(lengths[index])
+        )
+        people[index].genome = people[index].genome.with_gene(
+            HAIR_CURL, Expression(curls[index])
         )
         for mode in range(FACE_SHAPES):
             people[index].genome = people[index].genome.with_gene(
