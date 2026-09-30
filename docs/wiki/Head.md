@@ -109,7 +109,21 @@ The skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton
 
 ## Hair
 
-The scalp's hair is a shell over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It is cut back to a hairline over the forehead, away round each ear and off above the nape and the sideburns. It follows every head a genome makes.
+The scalp's hair is strands over a shell. `add_groom` grows the strands. The shell under them is the mass of hair in shade.
+
+The shell lies over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It follows every head a genome makes. Its hairline is level across the middle of the forehead, set back at each temple, and turns down past the temples to the sideburns. A male's temples are set back more than a female's. The shell is cut away round each ear and off above the nape.
+
+### Strands
+
+`add_groom(scene, assets, parent, spec, guides, followers)` grows a groom, the way grooming tools grow one:
+
+- Guide strands grow from roots on the shell. Each lies along it, combed away from the crown's whorl and pulled down as the hair grows longer. A guide at the front can fall off the hairline onto the forehead as a fringe. It stops at a ragged line above the brows.
+- Follow strands fill in round each guide, as AMD's TressFX makes them. Each keeps an offset from its guide that widens toward the tip.
+- Clumping pulls each follower back toward its guide at the tip, so the hair gathers into locks. Frizz moves each tip a little.
+
+Each strand is drawn as a `LineSegments2` a pixel wide, unlit, in colors worked out at its points. A real hair is far thinner than a pixel, so the line stands in for it.
+
+The colors are strand-space shading, as Frostbite's hair works it out. Kajiya and Kay's diffuse and Marschner's specular read the strand's direction, not a normal. Marschner's R highlight reflects white off the fiber; TRT passes through it and comes back in the pigment's color. Light is also lost with depth into the hair, as the Beer-Lambert law has it. Call `HairStrands.shade` when the head turns or the camera moves: the highlights move with them. The shading is ported from Frostbitten Hair WebGPU, and the follow strands from AMD TressFX.
 
 `HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 

@@ -63,6 +63,8 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     PECTORALIS_MAJOR,
 )
 from extensions.humanoid.skeleton.torso.muscles.mass import torso_muscle_mass
+from extensions.humanoid.skeleton.head.hair.shading import HairLight
+from extensions.humanoid.skeleton.head.hair.strands import add_groom
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
@@ -74,6 +76,7 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
+from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
@@ -114,6 +117,21 @@ def frame_at(
     scene.node(node).rotate_y(step)
     scene.update()
     return renderer.render(scene, assets, camera)
+
+
+def _turned(v: Vector3, angle: Float32) -> Vector3:
+    """Return `v` turned by `angle` radians about the vertical.
+
+    Args:
+        v: The vector.
+        angle: The turn, counterclockwise seen from above.
+
+    Returns:
+        The turned vector.
+    """
+    var c = cos(angle)
+    var s = sin(angle)
+    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def _stand(
@@ -245,6 +263,8 @@ def main() raises:
         eye_paint=looks.eyes,
         workers=available_workers(),
     )
+    # The scalp's hair as strands, over the mass of it in shade.
+    var hair = add_groom(scene, assets, covered, person, 1200, 5)
     # The skin is meshed smooth and lean already, and carries the face's
     # colors, which decimation would drop: only the anatomy is fitted to
     # the budget.
@@ -287,7 +307,21 @@ def main() raises:
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
+    # The lamp as the hair sees it, and the camera.
+    var toward = Vector3(1.4, 2.6, 2.2)
+    toward.normalize()
+    var eye = Vector3(0.0, 1.05, 5.3)
+    var turned = Float32(0)
     for _ in range(FRAMES):
+        # The frame turns the bodies by `step`: carry the camera and the
+        # lamp into the covered body's own frame, as it will stand.
+        turned += step.value
+        var lights = List[HairLight]()
+        lights.append(
+            HairLight(_turned(toward, -turned), Vector3(2.2, 1.97, 1.72))
+        )
+        var camera_at = _turned(eye, -turned) - Vector3(SPACING, ground, 0)
+        hair.shade(assets, lights, camera_at, Vector3(0.11, 0.11, 0.12))
         frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))

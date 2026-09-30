@@ -346,7 +346,9 @@ def hair_phong(genome: Genome = Genome()) raises -> Material:
 
 
 def hair_physical(
-    genome: Genome = Genome(), map: TextureId = NO_TEXTURE
+    genome: Genome = Genome(),
+    map: TextureId = NO_TEXTURE,
+    depth: Float32 = 1,
 ) raises -> Material:
     """Return a physically based material for a mass of hair.
 
@@ -358,18 +360,28 @@ def hair_physical(
     Args:
         genome: Reads the hair's genes. The template genome by default.
         map: Id of a `hair_albedo` texture, or `NO_TEXTURE`.
+        depth: How much of the light reaches it, zero through one. One
+            by default; about a half for the mass of hair under
+            `hair_cards`, which the hairs over it shade.
 
     Returns:
         A `PHYSICAL` material.
 
     Raises:
         Error: If the physical constructor refuses the values, or if
-            `genome` is not valid.
+            `genome` is not valid, or `depth` is out of range.
     """
+    if depth < 0 or depth > 1:
+        raise Error("A hair's depth runs zero through one")
     var tone = hair_tone(genome)
     var color = tone
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
+    color = Color(
+        UInt8(Float32(color.r) * depth),
+        UInt8(Float32(color.g) * depth),
+        UInt8(Float32(color.b) * depth),
+    )
     return physical_material(
         color,
         map=map,
@@ -598,12 +610,18 @@ struct Complexion(ImplicitlyCopyable):
     """The looks one person's genome asks for, stored in an `Assets`.
 
     `skin` is tinted: every mesh it paints needs a `color` attribute,
-    which the head's and the body's skins carry.
+    which the head's and the body's skins carry. `hair` is the mass of
+    the scalp's hair, in shade, for the strands of `add_groom` to lie
+    on.
     """
 
     var skin: MaterialId
     var hair: MaterialId
     var eyes: MaterialId
+
+
+# How much light reaches the mass of the scalp's hair under its cards.
+comptime HAIR_DEPTH = Float32(0.65)
 
 
 def add_complexion(
@@ -667,7 +685,7 @@ def add_complexion(
     look.nodes = assets.programs.add(skin_scatter(genome))
     var skin = assets.materials.add(look^)
     var hair = assets.materials.add(
-        hair_physical(genome, assets.textures.add(strands^))
+        hair_physical(genome, assets.textures.add(strands^), HAIR_DEPTH)
     )
     var eyes = assets.materials.add(
         eye_physical(assets.textures.add(iris_albedo(64, genome)))

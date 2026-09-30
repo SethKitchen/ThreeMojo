@@ -38,6 +38,11 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.skeleton.head.assembly import add_head
 from extensions.humanoid.skeleton.head.contents import EYES, HAIR, SKIN
 from extensions.humanoid.skeleton.head.frame import head_dimensions
+from extensions.humanoid.skeleton.head.hair.shading import HairLight
+from extensions.humanoid.skeleton.head.hair.strands import (
+    HairStrands,
+    add_groom,
+)
 from extensions.humanoid.skeleton.look import add_complexion
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.athleticism import UNTONED
@@ -52,11 +57,19 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import sin
+from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
 
+# The hair's strands: guides per head, and followers per guide.
+comptime GUIDES = 1000
+comptime FOLLOWERS = 5
+# The key and the rim lights' linear radiance, and the room's, as the
+# hair's shading reads them.
+comptime KEY_RADIANCE = Vector3(2.4, 2.1, 1.8)
+comptime RIM_RADIANCE = Vector3(0.52, 0.6, 0.9)
+comptime AMBIENT = Vector3(0.12, 0.12, 0.13)
 comptime DEFAULT_OUTPUT = "out/genomes.png"
 comptime WIDTH = 960
 comptime HEIGHT = 540
@@ -152,6 +165,21 @@ def _people() raises -> List[HumanoidSpec]:
     return people^
 
 
+def _turned(v: Vector3, angle: Float32) -> Vector3:
+    """Return `v` turned by `angle` radians about the vertical.
+
+    Args:
+        v: The vector.
+        angle: The turn, counterclockwise seen from above.
+
+    Returns:
+        The turned vector.
+    """
+    var c = cos(angle)
+    var s = sin(angle)
+    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
+
+
 def main() raises:
     var args = argv()
     var destination = String(DEFAULT_OUTPUT)
@@ -183,6 +211,9 @@ def main() raises:
 
     var people = _people()
     var turners = List[NodeId]()
+    var hairs = List[HairStrands]()
+    var places = List[Vector3]()
+    var centers = List[Vector3]()
     for index in range(len(people)):
         var person = people[index]
         var looks = add_complexion(assets, person.genome)
@@ -222,6 +253,12 @@ def main() raises:
             eye_paint=looks.eyes,
             workers=available_workers(),
         )
+        # The scalp's hair as strands, over the mass of it in shade.
+        hairs.append(
+            add_groom(scene, assets, holder_id, person, GUIDES, FOLLOWERS)
+        )
+        places.append(Vector3(x, y, 0))
+        centers.append(center)
         turners.append(pivot_id)
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
@@ -252,6 +289,12 @@ def main() raises:
     )
     camera.place(Vector3(0.0, 0.36, 1.32), Vector3(0.0, 0.335, 0.0))
 
+    # The lights as the hair sees them: toward each, and how bright.
+    var key_toward = Vector3(1.0, 1.6, 2.2)
+    key_toward.normalize()
+    var rim_toward = Vector3(-1.4, 1.0, -1.2)
+    rim_toward.normalize()
+    var eye = Vector3(0.0, 0.36, 1.32)
     var frames = List[Framebuffer]()
     var previous = Float32(0)
     for frame in range(count):
@@ -263,6 +306,15 @@ def main() raises:
         for index in range(len(turners)):
             scene.node(turners[index]).rotate_y(Angle(angle - previous, RADIAN))
         previous = angle
+        for index in range(len(hairs)):
+            # Carry the camera and the lights into the head's own frame.
+            var lights = List[HairLight]()
+            lights.append(HairLight(_turned(key_toward, -angle), KEY_RADIANCE))
+            lights.append(HairLight(_turned(rim_toward, -angle), RIM_RADIANCE))
+            var camera_at = (
+                _turned(eye - places[index], -angle) + centers[index]
+            )
+            hairs[index].shade(assets, lights, camera_at, AMBIENT)
         scene.update()
         frames.append(renderer.render(scene, assets, camera))
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))

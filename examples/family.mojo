@@ -35,6 +35,11 @@ from extensions.humanoid.quality import (
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.head.hair.shading import HairLight
+from extensions.humanoid.skeleton.head.hair.strands import (
+    HairStrands,
+    add_groom,
+)
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.look import add_complexion
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
@@ -51,6 +56,7 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
+from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, INCH, Length, METER
@@ -62,6 +68,29 @@ comptime DEFAULT_FRAMES = 30
 comptime DELAY_MS = 70
 comptime DEFAULT_QUALITY = "high"
 comptime SPACING = Float32(0.8)
+# The hair's strands: guides per head, and followers per guide.
+comptime GUIDES = 900
+comptime FOLLOWERS = 5
+# The key and the rim lights' linear radiance, and the room's, as the
+# hair's shading reads them.
+comptime KEY_RADIANCE = Vector3(2.4, 2.1, 1.8)
+comptime RIM_RADIANCE = Vector3(0.46, 0.54, 0.8)
+comptime AMBIENT = Vector3(0.12, 0.12, 0.13)
+
+
+def _turned(v: Vector3, angle: Float32) -> Vector3:
+    """Return `v` turned by `angle` radians about the vertical.
+
+    Args:
+        v: The vector.
+        angle: The turn, counterclockwise seen from above.
+
+    Returns:
+        The turned vector.
+    """
+    var c = cos(angle)
+    var s = sin(angle)
+    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def _genome(values: List[Float32]) raises -> Genome:
@@ -157,6 +186,8 @@ def main() raises:
 
     var people = _family()
     var turners = List[NodeId]()
+    var hairs = List[HairStrands]()
+    var places = List[Vector3]()
     for index in range(len(people)):
         var person = people[index]
         var looks = add_complexion(assets, person.genome, whole_body=True)
@@ -196,6 +227,17 @@ def main() raises:
             hair_paint=looks.hair,
             eye_paint=looks.eyes,
             workers=workers,
+        )
+        # The scalp's hair as strands, over the mass of it in shade.
+        hairs.append(
+            add_groom(scene, assets, holder_id, person, GUIDES, FOLLOWERS)
+        )
+        places.append(
+            Vector3(
+                (Float32(index) - Float32(len(people) - 1) / 2) * SPACING,
+                ground,
+                0,
+            )
         )
         turners.append(pivot_id)
     for index in range(len(scene.meshes)):
@@ -240,10 +282,28 @@ def main() raises:
     camera.place(Vector3(0.0, 1.2, 4.6), Vector3(0.0, 0.95, 0.0))
 
     var step = Angle(Float32(360) / Float32(count), DEGREE)
+    # The lights as the hair sees them: toward each.
+    var key_toward = Vector3(1.4, 2.8, 2.6)
+    key_toward.normalize()
+    var rim_toward = Vector3(-2.0, 1.8, -2.0)
+    rim_toward.normalize()
+    var eye = Vector3(0.0, 1.2, 4.6)
+    var turned = Float32(0)
     var frames = List[Framebuffer]()
     for _ in range(count):
         for index in range(len(turners)):
             scene.node(turners[index]).rotate_y(step)
+        turned += step.value
+        for index in range(len(hairs)):
+            # Carry the camera and the lights into the body's own frame.
+            var lights = List[HairLight]()
+            lights.append(HairLight(_turned(key_toward, -turned), KEY_RADIANCE))
+            lights.append(HairLight(_turned(rim_toward, -turned), RIM_RADIANCE))
+            var at = places[index]
+            var camera_at = _turned(
+                eye - Vector3(at.x, 0, 0), -turned
+            ) - Vector3(0, at.y, 0)
+            hairs[index].shade(assets, lights, camera_at, AMBIENT)
         scene.update()
         frames.append(renderer.render(scene, assets, camera))
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))

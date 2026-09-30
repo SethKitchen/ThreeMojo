@@ -20,6 +20,7 @@ centimeters. They are not a cited hair density table; see
 """
 
 from extensions.humanoid.genome import BROW_THICKNESS, HAIR_LENGTH
+from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
@@ -35,7 +36,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
 )
 from math.vector3 import Vector3
-from std.math import max, min
+from std.math import exp, max, min
 
 # How much of the hair's volume is hair rather than air: an authored
 # value for short hair.
@@ -208,6 +209,16 @@ def head_hair_field(
     return field^
 
 
+# The hairline, in template centimeters: its height over the middle of
+# the forehead, the half width that stays level, where each temple's
+# recess is, and how far it sets the line back.
+comptime HAIRLINE_HEIGHT = Float32(79.0)
+comptime HAIRLINE_FLAT = Float32(3.0)
+comptime HAIRLINE_TEMPLE = Float32(4.6)
+comptime HAIRLINE_RECESS_MALE = Float32(1.1)
+comptime HAIRLINE_RECESS_FEMALE = Float32(0.3)
+
+
 struct HairShape(Copyable, DistanceField, Movable):
     """The solid a head hair group is drawn as.
 
@@ -241,6 +252,17 @@ struct HairShape(Copyable, DistanceField, Movable):
     var fall_radii: Vector3
     var front: Float32
     var brow: Float32
+    # The hairline over the forehead: level across the middle, turning
+    # down past the temples, and set back at each temple, more for a
+    # male. See `hairline`.
+    var line_middle: Float32
+    var line_center: Float32
+    var line_flat: Float32
+    var line_drop: Float32
+    var line_temple: Float32
+    var line_recess: Float32
+    var line_spread: Float32
+    var line_face: Float32
     var low: Vector3
     var high: Vector3
 
@@ -287,11 +309,27 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.sideburn = h.at(0, 71.0, 0).y
         self.ear_line = h.at(0, 0, -2.2).z
         self.bury = h.cm(0.08)
+        self.line_middle = h.at(0, HAIRLINE_HEIGHT, 0).y
+        self.line_center = h.at(0, 0, 0).x
+        var cm_x = h.at(1, 0, 0).x - h.at(0, 0, 0).x
+        var cm_y = h.at(0, 1, 0).y - h.at(0, 0, 0).y
+        self.line_flat = cm_x * HAIRLINE_FLAT
+        # From the edge of the level middle to the sideburn's top, over
+        # four and a half centimeters.
+        self.line_drop = (
+            cm_y
+            * (HAIRLINE_HEIGHT - 71.0)
+            / (Float32(4.5) * Float32(4.5) * cm_x * cm_x)
+        )
+        self.line_temple = cm_x * HAIRLINE_TEMPLE
+        var recess = HAIRLINE_RECESS_FEMALE
+        if h.torso.sex == MALE:
+            recess = HAIRLINE_RECESS_MALE
+        self.line_recess = cm_y * recess
+        self.line_spread = cm_x * Float32(1.2)
+        self.line_face = h.at(0, 0, 2.0).z
         self.cuts = List[Sweep]()
-        # The face below the hairline, and round each ear.
-        var face = Sweep(Vector3(1, 0, 0))
-        face.add(h.at(0, 70.0, 10.6), h.cm(8.8), h.cm(10.4))
-        self.cuts.append(face^)
+        # Round each ear.
         for s in range(2):  # pragma: no branch
             var x = Float32(1) - Float32(2 * s)
             var ear = Sweep(Vector3(1, 0, 0))
@@ -340,6 +378,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         d = smax(d, self.nape - point.y, self.soft)
         var cheek = max(point.y - self.sideburn, self.ear_line - point.z)
         d = smax(d, -cheek, self.soft)
+        d = smax(d, self.hairline(point), self.soft)
         for index in range(len(self.cuts)):  # pragma: no branch
             d = smax(d, -self.cuts[index].distance(point, self.soft), self.soft)
         if self.length <= 0:
@@ -352,8 +391,32 @@ struct HairShape(Copyable, DistanceField, Movable):
         )
         var face = max(point.y - self.brow, self.front - point.z)
         fall = smax(fall, -face, self.soft)
-        fall = smax(fall, -self.cuts[0].distance(point, self.soft), self.soft)
+        fall = smax(fall, self.hairline(point), self.soft)
         return smin(d, fall, self.soft)
+
+    def hairline(self, point: Vector3) -> Float32:
+        """Return how far `point` lies inside the bare face, under the
+        hairline and in front of the temples: negative outside it.
+
+        The line is level across the middle of the forehead, set back a
+        little at each temple, and turns down past the temples to the
+        sideburns.
+
+        Args:
+            point: A point in the pelvis frame, in meters.
+
+        Returns:
+            A signed distance, in meters, near enough.
+        """
+        var x = abs(point.x - self.line_center)
+        var past = max(Float32(0), x - self.line_flat)
+        var off = (x - self.line_temple) / self.line_spread
+        var line = (
+            self.line_middle
+            - self.line_drop * past * past
+            + self.line_recess * exp(-off * off)
+        )
+        return min(line - point.y, point.z - self.line_face)
 
 
 def _on_skin(skin: HeadSkinField, start: Vector3) -> Vector3:
