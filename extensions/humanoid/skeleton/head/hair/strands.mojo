@@ -35,6 +35,7 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     groom_hair,
     groom_lines,
 )
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,
@@ -113,6 +114,7 @@ def add_groom(
     followers: Int = 6,
     seed: Int = 1,
     width: Float32 = 1.0,
+    style: HairStyle = GROWN,
 ) raises -> HairStrands:
     """Grow a person's scalp hair as strands and draw it under `parent`.
 
@@ -130,16 +132,20 @@ def add_groom(
         followers: How many follow strands round each guide.
         seed: Picks the roots, the lengths and the sway.
         width: How wide each strand is drawn, in pixels.
+        style: How the hair is cut and laid; `GROWN` by default. See
+            `HairStyle`.
 
     Returns:
         The strands, for `HairStrands.shade`.
 
     Raises:
-        Error: If the spec, a count or the width is refused, or no guide
-            finds a root.
+        Error: If the spec, a count, the width or the style is refused,
+            or no guide finds a root.
     """
     var dims = head_muscle_dimensions(spec)
-    var groom = groom_hair(dims, GroomSpec(dims, guides, followers), seed)
+    var groom = groom_hair(
+        dims, GroomSpec(dims, guides, followers), seed, style
+    )
     var tone = hair_tone(spec.genome)
     var look = HairLook(
         Vector3(_linear(tone.r), _linear(tone.g), _linear(tone.b))

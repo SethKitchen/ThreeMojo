@@ -616,6 +616,12 @@ strands, `TressFXAsset::GenerateFollowHairs`: each follower keeps an offset
 from its guide that widens toward the tip. The Mojo implementation is original
 work. TressFX is distributed under the MIT License, reproduced below.
 
+`assets/hair/mohawk.bin` is the crest of Ratboy's mohawk, TressFX's sample
+hair `Ratboy_mohawk.tfx`, as `tools/hair_style.py` converts it: the strands from
+the brow to the nape, narrowed and laid on a human cranium. The sample is
+distributed under the same MIT License, copyright 2017 Advanced Micro Devices,
+Inc.
+
 ```
 Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
@@ -674,6 +680,20 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## Sintel's hair
+
+<https://durian.blender.org/sharing/>
+
+`assets/hair/layered.bin` is Sintel's hair from Sintel Lite 2.57b by
+BenDansie, as frostbitten-hair-webgpu exports it
+(`SintelHairOriginal-sintel_hair.16points.tfx`) and `tools/hair_style.py`
+converts it: each strand kept as offsets from its root on a fitted cranium, so
+it can be laid on any head. The character Sintel is (c) copyright Blender
+Foundation | durian.blender.org, licensed under the Creative Commons
+Attribution 3.0 License, <https://creativecommons.org/licenses/by/3.0/>.
 
 ---
 

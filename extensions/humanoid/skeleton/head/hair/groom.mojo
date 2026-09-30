@@ -42,6 +42,12 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     SCALP_HAIR,
     HairShape,
 )
+from extensions.humanoid.skeleton.head.hair.styles import (
+    GROWN,
+    HairStyle,
+    HairStyleFile,
+    hair_style_path,
+)
 from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from math.vector3 import Vector3
 from std.math import cos, max, min, pi, sin, sqrt
@@ -52,6 +58,8 @@ comptime MAX_GUIDES = 20000
 comptime MAX_FOLLOWERS = 64
 # How many roots are tried for each guide before it is given up.
 comptime ROOT_TRIES = 8
+# How many Newton steps lift a laid strand's point out of the skin.
+comptime LIFT_STEPS = 6
 
 
 def _unit(key: Int, salt: Int) -> Float32:
@@ -440,22 +448,32 @@ def _grow_guide(
 
 
 def groom_hair(
-    dimensions: HeadMuscleDimensions, spec: GroomSpec, seed: Int = 1
+    dimensions: HeadMuscleDimensions,
+    spec: GroomSpec,
+    seed: Int = 1,
+    style: HairStyle = GROWN,
 ) raises -> HairGroom:
-    """Grow the scalp's hair as strands.
+    """Grow the scalp's hair as strands, or lay an artist's style.
 
     Args:
         dimensions: Landmarks from `head_muscle_dimensions`.
-        spec: How many strands, how long, and how they gather.
+        spec: How many strands, how long, and how they gather. An
+            artist's style keeps its own lengths and lay.
         seed: Picks the roots, the lengths and the sway.
+        style: `GROWN` by default; see `HairStyle`.
 
     Returns:
         Every guide, each followed by its followers.
 
     Raises:
-        Error: If `dimensions.validate` refuses the copy, or if no guide
-            finds a root.
+        Error: If `dimensions.validate` refuses the copy, if `style` is
+            not named or its file cannot be read, or if no guide finds a
+            root.
     """
+    if not style.is_valid():
+        raise Error("A hair style must be a named style")
+    if style != GROWN:
+        return _laid(dimensions, spec, seed, style)
     var field = GroomField(dimensions)
     var h = dimensions.head.copy()
     var length = h.torso.genome.get(HAIR_LENGTH)
@@ -502,6 +520,62 @@ def groom_hair(
             _follow(groom, spec, points, normals, depths, key, follower + 1)
     if len(groom) == 0:
         raise Error("No guide found a root on the scalp's hair")
+    return groom^
+
+
+def _laid(
+    dimensions: HeadMuscleDimensions,
+    spec: GroomSpec,
+    seed: Int,
+    style: HairStyle,
+) raises -> HairGroom:
+    """Lay an artist's style on the head: its strands, spread evenly
+    over as many guides as `spec` asks for, each rooted on the skin and
+    kept off it."""
+    var file = HairStyleFile(hair_style_path(style))
+    var field = GroomField(dimensions)
+    ref skin = field.hair.skin
+    var h = dimensions.head.copy()
+    var probe = h.cm(0.08)
+    var top = spec.lift + spec.rise
+    var guides = min(spec.guides, file.count)
+    var groom = HairGroom()
+    for guide in range(guides):  # pragma: no branch
+        var key = seed * 100003 + guide
+        var strand = file.strand(h, guide * file.count // guides)
+        # The style's cranium is not this head's skin: the root is walked
+        # onto the skin, the strand goes with it, and any point that
+        # would pass under the skin is lifted back out.
+        var root = strand[0]
+        for _ in range(4):  # pragma: no branch
+            var g = surface_gradient(skin, root, probe)
+            root = root - g * (skin.distance(root) / max(g.dot(g), 1e-12))
+        var shift = root - strand[0]
+        var points = List[Vector3]()
+        var normals = List[Vector3]()
+        var depths = List[Float32]()
+        for k in range(len(strand)):  # pragma: no branch
+            var p = strand[k] + shift
+            var n = _unit_vector(
+                surface_gradient(skin, p, probe), Vector3(0, 1, 0)
+            )
+            var d = skin.distance(p)
+            if k > 0:
+                for _ in range(LIFT_STEPS):  # pragma: no branch
+                    if d >= spec.lift:
+                        break
+                    var g = surface_gradient(skin, p, probe)
+                    p = p + g * ((spec.lift - d) / max(g.dot(g), 1e-12))
+                    d = skin.distance(p)
+                n = _unit_vector(
+                    surface_gradient(skin, p, probe), Vector3(0, 1, 0)
+                )
+            points.append(p)
+            normals.append(n)
+            depths.append(max(Float32(0), top - d))
+        groom.add(points, normals, depths, _shade(key, 0))
+        for follower in range(spec.followers):  # pragma: no branch
+            _follow(groom, spec, points, normals, depths, key, follower + 1)
     return groom^
 
 

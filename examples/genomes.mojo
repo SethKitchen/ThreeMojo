@@ -9,7 +9,8 @@
 
 The page is Genome. Each head is the six-foot template with a different
 genome: its skin tone, its hair and eye color, and the shape of its
-head, its eyes, its brows, its nose, its mouth and its ears. Each is a
+head, its eyes, its brows, its nose, its mouth and its ears. Two wear
+Sintel's layered cut and one a mohawk; see Head's hairstyles. Each is a
 bust, cut off under the chin. The heads turn a little to each side, so
 the shape reads.
 
@@ -23,6 +24,12 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
+from extensions.humanoid.skeleton.head.hair.styles import (
+    GROWN,
+    LAYERED,
+    MOHAWK,
+    HairStyle,
+)
 from extensions.humanoid.genome import (
     FACE_SHAPES,
     FACE_SHAPE_1,
@@ -229,6 +236,15 @@ def main() raises:
 
     var people = _people()
     var turners = List[NodeId]()
+    # How each head's hair is cut and laid.
+    var styles: List[HairStyle] = [
+        LAYERED,
+        MOHAWK,
+        GROWN,
+        LAYERED,
+        GROWN,
+        GROWN,
+    ]
     var hairs = List[HairStrands]()
     var places = List[Vector3]()
     var centers = List[Vector3]()
@@ -270,10 +286,19 @@ def main() raises:
             hair_paint=looks.hair,
             eye_paint=looks.eyes,
             workers=available_workers(),
+            hair_style=styles[index],
         )
         # The scalp's hair as strands, over the mass of it in shade.
         hairs.append(
-            add_groom(scene, assets, holder_id, person, GUIDES, FOLLOWERS)
+            add_groom(
+                scene,
+                assets,
+                holder_id,
+                person,
+                GUIDES,
+                FOLLOWERS,
+                style=styles[index],
+            )
         )
         places.append(Vector3(x, y, 0))
         centers.append(center)

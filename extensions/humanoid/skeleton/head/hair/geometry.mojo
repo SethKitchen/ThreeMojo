@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     HeadHair,
     head_hair_label,
 )
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
@@ -63,6 +64,7 @@ def head_hair_from_dimensions(
     side: BodySide,
     detail: Int = 16,
     workers: Int = 1,
+    style: HairStyle = GROWN,
 ) raises -> BufferGeometry:
     """Return one hair group's mesh for already-computed dimensions.
 
@@ -72,16 +74,17 @@ def head_hair_from_dimensions(
         side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
         detail: Cells along the solid.
         workers: How many threads mesh it. One by default.
+        style: How the scalp's hair is cut; `GROWN` by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `part` is
-            not named, if `side` is not valid, if `detail` is out of
-            range, or if the field produces no surface.
+            not named, if `side` or `style` is not valid, if `detail` is
+            out of range, or if the field produces no surface.
     """
-    var field = HairShape(dimensions, part, side)
+    var field = HairShape(dimensions, part, side, style)
     var label = head_hair_label(part)
     check_detail(detail, label)
     return mesh_surface(field, field.low, field.high, detail, label, workers)

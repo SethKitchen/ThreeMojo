@@ -148,6 +148,20 @@ The colors are strand-space shading, as Frostbite's hair works it out. Kajiya an
 
 Light that diffuses through a fiber crosses it twice, so the pigment tints the diffuse twice. Pale hair then stays golden and does not wash out to white.
 
+### Hairstyles
+
+A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_groom` as `style` and to `add_head` or `add_body` as `hair_style`.
+
+| Style | The hair |
+|---|---|
+| `GROWN` | The groom above, combed down to the length `HAIR_LENGTH` asks for. The default. |
+| `LAYERED` | Sintel's hair: a layered cut to the jaw, with a fringe. From Sintel Lite by BenDansie, (c) the Blender Foundation, CC-BY 3.0. |
+| `MOHAWK` | A crest from the brow to the nape, and shaved sides. From AMD TressFX's Ratboy, MIT license. |
+
+An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`. A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
+
+A mohawk's shell covers only a strip along the midline, so the sides are bare.
+
 `HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 
 Each eyebrow is an arc on the skin over its orbit, thick at its head and thin at its tail. `BROW_THICKNESS` makes it fuller or finer. `add_head` paints the brows into the skin's colors, hair by hair, in the hair's color. A solid strip stands off the curve of the brow ridge, so the brows are not a mesh. `head_hair` still meshes one, and its mass is its volume.

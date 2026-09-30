@@ -59,6 +59,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
 )
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.dimensions import JOIN_LAP
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
@@ -384,6 +385,7 @@ def add_body(
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
     workers: Int = 1,
+    hair_style: HairStyle = GROWN,
 ) raises -> NodeId:
     """Attach the torso, the pelvis, both legs and feet, both arms and
     hands, and the neck and the head.
@@ -422,6 +424,9 @@ def add_body(
             look.
         workers: How many threads mesh the skin and the hair. One by
             default.
+        hair_style: How the scalp's hair mesh is cut; `GROWN` by
+            default. Draw the strands with `add_groom` in the same
+            style.
 
     Returns:
         The pelvis origin node.
@@ -573,5 +578,6 @@ def add_body(
             hair_paint=hair_paint,
             eye_paint=eye_paint,
             workers=workers,
+            hair_style=hair_style,
         )
     return root_id

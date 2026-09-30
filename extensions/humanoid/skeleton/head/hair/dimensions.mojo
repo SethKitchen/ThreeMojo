@@ -23,6 +23,11 @@ from extensions.humanoid.genome import BROW_THICKNESS, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
+from extensions.humanoid.skeleton.head.hair.styles import (
+    GROWN,
+    MOHAWK,
+    HairStyle,
+)
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -247,6 +252,9 @@ def _scalp_field(dimensions: HeadMuscleDimensions) raises -> SweepField:
     return field^
 
 
+# How far either side of the midline a mohawk's strip of hair reaches,
+# in template centimeters.
+comptime MOHAWK_STRIP = Float32(2.2)
 # The hairline, in template centimeters: its height over the middle of
 # the forehead, the half width that stays level, where each temple's
 # recess is, and how far it sets the line back.
@@ -301,6 +309,9 @@ struct HairShape(Copyable, DistanceField, Movable):
     var line_recess: Float32
     var line_spread: Float32
     var line_face: Float32
+    # How far either side of the midline a style's strip of hair
+    # reaches, as a mohawk's does; zero where the hair covers the scalp.
+    var strip: Float32
     var low: Vector3
     var high: Vector3
 
@@ -309,6 +320,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         dimensions: HeadMuscleDimensions,
         part: HeadHair,
         side: BodySide,
+        style: HairStyle = GROWN,
     ) raises:
         """Shape one head hair group.
 
@@ -316,12 +328,16 @@ struct HairShape(Copyable, DistanceField, Movable):
             dimensions: Landmarks from `head_muscle_dimensions`.
             part: A named group.
             side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
+            style: How the hair is cut; `GROWN` by default. A `MOHAWK`
+                keeps only a strip along the midline.
 
         Raises:
             Error: If `dimensions.validate` refuses the copy, if `part`
-                is not named, or if `side` is not valid.
+                is not named, or if `side` or `style` is not valid.
         """
-        self = HairShape(dimensions, part, side, HeadSkinField(dimensions))
+        self = HairShape(
+            dimensions, part, side, HeadSkinField(dimensions), style
+        )
 
     def __init__(
         out self,
@@ -329,6 +345,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         part: HeadHair,
         side: BodySide,
         skin: HeadSkinField,
+        style: HairStyle = GROWN,
     ) raises:
         """Shape one head hair group on a skin already built for the same
         head.
@@ -338,11 +355,15 @@ struct HairShape(Copyable, DistanceField, Movable):
             part: A named group.
             side: `RIGHT` or `LEFT`. The scalp's hair ignores it.
             skin: The head's skin, from the same dimensions.
+            style: How the hair is cut; `GROWN` by default. A `MOHAWK`
+                keeps only a strip along the midline.
 
         Raises:
             Error: If `dimensions.validate` refuses the copy, if `part`
-                is not named, or if `side` is not valid.
+                is not named, or if `side` or `style` is not valid.
         """
+        if not style.is_valid():
+            raise Error("A hair style must be a named style")
         self.group = head_hair_field(dimensions, part, side, skin)
         self.scalp = not is_paired_head_hair(part)
         self.skin = skin.copy()
@@ -388,6 +409,9 @@ struct HairShape(Copyable, DistanceField, Movable):
         self.line_recess = cm_y * recess
         self.line_spread = cm_x * Float32(1.2)
         self.line_face = h.at(0, 0, 2.0).z
+        self.strip = 0
+        if style == MOHAWK:
+            self.strip = h.cm(MOHAWK_STRIP)
         self.cuts = List[Sweep]()
         # Round each ear.
         for s in range(2):  # pragma: no branch
@@ -441,18 +465,23 @@ struct HairShape(Copyable, DistanceField, Movable):
         d = smax(d, self.hairline(point), self.soft)
         for index in range(len(self.cuts)):  # pragma: no branch
             d = smax(d, -self.cuts[index].distance(point, self.soft), self.soft)
-        if self.length <= 0:
-            return d
-        # The fall: outside the skin, inside the hanging ellipsoid, and
-        # open over the face below the brow.
-        var fall = max(
-            sd_ellipsoid(point, self.fall_center, self.fall_radii),
-            -skin - self.bury,
-        )
-        var face = max(point.y - self.brow, self.front - point.z)
-        fall = smax(fall, -face, self.soft)
-        fall = smax(fall, self.hairline(point), self.soft)
-        return smin(d, fall, self.soft)
+        if self.length > 0:
+            # The fall: outside the skin, inside the hanging ellipsoid,
+            # and open over the face below the brow.
+            var fall = max(
+                sd_ellipsoid(point, self.fall_center, self.fall_radii),
+                -skin - self.bury,
+            )
+            var face = max(point.y - self.brow, self.front - point.z)
+            fall = smax(fall, -face, self.soft)
+            fall = smax(fall, self.hairline(point), self.soft)
+            d = smin(d, fall, self.soft)
+        if self.strip > 0:
+            # The sides are shaved.
+            d = smax(
+                d, abs(point.x - self.line_center) - self.strip, 2 * self.soft
+            )
+        return d
 
     def hairline(self, point: Vector3) -> Float32:
         """Return how far `point` lies inside the bare face, under the

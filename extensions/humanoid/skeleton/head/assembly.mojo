@@ -32,6 +32,7 @@ from extensions.humanoid.skeleton.head.bones.geometry import (
 from extensions.humanoid.skeleton.head.contents import BOTH, HeadContents
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
@@ -110,6 +111,7 @@ def add_head(
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
     workers: Int = 1,
+    hair_style: HairStyle = GROWN,
 ) raises -> NodeId:
     """Attach the neck and the head under `parent` and return their node.
 
@@ -142,12 +144,16 @@ def add_head(
             in the color the spec's genome asks for.
         workers: How many threads mesh the skin and the hair. One by
             default.
+        hair_style: How the scalp's hair mesh is cut; `GROWN` by
+            default. Draw the strands with `add_groom` in the same
+            style.
 
     Returns:
         The head's node.
 
     Raises:
-        Error: If the spec, a mesh, `contents` or the scene is invalid.
+        Error: If the spec, a mesh, `contents`, the hair style or the
+            scene is invalid.
     """
     if not contents.is_valid():
         raise Error("Head contents must be a named layer set")
@@ -277,6 +283,7 @@ def add_head(
                 RIGHT,
                 (detail + 2 * skin_detail) // 3,
                 workers,
+                hair_style,
             ),
             hair,
         )
