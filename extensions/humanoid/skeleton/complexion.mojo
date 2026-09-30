@@ -225,11 +225,11 @@ def _hash(x: Int, y: Int, seed: Int) -> Float32:
 
 
 def _wrap(value: Int, period: Int) -> Int:
-    """Return `value` modulo `period`, never negative."""
-    var r = value % period
-    if r < 0:
-        r += period
-    return r
+    """Return `value` modulo `period`, never negative.
+
+    Mojo's `%` takes the sign of the divisor, as Python's does.
+    """
+    return value % period
 
 
 def value_noise(
