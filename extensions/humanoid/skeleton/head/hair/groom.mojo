@@ -634,14 +634,14 @@ def _curl(
         var p = points[j] + (points[j + 1] - points[j]) * t
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
-        var out = _unit_vector(n - tangent * n.dot(tangent), n)
-        var across = _cross(out, tangent)
+        var outward = _unit_vector(n - tangent * n.dot(tangent), n)
+        var across = _cross(outward, tangent)
         var angle = phase + Float32(2 * pi) * s / spec.curl_length
         var swing = spec.curl * min(Float32(1), 2 * s / spec.curl_length)
         fine.append(
             p
             + across * (swing * cos(angle))
-            + out * (swing * Float32(0.5) * (1 + sin(angle)))
+            + outward * (swing * Float32(0.5) * (1 + sin(angle)))
         )
         ups.append(n)
         deep.append(depths[j] + (depths[j + 1] - depths[j]) * t)
