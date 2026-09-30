@@ -261,6 +261,10 @@ struct _Brows(Movable):
     var factor: Vector3
     var edge: Float32
     var grain: Float32
+    # The box both brows lie in, out to their soft edge. A point outside
+    # it takes no hair, and costs no sweep.
+    var low: Vector3
+    var high: Vector3
 
     def __init__(out self, dimensions: HeadMuscleDimensions) raises:
         """Find the brows and the color their hair gives the skin.
@@ -283,9 +287,34 @@ struct _Brows(Movable):
         )
         self.edge = dimensions.head.cm(0.12)
         self.grain = dimensions.head.cm(0.12)
+        var pad = Vector3(self.edge, self.edge, self.edge)
+        self.low = (
+            Vector3(
+                min(self.right.low.x, self.left.low.x),
+                min(self.right.low.y, self.left.low.y),
+                min(self.right.low.z, self.left.low.z),
+            )
+            - pad
+        )
+        self.high = (
+            Vector3(
+                max(self.right.high.x, self.left.high.x),
+                max(self.right.high.y, self.left.high.y),
+                max(self.right.high.z, self.left.high.z),
+            )
+            + pad
+        )
 
     def weight(self, point: Vector3) -> Float32:
         """Return how much of the hair's color a point takes."""
+        if (
+            point.y < self.low.y
+            or point.y > self.high.y
+            or point.z < self.low.z
+            or point.x < self.low.x
+            or point.x > self.high.x
+        ):
+            return 0
         var d = min(self.right.distance(point), self.left.distance(point))
         if d > self.edge:
             return 0

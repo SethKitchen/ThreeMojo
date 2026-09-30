@@ -61,6 +61,7 @@ from extensions.humanoid.skeleton.head.frame import (
 from extensions.humanoid.skeleton.head.hair.dimensions import (
     EYEBROWS,
     SCALP_HAIR,
+    HairShape,
     HeadHair,
     head_hair_distance,
     head_hair_field,
@@ -693,12 +694,16 @@ def test_hair() raises:
     )
     # The left brow lies on the skin over the left eye: somewhere on a
     # line from in front of the face back into it.
+    var brow = HairShape(dims, EYEBROWS, LEFT)
     var inside = False
     for step in range(400):  # pragma: no branch
         var z = Float32(11.0) - Float32(step) * Float32(0.01)
-        if head_hair_distance(dims, EYEBROWS, LEFT, h.at(-2.7, 74.5, z)) < 0:
+        if brow.distance(h.at(-2.7, 74.5, z)) < 0:
             inside = True
     assert_true(inside)
+    assert_true(
+        head_hair_distance(dims, EYEBROWS, LEFT, h.at(-2.7, 74.5, 20.0)) > 0
+    )
     var scalp = head_hair_mass_from_dimensions(dims, SCALP_HAIR, hair_tissue())
     assert_true(scalp.mass.value > 0.01 and scalp.mass.value < 0.3)
     assert_true(head_hair_mass(_person(), EYEBROWS).mass.value > 0)
