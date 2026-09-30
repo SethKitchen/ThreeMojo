@@ -35,7 +35,10 @@ from extensions.humanoid.skeleton.complexion import (
     skin_tone,
     value_noise,
 )
+from core.assets import Assets
 from extensions.humanoid.skeleton.look import (
+    add_complexion,
+    skin_scatter,
     eye_physical,
     hair_phong,
     hair_physical,
@@ -213,6 +216,27 @@ def test_looks_follow_the_genome() raises:
     assert_true(eye_physical().clearcoat > 0.9)
     assert_true(eye_physical(TextureId(3)).map == TextureId(3))
     assert_true(eye_physical().map == NO_TEXTURE)
+
+
+def test_a_complexion_is_stored() raises:
+    var assets = Assets()
+    var head = add_complexion(assets, _with(0.3))
+    var body = add_complexion(assets, _with(0.3), whole_body=True)
+    assert_equal(assets.materials.count(), 6)
+    assert_equal(assets.textures.count(), 8)
+    var skin = assets.materials.get(head.skin)
+    assert_true(skin.vertex_colors)
+    assert_true(skin.nodes.value >= 0)
+    var tall = assets.materials.get(body.skin)
+    assert_true(
+        assets.textures.get(tall.map).repeat.y
+        > assets.textures.get(skin.map).repeat.y
+    )
+    assert_true(assets.materials.get(head.eyes).clearcoat > 0.9)
+    assert_true(assets.materials.get(body.hair).map != NO_TEXTURE)
+    _ = skin_scatter()
+    with assert_raises(contains="skin"):
+        _ = skin_scatter(_broken())
 
 
 def main() raises:

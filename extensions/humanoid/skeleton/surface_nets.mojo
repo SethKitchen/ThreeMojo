@@ -212,12 +212,27 @@ def _cell_guess(
     return sum * (Float32(1) / Float32(crossings))
 
 
-def _project[
+def project_to_surface[
     F: DistanceField
 ](
     field: F, start: Vector3, low: Vector3, high: Vector3, step: Float32
 ) -> Vector3:
-    """Walk `start` onto the surface along the gradient, inside a box."""
+    """Walk a point onto the field's surface along its gradient.
+
+    Each step is one Newton step. The point is held inside a box, so a
+    field that is not a true distance cannot throw it far. Where the
+    gradient vanishes the walk stops.
+
+    Args:
+        field: The implicit solid.
+        start: Where to start, in meters.
+        low: The box's minimum corner.
+        high: The box's maximum corner.
+        step: The gradient's sample distance, in meters.
+
+    Returns:
+        The point on the surface, or as near it as the box allows.
+    """
     var p = start
     for _ in range(PROJECT_STEPS):  # pragma: no branch
         var gradient = surface_gradient(field, p, step)
@@ -308,13 +323,12 @@ async def _sample_task[
         var i = block % bx
         var j = (block // bx) % by
         var k = block // (bx * by)
-        for fk in range(k * BLOCK, (k + 1) * BLOCK + 1):  # pragma: no branch
-            for fj in range(
-                j * BLOCK, (j + 1) * BLOCK + 1
-            ):  # pragma: no branch
-                for fi in range(
-                    i * BLOCK, (i + 1) * BLOCK + 1
-                ):  # pragma: no branch
+        var i0 = i * BLOCK
+        var j0 = j * BLOCK
+        var k0 = k * BLOCK
+        for fk in range(k0, k0 + BLOCK + 1):  # pragma: no branch
+            for fj in range(j0, j0 + BLOCK + 1):  # pragma: no branch
+                for fi in range(i0, i0 + BLOCK + 1):  # pragma: no branch
                     var at = grid.index(fi, fj, fk)
                     if values[unsafe_offset=at] == UNSAMPLED:
                         values[unsafe_offset=at] = field[].distance(
@@ -355,7 +369,7 @@ async def _vertex_task[
         var j = (index // grid.nx) % grid.ny
         var k = index // (grid.nx * grid.ny)
         var guess = _cell_guess(values[], grid, i, j, k)
-        var p = _project(
+        var p = project_to_surface(
             field[],
             guess,
             grid.point(i, j, k) - half,
@@ -620,7 +634,7 @@ def _finish(
     # side, moved past one.
     var copies = Dict[Int, Int]()
     var corner = 0
-    while corner < len(indices):
+    while corner < len(indices):  # pragma: no branch
         var lowest = Float32(2)
         var highest = Float32(-1)
         for n in range(3):  # pragma: no branch

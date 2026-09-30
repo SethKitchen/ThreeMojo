@@ -10,6 +10,7 @@ from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.surface_nets import (
     mesh_surface,
+    project_to_surface,
     surface_gradient,
 )
 from math.vector3 import Vector3
@@ -88,6 +89,25 @@ def test_a_ball_meshes_onto_its_surface() raises:
     assert_true(past > 0)
 
 
+def test_smoothing_is_optional() raises:
+    var exact = mesh_surface(
+        _Ball(0.1),
+        Vector3(-0.1, -0.1, -0.1),
+        Vector3(0.1, 0.1, 0.1),
+        8,
+        "ball",
+        1,
+        0,
+    )
+    ref points = exact.attribute_view(String(POSITION))
+    ref normals = exact.attribute_view(String(NORMAL))
+    # Unsmoothed, each normal is the exact gradient: along its point.
+    for index in range(points.count()):  # pragma: no branch
+        var p = points.vector3(index)
+        var n = normals.vector3(index)
+        assert_true(n.dot(p) / p.length() > 0.999)
+
+
 def test_threads_make_the_same_mesh() raises:
     var one = _ball_mesh(1)
     var four = _ball_mesh(4)
@@ -127,6 +147,33 @@ def test_odd_fields_still_mesh() raises:
     ref points = steep.attribute_view(String(POSITION))
     for index in range(points.count()):  # pragma: no branch
         assert_true(points.vector3(index).y < 0.02)
+
+
+@fieldwise_init
+struct _Level(Copyable, DistanceField, Movable):
+    """A field with no gradient anywhere."""
+
+    var r: Float32
+
+    def distance(self, point: Vector3) -> Float32:
+        return self.r
+
+
+def test_projection_walks_onto_the_surface() raises:
+    var low = Vector3(-1, -1, -1)
+    var high = Vector3(1, 1, 1)
+    var p = project_to_surface(_Ball(0.1), Vector3(0.2, 0, 0), low, high, 0.001)
+    assert_true(abs(p.x - 0.1) < 1e-4)
+    # The box holds the walk.
+    var held = project_to_surface(
+        _Ball(0.1), Vector3(0.5, 0, 0), Vector3(0.4, -1, -1), high, 0.001
+    )
+    assert_equal(held.x, 0.4)
+    # With no gradient, the point stays.
+    var still = project_to_surface(
+        _Level(1), Vector3(0.3, 0, 0), low, high, 0.001
+    )
+    assert_equal(still.x, 0.3)
 
 
 def test_the_gradient_of_a_ball_points_out() raises:
