@@ -88,23 +88,23 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
     var zones = List[_Zone]()
     zones.append(
         _Zone(
-            h.at(0, 65.1, 9.6),
-            Vector3(2.35 * c, 0.42 * c, 1.0 * c),
+            h.at(0, 65.55, 10.5),
+            Vector3(2.3 * c, 0.5 * c, 1.0 * c),
             lips,
             0.7,
         )
     )
     zones.append(
         _Zone(
-            h.at(0, 64.4, 9.4),
-            Vector3(2.25 * c, 0.55 * c, 1.0 * c),
+            h.at(0, 64.5, 10.3),
+            Vector3(2.2 * c, 0.6 * c, 1.0 * c),
             lips,
             0.7,
         )
     )
     zones.append(
         _Zone(
-            h.at(0, 68.8, 10.2),
+            h.at(0, 68.8, 11.6),
             Vector3(1.6 * c, 1.1 * c, 1.4 * c),
             flush,
             0.2,
@@ -115,7 +115,7 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         # The cheek's flush.
         zones.append(
             _Zone(
-                h.at(side * 4.3, 68.4, 7.4),
+                h.at(side * 4.3, 68.4, 8.2),
                 Vector3(2.4 * c, 2.2 * c, 2.4 * c),
                 flush,
                 0.1,
@@ -124,7 +124,7 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         # The ear, thin and red.
         zones.append(
             _Zone(
-                h.at(side * 8.4, 71.0, -1.6),
+                h.at(side * 8.7, 71.0, -1.6),
                 Vector3(1.6 * c, 3.4 * c, 2.2 * c),
                 flush,
                 0.5,
@@ -154,7 +154,7 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         )
         zones.append(
             _Zone(
-                h.at(0, 63.0, 5.0),
+                h.at(0, 63.0, 6.2),
                 Vector3(6.2 * c, 3.6 * c, 5.2 * c),
                 beard,
                 0.55,
@@ -162,7 +162,7 @@ def _zones(h: HeadDimensions) raises -> List[_Zone]:
         )
         zones.append(
             _Zone(
-                h.at(0, 66.3, 9.2),
+                h.at(0, 66.3, 10.4),
                 Vector3(2.6 * c, 0.9 * c, 1.2 * c),
                 beard,
                 0.4,
@@ -204,7 +204,7 @@ def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
     var zones = List[_Zone]()
     zones.append(
         _Zone(
-            h.at(0, 68.3, 9.8),
+            h.at(0, 68.3, 11.3),
             Vector3(1.9 * c, 1.1 * c, 1.3 * c),
             Vector3(0.4, 0, 0),
             0.3,
@@ -212,7 +212,7 @@ def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
     )
     zones.append(
         _Zone(
-            h.at(0, 64.7, 9.5),
+            h.at(0, 64.7, 10.4),
             Vector3(2.4 * c, 0.9 * c, 0.9 * c),
             Vector3(0.25, 0, 0),
             0.4,
@@ -222,7 +222,7 @@ def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
         var side = Float32(1) - Float32(2 * s)
         zones.append(
             _Zone(
-                h.at(side * 8.6, 71.2, -2.0),
+                h.at(side * 8.9, 71.2, -2.0),
                 Vector3(1.8 * c, 3.6 * c, 2.4 * c),
                 Vector3(1, 0, 0),
                 0.5,

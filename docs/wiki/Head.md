@@ -83,13 +83,28 @@ The deep cervical nodes lie in a chain along the internal jugular vein. The subm
 
 ## Skin and hair
 
-The head's skin is sculpted, not lofted. A face is not convex: the eyes sit in sockets, and the chin overhangs the throat. The cranium is an ellipsoid a scalp's thickness outside the vault. A mask of sections joins it to the brow, the cheeks, the jaw and the chin, and a broad blend joins the neck.
+The face is a scan. The skin of the head is the mean head of the ICT Face Model Light, a morphable model learned from scans of real faces. A sculpt of even solids makes a face that looks like a doll's. The scan brings the lids, the lips, the nostrils, the folds and the ears of a real face.
 
-`Sculpt` holds the rest as clay: ellipsoids and tapered capsules joined smoothly, with hollows carved out. The broad forms are the forehead, the temples, the brow, the cheekbones, the cheeks, the jaw's line and angle, and the chin. The fine forms are the nose's bridge, tip, wings and nostrils. They are also the lips' two rolls, the bow of the upper lip and the line where the lips meet. Each ear is a rimmed plate with its helix, antihelix, concha, tragus and lobe.
+`ScannedHead` fits the scan to the anatomy, in `extensions/humanoid/skeleton/head/skin/scan.mojo`:
 
-The genome shapes all of it. See [Genome](Genome). The modeled anatomy stays inside the skin.
+1. The scan's eyes land on the template's eyes. Each vertex then goes through the head's frame, as an authored point does. So the genome's face and head genes move the scan as they move the skull under it. See [Genome](Genome).
+2. The ear genes warp the ears. Each ear grows about its root, its back edge stands out, and its lobe hangs lower.
+3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
+4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.
 
-The skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. Each vertex is walked onto the true surface along the field's gradient, and its normal is that gradient. So the face's small forms come out smooth, and a mesh has about a third of the triangles marching tetrahedra makes. The mesher samples finely only near the surface, and it can use every core: pass `workers`. The mesh is the same for any number of workers.
+`HeadSkinField` is the smooth union of the scan and the modeled solids. The modeled anatomy stays inside the skin.
+
+The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.
+
+`tools/ict_face_model.py` converts the model's OBJ files into `assets/face/ict_face.bin`. `FaceModel` reads it. The file keeps the mean head, its mesh, sixty identity modes and fifty-seven expressions, with the left and the right side apart. `FaceModel` reads only what you ask for, so a head that needs no expression loads in a few milliseconds.
+
+| Function | Returns |
+|---|---|
+| `FaceModel(path, identities, expressions)` | The model, or the part of it you ask for. |
+| `FaceModel.shape(identity, expression)` | Every vertex for one weight per identity mode and one per expression. |
+| `FaceModel.part(points, part)` | One part as a mesh: `FACE_AND_HEAD`, `TEETH`, `LEFT_EYEBALL` and the others. |
+| `MeshField(points, triangles)` | The signed distance to a mesh. |
+| `ScannedHead(h, model, hull)` | The scan fitted to one person, over the solids in `hull`. |
 
 `tint_head_skin` writes the face's zones of color into the mesh's `color` attribute. The lips are red. The cheeks, the nose's tip and the ears are a little redder than the forehead. The lids and the skin under the eyes are darker, and the lashes darken the lids' margins. A man's jaw and upper lip carry the gray-blue of a beard under the skin.
 

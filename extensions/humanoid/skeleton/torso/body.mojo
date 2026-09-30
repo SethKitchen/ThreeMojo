@@ -26,8 +26,7 @@ is anterior.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION, UV
+from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
@@ -52,13 +51,21 @@ from extensions.humanoid.skeleton.head.contents import (
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.sculpt import Sculpt, box_gap
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
+from extensions.humanoid.skeleton.head.skin.scan import (
+    NECK_SEAM,
+    scan_model,
+    scan_skin_mesh,
+)
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
 from extensions.humanoid.skeleton.head.skin.tint import tint_head_skin, untinted
 from extensions.humanoid.skeleton.isosurface import check_detail
-from extensions.humanoid.skeleton.surface_nets import mesh_surface
+from extensions.humanoid.skeleton.surface_nets import (
+    mesh_surface,
+    share_height,
+)
 from geometries.utils import merge_geometries
 from extensions.humanoid.skeleton.look import skin_phong
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
@@ -87,7 +94,7 @@ comptime UNSET_PAINT = MaterialId(-1)
 # Where the body's mesh hands over to the head's, in template
 # centimeters: on the neck, below the chin, where the skin is upright
 # and a level cut crosses it cleanly.
-comptime HEAD_SPLIT = Float32(56.5)
+comptime HEAD_SPLIT = NECK_SEAM
 # The ridge of the upper trapezius, in template centimeters: its ends at
 # the neck and at the shoulder, their radii, its depth, and its fold.
 comptime RIDGE_NECK_X = Float32(4.5)
@@ -251,10 +258,11 @@ def body_skin_mesh(
     """Return one skin over the torso, the pelvis, both legs, both arms,
     the neck and the head, down to the wrists.
 
-    The head's small forms need finer cells than the body's, so the
-    surface is meshed in two boxes that meet on the neck, each with
-    `detail` cells along its height, and joined. The two overlap by a
-    few millimeters. The face's zones of color are in its `color`
+    The body is meshed from its field up to the neck, with `detail`
+    cells along its height. Above that the head is the scanned head's
+    own mesh, walked onto the same surface where the field stands out
+    of it (see `scan_skin_mesh`). The two overlap by a few millimeters
+    on the neck. The face's zones of color are in its `color`
     attribute; see `tint_head_skin`.
 
     Args:
@@ -287,44 +295,22 @@ def body_skin_mesh(
             4,
         )
     )
-    # The head's box: wide enough for the ears, no wider.
-    var reach = (
-        max(-field.head.ears.low.x, field.head.ears.high.x) + field.head_lap
-    )
+    # The head is the scan's own mesh, on the same surface.
     parts.append(
-        mesh_surface(
+        scan_skin_mesh(
             field,
-            Vector3(
-                -reach, field.head_split - field.head_lap, field.head.low.z
-            ),
-            Vector3(reach, field.high.y, field.head.high.z),
-            detail,
-            "body skin",
-            workers,
+            field.head.scan,
+            scan_model(),
+            field.head_split - field.head_lap,
+            field.low,
+            field.high,
+            field.epsilon,
         )
     )
     var skin = merge_geometries(parts)
-    _share_height(skin, field.low.y, field.high.y - field.low.y)
+    share_height(skin, field.low.y, field.high.y - field.low.y)
     tint_head_skin(skin, head_muscle_dimensions(spec))
     return skin^
-
-
-def _share_height(
-    mut geometry: BufferGeometry, low: Float32, span: Float32
-) raises:
-    """Set each vertex's v from its height over the whole skin.
-
-    Each box measures v over its own height, so the head's pores would
-    be shorter than the body's and would not meet them on the neck.
-    """
-    ref positions = geometry.attribute_view(String(POSITION))
-    ref uvs = geometry.attribute_view(String(UV))
-    var shared = List[Float32]()
-    for index in range(positions.count()):  # pragma: no branch
-        shared.append(uvs.component(index, 0))
-        var v = (positions.vector3(index).y - low) / span
-        shared.append(max(Float32(0), min(Float32(1), v)))
-    geometry.set_attribute(String(UV), BufferAttribute(shared^, 2))
 
 
 def add_body(

@@ -23,7 +23,7 @@ template genome gives the identity everywhere.
 
 The strengths are authored. At an expression of one each trait sits
 near the edge of the adult range, not beyond it. The ears are skin
-alone, so the skin shapes them itself; see `ear_frame`.
+alone, so the skin shapes them itself; see `warp_ear`.
 """
 
 from extensions.humanoid.genome import (

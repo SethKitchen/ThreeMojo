@@ -85,7 +85,7 @@ The skin's genes set its looks. `skin_tone(genome)` walks a ramp of six swatches
 
 The head's and the face's genes move the head's landmarks. Each landmark is authored in centimeters on the six-foot template, and `HeadMorph` moves it before the frame places it. Each gene is a smooth displacement in its own region. The nose's genes move the points near the nose, and the eyes' genes the points round each orbit. The skull, the muscles, the vessels, the skin and the hair all move together, so the anatomy stays inside the skin. Below the base of the neck the morph does nothing, so the neck still meets the torso.
 
-The ears are skin alone, so the skin shapes them itself: `ear_frame(size, protrusion)` sets the plane each ear is authored in.
+The ears are skin and cartilage alone, so the skin shapes them itself. `warp_ear(point, size, protrusion, lobe)` moves each point of the scanned ear: it grows about its root, its back edge stands out, and its lobe hangs lower. `ear_weight(point)` says how much of the ear a point is. See [Head](Head#skin-and-hair).
 
 The frame's genes change the torso's frame. `SHOULDER_BREADTH` widens the rib cage and the shoulder girdle, most at the shoulders and not at all at the waist. The arms hang from the wider girdle. `CHEST_DEPTH` deepens the rib cage in front of and behind the spine. `ARM_LENGTH` stretches the upper arm and the forearm. The hand keeps its size.
 

@@ -677,6 +677,45 @@ SOFTWARE.
 
 ---
 
+## ICT FaceKit
+
+<https://github.com/USC-ICT/ICT-FaceKit>
+
+`assets/face/ict_face.bin` is the ICT Face Model Light of USC's Institute for
+Creative Technologies, converted by `tools/ict_face_model.py`: its generic
+neutral mesh, its texture coordinates, its first sixty identity modes and its
+expression shapes, with the skin's triangles, edges and holes worked out from
+the mesh. `extensions/humanoid/skeleton/head/face_model.mojo` reads
+it; the Mojo implementation is original work. Only the Light model is used,
+which ICT-FaceKit releases under the MIT License, reproduced below. ICT's Full
+face model, under a different license, is not used.
+
+```
+MIT License
+
+Copyright (c) 2020 USC Institute for Creative Technologies
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## Scope note
 
 The `coverage/` directory — the line, branch, condition, and MC-DC coverage

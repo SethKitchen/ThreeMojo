@@ -412,6 +412,7 @@ def mesh_surface[
     name: String,
     workers: Int = 1,
     smoothing: Int = 1,
+    height: Float32 = 0,
 ) raises -> BufferGeometry:
     """Return a smooth mesh of `field`'s zero set inside a box.
 
@@ -430,6 +431,9 @@ def mesh_surface[
             threads' probes would interleave.
         smoothing: How many times each normal is averaged with its
             neighbors'. One by default; zero keeps the exact gradient.
+        height: The height the cells are measured along, in meters, for
+            a box that is one part of a taller solid. Zero, the default,
+            means the box's own height.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -443,7 +447,10 @@ def mesh_surface[
     if threads < 1:
         threads = num_logical_cores()
     var span_y = high.y - low.y
-    var cell = span_y / Float32(detail * REFINE)
+    var along = span_y
+    if height > 0:
+        along = height
+    var cell = along / Float32(detail * REFINE)
     # Room round the solid, so its surface closes inside the grid.
     var pad = cell * Float32(2)
     var start = Vector3(low.x - pad, low.y - pad, low.z - pad)
@@ -533,7 +540,7 @@ def mesh_surface[
     if len(indices) == 0:
         raise Error("The " + name + " field produced no surface")
     _smooth_normals(normals, indices, smoothing)
-    return _finish(positions^, normals^, indices^, low.y, span_y)
+    return finish_surface(positions^, normals^, indices^, low.y, span_y)
 
 
 def _smooth_normals(
@@ -616,14 +623,32 @@ def _emit_quad(
             indices.append(i2)
 
 
-def _finish(
+def finish_surface(
     var positions: List[Float32],
     var normals: List[Float32],
     var indices: List[Int],
     base: Float32,
     span: Float32,
 ) raises -> BufferGeometry:
-    """Add texture coordinates, split the seam, and build the geometry."""
+    """Add texture coordinates, split the seam, and build the geometry.
+
+    `u` runs round the vertical axis, with its seam at the back; `v` is
+    the height over `span` from `base`. A triangle across the seam gets
+    copies of its corners.
+
+    Args:
+        positions: Three floats a vertex, in meters.
+        normals: Three floats a vertex.
+        indices: Three vertices a triangle.
+        base: The height where `v` is zero, in meters.
+        span: The height over which `v` runs to one, in meters.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv`.
+
+    Raises:
+        Error: If the geometry refuses the attributes.
+    """
     var uvs = List[Float32]()
     var count = len(positions) // 3
     for index in range(count):  # pragma: no branch
@@ -663,3 +688,29 @@ def _finish(
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(indices^)
     return geometry^
+
+
+def share_height(
+    mut geometry: BufferGeometry, low: Float32, span: Float32
+) raises:
+    """Set each vertex's `v` from its height over a whole skin.
+
+    A skin meshed in parts measures `v` over each part's own height, so
+    the texture would not meet across the parts.
+
+    Args:
+        geometry: A geometry with `position` and `uv`.
+        low: The height where `v` is zero, in meters.
+        span: The height over which `v` runs to one, in meters.
+
+    Raises:
+        Error: If the geometry lacks `position` or `uv`.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref uvs = geometry.attribute_view(String(UV))
+    var shared = List[Float32]()
+    for index in range(positions.count()):  # pragma: no branch
+        shared.append(uvs.component(index, 0))
+        var v = (positions.vector3(index).y - low) / span
+        shared.append(max(Float32(0), min(Float32(1), v)))
+    geometry.set_attribute(String(UV), BufferAttribute(shared^, 2))

@@ -70,8 +70,8 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
 from extensions.humanoid.skeleton.head.skin.dimensions import (
     EyeLids,
     HeadSkinField,
-    ear_frame,
 )
+from extensions.humanoid.skeleton.head.skin.scan import ear_weight, warp_ear
 from extensions.humanoid.skeleton.head.skin.geometry import (
     head_skin_from_dimensions,
 )
@@ -279,10 +279,20 @@ def test_lids_open_on_the_eye() raises:
 
 
 def test_ears_follow_their_genes() raises:
-    var plain = ear_frame(0, 0)
-    var flared = ear_frame(0, 1)
-    assert_true(flared.back.x > plain.back.x)
-    assert_true(ear_frame(1, 0).size > plain.size)
+    # The ear genes move the auricle and leave the head alone.
+    var rim = Vector3(8.8, 72.0, -3.0)
+    assert_true(ear_weight(rim) > 0.5)
+    var crown = Vector3(0, 80.0, 0)
+    assert_equal(ear_weight(crown), 0)
+    assert_equal(warp_ear(crown, 1, 1, 1).y, crown.y)
+    # Its back edge stands out, on either side.
+    assert_true(warp_ear(rim, 0, 1, 0).x > rim.x)
+    var left = Vector3(-rim.x, rim.y, rim.z)
+    assert_true(warp_ear(left, 0, 1, 0).x < left.x)
+    # A larger ear reaches farther from its root; a longer lobe hangs.
+    assert_true(warp_ear(rim, 1, 0, 0).x > rim.x)
+    var lobe = Vector3(7.9, 66.8, -1.2)
+    assert_true(warp_ear(lobe, 0, 0, 1).y < lobe.y)
     var big = HeadSkinField(head_muscle_dimensions(_person(_one(EAR_SIZE, 1))))
     var small = HeadSkinField(
         head_muscle_dimensions(_person(_one(EAR_SIZE, -1)))
@@ -310,7 +320,7 @@ def test_the_skin_is_tinted() raises:
     ref colors = skin.attribute_view(String(COLOR))
     ref points = skin.attribute_view(String(POSITION))
     var h = dims.head.copy()
-    var lips = h.at(0, 65.0, 9.8)
+    var lips = h.at(0, 65.6, 10.8)
     var brow = h.at(0, 78.0, 9.0)
     var lip_red = Float32(0)
     var brow_red = Float32(0)
