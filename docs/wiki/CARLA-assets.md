@@ -110,7 +110,7 @@ Use the cooked release, not the carla-content repository. The repository holds u
 
 Each town package holds one CARLA town as CARLA builds it: its buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
 
-A package is one glTF file with its buffer and its textures. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
+A package is one glTF file with its buffer and its textures, and the town's OpenDRIVE map, `<town>.xodr`. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
 
 The meshes are merged by tile, by kind and by material. A tile is 64 meters square. Each node has two tags in its `extras`:
 

@@ -14,7 +14,8 @@ draws itself.
 
     python build_towns.py [TOWN ...] [--max-size 512] [--tile 64]
 
-It writes `town_packages/carla.town.<town>/`. The package names no engine
+It writes `town_packages/carla.town.<town>/`, with the town's OpenDRIVE
+map, `<town>.xodr`, beside the glTF. The package names no engine
 and no engine path: `check_clean` refuses one that does.
 """
 
@@ -36,6 +37,7 @@ import carla_gltf_fix as fix  # noqa: E402
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 RAW = os.path.join(BASE, "raw_town")
 LAYOUT = os.path.join(BASE, "layout")
+MAPS = os.path.join(BASE, "release", "CarlaUE4", "Content", "Carla", "Maps", "OpenDrive")
 OUT = os.path.join(BASE, "town_packages")
 TOWNS = ["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"]
 
@@ -679,6 +681,8 @@ def build(town, max_size, tile):
                     group[2].append(part["uvs"].astype(numpy.float32))
                     group[3].append(triangles + group[4])
                     group[4] += len(points)
+    # The town's own road network, so a package brings the map it stands on.
+    shutil.copy(os.path.join(MAPS, town + ".xodr"), os.path.join(out_dir, town + ".xodr"))
     return write(town, name, out_dir, library, groups)
 
 
@@ -731,7 +735,7 @@ def check_clean(out_dir):
         for name in files:
             if UNCLEAN.search(name):
                 raise SystemExit("unclean file name: " + os.path.join(base, name))
-            if name.endswith(".gltf"):
+            if name.endswith(".gltf") or name.endswith(".xodr"):
                 text = open(os.path.join(base, name), encoding="utf-8").read()
                 found = UNCLEAN.search(text)
                 if found:
