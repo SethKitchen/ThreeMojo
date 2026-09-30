@@ -14,19 +14,37 @@ and read best tone mapped. The maps are visual approximations.
     var paint = muscle_physical(store.add(map))
 """
 
-from extensions.humanoid.genome import Genome
+from extensions.humanoid.genome import MELANIN, Genome, check_genome
+from core.assets import Assets
 from extensions.humanoid.skeleton.complexion import (
+    hair_albedo,
     hair_tone,
+    iris_albedo,
     skin_albedo_pixels,
     skin_glow,
+    skin_relief,
     skin_tone,
 )
 from materials.material import (
     DOUBLE_SIDE,
     Material,
+    MaterialId,
     phong_material,
     physical_material,
 )
+from extensions.humanoid.skeleton.head.skin.tint import THINNESS
+from materials.nodes import (
+    NODE_FLOAT,
+    NodeGraph,
+    NodeProgram,
+    THICKNESS_AMBIENT_NODE,
+    THICKNESS_ATTENUATION_NODE,
+    THICKNESS_COLOR_NODE,
+    THICKNESS_DISTORTION_NODE,
+    THICKNESS_POWER_NODE,
+    THICKNESS_SCALE_NODE,
+)
+from math.vector2 import Vector2
 from render.framebuffer import Color
 from render.srgb import SRGB
 from render.texture import REPEAT, Texture
@@ -534,3 +552,104 @@ def skin_physical(
     )
     material.vertex_colors = tinted
     return material^
+
+
+def skin_scatter(genome: Genome = Genome()) raises -> NodeProgram:
+    """Return the node program that lets light through thin skin.
+
+    It makes a physical skin three.js's `MeshSSSNodeMaterial`: a lamp
+    behind an ear, a nostril or the edge of a cheek shows through it,
+    deep red, because red light travels farthest in blood-filled
+    tissue. Melanin absorbs some of it on its way, so darker skin lets
+    less through. The mesh has no thickness map, so the light through
+    is scaled by the mesh's `thinness` attribute, which
+    `tint_head_skin` writes: one at the rim of an ear, less at the
+    nostrils, the lips and the lids, and nothing where the attribute
+    is missing.
+
+    Args:
+        genome: Reads `MELANIN`. The template genome by default.
+
+    Returns:
+        A compiled node program to store in `Assets.programs` and name
+        in the skin material's `nodes`.
+
+    Raises:
+        Error: If `genome` is not valid or the graph refuses a node.
+    """
+    check_genome(genome, "skin")
+    var dark = (genome.get(MELANIN) + 1) / 2
+    var through = Float32(1) - Float32(0.6) * dark
+    var graph = NodeGraph()
+    var red = graph.vec3(0.6 * through, 0.1 * through, 0.05 * through)
+    var thin = graph.attribute(String(THINNESS), NODE_FLOAT)
+    graph.set_output(THICKNESS_COLOR_NODE, graph.mul(red, thin))
+    graph.set_output(THICKNESS_DISTORTION_NODE, graph.float(0.25))
+    graph.set_output(THICKNESS_AMBIENT_NODE, graph.float(0.02))
+    graph.set_output(THICKNESS_ATTENUATION_NODE, graph.float(0.5))
+    graph.set_output(THICKNESS_POWER_NODE, graph.float(3.0))
+    graph.set_output(THICKNESS_SCALE_NODE, graph.float(4.0))
+    return graph.compile()
+
+
+@fieldwise_init
+struct Complexion(ImplicitlyCopyable):
+    """The looks one person's genome asks for, stored in an `Assets`.
+
+    `skin` is tinted: every mesh it paints needs a `color` attribute,
+    which the head's and the body's skins carry.
+    """
+
+    var skin: MaterialId
+    var hair: MaterialId
+    var eyes: MaterialId
+
+
+def add_complexion(
+    mut assets: Assets, genome: Genome, whole_body: Bool = False
+) raises -> Complexion:
+    """Store a person's skin, hair and eye looks and return their ids.
+
+    The skin's color map and its relief tile several times across the
+    mesh, so a pore is a fraction of a millimeter on the face. A whole
+    body's skin is taller than a head's, so it tiles more times up it.
+    The skin lets light through where it is thin; see `skin_scatter`.
+
+    Args:
+        assets: The store that receives the textures and the materials.
+        genome: The person's genome.
+        whole_body: True for the body's skin from the head down; False
+            for the head's alone.
+
+    Returns:
+        The three material ids.
+
+    Raises:
+        Error: If `genome` is not valid or a store refuses an entry.
+    """
+    var up = Float32(2.5)
+    var relief_up = Float32(5)
+    if whole_body:
+        up = Float32(14)
+        relief_up = Float32(28)
+    var albedo = skin_albedo(256, genome)
+    albedo.repeat = Vector2(3, up)
+    var relief = skin_relief(256)
+    relief.repeat = Vector2(6, relief_up)
+    var strands = hair_albedo(256, genome)
+    strands.repeat = Vector2(6, 2)
+    var look = skin_physical(
+        assets.textures.add(albedo^),
+        genome,
+        assets.textures.add(relief^),
+        tinted=True,
+    )
+    look.nodes = assets.programs.add(skin_scatter(genome))
+    var skin = assets.materials.add(look^)
+    var hair = assets.materials.add(
+        hair_physical(genome, assets.textures.add(strands^))
+    )
+    var eyes = assets.materials.add(
+        eye_physical(assets.textures.add(iris_albedo(64, genome)))
+    )
+    return Complexion(skin, hair, eyes)

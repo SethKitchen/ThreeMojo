@@ -63,27 +63,16 @@ from extensions.humanoid.quality import (
     skin_detail,
 )
 from extensions.humanoid.sex import FEMALE, MALE, Sex
-from extensions.humanoid.skeleton.complexion import (
-    hair_albedo,
-    iris_albedo,
-    skin_relief,
-)
 from extensions.humanoid.skeleton.head.assembly import add_head
 from extensions.humanoid.skeleton.head.contents import EYES, HAIR, SKIN
 from extensions.humanoid.skeleton.head.frame import head_dimensions
-from extensions.humanoid.skeleton.look import (
-    eye_physical,
-    hair_physical,
-    skin_albedo,
-    skin_physical,
-)
+from extensions.humanoid.skeleton.look import add_complexion
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.athleticism import UNTONED
 from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import MaterialId, standard_material
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
@@ -209,31 +198,11 @@ def main() raises:
     scene.environment = assets.cube_textures.add(lighting^)
     scene.environment_intensity = 0.6
 
-    var relief_map = skin_relief(256)
-    relief_map.repeat = Vector2(6, 5)
-    var relief = assets.textures.add(relief_map^)
     var people = _people()
     var turners = List[NodeId]()
     for index in range(len(people)):
         var person = people[index]
-        var albedo = skin_albedo(256, person.genome)
-        albedo.repeat = Vector2(3, 2.5)
-        var skin = assets.materials.add(
-            skin_physical(
-                assets.textures.add(albedo^),
-                person.genome,
-                relief,
-                tinted=True,
-            )
-        )
-        var strands = hair_albedo(256, person.genome)
-        strands.repeat = Vector2(6, 2)
-        var hair = assets.materials.add(
-            hair_physical(person.genome, assets.textures.add(strands^))
-        )
-        var eye = assets.materials.add(
-            eye_physical(assets.textures.add(iris_albedo(64, person.genome)))
-        )
+        var looks = add_complexion(assets, person.genome)
         var column = index % COLUMNS
         var row = index // COLUMNS
         var x = (Float32(column) - Float32(COLUMNS - 1) / 2) * SPACING_X
@@ -252,16 +221,17 @@ def main() raises:
             assets,
             holder_id,
             person,
-            skin,
-            skin,
-            skin,
-            skin,
+            looks.skin,
+            looks.skin,
+            looks.skin,
+            looks.skin,
             SKIN.plus(HAIR).plus(EYES),
             detail,
             covering,
-            skin_paint=skin,
-            hair_paint=hair,
-            eye_paint=eye,
+            skin_paint=looks.skin,
+            hair_paint=looks.hair,
+            eye_paint=looks.eyes,
+            workers=available_workers(),
         )
         turners.append(pivot_id)
     for index in range(len(scene.meshes)):

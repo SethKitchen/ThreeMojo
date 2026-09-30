@@ -55,6 +55,12 @@ struct _Zone(ImplicitlyCopyable):
         return 1 - smoothstep(self.core, 1, q)
 
 
+# The name of the attribute that says how thin the skin is: one where
+# light passes through it, at the rim of an ear, and zero where it
+# cannot.
+comptime THINNESS = "thinness"
+
+
 def _mix(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     """Return `a` moved toward `b` by `t`."""
     return a + (b - a) * t
@@ -182,6 +188,49 @@ def _lash_line(lids: EyeLids, point: Vector3) -> Float32:
     return band * upper * (1 - smoothstep(0.85, 1.0, abs(across)))
 
 
+def _thin_zones(h: HeadDimensions) raises -> List[_Zone]:
+    """Return where the face's skin is thin enough to let light through.
+
+    The factor's `x` is the thinness at the zone's core."""
+    var c = h.cm(1)
+    var zones = List[_Zone]()
+    zones.append(
+        _Zone(
+            h.at(0, 68.3, 9.8),
+            Vector3(1.9 * c, 1.1 * c, 1.3 * c),
+            Vector3(0.4, 0, 0),
+            0.3,
+        )
+    )
+    zones.append(
+        _Zone(
+            h.at(0, 64.7, 9.5),
+            Vector3(2.4 * c, 0.9 * c, 0.9 * c),
+            Vector3(0.25, 0, 0),
+            0.4,
+        )
+    )
+    for s in range(2):  # pragma: no branch
+        var side = Float32(1) - Float32(2 * s)
+        zones.append(
+            _Zone(
+                h.at(side * 8.6, 71.2, -2.0),
+                Vector3(1.8 * c, 3.6 * c, 2.4 * c),
+                Vector3(1, 0, 0),
+                0.5,
+            )
+        )
+        zones.append(
+            _Zone(
+                h.at(side * 3.2, 72.1, 8.8),
+                Vector3(1.6 * c, 1.0 * c, 0.9 * c),
+                Vector3(0.3, 0, 0),
+                0.3,
+            )
+        )
+    return zones^
+
+
 def tint_head_skin(
     mut geometry: BufferGeometry, dimensions: HeadMuscleDimensions
 ) raises:
@@ -189,6 +238,9 @@ def tint_head_skin(
 
     The lips take their own color over whatever else is under them;
     every other zone multiplies what is there.
+
+    It also writes the `THINNESS` attribute, one float a vertex, that
+    `skin_scatter` reads.
 
     Args:
         geometry: A skin mesh in the pelvis frame, with `position`. Its
@@ -201,12 +253,18 @@ def tint_head_skin(
     """
     dimensions.validate()
     var zones = _zones(dimensions.head)
+    var thin = _thin_zones(dimensions.head)
     var lids = EyeLids(dimensions.head)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var colors = List[Float32](capacity=count * 3)
+    var thinness = List[Float32](capacity=count)
     for index in range(count):  # pragma: no branch
         var p = positions.vector3(index)
+        var through = Float32(0)
+        for z in range(len(thin)):  # pragma: no branch
+            through = max(through, thin[z].factor.x * thin[z].weight(p))
+        thinness.append(through)
         var color = Vector3(1, 1, 1)
         for z in range(len(zones)):  # pragma: no branch
             var w = zones[z].weight(p)
@@ -228,6 +286,7 @@ def tint_head_skin(
         colors.append(color.y)
         colors.append(color.z)
     geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
+    geometry.set_attribute(String(THINNESS), BufferAttribute(thinness^, 1))
 
 
 def untinted(mut geometry: BufferGeometry) raises:

@@ -227,7 +227,7 @@ def body_skin_mesh(
             detail,
             "body skin",
             workers,
-            2,
+            4,
         )
     )
     # The head's box: wide enough for the ears, no wider.
