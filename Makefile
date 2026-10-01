@@ -545,17 +545,12 @@ endif
 # The units system's value is what it *rejects*, and a rejection cannot be
 # tested from inside a test suite: a file exercising one would not build. So
 # each case lives in its own file that must fail to compile, and this target
-# fails if any of them ever starts compiling.
+# fails if any of them ever starts compiling. The helper first builds a
+# valid control and distinguishes source rejections from infrastructure errors.
 compile-fail: $(NEG_STAMP)
 $(NEG_STAMP):
-	@fail=0; \
-	for f in $(COMPILE_FAIL_RUN); do \
-	  if $(MOJO) build $(MOJOFLAGS) -o /dev/null "$$f" > /dev/null 2>&1; then \
-	    echo "compiled but should not have: $$f"; fail=1; \
-	  fi; \
-	done; \
-	if [ $$fail -ne 0 ]; then exit 1; fi; \
-	echo "All $(words $(COMPILE_FAIL_RUN)) unit errors rejected."
+	@python3 tools/compile_fail.py --compiler=$(call quote,$(MOJO)) \
+	  --flags=$(call quote,$(MOJOFLAGS)) $(COMPILE_FAIL_RUN)
 	@$(call stamp,compile-fail)
 
 # --- documentation ----------------------------------------------------------
