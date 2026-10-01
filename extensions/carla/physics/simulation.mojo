@@ -426,8 +426,18 @@ struct CarlaPhysics(Movable):
             raise Error("A tick must be more than zero")
         var h = Duration(dt.value / Float32(substeps), SECOND)
         self.events = List[CollisionEvent]()
+        # External forces belong to the whole tick. The world clears its
+        # accumulators after each substep; vehicle forces are rebuilt.
+        var forces = List[Vector3]()
+        var torques = List[Vector3]()
+        for body in self.world.bodies:
+            forces.append(body.force)
+            torques.append(body.torque)
         # `substeps` is one or more, checked above.
         for _ in range(substeps):  # pragma: no branch
+            for i in range(len(forces)):
+                self.world.bodies[i].force = forces[i]
+                self.world.bodies[i].torque = torques[i]
             for i in range(len(self.vehicles)):
                 self.vehicles[i].update(self.world, h)
             for i in range(len(self.walkers)):
