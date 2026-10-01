@@ -76,6 +76,8 @@ The sidewalk needs a curb with a height. With a curb height of zero, `City.sidew
 
 `SkyscraperGenerator(parameters).layout()` returns every placement of every piece. `build()` bakes them into one geometry without an index. Every vertex has a `partId` for its zone, and the glass has the room behind it, `roomCenter` and `roomSize`.
 
+The bake transforms normals as directions. A rigid placement rotates the normal without adding its translation. A scaled placement uses the inverse transpose of its linear part.
+
 - The footprint is a rectangle with one corner cut at 45 degrees. Each edge is a face with a frame: `u` along the edge, `v` up, `n` out.
 - The tower has three tiers: a base, a shaft and a crown. The crown steps back by `setback_depth` bays.
 - The ground floor is a row of shopfronts. On a few seeds it is a pointed-arch arcade, `ARCADE`.
