@@ -90,8 +90,8 @@ def build_world(
     var models: List[Tuple[String, String]] = [
         ("vehicle.lincoln.mkz", "190,30,28"),
         ("vehicle.mini.cooper", "20,60,150"),
-        ("vehicle.tesla.model3", "235,235,235"),
-        ("vehicle.audi.tt", "30,30,32"),
+        ("vehicle.nissan.patrol", "235,235,235"),
+        ("vehicle.dodge.charger", "30,30,32"),
     ]
     for k in range(len(models)):
         var blueprint = library.at(models[k][0])
