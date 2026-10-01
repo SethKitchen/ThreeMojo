@@ -346,7 +346,9 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 
 `damp(x, y, rate, delta)` takes the frame time as a `Duration`. `smooth_step(x, low, high)` has three.js's argument order. The shaders read `smoothstep(edge0, edge1, x)` from `math/smoothstep.mojo`, in GLSL's order.
 
-A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. They call libm, and a GPU has no libm. On a card before sm_80, `atan2` does not link. Use `atan_float32` and `atan2_float32` from `math/arc_tangent.mojo`. They are Cephes's `atanf` in plain arithmetic, and the CPU calls them too.
+A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. They call libm, and a GPU has no libm. On a card before sm_80, `atan2` does not link. Use `atan_float32` and `atan2_float32` from `math/arc_tangent.mojo`. They are Cephes's `atanf` in plain arithmetic, and the CPU calls them too. Signed zeros and infinite coordinates follow the IEEE quadrant rules.
+
+`sin_float32` uses the same arithmetic on the CPU and GPU. It accepts every finite `Float32` angle. Ordinary angles keep the existing Cody-Waite reduction. Large angles use an integer range reduction before the same polynomial. Infinite angles and NaN return NaN.
 
 `degToRad` and `radToDeg` are not here. An `Angle` converts itself.
 

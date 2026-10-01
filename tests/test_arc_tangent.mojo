@@ -7,6 +7,7 @@
 
 from math.arc_tangent import atan2_float32, atan_float32
 from std.math import atan, atan2, inf, nan, pi
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -41,6 +42,25 @@ def test_the_origin_and_nan() raises:
     assert_true(got != got)
     got = atan2_float32(1, nothing)
     assert_true(got != got)
+
+
+def test_signed_zero_and_infinite_quadrants_match_libm() raises:
+    var values: List[Float32] = [
+        -inf[DType.float32](),
+        -1,
+        -0.0,
+        0.0,
+        1,
+        inf[DType.float32](),
+    ]
+    for y in values:
+        for x in values:
+            assert_equal(
+                bitcast[DType.uint32](atan2_float32(y, x)),
+                bitcast[DType.uint32](atan2(y, x)),
+            )
+    assert_equal(bitcast[DType.uint32](atan_float32(-0.0)), UInt32(0x80000000))
+    assert_equal(bitcast[DType.uint32](atan_float32(0.0)), UInt32(0))
 
 
 def main() raises:

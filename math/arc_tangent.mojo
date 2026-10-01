@@ -16,6 +16,9 @@ with `math.smoothstep`.
 """
 
 
+from std.memory import bitcast
+
+
 def atan_float32(x: Float32) -> Float32:
     """Return the arc tangent of one number, Cephes's `atanf`.
 
@@ -27,7 +30,12 @@ def atan_float32(x: Float32) -> Float32:
 
     Returns:
         The angle, in radians, from minus a half pi to a half pi.
+
+    Raises:
+        None.
     """
+    if x == 0:
+        return x
     var sign = Float32(1)
     var a = x
     if a < 0:
@@ -61,22 +69,33 @@ def atan2_float32(y: Float32, x: Float32) -> Float32:
 
     Returns:
         The angle from the positive x axis, in radians, from minus pi to
-        pi. Zero for the origin, and NaN when either coordinate is NaN.
+        pi. Signed zeros and infinities follow the IEEE quadrant rules.
+        NaN when either coordinate is NaN.
+
+    Raises:
+        None.
     """
     if x != x or y != y:
         return x + y
+    var y_sign = bitcast[DType.uint32](y) & 0x80000000
+    var x_negative = (bitcast[DType.uint32](x) & 0x80000000) != 0
+    if y == 0:
+        var angle = Float32(3.141592653589793) if x_negative else Float32(0)
+        return bitcast[DType.float32](bitcast[DType.uint32](angle) | y_sign)
+    if x == 0:
+        return bitcast[DType.float32](UInt32(0x3FC90FDB) | y_sign)
+    if (bitcast[DType.uint32](x) & 0x7FFFFFFF) == 0x7F800000 and (
+        bitcast[DType.uint32](y) & 0x7FFFFFFF
+    ) == 0x7F800000:
+        var angle = Float32(2.356194490192345) if x_negative else Float32(
+            0.7853981633974483
+        )
+        return bitcast[DType.float32](bitcast[DType.uint32](angle) | y_sign)
     if x > 0:
         return atan_float32(y / x)
-    if x < 0:
-        # Each branch a Float32 of its own. A Float32 of the choice picks
-        # between two doubles first, and Metal has no double: the kernel
-        # that called this failed to build on a Mac.
-        var half_turn = Float32(3.141592653589793) if y >= 0 else Float32(
-            -3.141592653589793
-        )
-        return atan_float32(y / x) + half_turn
-    if y > 0:
-        return Float32(1.5707963267948966)
-    if y < 0:
-        return Float32(-1.5707963267948966)
-    return 0
+    # With NaN and zero already handled, the remaining x is negative.
+    # Each branch stays Float32 so Metal does not select between doubles.
+    var half_turn = Float32(3.141592653589793) if y_sign == 0 else Float32(
+        -3.141592653589793
+    )
+    return atan_float32(y / x) + half_turn
