@@ -43,7 +43,7 @@ from render.texture import (
     UNSIGNED_BYTE_TYPE,
     TexelType,
 )
-from render.volume_texture import Data3DTexture, VolumeImage
+from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
 from std.math import ceil, isfinite, log2
 from std.pathlib import Path
 
@@ -176,6 +176,17 @@ def lut_3dl_byte(value: Float64) -> UInt8:
     return UInt8(((whole % 256) + 256) % 256)
 
 
+def _checked_grid_cells(size: Int) raises -> Int:
+    """Bound shared RGBA dimensions and the temporary Float64 allocation."""
+    _check_extent(size, size, size, 4)
+    var cells = size * size * size
+    # The parser first stores four Float64 values per cell. Validate the
+    # byte count too, before List converts its element count to bytes.
+    if cells > Int.MAX // 4 // 8:
+        raise Error("3DL: temporary grid storage cannot fit in Int")
+    return cells
+
+
 def parse_lut_3dl(
     text: String, texel_type: TexelType = UNSIGNED_BYTE_TYPE
 ) raises -> Lut3dl:
@@ -214,7 +225,7 @@ def parse_lut_3dl(
     for i in range(1, size):
         if grid[i] - grid[i - 1] != step:
             raise Error("3DL: inconsistent grid size")
-    var cells = size * size * size
+    var cells = _checked_grid_cells(size)
     var data = List[Float64](length=cells * 4, fill=0)
     var largest = Float64(0)
     var index = 0
