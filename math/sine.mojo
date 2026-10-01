@@ -71,10 +71,15 @@ def _large_reduction(a: Float32) -> Tuple[Int, Float32]:
         product[i] = UInt32(term & 0xFFFFFFFF)
         carry = term >> 32
     product[8] = UInt32(carry)
+    # a = mantissa * 2^(exponent - 23); the constant has 256 fractional
+    # bits, so the product's binary point is at 256 + 23 - exponent.
     var point = 279 - exponent
     var quadrant = Int(_reduction_word(product, point) & 3)
     var upper = _reduction_word(product, point - 32)
     var lower = _reduction_word(product, point - 64)
+    # Choose the next quadrant at a half. Exact nonzero binary angles
+    # cannot be halfway between multiples of pi/2; either side at a
+    # rounded midpoint also stays in the polynomial's [-pi/4, pi/4] range.
     var negative = upper >= 0x80000000
     if negative:
         # Form the distance below the next integer without subtracting
