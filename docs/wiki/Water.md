@@ -58,3 +58,11 @@ The caustic grid in the still is 64. The page uses 256.
 ## Frame
 
 `render_water` builds the spectrum, steps the ripple and draws the caustics. It then shades each pixel and grades the color. The shader clock is 0.9 times the frame clock. Dispersion repeats every 60 seconds of shader time.
+
+## Sampling and light transport
+
+Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity.
+
+Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
+
+This extension draws a CPU still. It is not a shared scene-water object or a validated fluid solver. The picture does not establish a real-time frame rate, buoyancy, or engineering fluid accuracy.

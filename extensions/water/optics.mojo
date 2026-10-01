@@ -209,6 +209,18 @@ def refract(
     )
 
 
+def refracted_sun(sun: Vector3) -> Refracted:
+    """Return the sun ray after it enters a horizontal water surface.
+
+    Args:
+        sun: Unit direction toward the sun, with positive y above water.
+
+    Returns:
+        The downward transmitted ray, including its horizontal offset.
+    """
+    return refract(-sun.x, -sun.y, -sun.z, 0.0, 1.0, 0.0, 1.0 / water_ior())
+
+
 def beckmann(nh: Float32, alpha2: Float32) -> Float32:
     """Return the Beckmann distribution Clearwater uses for glints.
 

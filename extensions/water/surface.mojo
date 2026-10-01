@@ -153,8 +153,8 @@ def sample_surface(
     var n = surface.field.n
     var u = x / surface.patch.value
     var v = z / surface.patch.value
-    var px = u * Float32(n)
-    var pz = v * Float32(n)
+    var px = u * Float32(n) - 0.5
+    var pz = v * Float32(n) - 0.5
     var x0 = Int(floor(px))
     var z0 = Int(floor(pz))
     var fx = px - Float32(x0)
@@ -349,8 +349,8 @@ def _sample_level(
 
 def _sample_uv(field: ComplexField, u: Float32, v: Float32) -> SurfaceSample:
     var n = field.n
-    var px = u * Float32(n)
-    var pz = v * Float32(n)
+    var px = u * Float32(n) - 0.5
+    var pz = v * Float32(n) - 0.5
     var x0 = Int(floor(px))
     var z0 = Int(floor(pz))
     var fx = px - Float32(x0)

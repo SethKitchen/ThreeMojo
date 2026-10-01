@@ -124,8 +124,8 @@ def sample_pebble(bed: PebbleBed, u: Float32, v: Float32) -> PebbleSample:
     """
     var fu = u - floor(u)
     var fv = v - floor(v)
-    var x = fu * Float32(bed.width)
-    var y = fv * Float32(bed.height)
+    var x = fu * Float32(bed.width) - 0.5
+    var y = fv * Float32(bed.height) - 0.5
     var x0 = Int(floor(x)) % bed.width
     var y0 = Int(floor(y)) % bed.height
     var x1 = (x0 + 1) % bed.width
@@ -223,8 +223,8 @@ def _sample_level(
         h = bed.mip_h[level - 1]
     var fu = u - floor(u)
     var fv = v - floor(v)
-    var x = fu * Float32(w)
-    var y = fv * Float32(h)
+    var x = fu * Float32(w) - 0.5
+    var y = fv * Float32(h) - 0.5
     var x0 = Int(floor(x)) % w
     var y0 = Int(floor(y)) % h
     var x1 = (x0 + 1) % w
