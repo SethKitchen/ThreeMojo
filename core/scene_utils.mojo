@@ -33,6 +33,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.deform import morphed_positions, skin_carriers, skin_pose
+from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from geometries.attribute_utils import (
@@ -55,8 +56,9 @@ def create_meshes_from_instanced_mesh(
 
     The group copies the instanced mesh's node. Each mesh gets a node of
     its own under the group, placed by its instance's matrix taken apart,
-    and draws the instanced mesh's geometry and material. The instance
-    colors are not carried over, as in three.js. The node's children are
+    and draws the instanced mesh's geometry and material. Each mesh keeps
+    its instance's morph weights. The instance colors are not carried
+    over, as in three.js. The node's children are
     not copied under the group; three.js's `copy` copies them.
 
     Args:
@@ -84,7 +86,9 @@ def create_meshes_from_instanced_mesh(
             node.position, node.quaternion, node.scale
         )
         var id = scene.attach(node^, group_id)
-        scene.add_mesh(Mesh(instanced.geometry, instanced.material, id))
+        var mesh = Mesh(instanced.geometry, instanced.material, id)
+        mesh.morph_influences = instanced.morph_at(instance)
+        scene.add_mesh(mesh^)
     return group_id
 
 
@@ -208,7 +212,7 @@ def sort_instanced_mesh(
     three.js takes a comparison function. This takes one key for each
     instance and sorts them rising, equal keys keeping their order, which
     is what three.js's stable sort gives a comparison of keys. The
-    matrices, the colors and every attribute of the geometry that advances
+    matrices, the colors, the morph weights and every attribute that advances
     per instance move with their instance. As in three.js, only the first
     four numbers of such an attribute's item move.
 
@@ -234,10 +238,15 @@ def sort_instanced_mesh(
     var order = _sorted_order(keys)
     var matrices = mesh.matrices.copy()
     var colors = mesh.colors.copy()
+    var morphs = List[MorphInfluences]()
+    if len(mesh.morphs) > 0:
+        for original in order:
+            morphs.append(mesh.morph_at(original))
     for i in range(len(order)):
         mesh.matrices[i] = matrices[order[i]]
         if len(colors) > 0:
             mesh.colors[i] = colors[order[i]]
+    mesh.morphs = morphs^
     ref geometry = assets.geometries.geometries[id]
     for slot in range(len(geometry.values)):
         ref attribute = geometry.values[slot]
