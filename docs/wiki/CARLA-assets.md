@@ -172,3 +172,12 @@ The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python 
 ## Why not Poly Haven
 
 Poly Haven has no CARLA vehicles or towns. CARLA's own models are in the CARLA release, in Unreal's format, under CC BY 4.0. The manifest still uses Poly Haven and ambientCG for the procedural town's textures and skies.
+
+## Verify extracted files
+
+Run `python3 assets/carla/tools/carla_assets.py verify` to check the cache.
+For each verified archive, the tool also compares its extracted files with
+its members. A changed extracted file is reported as a mismatch. `fetch`
+refuses to overwrite it. Remove that file explicitly, then run `fetch` to
+restore the verified member. Do this after a package update if an old
+extracted file remains in the cache.
