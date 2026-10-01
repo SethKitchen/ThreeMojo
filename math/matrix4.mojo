@@ -836,8 +836,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         This is an object's orientation, the inverse of a view matrix's
         turn. `math.projection.look_at` builds the view matrix.
 
-        An eye on the target looks down -z. An up vector along the view
-        direction is nudged off it by a ten-thousandth, as in three.js.
+        Coincident positions use a +z basis direction. A direction parallel
+        to `up` gets a ten-thousandth nudge, as in three.js.
 
         Args:
             eye: Where the object is.
