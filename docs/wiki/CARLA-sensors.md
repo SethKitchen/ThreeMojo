@@ -31,13 +31,15 @@ for m in measurements:
         print(m.imu.value())
 ```
 
-`listen` starts a sensor that was spawned before. `stop` ends it. `send` queues a message on a custom V2X sensor for the next tick.
+`listen` starts a sensor that was spawned before. `stop` ends it. `send` queues a message on a custom V2X sensor for its next due tick.
 
 ### One tick
 
-1. Each V2X sensor that is due makes its cooperative awareness message (CAM). Each custom V2X sensor moves the messages sent since the last tick to its outbox.
+1. Each V2X sensor that is due makes its cooperative awareness message (CAM). Each custom V2X sensor that is due moves its queued messages to its outbox.
 2. The world ticks.
 3. Each sensor that is due measures, in the order it was listened to.
+
+A V2X receiver hears only senders that are due on the same world tick. A saved CAM or custom outbox is not retransmitted on intervening ticks. A receiver that is not due does not buffer transmissions for a later measurement.
 
 A sensor is due on the first tick that brings the time since its last measurement to its `sensor_tick` or more. A `sensor_tick` of zero is every tick. The measurement uses that time as its tick. The collision and lane invasion sensors report on every tick.
 
