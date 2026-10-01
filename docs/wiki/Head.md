@@ -53,6 +53,8 @@ On a 1.75 m man the head measures about 56 cm round and the neck about 43 cm. On
 
 The atlas is a ring with two lateral masses. The axis carries the dens up through the atlas's front arch. C3 to C6 have short forked spines. The spine of C7 is long.
 
+Vertebral bodies use flat endplates at the authored lower and upper y coordinates. Their full body height is the listed height; no rounded sweep cap extends into the disc space. Discs use horizontal elliptical sections between those endplates, including the C7–T1 junction. These template planes enforce a dimensional contract, not measured endplate anatomy. The dens, arches, processes and their smooth joins remain separate features. This change does not certify that all tissues are disjoint or suitable for contact or finite-element analysis.
+
 The vault is a thin dome of bone about seven millimeters thick. The face is one solid with the orbits and the nasal opening cut out. The mandible is a U of bone with a ramus and a condyle on each side. The condyles sit in front of the ear canals. The occipital condyles sit on the atlas.
 
 ## Joint tissues and cartilages

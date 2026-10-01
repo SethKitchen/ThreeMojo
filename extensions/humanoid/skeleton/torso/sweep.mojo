@@ -52,17 +52,22 @@ struct Sweep(Copyable, Movable):
 
     var stations: List[Station]
     var hint: Vector3
+    var flat_y: Bool
     var low: Vector3
     var high: Vector3
 
-    def __init__(out self, hint: Vector3):
+    def __init__(out self, hint: Vector3, flat_y: Bool = False):
         """Start an empty sweep.
 
         Args:
             hint: The direction each station's `ml` radius runs along.
+            flat_y: Use horizontal x/z elliptical sections with flat y
+                endplates. Intended for two-station vertebral bodies and
+                discs; the hint is ignored in this mode.
         """
         self.stations = List[Station]()
         self.hint = hint
+        self.flat_y = flat_y
         self.low = Vector3(FAR, FAR, FAR)
         self.high = Vector3(-FAR, -FAR, -FAR)
 
@@ -104,9 +109,42 @@ struct Sweep(Copyable, Movable):
             k: Smooth-union radius between segments, in meters.
 
         Returns:
-            The signed distance. A sweep of one station is an ellipsoid.
+            An approximate signed distance. A capsule sweep of one station
+            is an ellipsoid. Flat-y sweeps need at least two stations with
+            distinct y coordinates; otherwise they have no interior.
         """
         var count = len(self.stations)
+        if self.flat_y:
+            var d = FAR
+            for index in range(count - 1):
+                var a = self.stations[index]
+                var b = self.stations[index + 1]
+                var span = b.p.y - a.p.y
+                if span == 0:
+                    continue
+                var t = max(
+                    Float32(0), min(Float32(1), (point.y - a.p.y) / span)
+                )
+                var center = a.p + (b.p - a.p) * t
+                var ml = a.ml + (b.ml - a.ml) * t
+                var ap = a.ap + (b.ap - a.ap) * t
+                var u = (point.x - center.x) / ml
+                var v = (point.z - center.z) / ap
+                var q = sqrt(u * u + v * v)
+                var radial = -min(ml, ap)
+                if q > 0:
+                    radial = (
+                        q
+                        * (q - 1)
+                        / sqrt(u * u / (ml * ml) + v * v / (ap * ap))
+                    )
+                var axial = max(
+                    min(a.p.y, b.p.y) - point.y, point.y - max(a.p.y, b.p.y)
+                )
+                # A hard union preserves endplanes; no cap or blend may
+                # grow into the neighboring vertebral body or disc.
+                d = min(d, max(radial, axial))
+            return d
         var first = self.stations[0]
         if count < 2:
             return sd_ellipsoid(
@@ -142,10 +180,30 @@ struct Sweep(Copyable, Movable):
     def volume(self) -> Float32:
         """Return the sweep's analytic volume, in cubic meters.
 
-        Each segment is an elliptical frustum. The two ends are capped
-        by half ellipsoids.
+        Capsule segments use elliptical frustums and half-ellipsoid caps.
+        Flat-y segments integrate horizontal elliptical sections between
+        their endplates, without caps. Lateral center shifts do not change
+        that volume. Overlapping segments are still counted separately.
         """
         var count = len(self.stations)
+        if self.flat_y:
+            var volume = Float32(0)
+            for index in range(count - 1):
+                var a = self.stations[index]
+                var b = self.stations[index + 1]
+                # Integrate the product of independently linear radii.
+                volume += (
+                    pi
+                    * abs(b.p.y - a.p.y)
+                    * (
+                        2 * a.ml * a.ap
+                        + a.ml * b.ap
+                        + b.ml * a.ap
+                        + 2 * b.ml * b.ap
+                    )
+                    / Float32(6)
+                )
+            return volume
         var first = self.stations[0]
         var cap = first.ml * first.ap
         if count < 2:

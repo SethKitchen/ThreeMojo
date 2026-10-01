@@ -190,7 +190,7 @@ def _discs(mut sweeps: List[Sweep], dimensions: TorsoDimensions):
         else:
             # The sacral base, under the fifth lumbar body.
             below = f.at(0, 7.6, -2.4)
-        var disc = Sweep(Vector3(1, 0, 0))
+        var disc = Sweep(Vector3(1, 0, 0), flat_y=True)
         disc.add(top, 0.5 * (w + bw), 0.5 * (d + bd))
         disc.add(below, 0.5 * (w + bw), 0.5 * (d + bd))
         sweeps.append(disc^)
