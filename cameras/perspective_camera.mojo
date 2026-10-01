@@ -44,7 +44,7 @@ from math.matrix4 import Matrix4
 from math.projection import look_at, perspective, viewport
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import atan, isfinite, max, min, tan
+from std.math import pi, atan, isfinite, max, min, tan
 from units.si import Angle, Length, METER, MILLIMETER, RADIAN
 
 # A frustum that looks straight ahead: what a camera has unless asked.
@@ -133,19 +133,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
 
         Raises:
             Error: If the aspect ratio or the clipping planes are unusable,
-                or the shift is not finite.
+                the field of view is not between zero and pi, or a
+                frustum setting is not finite.
         """
-        if aspect <= 0:
-            raise Error("The aspect ratio must be positive")
-        if fov.value <= 0:
-            raise Error("The field of view must be positive")
-        if near.value <= 0:
-            raise Error("The near plane must be in front of the camera")
-        if far.value <= near.value:
-            raise Error("The far plane must be beyond the near plane")
-        if not isfinite(view_shift.value):
-            raise Error("A view shift must be finite")
-
         self.view_shift = view_shift
         self.fov = fov
         self.aspect = aspect
@@ -162,19 +152,34 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.film_offset = NO_SHIFT
         self.view = None
         self.projection_override = None
+        self.validate()
 
     def validate(self) raises:
-        """Refuse a zoom, a film, a focus or a tile that is not one.
+        """Refuse invalid frustum, zoom, film, focus or tile settings.
 
         The fields are open, so a value can be written that three.js would
         take and turn into a projection of infinities. `projection_matrix`
         asks this first.
 
         Raises:
-            Error: If the zoom, the film gauge or the focus is not
-                positive and finite, the film offset is not finite, or an
-                enabled view is refused by `ViewOffset.validate`.
+            Error: If a frustum setting is not finite, the field of view
+                is not between zero and pi, the aspect or near is not
+                positive, far does not exceed near, the zoom, film gauge
+                or focus is not positive and finite, or an enabled view
+                is refused by `ViewOffset.validate`.
         """
+        if not _positive(self.aspect):
+            raise Error("The aspect ratio must be positive and finite")
+        if not (_positive(self.fov.value) and self.fov.value < Float32(pi)):
+            raise Error("The field of view must be between zero and pi")
+        if not _positive(self.near.value):
+            raise Error("The near plane must be in front of the camera")
+        if not (isfinite(self.far.value) and self.far.value > self.near.value):
+            raise Error(
+                "The far plane must be finite and beyond the near plane"
+            )
+        if not isfinite(self.view_shift.value):
+            raise Error("A view shift must be finite")
         if not _positive(self.zoom):
             raise Error("A camera's zoom must be positive, got ", self.zoom)
         if not _positive(self.film_gauge.value):
@@ -220,7 +225,10 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
                 not positive. The camera is left as it was.
         """
         var view = view_offset(full_width, full_height, x, y, width, height)
-        self.aspect = full_width / full_height
+        var aspect = full_width / full_height
+        if not _positive(aspect):
+            raise Error("A view offset must give a positive finite aspect")
+        self.aspect = aspect
         self.view = view
 
     def clear_view_offset(mut self):
