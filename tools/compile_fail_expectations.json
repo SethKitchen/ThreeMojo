@@ -3558,6 +3558,18 @@
       "candidate not viable: value passed to 'method' cannot be converted from 'IntLiteral[8]' to 'ZipMethod'"
     ]
   },
+  "tests/compile_fail/add_illuminance_to_luminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Luminance' to 'Illuminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/add_length_to_duration.mojo": {
     "errors": [
       {
@@ -3568,6 +3580,18 @@
     ],
     "notes": [
       ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/add_luminance_to_illuminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Illuminance' to 'Luminance'"
+      }
+    ],
+    "notes": [
       "function declared here"
     ]
   },
@@ -4420,6 +4444,30 @@
       "call expansion failed with parameter value(s): (\"length\": 3, \"mass\": 0, \"time\": 0, \"angle\": 0)",
       "constraint failed: sqrt needs an even length exponent",
       "function instantiation failed"
+    ]
+  },
+  "tests/compile_fail/subtract_illuminance_from_luminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__sub__': value passed to 'other' cannot be converted from 'Illuminance' to 'Luminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/subtract_luminance_from_illuminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__sub__': value passed to 'other' cannot be converted from 'Luminance' to 'Illuminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/torso_contents_are_not_a_bare_int.mojo": {

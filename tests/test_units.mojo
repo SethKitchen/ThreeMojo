@@ -55,6 +55,8 @@ from units.si import (
     Volume,
     YARD,
 )
+from std.math import isinf, isnan
+from std.memory import bitcast
 from std.sys import size_of
 from std.testing import (
     TestSuite,
@@ -126,6 +128,20 @@ def test_negation_and_absolute_value() raises:
     assert_equal((-Length(2.0)).value, Float32(-2.0))
     assert_equal(abs(Length(-2.0)).value, Float32(2.0))
     assert_equal(abs(Length(2.0)).value, Float32(2.0))
+
+
+def test_absolute_value_clears_ieee_signs() raises:
+    assert_equal(bitcast[DType.uint32](abs(Length(-0.0)).value), UInt32(0))
+    assert_equal(bitcast[DType.uint32](abs(Length(0.0)).value), UInt32(0))
+    var positive_inf = bitcast[DType.float32](UInt32(0x7F800000))
+    assert_true(isinf(abs(Length(-positive_inf)).value))
+    assert_equal(abs(Length(-positive_inf)).value, positive_inf)
+    var negative_nan = bitcast[DType.float32](UInt32(0xFFC00000))
+    assert_true(isnan(abs(Length(negative_nan)).value))
+    assert_equal(
+        bitcast[DType.uint32](abs(Length(negative_nan)).value),
+        UInt32(0x7FC00000),
+    )
 
 
 def test_scaling_by_a_plain_number_keeps_the_dimension() raises:

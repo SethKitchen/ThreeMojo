@@ -18,6 +18,7 @@ from units.photometry import (
     Luminance,
     diffuse_luminance,
 )
+from std.sys import size_of
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -60,6 +61,17 @@ def test_a_luminance_converts_scales_and_compares() raises:
     assert_true(screen == Luminance(250, NIT))
     assert_true(screen < Luminance(251, NIT))
     assert_false(Luminance(251, NIT) < screen)
+
+
+def test_luminances_add_subtract_and_scale_from_either_side() raises:
+    var first = Luminance(20, NIT)
+    var second = Luminance(30, NIT)
+    assert_equal((first + second).to(NIT), Float32(50))
+    assert_equal((first - second).to(NIT), Float32(-10))
+    assert_equal((Float32(2) * second).to(NIT), Float32(60))
+    assert_equal((Float32(0) * first).to(NIT), Float32(0))
+    assert_equal((Float32(-2) * second).nits, (second * -2).nits)
+    assert_equal(size_of[Luminance](), size_of[Float32]())
 
 
 def test_a_white_diffuse_surface_shines_its_light_over_pi() raises:

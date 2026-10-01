@@ -112,7 +112,7 @@ struct Illuminance(ImplicitlyCopyable, Writable):
         Returns:
             The scaled illuminance.
         """
-        return Self(self.lux * factor, LUX)
+        return self * factor
 
     def __truediv__(self, other: Self) -> Float32:
         """Return the ratio of two illuminances.
@@ -181,6 +181,34 @@ struct Luminance(ImplicitlyCopyable, Writable):
         """
         return self.nits / unit.nits
 
+    def __add__(self, other: Self) -> Self:
+        """Add two luminances.
+
+        Args:
+            other: The other luminance.
+
+        Returns:
+            The sum in nits.
+
+        Raises:
+            None.
+        """
+        return Self(self.nits + other.nits, NIT)
+
+    def __sub__(self, other: Self) -> Self:
+        """Subtract a luminance.
+
+        Args:
+            other: The luminance to take away.
+
+        Returns:
+            The difference in nits.
+
+        Raises:
+            None.
+        """
+        return Self(self.nits - other.nits, NIT)
+
     def __mul__(self, factor: Float32) -> Self:
         """Scale the luminance.
 
@@ -191,6 +219,20 @@ struct Luminance(ImplicitlyCopyable, Writable):
             The scaled luminance.
         """
         return Self(self.nits * factor, NIT)
+
+    def __rmul__(self, factor: Float32) -> Self:
+        """Scale the luminance with a factor on the left.
+
+        Args:
+            factor: The factor.
+
+        Returns:
+            The scaled luminance.
+
+        Raises:
+            None.
+        """
+        return self * factor
 
     def __truediv__(self, other: Self) -> Float32:
         """Return the ratio of two luminances.
