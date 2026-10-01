@@ -35,7 +35,7 @@ uv pip install "max==26.6.0"      # optional: the GPU backend
 
 ```bash
 make check-cpu                                            # format, lint, tests, docs
-make animation                                            # every example, into out/
+make animation                                            # gallery examples, into out/
 make optimize-images                                      # losslessly compress tracked gallery PNGs
 .venv/bin/mojo run -I . examples/cubes.mojo out/cubes.png
 ```

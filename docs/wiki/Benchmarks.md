@@ -1,6 +1,6 @@
 # Benchmarks
 
-This page records compile time, run time and peak memory for the examples in `bench/catalog.json`. The catalog is a subset of the example programs. The same scene, size and frame count run in three.js. A standalone probe compares Mojo 1.1 to Mojo 1.0.
+This page records compile time, run time and peak memory for measured entries in `bench/catalog.json`. The catalog is a subset of the example programs. The same scene, size and frame count run in three.js. A standalone probe compares Mojo 1.1 to Mojo 1.0.
 
 Each table states its measurement date. These results do not measure later code changes.
 
