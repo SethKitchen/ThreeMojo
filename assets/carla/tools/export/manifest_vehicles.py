@@ -153,6 +153,10 @@ def main(argv=None):
     order = [k for k in bindings if not k.startswith(("vehicle.", "walker."))]
     order += vehicles + ["vehicle.*"] + [k for k in bindings if k.startswith("walker.")]
     manifest["bindings"] = {k: bindings.get(k) for k in order}
+    removed = set(old) - {entry["id"] for entry in manifest["entries"]}
+    for key, value in manifest["bindings"].items():
+        if value in removed:
+            manifest["bindings"][key] = None
     tool.save_manifest(manifest, args.manifest)
     hosted = sum(1 for e in added if e["files"][0]["url"])
     print(f"{len(added)} vehicles written, {hosted} with a URL, {len(manifest['bindings'])} bindings")

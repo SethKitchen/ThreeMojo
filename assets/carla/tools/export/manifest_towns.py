@@ -105,6 +105,10 @@ def main(argv=None):
         added.append(entry_of(package_id, item, url))
         bindings["town." + town_of(item)] = package_id
     manifest["entries"] = kept + added
+    removed = set(old) - {entry["id"] for entry in manifest["entries"]}
+    for key, value in manifest["bindings"].items():
+        if value in removed:
+            manifest["bindings"][key] = None
     tool.save_manifest(manifest, args.manifest)
     print(f"{len(added)} towns written, {sum(1 for e in added if e['files'][0]['url'])} with a URL")
 
