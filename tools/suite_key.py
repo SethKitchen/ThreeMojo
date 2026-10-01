@@ -35,7 +35,8 @@ import sys
 import affected
 
 # The files that decide how a suite is built and run.
-TOOLING = ["Makefile", "tools/affected.py", "tools/run_suite.py", "tools/suite_key.py"]
+TOOLING = ["Makefile", "tools/affected.py", "tools/run_suite.py", "tools/suite_key.py",
+           "tools/test_environment.py"]
 
 
 def closure(suite, known, imports):

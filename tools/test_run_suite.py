@@ -3,6 +3,7 @@
 """Tests for the time limit on each test of a suite."""
 
 import os
+from pathlib import Path
 import sys
 import tempfile
 import unittest
@@ -51,6 +52,22 @@ class RunSuiteTests(unittest.TestCase):
 
     def test_keeps_the_suite_exit_code(self):
         self.assertEqual(self._run(5, "import sys; sys.exit(3)"), 3)
+
+    def test_real_child_temp_files_are_cleaned_on_every_outcome(self):
+        with tempfile.TemporaryDirectory() as parent:
+            marker = Path(parent) / 'root.txt'
+            setup = (
+                "import os,pathlib,time; "
+                "root=os.environ['THREEMOJO_TEST_TMPDIR']; "
+                "assert root == os.environ['TMPDIR']; "
+                f"pathlib.Path({str(marker)!r}).write_text(root); "
+                "pathlib.Path(root, 'fixture.bin').write_bytes(b'fixture'); ")
+            for ending, seconds, expected in (
+                    ("raise SystemExit(0)", 5, 0),
+                    ("raise SystemExit(3)", 5, 3),
+                    ("time.sleep(5)", 0.1, run_suite.TIMED_OUT)):
+                self.assertEqual(self._run(seconds, setup + ending), expected)
+                self.assertFalse(Path(marker.read_text()).exists())
 
     def test_stops_a_hung_suite(self):
         self.assertEqual(

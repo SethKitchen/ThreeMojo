@@ -15,6 +15,8 @@ import tempfile
 import threading
 import time
 
+from test_environment import isolated_environment
+
 
 LINE = b'COVLINE:'
 BRANCH = b'COVBRANCH:'
@@ -86,8 +88,8 @@ class Reducer:
 def capture(command, out_path, err_path):
     """Run a suite and keep what its probe records tell the report, once
     each, compressed; see `Reducer`."""
-    with open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
-        with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE) as process:
+    with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
+        with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE, env=environment) as process:
             try:
                 reducer = Reducer(errors.write)
                 for line in process.stderr:
