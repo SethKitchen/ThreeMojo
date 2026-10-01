@@ -156,9 +156,14 @@ The hair moves. `HairSimulation(groom)` makes every point of every strand a part
 2. Each segment keeps the length it was groomed at.
 3. Each point is pulled back to where it was groomed: fully near the root and less toward the tip, so the style holds.
 4. Each run of three points keeps its bend.
-5. A point inside the head is pushed out of it.
+5. A point inside the body is pushed out of it.
 
-`HairCollider` bakes the head's skin into a grid of distances, because the skin's own field is too slow to read for every point. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
+Pass a `HairBody` as the collider. The skins' own fields are too slow to read for every point, so it bakes them into grids of distances:
+
+- The head's skin, into a fine grid. Above the chin only the head counts, so the hair on the scalp lies smooth.
+- The body's skin, from the middle of the back up, into a coarser grid. Below the neck the body counts, so long hair falls on the shoulders and the back.
+
+`HairCollider` bakes any other field. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
 
 ### Hairstyles
 
@@ -169,8 +174,18 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `GROWN` | The groom above, combed down to the length `HAIR_LENGTH` asks for. The default. |
 | `LAYERED` | Sintel's hair: a layered cut to the jaw, with a fringe. From Sintel Lite by BenDansie, (c) the Blender Foundation, CC-BY 3.0. |
 | `MOHAWK` | A crest from the brow to the nape, and shaved sides. From AMD TressFX's Ratboy, MIT license. |
+| `LONG` | Parted down the middle, and falling 34 to 50 cm, past the shoulders. |
+| `PONYTAIL` | Combed back to a tie at the back of the head. A tail of 20 to 32 cm springs back from the tie and falls. |
+| `BUN` | Combed up to a tie at the top of the back of the head, and coiled round a ball on it. |
 
 An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`.
+
+The groom designs `LONG`, `PONYTAIL` and `BUN` on its own guides. Each guide grows from a root on the scalp's hair:
+
+- For `LONG`, the guide walks over the hair away from the part and down, to the ears. Then it hangs to its length and sways a little.
+- For a tied style, the guide follows the arc from its root to the tie, round the cranium's middle. So hair from the brow goes up over the crown, and hair from the temple goes back over the ear. The arc arches up a little in its middle, so the hair clears the ear. Each point is laid on the hair.
+
+Each strand is then lifted out of the head's skin and the body's grid. Tied hair is pulled taut over the scalp: it curls only past the tie, and its shell does not stand fuller for the curl. Long and tied hair keep a thin shell, so the strands are what shows.
 
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 

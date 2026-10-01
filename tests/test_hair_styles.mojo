@@ -21,10 +21,14 @@ from extensions.humanoid.skeleton.head.hair.geometry import (
 )
 from extensions.humanoid.skeleton.head.hair.groom import (
     GroomSpec,
+    HairBody,
     groom_hair,
 )
 from extensions.humanoid.skeleton.head.hair.styles import (
+    BUN,
     GROWN,
+    LONG,
+    PONYTAIL,
     LAYERED,
     MOHAWK,
     HairStyle,
@@ -38,6 +42,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from std.pathlib import Path
+from std.math import max
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -59,13 +64,15 @@ def _u32(mut bytes: List[UInt8], value: Int):
         bytes.append(UInt8((value >> (8 * k)) & 0xFF))
 
 
-def _file(name: String, version: Int, strands: Int, body: Int) raises -> String:
+def _file(
+    name: String, version: Int, strands: Int, body: Int, points: Int = 2
+) raises -> String:
     """Write a style file's header and `body` zero bytes; return its
     path."""
     var bytes: List[UInt8] = [84, 72, 82, 83]
     _u32(bytes, version)
     _u32(bytes, strands)
-    _u32(bytes, 2)
+    _u32(bytes, points)
     _u32(bytes, 0)
     for _ in range(body):  # pragma: no branch
         bytes.append(0)
@@ -77,8 +84,13 @@ def _file(name: String, version: Int, strands: Int, body: Int) raises -> String:
 def test_a_hair_style_is_named() raises:
     assert_true(MOHAWK.is_valid())
     assert_false(HairStyle(-1).is_valid())
-    assert_false(HairStyle(3).is_valid())
-    assert_equal(len(named_hair_styles()), 3)
+    assert_false(HairStyle(6).is_valid())
+    assert_equal(len(named_hair_styles()), 6)
+    assert_equal(hair_style_label(LONG), "long")
+    assert_equal(hair_style_label(PONYTAIL), "ponytail")
+    assert_equal(hair_style_label(BUN), "bun")
+    assert_true(LAYERED.is_scanned() and not LONG.is_scanned())
+    assert_true(BUN.is_tied() and PONYTAIL.is_tied() and not LONG.is_tied())
     assert_equal(hair_style_label(GROWN), "grown")
     assert_equal(hair_style_label(LAYERED), "layered")
     assert_equal(hair_style_label(MOHAWK), "mohawk")
@@ -86,6 +98,8 @@ def test_a_hair_style_is_named() raises:
     assert_equal(hair_style_path(LAYERED), "assets/hair/layered.bin")
     with assert_raises(contains="no file"):
         _ = hair_style_path(GROWN)
+    with assert_raises(contains="no file"):
+        _ = hair_style_path(PONYTAIL)
     with assert_raises(contains="named style"):
         _ = hair_style_path(HairStyle(9))
 
@@ -123,6 +137,8 @@ def test_a_bad_style_file_is_refused() raises:
         _ = HairStyleFile(_file("version", 2, 1, 20))
     with assert_raises(contains="no strands"):
         _ = HairStyleFile(_file("empty", 1, 0, 20))
+    with assert_raises(contains="no strands"):
+        _ = HairStyleFile(_file("point", 1, 1, 20, 1))
     with assert_raises(contains="ends early"):
         _ = HairStyleFile(_file("cut", 1, 1, 4))
     # One strand of two points, all at its root.
@@ -138,6 +154,9 @@ def test_the_cranium_frame() raises:
     # At the side's pole plus x is the normal: across is plus z.
     var side = cranium_frame(Vector3(1, 0, 0), Vector3(1, 1, 1))
     assert_true(side[0] == Vector3(0, 0, 1))
+    # The center has no normal: up is left as nothing.
+    var center = cranium_frame(Vector3(0, 0, 0), Vector3(1, 1, 1))
+    assert_true(center[1] == Vector3(0, 0, 0))
 
 
 def test_a_style_is_laid_on_the_head() raises:
@@ -157,7 +176,7 @@ def test_a_style_is_laid_on_the_head() raises:
             ):  # pragma: no branch
                 assert_true(skin.distance(groom.points[index]) > 0)
     with assert_raises(contains="named style"):
-        _ = groom_hair(dims, spec, 1, HairStyle(5))
+        _ = groom_hair(dims, spec, 1, HairStyle(9))
 
 
 def _curled(curl: Float32) raises -> HeadMuscleDimensions:
@@ -189,6 +208,68 @@ def test_curled_hair_winds_round_its_line() raises:
     assert_true(full.crown_depth > flat.crown_depth)
 
 
+def test_long_tied_and_bunned_hair_is_designed() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var spec = GroomSpec(dims, 12, 0)
+    # Long hair falls well past the chin.
+    var long = groom_hair(dims, spec, 1, LONG)
+    assert_equal(len(long), 12)
+    var lowest = Float32(1.0e9)
+    for index in range(len(long.points)):  # pragma: no branch
+        lowest = min(lowest, long.points[index].y)
+    assert_true(lowest < h.at(0, 55.0, 0).y)
+    # A ponytail's tail falls from the back of the head.
+    var tail = groom_hair(dims, spec, 1, PONYTAIL)
+    var tip = tail.points[tail.starts[1] - 1]
+    assert_true(tip.y < h.at(0, 70.0, 0).y and tip.z < h.at(0, 0, -8.0).z)
+    # Hair from the brow is combed up over the crown to the tie, not
+    # down the forehead.
+    for strand in range(len(tail)):  # pragma: no branch
+        var root = tail.points[tail.starts[strand]]
+        if root.z < h.at(0, 0, 4.0).z:
+            continue
+        var highest = root.y
+        for k in range(tail.starts[strand], tail.starts[strand] + 6):
+            highest = max(highest, tail.points[k].y)
+        assert_true(highest > root.y)
+    # A bun's strands end round the ball on its tie.
+    var bun = groom_hair(dims, spec, 1, BUN)
+    var tie = h.at(0, 83.0, -6.5)
+    for strand in range(len(bun)):  # pragma: no branch
+        var end = bun.points[bun.starts[strand + 1] - 1]
+        assert_true((end - tie).length() < h.cm(9.0))
+    # Tied and long hair lie close on the scalp.
+    var skin = HeadSkinField(dims)
+    var grown = HairShape(dims, SCALP_HAIR, RIGHT, skin)
+    assert_true(
+        HairShape(dims, SCALP_HAIR, RIGHT, skin, LONG).crown_depth
+        < grown.crown_depth
+    )
+    var none = GroomSpec(dims, 4, 0)
+    none.root_tries = 0
+    with assert_raises(contains="root"):
+        _ = groom_hair(dims, none, 1, BUN)
+
+
+def test_hair_falls_against_the_head_and_the_body() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var body = HairBody(dims)
+    # Over the crown the head's own grid counts: just above it, the hair
+    # is just outside.
+    var crown = h.at(0, 86.0, -1.0)
+    var above = body.distance(crown)
+    assert_true(above > 0 and above < h.cm(3.0))
+    assert_equal(body.distance(crown), body.head.distance(crown))
+    # Above the chin the body's grid is pushed away.
+    assert_equal(body.joined(Float32(0.5), crown), Float32(0.5))
+    # Over the shoulder, past the head's box, the body's grid counts.
+    var shoulder = h.at(-17.0, 50.0, 0)
+    assert_true(body.distance(shoulder) < h.cm(6.0))
+    assert_true(body.distance(shoulder) < body.head.distance(shoulder))
+
+
 def test_a_mohawk_shaves_the_sides() raises:
     var dims = _dims()
     var h = dims.head.copy()
@@ -205,7 +286,7 @@ def test_a_mohawk_shaves_the_sides() raises:
     crown = crown + skin.gradient(crown) * (h.cm(0.3) - skin.distance(crown))
     assert_true(mohawk.distance(crown) < 0)
     with assert_raises(contains="named style"):
-        _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(5))
+        _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(9))
     var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8, 1, MOHAWK)
     assert_true(shell.triangle_count() > 0)
 

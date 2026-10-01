@@ -36,6 +36,12 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
+from extensions.humanoid.skeleton.head.hair.styles import (
+    GROWN,
+    LONG,
+    PONYTAIL,
+    HairStyle,
+)
 from extensions.humanoid.skeleton.head.hair.strands import (
     HairStrands,
     add_groom,
@@ -188,6 +194,9 @@ def main() raises:
     var turners = List[NodeId]()
     var hairs = List[HairStrands]()
     var places = List[Vector3]()
+    # How each one wears the hair: the mother long, the father and the
+    # son grown, and the daughter in a ponytail.
+    var styles: List[HairStyle] = [LONG, GROWN, GROWN, PONYTAIL]
     for index in range(len(people)):
         var person = people[index]
         var looks = add_complexion(assets, person.genome, whole_body=True)
@@ -227,10 +236,19 @@ def main() raises:
             hair_paint=looks.hair,
             eye_paint=looks.eyes,
             workers=workers,
+            hair_style=styles[index],
         )
         # The scalp's hair as strands, over the mass of it in shade.
         hairs.append(
-            add_groom(scene, assets, holder_id, person, GUIDES, FOLLOWERS)
+            add_groom(
+                scene,
+                assets,
+                holder_id,
+                person,
+                GUIDES,
+                FOLLOWERS,
+                style=styles[index],
+            )
         )
         places.append(
             Vector3(

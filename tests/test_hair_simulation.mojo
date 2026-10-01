@@ -6,10 +6,12 @@
 """Tests for hair that moves under gravity and the wind."""
 
 from extensions.humanoid.skeleton.field import DistanceField
-from extensions.humanoid.skeleton.head.hair.groom import HairGroom
-from extensions.humanoid.skeleton.head.hair.simulation import (
+from extensions.humanoid.skeleton.head.hair.collider import (
     FAR_AWAY,
     HairCollider,
+)
+from extensions.humanoid.skeleton.head.hair.groom import HairGroom
+from extensions.humanoid.skeleton.head.hair.simulation import (
     HairPhysics,
     HairSimulation,
     HairWind,
@@ -68,6 +70,8 @@ def test_the_collider_is_the_field_baked() raises:
     assert_true(abs(collider.distance(Vector3(0, 0, 0)) + 0.1) < 0.01)
     assert_true(abs(collider.distance(Vector3(0.15, 0, 0)) - 0.05) < 0.01)
     assert_equal(collider.distance(Vector3(0.5, 0, 0)), FAR_AWAY)
+    assert_equal(collider.distance(Vector3(-0.5, 0, 0)), FAR_AWAY)
+    assert_equal(collider.distance(Vector3(0, 0, -0.5)), FAR_AWAY)
     assert_equal(collider.distance(Vector3(0, -0.5, 0)), FAR_AWAY)
     assert_equal(collider.distance(Vector3(0, 0, 0.2)), FAR_AWAY)
 
@@ -120,6 +124,20 @@ def test_the_head_pushes_the_hair_out() raises:
         hair.step(collider, HairWind(Vector3(1, 0, 0), 0))
     for k in range(3, 6):  # pragma: no branch
         assert_true(collider.distance(hair.now[k]) > -0.02)
+    # A strand gathered at one point has no bend to keep, and with no
+    # gravity it stays there.
+    var still = HairPhysics()
+    still.gravity = 0
+    var gathered = HairGroom()
+    var spot: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+    ]
+    _strand(gathered, spot)
+    var knot = HairSimulation(gathered, still)
+    knot.step(collider, HairWind(Vector3(1, 0, 0), 0))
+    assert_true(knot.now[2] == Vector3(0, 0, 0))
     # Where the field is the same everywhere it has no way out, and the
     # points are left where they are.
     var flat = HairSimulation(_hanging(0))

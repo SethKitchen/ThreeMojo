@@ -25,6 +25,7 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.hair.styles import (
     GROWN,
+    LONG,
     MOHAWK,
     HairStyle,
 )
@@ -370,12 +371,19 @@ struct HairShape(Copyable, DistanceField, Movable):
         var h = dimensions.head.copy()
         self.soft = h.cm(0.8)
         self.length = h.torso.genome.get(HAIR_LENGTH)
+        # Tied and long hair lie close on the scalp: the strands over
+        # the shell are what falls.
+        if style.is_tied() or style == LONG:
+            self.length = Float32(-0.5)
         # Shorter than the template crops the hair close.
         var crop = 1 + Float32(0.35) * min(Float32(0), self.length)
-        # Curled hair stands fuller off the head than straight hair.
+        # Curled hair stands fuller off the head than straight hair,
+        # unless it is pulled back to a tie.
         var volume = 1 + Float32(1.2) * max(
             Float32(0), h.torso.genome.get(HAIR_CURL)
         )
+        if style.is_tied():
+            volume = 1
         self.side_depth = h.cm(0.55) * crop * volume
         self.crown_depth = h.cm(1.0) * crop * volume
         # Longer grows a fall from the cranium's own ellipsoid out to a

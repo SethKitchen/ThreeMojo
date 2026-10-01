@@ -6,8 +6,15 @@
 """Hairstyles: how a head of hair is cut and laid.
 
 `GROWN` is the groom's own hair, grown from the scalp and combed down
-to the length `HAIR_LENGTH` asks for. The other styles are strands an
-artist groomed, kept in `assets/hair/`:
+to the length `HAIR_LENGTH` asks for. Three more are designed on the
+groom's own guides:
+
+- `LONG`: parted down the middle and falling past the shoulders.
+- `PONYTAIL`: gathered to a tie at the back of the head, and a tail
+  that springs back from it and falls.
+- `BUN`: gathered higher, and coiled round a ball on the tie.
+
+The last two are strands an artist groomed, kept in `assets/hair/`:
 
 - `LAYERED`: Sintel's hair, a layered cut to the jaw with a fringe,
   from Sintel Lite 2.57b by BenDansie. (c) the Blender Foundation,
@@ -56,12 +63,23 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named style."""
-        return self.value >= 0 and self.value <= MOHAWK.value
+        return self.value >= 0 and self.value <= BUN.value
+
+    def is_scanned(self) -> Bool:
+        """Return True for a style an artist groomed, kept in a file."""
+        return self == LAYERED or self == MOHAWK
+
+    def is_tied(self) -> Bool:
+        """Return True for a style gathered into a tie."""
+        return self == PONYTAIL or self == BUN
 
 
 comptime GROWN = HairStyle(0)
 comptime LAYERED = HairStyle(1)
 comptime MOHAWK = HairStyle(2)
+comptime LONG = HairStyle(3)
+comptime PONYTAIL = HairStyle(4)
+comptime BUN = HairStyle(5)
 
 
 def hair_style_label(style: HairStyle) -> String:
@@ -71,8 +89,8 @@ def hair_style_label(style: HairStyle) -> String:
         style: A style, named or not.
 
     Returns:
-        `"grown"`, `"layered"` or `"mohawk"`, or `"hair style"` when
-        `style` is not named.
+        `"grown"`, `"layered"`, `"mohawk"`, `"long"`, `"ponytail"` or
+        `"bun"`, or `"hair style"` when `style` is not named.
     """
     if style == GROWN:
         return "grown"
@@ -80,6 +98,12 @@ def hair_style_label(style: HairStyle) -> String:
         return "layered"
     if style == MOHAWK:
         return "mohawk"
+    if style == LONG:
+        return "long"
+    if style == PONYTAIL:
+        return "ponytail"
+    if style == BUN:
+        return "bun"
     return "hair style"
 
 
@@ -87,9 +111,9 @@ def named_hair_styles() -> List[HairStyle]:
     """Return every named style in a stable order.
 
     Returns:
-        `GROWN`, `LAYERED` and `MOHAWK`.
+        `GROWN`, `LAYERED`, `MOHAWK`, `LONG`, `PONYTAIL` and `BUN`.
     """
-    return [GROWN, LAYERED, MOHAWK]
+    return [GROWN, LAYERED, MOHAWK, LONG, PONYTAIL, BUN]
 
 
 def hair_style_path(style: HairStyle) raises -> String:
@@ -102,13 +126,13 @@ def hair_style_path(style: HairStyle) raises -> String:
         The path under `assets/hair/`.
 
     Raises:
-        Error: If `style` is not named, or is `GROWN`, which is grown and
+        Error: If `style` is not named, or is grown or designed, and so
             has no file.
     """
     if not style.is_valid():
         raise Error("A hair style must be a named style")
-    if style == GROWN:
-        raise Error("A grown hair style has no file")
+    if not style.is_scanned():
+        raise Error("A grown or designed hair style has no file")
     return String("assets/hair/") + hair_style_label(style) + ".bin"
 
 

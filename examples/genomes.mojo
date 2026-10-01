@@ -9,9 +9,9 @@
 
 The page is Genome. Each head is the six-foot template with a different
 genome: its skin tone, its hair and eye color, and the shape of its
-head, its eyes, its brows, its nose, its mouth and its ears. Two wear
-Sintel's layered cut and one a mohawk, and their hair runs from straight
-to tightly coiled; see Head's hairstyles. A breeze blows through their
+head, its eyes, its brows, its nose, its mouth and its ears. One wears
+Sintel's layered cut, one a mohawk, one a bun and one a ponytail, and
+their hair runs from straight to tightly coiled; see Head's hairstyles. A breeze blows through their
 hair as they turn. Each is a
 bust, cut off under the chin. The heads turn a little to each side, so
 the shape reads.
@@ -27,17 +27,18 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.skeleton.head.hair.styles import (
+    BUN,
     GROWN,
     LAYERED,
     MOHAWK,
+    PONYTAIL,
     HairStyle,
 )
+from extensions.humanoid.skeleton.head.hair.groom import HairBody
 from extensions.humanoid.skeleton.head.hair.simulation import (
-    HairCollider,
     HairSimulation,
     HairWind,
 )
-from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.genome import (
     HAIR_CURL,
     FACE_SHAPES,
@@ -259,11 +260,11 @@ def main() raises:
     var turners = List[NodeId]()
     # How each head's hair is cut and laid.
     var styles: List[HairStyle] = [
-        LAYERED,
+        BUN,
         MOHAWK,
         GROWN,
         LAYERED,
-        GROWN,
+        PONYTAIL,
         GROWN,
     ]
     var hairs = List[HairStrands]()
@@ -324,20 +325,13 @@ def main() raises:
         places.append(Vector3(x, y, 0))
         centers.append(center)
         turners.append(pivot_id)
-    # A breeze blows through the hair: each head's skin is baked for its
-    # strands to collide with, down past the chin they may fall to.
+    # A breeze blows through the hair: each body's skin is baked for its
+    # strands to collide with, down past the shoulders they may fall to.
     var motions = List[HairSimulation]()
-    var colliders = List[HairCollider]()
+    var colliders = List[HairBody]()
     for index in range(len(hairs)):
         motions.append(HairSimulation(hairs[index].groom))
-        var skin = HeadSkinField(head_muscle_dimensions(people[index]))
-        colliders.append(
-            HairCollider(
-                skin,
-                skin.low - Vector3(0.05, 0.1, 0.05),
-                skin.high + Vector3(0.05, 0.02, 0.05),
-            )
-        )
+        colliders.append(HairBody(head_muscle_dimensions(people[index])))
     for index in range(len(scene.meshes)):
         scene.meshes[index].cast_shadow = True
         scene.meshes[index].receive_shadow = True

@@ -16,8 +16,8 @@ Computer Graphics"):
 - Local shape: each run of three points keeps its bend (Kelager et al.
   2010, "A Triangle Bending Constraint Model for Position-Based
   Dynamics"); the last points keep their groomed direction.
-- Collisions: a point that falls inside the head is pushed out of it,
-  along the gradient of a distance field baked round the head.
+- Collisions: a point that falls inside the body is pushed out of it,
+  along the gradient of a distance field baked round it.
 
 The wind blows in one direction, in gusts: each strand's strength
 flutters, out of phase with its neighbors'. Friction takes part of each
@@ -31,105 +31,15 @@ together, are left out. See THIRD-PARTY-NOTICES.md.
 
 This is not a three.js port. See Extensions.
 
-    var collider = HairCollider(HeadSkinField(dims))
     var physics = HairSimulation(groom)
-    physics.step(collider, HairWind(Vector3(1, 0, 0), 0.5))
+    var body = HairBody(dims)
+    physics.step(body, HairWind(Vector3(1, 0, 0), 0.5))
 """
 
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
-from std.math import floor, max, min, sqrt
-
-# The collider's grid: cells along each side of its box.
-comptime COLLIDER_CELLS = 48
-# How far past the collider's box a sample reads as empty, in meters.
-comptime FAR_AWAY = Float32(1.0)
-
-
-struct HairCollider(Copyable, Movable):
-    """A distance field baked into a grid, which a step reads for each
-    point: a solid's own field is far too slow to read that often."""
-
-    var low: Vector3
-    var cell: Vector3
-    var cells: Int
-    var values: List[Float32]
-
-    def __init__[
-        F: DistanceField
-    ](out self, field: F, low: Vector3, high: Vector3):
-        """Bake `field` over the box from `low` to `high`.
-
-        Args:
-            field: The solid, a head's skin.
-            low: The box's least corner.
-            high: The box's greatest corner.
-        """
-        self.cells = COLLIDER_CELLS
-        self.low = low
-        var n = Float32(self.cells - 1)
-        self.cell = Vector3(
-            (high.x - low.x) / n, (high.y - low.y) / n, (high.z - low.z) / n
-        )
-        self.values = List[Float32](
-            capacity=self.cells * self.cells * self.cells
-        )
-        for k in range(self.cells):  # pragma: no branch
-            for j in range(self.cells):  # pragma: no branch
-                for i in range(self.cells):  # pragma: no branch
-                    self.values.append(
-                        field.distance(
-                            low
-                            + Vector3(
-                                Float32(i) * self.cell.x,
-                                Float32(j) * self.cell.y,
-                                Float32(k) * self.cell.z,
-                            )
-                        )
-                    )
-
-    def distance(self, point: Vector3) -> Float32:
-        """Return the baked distance at `point`, trilinear between the
-        grid's samples, or far away off the grid.
-
-        Args:
-            point: Where to read, in the frame the field was baked in.
-
-        Returns:
-            The distance, negative inside the solid.
-        """
-        var u = (point.x - self.low.x) / self.cell.x
-        var v = (point.y - self.low.y) / self.cell.y
-        var w = (point.z - self.low.z) / self.cell.z
-        var top = Float32(self.cells - 1)
-        if u < 0 or v < 0 or w < 0 or u >= top or v >= top or w >= top:
-            return FAR_AWAY
-        var i = Int(u)
-        var j = Int(v)
-        var k = Int(w)
-        var fu = u - Float32(i)
-        var fv = v - Float32(j)
-        var fw = w - Float32(k)
-        var n = self.cells
-        var at = (k * n + j) * n + i
-        var c00 = self.values[at] + (self.values[at + 1] - self.values[at]) * fu
-        var c10 = (
-            self.values[at + n]
-            + (self.values[at + n + 1] - self.values[at + n]) * fu
-        )
-        var c01 = (
-            self.values[at + n * n]
-            + (self.values[at + n * n + 1] - self.values[at + n * n]) * fu
-        )
-        var c11 = (
-            self.values[at + n * n + n]
-            + (self.values[at + n * n + n + 1] - self.values[at + n * n + n])
-            * fu
-        )
-        var c0 = c00 + (c10 - c00) * fv
-        var c1 = c01 + (c11 - c01) * fv
-        return c0 + (c1 - c0) * fw
+from std.math import floor, max, min
 
 
 @fieldwise_init
@@ -173,8 +83,10 @@ struct HairPhysics(ImplicitlyCopyable):
     var fade: Float32
     var bend: Float32
     var collision: Float32
-    # How far outside the collider a point is kept, in meters.
+    # How far outside the collider a point is kept, and how far apart
+    # its field is read for its gradient, in meters.
     var offset: Float32
+    var probe: Float32
 
     def __init__(out self):
         """Take Frostbitten's defaults."""
@@ -189,6 +101,7 @@ struct HairPhysics(ImplicitlyCopyable):
         self.bend = Float32(0.3)
         self.collision = Float32(1.0)
         self.offset = Float32(0.0015)
+        self.probe = Float32(0.001)
 
 
 struct HairSimulation(Movable):
@@ -224,11 +137,15 @@ struct HairSimulation(Movable):
         self.physics = physics
         self.frame = 0
 
-    def step(mut self, collider: HairCollider, wind: HairWind):
+    def step[F: DistanceField](mut self, collider: F, wind: HairWind):
         """Move every strand one step, and settle it.
 
+        Parameters:
+            F: The collider's type.
+
         Args:
-            collider: The head, baked.
+            collider: What the hair falls against, baked: a `HairBody`
+                or a `HairCollider`.
             wind: The wind.
         """
         ref p = self.physics
@@ -261,9 +178,9 @@ struct HairSimulation(Movable):
                 self.now[first + k] = moved[k]
         self.frame += 1
 
-    def _settle(
-        self, mut points: List[Vector3], first: Int, collider: HairCollider
-    ):
+    def _settle[
+        F: DistanceField
+    ](self, mut points: List[Vector3], first: Int, collider: F):
         """Settle one strand once against every constraint."""
         ref p = self.physics
         var count = len(points)
@@ -305,10 +222,10 @@ struct HairSimulation(Movable):
             points[k] = points[k] + delta * (bend * w0 / total * 2)
             points[k + 1] = points[k + 1] + delta * (bend / total * -4)
             points[k + 2] = points[k + 2] + delta * (bend / total * 2)
-        # Collisions: a point inside the head goes out along the field's
+        # Collisions: a point inside the body goes out along the field's
         # gradient; the points by the root lie against it and are left.
         var push = p.collision / iterations
-        var probe = collider.cell.x * Float32(0.1)
+        var probe = p.probe
         for k in range(3, count):  # pragma: no branch
             var q = points[k]
             var d = collider.distance(q) - p.offset
