@@ -18,7 +18,8 @@ here keeps a generator and asks it.
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
 from math.smoothstep import smoothstep
-from std.math import cos, exp, floor, sin
+from std.math import cos, exp, floor, isfinite, sin
+from std.memory import bitcast
 from units.si import Angle, Duration, SECOND
 
 
@@ -249,9 +250,34 @@ struct SeededRandom(Copyable, Movable):
             high: The top, not reached.
 
         Returns:
-            The number.
+            A finite value in `[low, high)` for finite bounds with
+            `low < high`. Equal finite bounds return `low`. Each call
+            advances the generator once. Other bounds keep IEEE arithmetic.
+
+        Raises:
+            None.
         """
-        return low + Float32(self.next()) * (high - low)
+        var sample = Float32(self.next())
+        var span = high - low
+        var value = low + sample * span
+        if isfinite(low) and isfinite(high) and low <= high:
+            if low == high:
+                return low
+            if not isfinite(span):
+                # Opposite signs can overflow the width while every point
+                # in the interval is finite. The weighted endpoints cannot.
+                value = (1 - sample) * low + sample * high
+            if value >= high:
+                # A rounded draw or sum can reach the exclusive endpoint.
+                var bits = bitcast[DType.uint32](high)
+                if high == 0:
+                    bits = 0x80000001
+                elif high > 0:
+                    bits -= 1
+                else:
+                    bits += 1
+                return bitcast[DType.float32](bits)
+        return value
 
     def float_spread(mut self, spread: Float32) -> Float32:
         """Return a number within half a spread of zero. three.js:

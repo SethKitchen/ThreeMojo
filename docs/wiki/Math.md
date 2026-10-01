@@ -361,3 +361,5 @@ The ceiling raises an error if its result cannot fit in `Int`.
 The floor accepts every positive `Int`, including `Int.MAX`.
 
 `SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.
+
+For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
