@@ -750,6 +750,7 @@ struct ALSM(Movable):
         Args:
             world: The world, for the time now.
         """
+        self.has_physics_enabled = Dict[Int, Bool]()
         self.unregistered_actors = List[Int]()
         self.idle_time = Dict[Int, Float64]()
         self.hero_actors = List[Int]()
@@ -921,10 +922,15 @@ struct TrafficManagerLocal(Movable):
 
     def stop(mut self):
         """Forget every vehicle and all state, `Stop`."""
+        self.alsm = ALSM()
+        self.last_frame = 0
+        self.shared.large_vehicles = Dict[Int, LargeVehicle]()
+        self.shared.marked_for_removal = List[ActorId]()
         self.shared.vehicle_id_list = List[ActorId]()
         self.registered_vehicles.clear()
         self.registered_vehicles_state = -1
         self.shared.track_traffic.clear()
+        self.shared.track_traffic.set_hero_location(Vector3(0, 0, 0))
         self.shared.simulation_state.reset()
         self.localization_stage.reset()
         self.collision_stage.reset()
@@ -952,6 +958,7 @@ struct TrafficManagerLocal(Movable):
         """
         self.release()
         self.shared.local_map = _local_map(world, self.map_name, None)
+        self.alsm.reset(world)
 
     # --- vehicles --------------------------------------------------------------------
 

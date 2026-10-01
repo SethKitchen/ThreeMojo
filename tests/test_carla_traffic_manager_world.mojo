@@ -47,6 +47,7 @@ from extensions.carla.traffic_manager_map import (
     ROAD_OPTION_LANE_FOLLOW,
     ROAD_OPTION_RIGHT,
     ROAD_OPTION_VOID,
+    SimpleWaypointIndex,
 )
 from extensions.carla.traffic_manager_shared import (
     CommandKind,
@@ -419,6 +420,47 @@ def test_asynchronous_steps_and_life_cycle() raises:
     assert_equal(tm.shared.local_map.size(), 180)
     tm.set_random_device_seed(9, world)
     assert_equal(tm.seed, 9)
+
+
+def test_reset_clears_previous_episode_actor_and_junction_state() raises:
+    var old_world = _world(straight_town())
+    var hero = _spawn(old_world, 20, 1.75, "hero")
+    var tm = _manager(old_world)
+    tm.register_vehicles(old_world, [hero])
+    tm.step(old_world)
+    assert_equal(len(tm.alsm.hero_actors), 1)
+    # These are indices into the old map and must not survive any reset.
+    tm.localization_stage.vehicles_at_junction_entrance[hero.value] = (
+        SimpleWaypointIndex(9999),
+        SimpleWaypointIndex(10000),
+    )
+    tm.alsm.has_physics_enabled[hero.value] = False
+    tm.shared.track_traffic.set_hero_location(Vector3(20, 1.75, 0.3))
+    var new_world = _world(straight_town())
+    tm.reset(new_world)
+    assert_equal(len(tm.alsm.hero_actors), 0)
+    assert_equal(len(tm.alsm.idle_time), 0)
+    assert_equal(len(tm.alsm.has_physics_enabled), 0)
+    assert_equal(len(tm.localization_stage.vehicles_at_junction_entrance), 0)
+    assert_true(tm.shared.track_traffic.get_hero_location() == Vector3(0, 0, 0))
+    # No stale hero lookup, even though the new episode has no vehicles.
+    tm.step(new_world)
+    # Reused IDs get a fresh physics decision rather than a cached one.
+    var car = _spawn(new_world, 20, 1.75)
+    assert_equal(car, hero)
+    tm.register_vehicles(new_world, [car])
+    tm.set_hybrid_physics_mode(True)
+    tm.step(new_world)
+    assert_false(is_physics_enabled(new_world, car))
+    tm.localization_stage.vehicles_at_junction_entrance[car.value] = (
+        SimpleWaypointIndex(9999),
+        SimpleWaypointIndex(10000),
+    )
+    tm.unregister_vehicles([car])
+    assert_equal(len(tm.localization_stage.vehicles_at_junction_entrance), 0)
+    tm.alsm.has_physics_enabled[car.value] = False
+    tm.alsm.reset(new_world)
+    assert_equal(len(tm.alsm.has_physics_enabled), 0)
 
 
 def test_manager_from_a_cache_and_a_large_vehicle() raises:

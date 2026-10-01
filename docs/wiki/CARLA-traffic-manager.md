@@ -156,6 +156,7 @@ Each node has a road option: straight, left or right through a junction, lane fo
 
 ## Differences from CARLA
 
+- Stopping or resetting clears actor tracking and transient junction, hero and physics caches. A new map cannot inherit cached waypoint indices from the old one. Parameter settings remain configured.
 - The remote traffic manager, its server and its client are not ported. They are a network transport.
 - Asynchronous mode has no worker thread. The caller calls `step`.
 - The world never makes an actor dormant. A caller can mark one with `ACTOR_DORMANT`.

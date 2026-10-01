@@ -308,6 +308,8 @@ struct LocalPlanner(Movable):
         Raises:
             Error: If a map query fails.
         """
+        if len(self.queue) == 0:
+            return
         var count = min(self.max_queue_length - len(self.queue), k)
         for _ in range(count):
             var last = self.queue[len(self.queue) - 1].waypoint

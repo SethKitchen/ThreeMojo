@@ -811,12 +811,17 @@ struct LocalizationStage(Movable):
         var a = actor.value
         if a in self.last_lane_change_swpt:
             _ = self.last_lane_change_swpt.pop(a)
+        if a in self.vehicles_at_junction_entrance:
+            _ = self.vehicles_at_junction_entrance.pop(a)
         _drop(self.vehicles_at_junction, a)
         _drop(self.large_vehicles_at_junction_entrance, a)
         _drop(self.large_vehicles_at_junction, a)
 
     def reset(mut self):
         """Forget every vehicle, `Reset`."""
+        self.vehicles_at_junction_entrance = Dict[
+            Int, Tuple[SimpleWaypointIndex, SimpleWaypointIndex]
+        ]()
         self.last_lane_change_swpt = Dict[Int, SimpleWaypointIndex]()
         self.vehicles_at_junction = List[Int]()
         self.large_vehicles_at_junction_entrance = List[Int]()

@@ -103,8 +103,9 @@ The map functions are `generate_mesh`, `generate_chunked_mesh`, `generate_ordere
 
 ## Differences from CARLA
 
-This port keeps CARLA's numbers. The differences are these.
+This port keeps CARLA's numbers except for the corrections listed here.
 
+- Waypoint pitch uses the arctangent of the elevation grade, with the sign required by CARLA's corrected rotation convention. Uphill waypoints face uphill in either traffic direction. CARLA's old lane transform used the raw grade as a positive angle.
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
 - CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float.
 - A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains.
