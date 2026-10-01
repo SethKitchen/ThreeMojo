@@ -125,6 +125,7 @@ from render.texture import (
 )
 from render.texture_store import TextureId
 from std.math import pi
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -680,7 +681,7 @@ def test_write_and_load_a_file() raises:
     var geometry = assets.geometries.add(_triangle())
     var material = assets.materials.add(Material(WHITE, kind=BASIC))
     scene.add_mesh(Mesh(geometry, material, node))
-    var path = "/tmp/threemojo_object_json_test.json"
+    var path = temporary_path("threemojo_object_json_test.json")
     write_object_json(path, scene, assets)
     var again = Scene()
     var read = Assets()
@@ -1457,7 +1458,7 @@ def test_a_texture_used_twice_is_built_once_per_alpha() raises:
 
 def test_an_image_file_beside_the_document() raises:
     """An image with a relative URL is read beside the document."""
-    var directory = "/tmp/"
+    var directory = temporary_path("")
     Path(directory + "threemojo_object_json.png").write_bytes(
         encode_png(Framebuffer(2, 2, _pixels()))
     )

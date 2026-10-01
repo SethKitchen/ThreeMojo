@@ -49,6 +49,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.math import max
 from std.testing import (
@@ -84,7 +85,7 @@ def _file(
     _u32(bytes, 0)
     for _ in range(body):  # pragma: no branch
         bytes.append(0)
-    var path = String("/tmp/threemojo_style_") + name + ".bin"
+    var path = temporary_path("threemojo_style_") + name + ".bin"
     Path(path).write_bytes(bytes)
     return path
 
@@ -141,7 +142,7 @@ def test_a_style_file_is_read() raises:
 
 def test_a_bad_style_file_is_refused() raises:
     var junk: List[UInt8] = [1, 2, 3]
-    var short = String("/tmp/threemojo_style_short.bin")
+    var short = temporary_path("threemojo_style_short.bin")
     Path(short).write_bytes(junk)
     with assert_raises(contains="Not a hair style"):
         _ = HairStyleFile(short)

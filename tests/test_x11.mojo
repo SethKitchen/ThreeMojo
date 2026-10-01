@@ -32,6 +32,7 @@ from controls.input import (
 from render.framebuffer import Color, Framebuffer
 from std.ffi import OwnedDLHandle, c_int, external_call
 from std.subprocess import run
+from test_scratch import temporary_path
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -210,14 +211,24 @@ def _xlib() -> String:
     return library_path(macos_folders())
 
 
+def _quoted(value: String) -> String:
+    """Quote one shell argument, including a custom TMPDIR with spaces."""
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
 def test_xlib_is_found_by_its_macos_path_or_its_soname() raises:
-    var folder = String("/tmp/threemojo-test-x11-library")
-    _ = run("mkdir -p " + folder + " && touch " + folder + "/libX11.6.dylib")
-    var missing = String("/tmp/threemojo-test-x11-no-library")
+    var folder = temporary_path("threemojo-test-x11-library")
+    _ = run(
+        "mkdir -p "
+        + _quoted(folder)
+        + " && touch "
+        + _quoted(folder + "/libX11.6.dylib")
+    )
+    var missing = temporary_path("threemojo-test-x11-no-library")
     assert_equal(library_path([missing, folder]), folder + "/libX11.6.dylib")
     assert_equal(library_path([missing]), "libX11.so.6")
     assert_equal(library_path(List[String]()), "libX11.so.6")
-    _ = run("rm -rf " + folder)
+    _ = run("rm -rf " + _quoted(folder))
 
 
 def _pixel(window: X11Window, x: Int, y: Int) raises -> Int:

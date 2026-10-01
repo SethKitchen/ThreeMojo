@@ -16,6 +16,7 @@ from extensions.humanoid.skeleton.head.face_model import (
     TEETH,
 )
 from math.vector3 import Vector3
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -43,7 +44,7 @@ def _file(name: String, counts: List[Int], body: List[UInt8]) raises -> String:
     for count in header:  # pragma: no branch
         _u32(bytes, count)
     bytes.extend(body.copy())
-    var path = String("/tmp/threemojo_face_") + name + ".bin"
+    var path = temporary_path("threemojo_face_") + name + ".bin"
     Path(path).write_bytes(bytes)
     return path
 
@@ -147,7 +148,7 @@ def test_a_part_is_a_mesh() raises:
 
 def test_a_bad_file_is_refused() raises:
     var junk: List[UInt8] = [1, 2, 3]
-    var short = String("/tmp/threemojo_face_short.bin")
+    var short = temporary_path("threemojo_face_short.bin")
     Path(short).write_bytes(junk)
     with assert_raises(contains="Not a face model"):
         _ = FaceModel(short)
