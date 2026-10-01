@@ -115,5 +115,25 @@ def test_images() raises:
         _ = read_lut_image("assets/lut/missing.png")
 
 
+def test_lut_size_and_storage_are_checked_before_transpose() raises:
+    for size in [Int(1) << 22, Int(1) << 32, Int.MAX]:
+        with assert_raises(contains="size cannot fit"):
+            _ = parse_lut_image(List[UInt8](), size)
+    for shape in [[1, 1], [4, 2], [2, 4]]:
+        var image = DecodedImage(shape[0], shape[1], List[UInt8](), SRGB)
+        with assert_raises(contains="pixel length"):
+            _ = lut_image_from(image)
+        image.pixels = List[UInt8](length=shape[0] * shape[1] * 4 + 1, fill=0)
+        with assert_raises(contains="pixel length"):
+            _ = lut_image_from(image)
+    for shape in [[0, 1], [1, 0], [-1, 1], [1, -1]]:
+        var image = DecodedImage(shape[0], shape[1], List[UInt8](), SRGB)
+        with assert_raises(contains="size below one"):
+            _ = lut_image_from(image)
+    var huge = DecodedImage(Int.MAX, 2, List[UInt8](), SRGB)
+    with assert_raises(contains="image size cannot fit"):
+        _ = lut_image_from(huge)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

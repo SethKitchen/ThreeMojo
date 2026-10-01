@@ -78,12 +78,19 @@ def _check_extent(width: Int, height: Int, depth: Int, channels: Int) raises:
 
     Raises:
         Error: If a dimension is not positive or `channels` is not one
-            through four.
+            through four, or the stored RGBA size cannot fit in Int.
     """
     if width <= 0 or height <= 0 or depth <= 0:
         raise Error("A volume texture's dimensions must be positive")
     if channels < 1 or channels > VOLUME_CHANNELS:
         raise Error("A volume texture holds one through four numbers a texel")
+    # Stored images always expand to RGBA. Bound the element count before
+    # multiplying dimensions, including when the input has fewer channels.
+    var length = width
+    for factor in [height, depth, VOLUME_CHANNELS]:  # pragma: no branch
+        if length > Int.MAX // factor:
+            raise Error("A volume texture's size cannot fit in Int")
+        length *= factor
 
 
 struct VolumeImage(Movable):
