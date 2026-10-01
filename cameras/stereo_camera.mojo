@@ -198,5 +198,6 @@ def _eye(
     eye.place(position, position + forward)
     eye.up = up
     eye.layers = camera.layers
-    eye.zoom = camera.zoom
+    # Validate after zoom and skew, before either eye is committed.
+    _ = eye.projection_matrix()
     return eye^
