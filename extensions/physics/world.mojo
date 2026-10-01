@@ -308,7 +308,7 @@ struct PhysicsWorld(Movable):
         var shapes = List[WorldShape]()
         var boxes = List[Box3]()
         for i in range(len(self.bodies)):
-            if self.bodies[i].shape.kind == MESH:
+            if self.bodies[i].shape.kind == MESH or not self.bodies[i].collides:
                 shapes.append(
                     WorldShape.round(Vector3(0, 0, 0), Vector3(0, 0, 0), 0)
                 )
@@ -316,8 +316,20 @@ struct PhysicsWorld(Movable):
             else:
                 shapes.append(self._shape(i))
                 boxes.append(_box_of(shapes[i]))
-        # Insertion sort: the order changes little from step to step.
-        for i in range(1, len(self._order)):
+        # Keep disabled bodies out of the sweep. Parked actors can share
+        # one location; filtering inside _may_touch still visits every pair.
+        # Keep their ids so changing collides back to True works next step.
+        var active = List[Int]()
+        var inactive = List[Int]()
+        for i in self._order:
+            if self.bodies[i].collides:
+                active.append(i)
+            else:
+                inactive.append(i)
+        var count = len(active)
+        self._order = active^
+        # Insertion sort: the active order changes little from step to step.
+        for i in range(1, count):
             var j = i
             while (
                 j > 0
@@ -326,10 +338,12 @@ struct PhysicsWorld(Movable):
             ):
                 self._order.swap_elements(j - 1, j)
                 j -= 1
+        for i in inactive:
+            self._order.append(i)
         var out = List[_Manifold]()
-        for i in range(len(self._order)):
+        for i in range(count):
             var a = self._order[i]
-            for j in range(i + 1, len(self._order)):
+            for j in range(i + 1, count):
                 var b = self._order[j]
                 if boxes[b].min.x > boxes[a].max.x + self.margin:
                     break
@@ -343,8 +357,6 @@ struct PhysicsWorld(Movable):
     def _may_touch(self, a: Int, b: Int, boxes: List[Box3]) -> Bool:
         ref ba = self.bodies[a]
         ref bb = self.bodies[b]
-        if not (ba.collides and bb.collides):
-            return False
         if not (ba.is_dynamic() or bb.is_dynamic()):
             return False
         var grown = boxes[a]
@@ -361,7 +373,7 @@ struct PhysicsWorld(Movable):
         if len(self._triangles) == 0:
             return
         ref body = self.bodies[a]
-        if not (body.is_dynamic() and body.collides):
+        if not body.is_dynamic():
             return
         var center = box.center()
         var reach = (box.max - center).length() + self.margin

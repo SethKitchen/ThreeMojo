@@ -937,6 +937,9 @@ def test_vehicles_in_two_boxes_of_a_light() raises:
     var both = _car(world, _pose(55, 15, 0.05, -90))
     _ = world.tick()
     assert_equal(len(world.traffic_lights.lights[4].vehicles), 2)
+    # A repeated update does not duplicate either box's membership.
+    world._update_overlaps()
+    assert_equal(len(world.traffic_lights.lights[4].vehicles), 2)
     # Leaving just one box must keep the red light's other overlap.
     world.set_transform(both, _pose(55, 18, 0.05, -90))
     _ = world.tick()

@@ -38,6 +38,12 @@ A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor
 
 Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints, continuous collision detection, improved angular integration and moving-ground tire coupling remain separate work.
 
+## Disabled collisions
+
+Set `RigidBody.collides` to `False` to leave the primitive contact sweep. For a primitive body, the next step skips its contact-shape transforms and sweep candidate pairs. Set it back to `True` to restore contacts on the next step. The body id stays valid. Forces and motion still integrate.
+
+A disabled body still occupies its body slot. CARLA parks destroyed actors with collisions disabled. This avoids quadratic pair scans between parked bodies, but it does not reclaim their memory. Resource reclamation is tracked in [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
+
 ## Verification boundary
 
 The extraction changes import paths, not the numerical solver. Existing CARLA behavior and its known limitations remain. Shared code is not evidence that a model is validated for an engineering scenario. Select measured inputs, acceptance tolerances and validation cases for each use.

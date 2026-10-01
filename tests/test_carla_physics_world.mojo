@@ -620,6 +620,32 @@ def test_non_colliding_and_static_pairs() raises:
     assert_true(world.bodies[solid.value].position.z > 0)
 
 
+def test_disabled_bodies_leave_the_sweep_and_can_return() raises:
+    var world = PhysicsWorld()
+    world.gravity = Vector3(0, 0, 0)
+    # Destroyed actors all park together. These ids must remain valid, but
+    # their shared bounds must not cause pair scans or transformed shapes.
+    for _ in range(1024):
+        var ghost = _ball(0.5, 1, Vector3(0, 0, 0), 0)
+        ghost.collides = False
+        _ = world.add_body(ghost^)
+    var solid = world.add_body(_ball(0.5, 1, Vector3(0.8, 0, 0), 0))
+    world.step(Duration(H, SECOND))
+    assert_equal(world.contact_count, 0)
+    assert_equal(world._order[0], solid.value)
+    assert_equal(world.body_count(), 1025)
+    # A public collides change takes effect on the next step.
+    world.bodies[0].collides = True
+    world.step(Duration(H, SECOND))
+    assert_true(world.contact_count > 0)
+    assert_equal(world._order[0], 0)
+    assert_equal(world._order[1], solid.value)
+    world.bodies[0].collides = False
+    world.bodies[solid.value].collides = False
+    world.step(Duration(H, SECOND))
+    assert_equal(world.contact_count, 0)
+
+
 def test_mesh_added_later_and_ignored() raises:
     var world = PhysicsWorld()
     var ball = world.add_body(_ball(0.5, 1, Vector3(0, 0, 1), 0))

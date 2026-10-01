@@ -158,6 +158,8 @@ from math.obb import OBB
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
+from std.hashlib import Hasher
+from std.collections import Set
 from std.math import ceil
 from std.time import perf_counter_ns
 from units.si import (
@@ -328,7 +330,7 @@ struct LabelledPoint(ImplicitlyCopyable, Writable):
 
 
 @fieldwise_init
-struct _Overlap(Equatable, ImplicitlyCopyable):
+struct _Overlap(Hashable, ImplicitlyCopyable, KeyElement):
     """A vehicle inside one road box."""
 
     var vehicle: Int
@@ -336,6 +338,12 @@ struct _Overlap(Equatable, ImplicitlyCopyable):
     var owner: Int
     var index: Int
     var box: Int
+
+    def __hash__[H: Hasher](self, mut hasher: H):
+        self.vehicle.__hash__(hasher)
+        self.owner.__hash__(hasher)
+        self.index.__hash__(hasher)
+        self.box.__hash__(hasher)
 
 
 def surface_tag(kind: Int) -> SemanticTag:
@@ -2076,7 +2084,12 @@ struct World(Movable):
 
     def _leave(mut self, overlaps: List[_Overlap]):
         """The vehicles leave these boxes."""
-        for o in overlaps:
+        if len(overlaps) == 0:
+            return
+        var gone = Set[_Overlap]()
+        # The empty list returned above.
+        for o in overlaps:  # pragma: no branch
+            gone.add(o)
             var vehicle = ActorId(o.vehicle)
             var v = self.actors[o.vehicle - 1].handle
             if o.owner == 0:
@@ -2102,12 +2115,12 @@ struct World(Movable):
                     self.signs[o.index].end_effect(vehicle)
             else:
                 self.signs[o.index].end_check(vehicle)
-            var kept = List[_Overlap]()
-            # The overlap being left is in the list.
-            for have in self._overlaps:  # pragma: no branch
-                if not (have == o):
-                    kept.append(have)
-            self._overlaps = kept^
+        var kept = List[_Overlap]()
+        # Every overlap being left is in the list.
+        for have in self._overlaps:  # pragma: no branch
+            if have not in gone:
+                kept.append(have)
+        self._overlaps = kept^
 
     def _enter(mut self, o: _Overlap):
         var vehicle = ActorId(o.vehicle)
@@ -2126,6 +2139,24 @@ struct World(Movable):
             self._apply(self.signs[o.index].begin_check(vehicle))
         self._overlaps.append(o)
 
+    def _append_overlaps(
+        self,
+        mut out: List[_Overlap],
+        id: ActorId,
+        owner: Int,
+        box: OBB,
+        groups: List[List[OBB]],
+    ):
+        var reach = box.half_size.length()
+        for i in range(len(groups)):
+            ref boxes = groups[i]
+            for k in range(len(boxes)):
+                var gap = (boxes[k].center - box.center).length()
+                if gap > reach + boxes[k].half_size.length():
+                    continue
+                if box.intersects_obb(boxes[k]):
+                    out.append(_Overlap(id.value, owner, i, k))
+
     def _find_overlaps(self) raises -> List[_Overlap]:
         var out = List[_Overlap]()
         # The spectator is always in the list.
@@ -2133,36 +2164,25 @@ struct World(Movable):
             if not (a.is_alive() and a.kind == VEHICLE_ACTOR):
                 continue
             var box = world_obb(self.get_transform(a.id), a.bounding_box)
-            var reach = box.half_size.length()
-            for owner in range(3):  # pragma: no branch
-                var count = len(self._light_boxes)
-                if owner > 0:
-                    count = len(self._effect_boxes)
-                for i in range(count):
-                    var boxes: List[OBB]
-                    if owner == 0:
-                        boxes = self._light_boxes[i].copy()
-                    elif owner == 1:
-                        boxes = self._effect_boxes[i].copy()
-                    else:
-                        boxes = self._check_boxes[i].copy()
-                    for k in range(len(boxes)):
-                        var gap = (boxes[k].center - box.center).length()
-                        if gap > reach + boxes[k].half_size.length():
-                            continue
-                        if box.intersects_obb(boxes[k]):
-                            out.append(_Overlap(a.id.value, owner, i, k))
+            self._append_overlaps(out, a.id, 0, box, self._light_boxes)
+            self._append_overlaps(out, a.id, 1, box, self._effect_boxes)
+            self._append_overlaps(out, a.id, 2, box, self._check_boxes)
         return out^
 
     def _update_overlaps(mut self) raises:
         var now = self._find_overlaps()
+        var present = Set[_Overlap]()
+        var previous = Set[_Overlap]()
+        for o in now:
+            present.add(o)
         var gone = List[_Overlap]()
         for o in self._overlaps:
-            if not (o in now):
+            previous.add(o)
+            if o not in present:
                 gone.append(o)
         self._leave(gone)
         for o in now:
-            if not (o in self._overlaps):
+            if o not in previous:
                 self._enter(o)
 
     def tick(mut self) raises -> Int:
