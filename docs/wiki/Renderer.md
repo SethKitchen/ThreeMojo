@@ -56,6 +56,28 @@ The two passes are separate because almost nothing a triangle carries applies to
 
 `scene.update()` must run before `prepare` or `render`. The renderer reads world matrices and does not recompute them.
 
+## Preparation memory
+
+One worker emits each draw before it prepares the next draw. Several workers
+hold at most 65,536 prepared vertices across pending draws. A larger draw
+runs on its own. Triangle pieces stay in draw order when the batch is flushed.
+The limit bounds temporary vertex arrays, not the final frame or its assets.
+
+## Reuse shadow maps
+
+`render_into_keeping_shadows` returns the maps drawn by a frame. To reuse them,
+pass the maps to `render_into_reusing_shadows`. Transfer the list with `^` and
+keep the returned list to avoid copying its texels between views:
+
+```mojo
+maps = renderer.render_into_reusing_shadows(target, scene, assets, camera, maps^)
+```
+
+Views can share maps when the lights, casters and visible layers are the same.
+The view's layers filter both lights and casters, including point-light faces.
+Scene cube captures use the same layer mask for their maps and all six faces.
+`render_into_with_shadows` copies a borrowed list so the caller keeps its independent maps.
+
 ## Shading modes
 
 | Mode | A fragment's color is |

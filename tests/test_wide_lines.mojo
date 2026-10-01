@@ -428,18 +428,34 @@ def _corners(points: List[Vector3], material: Material) raises -> Int:
     )
 
 
-def test_a_thin_line_keeps_no_caps_but_a_dot_does() raises:
-    # A line a pixel wide is its quad alone: its caps would each cover a
-    # fraction of a pixel.
-    assert_equal(
-        _corners(across_x(), line_material(RED, LineWidth(pixels=1))), 6
-    )
-    assert_true(
-        _corners(across_x(), line_material(RED, LineWidth(pixels=4))) > 6
-    )
-    # A dot a pixel wide keeps its caps, or there would be nothing of it.
-    var points: List[Vector3] = [Vector3(0, 0, 0), Vector3(0, 0, 0)]
-    assert_true(_corners(points, line_material(RED, LineWidth(pixels=1))) > 6)
+def test_a_solid_line_keeps_round_caps_at_every_width() raises:
+    # LineSegments2 keeps round caps even below one pixel. Test long,
+    # short and zero-length segments so no half-width cutoff can return.
+    for width in [Float32(0.5), 1, 1.5, 4]:
+        for length in [Float32(0), 0.04, 0.08, 0.5]:
+            var points: List[Vector3] = [
+                Vector3(-length / 2, 0, 0),
+                Vector3(length / 2, 0, 0),
+            ]
+            assert_true(
+                _corners(points, line_material(RED, LineWidth(pixels=width)))
+                > 6
+            )
+
+
+def test_thin_round_caps_cover_pixels_beyond_the_segment_ends() raises:
+    # The endpoints project to (4.75, 7.5) and (11.25, 7.5). The pixel
+    # centers just beyond them are inside the round caps, not the quad.
+    var points: List[Vector3] = [
+        Vector3(-0.40625, 0.0625, 0),
+        Vector3(0.40625, 0.0625, 0),
+    ]
+    for width in [Float32(1), 1.5]:
+        var image = draw(points, line_material(RED, LineWidth(pixels=width)))
+        assert_true(lit(image, 4, 7))
+        assert_true(lit(image, 11, 7))
+        assert_false(lit(image, 3, 7))
+        assert_false(lit(image, 12, 7))
 
 
 def test_a_segment_pointing_at_the_eye_is_a_disc_in_the_world() raises:

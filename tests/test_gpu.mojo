@@ -14826,3 +14826,41 @@ def test_both_backends_draw_marschner_strand_colors() raises:
     )
     assert_true(count_background(host, BACKGROUND) < 32 * 32)
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+def test_both_backends_keep_subpixel_wide_line_caps() raises:
+    if skipped_for_lack_of_a_gpu("subpixel wide-line caps"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    for index in range(3):
+        var y = Float32(index - 1) * 0.4
+        var shape = assets.geometries.add(
+            line_segments_geometry(
+                [Vector3(-0.8, y, 0), Vector3(0.8, y + 0.15, 0)]
+            )
+        )
+        var paint = assets.materials.add(
+            line_material(
+                Color(240, 160, 90),
+                LineWidth(pixels=Float32(index + 1) * 0.5),
+            )
+        )
+        scene.add_wide_line(LineSegments2(shape, paint, node))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32, workers=3)
+    renderer.background = BACKGROUND
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    # Each of the three solid segments needs more than its two triangles.
+    assert_true(len(frame.corners) > 3 * 6)
+    var host = renderer.render(scene, assets, camera)
+    var device = render_triangles(
+        frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
+    )
+    assert_true(count_background(host, BACKGROUND) < 32 * 32)
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)

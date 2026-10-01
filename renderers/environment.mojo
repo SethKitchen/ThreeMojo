@@ -207,16 +207,16 @@ def scene_cube(
     side.shadow_map_type = renderer.shadow_map_type
     side.set_ltc_tables(renderer.ltc_tables())
     side.set_light_probe_grid(LightProbeGrid(copy=probe_grid))
-    # A shadow map does not depend on the camera, so the six faces share
-    # one set, drawn once.
-    var shadows = side.shadow_maps(scene, assets)
+    # The six faces share the same layers, so they share one set of
+    # shadow maps. Lights on other layers must not enter this set.
+    var shadows = side.shadow_maps(scene, assets, camera.layers)
     var faces = List[Texture]()
     for face in range(FACE_COUNT):  # pragma: no branch
         var target = RenderTarget(
             size, size, side.clear_color(scene), FLOAT_TARGET
         )
-        side.render_into_with_shadows(
-            target, scene, assets, camera.face_camera(face, scene), shadows
+        shadows = side.render_into_reusing_shadows(
+            target, scene, assets, camera.face_camera(face, scene), shadows^
         )
         var data = List[Float32](capacity=size * size * 4)
         for slot in range(size * size):  # pragma: no branch
