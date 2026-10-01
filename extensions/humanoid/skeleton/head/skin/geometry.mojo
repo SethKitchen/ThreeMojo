@@ -25,6 +25,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     ScannedHead,
     scan_model,
     scan_skin_mesh,
+    still_targets,
 )
 from extensions.humanoid.skeleton.head.skin.tint import tint_head_skin
 from extensions.humanoid.skeleton.isosurface import check_detail
@@ -104,7 +105,10 @@ def _drawn_by_scan(
 
 
 def head_skin_from_dimensions(
-    dimensions: HeadMuscleDimensions, detail: Int = 32, workers: Int = 1
+    dimensions: HeadMuscleDimensions,
+    detail: Int = 32,
+    workers: Int = 1,
+    shapes: List[String] = List[String](),
 ) raises -> BufferGeometry:
     """Return the neck's and the head's skin mesh for already-computed
     dimensions.
@@ -113,6 +117,9 @@ def head_skin_from_dimensions(
         dimensions: Landmarks from `head_muscle_dimensions`.
         detail: Cells along the solid.
         workers: How many threads mesh it. One by default.
+        shapes: The face model's expression shapes to rig, by name, as
+            relative morph targets. The face moves with them; the neck
+            below the scan does not. None by default.
 
     Returns:
         A geometry with `position`, `normal`, `uv` and `color`
@@ -121,7 +128,8 @@ def head_skin_from_dimensions(
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `detail` is
-            out of range, or if the field produces no surface.
+            out of range, if the field produces no surface, or if a shape
+            is not the model's.
     """
     check_detail(detail, "head skin")
     var field = HeadSkinField(dimensions)
@@ -142,6 +150,8 @@ def head_skin_from_dimensions(
         workers,
     )
     _leave_covered_out(solids, field.scan, seam + lap, h.cm(COVERED))
+    if len(shapes) > 0:
+        still_targets(solids, shapes)
     parts.append(solids^)
     parts.append(
         scan_skin_mesh(
@@ -152,6 +162,7 @@ def head_skin_from_dimensions(
             field.low,
             field.high,
             field.epsilon,
+            shapes,
         )
     )
     var skin = merge_geometries(parts)

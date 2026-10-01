@@ -29,7 +29,8 @@ This is not a three.js port. See Extensions.
     var d = scan.distance(point)
 """
 
-from core.buffer_geometry import BufferGeometry
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.genome import (
     EAR_LOBE,
     EAR_PROTRUSION,
@@ -123,6 +124,9 @@ comptime FILL_ROUNDS = 6
 # height to all of it at the second, in template centimeters.
 comptime IDENTITY_FROM = Float32(57.0)
 comptime IDENTITY_TO = Float32(62.0)
+# How far above the scan's floor its expression targets fade in, in
+# template centimeters.
+comptime RIG_FADE = Float32(3.0)
 
 
 def scan_model() raises -> FaceModel:
@@ -472,29 +476,37 @@ def skin_triangles(model: FaceModel) raises -> List[Int]:
 
 
 def place(
-    h: HeadDimensions, model: FaceModel, count: Int
+    h: HeadDimensions,
+    model: FaceModel,
+    count: Int,
+    expression: List[Float32] = List[Float32](),
 ) raises -> List[Vector3]:
-    """Return the model's first `count` vertices at rest, placed on the
-    template of `h`: the face shape genes weigh the model's identity
-    modes above the neck's base, the ear genes warp the ears, and the head's frame places
-    every point.
+    """Return the model's first `count` vertices, placed on the template
+    of `h`: the face shape genes weigh the model's identity modes above
+    the neck's base, the ear genes warp the ears, and the head's frame
+    places every point.
 
     Args:
         h: Head landmarks, with the genome.
         model: The face model, with its expressions.
         count: How many of the first vertices.
+        expression: One weight per expression shape. Empty, the default,
+            is the face at rest; see `rest_expression`.
 
     Returns:
         The vertices, in the pelvis frame, in meters.
 
     Raises:
-        Error: If the model has no blinks.
+        Error: If the model has no blinks, or `expression` is not one
+            weight per shape.
     """
     var genome = h.torso.genome
     var size = genome.get(EAR_SIZE)
     var protrusion = genome.get(EAR_PROTRUSION)
     var lobe = genome.get(EAR_LOBE)
     var rest = rest_expression(model)
+    if len(expression) > 0:
+        rest = expression.copy()
     var shape = model.shape(model.no_identity(), rest, count)
     var identity = h.frame.morph.identity_weights(model.identities())
     var shaped = False
@@ -667,6 +679,7 @@ def scan_skin_mesh[
     low: Vector3,
     high: Vector3,
     step: Float32,
+    shapes: List[String] = List[String](),
 ) raises -> BufferGeometry:
     """Return the scan's skin as a mesh on the surface of `field`.
 
@@ -688,13 +701,16 @@ def scan_skin_mesh[
         low: The field's box's minimum corner, in meters.
         high: Its maximum corner.
         step: The gradient's sample distance, in meters.
+        shapes: The model's expression shapes to rig, by name; see
+            `rig_expressions`. None by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv`; `v` runs over the
-        box's height.
+        box's height. With `shapes`, one relative morph target each.
 
     Raises:
-        Error: If no triangle lies above `floor`.
+        Error: If no triangle lies above `floor`, or a shape is not the
+            model's.
     """
     var triangles = skin_triangles(model)
     var skin = scan.skin(model)
@@ -768,7 +784,121 @@ def scan_skin_mesh[
         normals.append(n.x)
         normals.append(n.y)
         normals.append(n.z)
-    return finish_surface(positions^, normals^, indices^, low.y, high.y - low.y)
+    var surface = finish_surface(
+        positions^, normals^, indices.copy(), low.y, high.y - low.y
+    )
+    if len(shapes) > 0:
+        rig_expressions(
+            surface, scan.head, model, remap, points, indices, shapes, floor
+        )
+    return surface^
+
+
+def _area_normals(points: List[Vector3], indices: List[Int]) -> List[Vector3]:
+    """Return each vertex's normal: the mean of its triangles' normals,
+    weighted by their area."""
+    var sums = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
+    for t in range(0, len(indices), 3):  # pragma: no branch
+        var a = points[indices[t]]
+        var n = cross(points[indices[t + 1]] - a, points[indices[t + 2]] - a)
+        for c in range(3):  # pragma: no branch
+            sums[indices[t + c]] = sums[indices[t + c]] + n
+    for v in range(len(sums)):  # pragma: no branch
+        sums[v].normalize()
+    return sums^
+
+
+def rig_expressions(
+    mut surface: BufferGeometry,
+    h: HeadDimensions,
+    model: FaceModel,
+    remap: List[Int],
+    points: List[Vector3],
+    indices: List[Int],
+    shapes: List[String],
+    floor: Float32,
+) raises:
+    """Give the scan's skin one relative morph target per expression
+    shape, with its normals.
+
+    Each target is how far each vertex moves when the face wears the
+    shape outright, from rest, placed on the person as the rest is. A
+    blink's target closes the lid from where it rests. Near `floor`,
+    where the scan's skin meets the neck's mesh, the targets fade to
+    nothing, so the two never part. The copies of the vertices on the
+    texture's seam, at the back of the head, which no expression moves,
+    stay still.
+
+    Args:
+        surface: The scan's skin, with `remap`'s vertices.
+        h: Head landmarks, with the genome.
+        model: The face model, with its expressions.
+        remap: Each model vertex's index in `surface`, or minus one.
+        points: The surface's vertices, in the pelvis frame.
+        indices: The surface's triangles.
+        shapes: The shapes to rig, by the model's names.
+        floor: The height the skin starts at, in meters.
+
+    Raises:
+        Error: If a shape is not the model's, or a target does not fit.
+    """
+    var count = EYE_SOCKETS.end
+    var total = surface.attribute_view(String(POSITION)).count()
+    var rest = place(h, model, count)
+    var still = _area_normals(points, indices)
+    var fade = List[Float32](capacity=len(points))
+    for p in points:  # pragma: no branch
+        fade.append(smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
+    surface.morph_relative = True
+    for name in shapes:  # pragma: no branch
+        var weights = rest_expression(model)
+        weights[model.expression(name)] = 1
+        var moved = place(h, model, count, weights)
+        var shifts = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
+        for v in range(count):  # pragma: no branch
+            if remap[v] >= 0:
+                shifts[remap[v]] = (moved[v] - rest[v]) * fade[remap[v]]
+        var worn = List[Vector3](capacity=len(points))
+        for v in range(len(points)):  # pragma: no branch
+            worn.append(points[v] + shifts[v])
+        var turned = _area_normals(worn, indices)
+        var positions = List[Float32](length=3 * total, fill=0)
+        var normals = List[Float32](length=3 * total, fill=0)
+        for v in range(len(points)):  # pragma: no branch
+            var n = turned[v] - still[v]
+            positions[3 * v] = shifts[v].x
+            positions[3 * v + 1] = shifts[v].y
+            positions[3 * v + 2] = shifts[v].z
+            normals[3 * v] = n.x
+            normals[3 * v + 1] = n.y
+            normals[3 * v + 2] = n.z
+        surface.add_morph_target(
+            BufferAttribute(positions^, 3),
+            BufferAttribute(normals^, 3),
+            name=name,
+        )
+
+
+def still_targets(mut surface: BufferGeometry, shapes: List[String]) raises:
+    """Give a mesh that does not move with the face one empty relative
+    morph target per expression shape, so it merges with the scan's
+    rigged skin.
+
+    Args:
+        surface: The mesh, with positions.
+        shapes: The shapes the scan's skin is rigged with.
+
+    Raises:
+        Error: If the mesh has no positions.
+    """
+    var count = surface.attribute_view(String(POSITION)).count()
+    surface.morph_relative = True
+    for name in shapes:  # pragma: no branch
+        surface.add_morph_target(
+            BufferAttribute(List[Float32](length=3 * count, fill=0), 3),
+            BufferAttribute(List[Float32](length=3 * count, fill=0), 3),
+            name=name,
+        )
 
 
 def _walk[

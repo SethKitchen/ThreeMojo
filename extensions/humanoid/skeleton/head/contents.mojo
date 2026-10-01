@@ -7,7 +7,7 @@
 
 Each named value is a bit. Combine layers with `plus`. `BOTH` is the
 skeleton, the ligaments and the muscles. `ALL` is every layer, the
-eyes too.
+eyes and the mouth too.
 
     _ = add_head(..., contents=MUSCLES)
     _ = add_head(..., contents=BONES.plus(VESSELS))
@@ -140,6 +140,19 @@ struct HeadContents(Equatable, ImplicitlyCopyable, Writable):
         self._require()
         return (self.value & EYES.value) != 0
 
+    def includes_mouth(self) raises -> Bool:
+        """Return True if this layer set draws the teeth, the gums and
+        the tongue.
+
+        Returns:
+            True when the mouth bit is set.
+
+        Raises:
+            Error: If this value is not a named layer set.
+        """
+        self._require()
+        return (self.value & MOUTH.value) != 0
+
     def plus(self, other: HeadContents) raises -> HeadContents:
         """Return the union of this set and `other`.
 
@@ -182,7 +195,10 @@ comptime SKIN = HeadContents(64)
 comptime HAIR = HeadContents(128)
 # The two eyeballs: sclera, iris and pupil.
 comptime EYES = HeadContents(256)
+# The teeth, the gums and the tongue of the scanned face, which move
+# with its expressions.
+comptime MOUTH = HeadContents(512)
 # Skeleton, ligaments and muscles together.
 comptime BOTH = HeadContents(7)
 # Every named layer.
-comptime ALL = HeadContents(511)
+comptime ALL = HeadContents(1023)

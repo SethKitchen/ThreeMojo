@@ -128,6 +128,56 @@ An eyeball goes where its lids go. The face's genes move the lids and the eye's 
 
 `add_head` draws the eyes when `contents` has `EYES`. `ALL` has it. `add_body` draws the eyes and the scalp's hair with the skin.
 
+## Expressions and speech
+
+A head can smile, frown and talk. Rig it once, then set its weights each frame.
+
+```mojo
+from extensions.humanoid.skeleton.head.contents import EYES, MOUTH, SKIN
+from extensions.humanoid.skeleton.head.expression import (
+    SMILE, FaceWeights, face_rig_shapes,
+)
+from extensions.humanoid.skeleton.head.speech import Speech
+
+var first = len(scene.meshes)
+_ = add_head(..., contents=SKIN.plus(EYES).plus(MOUTH),
+             face_shapes=face_rig_shapes())
+var speech = Speech("Hello there!")
+var face = FaceWeights()
+face.add_expression(SMILE, 0.6)
+speech.speak(face, time)
+for m in range(first, len(scene.meshes)):
+    if len(scene.meshes[m].morph_target_dictionary) > 0:
+        face.apply(scene.meshes[m])
+```
+
+`face_shapes` names the face model's blend shapes to rig, as `jawOpen` or `mouthSmile_L`. The face model is ICT FaceKit, and its shapes are Apple's ARKit set. `add_head` gives the skin one morph target per shape. Each target moves the scanned face as the model's shape does, placed on the person as the face at rest is. The targets carry normals, so a smile shades as it creases.
+
+The targets fade to nothing at the neck's seam, so the face never parts from the neck. Building the head costs the same. A frame only sets weights.
+
+`MOUTH` draws the model's own teeth, gums and tongue, rigged with the same shapes. The jaw opening drops the lower teeth and the tongue with the chin. `teeth_physical` and `gum_physical` are their looks.
+
+| Expression | The face |
+|---|---|
+| `NEUTRAL` | At rest. |
+| `SMILE` | The corners of the mouth up, the cheeks raised, the eyes narrowed a little. |
+| `FROWN` | The brows drawn down, the corners of the mouth down, the lips pressed. |
+| `SADNESS` | The inner brows raised, the corners of the mouth down, the chin pushed up. |
+| `SURPRISE` | The brows up, the eyes wide, the jaw dropped. |
+| `ANGER` | The brows down, the eyes narrowed, the lips pressed hard. |
+| `DISGUST` | The nose wrinkled and the upper lip raised. |
+| `FEAR` | The brows up and together, the eyes wide, the lips stretched. |
+
+Each expression is a recipe of shapes from the Facial Action Coding System. A smile is action units 6 and 12, for example. `expression_recipe` returns it.
+
+A `Viseme` is the shape the mouth takes for a group of sounds that look alike. The fifteen are the Oculus Lipsync set, from `SILENT` and `PP` to `OU`. The model has no tongue shapes, so the sounds the tongue makes show as the jaw and the lips do. `viseme_recipe` returns each recipe.
+
+`FaceWeights` adds expressions, visemes and blinks. `apply` holds each weight to zero through one and sets it on a mesh. So a face can smile while it talks.
+
+`Speech(text, rate)` reads English text by its spelling. Pairs of letters such as "th", "ch" and "oo" come first. A silent final "e" and an "h" on its own make no shape. A vowel is held 0.13 s, a consonant 0.075 s, a space 0.06 s and a phrase's end 0.32 s, all divided by `rate`. `speak(face, time)` adds the visemes at `time`. Each viseme ramps in and out over 0.035 s either side of its time, so the mouth passes through both shapes between two sounds.
+
+Spelling is not sound in English. A word spelled far from how it sounds moves the mouth as it is spelled.
+
 ## Hair
 
 The scalp's hair is strands over a shell. `add_groom` grows the strands. The shell under them is the mass of hair in shade.
@@ -200,6 +250,8 @@ Each guide is sampled at eight points a turn and wound round its own line. It sw
 Each eyebrow is an arc on the skin over its orbit, thick at its head and thin at its tail. `BROW_THICKNESS` makes it fuller or finer. `add_head` paints the brows into the skin's colors, hair by hair, in the hair's color. A solid strip stands off the curve of the brow ridge, so the brows are not a mesh. `head_hair` still meshes one, and its mass is its volume.
 
 ## Examples
+
+`examples/expressions.mojo` draws one face in each of the eight expressions and writes `out/expressions.png`. `examples/talking.mojo` writes `out/talking.png`, an animation: a woman says four phrases, and her face greets, smiles, frowns and is surprised.
 
 `examples/head.mojo` draws a six-foot male neck and head twice and writes `out/head.png`. The left copy shows the bones, the joint tissues and the muscles. The right copy shows the skin, the hair and the eyes. The program also prints the mass of several head parts.
 

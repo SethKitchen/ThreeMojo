@@ -64,9 +64,14 @@ from extensions.humanoid.skeleton.head.nerves.dimensions import (
 from extensions.humanoid.skeleton.head.nerves.geometry import (
     head_nerve_from_dimensions,
 )
+from extensions.humanoid.skeleton.head.face_model import (
+    GUMS_AND_TONGUE,
+    TEETH,
+)
 from extensions.humanoid.skeleton.head.skin.geometry import (
     head_skin_from_dimensions,
 )
+from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
 from extensions.humanoid.skeleton.head.vessels.dimensions import (
     is_head_artery,
     named_head_vessels,
@@ -79,12 +84,16 @@ from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.look import (
     artery_phong,
     eye_physical,
+    gum_physical,
     hair_phong,
     lymph_phong,
     nerve_phong,
     skin_phong,
+    teeth_physical,
     vein_phong,
 )
+from core.buffer_geometry import BufferGeometry
+from objects.mesh import Mesh
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.vector3 import Vector3
@@ -112,6 +121,9 @@ def add_head(
     eye_paint: MaterialId = UNSET_PAINT,
     workers: Int = 1,
     hair_style: HairStyle = GROWN,
+    face_shapes: List[String] = List[String](),
+    teeth_paint: MaterialId = UNSET_PAINT,
+    gum_paint: MaterialId = UNSET_PAINT,
 ) raises -> NodeId:
     """Attach the neck and the head under `parent` and return their node.
 
@@ -147,6 +159,12 @@ def add_head(
         hair_style: How the scalp's hair mesh is cut; `GROWN` by
             default. Draw the strands with `add_groom` in the same
             style.
+        face_shapes: The face model's expression shapes the skin and the
+            mouth are rigged with, one morph target each; see
+            `face_rig_shapes`. Set their influences each frame with a
+            `FaceWeights`. None by default: the face is still.
+        teeth_paint: Teeth look, or the default enamel.
+        gum_paint: Gums and tongue look, or the default wet pink.
 
     Returns:
         The head's node.
@@ -260,11 +278,11 @@ def add_head(
         var skin = resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome, tinted=True)
         )
-        place_mesh(
+        place_rigged(
             scene,
             assets,
             root_id,
-            head_skin_from_dimensions(dims, skin_detail, workers),
+            head_skin_from_dimensions(dims, skin_detail, workers, face_shapes),
             skin,
         )
     if contents.includes_hair():
@@ -287,6 +305,19 @@ def add_head(
             ),
             hair,
         )
+    if contents.includes_mouth():
+        var teeth = resolved_paint(assets, teeth_paint, teeth_physical())
+        var gums = resolved_paint(assets, gum_paint, gum_physical())
+        place_rigged(
+            scene, assets, root_id, mouth_mesh(dims, TEETH, face_shapes), teeth
+        )
+        place_rigged(
+            scene,
+            assets,
+            root_id,
+            mouth_mesh(dims, GUMS_AND_TONGUE, face_shapes),
+            gums,
+        )
     if contents.includes_eyes():
         var eye = eye_paint
         if eye.value < 0:
@@ -301,3 +332,30 @@ def add_head(
                 eye,
             )
     return root_id
+
+
+def place_rigged(
+    mut scene: Scene,
+    mut assets: Assets,
+    parent: NodeId,
+    var geometry: BufferGeometry,
+    paint: MaterialId,
+) raises:
+    """Attach one mesh at its parent's origin, with a weight for each of
+    its geometry's morph targets, all zero.
+
+    Args:
+        scene: The scene that receives the node and the mesh.
+        assets: Geometry store for the new mesh.
+        parent: Node the part hangs from.
+        geometry: The solid to draw, with any morph targets.
+        paint: Material id.
+
+    Raises:
+        Error: If the scene refuses the node or the mesh.
+    """
+    var nid = scene.attach(Object3D(), parent)
+    var shape = assets.geometries.add(geometry^)
+    var mesh = Mesh(shape, paint, nid)
+    mesh.update_morph_targets(assets.geometries.get(shape))
+    scene.add_mesh(mesh^)

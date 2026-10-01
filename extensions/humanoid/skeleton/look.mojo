@@ -421,6 +421,46 @@ def eye_physical(map: TextureId = NO_TEXTURE) raises -> Material:
     )
 
 
+def teeth_physical() raises -> Material:
+    """Return a physically based material for the teeth.
+
+    Enamel is an ivory white, smooth and wet: a clear coat over it gives
+    the teeth their glint.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(232, 226, 208),
+        roughness=0.3,
+        clearcoat=0.6,
+        clearcoat_roughness=0.1,
+    )
+
+
+def gum_physical() raises -> Material:
+    """Return a physically based material for the gums and the tongue.
+
+    They are a deep pink, and wet. The color is darker than the tissue
+    itself, for the shade inside the mouth.
+
+    Returns:
+        A `PHYSICAL` material.
+
+    Raises:
+        Error: If the physical constructor refuses the values.
+    """
+    return physical_material(
+        Color(118, 52, 56),
+        roughness=0.55,
+        clearcoat=0.8,
+        clearcoat_roughness=0.08,
+    )
+
+
 def muscle_physical(map: TextureId = NO_TEXTURE) raises -> Material:
     """Return a physically based material for skeletal muscle.
 

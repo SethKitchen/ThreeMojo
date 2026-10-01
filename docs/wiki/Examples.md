@@ -108,11 +108,13 @@ mkdir -p out
 | `head.mojo` | `head.png` | [Head](Head) |
 | `genomes.mojo` | `genomes.png` | [Genome](Genome) |
 | `family.mojo` | `family.png` | [Genome](Genome) |
+| `expressions.mojo` | `expressions.png` | [Head](Head) |
+| `talking.mojo` | `talking.png` | [Head](Head) |
 | `water.mojo` | `water.png` | [Water](Water) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
-`pelvis.mojo`, `torso.mojo`, `arm.mojo`, `hand.mojo`, `head.mojo`, `genomes.mojo` and `family.mojo` take a mesh quality after the path: `low`, `medium`, `high` or `xhigh`. See [Mesh quality](Mesh-quality).
+`pelvis.mojo`, `torso.mojo`, `arm.mojo`, `hand.mojo`, `head.mojo`, `genomes.mojo`, `family.mojo`, `expressions.mojo` and `talking.mojo` take a mesh quality after the path: `low`, `medium`, `high` or `xhigh`. See [Mesh quality](Mesh-quality).
 
 ```bash
 .venv/bin/mojo run -I . examples/torso.mojo out/torso.png low

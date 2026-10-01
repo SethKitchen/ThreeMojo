@@ -754,8 +754,10 @@ def test_contents_bits() raises:
     assert_false(BONES.includes_hair())
     assert_equal(BONES.plus(HAIR).value, 129)
     assert_false(HeadContents(0).is_valid())
-    assert_false(HeadContents(512).is_valid())
+    assert_false(HeadContents(1024).is_valid())
     assert_true(every.includes_eyes())
+    assert_true(every.includes_mouth())
+    assert_false(SKIN.includes_mouth())
     assert_false(SKIN.includes_eyes())
     assert_true(EYES.includes_eyes())
     with assert_raises():
@@ -778,9 +780,9 @@ def test_add_head_places_every_layer() raises:
         scene, assets, root, _person(), paint, paint, paint, paint, ALL, 8, 8
     )
     # 11 bones, 7 joint tissues, 28 muscles, 12 vessels, 9 nerves, 10
-    # node groups, the skin, the scalp's hair and 2 eyes. The brows are
-    # painted into the skin.
-    assert_equal(len(scene.meshes), 81)
+    # node groups, the skin, the scalp's hair, the teeth, the gums and 2
+    # eyes. The brows are painted into the skin.
+    assert_equal(len(scene.meshes), 83)
     var dressed = Scene()
     var top = dressed.add(Object3D())
     _ = add_head(
