@@ -637,6 +637,7 @@ The loader refuses these, with a message that names the problem:
 - A file with no grid, and a grid that is not evenly spaced. three.js throws for these too.
 - A number that is not one. three.js reads it as `NaN`.
 - A table whose largest number is not above zero. three.js divides by zero.
+- A grid whose RGBA element count or temporary Float64 byte count does not fit in `Int`. These counts are checked before allocation.
 
 ### Example
 
