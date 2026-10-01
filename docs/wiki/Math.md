@@ -298,7 +298,11 @@ An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only w
 | `look_at(eye, target, up)` | The view matrix of a camera at `eye`. |
 | `viewport(width, height)` | Normalized device space to pixels. Rows count down. |
 
-Each raises for a degenerate volume. `look_at` never raises. A camera at its own target looks down its own -z. An up vector along the view direction is nudged off it, as three.js does.
+Projection bounds must be finite and ordered. An infinite far plane is refused. The builders raise if the volume is degenerate or a required coefficient cannot fit in `Float32`. Intermediate overflow uses a wider calculation when the final coefficients can fit.
+
+Both `Matrix4.look_at` and the view builder use the same basis. Positions must be finite. Up must be finite and nonzero. A camera at its own target uses +z as its backward axis. Parallel up is nudged off the view direction. The basis accepts very small and large finite directions.
+
+`Matrix4.look_at` keeps translation and the bottom row, and leaves the matrix unchanged on failure. The view builder also refuses an offset that cannot fit in `Float32`. Frustum builders refuse nonfinite matrices and depth distances.
 
 Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.
 

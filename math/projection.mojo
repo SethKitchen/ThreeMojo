@@ -25,6 +25,41 @@ coordinate system. three.js also supports WebGPU's convention, where z runs
 
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from std.math import isfinite
+
+
+def _check_finite_bounds(
+    left: Float32,
+    right: Float32,
+    top: Float32,
+    bottom: Float32,
+    near: Float32,
+    far: Float32,
+) raises:
+    """Refuse a nonfinite projection edge or depth."""
+    if not (
+        isfinite(left)
+        and isfinite(right)
+        and isfinite(top)
+        and isfinite(bottom)
+        and isfinite(near)
+        and isfinite(far)
+    ):
+        raise Error("Projection bounds must be finite")
+
+
+def _view_offset(axis: Vector3, eye: Vector3) -> Float32:
+    """Keep ordinary dot arithmetic and widen an overflowing view offset."""
+    var value = -axis.dot(eye)
+    if not isfinite(value):
+        value = Float32(
+            -(
+                Float64(axis.x) * Float64(eye.x)
+                + Float64(axis.y) * Float64(eye.y)
+                + Float64(axis.z) * Float64(eye.z)
+            )
+        )
+    return value
 
 
 def perspective(
@@ -52,11 +87,12 @@ def perspective(
         A projection matrix mapping the frustum onto the NDC cube.
 
     Raises:
-        Error: If the frustum is degenerate, or any of the planes are not
-            ordered. Reversed edges are refused as well as equal ones: they
+        Error: If a bound is not finite, a coefficient is not representable,
+            the frustum is degenerate, or its planes are not ordered. Reversed edges are refused as well as equal ones: they
             would mirror the projection, and a mirrored projection reverses
             screen winding, which is the one thing backface culling reads.
     """
+    _check_finite_bounds(left, right, top, bottom, near, far)
     if near <= 0:
         raise Error("The near plane must be in front of the camera")
     if far <= near:
@@ -76,6 +112,29 @@ def perspective(
     # The -1 in the bottom row is what copies z into w, and dividing by w is
     # what makes distant things small. Everything else is scale and offset.
     matrix.set(x, 0, a, 0, 0, y, b, 0, 0, 0, c, d, 0, 0, -1, 0)
+    if (
+        not matrix.is_finite()
+        or not (
+            isfinite(right - left)
+            and isfinite(top - bottom)
+            and isfinite(far - near)
+        )
+        or x == 0
+        or y == 0
+        or d == 0
+    ):
+        var width = Float64(right) - Float64(left)
+        var height = Float64(top) - Float64(bottom)
+        var depth = Float64(far) - Float64(near)
+        x = Float32(2 * Float64(near) / width)
+        y = Float32(2 * Float64(near) / height)
+        a = Float32((Float64(right) + Float64(left)) / width)
+        b = Float32((Float64(top) + Float64(bottom)) / height)
+        c = Float32(-(Float64(far) + Float64(near)) / depth)
+        d = Float32(-2 * Float64(far) * Float64(near) / depth)
+        matrix.set(x, 0, a, 0, 0, y, b, 0, 0, 0, c, d, 0, 0, -1, 0)
+    if not matrix.is_finite() or x == 0 or y == 0 or d == 0:
+        raise Error("The projection is not representable in Float32")
     return matrix^
 
 
@@ -117,9 +176,11 @@ def orthographic(
         A projection matrix mapping the box onto the NDC cube.
 
     Raises:
-        Error: If the volume is degenerate or its edges are reversed, or the
-            planes are not ordered.
+        Error: If a bound is not finite, a coefficient is not representable,
+            the volume is degenerate, its edges are reversed, or its planes
+            are not ordered.
     """
+    _check_finite_bounds(left, right, top, bottom, near, far)
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
     if right <= left or top <= bottom:
@@ -148,6 +209,39 @@ def orthographic(
         0,
         1,
     )
+    if not matrix.is_finite() or not (
+        isfinite(right - left)
+        and isfinite(top - bottom)
+        and isfinite(far - near)
+    ):
+        var width = Float64(right) - Float64(left)
+        var height = Float64(top) - Float64(bottom)
+        var depth = Float64(far) - Float64(near)
+        matrix.set(
+            Float32(2 / width),
+            0,
+            0,
+            Float32(-(Float64(right) + Float64(left)) / width),
+            0,
+            Float32(2 / height),
+            0,
+            Float32(-(Float64(top) + Float64(bottom)) / height),
+            0,
+            0,
+            Float32(-2 / depth),
+            Float32(-(Float64(far) + Float64(near)) / depth),
+            0,
+            0,
+            0,
+            1,
+        )
+    if (
+        not matrix.is_finite()
+        or matrix.elements[0] == 0
+        or matrix.elements[5] == 0
+        or matrix.elements[10] == 0
+    ):
+        raise Error("The projection is not representable in Float32")
     return matrix^
 
 
@@ -167,55 +261,39 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
         A matrix transforming world space into camera space.
 
     Raises:
-        Error: Never. A camera at its own target looks down its own -z, and
-            an `up` parallel to the view direction is nudged off it by a
-            ten-thousandth, exactly as three.js's `Matrix4.lookAt` settles
-            both, so a camera looking straight down with the default up
-            still has a basis.
+        Error: If a position is not finite, up is zero or not finite, or
+            the view offset is not representable in Float32. A camera at
+            its own target uses +z as its backward axis. Parallel up is
+            nudged by a ten-thousandth along a different axis.
     """
-    # z points back towards the camera, because the camera looks down -z.
-    var forward = eye - target
-    if forward.length() == 0:
-        forward = Vector3(0, 0, 1)
-    forward.normalize()
-
-    var right = up
-    right.cross(forward)
-    if right.length() == 0:
-        # three.js's own nudge: along x when up is the z axis, along z
-        # otherwise, and the basis is rebuilt from the nudged direction.
-        if abs(up.z) == 1:
-            forward.x += 0.0001
-        else:
-            forward.z += 0.0001
-        forward.normalize()
-        right = up
-        right.cross(forward)
-    right.normalize()
-
-    # Already perpendicular unit vectors, so this needs no normalizing.
-    var above = forward
-    above.cross(right)
+    var basis = Matrix4()
+    basis.look_at(eye, target, up)
+    var right = Vector3(0, 0, 0)
+    var above = Vector3(0, 0, 0)
+    var forward = Vector3(0, 0, 0)
+    basis.extract_basis(right, above, forward)
 
     var matrix = Matrix4()
     matrix.set(
         right.x,
         right.y,
         right.z,
-        -right.dot(eye),
+        _view_offset(right, eye),
         above.x,
         above.y,
         above.z,
-        -above.dot(eye),
+        _view_offset(above, eye),
         forward.x,
         forward.y,
         forward.z,
-        -forward.dot(eye),
+        _view_offset(forward, eye),
         0,
         0,
         0,
         1,
     )
+    if not matrix.is_finite():
+        raise Error("The view offset is not representable in Float32")
     return matrix^
 
 

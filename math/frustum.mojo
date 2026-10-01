@@ -37,6 +37,7 @@ change the image, which is the one thing culling must not do.
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from std.math import isfinite
 
 
 @fieldwise_init
@@ -114,11 +115,14 @@ struct Frustum(Copyable, Movable):
             The frustum.
 
         Raises:
-            Error: If the coordinate system is neither of the two, or a
+            Error: If the matrix is not finite, the coordinate system is
+                neither of the two, or a
                 plane comes out with no normal, which no projection does:
                 a matrix of zeros, or one whose bottom row cancels another,
                 describes no volume.
         """
+        if not matrix.is_finite():
+            raise Error("A frustum projection must be finite")
         if not coordinate_system.is_valid():
             raise Error("A frustum reads WEBGL or WEBGPU coordinates")
         ref e = matrix.elements
@@ -178,9 +182,11 @@ struct Frustum(Copyable, Movable):
             Left, right, top and bottom, each facing inward.
 
         Raises:
-            Error: If a plane has no normal, which a degenerate projection
-                gives.
+            Error: If the projection is not finite or a plane has no normal,
+                which a degenerate projection gives.
         """
+        if not projection.is_finite():
+            raise Error("A frustum projection must be finite")
         ref e = projection.elements
         var planes = List[Plane]()
         planes.append(Frustum._plane(e, 0, 1))
@@ -231,14 +237,20 @@ struct Frustum(Copyable, Movable):
             The frustum, in world space.
 
         Raises:
-            Error: If the view is not affine, whose z row is then not a
-                depth; if `far` is not beyond `near`; or if a side plane
+            Error: If a matrix is not finite or the view is not affine,
+                whose z row is then not a
+                depth; if a depth is not finite or `far` is not beyond
+                `near`; or if a side plane
                 has no normal, as `from_projection_matrix` refuses.
         """
+        if not clip.is_finite() or not view.is_finite():
+            raise Error("Frustum clip and view matrices must be finite")
         if not view.is_affine():
             raise Error(
                 "A view matrix must be affine to place the depth planes"
             )
+        if not isfinite(near) or not isfinite(far):
+            raise Error("Frustum near and far distances must be finite")
         if far <= near:
             raise Error("The far plane must be beyond the near plane")
         ref c = clip.elements
