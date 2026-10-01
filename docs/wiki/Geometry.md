@@ -102,6 +102,8 @@ three.js recomputes a bounding box or sphere that it has cached. Here the bounds
 
 ## Draw range
 
+Range readers clamp the start and count before adding them. Large nonnegative counts stay inside the triangle or vertex stream.
+
 ```mojo
 geometry.set_draw_range(6, 12)     # index entries 6 to 17: triangles 2 to 5
 geometry.set_draw_range(0)         # every slot again: three.js's Infinity
