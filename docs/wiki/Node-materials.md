@@ -611,6 +611,8 @@ three.js writes each node of the graph with its type and its inputs. This port w
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
+The reader checks the compiled program before a renderer can use it. Each instruction, register, constant, matrix, uniform and custom attribute must fit its storage. Every texture read must have an offset in the serialized texture list. Invalid code raises an error at load time.
+
 ### three.js's node JSON
 
 `loaders.node_loader` reads the node graph that three.js writes, and compiles it here. A node material that you make in three.js can load in this port. The module is three.js's `NodeLoader`, `NodeMaterialLoader` and `NodeObjectLoader`.
