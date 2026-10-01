@@ -238,6 +238,30 @@ class CoverageIoTests(unittest.TestCase):
             b'COVLINE:a:9\n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
         ]))
 
+    def test_invalid_outcome_is_rejected_before_it_adds_a_hit(self):
+        import coverage_io
+        for state in (b'', b'garbage', b't', b'False', b'T:extra'):
+            for probe in (b'm:4', b'm:4.0'):
+                written = []
+                reducer = coverage_io.Reducer(written.append)
+                with self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+                    reducer.feed(b'COVBRANCH:' + probe + b':' + state + b'\n')
+                self.assertEqual(written, [])
+                self.assertEqual(reducer.payloads, set())
+                self.assertEqual(reducer.pending, {})
+
+    def test_capture_cannot_fabricate_false_from_invalid_outcome(self):
+        import gzip
+        import sys
+        import coverage_io
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+                coverage_io.capture([sys.executable, '-c',
+                    'import sys;sys.stderr.write("COVLINE:m:4\\nCOVBRANCH:m:4:T\\nCOVBRANCH:m:4:garbage\\n")'],
+                    root / 'out', root / 'err.gz')
+            self.assertNotIn(b'COVBRANCH:m:4:F', gzip.decompress((root / 'err.gz').read_bytes()))
+
     def test_failed_suite_retains_diagnostics_and_exit_status(self):
         import contextlib
         import io
