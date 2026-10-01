@@ -392,6 +392,7 @@ Content that is not a three.js port lives under `extensions/`. Each item is test
 - [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality): quality levels that fit a humanoid to a triangle budget, from 90,000 to one million, by edge collapse [#269](https://github.com/SethKitchen/ThreeMojo/issues/269)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
+- [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable rigid bodies, contacts, integration and quantities, with compatible CARLA imports
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
 
 ### Out of scope

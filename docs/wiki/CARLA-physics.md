@@ -4,6 +4,8 @@
 
 The port follows the CARLA source at commit `1360bb9`. The records come from `LibCarla/source/carla/rpc`. The controllers come from the `Carla/Vehicle` and `Carla/Walker` sources of CARLA's simulator plugin. No game-engine source code is ported. See [CARLA](CARLA) for the frame and the roads.
 
+The rigid-body core lives in [Shared physics](Physics). Its CARLA import paths remain compatible.
+
 ## Modules
 
 | Module | What it gives |
