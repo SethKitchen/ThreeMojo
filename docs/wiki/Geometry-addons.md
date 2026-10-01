@@ -132,7 +132,9 @@ A three.js group holds its children. Here a group is a scene node, and a mesh na
 
 `NURBSSurface` is a `ParametricSurface`, so `parametric(surface, slices, stacks)` makes a mesh of it. `NURBSVolume.point(u, v, w)` gives a point inside a volume.
 
-The knots must not fall, and their count must be the number of control points, plus the degree, plus one. three.js does not check this.
+The knots must be finite and must not fall. Their count must be the number of control points, plus the degree, plus one. The degree must be less than the control point count. The active interval, from `knots[degree]` to `knots[control_point_count]`, must have positive width.
+
+These checks apply to every axis of a surface or volume. Repeated knots are allowed when the active interval stays nonempty. three.js does not check these conditions.
 
 Weighted derivatives above the polynomial degree are zero, including the weight component. This corrects three.js's padding weight of one. Constant NURBS curves have zero tangents. Rational curves can still have nonzero higher derivatives when their weights vary.
 
