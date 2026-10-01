@@ -65,11 +65,12 @@ from extensions.carla.physics.shape import (
     unit_or,
 )
 from extensions.carla.physics.world import PhysicsWorld
+from extensions.physics.collide import _supporting
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import cos, inf, isnan, nan, pi, sin, sqrt
+from std.math import cos, inf, isfinite, isnan, nan, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -668,6 +669,96 @@ def test_box_box_gap_along_the_second() raises:
         Quaternion.identity(),
     )
     assert_equal(len(collide(a, b, 0.02)), 0)
+
+
+def test_friction_mixing_preserves_representable_means() raises:
+    var coefficients: List[Float32] = [
+        0,
+        1e-45,
+        1e-30,
+        1e-20,
+        0.2,
+        0.8,
+        1e20,
+        1e30,
+        3.4028234e38,
+    ]
+    for a in coefficients:
+        for b in coefficients:
+            var first = PhysicsMaterial(a, 0.25)
+            var second = PhysicsMaterial(b, 0.75)
+            first.check()
+            second.check()
+            var combined = first.combine(second)
+            var expected = Float32(sqrt(Float64(a) * Float64(b)))
+            assert_true(isfinite(combined.friction))
+            assert_equal(combined.friction, expected)
+            assert_equal(combined.friction, second.combine(first).friction)
+            assert_equal(combined.restitution, 0.75)
+            if a == b:
+                assert_equal(combined.friction, a)
+            if a > 0 and b > 0:
+                assert_true(combined.friction > 0)
+
+
+def test_translated_support_sets_keep_extreme_vertices() raises:
+    var axes: List[Vector3] = [
+        Vector3(1, 0, 0),
+        Vector3(-1, 0, 0),
+        Vector3(0, 1, 0),
+        Vector3(0, -1, 0),
+        Vector3(0, 0, 1),
+        Vector3(0, 0, -1),
+    ]
+    var offsets: List[Float32] = [-10000, -4096, 0, 4096, 10000]
+    for offset in offsets:
+        var shape = Polyhedron.box(Vector3(1, 1, 1)).transformed(
+            Vector3(offset, offset, offset), Matrix3()
+        )
+        for axis in axes:
+            var supporting = _supporting(shape, axis)
+            assert_equal(len(supporting), 4)
+            for index in supporting:
+                assert_equal(
+                    shape.vertices[index].dot(axis), shape.support(axis)
+                )
+    # Keep the existing near-support tolerance, not only exact maximizers.
+    var near = Polyhedron()
+    near.vertices = [
+        Vector3(0, 0, 0),
+        Vector3(-0.00005, 0, 0),
+        Vector3(-0.0002, 0, 0),
+    ]
+    var supporting = _supporting(near, Vector3(1, 0, 0))
+    assert_equal(len(supporting), 2)
+    assert_equal(supporting[0], 0)
+    assert_equal(supporting[1], 1)
+
+
+def test_translated_crossed_edge_contacts() raises:
+    var top = Float32(sqrt(2.0))
+    var turns: List[Quaternion] = [
+        Quaternion.identity(),
+        _turn(Vector3(0, 1, 0), 90),
+        _turn(Vector3(1, 0, 0), -90),
+    ]
+    var offsets: List[Float32] = [-10000, -4096, 0, 4096, 10000]
+    for turn in turns:
+        var qa = turn * _turn(Vector3(1, 0, 0), 45)
+        var qb = turn * _turn(Vector3(0, 1, 0), 45)
+        var separation = turn.rotate(Vector3(0, 0, 2 * top - 0.1))
+        var expected_normal = turn.rotate(Vector3(0, 0, 1))
+        var expected_point = turn.rotate(Vector3(0, 0, top - 0.05))
+        for offset in offsets:
+            var shift = Vector3(offset, offset, offset)
+            var a = _solid(Vector3(1, 1, 1), shift, qa)
+            var b = _solid(Vector3(1, 1, 1), shift + separation, qb)
+            var contacts = collide(a, b, 0.02)
+            assert_equal(len(contacts), 1)
+            assert_true(isfinite(contacts[0].depth))
+            assert_almost_equal(contacts[0].depth, 0.1, atol=0.003)
+            _near(contacts[0].normal, expected_normal, 0.0002)
+            _near(contacts[0].point - shift, expected_point, 0.003)
 
 
 def main() raises:

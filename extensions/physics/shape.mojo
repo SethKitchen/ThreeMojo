@@ -106,7 +106,8 @@ struct PhysicsMaterial(ImplicitlyCopyable):
             restitution.
         """
         return PhysicsMaterial(
-            sqrt(self.friction * other.friction),
+            # The product can exceed Float32 while its square root fits.
+            Float32(sqrt(Float64(self.friction) * Float64(other.friction))),
             max(self.restitution, other.restitution),
         )
 

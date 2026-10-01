@@ -44,6 +44,14 @@ Set `RigidBody.collides` to `False` to leave the primitive contact sweep. For a 
 
 A disabled body still occupies its body slot. CARLA parks destroyed actors with collisions disabled. This avoids quadratic pair scans between parked bodies, but it does not reclaim their memory. Resource reclamation is tracked in [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
 
+## Numerical contact boundaries
+
+Convex edge contacts compare differences between support projections. A maximum support vertex stays selected after a large world translation. Contact coordinates still have Float32 resolution. Tests move crossed edges by positive and negative 10 km offsets along each contact axis. Their 3 mm point and depth tolerance allows about three Float32 coordinate steps at 10 km.
+
+These tests do not prove contact accuracy at arbitrary world coordinates. Body positions and contact points still use Float32. A precision-preserving public quantity contract is tracked in [#333](https://github.com/SethKitchen/ThreeMojo/issues/333); a world-origin policy remains a separate design choice.
+
+Material mixing widens the friction product before its square root. This keeps a representable geometric mean finite across the accepted Float32 coefficient range. It does not establish a calibrated material model.
+
 ## Verification boundary
 
 The extraction changes import paths, not the numerical solver. Existing CARLA behavior and its known limitations remain. Shared code is not evidence that a model is validated for an engineering scenario. Select measured inputs, acceptance tolerances and validation cases for each use.
