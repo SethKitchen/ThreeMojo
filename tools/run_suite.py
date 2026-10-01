@@ -14,9 +14,11 @@ the code under test faster, not the test smaller.
 The limit applies to each test and not to the suite. `TestSuite` holds all
 of its output until the program exits, through a pipe and a terminal alike,
 so nothing can see one test end while the suite runs. The check therefore
-has two parts:
+has three parts:
 
-- After the suite exits, every result line gives the test's time in
+- After the suite exits, its header, result records and summary must agree.
+  A zero exit code without complete test results is not a pass.
+- Every result line gives the test's time in
   milliseconds. A time over the limit fails that test.
 - While the suite runs, a hung test never gets to report. The program is
   stopped when it runs longer than the limit multiplied by the number of
@@ -25,6 +27,7 @@ has two parts:
 """
 
 import argparse
+from collections import Counter
 import re
 import subprocess
 import sys
@@ -32,7 +35,13 @@ import sys
 from test_environment import isolated_environment
 
 # `PASS [ 2000.245 ] test_name`, after the color codes are removed.
-RESULT = re.compile(r"^\s*(PASS|FAIL|SKIP)\s*\[\s*([0-9.]+)\s*\]\s*(\S+)")
+TIME = r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"
+RESULT = re.compile(r"^\s*(PASS|FAIL|SKIP)\s*\[\s*(" + TIME + r")\s*\]\s*(\S+)")
+HEADER = re.compile(r"^\s*Running\s+(\d+)\s+tests?\s+for\s+.+?\s*$")
+SUMMARY = re.compile(
+    r"^\s*Summary\s*\[\s*" + TIME + r"\s*\]\s*"
+    r"(\d+)\s+tests?\s+run:\s*(\d+)\s+passed\s*,\s*"
+    r"(\d+)\s+failed\s*,\s*(\d+)\s+skipped\s*$")
 COLOR = re.compile(r"\x1b\[[0-9;]*m")
 # `TestSuite.discover_tests` runs every function whose name starts `test_`.
 TEST = re.compile(r"^def\s+test_\w*\s*\(", re.MULTILINE)
@@ -53,6 +62,49 @@ def slow_tests(output, seconds):
         if match and float(match.group(2)) / 1000.0 > seconds:
             slow.append((match.group(3), float(match.group(2)) / 1000.0))
     return slow
+
+
+def result_errors(output):
+    """Return errors unless one complete TestSuite run reports no failures.
+
+    Runtime counts are authoritative. The source-text count is only a hang
+    budget estimate; imported or generated tests can change the actual count.
+    Diagnostic output, including device-skip notices, is left uninterpreted.
+    """
+    headers, summaries = [], []
+    header_lines, summary_lines, result_lines = [], [], []
+    results = Counter()
+    errors = []
+    for number, line in enumerate(COLOR.sub("", output).splitlines()):
+        if match := HEADER.fullmatch(line):
+            headers.append(int(match.group(1)))
+            header_lines.append(number)
+        if match := SUMMARY.fullmatch(line):
+            summaries.append(tuple(map(int, match.groups())))
+            summary_lines.append(number)
+        if match := RESULT.match(line):
+            results[match.group(1)] += 1
+            result_lines.append(number)
+    if results['FAIL']:
+        errors.append('one or more test results report FAIL')
+    if len(headers) != 1 or len(summaries) != 1:
+        errors.append('expected one complete TestSuite header and summary')
+        return errors
+    if (header_lines[0] >= summary_lines[0]
+            or any(not header_lines[0] < n < summary_lines[0] for n in result_lines)):
+        errors.append('test result records are outside the run header and summary')
+    total, passed, failed, skipped = summaries[0]
+    if total <= 0:
+        errors.append('the suite reported no tests')
+    if headers[0] != total:
+        errors.append('the run header and summary test counts differ')
+    if passed + failed + skipped != total:
+        errors.append('the summary totals do not add up')
+    if (results['PASS'], results['FAIL'], results['SKIP']) != (passed, failed, skipped):
+        errors.append('test result records do not match the summary totals')
+    if failed:
+        errors.append('the summary reports failed tests')
+    return errors
 
 
 def budget(seconds, tests):
@@ -97,7 +149,10 @@ def main(argv):
         )
     if run.returncode != 0:
         return run.returncode
-    return 1 if slow else 0
+    errors = result_errors(output)
+    for error in errors:
+        print(f"{args.suite}: invalid test results: {error}.")
+    return 1 if slow or errors else 0
 
 
 if __name__ == "__main__":
