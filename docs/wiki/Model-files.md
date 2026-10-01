@@ -37,6 +37,8 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
+OBJ polygon convexity is checked in translated, widened coordinates so small or large finite model scales do not change whether a face is accepted.
+
 ## ObjModel and ObjObject
 
 `ObjModel.objects` holds one `ObjObject` per object, in file order. `count()` says how many. `ObjModel.material_libraries` holds the file name of each `mtllib` line, in file order.
