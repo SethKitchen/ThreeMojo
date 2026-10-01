@@ -30,7 +30,7 @@ three.js takes a `get` that reads each item's key. Here the items are indices in
 
 `ImprovedNoise().noise(x, y, z)` is Ken Perlin's improved noise. It is zero at every whole-number point.
 
-`SimplexNoise(random)` is Stefan Gustavson's simplex noise. `noise(x, y)`, `noise3d(x, y, z)` and `noise4d(x, y, z, w)` give the value in two, three and four dimensions.
+`SimplexNoise(random)` is Stefan Gustavson's simplex noise. It refuses finite coordinates if their lattice transform overflows, before converting lattice cells to integer indices. `noise(x, y)`, `noise3d(x, y, z)` and `noise4d(x, y, z, w)` give the value in two, three and four dimensions.
 
 | Member | Meaning |
 |---|---|
