@@ -5344,6 +5344,10 @@ struct Renderer(Movable):
         big.info_auto_reset = self.info_auto_reset
         big._opaque_sort = self._opaque_sort
         big._transparent_sort = self._transparent_sort
+        big.draw_filter = self.draw_filter
+        big.oit_draw = self.oit_draw
+        big.snap_vertices = self.snap_vertices
+        big.uv_space_meshes = self.uv_space_meshes.copy()
         # Counted into this renderer's info, not a copy of it.
         big._state = self._state
         big.ltc = self.ltc.copy()
@@ -5389,8 +5393,19 @@ struct Renderer(Movable):
         sized.custom_tone_mapping = self.custom_tone_mapping
         sized._opaque_sort = self._opaque_sort
         sized._transparent_sort = self._transparent_sort
+        sized.draw_filter = self.draw_filter
+        sized.oit_draw = self.oit_draw
+        sized.snap_vertices = self.snap_vertices
+        sized.uv_space_meshes = self.uv_space_meshes.copy()
+        sized.auto_clear = self.auto_clear
+        sized.auto_clear_color = self.auto_clear_color
+        sized.auto_clear_depth = self.auto_clear_depth
+        sized.auto_clear_stencil = self.auto_clear_stencil
+        sized.info_auto_reset = self.info_auto_reset
+        sized.antialias = self.antialias
         sized._state = self._state
         sized.ltc = self.ltc.copy()
+        sized.probe_grid = self.probe_grid.copy()
         sized.render_scale = self.render_scale
         return sized^
 
