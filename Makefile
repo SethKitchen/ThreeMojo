@@ -492,7 +492,7 @@ else
 	@mkdir -p $(COV_DIR)/coverage
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
-	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
+	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
 endif
 
