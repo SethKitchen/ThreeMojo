@@ -284,6 +284,7 @@ from render.texture import (
     texture_from,
 )
 from render.tasks import TaskGroup
+from loaders.image_batch import TextureDecodeBatch
 from render.texture_store import TextureId
 from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
@@ -718,19 +719,6 @@ struct GltfModel(Copyable, Movable):
         for offset in range(self.primitive_counts[mesh]):
             found.append(self.geometries[self.first_primitives[mesh] + offset])
         return found^
-
-
-def _decode_batch_size(remaining: Int, workers: Int) -> Int:
-    """Return the number of pending images one decode batch can own.
-
-    Args:
-        remaining: The nonnegative number of images still to decode.
-        workers: The requested limit; one or less uses one image.
-
-    Returns:
-        No more than `remaining` and `max(1, workers)` images.
-    """
-    return min(remaining, max(1, workers))
 
 
 async def _decode_one(
@@ -1754,11 +1742,11 @@ struct _Loader(Movable):
             # Own only one bounded batch of compressed bytes and decoded
             # results. Wait and publish it before reading the next batch.
             # first < count and the worker floor make every batch nonempty.
-            var batch = _decode_batch_size(count - first, workers)
+            var decoded = TextureDecodeBatch(count - first, workers)
+            var batch = len(decoded.textures)
             var bytes = List[List[UInt8]]()
             var samplings = List[GltfSampler]()
             var batch_spaces = List[ColorSpace]()
-            var built = List[Texture]()
             for k in range(batch):  # pragma: no branch
                 var index = first + k
                 bytes.append(
@@ -1766,13 +1754,6 @@ struct _Loader(Movable):
                 )
                 samplings.append(self.texture_samplers[textures[index]])
                 batch_spaces.append(spaces[index])
-                var texel: List[UInt8] = [0, 0, 0, 255]
-                built.append(
-                    Texture(
-                        1, 1, texel^, REPEAT, BILINEAR, LINEAR, False, IGNORED
-                    )
-                )
-            var errors = List[String](length=batch, fill=String(""))
             # Every pointer is to a local that outlives `wait`: no list
             # is resized or consumed while its tasks can still access it.
             var group = TaskGroup()
@@ -1786,20 +1767,23 @@ struct _Loader(Movable):
                         batch_spaces.unsafe_ptr().unsafe_origin_cast[
                             MutAnyOrigin
                         ](),
-                        built.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                        errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        decoded.textures.unsafe_ptr().unsafe_origin_cast[
+                            MutAnyOrigin
+                        ](),
+                        decoded.errors.unsafe_ptr().unsafe_origin_cast[
+                            MutAnyOrigin
+                        ](),
                         k,
                     )
                 )
             group.wait()
             # Reverse once so popping moves results in source order.
-            built.reverse()
+            decoded.check()
+            decoded.textures.reverse()
             for k in range(batch):  # pragma: no branch
-                if errors[k].byte_length() > 0:
-                    raise Error(errors[k])
                 # Move the completed texture, retaining its stable source
                 # order without copying its pixels and mipmaps again.
-                var texture = built.pop()
+                var texture = decoded.textures.pop()
                 texture.wrap_t = samplings[k].wrap_t
                 texture.min_filter = samplings[k].min_filter
                 texture.flip_y = False
