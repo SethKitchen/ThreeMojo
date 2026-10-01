@@ -731,3 +731,24 @@ def add_complexion(
         eye_physical(assets.textures.add(iris_albedo(64, genome)))
     )
     return Complexion(skin, hair, eyes)
+
+
+def resolved_paint(
+    mut assets: Assets, paint: MaterialId, var material: Material
+) raises -> MaterialId:
+    """Return `paint`, or store `material` when `paint` is unset.
+
+    Args:
+        assets: Material store for a new default look.
+        paint: Caller paint, or `UNSET_PAINT`.
+        material: Default material for this layer.
+
+    Returns:
+        A stored material id.
+
+    Raises:
+        Error: If the store refuses the material.
+    """
+    if paint.value >= 0:
+        return paint
+    return assets.materials.add(material^)

@@ -17,6 +17,8 @@ upper bound.
 """
 
 from extensions.humanoid.skeleton.tissue import BoneTissue
+from extensions.humanoid.skeleton.field import DistanceField
+from math.vector3 import Vector3
 from std.math import isfinite
 from units.si import (
     STANDARD_GRAVITY,
@@ -231,3 +233,73 @@ def in_shaft_span(
     if y > y1 - proximal * span:
         return False
     return True
+
+
+def sample_bone_mass[
+    F: DistanceField, //, classify: def(F, Vector3) thin -> BoneOccupancy
+](
+    field: F,
+    low: Vector3,
+    high: Vector3,
+    cortical: BoneTissue,
+    trabecular: BoneTissue,
+    step: Length,
+    name: String,
+) raises -> BoneMass:
+    """Integrate one bone's occupancy policy in a fixed grid order.
+
+    Parameters:
+        F: The bone-specific distance field.
+        classify: The bone-specific shell, marrow and end-region policy.
+
+    Args:
+        field: A field built from validated dimensions.
+        low: Minimum sample-box corner, in meters.
+        high: Maximum sample-box corner, in meters.
+        cortical: The cortical tissue.
+        trabecular: The trabecular tissue.
+        step: Grid cell size.
+        name: The bone name used in errors.
+
+    Returns:
+        Regional volumes, solid tissue volume and bone-tissue mass.
+
+    Raises:
+        Error: If the step, tissues, bounds or occupancy are invalid.
+    """
+    check_mass_step(step, name)
+    cortical.validate()
+    trabecular.validate()
+    for axis in range(3):  # pragma: no branch
+        var lo = low.get_component(axis)
+        var hi = high.get_component(axis)
+        if not isfinite(lo) or not isfinite(hi) or hi < lo:
+            raise Error("A bone mass sample box must be finite and ordered")
+        var span = hi - lo
+        # Refuse overflow before grid_cells converts its rounded count.
+        if not isfinite(span) or span / step.value + Float32(0.5) >= Float32(
+            Int.MAX
+        ):
+            raise Error("A bone mass sample span is too large")
+    var dx = step.value
+    var dy = step.value
+    var dz = step.value
+    var nx = grid_cells(high.x - low.x, dx)
+    var ny = grid_cells(high.y - low.y, dy)
+    var nz = grid_cells(high.z - low.z, dz)
+    var cell = dx * dy * dz
+    var tally = Tally(0, 0, 0, 0, 0)
+    for iz in range(nz):  # pragma: no branch
+        var z = low.z + (Float32(iz) + Float32(0.5)) * dz
+        for iy in range(ny):  # pragma: no branch
+            var y = low.y + (Float32(iy) + Float32(0.5)) * dy
+            for ix in range(nx):  # pragma: no branch
+                var x = low.x + (Float32(ix) + Float32(0.5)) * dx
+                add_fill(
+                    tally,
+                    classify(field, Vector3(x, y, z)),
+                    cell,
+                    cortical,
+                    trabecular,
+                )
+    return finish_mass(tally)
