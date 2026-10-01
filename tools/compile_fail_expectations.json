@@ -3558,6 +3558,18 @@
       "candidate not viable: value passed to 'method' cannot be converted from 'IntLiteral[8]' to 'ZipMethod'"
     ]
   },
+  "tests/compile_fail/add_illuminance_to_luminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Luminance' to 'Illuminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/add_length_to_duration.mojo": {
     "errors": [
       {
@@ -4440,6 +4452,18 @@
         "line": 8,
         "column": 51,
         "message": "invalid call to '__sub__': value passed to 'other' cannot be converted from 'Illuminance' to 'Luminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/subtract_luminance_from_illuminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__sub__': value passed to 'other' cannot be converted from 'Luminance' to 'Illuminance'"
       }
     ],
     "notes": [

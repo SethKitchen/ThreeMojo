@@ -112,7 +112,7 @@ struct Illuminance(ImplicitlyCopyable, Writable):
         Returns:
             The scaled illuminance.
         """
-        return Self(self.lux * factor, LUX)
+        return self * factor
 
     def __truediv__(self, other: Self) -> Float32:
         """Return the ratio of two illuminances.
