@@ -818,7 +818,9 @@ struct SensorManager(Movable):
         # The receiver is in the list.
         for j in order:  # pragma: no branch
             ref other = self.slots[j]
-            if j == i or other.kind != self.slots[i].kind:
+            # Transmissions exist only on the sender's due tick. Its cached
+            # CAM/outbox is not a fresh transmission on intervening ticks.
+            if j == i or other.kind != self.slots[i].kind or not other.due:
                 continue
             if custom:
                 if (

@@ -937,8 +937,14 @@ def test_vehicles_in_two_boxes_of_a_light() raises:
     var both = _car(world, _pose(55, 15, 0.05, -90))
     _ = world.tick()
     assert_equal(len(world.traffic_lights.lights[4].vehicles), 2)
-    # Leaving both boxes: the first leave clears the list, the second finds
-    # it empty.
+    # Leaving just one box must keep the red light's other overlap.
+    world.set_transform(both, _pose(55, 18, 0.05, -90))
+    _ = world.tick()
+    assert_equal(len(world.traffic_lights.lights[4].vehicles), 1)
+    assert_true(world.is_at_traffic_light(both))
+    assert_equal(world.get_traffic_light(both).value(), L2002)
+    assert_equal(world.get_traffic_light_state(both).value, RED.value)
+    # Leaving the last box clears the association.
     world.set_transform(both, _pose(55, 40, 0.05, -90))
     _ = world.tick()
     assert_equal(len(world.traffic_lights.lights[4].vehicles), 0)

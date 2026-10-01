@@ -2080,12 +2080,22 @@ struct World(Movable):
             var vehicle = ActorId(o.vehicle)
             var v = self.actors[o.vehicle - 1].handle
             if o.owner == 0:
-                self.vehicles[v].traffic_light_state = GREEN
-                self.vehicles[v].traffic_light = NO_ACTOR
+                # Each overlapping box contributes one entry. Leaving one
+                # box must not remove the entries for the same light's others.
                 var kept = List[ActorId]()
+                var removed = False
                 for w in self.traffic_lights.lights[o.index].vehicles:
-                    if w != vehicle:
+                    if w == vehicle and not removed:
+                        removed = True
+                    else:
                         kept.append(w)
+                if (
+                    vehicle not in kept
+                    and self.vehicles[v].traffic_light
+                    == self._light_actors[o.index]
+                ):
+                    self.vehicles[v].traffic_light_state = GREEN
+                    self.vehicles[v].traffic_light = NO_ACTOR
                 self.traffic_lights.lights[o.index].vehicles = kept^
             elif o.owner == 1:
                 if self.signs[o.index].kind != SPEED_LIMIT_SIGN:
