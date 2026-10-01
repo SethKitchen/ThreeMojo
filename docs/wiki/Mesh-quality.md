@@ -1,6 +1,6 @@
 # Mesh quality
 
-A `Quality` level sets how many triangles one humanoid holds. `LOW` keeps 90,000 triangles for a whole body. `XHIGH` keeps one million.
+A `Quality` level sets a target triangle count for one humanoid. `LOW` targets 90,000 triangles for a whole body. `XHIGH` targets one million.
 
 For engineering use and representation limits, see [Humanoid fidelity](Humanoid-fidelity).
 
@@ -48,14 +48,14 @@ Do these steps for each body:
 | `HIGH` | 12 | 48 | 40 | 450,000 |
 | `XHIGH` | 16 | 56 | 48 | 1,000,000 |
 
-The three `detail` values set how finely the mesher samples each solid. The budget sets how many triangles are kept after the merge. Each level has about twice the triangles of the level below it.
+The three `detail` values set how finely the mesher samples each solid. The budget sets the target triangle count after the merge. Each level has about twice the triangles of the level below it.
 
 | Function | Returns |
 |---|---|
 | `anatomy_detail(quality)` | The detail of each bone, ligament, muscle and vessel. |
 | `skin_detail(quality)` | The detail of a skin over the body or a limb. |
 | `hand_skin_detail(quality)` | The detail of the skin of one hand. |
-| `triangle_budget(quality)` | The triangles one whole body keeps. |
+| `triangle_budget(quality)` | The target triangle count for one whole body. |
 | `quality_named(name)` | The level that `low`, `medium`, `high` or `xhigh` names. |
 | `quality_label(quality)` | The name of the level. |
 
@@ -63,7 +63,11 @@ A bare integer is a compile error. A value that is not a named level raises.
 
 ## Budget
 
-`fit_triangle_budget(scene, assets, first_mesh, budget, workers=1)` shares the budget between the meshes by surface area. Each mesh keeps at least `MIN_PART_TRIANGLES`, which is 32. A mesh never keeps more triangles than it has. The triangles that it cannot use go to the other meshes. A geometry that two meshes name is decimated once.
+`fit_triangle_budget(scene, assets, first_mesh, budget, workers=1)` shares the budget between unique geometries by surface area. Each geometry keeps at least `MIN_PART_TRIANGLES`, which is 32. If welding leaves fewer than 32 triangles, it keeps that count. A geometry never receives a share larger than its count after welding. The triangles that it cannot use go to the other geometries. A geometry that two meshes name is counted and decimated once.
+
+The budget is a target. It is not a hard maximum. The minimum shares take priority when the budget cannot cover them. Safe collapse rules can also leave more triangles than a geometry's share. A collapse never crosses the 32-triangle minimum.
+
+The allocator reserves minimum shares before it assigns larger shares. For a feasible budget, the assigned shares total at most that budget. Shares are rounded down. A geometry with no surface area receives only its minimum share.
 
 `share_budget(areas, counts, budget)` does the sharing alone. `simplify(geometry, target)` decimates one geometry.
 

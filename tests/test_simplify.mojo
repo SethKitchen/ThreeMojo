@@ -28,7 +28,7 @@ from geometries.sphere import sphere
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from std.math import pi
+from std.math import cos, pi, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -490,6 +490,126 @@ def test_a_tetrahedron_stops_when_no_edge_can_go() raises:
     var tetra = WeldedMesh(positions^, List[Float32](), faces^)
     var kept = simplify_welded(tetra, 1)
     assert_true(kept.triangle_count() >= 2)
+
+
+def test_budget_floors_do_not_exceed_a_feasible_budget() raises:
+    var areas: List[Float64] = [1, 100]
+    var counts: List[Int] = [100, 100]
+    var shares = share_budget(areas, counts, 64)
+    assert_equal(shares[0], 32)
+    assert_equal(shares[1], 32)
+    # A capped large-area mesh must not consume another mesh's minimum.
+    var capped: List[Int] = [100, 50]
+    var tight = share_budget(areas, capped, 64)
+    assert_equal(tight[0], 32)
+    assert_equal(tight[1], 32)
+    # With room to spare, return unused triangles from the capped mesh.
+    var roomy = share_budget(areas, capped, 100)
+    assert_equal(roomy[0], 50)
+    assert_equal(roomy[1], 50)
+
+
+def _fan(triangles: Int) raises -> BufferGeometry:
+    """Return a flat disk with one center and `triangles` border vertices."""
+    var positions: List[Vector3] = [Vector3(0, 0, 0)]
+    var faces = List[Int]()
+    for index in range(triangles):  # pragma: no branch
+        var angle = Float32(2 * pi) * Float32(index) / Float32(triangles)
+        positions.append(Vector3(cos(angle), sin(angle), 0))
+        faces.append(0)
+        faces.append(index + 1)
+        faces.append((index + 1) % triangles + 1)
+    return WeldedMesh(positions^, List[Float32](), faces^).to_geometry()
+
+
+def test_budget_does_not_collapse_below_the_part_minimum() raises:
+    for workers in [1, 3]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var id = assets.geometries.add(_fan(33))
+        scene.add_mesh(Mesh(id, MaterialId(0), node))
+        fit_triangle_budget(scene, assets, 0, 32, workers)
+        assert_equal(assets.geometries.get(id).triangle_count(), 32)
+
+
+def test_budget_bounds_hold_for_small_and_zero_area_meshes() raises:
+    # Cover lower and upper bounds in both orders, including zero areas.
+    for first_area in [Float64(0), 1, 100]:  # pragma: no branch
+        for second_area in [Float64(0), 1, 100]:  # pragma: no branch
+            for first_count in [0, 10, 32, 33, 100]:  # pragma: no branch
+                for second_count in [10, 50, 100]:  # pragma: no branch
+                    for budget in [1, 64, 100, 500]:  # pragma: no branch
+                        var areas: List[Float64] = [first_area, second_area]
+                        var counts: List[Int] = [first_count, second_count]
+                        var shares = share_budget(areas, counts, budget)
+                        var least = min(32, first_count) + min(32, second_count)
+                        assert_true(shares[0] >= min(32, first_count))
+                        assert_true(shares[1] >= min(32, second_count))
+                        assert_true(shares[0] <= first_count)
+                        assert_true(shares[1] <= second_count)
+                        assert_true(shares[0] + shares[1] <= max(budget, least))
+                        var reversed_areas: List[Float64] = [
+                            second_area,
+                            first_area,
+                        ]
+                        var reversed_counts: List[Int] = [
+                            second_count,
+                            first_count,
+                        ]
+                        var reversed = share_budget(
+                            reversed_areas, reversed_counts, budget
+                        )
+                        assert_equal(shares[0], reversed[1])
+                        assert_equal(shares[1], reversed[0])
+
+
+def test_budget_minima_take_priority_when_the_budget_is_too_small() raises:
+    for workers in [1, 3]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var first = assets.geometries.add(_fan(33))
+        var second = assets.geometries.add(_fan(33))
+        scene.add_mesh(Mesh(first, MaterialId(0), node))
+        scene.add_mesh(Mesh(second, MaterialId(0), node))
+        fit_triangle_budget(scene, assets, 0, 1, workers)
+        assert_equal(assets.geometries.get(first).triangle_count(), 32)
+        assert_equal(assets.geometries.get(second).triangle_count(), 32)
+
+
+def test_budget_minimum_uses_the_count_after_welding() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var geometry = _fan(3)
+    for _ in range(30):  # pragma: no branch
+        geometry.index.append(0)
+        geometry.index.append(0)
+        geometry.index.append(1)
+    assert_equal(geometry.triangle_count(), 33)
+    var id = assets.geometries.add(geometry^)
+    scene.add_mesh(Mesh(id, MaterialId(0), node))
+    fit_triangle_budget(scene, assets, 0, 1)
+    assert_equal(assets.geometries.get(id).triangle_count(), 3)
+
+
+def test_budget_keeps_protected_topology_above_the_target() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var geometry = _loose([0, 0, 0, 1, 0, 0, 0, 1, 0])
+    var faces = List[Int]()
+    # Every edge belongs to more than two faces. No collapse is safe.
+    for _ in range(33):  # pragma: no branch
+        faces.append(0)
+        faces.append(1)
+        faces.append(2)
+    geometry.set_index(faces^)
+    var id = assets.geometries.add(geometry^)
+    scene.add_mesh(Mesh(id, MaterialId(0), node))
+    fit_triangle_budget(scene, assets, 0, 32)
+    assert_equal(assets.geometries.get(id).triangle_count(), 33)
 
 
 def main() raises:
