@@ -71,7 +71,7 @@ from math.bounds import Box3
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.cube_texture_store import NO_CUBE_TEXTURE, SCENE_ENVIRONMENT
+from render.cube_texture_store import SCENE_ENVIRONMENT
 from render.rgbe import decode as decode_rgbe
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
@@ -948,7 +948,8 @@ struct AssetRegistry(Movable):
         Raises:
             Error: If the file system cannot be asked.
         """
-        for f in entry.files:
+        # A texture set names its albedo map, so it has a file.
+        for f in entry.files:  # pragma: no branch
             if not Path(self.path(f.path)).is_file():
                 return False
         return True
@@ -1028,7 +1029,8 @@ struct AssetRegistry(Movable):
             if entry.kind != TEXTURE_SET_ASSET or not self.is_cached(entry):
                 continue
             var normal = Bool(entry.file(NORMAL_ROLE))
-            for f in entry.files:
+            # A texture set names its albedo map, so it has a file.
+            for f in entry.files:  # pragma: no branch
                 # The maps `texture_set` reads, in the spaces it reads them.
                 if f.role == DISPLACEMENT_ROLE and normal:
                     continue
@@ -1160,8 +1162,8 @@ struct AssetRegistry(Movable):
         evenly by the largest factor that keeps it inside `fit`, and moves
         it so that its box is centered on the pivot's origin in x and z
         and stands on it in y. Every mesh casts and receives shadows, and
-        each material that reflects no cube reflects the scene's
-        environment.
+        every material reflects the scene's environment: a glTF names no
+        cube.
 
         Args:
             index: The entry's index, from `cached_entry`.
@@ -1195,7 +1197,10 @@ struct AssetRegistry(Movable):
             raise Error("The model " + entry.id + " has no mesh")
         scene.update()
         var bounds = Box3.empty()
-        for m in range(model.first_mesh, model.first_mesh + model.mesh_count):
+        # A model has a mesh: one with none was refused above.
+        for m in range(
+            model.first_mesh, model.first_mesh + model.mesh_count
+        ):  # pragma: no branch
             var box = assets.geometries.get(
                 scene.meshes[m].geometry
             ).bounding_box()
@@ -1203,11 +1208,11 @@ struct AssetRegistry(Movable):
             bounds.union(box)
             scene.meshes[m].cast_shadow = True
             scene.meshes[m].receive_shadow = True
+        # A glTF names no cube, so every material reflects the scene's.
         for id in model.materials:
             var material = assets.materials.get(id)
-            if material.env_map == NO_CUBE_TEXTURE:
-                material.env_map = SCENE_ENVIRONMENT
-                assets.materials.materials[id.value] = material
+            material.env_map = SCENE_ENVIRONMENT
+            assets.materials.materials[id.value] = material
         var turned = Object3D()
         turned.rotate_y(entry.yaw)
         bounds.apply_matrix4(turned.local_matrix())
@@ -1227,7 +1232,8 @@ struct AssetRegistry(Movable):
             -center.x * scale, -bounds.min.y * scale, -center.z * scale
         )
         var node = scene.attach(pivot^, parent)
-        for n in model.nodes:
+        # A model has a mesh, so it has a node.
+        for n in model.nodes:  # pragma: no branch
             if n != NO_PARENT and scene.get(n).parent == NO_PARENT:
                 scene.add(n, parent=node)
         scene.update()
@@ -1269,8 +1275,8 @@ struct AssetRegistry(Movable):
         near meshes show when the camera is nearer than `near` to the
         middle of the tile's ground, and its far meshes show otherwise. Call
         `Scene.update_lods` with the camera's position before a frame.
-        Every mesh casts and receives shadows, and each material that
-        reflects no cube reflects the scene's environment.
+        Every mesh casts and receives shadows, and every material reflects
+        the scene's environment: a glTF names no cube.
 
         Args:
             index: The entry's index, from `cached_entry`.
@@ -1304,18 +1310,21 @@ struct AssetRegistry(Movable):
         if model.mesh_count == 0:
             raise Error("The town " + entry.id + " has no mesh")
         scene.update()
+        # A glTF names no cube, so every material reflects the scene's.
         for id in model.materials:
             var material = assets.materials.get(id)
-            if material.env_map == NO_CUBE_TEXTURE:
-                material.env_map = SCENE_ENVIRONMENT
-                assets.materials.materials[id.value] = material
+            material.env_map = SCENE_ENVIRONMENT
+            assets.materials.materials[id.value] = material
         # Each tile's key, box and meshes, in the order first met.
         var tiles = List[String]()
         var boxes = List[Box3]()
         var kinds = List[String]()
         var lods = List[Int]()
         var tile_of = List[Int]()
-        for m in range(model.first_mesh, model.first_mesh + model.mesh_count):
+        # A town has a mesh: one with none was refused above.
+        for m in range(
+            model.first_mesh, model.first_mesh + model.mesh_count
+        ):  # pragma: no branch
             scene.meshes[m].cast_shadow = True
             scene.meshes[m].receive_shadow = True
             var node = scene.get(scene.meshes[m].node).copy()
@@ -1344,7 +1353,8 @@ struct AssetRegistry(Movable):
             tile_of.append(at)
         var first_lod = len(scene.lods)
         var groups = List[NodeId]()
-        for k in range(len(tiles)):
+        # A town has a mesh, so it has a tile.
+        for k in range(len(tiles)):  # pragma: no branch
             # The tile's middle, at its ground: a tower's tile is measured
             # from the street, not from halfway up the tower.
             var center = boxes[k].center()
@@ -1353,7 +1363,8 @@ struct AssetRegistry(Movable):
             holder.set_position(center.x, center.y, center.z)
             var tile_node = scene.attach(holder^, parent)
             var lod = Lod(tile_node)
-            for level in range(2):
+            # Two levels: near and far.
+            for level in range(2):  # pragma: no branch
                 var group = Object3D()
                 group.set_position(-center.x, -center.y, -center.z)
                 var group_node = scene.add(group^)
@@ -1362,7 +1373,8 @@ struct AssetRegistry(Movable):
                     group_node, near if level == 1 else Length(0.0, METER)
                 )
             scene.add_lod(lod^)
-        for k in range(model.mesh_count):
+        # A town has a mesh: one with none was refused above.
+        for k in range(model.mesh_count):  # pragma: no branch
             var node = scene.meshes[model.first_mesh + k].node
             scene.add(node, parent=groups[2 * tile_of[k] + lods[k]])
         scene.update()
@@ -1375,7 +1387,8 @@ struct AssetRegistry(Movable):
             var into = scene.world_matrix(parent)
             for k in range(document.length(root) // 3):
                 var xyz = List[Float32]()
-                for axis in range(3):
+                # Three numbers to a lamp.
+                for axis in range(3):  # pragma: no branch
                     var at = document.at(root, 3 * k + axis)
                     if document.kind(at) != NUMBER:
                         raise Error("A town's lamps must be three numbers each")
@@ -1431,7 +1444,8 @@ def repeat_model(
     # Each mesh's place under the pivot, read while the scene is still
     # up to date: attaching a node makes its world matrices stale.
     var relatives = List[Matrix4]()
-    for m in range(
+    # A placed model has a mesh: `place_model` refuses one with none.
+    for m in range(  # pragma: no branch
         placement.first_mesh, placement.first_mesh + placement.mesh_count
     ):
         relatives.append(into_pivot * scene.world_matrix(scene.meshes[m].node))
@@ -1439,7 +1453,8 @@ def repeat_model(
     pivot.set_from_matrix(pivot_local)
     var node = scene.attach(pivot^, parent)
     var first = len(scene.meshes)
-    for k in range(placement.mesh_count):
+    # A placed model has a mesh: `place_model` refuses one with none.
+    for k in range(placement.mesh_count):  # pragma: no branch
         var m = placement.first_mesh + k
         var holder = Object3D()
         holder.set_from_matrix(relatives[k])

@@ -967,5 +967,116 @@ def test_a_town_the_renderer_cannot_use_is_refused() raises:
             _ = odd.place_town(0, scene, assets, parent, near)
 
 
+# One triangle with no material, as a node named `name`, and the same
+# triangle drawn at three places by `EXT_mesh_gpu_instancing`.
+def _bare_triangle(name: String, instanced: Bool) -> String:
+    var node = '{"name":"' + name + '","mesh":0'
+    if instanced:
+        node += (
+            ',"extensions":{"EXT_mesh_gpu_instancing":{"attributes":'
+            '{"TRANSLATION":0}}}'
+        )
+    return (
+        '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],'
+        + '"extensionsUsed":["EXT_mesh_gpu_instancing"],"nodes":['
+        + node
+        + '}],"buffers":[{"byteLength":36,"uri":'
+        + '"data:application/octet-stream;base64,'
+        + 'AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],'
+        + '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
+        + '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
+        + '"min":[0,0,0],"max":[1,1,0]}],"meshes":[{"primitives":'
+        + '[{"attributes":{"POSITION":0}}]}]}'
+    )
+
+
+def test_the_edges_of_a_manifest_and_a_cache() raises:
+    # A manifest with no entry reads, and a registry over it has nothing
+    # to decode.
+    var none = parse_manifest('{"format": 1, "entries": []}')
+    assert_equal(len(none.entries), 0)
+    var empty = AssetRegistry(none^, CACHE)
+    empty.preload(1)
+    assert_equal(len(empty.decoded), 0)
+    # A displacement map with no normal map is read, as the bump.
+    var bumpy = AssetRegistry(
+        parse_manifest(
+            _manifest(
+                _entry(
+                    "bumpy",
+                    "texture_set",
+                    _file("albedo", "gltf/checker.png")
+                    + ", "
+                    + _file("displacement", "gltf/checker.png"),
+                    ', "tile_meters": 2',
+                ),
+                '{"surface.road": "bumpy"}',
+            )
+        ),
+        CACHE,
+    )
+    bumpy.preload(1)
+    assert_equal(len(bumpy.decoded), 2)
+
+
+def test_models_and_towns_with_no_material_or_with_instances() raises:
+    var folder = "/tmp/threemojo_carla_bare/"
+    makedirs(folder, exist_ok=True)
+    Path(folder + "model.gltf").write_text(_bare_triangle("part", False))
+    Path(folder + "town.gltf").write_text(
+        _bare_triangle("building_0_0_lod0", False)
+    )
+    Path(folder + "crowd.gltf").write_text(_bare_triangle("part", True))
+    Path(folder + "lampless.gltf").write_text(
+        String(TOWN_GLTF).replace("[0,5,0,10,5,0,100,5,0]", "[]")
+    )
+    var registry = AssetRegistry(
+        parse_manifest(
+            _manifest(
+                _entry(
+                    "model",
+                    "model",
+                    _file("model", "model.gltf"),
+                    ', "forward": "+x"',
+                )
+                + ", "
+                + _entry("town", "town", _file("model", "town.gltf"))
+                + ", "
+                + _entry(
+                    "crowd",
+                    "model",
+                    _file("model", "crowd.gltf"),
+                    ', "forward": "+x"',
+                )
+                + ", "
+                + _entry("crowds", "town", _file("model", "crowd.gltf"))
+                + ", "
+                + _entry("lampless", "town", _file("model", "lampless.gltf"))
+            )
+        ),
+        folder,
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var parent = scene.add(Object3D())
+    scene.update()
+    var near = Length(10, METER)
+    # No material: nothing to reflect the environment or to tag.
+    var model = registry.place_model(0, scene, assets, parent, Vector3(1, 1, 1))
+    assert_equal(model.mesh_count, 1)
+    assert_equal(len(model.paint), 0)
+    var town = registry.place_town(1, scene, assets, parent, near)
+    assert_equal(town.mesh_count, 1)
+    assert_equal(len(town.lamp_materials), 0)
+    # Instances are refused by both.
+    with assert_raises(contains="only plain meshes"):
+        _ = registry.place_model(2, scene, assets, parent, Vector3(1, 1, 1))
+    with assert_raises(contains="only plain meshes"):
+        _ = registry.place_town(3, scene, assets, parent, near)
+    # An empty list of lamps is no lamp.
+    var lampless = registry.place_town(4, scene, assets, parent, near)
+    assert_equal(len(lampless.lamps), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

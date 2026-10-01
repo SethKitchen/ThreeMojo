@@ -163,5 +163,32 @@ def test_the_sky_readers_refuse_byte_textures() raises:
         _ = hdri_sun_azimuth(panorama)
 
 
+def test_a_shaft_of_no_steps_lets_the_sun_through() raises:
+    var weather = weather_preset("ClearNoon")
+    weather.fog_density = 40
+    var share = shaft_share(
+        _rays(),
+        List[ShadowMap](),
+        height_fog(weather),
+        0,
+        0,
+        0.5,
+        Vector3(0, 1, 0),
+        0,
+    )
+    assert_almost_equal(share, 1, atol=1e-6)
+    var frame = _frame()
+    with assert_raises(contains="stride"):
+        _ = fog_light_shafts(
+            frame,
+            _rays(),
+            height_fog(weather),
+            List[ShadowMap](),
+            Vector3(0, 1, 0),
+            stride=1,
+            steps=0,
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
