@@ -43,6 +43,13 @@ class BenchmarkProvenanceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bench.require_same_measurement_host(old, HOST)
 
+    def test_unknown_identity_is_not_an_established_host_match(self):
+        for key in ('cpu', 'os', 'mojo_1_1'):
+            for value in ('unknown', 'missing', 'not installed', ' '):
+                host = HOST | {key: value}
+                with self.assertRaises(ValueError):
+                    bench.require_same_measurement_host({'host': host}, host)
+
     def test_retained_direct_dates_and_values_survive_in_catalog_order(self):
         old = payload('2026-09-10', [example('cube')])
         old['examples'][0].update(measured_on='2026-09-03', measurement_date_source='direct')

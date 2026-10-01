@@ -625,7 +625,11 @@ def measurement_label(row: dict) -> str:
 def require_same_measurement_host(previous: dict, host: dict) -> None:
     """Refuse partial refreshes that would relabel another host's results."""
     old = previous.get("host") if isinstance(previous, dict) else None
-    if not isinstance(old, dict) or not all(old.get(key) for key in ("cpu", "os", "mojo_1_1")) or old != host:
+    if not isinstance(old, dict) or not all(
+        isinstance(old.get(key), str)
+        and old[key].strip().lower() not in ("", "unknown", "missing", "not installed")
+        for key in ("cpu", "os", "mojo_1_1")
+    ) or old != host:
         raise ValueError("Cannot merge results with different or missing host/toolchain metadata")
 
 
