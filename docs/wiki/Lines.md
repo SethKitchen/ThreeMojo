@@ -240,7 +240,7 @@ three.js turns the dashes on with a `dashed` flag. Here a gap above zero turns t
 1. The segment is cut to the near and far planes.
 2. For a width in pixels, each corner is its end moved on the image, then carried back into camera space at the end's own depth. three.js moves the clip-space corner by an offset times `w`, which is the same move.
 3. For a width in the world, each corner is its end moved in camera space. It moves across the segment and square to the direction of the segment's middle, three.js's `worldUp`.
-4. A round cap is added at each end, as a fan of triangles.
+4. A round cap is added at each end, as a fan of triangles. Solid lines keep both caps at every width, including widths below one pixel.
 5. The triangles go through the clipper and are sorted among the meshes by the depth of the line's node.
 
 Two segments that share an end overlap in their caps. That overlap is the round join, as in three.js. A blended line is therefore twice as opaque where two caps overlap, as in three.js.
