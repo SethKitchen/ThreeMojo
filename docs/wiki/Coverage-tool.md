@@ -51,7 +51,11 @@ MC/DC is the masking variant. Short-circuit evaluation makes unique-cause MC/DC 
 
 ## Limits
 
-Two threads reporting one decision at once would interleave their records. The renderer therefore defaults to one worker, and the coverage run uses it.
+Coverage must reach 100% under the measured rules. A badge states this requirement. It does not prove that a revision passed its checks.
+
+The current trace protocol can lose an outer operand when a recursive call reports the same decision. Two threads that report the same decision can also interleave their records. A single-worker test avoids that thread conflict, but does not fix recursion. [Issue #385](https://github.com/SethKitchen/ThreeMojo/issues/385) tracks the protocol work and its tests.
+
+Until that work is complete and validated, a reported percentage is not a general proof of MC/DC correctness. Check the source, test scope and trace limits with each result. It is not an engineering validation certificate.
 
 ### The capture grows with every statement run
 
@@ -71,7 +75,7 @@ A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrume
 
 ## Capture storage
 
-The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct evaluation once, rebuilt from its pending conditions when its decision closes. The report then sees the same payloads and the same evaluations, in the same order of first closing.
+The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct evaluation once, rebuilt from its pending conditions when its decision closes. The report receives the retained payloads and reconstructed evaluations in the order they first close. Reduction does not repair the trace limits above.
 
 `test_rasterizer` writes 9.9 million records. The reduced capture holds 3,477 lines, and the report reads it in 0.02 s instead of 8 s, with an identical result. The reduction runs on the capture runners, in parallel, and the report reads the captures on one core.
 

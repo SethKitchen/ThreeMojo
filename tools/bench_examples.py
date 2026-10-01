@@ -4,7 +4,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Time every example against three.js and, when present, Mojo 1.0."""
+"""Time cataloged examples against three.js and, when present, Mojo 1.0."""
 
 from __future__ import annotations
 

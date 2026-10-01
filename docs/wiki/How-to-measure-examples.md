@@ -1,6 +1,6 @@
 # How to measure examples
 
-`make bench-examples` times every example. It records compile time, run time and peak memory for ThreeMojo and for a three.js scene of the same size.
+`make bench-examples` times the examples listed in `bench/catalog.json`. It records compile time, run time and peak memory for ThreeMojo and for a three.js scene of the same size.
 
 It also times a standalone probe on Mojo 1.0 when that compiler is present.
 

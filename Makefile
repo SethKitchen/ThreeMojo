@@ -264,7 +264,7 @@ help:
 	@echo "  make viewer     orbit a scene in this terminal with the mouse"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
-	@echo "  make bench-examples  each example vs three.js, and vs Mojo 1.0"
+	@echo "  make bench-examples  cataloged examples vs three.js and Mojo 1.0"
 	@echo "  make draco-export-check  every Draco export against three.js (not in check)"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
