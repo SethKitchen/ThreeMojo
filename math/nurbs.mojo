@@ -540,7 +540,7 @@ struct NURBSCurve(SpaceCurve):
             start_knot: The knot `t` of zero maps to. The first unless
                 said otherwise.
             end_knot: The knot `t` of one maps to. The last unless said
-                otherwise.
+                otherwise. This index can equal or precede `start_knot`.
 
         Raises:
             Error: If the knots do not fit the degree and the points, a
