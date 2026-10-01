@@ -4,6 +4,9 @@ The rendering modules turn a CARLA world into images. They build a town from the
 
 ![A CARLA town at clear noon, at a wet sunset, in rain and fog, and at night](out/carla_town.png)
 
+Images can include CC BY 4.0 CARLA vehicles and town content.
+Keep the [asset credits](CARLA-assets#credit-the-assets) with shared images.
+
 To render the stills, run `mojo run -I . examples/carla_town.mojo out/carla_town.png`. Each view is also written alone, at 800 by 600: `out/carla_town_clear_noon.png`, `out/carla_town_wet_sunset.png`, `out/carla_town_rain.png` and `out/carla_town_night.png`.
 
 The look comes from ThreeMojo's renderer and well-known techniques: physical materials, cascaded sun shadows, a sky model, height fog, screen-space reflections, bloom and tone mapping. The sizes, colors and gains are this port's own choices. See [CARLA world](CARLA-world) for the world and its weather data.

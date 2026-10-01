@@ -308,6 +308,21 @@ class FetchTests(unittest.TestCase):
 
 
 class CreditTests(unittest.TestCase):
+    def test_committed_attribution_matches_every_manifest_entry(self):
+        manifest = tool.load_manifest()
+        expected = tool.credits(manifest, everything=True)
+        path = tool.MANIFEST.parent / 'ATTRIBUTION.md'
+        self.assertEqual(path.read_text(encoding='utf-8'), expected)
+        required = [e for e in manifest['entries'] if e['license'] == 'CC-BY-4.0']
+        self.assertEqual(len(required), 47)
+        for entry in required:
+            self.assertIn(entry['title'], expected)
+            self.assertIn(entry['author'], expected)
+            self.assertIn(entry['source'], expected)
+            self.assertIn(entry['changes'], expected)
+        self.assertIn('https://creativecommons.org/licenses/by/4.0/', expected)
+
+
     def test_cc_by_entries_are_credited(self):
         free = texture_entry('https://example.org/a.jpg', None)
         scanned = texture_entry('https://example.org/b.jpg', None, 'bricks', 'bricks/color.jpg')

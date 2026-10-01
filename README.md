@@ -36,6 +36,7 @@ uv pip install "max==26.6.0"      # optional: the GPU backend
 ```bash
 make check-cpu                                            # format, lint, tests, docs
 make animation                                            # every example, into out/
+make optimize-images                                      # losslessly compress tracked gallery PNGs
 .venv/bin/mojo run -I . examples/cubes.mojo out/cubes.png
 ```
 
@@ -369,29 +370,31 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Extensions
 
-Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
+Content that is not a three.js port lives under `extensions/`. These features have implementations, regression tests and documentation.
+A checked box records implemented scope. It does not establish engineering or clinical validity.
+The anatomy combines measured inputs with authored templates. Validation limits are tracked in [#289](https://github.com/SethKitchen/ThreeMojo/issues/289).
 
-- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look
-- [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue
-- [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue
-- [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue
-- [x] [Knee](https://github.com/SethKitchen/ThreeMojo/wiki/Knee): articular cartilage, menisci and collateral ligaments
-- [x] [Muscles](https://github.com/SethKitchen/ThreeMojo/wiki/Muscles): stature-scaled leg muscles, with toned and untoned templates
-- [x] [Vessels](https://github.com/SethKitchen/ThreeMojo/wiki/Vessels): stature-scaled arteries and veins of the leg
-- [x] [Lymph](https://github.com/SethKitchen/ThreeMojo/wiki/Lymph): stature-scaled lymph nodes and trunks of the leg
-- [x] [Nerves](https://github.com/SethKitchen/ThreeMojo/wiki/Nerves): stature-scaled peripheral nerves of the leg
-- [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): skin fitted to the anatomy under it, one skin over a leg and its foot, and hair
-- [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers, with Phong and physical looks
-- [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot in an arch, with ligaments, muscles and the later layers
-- [x] [Pelvis](https://github.com/SethKitchen/ThreeMojo/wiki/Pelvis): the hip bones, sacrum and coccyx, with ligaments, muscles, the later layers and one skin over the lower body
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
+- [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
+- [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue [#314](https://github.com/SethKitchen/ThreeMojo/issues/314)
+- [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue [#315](https://github.com/SethKitchen/ThreeMojo/issues/315)
+- [x] [Knee](https://github.com/SethKitchen/ThreeMojo/wiki/Knee): articular cartilage, menisci and collateral ligaments [#316](https://github.com/SethKitchen/ThreeMojo/issues/316)
+- [x] [Muscles](https://github.com/SethKitchen/ThreeMojo/wiki/Muscles): stature-scaled leg muscles, with toned and untoned templates [#317](https://github.com/SethKitchen/ThreeMojo/issues/317)
+- [x] [Vessels](https://github.com/SethKitchen/ThreeMojo/wiki/Vessels): stature-scaled arteries and veins of the leg [#318](https://github.com/SethKitchen/ThreeMojo/issues/318)
+- [x] [Lymph](https://github.com/SethKitchen/ThreeMojo/wiki/Lymph): stature-scaled lymph nodes and trunks of the leg [#319](https://github.com/SethKitchen/ThreeMojo/issues/319)
+- [x] [Nerves](https://github.com/SethKitchen/ThreeMojo/wiki/Nerves): stature-scaled peripheral nerves of the leg [#320](https://github.com/SethKitchen/ThreeMojo/issues/320)
+- [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): skin fitted to the anatomy under it, one skin over a leg and its foot, and hair [#321](https://github.com/SethKitchen/ThreeMojo/issues/321)
+- [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers, with Phong and physical looks [#322](https://github.com/SethKitchen/ThreeMojo/issues/322)
+- [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot in an arch, with ligaments, muscles and the later layers [#323](https://github.com/SethKitchen/ThreeMojo/issues/323)
+- [x] [Pelvis](https://github.com/SethKitchen/ThreeMojo/wiki/Pelvis): the hip bones, sacrum and coccyx, with ligaments, muscles, the later layers and one skin over the lower body [#325](https://github.com/SethKitchen/ThreeMojo/issues/325)
 - [x] [Torso](https://github.com/SethKitchen/ThreeMojo/wiki/Torso): the vertebrae, ribs, sternum and shoulder girdle, with joint tissues, muscles, the later layers and one skin below the neck [#264](https://github.com/SethKitchen/ThreeMojo/issues/264)
 - [x] [Arm](https://github.com/SethKitchen/ThreeMojo/wiki/Arm): the humerus, radius and ulna hung from the scapula, with joint tissues, muscles, vessels, nerves, lymph, skin and hair [#265](https://github.com/SethKitchen/ThreeMojo/issues/265)
 - [x] [Hand](https://github.com/SethKitchen/ThreeMojo/wiki/Hand): the carpals, metacarpals and the phalanges of each finger, with joint tissues, muscles and tendons, the later layers, skin and hair [#266](https://github.com/SethKitchen/ThreeMojo/issues/266)
 - [x] [Head](https://github.com/SethKitchen/ThreeMojo/wiki/Head): the cervical vertebrae, the skull and the mandible, with joint tissues, muscles, vessels, nerves, lymph, skin and hair [#271](https://github.com/SethKitchen/ThreeMojo/issues/271)
 - [x] [Genome](https://github.com/SethKitchen/ThreeMojo/wiki/Genome): genes for skin tone, the frame and the face, inheritance, eyes, a scanned face with its own shape, and strand hair [#272](https://github.com/SethKitchen/ThreeMojo/issues/272)
 - [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality): quality levels that fit a humanoid to a triangle budget, from 90,000 to one million, by edge collapse [#269](https://github.com/SethKitchen/ThreeMojo/issues/269)
-- [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot
-- [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
+- [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
+- [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable rigid bodies, contacts, integration and quantities, with compatible CARLA imports
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
 
