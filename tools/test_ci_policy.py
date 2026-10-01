@@ -12,7 +12,9 @@ import unittest
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / '.github/workflows/ci.yml'
-GUARD = "github.event_name != 'pull_request' || github.event.pull_request.draft == false"
+GUARD = ("github.event_name != 'pull_request' || "
+         "(github.event.pull_request.draft == false && "
+         "github.event.pull_request.base.ref == 'main')")
 WIKI_GUARD = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
 CHECK_JOBS = {'lint', 'cpu', 'cpu-macos', 'coverage-capture', 'coverage', 'gpu-host'}
 
@@ -33,11 +35,11 @@ def guard_of(job):
     return found.group(1).strip() if found else None
 
 
-def allows(guard, event, draft):
+def allows(guard, event, draft, base="main"):
     """Evaluate only the reviewed guard, not arbitrary workflow code."""
     if guard != GUARD:
         raise ValueError('Every check job must use the explicit draft guard')
-    return event != 'pull_request' or draft is False
+    return event != 'pull_request' or (draft is False and base == 'main')
 
 
 class CiPolicyTests(unittest.TestCase):
@@ -60,6 +62,17 @@ class CiPolicyTests(unittest.TestCase):
                 with self.subTest(job=name, event=event):
                     self.assertTrue(allows(guard_of(self.jobs[name]), event, draft))
 
+    def test_native_stack_layers_require_a_direct_main_target(self):
+        # Native stacks match the workflow branch filter against their
+        # ultimate base. The job guard must still reject an intermediate
+        # PR's actual base, even when its stack targets main.
+        for name in CHECK_JOBS:
+            with self.subTest(job=name):
+                self.assertFalse(allows(guard_of(self.jobs[name]),
+                                        'pull_request', False, 'feature/parent'))
+                self.assertTrue(allows(guard_of(self.jobs[name]),
+                                       'pull_request', False, 'main'))
+
     def test_ready_for_review_retains_the_default_pr_events(self):
         event = re.search(r'^  pull_request:\n((?:    .*\n)+)', self.text, re.MULTILINE)
         self.assertIsNotNone(event)
@@ -69,6 +82,11 @@ class CiPolicyTests(unittest.TestCase):
             {value.strip() for value in types.group(1).split(',')},
             {'opened', 'synchronize', 'reopened', 'ready_for_review'},
         )
+
+    def test_pull_request_trigger_keeps_main_branch_filter(self):
+        event = re.search(r'^  pull_request:\n((?:    .*\n)+)', self.text, re.MULTILINE)
+        self.assertIsNotNone(event)
+        self.assertRegex(event.group(1), r'(?m)^    branches: \[main\]$')
 
     def test_main_push_manual_and_read_permissions_are_preserved(self):
         self.assertRegex(self.text, r'(?m)^  push:\n    branches: \[main\]$')

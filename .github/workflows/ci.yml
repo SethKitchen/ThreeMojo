@@ -24,6 +24,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    # Native stacks match this filter on their ultimate base. Each job
+    # also checks the direct PR base, so intermediate layers stay idle.
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
@@ -45,7 +48,7 @@ jobs:
   # suite runs whole, in the lint job. The splits are sized so that no group
   # outlasts the lint job by much.
   lint:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: lint (standard library only)
     runs-on: ubuntu-latest
     # A hang detector, not a speed target: lint alone once ran an hour.
@@ -73,7 +76,7 @@ jobs:
         run: make -B fmt-check lint-cpu compile-fail docs-check test-tools AFFECTED="$AFFECTED"
 
   cpu:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: test-cpu ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -114,7 +117,7 @@ jobs:
   # these jobs must not move to one. A free account runs five macOS jobs at
   # once, so the Mac takes three: lint, and the suites in two groups.
   cpu-macos:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: check-cpu (macOS, Apple Silicon) ${{ matrix.part }}
     runs-on: macos-latest
     timeout-minutes: 150
@@ -167,7 +170,7 @@ jobs:
   # than its share: six groups, not four, keep the slowest one well
   # inside the budget.
   coverage-capture:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: coverage capture ${{ matrix.shard }}/6
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -210,7 +213,7 @@ jobs:
           retention-days: 1
 
   coverage:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: coverage
     needs: coverage-capture
     runs-on: ubuntu-latest
@@ -250,7 +253,7 @@ jobs:
   # fails here. They need MAX, so this job installs it; they need no GPU,
   # so nothing in them skips.
   gpu-host:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: test-gpu-host (MAX, no GPU)
     runs-on: ubuntu-latest
     timeout-minutes: 30
