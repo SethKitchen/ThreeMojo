@@ -84,28 +84,34 @@ struct TubePainter(Movable):
             out.append(Vector3(sin(angle) * radius, cos(angle) * radius, 0))
         return out^
 
-    def _facing_to(self, point: Vector3) -> Matrix4:
+    def _facing_to(self, point: Vector3) raises -> Matrix4:
         """Return a turn that faces from the pen toward a point, three.js's
         `matrix1.lookAt( point2, point1, up )`."""
         var facing = Matrix4()
         facing.look_at(self._point, point, Vector3(0, 1, 0))
         return facing^
 
-    def move_to(mut self, position: Vector3):
+    def move_to(mut self, position: Vector3) raises:
         """Lift the pen to a point, three.js's `moveTo`.
 
         Args:
             position: Where the next stroke starts.
+
+        Raises:
+            Error: If the position is not finite. The pen stays unchanged.
         """
         self._facing = self._facing_to(position)
         self._point = position
 
-    def line_to(mut self, position: Vector3):
+    def line_to(mut self, position: Vector3) raises:
         """Draw a tube from the pen to a point, three.js's `lineTo`.
         Nothing is drawn to the point the pen is at.
 
         Args:
             position: Where the stroke ends, and the pen with it.
+
+        Raises:
+            Error: If the position is not finite. The pen stays unchanged.
         """
         var facing = self._facing_to(position)
         var start = self._point

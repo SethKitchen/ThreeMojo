@@ -34,7 +34,7 @@ from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import cos, isfinite, sin, sqrt
+from std.math import cos, fma, isfinite, sin, sqrt
 from units.si import Angle
 
 # How far a frame can be from a rotation before `is_rotation` says it is not
@@ -42,6 +42,40 @@ from units.si import Angle
 # axis's length. Float32 rounding leaves errors near 1e-7 even down a long
 # chain of products; a real shear or scale is thousands of times past this.
 comptime FRAME_TOLERANCE = Float32(1e-4)
+
+
+def _finite_direction(vector: Vector3) -> Bool:
+    """Return whether all three direction components are finite."""
+    return isfinite(vector.x) and isfinite(vector.y) and isfinite(vector.z)
+
+
+def _unit_direction(vector: Vector3) -> Vector3:
+    """Normalize a finite nonzero direction without squared-norm overflow."""
+    var squared = vector.dot(vector)
+    if squared >= Float32(1.1754943508222875e-38) and isfinite(squared):
+        var length = sqrt(squared)
+        return Vector3(vector.x / length, vector.y / length, vector.z / length)
+    var scale = max(abs(vector.x), max(abs(vector.y), abs(vector.z)))
+    var scaled = Vector3(vector.x / scale, vector.y / scale, vector.z / scale)
+    var scaled_length = scaled.length()
+    return Vector3(
+        scaled.x / scaled_length,
+        scaled.y / scaled_length,
+        scaled.z / scaled_length,
+    )
+
+
+def _cross_direction(first: Vector3, second: Vector3) -> Vector3:
+    """Round both products before subtraction so parallel axes cancel.
+
+    Contracting only one product into the subtraction can leave a false
+    cross direction when the two input directions are exactly equal.
+    """
+    return Vector3(
+        fma(first.y, second.z, Float32(0)) - fma(first.z, second.y, Float32(0)),
+        fma(first.z, second.x, Float32(0)) - fma(first.x, second.z, Float32(0)),
+        fma(first.x, second.y, Float32(0)) - fma(first.y, second.x, Float32(0)),
+    )
 
 
 struct Matrix4(Equatable, ImplicitlyCopyable):
@@ -792,7 +826,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         y_axis = Vector3(e[4], e[5], e[6])
         z_axis = Vector3(e[8], e[9], e[10])
 
-    def look_at(mut self, eye: Vector3, target: Vector3, up: Vector3):
+    def look_at(mut self, eye: Vector3, target: Vector3, up: Vector3) raises:
         """Set the rotation part so that +z points from `target` to `eye`,
         three.js's `lookAt`. The translation and the bottom row are kept.
 
@@ -805,25 +839,37 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         Args:
             eye: Where the object is.
             target: What it faces away from, along +z.
-            up: Which way is up, any length but zero.
+            up: Which way is up, any finite length but zero.
+
+        Raises:
+            Error: If a position is not finite, or up is zero or not finite.
+            The matrix stays unchanged on failure.
         """
+        if not (_finite_direction(eye) and _finite_direction(target)):
+            raise Error("Look-at positions must be finite")
+        if not _finite_direction(up) or (up.x == 0 and up.y == 0 and up.z == 0):
+            raise Error("An up direction must be finite and not zero")
         var z = eye - target
-        if z.length_sq() == 0:
-            z.z = 1
-        z.normalize()
-        var x = up
-        x.cross(z)
-        if x.length_sq() == 0:
-            if abs(up.z) == 1:
+        if not _finite_direction(z):
+            # Halve before subtraction when opposite finite coordinates
+            # would overflow. The direction is unchanged.
+            z = eye * 0.5 - target * 0.5
+        if z.x == 0 and z.y == 0 and z.z == 0:
+            z = Vector3(0, 0, 1)
+        z = _unit_direction(z)
+        var above = _unit_direction(up)
+        var x = _cross_direction(above, z)
+        if x.x == 0 and x.y == 0 and x.z == 0:
+            # Nudge along an axis that is not the dominant direction.
+            # This keeps the usual y/z-up choice and works at any scale.
+            if abs(z.z) > max(abs(z.x), abs(z.y)):
                 z.x += 0.0001
             else:
                 z.z += 0.0001
-            z.normalize()
-            x = up
-            x.cross(z)
-        x.normalize()
-        var y = z
-        y.cross(x)
+            z = _unit_direction(z)
+            x = _cross_direction(above, z)
+        x = _unit_direction(x)
+        var y = _cross_direction(z, x)
         self.elements[0] = x.x
         self.elements[1] = x.y
         self.elements[2] = x.z

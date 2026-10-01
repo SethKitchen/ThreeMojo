@@ -179,7 +179,9 @@ The arithmetic is in doubles, as in three.js. The sky and the trees take their r
 
 ## Tube painter
 
-A `TubePainter` is a pen that draws tubes. `move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
+A `TubePainter` is a pen that draws tubes. `move_to` and `line_to` refuse a nonfinite position before changing the pen.
+
+`move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
 
 three.js fills a buffer of a million vertices. Here the lists grow. Draw the geometry with a `STANDARD` material that reads the vertex colors, and turn frustum culling off, as three.js does.
 
