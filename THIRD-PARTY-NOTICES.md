@@ -793,3 +793,37 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Fast Quadric Mesh Simplification
+
+`extensions/carla/simplification.mojo` ports the simplifier in CARLA
+0.9.16's `LibCarla/source/third-party/simplify/Simplify.h`. That source
+credits Sven Forstmann (2014), under the MIT License. The upstream project
+also publishes the notice below. These notices apply to the ported
+simplifier independently of CARLA's CVC notice.
+
+Sources:
+- https://github.com/carla-simulator/carla/blob/0.9.16/LibCarla/source/third-party/simplify/Simplify.h
+- https://github.com/sp4cerat/Fast-Quadric-Mesh-Simplification/blob/master/LICENSE.md
+
+Copyright (C) 2014 Sven Forstmann
+
+Copyright © 2015-2019 Spacerat and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -288,6 +288,15 @@ def _download(url, destination):
             time.sleep(BACKOFF_SECONDS * (attempt + 1))
 
 
+def _member_matches(bundle, member, target):
+    """Compare an extracted file with its member of a verified archive."""
+    expected = hashlib.sha256()
+    with bundle.open(member) as stream:
+        for block in iter(lambda: stream.read(CHUNK), b''):
+            expected.update(block)
+    return target.is_file() and sha256_of(target) == expected.hexdigest()
+
+
 def _extract(archive, item, cache):
     """Extract an archive's named members to their paths, never over a
     file that is already there."""
@@ -295,10 +304,13 @@ def _extract(archive, item, cache):
         names = set(bundle.namelist())
         for member in item['extract']:
             target = cache / member['path']
-            if target.exists():
-                continue
             if member['member'] not in names:
                 raise FetchError(f'{item["url"]}: the archive has no member {member["member"]!r}')
+            if target.exists():
+                if not _member_matches(bundle, member['member'], target):
+                    raise FetchError(f'{target}: extracted member differs from the verified archive; '
+                                     'remove it explicitly before fetching again')
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             partial = target.with_name(target.name + '.part')
             with bundle.open(member['member']) as source, open(partial, 'wb') as out:
@@ -403,6 +415,19 @@ def verify(manifest, cache):
                 report.append((item['path'], 'mismatch'))
             else:
                 report.append((item['path'], 'ok'))
+                if item['role'] == 'archive':
+                    with zipfile.ZipFile(target) as bundle:
+                        names = set(bundle.namelist())
+                        for member in item['extract']:
+                            extracted = cache / member['path']
+                            if not extracted.exists():
+                                state = 'missing'
+                            elif member['member'] not in names:
+                                state = 'mismatch'
+                            else:
+                                state = ('ok' if _member_matches(
+                                    bundle, member['member'], extracted) else 'mismatch')
+                            report.append((member['path'], state))
     return report
 
 

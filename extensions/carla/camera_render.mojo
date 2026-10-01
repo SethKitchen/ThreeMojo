@@ -184,6 +184,8 @@ from render.cube_texture import CubeTexture
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import srgb_to_linear
 from render.target import RenderTarget
+from render.texture import Texture
+from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, NO_TONE_MAPPING
 from renderers.environment import scene_cube
 from renderers.renderer import Renderer
@@ -726,6 +728,12 @@ struct CarlaRenderer(Movable):
     var supersample: Int
     var frame_count: Int
     var renderer: Renderer
+    var sensor_sources: List[MaterialId]
+    var sensor_tags: List[Int]
+    var sensor_materials: List[MaterialId]
+    var coverage_sources: List[TextureId]
+    var coverage_maps: List[TextureId]
+    var coverage_read: List[TextureId]
 
     def __init__(
         out self,
@@ -784,6 +792,12 @@ struct CarlaRenderer(Movable):
         self.supersample = supersample if antialias else 1
         self.frame_count = 0
         self.renderer = Renderer(8, 8, workers)
+        self.sensor_sources = List[MaterialId]()
+        self.sensor_tags = List[Int]()
+        self.sensor_materials = List[MaterialId]()
+        self.coverage_sources = List[TextureId]()
+        self.coverage_maps = List[TextureId]()
+        self.coverage_read = List[TextureId]()
 
     def update(mut self, world: World) raises:
         """Bring the scene to the world's state: the weather, the traffic
@@ -805,18 +819,38 @@ struct CarlaRenderer(Movable):
         self.actors.sync(world, self.scene, self.assets, self.registry)
         if not Bool(self.sky) or not (self.sky_weather == weather):
             var scanned = self.registry.cached_entry(sky_key(weather))
+            var sky_assets = Assets()
             var sky: SkyLighting
             if Bool(scanned):
                 sky = hdri_sky(
-                    self.assets,
+                    sky_assets,
                     self.registry.hdri(scanned.value()),
                     weather,
                     self.sky_size,
                 )
             else:
                 sky = build_sky(
-                    self.renderer, self.assets, weather, self.sky_size
+                    self.renderer, sky_assets, weather, self.sky_size
                 )
+            var background = CubeTexture(
+                copy=sky_assets.cube_textures.get(sky.background)
+            )
+            var environment = CubeTexture(
+                copy=sky_assets.cube_textures.get(sky.environment)
+            )
+            if Bool(self.sky):
+                var owned = self.sky.value()
+                self.assets.cube_textures.textures[owned.background.value] = (
+                    background^
+                )
+                self.assets.cube_textures.textures[owned.environment.value] = (
+                    environment^
+                )
+                sky.background = owned.background
+                sky.environment = owned.environment
+            else:
+                sky.background = self.assets.cube_textures.add(background^)
+                sky.environment = self.assets.cube_textures.add(environment^)
             self.scene.background = cube_background(sky.background)
             self.scene.environment = sky.environment
             self.sky = sky
@@ -1072,6 +1106,83 @@ struct CarlaRenderer(Movable):
         self.actors.tag_meshes(world, tags)
         return tags^
 
+    def _coverage_map(mut self, source: TextureId) raises -> TextureId:
+        """Keep a white RGB copy of a color map, with identical alpha and
+        sampling, refreshed once per capture so dynamic alpha stays current."""
+        if source == NO_TEXTURE:
+            return NO_TEXTURE
+        var slot = -1
+        for i in range(len(self.coverage_sources)):
+            if self.coverage_sources[i] == source:
+                slot = i
+                break
+        if source in self.coverage_read:
+            return self.coverage_maps[slot]
+        var texture = Texture(copy=self.assets.textures.get(source))
+        # Replace RGB in every mip level; preserve alpha and sampler state.
+        for i in range(0, len(texture.pixels), 4):
+            texture.pixels[i] = 255
+            texture.pixels[i + 1] = 255
+            texture.pixels[i + 2] = 255
+        for i in range(0, len(texture.data), 4):
+            texture.data[i] = 1
+            texture.data[i + 1] = 1
+            texture.data[i + 2] = 1
+        if slot < 0:
+            slot = len(self.coverage_sources)
+            self.coverage_sources.append(source)
+            self.coverage_maps.append(self.assets.textures.add(texture^))
+        else:
+            self.assets.textures.textures[self.coverage_maps[slot].value] = (
+                texture^
+            )
+        self.coverage_read.append(source)
+        return self.coverage_maps[slot]
+
+    def _sensor_material(
+        mut self, id: MaterialId, tag: SemanticTag
+    ) raises -> MaterialId:
+        """Reuse one flat override per source material and tag, retaining
+        the source's cutout and sidedness without tinting the tag color."""
+        var source = self.assets.materials.get(id)
+        var map = NO_TEXTURE
+        if (
+            source.alpha_test > 0
+            or source.alpha_hash
+            or source.alpha_to_coverage
+        ):
+            map = self._coverage_map(source.map)
+        var flat = Material(
+            cityscapes_color(tag),
+            map=map,
+            side=source.side,
+            opacity=source.opacity,
+            kind=BASIC,
+            alpha_map=source.alpha_map,
+            alpha_test=source.alpha_test,
+        )
+        flat.visible = source.visible
+        flat.alpha_hash = source.alpha_hash
+        flat.alpha_to_coverage = source.alpha_to_coverage
+        flat.set_clipping_planes(
+            source.clipping_planes(),
+            source.clip_intersection,
+            source.clip_shadows,
+        )
+        for i in range(len(self.sensor_sources)):
+            if (
+                self.sensor_sources[i] == id
+                and self.sensor_tags[i] == tag.value
+            ):
+                var cached = self.sensor_materials[i]
+                self.assets.materials.materials[cached.value] = flat
+                return cached
+        var added = self.assets.materials.add(flat)
+        self.sensor_sources.append(id)
+        self.sensor_tags.append(tag.value)
+        self.sensor_materials.append(added)
+        return added
+
     def _ground_truth(
         mut self, world: World, camera: ActorId
     ) raises -> Tuple[RenderTarget, ViewRays]:
@@ -1086,41 +1197,33 @@ struct CarlaRenderer(Movable):
         if not Bool(self.sky):
             self.update(world)
         var tags = self.semantic_tags(world)
-        var flats = List[MaterialId]()
-        # A constant count, more than zero.
-        for t in range(SEMANTIC_TAGS):  # pragma: no branch
-            flats.append(
-                self.assets.materials.add(
-                    Material(
-                        cityscapes_color(SemanticTag(t)),
-                        side=DOUBLE_SIDE,
-                        kind=BASIC,
-                    )
-                )
-            )
-        var saved = List[Mesh]()
-        # The town always adds its road.
-        for i in range(len(self.scene.meshes)):  # pragma: no branch
-            saved.append(self.scene.meshes[i])
-            var flat = flats[tags[i].value]
-            self.scene.meshes[i].material = flat
-            for k in range(len(self.scene.meshes[i].materials)):
-                self.scene.meshes[i].materials[k] = flat
+        var saved = self.scene.meshes.copy()
         var background = self.scene.background
-        self.scene.background = color_background(cityscapes_color(SKY))
         var view = self._pose_camera(world, camera, settings)
         var renderer = Renderer(
             settings.image_width, settings.image_height, self.workers
         )
         renderer.tone_mapping = NO_TONE_MAPPING
+        renderer.local_clipping_enabled = self.renderer.local_clipping_enabled
+        renderer.clipping_planes = self.renderer.clipping_planes.copy()
         var frame = RenderTarget(
             settings.image_width, settings.image_height, Color(0, 0, 0)
         )
-        renderer.render_into(frame, self.scene, self.assets, view)
-        # The town always adds its road.
-        for i in range(len(saved)):  # pragma: no branch
-            self.scene.meshes[i] = saved[i]
-        self.scene.background = background
+        self.coverage_read.clear()
+        try:
+            for i in range(len(saved)):
+                var original = saved[i].material
+                var flat = self._sensor_material(original, tags[i])
+                self.scene.meshes[i].material = flat
+                for k in range(len(saved[i].materials)):
+                    var group = saved[i].materials[k]
+                    var override = self._sensor_material(group, tags[i])
+                    self.scene.meshes[i].materials[k] = override
+            self.scene.background = color_background(cityscapes_color(SKY))
+            renderer.render_into(frame, self.scene, self.assets, view)
+        finally:
+            self.scene.meshes = saved^
+            self.scene.background = background
         var rays = ViewRays(
             settings.image_width,
             settings.image_height,
@@ -1273,17 +1376,20 @@ struct CarlaRenderer(Movable):
                 InverseLength(fog.density.to(PER_METER) * 0.7, PER_METER),
             )
         var at = transform.location
-        self._choose_detail(Vector3(at.x, at.z, at.y))
-        var cube = scene_cube(
-            self.renderer,
-            self.scene,
-            self.assets,
-            CAMERA_NEAR,
-            CAMERA_FAR,
-            max(lens.height, 16),
-            Vector3(at.x, at.z, at.y),
-        )
-        self.scene.fog = before
+        var cube: CubeTexture
+        try:
+            self._choose_detail(Vector3(at.x, at.z, at.y))
+            cube = scene_cube(
+                self.renderer,
+                self.scene,
+                self.assets,
+                CAMERA_NEAR,
+                CAMERA_FAR,
+                max(lens.height, 16),
+                Vector3(at.x, at.z, at.y),
+            )
+        finally:
+            self.scene.fog = before
         var frame = RenderTarget(lens.width, lens.height, Color(0, 0, 0))
         # A lens has at least one pixel.
         for y in range(lens.height):  # pragma: no branch

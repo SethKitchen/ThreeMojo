@@ -262,6 +262,31 @@ class FetchTests(unittest.TestCase):
         with self.assertRaises(tool.FetchError):
             tool.fetch(manifest, self.fixture.cache)
 
+    def test_corrupt_extracted_member_is_reported_and_never_overwritten(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as bundle:
+            bundle.writestr('color.jpg', b'original pixels')
+        data = buffer.getvalue()
+        url = self.fixture.file('checked.zip', data)
+        entry = texture_entry(url, None)
+        entry['files'] = [{
+            'role': 'archive', 'url': url, 'sha256': _sum(data), 'path': 'checked.zip',
+            'extract': [{'role': 'albedo', 'member': 'color.jpg', 'path': 'scan/color.jpg'}],
+        }]
+        manifest = manifest_of(entry)
+        tool.fetch(manifest, self.fixture.cache)
+        extracted = self.fixture.cache / 'scan/color.jpg'
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'ok'))
+        extracted.write_bytes(b'corrupted pixels')
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'mismatch'))
+        with self.assertRaisesRegex(tool.FetchError, 'extracted member differs'):
+            tool.fetch(manifest, self.fixture.cache)
+        self.assertEqual(extracted.read_bytes(), b'corrupted pixels')
+        extracted.unlink()
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'missing'))
+        tool.fetch(manifest, self.fixture.cache)
+        self.assertEqual(extracted.read_bytes(), b'original pixels')
+
     def test_command_line_pins_into_the_manifest(self):
         path = self.fixture.root / 'manifest.json'
         path.write_text(json.dumps(manifest_of(texture_entry(self.url, None))))
