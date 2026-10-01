@@ -334,7 +334,8 @@ def nurbs_derivatives(
         nd: The highest derivative wanted.
 
     Returns:
-        The point, then its derivatives.
+        The point, then its derivatives. The list has `nd + 2` entries,
+        matching `bspline_derivatives`, including one extra derivative.
     """
     return rational_curve_derivatives(
         bspline_derivatives(p, knots, points, u, nd)
