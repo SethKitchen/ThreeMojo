@@ -38,7 +38,8 @@ The file formats keep a scale and a rotation. `write_covariance` makes the covar
 
 `objects/gaussian_splat.mojo` has `GaussianSplat`. It holds the geometry and the scene node that places it.
 
-- `compute_bounding_box` and `compute_bounding_sphere` grow each splat by two standard deviations of its widest axis.
+- `compute_bounding_box` grows each splat by two standard deviations of its widest coordinate axis.
+- `compute_bounding_sphere` uses the largest absolute covariance row sum. This also covers a rotated long axis.
 - `raycast(world, raycaster)` finds where a ray meets the ellipsoid of each splat at two standard deviations. It skips a splat with an opacity below 0.2. It returns one `SplatHit` for each splat that the ray meets, with the distance as a `Length`.
 - `update_sort(world, view, near)` sorts the splats from far to near into `order`. It uses 4096 depth bins and a stable counting sort, as three.js's CPU sort does. It sorts again only when the view direction turns by more than the threshold of three.js.
 - `spherical_harmonics_colors(camera)` gives the view-dependent color of each splat for a camera position in the object's space.
@@ -108,7 +109,7 @@ SPZ uses the same splat limit in every version. The SPZ v4 parser checks its mag
 
 ## Tests
 
-`assets/gaussian_splat/make_splats.mjs` writes the test files. It reads each file with the loaders of three.js r186 into `expected.json`. It also writes the bounds, a raycast and the sort of three.js's `GaussianSplat` for one object and one camera. `tests/test_gaussian_splat_loaders.mojo` and `tests/test_gaussian_splat.mojo` compare the port with these values.
+`assets/gaussian_splat/make_splats.mjs` writes the test files. It reads each file with the loaders of three.js r186 into `expected.json`. It also writes the bounds, a raycast and the sort of three.js's `GaussianSplat` for one object and one camera. `tests/test_gaussian_splat_loaders.mojo` and `tests/test_gaussian_splat.mojo` compare the port with these values. The sphere and sort range instead use conservative row-sum bounds. three.js uses only the diagonal for its sphere, which can exclude part of a rotated splat.
 
 ## What is not ported
 
