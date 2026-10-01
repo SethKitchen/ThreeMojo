@@ -85,6 +85,7 @@ from render.texture import (
 )
 from render.tasks import TaskGroup
 from render.texture_store import NO_TEXTURE
+from std.math import isfinite
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 
@@ -442,8 +443,10 @@ def _entry(document: JsonDocument, node: Int) raises -> AssetEntry:
         if tile == NO_NODE or document.kind(tile) != NUMBER:
             raise Error("A texture set needs its tile_meters")
         var meters = Float32(document.number(tile))
-        if not (meters > 0):
-            raise Error("A texture set's tile_meters must be positive")
+        if not isfinite(meters) or not (meters > 0):
+            raise Error(
+                "A texture set's tile_meters must be positive and finite"
+            )
         entry.tile = Length(meters, METER)
         if not Bool(entry.file(ALBEDO_ROLE)):
             raise Error("A texture set needs an albedo map")
