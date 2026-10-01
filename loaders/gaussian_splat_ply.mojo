@@ -152,11 +152,11 @@ def _header_lines(bytes: List[UInt8]) raises -> List[String]:
     for at in range(3, end):
         var byte = bytes[at]
         if byte == 10 or byte == 13:
-            lines.append(String(unsafe_from_utf8=line))
+            lines.append(String(from_utf8=Span(line)))
             line = List[UInt8]()
         else:
             line.append(byte)
-    lines.append(String(unsafe_from_utf8=line))
+    lines.append(String(from_utf8=Span(line)))
     return lines^
 
 

@@ -526,7 +526,7 @@ def parse_fbx(bytes: List[UInt8]) raises -> FbxDocument:
     if binary:
         var reader = _BinaryReader(bytes)
         return reader.read()
-    return parse_fbx_text(String(unsafe_from_utf8=bytes))
+    return parse_fbx_text(String(from_utf8=Span(bytes)))
 
 
 def parse_fbx_text(text: String) raises -> FbxDocument:
@@ -877,7 +877,8 @@ struct _BinaryReader(Movable):
         var count = Int(self.unsigned(size))
         _ = self.unsigned(size)
         var length = Int(self.unsigned(1))
-        var name = String(unsafe_from_utf8=self.take(length))
+        var name_bytes = self.take(length)
+        var name = String(from_utf8=Span(name_bytes))
         if end == 0:
             return
         if end < self.at or end > len(self.bytes):
@@ -917,7 +918,7 @@ struct _BinaryReader(Movable):
                 if byte == 0:
                     break
                 cut.append(byte)
-            return string_property(String(unsafe_from_utf8=cut))
+            return string_property(String(from_utf8=Span(cut)))
         if code == 82:
             var raw = FbxProperty(FBX_BYTES)
             raw.bytes = self.take(Int(self.unsigned(4)))

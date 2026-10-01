@@ -10,6 +10,19 @@ three.js: `OBJLoader`, `MTLLoader`, `STLLoader`, `PLYLoader`, `GLTFLoader`, `Col
 
 To write these files, see [Exporters](Exporters). To read a scene in three.js JSON, see [Scene JSON](Scene-JSON).
 
+## Text encoding
+
+The glTF and FBX byte readers require valid UTF-8 text. This includes the
+JSON chunk in a GLB file and binary FBX names and string properties.
+Malformed text raises an error before it becomes a string. Valid Unicode
+names are preserved. Binary payloads keep their own format rules.
+
+The Gaussian splat glTF readers and PLY header reader use the same checked
+UTF-8 conversion. Draco metadata names, VTK detection headers and UltraHDR
+XMP also reject malformed encoding. `UsdzFiles.text` refuses bytes that are
+not valid UTF-8. This does not change a format that explicitly uses lossy
+decoding elsewhere.
+
 ## Read a file
 
 ```mojo

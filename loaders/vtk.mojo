@@ -1730,11 +1730,11 @@ def parse_vtk(bytes: List[UInt8]) raises -> BufferGeometry:
         else:
             line.append(bytes[k])
     lines.append(line^)
-    if String(unsafe_from_utf8=lines[0]).find("xml") >= 0:
+    if String(from_utf8=Span(lines[0])).find("xml") >= 0:
         return parse_vtk_xml(_decoded(bytes))
     if len(lines) < 3:
         raise Error("VTK: the third line is past the first 250 bytes")
-    if String(unsafe_from_utf8=lines[2]).find("ASCII") >= 0:
+    if String(from_utf8=Span(lines[2])).find("ASCII") >= 0:
         return parse_vtk_ascii(_decoded(bytes))
     return parse_vtk_binary(bytes)
 

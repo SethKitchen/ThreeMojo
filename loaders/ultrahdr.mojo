@@ -272,7 +272,7 @@ def _read_segments(
             raise Error("UltraHDR: a JPEG segment runs past the file")
         if marker == 0xE1 and _starts_with(bytes, payload, stop, XMP_NAMESPACE):
             var text = String(
-                unsafe_from_utf8=bytes[
+                from_utf8=Span(bytes)[
                     payload + len(XMP_NAMESPACE.as_bytes()) + 1 : stop
                 ]
             )
