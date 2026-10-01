@@ -394,7 +394,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
 
     @staticmethod
     def random(mut generator: SeededRandom) -> Vector2:
-        """Return a vector with each component from zero up to one,
+        """Return a vector with each component in `[0, 1)`,
         three.js's `random`, drawn in x, y order.
 
         Args:
@@ -403,6 +403,6 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Returns:
             The vector.
         """
-        var x = Float32(generator.next())
-        var y = Float32(generator.next())
+        var x = generator.float_in(0, 1)
+        var y = generator.float_in(0, 1)
         return Vector2(x, y)
