@@ -29,6 +29,8 @@ import re
 import subprocess
 import sys
 
+from test_environment import isolated_environment
+
 # `PASS [ 2000.245 ] test_name`, after the color codes are removed.
 RESULT = re.compile(r"^\s*(PASS|FAIL|SKIP)\s*\[\s*([0-9.]+)\s*\]\s*(\S+)")
 COLOR = re.compile(r"\x1b\[[0-9;]*m")
@@ -68,13 +70,15 @@ def main(argv):
     with open(args.suite, encoding="utf-8") as source:
         limit = budget(args.seconds, count_tests(source.read()))
     try:
-        run = subprocess.run(
-            args.command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            timeout=limit,
-        )
+        with isolated_environment() as environment:
+            run = subprocess.run(
+                args.command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                timeout=limit,
+                env=environment,
+            )
     except subprocess.TimeoutExpired as expired:
         if expired.output:
             sys.stdout.write(expired.output.decode("utf-8", "replace"))

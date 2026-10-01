@@ -17,6 +17,7 @@ FILES = {
     "tools/affected.py": "",
     "tools/run_suite.py": "",
     "tools/suite_key.py": "",
+    "tools/test_environment.py": "",
     "pkg/__init__.mojo": "",
     "pkg/used.mojo": "from pkg.deep import f\n",
     "pkg/deep.mojo": "def f():\n    pass\n",
