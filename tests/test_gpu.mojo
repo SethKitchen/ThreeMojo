@@ -14864,3 +14864,84 @@ def test_both_backends_keep_subpixel_wide_line_caps() raises:
     )
     assert_true(count_background(host, BACKGROUND) < 32 * 32)
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+def scalar_math_kernel(
+    output: MutPointer[Float32, MutAnyOrigin],
+    inputs: MutPointer[Float32, MutAnyOrigin],
+    count: Int32,
+):
+    """Evaluate shared scalar trigonometry on device inputs."""
+    from max.gpu import global_idx
+    from math.arc_tangent import atan2_float32, atan_float32
+    from math.sine import sin_float32
+
+    var at = Int(global_idx.x)
+    if at >= Int(count):
+        return
+    var x = inputs[unsafe_offset=at]
+    output[unsafe_offset=3 * at] = sin_float32(x)
+    output[unsafe_offset=3 * at + 1] = atan_float32(x)
+    output[unsafe_offset=3 * at + 2] = atan2_float32(
+        x, inputs[unsafe_offset=(at + 1) % Int(count)]
+    )
+
+
+def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
+    from max.gpu.host import DeviceContext
+    from math.arc_tangent import atan2_float32, atan_float32
+    from math.sine import sin_float32
+    from std.math import isnan, nan
+
+    if skipped_for_lack_of_a_gpu("shared scalar finite range and IEEE edges"):
+        return
+    var inputs: List[Float32] = [
+        0,
+        -0.0,
+        1,
+        -1,
+        inf[DType.float32](),
+        -inf[DType.float32](),
+        inf[DType.float32](),
+        nan[DType.float32](),
+        8192,
+        8192.0009765625,
+        1e8,
+        -1e9,
+        1e10,
+        1e15,
+        -1e30,
+        3e38,
+    ]
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[scalar_math_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            var expected: Array[Float32, 3] = [
+                sin_float32(inputs[at]),
+                atan_float32(inputs[at]),
+                atan2_float32(inputs[at], inputs[(at + 1) % len(inputs)]),
+            ]
+            for component in range(3):
+                var actual = host[3 * at + component]
+                if isnan(expected[component]):
+                    assert_true(isnan(actual))
+                else:
+                    assert_equal(
+                        bitcast[DType.uint32](actual),
+                        bitcast[DType.uint32](expected[component]),
+                    )
