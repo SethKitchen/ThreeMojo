@@ -412,6 +412,10 @@ struct CarlaPhysics(Movable):
     def tick(mut self, dt: Duration, substeps: Int) raises:
         """Advance the world by one fixed step.
 
+        External forces and torques present at tick entry act through every
+        substep. The accumulators are cleared after the tick;
+        vehicle and walker forces are rebuilt for each substep.
+
         Args:
             dt: The step, CARLA's `fixed_delta_seconds`.
             substeps: How many physics steps it is cut into. One or more.
