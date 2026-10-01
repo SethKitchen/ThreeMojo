@@ -404,7 +404,36 @@ def clip_depth(
     """
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
+    return clip_ordered(a, b, c, near, far, sides, any_of)
 
+
+def clip_ordered(
+    a: ClipVertex,
+    b: ClipVertex,
+    c: ClipVertex,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane] = List[Plane](),
+    any_of: List[Plane] = List[Plane](),
+) -> List[ClipVertex]:
+    """Return what `clip_depth` returns, for planes already in order.
+
+    The caller has checked that `far` lies beyond `near`: a camera's
+    projection refuses the other order before a frame is prepared. It
+    cannot raise, so a worker thread can call it.
+
+    Args:
+        a: First corner, in camera space.
+        b: Second corner.
+        c: Third corner.
+        near: Distance to the near plane; the plane sits at z = -near.
+        far: Distance to the far plane, at z = -far, beyond `near`.
+        sides: As `clip_depth` takes them.
+        any_of: As `clip_depth` takes them.
+
+    Returns:
+        Corners three at a time, as `clip_depth` returns them.
+    """
     var corners = List[ClipVertex]()
     corners.append(a)
     corners.append(b)

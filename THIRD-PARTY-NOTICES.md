@@ -445,6 +445,46 @@ SOFTWARE.
 
 ---
 
+## Clearwater
+
+<https://github.com/Aureliengmz/clearwater>
+
+`extensions/water/` ports Clearwater's shallow-water spectrum, ripple
+equation, refracted-grid caustics, water optics and lens-diffraction glare.
+`assets/pebbles.jpg` is Clearwater's pebble photograph. Clearwater is
+Copyright (c) 2026 Lumaris and is distributed under the MIT License,
+reproduced in full below.
+
+Anyone may obtain Clearwater directly from its authors under the MIT License.
+The noncommercial restriction in ThreeMojo's own license applies only to
+ThreeMojo's code and has no effect whatsoever on your rights in Clearwater.
+
+```
+MIT License
+
+Copyright (c) 2026 Lumaris
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## Draco
 
 <https://github.com/google/draco>
@@ -567,6 +607,138 @@ SOFTWARE.
 
 ---
 
+## AMD TressFX
+
+<https://github.com/GPUOpen-Effects/TressFX>
+
+`extensions/humanoid/skeleton/head/hair/groom.mojo` ports TressFX's follow
+strands, `TressFXAsset::GenerateFollowHairs`: each follower keeps an offset
+from its guide that widens toward the tip. The Mojo implementation is original
+work. TressFX is distributed under the MIT License, reproduced below.
+
+`assets/hair/mohawk.bin` is the crest of Ratboy's mohawk, TressFX's sample
+hair `Ratboy_mohawk.tfx`, as `tools/hair_style.py` converts it: the strands from
+the brow to the nape, narrowed and laid on a human cranium. The sample is
+distributed under the same MIT License, copyright 2017 Advanced Micro Devices,
+Inc.
+
+```
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+---
+
+## Frostbitten Hair WebGPU
+
+<https://github.com/Scthe/frostbitten-hair-webgpu>
+
+`extensions/humanoid/skeleton/head/hair/shading.mojo` ports Frostbitten's
+strand-space hair shading: Marschner's R, TT and TRT lobes as Brian Karis fit
+them, Kajiya and Kay's diffuse, the fake multiple scattering, and the
+Beer-Lambert falloff with depth. `simulation.mojo` beside it ports its hair
+simulation: Verlet integration with friction, gravity and gusting wind, and the
+length, global shape, local shape and distance-field collision constraints,
+with its defaults. The Mojo implementation is original work.
+Frostbitten Hair WebGPU is distributed under the MIT License, reproduced
+below.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2024 Marcin Matuszczyk
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
+## Sintel's hair
+
+<https://durian.blender.org/sharing/>
+
+`assets/hair/layered.bin` is Sintel's hair from Sintel Lite 2.57b by
+BenDansie, as frostbitten-hair-webgpu exports it
+(`SintelHairOriginal-sintel_hair.16points.tfx`) and `tools/hair_style.py`
+converts it: each strand kept as offsets from its root on a fitted cranium, so
+it can be laid on any head. The character Sintel is (c) copyright Blender
+Foundation | durian.blender.org, licensed under the Creative Commons
+Attribution 3.0 License, <https://creativecommons.org/licenses/by/3.0/>.
+
+---
+
+## ICT FaceKit
+
+<https://github.com/USC-ICT/ICT-FaceKit>
+
+`assets/face/ict_face.bin` is the ICT Face Model Light of USC's Institute for
+Creative Technologies, converted by `tools/ict_face_model.py`: its generic
+neutral mesh, its texture coordinates, its first sixty identity modes and its
+expression shapes, with the skin's triangles, edges and holes worked out from
+the mesh. `extensions/humanoid/skeleton/head/face_model.mojo` reads
+it; the Mojo implementation is original work. Only the Light model is used,
+which ICT-FaceKit releases under the MIT License, reproduced below. ICT's Full
+face model, under a different license, is not used.
+
+```
+MIT License
+
+Copyright (c) 2020 USC Institute for Creative Technologies
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## Scope note
 
 The `coverage/` directory — the line, branch, condition, and MC-DC coverage
@@ -576,3 +748,48 @@ ThreeMojo's own license alone.
 The Mojo toolchain and standard library are products of Modular Inc. and are
 not redistributed by this project; they are installed separately by the user
 under Modular's own terms.
+
+---
+
+## CARLA
+
+<https://github.com/carla-simulator/carla>
+
+`extensions/carla/` ports CARLA's `geom::Rotation` and `geom::Transform`
+math, its OpenDRIVE plan-view geometry, lane transforms and lane meshes, its
+depth and CityScapes palette encodings, and its ray-cast LiDAR model, from
+`LibCarla` and from the sensor, walker and vehicle sources of CARLA's
+simulator plugin, at commit `1360bb9`. The Mojo implementation is
+original work. No game-engine source code is ported. The spiral is integrated here with
+Gauss-Legendre quadrature; CARLA's third-party odrSpiral code is not
+included. CARLA is distributed under the MIT License, reproduced in full
+below.
+
+Anyone may obtain CARLA directly from its authors under the MIT License. The
+noncommercial restriction in ThreeMojo's own license applies only to
+ThreeMojo's code and has no effect whatsoever on your rights in CARLA.
+
+```
+MIT License
+
+Copyright (c) 2024 Computer Vision Center (CVC) at the Universitat Autonoma de
+Barcelona (UAB).
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing controls window exporters environments generators \
+                  postprocessing controls window exporters environments generators extensions \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
@@ -492,7 +492,7 @@ else
 	@mkdir -p $(COV_DIR)/coverage
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
-	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
+	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
 endif
 
@@ -674,7 +674,18 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/tslfunctions.png $(OUT_DIR)/gaussian.png \
            $(OUT_DIR)/vxgi.png $(OUT_DIR)/lighting.png \
            $(OUT_DIR)/lofts.png $(OUT_DIR)/generators.png \
-           $(OUT_DIR)/computenodes.png
+           $(OUT_DIR)/computenodes.png \
+           $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
+           $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
+           $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
+           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
+           $(OUT_DIR)/foot.png $(OUT_DIR)/limb.png \
+           $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
+           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
+           $(OUT_DIR)/pelvis.png $(OUT_DIR)/torso.png \
+           $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
+           $(OUT_DIR)/head.png \
+           $(OUT_DIR)/water.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -1101,6 +1112,111 @@ $(OUT_DIR)/computenodes.png: $(LIB_SOURCES) examples/particles.mojo
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/particles.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
+$(OUT_DIR)/femur.png: $(LIB_SOURCES) examples/femur.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/tibia.png: $(LIB_SOURCES) examples/tibia.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/tibia.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fibula.png: $(LIB_SOURCES) examples/fibula.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fibula.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/knee.png: $(LIB_SOURCES) examples/knee.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/knee.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/muscles.png: $(LIB_SOURCES) examples/muscles.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/muscles.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/leg.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/legs.png: $(LIB_SOURCES) examples/legs.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/legs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/foot.png: $(LIB_SOURCES) examples/foot.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/foot.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/limb.png: $(LIB_SOURCES) examples/limb.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/limb.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# The lower body: the pelvis, both legs and both feet, with skin and without.
+$(OUT_DIR)/pelvis.png: $(LIB_SOURCES) examples/pelvis.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/pelvis.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A body below the neck, arms included, with skin and without.
+$(OUT_DIR)/torso.png: $(LIB_SOURCES) examples/torso.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/torso.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# An arm and its hand, with skin and without.
+$(OUT_DIR)/arm.png: $(LIB_SOURCES) examples/arm.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/arm.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A hand and its fingers, with skin and without.
+$(OUT_DIR)/hand.png: $(LIB_SOURCES) examples/hand.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/hand.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A neck and a head, with skin and without.
+$(OUT_DIR)/head.png: $(LIB_SOURCES) examples/head.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/head.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vessels.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/lymph.png: $(LIB_SOURCES) examples/lymph.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lymph.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/nerves.png: $(LIB_SOURCES) examples/nerves.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/nerves.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/integument.png: $(LIB_SOURCES) examples/integument.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/water.png: $(LIB_SOURCES) examples/water.mojo assets/pebbles.jpg
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be
 # looked at, and a folder that keeps emptying itself is no use to watch.
 # `make clean-images` removes them when you actually want them gone.
@@ -1115,3 +1231,4 @@ clean-images:
 # Parser and cache regressions run without the Mojo compiler.
 test-tools:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
+	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'

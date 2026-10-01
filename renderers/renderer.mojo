@@ -321,14 +321,15 @@ from render.rasterizer import (
 from renderers.clip import (
     ClipVertex,
     clip_depth,
+    clip_ordered,
     clip_segment,
     within_any,
     within_depth,
     within_sides,
 )
 from render.tasks import TaskGroup
-from std.math import cos, floor, isfinite, max, pi, sin
-from std.memory import ArcPointer
+from std.math import cos, floor, isfinite, max, min, pi, sin
+from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
 
 
@@ -838,6 +839,9 @@ def _coordinates(
 # roundings of the same view; a millionth of the range they measure over
 # is several times the rounding and no distance an image can show.
 comptime CULL_SLACK = Float32(1e-6)
+# A wide line this many output pixels wide or thinner is drawn without
+# round caps: they are a fraction of a pixel. See `_emit_wide_line`.
+comptime THIN_LINE = Float32(0.75)
 
 
 def _in_view(
@@ -3678,6 +3682,15 @@ def _emit_cap(
         last = next
 
 
+def _screen_length(
+    to_screen: Matrix4, start: ClipVertex, end: ClipVertex
+) -> Float32:
+    """Return how long a segment is on the image, in raster pixels."""
+    var a = to_screen.transform_point(start.position)
+    var b = to_screen.transform_point(end.position)
+    return Vector2(b.x - a.x, b.y - a.y).length()
+
+
 def _emit_wide_line(
     mut corners: _Slim,
     assets: Assets,
@@ -3695,7 +3708,10 @@ def _emit_wide_line(
     three.js's `LineSegments2` drawn with `LineMaterial`: each segment is
     a quad, and each end of it a round cap, unless the line is dashed.
     A dashed segment is cut into a quad per dash, with no caps, as
-    three.js throws the caps of a dashed line away. The segment is first
+    three.js throws the caps of a dashed line away. A line at most one
+    and a half pixels wide keeps no caps either, save on a segment
+    shorter than it is wide: the caps would each cover a fraction of a
+    pixel, and they would triple the corners a strand of hair needs. The segment is first
     cut to the near and the far planes, as three.js trims it to the near
     plane, so that no corner is placed from a point behind the camera. The
     triangles then go where every triangle goes: through the clipper and
@@ -3808,6 +3824,15 @@ def _emit_wide_line(
         0,
     )
     var no_planes = List[Plane]()
+    # A line no wider than `THIN_LINE` output pixels keeps no caps: they
+    # would be a fraction of a pixel, and they would triple its corners.
+    var thin = not width.world_units and half <= THIN_LINE * Float32(
+        render_scale
+    )
+    var each = 6
+    if not thin and not dashed:
+        each += 6 * cap_steps(half)
+    corners.reserve(len(corners) + segments * each)
     for segment in range(segments):
         var ends = List[ClipVertex]()
         for side in range(2):  # pragma: no branch
@@ -3854,6 +3879,9 @@ def _emit_wide_line(
             _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
             _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
         if dashed:
+            continue
+        # A thin segment's caps are left off, but a dot keeps its own.
+        if thin and _screen_length(to_screen, start, end) > half:
             continue
         _emit_cap(ribbon, paint, corners, start, -1, near, far, sides, any_of)
         _emit_cap(ribbon, paint, corners, end, 1, near, far, sides, any_of)
@@ -4321,6 +4349,570 @@ def _paint_backdrop(
                 ),
                 False,
             )
+
+
+# The most triangles of one draw that one task emits in a row. A large
+# draw is cut into pieces this size, so that one skin of a hundred
+# thousand triangles is shared between the workers as well.
+comptime PIECE_TRIANGLES = 2048
+
+
+struct _TriangleJob(Movable):
+    """One draw's filled triangles, with its vertex stage done.
+
+    `_prepared` transforms, lights and colors a draw's vertices on one
+    thread, then builds one of these to hold the result. The job owns
+    its arrays, so its triangles can be emitted on any thread, and many
+    jobs can emit at once. See `_emit_jobs`.
+    """
+
+    var run_start: Int
+    var triangles: Int
+    # The geometry, whose index list is read if `indexed`.
+    var geometry: GeometryId
+    var indexed: Bool
+    var smooth: Bool
+    var mirrored: Bool
+    var kind: MaterialKind
+    var view: Matrix4
+    var world_points: List[Vector3]
+    var view_points: List[Vector3]
+    var vertex_normals: List[Vector3]
+    var vertex_colors: List[FloatColor]
+    var first_set: Tuple[List[Float32], List[Float32]]
+    var second_set: Tuple[List[Float32], List[Float32]]
+    var customs: List[SIMD[DType.float32, 8]]
+    var glow: FloatColor
+    var tracks: Bool
+    var current_points: List[Vector3]
+    var previous_points: List[Vector3]
+    var paint: _Paint
+    var in_uv_space: Bool
+    var viewport: Rect
+    var height: Int
+    var near: Float32
+    var far: Float32
+    var cut: List[Plane]
+    var any_of: List[Plane]
+    # The draw's sort key, for its span.
+    var depth: Float32
+    var blends: Bool
+    var order: Int
+    var source: _Source
+    var transmits: Bool
+
+    def __init__(
+        out self,
+        run_start: Int,
+        triangles: Int,
+        geometry: GeometryId,
+        indexed: Bool,
+        smooth: Bool,
+        mirrored: Bool,
+        kind: MaterialKind,
+        view: Matrix4,
+        var world_points: List[Vector3],
+        var view_points: List[Vector3],
+        var vertex_normals: List[Vector3],
+        var vertex_colors: List[FloatColor],
+        var first_set: Tuple[List[Float32], List[Float32]],
+        var second_set: Tuple[List[Float32], List[Float32]],
+        var customs: List[SIMD[DType.float32, 8]],
+        glow: FloatColor,
+        tracks: Bool,
+        var current_points: List[Vector3],
+        var previous_points: List[Vector3],
+        paint: _Paint,
+        in_uv_space: Bool,
+        viewport: Rect,
+        height: Int,
+        near: Float32,
+        far: Float32,
+        var cut: List[Plane],
+        var any_of: List[Plane],
+        depth: Float32,
+        blends: Bool,
+        order: Int,
+        source: _Source,
+        transmits: Bool,
+    ):
+        """Hold one draw's vertex stage, ready to emit.
+
+        Args:
+            run_start: The first index slot of the drawn run.
+            triangles: How many triangles the run holds.
+            geometry: The geometry drawn.
+            indexed: Whether the geometry has an index list.
+            smooth: Whether the corners take the vertex normals.
+            mirrored: Whether the world transform reflects.
+            kind: The material's kind.
+            view: The camera's view matrix.
+            world_points: Each vertex in world space.
+            view_points: Each vertex in camera space.
+            vertex_normals: Each vertex's world normal, if `smooth`.
+            vertex_colors: Each vertex's base color.
+            first_set: Each vertex's first texture coordinates.
+            second_set: Each vertex's second texture coordinates.
+            customs: Each vertex's custom attributes.
+            glow: The material's emitted light.
+            tracks: Whether the corners carry velocity.
+            current_points: Each vertex in this frame's clip space.
+            previous_points: Each vertex in the last frame's clip space.
+            paint: What every corner of the draw carries.
+            in_uv_space: Whether the frame is a light map's.
+            viewport: Where a light map's square is on the target.
+            height: The target's height.
+            near: Distance to the near plane.
+            far: Distance to the far plane.
+            cut: The planes that each cut the draw.
+            any_of: The planes of which a kept point needs one.
+            depth: The draw's camera-space depth.
+            blends: Whether its material blends.
+            order: Its node's render order.
+            source: What drew it.
+            transmits: Whether its material transmits.
+        """
+        self.run_start = run_start
+        self.triangles = triangles
+        self.geometry = geometry
+        self.indexed = indexed
+        self.smooth = smooth
+        self.mirrored = mirrored
+        self.kind = kind
+        self.view = view
+        self.world_points = world_points^
+        self.view_points = view_points^
+        self.vertex_normals = vertex_normals^
+        self.vertex_colors = vertex_colors^
+        self.first_set = first_set^
+        self.second_set = second_set^
+        self.customs = customs^
+        self.glow = glow
+        self.tracks = tracks
+        self.current_points = current_points^
+        self.previous_points = previous_points^
+        self.paint = paint
+        self.in_uv_space = in_uv_space
+        self.viewport = viewport
+        self.height = height
+        self.near = near
+        self.far = far
+        self.cut = cut^
+        self.any_of = any_of^
+        self.depth = depth
+        self.blends = blends
+        self.order = order
+        self.source = source
+        self.transmits = transmits
+
+    def note(self, mut spans: List[_Span], begin: Int, end: Int):
+        """Record the corners this draw emitted between two counts.
+
+        Args:
+            spans: The list to record into.
+            begin: Where the draw's corners start.
+            end: Where they end.
+        """
+        _note_span(
+            spans,
+            DRAW_TRIANGLES,
+            begin,
+            end,
+            self.depth,
+            self.blends,
+            self.order,
+            self.source,
+            self.transmits,
+        )
+
+    def emit(
+        self,
+        first: Int,
+        past: Int,
+        mut corners: _Slim,
+        lights: Lighting,
+        assets: Assets,
+    ):
+        """Append the triangles `first` up to `past` of the drawn run.
+
+        It cannot raise, so a worker thread can run it: the camera's
+        projection has refused a far plane in front of the near one
+        before any job is made, and the index list was checked against
+        the vertex count when the draw was.
+
+        Args:
+            first: The first triangle to emit, counted from the run's.
+            past: One past the last.
+            corners: The raster vertices, appended to.
+            lights: The camera's lights, which a `GOURAUD` corner is lit
+                by.
+            assets: The store that holds the geometry.
+        """
+        # Read directly: the draw has already fetched this id.
+        ref indices = assets.geometries.geometries[self.geometry.value].index
+        ref vertex_u = self.first_set[0]
+        ref vertex_v = self.first_set[1]
+        ref vertex_u1 = self.second_set[0]
+        ref vertex_v1 = self.second_set[1]
+        for triangle in range(first, past):
+            var first_corner = self.run_start + triangle * 3
+            var second = first_corner + 1
+            var third = first_corner + 2
+            if self.indexed:
+                first_corner = indices[first_corner]
+                second = indices[second]
+                third = indices[third]
+
+            var normal_a: Vector3
+            var normal_b: Vector3
+            var normal_c: Vector3
+            if self.smooth:
+                normal_a = self.vertex_normals[first_corner]
+                normal_b = self.vertex_normals[second]
+                normal_c = self.vertex_normals[third]
+            else:
+                # No normals given, so the face supplies its own and the
+                # whole triangle takes one.
+                var geometric = face_normal(
+                    self.world_points[first_corner],
+                    self.world_points[second],
+                    self.world_points[third],
+                )
+                if self.mirrored:
+                    # The cross product follows the mirrored winding, so
+                    # it comes out pointing into the surface. A supplied
+                    # normal carried through the inverse transpose does
+                    # not flip, and the two paths have to mean the same
+                    # side or an object would shade differently purely
+                    # for having normals.
+                    geometric = -geometric
+                if self.kind == NORMALS:
+                    # Into view space, as the supplied normals were.
+                    geometric = self.view.transform_direction(geometric)
+                normal_a = geometric
+                normal_b = geometric
+                normal_c = geometric
+
+            var corner_a = ClipVertex(
+                self.view_points[first_corner],
+                self.vertex_colors[first_corner],
+                normal_a,
+                vertex_u[first_corner],
+                vertex_v[first_corner],
+                self.world_points[first_corner],
+                self.glow,
+                u1=vertex_u1[first_corner],
+                v1=vertex_v1[first_corner],
+            )
+            var corner_b = ClipVertex(
+                self.view_points[second],
+                self.vertex_colors[second],
+                normal_b,
+                vertex_u[second],
+                vertex_v[second],
+                self.world_points[second],
+                self.glow,
+                u1=vertex_u1[second],
+                v1=vertex_v1[second],
+            )
+            var corner_c = ClipVertex(
+                self.view_points[third],
+                self.vertex_colors[third],
+                normal_c,
+                vertex_u[third],
+                vertex_v[third],
+                self.world_points[third],
+                self.glow,
+                u1=vertex_u1[third],
+                v1=vertex_v1[third],
+            )
+            corner_a.custom = self.customs[first_corner]
+            corner_b.custom = self.customs[second]
+            corner_c.custom = self.customs[third]
+            if self.kind == GOURAUD:
+                _light_at_corner(
+                    corner_a,
+                    lights,
+                    normal_a,
+                    self.world_points[first_corner],
+                )
+                _light_at_corner(
+                    corner_b, lights, normal_b, self.world_points[second]
+                )
+                _light_at_corner(
+                    corner_c, lights, normal_c, self.world_points[third]
+                )
+            if self.tracks:
+                corner_a.current = self.current_points[first_corner]
+                corner_b.current = self.current_points[second]
+                corner_c.current = self.current_points[third]
+                corner_a.previous = self.previous_points[first_corner]
+                corner_b.previous = self.previous_points[second]
+                corner_c.previous = self.previous_points[third]
+            # In texture space the triangle is placed by its second
+            # coordinates, whole: nothing clips it and neither side
+            # is culled.
+            if self.in_uv_space:
+                self.paint.emit_in_uv_space(
+                    corners,
+                    corner_a,
+                    corner_b,
+                    corner_c,
+                    self.viewport,
+                    self.height,
+                )
+                continue
+            # A triangle wholly between the two planes is what the
+            # clipper would hand back untouched, so it is not sent
+            # through: the clipper builds four lists for every triangle
+            # it is given, and a mesh in view gives it thousands that
+            # it would return as they came. See `within_depth`.
+            if _whole_in_view(
+                corner_a,
+                corner_b,
+                corner_c,
+                self.near,
+                self.far,
+                self.cut,
+                self.any_of,
+            ):
+                self.paint.emit(corners, corner_a, corner_b, corner_c)
+                continue
+            var pieces = clip_ordered(
+                corner_a,
+                corner_b,
+                corner_c,
+                self.near,
+                self.far,
+                self.cut,
+                self.any_of,
+            )
+            for piece in range(len(pieces) // 3):
+                self.paint.emit(
+                    corners,
+                    pieces[piece * 3],
+                    pieces[piece * 3 + 1],
+                    pieces[piece * 3 + 2],
+                )
+
+
+@fieldwise_init
+struct _Piece(ImplicitlyCopyable):
+    """A run of one job's triangles, which one task emits whole."""
+
+    # Which job, in the pending list.
+    var job: Int
+    # Its first triangle, and one past its last.
+    var first: Int
+    var past: Int
+
+
+async def _emit_pieces(
+    jobs: MutPointer[_TriangleJob, MutAnyOrigin],
+    pieces: MutPointer[_Piece, MutAnyOrigin],
+    first_piece: Int,
+    past_piece: Int,
+    corners: MutPointer[_Slim, MutAnyOrigin],
+    ends: MutPointer[Int, MutAnyOrigin],
+    lights: Pointer[Lighting, ImmutAnyOrigin],
+    assets: Pointer[Assets, ImmutAnyOrigin],
+):
+    """Emit a run of pieces into one task's own list.
+
+    One of these runs per worker, as a task on the standard library's
+    thread pool, and each writes a list of its own. It takes pointers
+    because a coroutine must not borrow from the call that made it;
+    `_emit_jobs` keeps everything alive until `TaskGroup.wait` returns.
+
+    A task cannot raise, and nothing it runs does; see
+    `_TriangleJob.emit`.
+
+    Args:
+        jobs: The pending jobs.
+        pieces: Every job's pieces, in draw order.
+        first_piece: The first piece this task emits.
+        past_piece: One past the last.
+        corners: This task's list, appended to.
+        ends: Per piece, how long this task's list is once it is done.
+        lights: The camera's lights, for a `GOURAUD` corner.
+        assets: The store that holds the geometries.
+    """
+    # A task is only made for a run of one piece or more.
+    for index in range(first_piece, past_piece):  # pragma: no branch
+        var piece = pieces[unsafe_offset=index]
+        # Each piece starts surfaces of its own, which the merge renumbers
+        # into the frame's.
+        corners[].new_surface()
+        jobs[unsafe_offset=piece.job].emit(
+            piece.first, piece.past, corners[], lights[], assets[]
+        )
+        ends[unsafe_offset=index] = len(corners[])
+
+
+async def _place_corners(
+    source: MutPointer[Corner, MutAnyOrigin],
+    destination: MutPointer[Corner, MutAnyOrigin],
+    count: Int,
+    shift: Int,
+):
+    """Copy one task's corners into their place in the frame's list.
+
+    Args:
+        source: The task's own corners.
+        destination: Where its corners go in the frame's list.
+        count: How many corners it holds.
+        shift: How many of the frame's surfaces come before the task's
+            own, which each corner's surface number moves by.
+    """
+    unsafe_memcpy(dest=destination, src=source, count=count)
+    # A task whose every triangle was culled holds none.
+    var index = 0
+    while index < count:
+        destination[unsafe_offset=index].surface += shift
+        index += 1
+
+
+def _emit_jobs(
+    mut jobs: List[_TriangleJob],
+    mut corners: _Slim,
+    mut spans: List[_Span],
+    workers: Int,
+    lights: Lighting,
+    assets: Assets,
+):
+    """Emit the pending jobs in draw order, and record each one's span.
+
+    With one worker, each job appends straight to `corners`. With more,
+    the jobs are cut into pieces of at most `PIECE_TRIANGLES`, the pieces
+    are shared out in order between the workers by triangle count, and
+    each worker appends to a list of its own. The lists are then copied
+    into `corners` one after another, also in parallel. The corners come
+    out in the same order either way, so the frame is the same.
+
+    Args:
+        jobs: The pending jobs, emptied.
+        corners: The frame's raster vertices, appended to.
+        spans: The frame's spans, one appended per job that emits.
+        workers: How many threads may emit.
+        lights: The camera's lights, for a `GOURAUD` corner.
+        assets: The store that holds the geometries.
+    """
+    if len(jobs) == 0:
+        return
+    var total = 0
+    for index in range(len(jobs)):  # pragma: no branch
+        total += jobs[index].triangles
+    # Room for three corners a triangle, before the clipper adds any or
+    # the facing test drops any. Grown to at least double when it runs
+    # out: reserving the exact size reallocated on every draw and copied
+    # the frame's whole list each time, which a scene of many meshes
+    # paid for quadratically.
+    var need = len(corners) + total * 3
+    if need > corners.capacity():
+        corners.reserve(max(need, 2 * corners.capacity()))
+    var pieces = List[_Piece]()
+    for index in range(len(jobs)):  # pragma: no branch
+        var count = jobs[index].triangles
+        var first = 0
+        while first < count:
+            var past = min(first + PIECE_TRIANGLES, count)
+            pieces.append(_Piece(index, first, past))
+            first = past
+    var tasks = min(workers, len(pieces))
+    if tasks <= 1:
+        for index in range(len(jobs)):  # pragma: no branch
+            corners.new_surface()
+            var begin = len(corners)
+            jobs[index].emit(0, jobs[index].triangles, corners, lights, assets)
+            jobs[index].note(spans, begin, len(corners))
+        jobs.clear()
+        # What is appended next starts a surface of its own.
+        corners.new_surface()
+        return
+    # Each task's first piece. The pieces are shared out evenly by count,
+    # so every task has one at least; a piece holds at most
+    # `PIECE_TRIANGLES`, so the shares are close in triangles as well.
+    var bounds = List[Int](length=tasks + 1, fill=0)
+    for index in range(tasks + 1):  # pragma: no branch
+        bounds[index] = index * len(pieces) // tasks
+    var outputs = List[_Slim]()
+    # At least two tasks on this branch, so the loops run.
+    for _ in range(tasks):  # pragma: no branch
+        outputs.append(_Slim())
+    var ends = List[Int](length=len(pieces), fill=0)
+    var group = TaskGroup()
+    for index in range(tasks):  # pragma: no branch
+        group.create_task(
+            _emit_pieces(
+                jobs.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                pieces.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                bounds[index],
+                bounds[index + 1],
+                outputs.unsafe_ptr()
+                .unsafe_offset(index)
+                .unsafe_origin_cast[MutAnyOrigin](),
+                ends.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=assets).unsafe_origin_cast[ImmutAnyOrigin](),
+            )
+        )
+    group.wait()
+    # Where each task's corners and surfaces start in the frame's lists.
+    var base = len(corners)
+    var starts = List[Int](length=tasks, fill=base)
+    var shifts = List[Int](length=tasks, fill=len(corners.surfaces))
+    for index in range(1, tasks):  # pragma: no branch
+        starts[index] = starts[index - 1] + len(outputs[index - 1])
+        shifts[index] = shifts[index - 1] + len(outputs[index - 1].surfaces)
+    corners.corners.resize(
+        unsafe_uninit_length=starts[tasks - 1] + len(outputs[tasks - 1])
+    )
+    for index in range(tasks):  # pragma: no branch
+        var slot = 0
+        while slot < len(outputs[index].surfaces):
+            corners.surfaces.append(outputs[index].surfaces[slot])
+            slot += 1
+    var copies = TaskGroup()
+    for index in range(tasks):  # pragma: no branch
+        copies.create_task(
+            _place_corners(
+                outputs[index]
+                .corners.unsafe_ptr()
+                .unsafe_origin_cast[MutAnyOrigin](),
+                corners.corners.unsafe_ptr()
+                .unsafe_offset(starts[index])
+                .unsafe_origin_cast[MutAnyOrigin](),
+                len(outputs[index]),
+                shifts[index],
+            )
+        )
+    copies.wait()
+    # Each job's corners, from its first piece's start to its last
+    # piece's end. The pieces are in draw order, so they are contiguous.
+    # A job with no triangles has no piece, and records nothing.
+    var job_begin = List[Int](length=len(jobs), fill=0)
+    var job_end = List[Int](length=len(jobs), fill=0)
+    for index in range(tasks):  # pragma: no branch
+        # Every task has one piece at least.
+        for slot in range(
+            bounds[index], bounds[index + 1]
+        ):  # pragma: no branch
+            var piece = pieces[slot]
+            var start = starts[index]
+            if slot > bounds[index]:
+                start += ends[slot - 1]
+            if piece.first == 0:
+                job_begin[piece.job] = start
+            job_end[piece.job] = starts[index] + ends[slot]
+    for index in range(len(jobs)):  # pragma: no branch
+        jobs[index].note(spans, job_begin[index], job_end[index])
+    # The tasks read these through pointers the compiler cannot see:
+    # these reads keep them alive until every task has finished.
+    _ = len(outputs)
+    _ = len(ends)
+    jobs.clear()
+    # What is appended next starts a surface of its own.
+    corners.new_surface()
 
 
 def available_workers() -> Int:
@@ -5310,6 +5902,10 @@ struct Renderer(Movable):
         # The light masks the materials name, each a lighting of its own;
         # see `light_masks`.
         var masks = light_masks(assets)
+        # The filled draws whose vertex stage is done, waiting to emit
+        # their triangles on the workers. Emitted before anything else
+        # is appended, so the corners stay in draw order.
+        var jobs = List[_TriangleJob]()
         for slot in range(len(draws)):
             # Each draw shares one surface per facing.
             corners.new_surface()
@@ -5320,6 +5916,9 @@ struct Renderer(Movable):
                 # `_emit_wide_line`. It never transmits.
                 if wireframe or transmissive_backs:
                     continue
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
                 var wide_begin = len(corners)
                 var wide_cut = List[Plane]()
                 var wide_any = List[Plane]()
@@ -5371,6 +5970,9 @@ struct Renderer(Movable):
                 # is basic, and never transmits.
                 if wireframe or transmissive_backs:
                     continue
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
                 var begin = len(corners)
                 var sprite_cut = List[Plane]()
                 var sprite_any = List[Plane]()
@@ -5657,6 +6259,8 @@ struct Renderer(Movable):
             # the point of the two accessors.
             ref positions = geometry.attribute_view(String(POSITION))
             var vertex_count = positions.count()
+            world_points.reserve(vertex_count)
+            view_points.reserve(vertex_count)
             # How many of the geometry's morph targets this draw actually
             # wears. Worked out once here rather than per vertex, and zero
             # for everything that is not a morphed mesh, which is the only
@@ -5725,16 +6329,12 @@ struct Renderer(Movable):
             # map everything to one place -- harmless until something is
             # actually sampled with them.
             var first_set = _coordinates(geometry, String(UV), vertex_count)
-            ref vertex_u = first_set[0]
-            ref vertex_v = first_set[1]
             # The second pair, which a map on `UV_CHANNEL_1` reads: the
             # geometry's `uv1` when it has one, and its `uv` otherwise.
             var second_name = String(UV)
             if geometry.has_attribute(String(UV1)):
                 second_name = String(UV1)
             var second_set = _coordinates(geometry, second_name, vertex_count)
-            ref vertex_u1 = second_set[0]
-            ref vertex_v1 = second_set[1]
             # The custom attributes a node material reads, raw.
             var customs = _customs(assets, material, geometry, vertex_count)
             if kind == GOURAUD and not gouraud_ready:
@@ -5820,15 +6420,6 @@ struct Renderer(Movable):
             )
             var run_start = run[0]
             var triangles = run[1]
-            # Room for this draw's corners, three a triangle before the
-            # clipper adds any or the facing test drops any. Grown to at
-            # least double when it runs out: reserving the exact size
-            # reallocated on every draw and copied the frame's whole list
-            # each time, which a scene of many meshes paid for quadratically.
-            var need = len(corners) + triangles * 3
-            if need > corners.capacity():
-                corners.reserve(max(need, 2 * corners.capacity()))
-            var begin = len(corners)
             var lights_up = not kind.is_data() and kind != SHADOW
             # A light's view approximates alpha to coverage by an alpha
             # test at one half, as three.js's shadow map does.
@@ -5883,6 +6474,10 @@ struct Renderer(Movable):
                 # The edges of the triangles drawn: the run above, which
                 # the draw range has cut, as three.js cuts its wireframe
                 # index by the same range.
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
+                var begin = len(corners)
                 var ends = triangle_edges(geometry, run_start, triangles * 3)
                 for edge in range(len(ends[0])):
                     var from_end = ends[0][edge]
@@ -5932,145 +6527,56 @@ struct Renderer(Movable):
                     draws[slot].source(),
                 )
                 continue
-            for triangle in range(triangles):
-                var first = run_start + triangle * 3
-                var second = first + 1
-                var third = first + 2
-                if indexed:
-                    first = indices[first]
-                    second = indices[second]
-                    third = indices[third]
-
-                var normal_a: Vector3
-                var normal_b: Vector3
-                var normal_c: Vector3
-                if smooth:
-                    normal_a = vertex_normals[first]
-                    normal_b = vertex_normals[second]
-                    normal_c = vertex_normals[third]
-                else:
-                    # No normals given, so the face supplies its own and the
-                    # whole triangle takes one.
-                    var geometric = face_normal(
-                        world_points[first],
-                        world_points[second],
-                        world_points[third],
-                    )
-                    if mirrored:
-                        # The cross product follows the mirrored winding, so
-                        # it comes out pointing into the surface. A supplied
-                        # normal carried through the inverse transpose does
-                        # not flip, and the two paths have to mean the same
-                        # side or an object would shade differently purely
-                        # for having normals.
-                        geometric = -geometric
-                    if kind == NORMALS:
-                        # Into view space, as the supplied normals were.
-                        geometric = view.transform_direction(geometric)
-                    normal_a = geometric
-                    normal_b = geometric
-                    normal_c = geometric
-
-                var corner_a = ClipVertex(
-                    view_points[first],
-                    vertex_colors[first],
-                    normal_a,
-                    vertex_u[first],
-                    vertex_v[first],
-                    world_points[first],
-                    glow,
-                    u1=vertex_u1[first],
-                    v1=vertex_v1[first],
-                )
-                var corner_b = ClipVertex(
-                    view_points[second],
-                    vertex_colors[second],
-                    normal_b,
-                    vertex_u[second],
-                    vertex_v[second],
-                    world_points[second],
-                    glow,
-                    u1=vertex_u1[second],
-                    v1=vertex_v1[second],
-                )
-                var corner_c = ClipVertex(
-                    view_points[third],
-                    vertex_colors[third],
-                    normal_c,
-                    vertex_u[third],
-                    vertex_v[third],
-                    world_points[third],
-                    glow,
-                    u1=vertex_u1[third],
-                    v1=vertex_v1[third],
-                )
-                corner_a.custom = customs[first]
-                corner_b.custom = customs[second]
-                corner_c.custom = customs[third]
-                if kind == GOURAUD:
-                    _light_at_corner(
-                        corner_a, gouraud_lights, normal_a, world_points[first]
-                    )
-                    _light_at_corner(
-                        corner_b, gouraud_lights, normal_b, world_points[second]
-                    )
-                    _light_at_corner(
-                        corner_c, gouraud_lights, normal_c, world_points[third]
-                    )
-                if tracks:
-                    corner_a.current = current_points[first]
-                    corner_b.current = current_points[second]
-                    corner_c.current = current_points[third]
-                    corner_a.previous = previous_points[first]
-                    corner_b.previous = previous_points[second]
-                    corner_c.previous = previous_points[third]
-                # In texture space the triangle is placed by its second
-                # coordinates, whole: nothing clips it and neither side
-                # is culled.
-                if in_uv_space:
-                    paint.emit_in_uv_space(
-                        corners,
-                        corner_a,
-                        corner_b,
-                        corner_c,
-                        self.viewport,
-                        self.height,
-                    )
-                    continue
-                # A triangle wholly between the two planes is what the
-                # clipper would hand back untouched, so it is not sent
-                # through: the clipper builds four lists for every triangle
-                # it is given, and a mesh in view gives it thousands that
-                # it would return as they came. See `within_depth`.
-                if _whole_in_view(
-                    corner_a, corner_b, corner_c, near, far, cut, any_of
-                ):
-                    paint.emit(corners, corner_a, corner_b, corner_c)
-                    continue
-                var pieces = clip_depth(
-                    corner_a, corner_b, corner_c, near, far, cut, any_of
-                )
-                for piece in range(len(pieces) // 3):
-                    paint.emit(
-                        corners,
-                        pieces[piece * 3],
-                        pieces[piece * 3 + 1],
-                        pieces[piece * 3 + 2],
-                    )
-            if kind == VOLUME:
-                _march_volume(corners, begin, material.steps, geometry, world)
-            _note_span(
-                spans,
-                DRAW_TRIANGLES,
-                begin,
-                len(corners),
+            # The triangles themselves are emitted later, on the workers,
+            # by a job that owns everything the vertex stage worked out.
+            var job = _TriangleJob(
+                run_start,
+                triangles,
+                draws[slot].geometry,
+                indexed,
+                smooth,
+                mirrored,
+                kind,
+                view,
+                world_points^,
+                view_points^,
+                vertex_normals^,
+                vertex_colors^,
+                first_set^,
+                second_set^,
+                customs^,
+                glow,
+                tracks,
+                current_points^,
+                previous_points^,
+                paint,
+                in_uv_space,
+                self.viewport,
+                self.height,
+                near,
+                far,
+                cut^,
+                any_of^,
                 draws[slot].depth,
                 draws[slot].blends,
                 draws[slot].order,
                 draws[slot].source(),
                 material.transmits() or _reads_scene(assets, material.nodes),
             )
+            if kind == VOLUME:
+                # A volume marches its own corners once they are all
+                # there, so it emits at once, after what came before it.
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
+                var begin = len(corners)
+                job.emit(0, triangles, corners, gouraud_lights, assets)
+                _march_volume(corners, begin, material.steps, geometry, world)
+                job.note(spans, begin, len(corners))
+                continue
+            jobs.append(job^)
 
+        _emit_jobs(jobs, corners, spans, self.workers, gouraud_lights, assets)
         # A light's view of the casters keeps the standard depth, which
         # is what the shadow comparison reads; see `set_depth_mode`.
         if not casters_only:
@@ -7346,7 +7852,7 @@ struct Renderer(Movable):
                 self.scissor = array.viewports[index]
                 # One frame, however many cameras, as three.js counts an
                 # array camera's `render`.
-                self._draw_into(
+                _ = self._draw_into(
                     hooks,
                     target,
                     scene,
@@ -7450,7 +7956,67 @@ struct Renderer(Movable):
             Error: Everything `_draw_into` raises.
         """
         var hooks = NoHooks()
-        self._draw_into(hooks, target, scene, assets, camera, True)
+        _ = self._draw_into(hooks, target, scene, assets, camera, True)
+
+    def render_into_keeping_shadows[
+        C: Camera
+    ](
+        self, mut target: RenderTarget, scene: Scene, assets: Assets, camera: C
+    ) raises -> List[ShadowMap]:
+        """Draw the scene into `target` as `render_into` does, and return
+        the shadow maps the frame drew.
+
+        A caller that reads the shadows again after the frame -- a
+        screen-space effect that asks which pixels the sun reaches --
+        takes them here rather than drawing every caster into every map a
+        second time with `shadow_maps`.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Returns:
+            The maps, as `shadow_maps` returns them for the camera's layers.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
+        var hooks = NoHooks()
+        return self._draw_into(hooks, target, scene, assets, camera, True)
+
+    def render_into_with_shadows[
+        C: Camera
+    ](
+        self,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        shadows: List[ShadowMap],
+    ) raises:
+        """Draw the scene into `target` as `render_into` does, with shadow
+        maps the caller drew rather than drawing them.
+
+        A light's shadow map depends on the light and the casters, not on
+        the camera, so views of one scene at one moment share their maps:
+        the six faces of a cube camera draw them once.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+            shadows: The maps, from `shadow_maps` for the camera's layers.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
+        var hooks = NoHooks()
+        _ = self._draw_into(
+            hooks, target, scene, assets, camera, True, shadows.copy()
+        )
 
     def render_into_with[
         C: Camera, H: RenderHooks
@@ -7477,7 +8043,7 @@ struct Renderer(Movable):
             Error: Everything `_draw_into` raises, and whatever a hook
                 raises.
         """
-        self._draw_into(hooks, target, scene, assets, camera, True)
+        _ = self._draw_into(hooks, target, scene, assets, camera, True)
 
     def _draw_into[
         C: Camera, H: RenderHooks
@@ -7489,9 +8055,10 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         first: Bool,
-    ) raises:
+        var shadows: Optional[List[ShadowMap]] = None,
+    ) raises -> List[ShadowMap]:
         """Draw every mesh in the scene on the CPU into `target`, clearing
-        first, and resolve nothing.
+        first, and resolve nothing, and return the shadow maps it drew.
 
         `render` without the target's creation and its resolution, for a
         caller that draws more than one view into one image: a split
@@ -7525,6 +8092,8 @@ struct Renderer(Movable):
             camera: The camera to project through.
             first: Whether this starts a frame of `info`, rather than
                 adding a camera of an array to the one before it.
+            shadows: The shadow maps to light the frame with, or None to
+                draw them.
 
         Raises:
             Error: If the target is not the renderer's size, if a mesh
@@ -7545,15 +8114,15 @@ struct Renderer(Movable):
             # target once the draw is done. Only the pixels the draw may
             # touch are resolved, so a scissor keeps the rest.
             var buffer = target.multisample_buffer()
-            self.multisampled(target.samples)._draw_into(
-                hooks, buffer, scene, assets, camera, first
+            var maps = self.multisampled(target.samples)._draw_into(
+                hooks, buffer, scene, assets, camera, first, shadows^
             )
             var drawn = Rect.whole(self.width, self.height)
             if self.scissor_test:
                 drawn = self.scissor
             target.resolve_samples(buffer, drawn)
             target.set_scissor(drawn)
-            return
+            return maps^
         hooks.on_before_scene(scene)
         # Prepared and checked before a pixel is touched, so a scene that
         # is refused leaves a target another view was drawn into as it was.
@@ -7608,7 +8177,7 @@ struct Renderer(Movable):
         # the camera goes with them too, for the frame a `MATCAP` surface
         # is looked up in, and which way is back, for a target that keeps
         # view-space normals. See `camera_up`.
-        var lighting = self._lighting(scene, assets, camera)
+        var lighting = self._lighting(scene, assets, camera, shadows^)
         # And the lights of each material that names its own, three.js's
         # `lightsNode`.
         var lightings = self._lightings(scene, assets, camera, lighting)
@@ -7702,6 +8271,7 @@ struct Renderer(Movable):
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
+        return lighting.shadows.copy()
 
     def _lightings[
         C: Camera
@@ -7748,17 +8318,28 @@ struct Renderer(Movable):
 
     def _lighting[
         C: Camera
-    ](self, scene: Scene, assets: Assets, camera: C) raises -> Lighting:
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        var shadows: Optional[List[ShadowMap]] = None,
+    ) raises -> Lighting:
         """Return the scene's lights as `render_into` resolves them for
         this camera: the ones on its layers, its shadows, and where it
-        stands."""
+        stands. Shadow maps the caller drew are used as they are."""
+        var maps: List[ShadowMap]
+        if Bool(shadows):
+            maps = shadows.take()
+        else:
+            maps = self.shadow_maps(scene, assets, camera.visible_layers())
         return Lighting(
             scene,
             visible=camera.visible_layers(),
             eye=camera_position(scene, camera),
             toward_eye=toward_camera(scene, camera),
             up=camera_up(scene, camera),
-            shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
+            shadows=maps^,
             ltc=self.ltc_tables(),
             spot_maps=self._projected(scene, assets, camera.visible_layers()),
             back=camera_back(scene, camera),
@@ -8399,7 +8980,9 @@ struct Renderer(Movable):
         # A material's planes cut its shadow under `clip_shadows`, which
         # this renderer's switch decides as it does for the frame.
         square.local_clipping_enabled = self.local_clipping_enabled
-        var corners = square._prepared(
+        # The slim corners, as the frame's pass takes them: a whole corner
+        # is four times the size, and the map is only depth.
+        var frame = square._prepared_slim(
             scene,
             assets,
             camera,
@@ -8430,7 +9013,7 @@ struct Renderer(Movable):
         # the other. Lit shading reads no material map. A node program
         # still runs, and it reads the scene's textures.
         var draws: List[Draw] = [
-            Draw(DRAW_TRIANGLES, 0, len(corners) // 3),
+            Draw(DRAW_TRIANGLES, 0, len(frame) // 3),
             Draw(DRAW_SEGMENTS, 0, len(segments) // 2),
             Draw(DRAW_POINTS, 0, len(points)),
         ]
@@ -8442,7 +9025,8 @@ struct Renderer(Movable):
             size, size, Color(0, 0, 0, 0) if transmitted else Color(0, 0, 0)
         )
         rasterize_frame(
-            corners,
+            frame.corners,
+            frame.surfaces,
             segments,
             draws,
             target,

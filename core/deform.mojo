@@ -115,7 +115,7 @@ def morphed_positions(
     """
     ref positions = geometry.attribute_view(String(POSITION))
     var targets = geometry.morph_count()
-    var out = List[Vector3]()
+    var out = List[Vector3](capacity=positions.count())
     for vertex in range(positions.count()):  # pragma: no branch
         var base = positions.vector3(vertex)
         var moved = base

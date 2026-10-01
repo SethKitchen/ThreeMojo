@@ -416,6 +416,32 @@ def test_a_segment_of_no_length_is_a_round_dot() raises:
     assert_false(lit(world, 10, 8))
 
 
+def _corners(points: List[Vector3], material: Material) raises -> Int:
+    """Return how many corners a wide line's frame holds."""
+    var assets = Assets()
+    var geometry = assets.geometries.add(line_segments_geometry(points))
+    var paint = assets.materials.add(material)
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    return len(
+        Renderer(SIZE, SIZE).prepare_frame(scene, assets, a_camera()).corners
+    )
+
+
+def test_a_thin_line_keeps_no_caps_but_a_dot_does() raises:
+    # A line a pixel wide is its quad alone: its caps would each cover a
+    # fraction of a pixel.
+    assert_equal(
+        _corners(across_x(), line_material(RED, LineWidth(pixels=1))), 6
+    )
+    assert_true(
+        _corners(across_x(), line_material(RED, LineWidth(pixels=4))) > 6
+    )
+    # A dot a pixel wide keeps its caps, or there would be nothing of it.
+    var points: List[Vector3] = [Vector3(0, 0, 0), Vector3(0, 0, 0)]
+    assert_true(_corners(points, line_material(RED, LineWidth(pixels=1))) > 6)
+
+
 def test_a_segment_pointing_at_the_eye_is_a_disc_in_the_world() raises:
     var points: List[Vector3] = [Vector3(0, 0, 1), Vector3(0, 0, -1)]
     var image = draw(

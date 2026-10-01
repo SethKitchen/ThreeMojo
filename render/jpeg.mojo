@@ -90,6 +90,11 @@ comptime COM = UInt8(0xFE)
 comptime MARKER = UInt8(0xFF)
 # How many samples a block has on a side, and in all.
 comptime BLOCK = 8
+# How many bits a Huffman table looks up at once, and how many the bit
+# reader holds ahead.
+comptime LOOKAHEAD = 9
+comptime BUFFER_BITS = 56
+comptime BUFFER_MASK = (1 << BUFFER_BITS) - 1
 comptime BLOCK_SAMPLES = 64
 # How many quantization and Huffman tables a file can define: four each,
 # by a two-bit id.
@@ -367,6 +372,32 @@ def upsampled(
     return clamp_sample(above * (1 - ty) + below * ty)
 
 
+def _full_plane(
+    component: Component, width: Int, height: Int, h_max: Int, v_max: Int
+) -> List[UInt8]:
+    """Return a component's samples under every image pixel, row-major:
+    `upsampled` at each pixel, worked out once for the whole plane."""
+    var across = h_max // component.h
+    var down = v_max // component.v
+    var stride = component.blocks_wide * BLOCK
+    var own_wide = (width + across - 1) // across
+    var own_tall = (height + down - 1) // down
+    var plane = List[UInt8](length=width * height, fill=0)
+    for y in range(height):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            plane[y * width + x] = upsampled(
+                component.samples,
+                stride,
+                own_wide,
+                own_tall,
+                x,
+                y,
+                across,
+                down,
+            )
+    return plane^
+
+
 def receive_extend(bits: Int, size: Int) -> Int:
     """Return the signed coefficient `size` raw bits encode: the standard's
     `EXTEND`, where a leading zero bit means a negative number.
@@ -404,6 +435,10 @@ struct HuffmanTable(Movable):
     # Whether the table was defined at all; a scan naming an undefined
     # table is refused.
     var defined: Bool
+    # For each `LOOKAHEAD` bits, the code at most that long they begin
+    # with: its length times 256 plus its symbol, or 0 when the code is
+    # longer. Most codes are short, so most symbols take one look.
+    var lookup: List[Int]
 
     def __init__(out self):
         """Start undefined."""
@@ -412,6 +447,7 @@ struct HuffmanTable(Movable):
         self.max_code = List[Int](length=17, fill=-1)
         self.first_symbol = List[Int](length=17, fill=0)
         self.defined = False
+        self.lookup = List[Int](length=1 << LOOKAHEAD, fill=0)
 
     def __init__(out self, counts: List[Int], var symbols: List[UInt8]) raises:
         """Build a table from its sixteen counts and its symbols.
@@ -454,10 +490,21 @@ struct HuffmanTable(Movable):
                     raise Error("A Huffman table is over-subscribed")
             code <<= 1
         self.defined = True
+        self.lookup = List[Int](length=1 << LOOKAHEAD, fill=0)
+        for length in range(1, LOOKAHEAD + 1):  # pragma: no branch
+            for code in range(self.min_code[length], self.max_code[length] + 1):
+                var symbol = Int(
+                    self.symbols[
+                        self.first_symbol[length] + code - self.min_code[length]
+                    ]
+                )
+                var spare = LOOKAHEAD - length
+                for tail in range(1 << spare):  # pragma: no branch
+                    self.lookup[(code << spare) | tail] = length * 256 + symbol
 
 
 struct BitReader(Movable):
-    """The entropy-coded bits of a scan, read one at a time.
+    """The entropy-coded bits of a scan.
 
     A 0xFF byte in the scan is followed by a stuffed zero, which is
     dropped here, and a 0xFF followed by anything else is a marker, where
@@ -465,6 +512,10 @@ struct BitReader(Movable):
     zeros: a scan that runs out of bits before its last block is a
     truncated file, and a decoder that pads it with zeros produces a
     plausible wrong image.
+
+    The bytes are read ahead into a buffer of up to `BUFFER_BITS` bits.
+    The reading ahead stops at a marker, so a bit past the marker is
+    still refused when it is asked for.
     """
 
     var bytes: List[UInt8]
@@ -473,6 +524,8 @@ struct BitReader(Movable):
     # The bits read and not yet handed out, and how many there are.
     var held: Int
     var count: Int
+    # Whether the reading ahead met a marker or the end of the file.
+    var stopped: Bool
 
     def __init__(out self, var bytes: List[UInt8], start: Int):
         """Start reading `bytes` at `start`."""
@@ -480,6 +533,29 @@ struct BitReader(Movable):
         self.at = start
         self.held = 0
         self.count = 0
+        self.stopped = False
+
+    def _fill(mut self):
+        """Read whole bytes ahead until the buffer is full or the data
+        stops."""
+        while self.count <= BUFFER_BITS - 8 and not self.stopped:
+            if self.at >= len(self.bytes):
+                self.stopped = True
+                return
+            var byte = self.bytes[self.at]
+            if byte == MARKER:
+                # A stuffed zero follows a data byte of 0xFF; anything else
+                # is a marker, and the coded data stops before it.
+                if (
+                    self.at + 1 >= len(self.bytes)
+                    or self.bytes[self.at + 1] != 0
+                ):
+                    self.stopped = True
+                    return
+                self.at += 1
+            self.at += 1
+            self.held = ((self.held << 8) | Int(byte)) & BUFFER_MASK
+            self.count += 8
 
     def bit(mut self) raises -> Int:
         """Return the next bit.
@@ -487,21 +563,7 @@ struct BitReader(Movable):
         Raises:
             Error: If the scan's data ended before the bit.
         """
-        if self.count == 0:
-            if self.at >= len(self.bytes):
-                raise Error("A scan ended before its last block")
-            var byte = self.bytes[self.at]
-            self.at += 1
-            if byte == MARKER:
-                # A stuffed zero follows a data byte of 0xFF; anything else
-                # is a marker, and the coded data stopped one byte back.
-                if self.at >= len(self.bytes) or self.bytes[self.at] != 0:
-                    raise Error("A scan ended before its last block")
-                self.at += 1
-            self.held = Int(byte)
-            self.count = 8
-        self.count -= 1
-        return (self.held >> self.count) & 1
+        return self.bits(1)
 
     def bits(mut self, size: Int) raises -> Int:
         """Return the next `size` bits as an unsigned number.
@@ -515,10 +577,12 @@ struct BitReader(Movable):
         Raises:
             Error: If the scan's data ended before the bits.
         """
-        var value = 0
-        for _ in range(size):  # pragma: no branch
-            value = (value << 1) | self.bit()
-        return value
+        if self.count < size:
+            self._fill()
+            if self.count < size:
+                raise Error("A scan ended before its last block")
+        self.count -= size
+        return (self.held >> self.count) & ((1 << size) - 1)
 
     def decode(mut self, table: HuffmanTable) raises -> UInt8:
         """Return the next symbol under `table`.
@@ -533,6 +597,16 @@ struct BitReader(Movable):
             Error: If sixteen bits make no code in the table, or the scan's
                 data ended.
         """
+        if self.count < 16:
+            self._fill()
+        if self.count >= LOOKAHEAD:
+            var entry = table.lookup[
+                (self.held >> (self.count - LOOKAHEAD)) & ((1 << LOOKAHEAD) - 1)
+            ]
+            if entry > 0:
+                self.count -= entry >> 8
+                return UInt8(entry & 255)
+        # A long code, or the last few bits of the data: a bit at a time.
         var code = 0
         for length in range(1, 17):  # pragma: no branch
             code = (code << 1) | self.bit()
@@ -555,8 +629,17 @@ struct BitReader(Movable):
         Raises:
             Error: If the marker is not there, or is another one.
         """
+        # Whole bytes still held were read ahead from before the marker:
+        # data that the interval does not use.
+        var extra = self.count >= 8
         self.count = 0
-        if self.at + 1 >= len(self.bytes) or self.bytes[self.at] != MARKER:
+        self.held = 0
+        self.stopped = False
+        if (
+            extra
+            or self.at + 1 >= len(self.bytes)
+            or self.bytes[self.at] != MARKER
+        ):
             raise Error("A restart interval ended without its marker")
         if self.bytes[self.at + 1] != expected:
             raise Error("A restart marker arrived out of order")
@@ -569,8 +652,15 @@ struct BitReader(Movable):
         Raises:
             Error: If no marker follows the data.
         """
+        var extra = self.count >= 8
         self.count = 0
-        if self.at + 1 >= len(self.bytes) or self.bytes[self.at] != MARKER:
+        self.held = 0
+        self.stopped = False
+        if (
+            extra
+            or self.at + 1 >= len(self.bytes)
+            or self.bytes[self.at] != MARKER
+        ):
             raise Error("A scan ended without a marker after it")
         return self.at
 
@@ -1247,23 +1337,44 @@ def _to_samples(
     component.samples = List[UInt8](
         length=stride * component.blocks_tall * BLOCK, fill=0
     )
-    var coefficients = List[Float32](length=BLOCK_SAMPLES, fill=0)
+    # The cosines, the zigzag and the quantizer on the stack, and one
+    # block's coefficients, rows and samples, reused for every block.
+    var cosine = Array[Float32, BLOCK_SAMPLES](fill=0)
+    var order = Array[Int, BLOCK_SAMPLES](fill=0)
+    var quant = Array[Int, BLOCK_SAMPLES](fill=0)
+    for index in range(BLOCK_SAMPLES):  # pragma: no branch
+        cosine[index] = cosines[index]
+        order[index] = zigzag[index]
+        quant[index] = component.quant[index]
+    var coefficients = Array[Float32, BLOCK_SAMPLES](fill=0)
+    var rows = Array[Float32, BLOCK_SAMPLES](fill=0)
     for block_y in range(component.blocks_tall):  # pragma: no branch
         for block_x in range(component.blocks_wide):  # pragma: no branch
             var base = (
                 block_y * component.blocks_wide + block_x
             ) * BLOCK_SAMPLES
             for index in range(BLOCK_SAMPLES):  # pragma: no branch
-                coefficients[zigzag[index]] = Float32(
-                    Int(component.coefficients[base + index])
-                    * component.quant[index]
+                coefficients[order[index]] = Float32(
+                    Int(component.coefficients[base + index]) * quant[index]
                 )
-            var samples = inverse_dct(coefficients, cosines)
+            # `inverse_dct`, summed in the same order, so each sample is
+            # the same number.
+            for v in range(BLOCK):  # pragma: no branch
+                for x in range(BLOCK):  # pragma: no branch
+                    var total = Float32(0)
+                    for u in range(BLOCK):  # pragma: no branch
+                        total += (
+                            cosine[x * BLOCK + u] * coefficients[v * BLOCK + u]
+                        )
+                    rows[v * BLOCK + x] = total
             for y in range(BLOCK):  # pragma: no branch
                 var row = (block_y * BLOCK + y) * stride + block_x * BLOCK
                 for x in range(BLOCK):  # pragma: no branch
+                    var total = Float32(0)
+                    for v in range(BLOCK):  # pragma: no branch
+                        total += cosine[y * BLOCK + v] * rows[v * BLOCK + x]
                     component.samples[row + x] = clamp_sample(
-                        samples[y * BLOCK + x]
+                        total + LEVEL_SHIFT
                     )
 
 
@@ -1410,37 +1521,32 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         planes.append(_slot_of(components, LUMA_ID))
         planes.append(_slot_of(components, BLUE_DIFFERENCE_ID))
         planes.append(_slot_of(components, RED_DIFFERENCE_ID))
-    var pixels = List[UInt8]()
-    pixels.reserve(width * height * DecodedImage.CHANNELS)
-    for y in range(height):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var color: Color
-            if len(components) == 1:
-                var gray = components[0].samples[
-                    y * components[0].blocks_wide * BLOCK + x
-                ]
-                color = Color(gray, gray, gray, 255)
-            else:
-                var samples = List[UInt8]()
-                for index in range(MAX_COMPONENTS):  # pragma: no branch
-                    ref component = components[planes[index]]
-                    var across = h_max // component.h
-                    var down = v_max // component.v
-                    samples.append(
-                        upsampled(
-                            component.samples,
-                            component.blocks_wide * BLOCK,
-                            (width + across - 1) // across,
-                            (height + down - 1) // down,
-                            x,
-                            y,
-                            across,
-                            down,
-                        )
-                    )
-                color = ycbcr_to_rgb(samples[0], samples[1], samples[2])
-            pixels.append(color.r)
-            pixels.append(color.g)
-            pixels.append(color.b)
-            pixels.append(color.a)
+    var pixels = List[UInt8](
+        length=width * height * DecodedImage.CHANNELS, fill=255
+    )
+    if len(components) == 1:
+        var stride = components[0].blocks_wide * BLOCK
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                var gray = components[0].samples[y * stride + x]
+                var at = (y * width + x) * DecodedImage.CHANNELS
+                pixels[at] = gray
+                pixels[at + 1] = gray
+                pixels[at + 2] = gray
+    else:
+        var luma = _full_plane(
+            components[planes[0]], width, height, h_max, v_max
+        )
+        var blue = _full_plane(
+            components[planes[1]], width, height, h_max, v_max
+        )
+        var red = _full_plane(
+            components[planes[2]], width, height, h_max, v_max
+        )
+        for index in range(width * height):  # pragma: no branch
+            var color = ycbcr_to_rgb(luma[index], blue[index], red[index])
+            var at = index * DecodedImage.CHANNELS
+            pixels[at] = color.r
+            pixels[at + 1] = color.g
+            pixels[at + 2] = color.b
     return DecodedImage(width, height, pixels^, SRGB)

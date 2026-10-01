@@ -163,6 +163,26 @@ class MakeCacheTests(unittest.TestCase):
                 self.assertNotEqual(full, partial, override)
 
 
+class CoverageStagingTests(unittest.TestCase):
+    def test_unselected_sibling_modules_are_staged(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        selected = 'tests/test_carla_render_scene.mojo'
+        sibling = 'tests/test_carla_assets.mojo'
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'instrumented'
+            subprocess.run([
+                'make', '--no-print-directory', '-s', 'coverage-instrument',
+                'MOJO=true', f'COV_DIR={destination}',
+                'COVERED=math/vector3.mojo', 'COVERAGE_PASSTHROUGH=',
+                f'COVERAGE_TESTS={selected}', f'TESTS={selected} {sibling}',
+            ], cwd=root, check=True, capture_output=True, text=True)
+            self.assertTrue((destination / selected).is_file())
+            self.assertTrue((destination / sibling).is_file())
+            self.assertEqual((destination / sibling).read_bytes(),
+                             (root / sibling).read_bytes())
+
+
 class CoverageIoTests(unittest.TestCase):
     def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
         import gzip

@@ -1,6 +1,6 @@
 # Examples
 
-`examples/`. Each example is one program that renders one image or animation into `out/`. `make animation` renders them all.
+`examples/`. Each example is one program that renders one image or animation into `out/`. `make animation` renders all of them except `carla.mojo` and `carla_town.mojo`.
 
 Run one by hand:
 
@@ -87,8 +87,44 @@ mkdir -p out
 | `vase.mojo` | `lofts.png` | [Lofts and clipping groups](Lofts-and-clipping-groups) |
 | `sapling.mojo` | `generators.png` | [Procedural generators](Procedural-generators) |
 | `particles.mojo` | `computenodes.png` | [Compute nodes](Compute-nodes) |
+| `femur.mojo` | `femur.png` | [Femur](Femur) |
+| `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
+| `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
+| `patella.mojo` | `patella.png` | [Patella](Patella) |
+| `knee.mojo` | `knee.png` | [Knee](Knee) |
+| `muscles.mojo` | `muscles.png` | [Muscles](Muscles) |
+| `leg.mojo` | `leg.png` | [Leg](Leg) |
+| `legs.mojo` | `legs.png` | [Leg](Leg) |
+| `foot.mojo` | `foot.png` | [Foot](Foot) |
+| `limb.mojo` | `limb.png` | [Leg](Leg) |
+| `vessels.mojo` | `vessels.png` | [Vessels](Vessels) |
+| `lymph.mojo` | `lymph.png` | [Lymph](Lymph) |
+| `nerves.mojo` | `nerves.png` | [Nerves](Nerves) |
+| `integument.mojo` | `integument.png` | [Integument](Integument) |
+| `pelvis.mojo` | `pelvis.png` | [Pelvis](Pelvis) |
+| `torso.mojo` | `torso.png` | [Torso](Torso) |
+| `arm.mojo` | `arm.png` | [Arm](Arm) |
+| `hand.mojo` | `hand.png` | [Hand](Hand) |
+| `head.mojo` | `head.png` | [Head](Head) |
+| `genomes.mojo` | `genomes.png` | [Genome](Genome) |
+| `family.mojo` | `family.png` | [Genome](Genome) |
+| `expressions.mojo` | `expressions.png` | [Head](Head) |
+| `talking.mojo` | `talking.png` | [Head](Head) |
+| `hairstyles.mojo` | `hairstyles.png` | [Head](Head) |
+| `game_humanoid.mojo` | `game_humanoid.png` | [Game humanoid](Game-humanoid) |
+| `water.mojo` | `water.png` | [Water](Water) |
+| `carla.mojo` | `carla.png` | [CARLA](CARLA) |
+| `carla_town.mojo` | `carla_town.png` | [CARLA rendering](CARLA-rendering) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
+
+`pelvis.mojo`, `torso.mojo`, `arm.mojo`, `hand.mojo`, `head.mojo`, `genomes.mojo`, `family.mojo`, `expressions.mojo`, `talking.mojo` and `hairstyles.mojo` take a mesh quality after the path: `low`, `medium`, `high` or `xhigh`. See [Mesh quality](Mesh-quality).
+
+```bash
+.venv/bin/mojo run -I . examples/torso.mojo out/torso.png low
+```
+
+`make animation` does not render the two CARLA examples. Run them by hand: `mojo run -I . examples/carla.mojo out/carla.png` and `mojo run -I . examples/carla_town.mojo out/carla_town.png`.
 
 `viewer.mojo` writes no file. It opens a window in the terminal, and `make viewer` runs it. See [Windowing and controls](Windowing-and-controls).
 

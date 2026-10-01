@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-# Runs the standard-library-only half of the project on every push.
+# Runs checks on main pushes, manual runs and pull requests ready for review.
+# Draft pull-request events start no runner jobs until the PR is marked ready.
 #
 # GitHub's hosted runners have no accelerator, so `make check-gpu` is
 # deliberately absent: it would skip every hardware test and report success,
@@ -23,6 +24,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -43,6 +45,7 @@ jobs:
   # suite runs whole, in the lint job. The splits are sized so that no group
   # outlasts the lint job by much.
   lint:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: lint (standard library only)
     runs-on: ubuntu-latest
     # A hang detector, not a speed target: lint alone once ran an hour.
@@ -70,6 +73,7 @@ jobs:
         run: make -B fmt-check lint-cpu compile-fail docs-check test-tools AFFECTED="$AFFECTED"
 
   cpu:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: test-cpu ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -110,6 +114,7 @@ jobs:
   # these jobs must not move to one. A free account runs five macOS jobs at
   # once, so the Mac takes three: lint, and the suites in two groups.
   cpu-macos:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: check-cpu (macOS, Apple Silicon) ${{ matrix.part }}
     runs-on: macos-latest
     timeout-minutes: 150
@@ -157,15 +162,19 @@ jobs:
   # exceeds that while behaving perfectly. Here it is only a hang detector:
   # 300, 900 and 3600 each became the ceiling as the library grew, with
   # every suite still progressing, and a genuine hang blows through any of
-  # them.
+  # them. The groups are balanced by the source their suites import, not
+  # by how long they run under coverage, so a group can run far longer
+  # than its share: six groups, not four, keep the slowest one well
+  # inside the budget.
   coverage-capture:
-    name: coverage capture ${{ matrix.shard }}/4
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    name: coverage capture ${{ matrix.shard }}/6
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
 
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +197,7 @@ jobs:
       - name: capture
         run: |
           make -B coverage-instrument AFFECTED="$AFFECTED"
-          make -B coverage-capture SHARD=${{ matrix.shard }}/4 COV_BUDGET=6000 AFFECTED="$AFFECTED"
+          make -B coverage-capture SHARD=${{ matrix.shard }}/6 COV_BUDGET=6000 AFFECTED="$AFFECTED"
 
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured
@@ -201,6 +210,7 @@ jobs:
           retention-days: 1
 
   coverage:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: coverage
     needs: coverage-capture
     runs-on: ubuntu-latest
@@ -240,6 +250,7 @@ jobs:
   # fails here. They need MAX, so this job installs it; they need no GPU,
   # so nothing in them skips.
   gpu-host:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: test-gpu-host (MAX, no GPU)
     runs-on: ubuntu-latest
     timeout-minutes: 30

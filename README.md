@@ -367,6 +367,33 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 <!-- /features -->
 
+### Extensions
+
+Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
+
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look
+- [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue
+- [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue
+- [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue
+- [x] [Knee](https://github.com/SethKitchen/ThreeMojo/wiki/Knee): articular cartilage, menisci and collateral ligaments
+- [x] [Muscles](https://github.com/SethKitchen/ThreeMojo/wiki/Muscles): stature-scaled leg muscles, with toned and untoned templates
+- [x] [Vessels](https://github.com/SethKitchen/ThreeMojo/wiki/Vessels): stature-scaled arteries and veins of the leg
+- [x] [Lymph](https://github.com/SethKitchen/ThreeMojo/wiki/Lymph): stature-scaled lymph nodes and trunks of the leg
+- [x] [Nerves](https://github.com/SethKitchen/ThreeMojo/wiki/Nerves): stature-scaled peripheral nerves of the leg
+- [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): skin fitted to the anatomy under it, one skin over a leg and its foot, and hair
+- [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers, with Phong and physical looks
+- [x] [Foot](https://github.com/SethKitchen/ThreeMojo/wiki/Foot): the twenty-six bones of the foot in an arch, with ligaments, muscles and the later layers
+- [x] [Pelvis](https://github.com/SethKitchen/ThreeMojo/wiki/Pelvis): the hip bones, sacrum and coccyx, with ligaments, muscles, the later layers and one skin over the lower body
+- [x] [Torso](https://github.com/SethKitchen/ThreeMojo/wiki/Torso): the vertebrae, ribs, sternum and shoulder girdle, with joint tissues, muscles, the later layers and one skin below the neck [#264](https://github.com/SethKitchen/ThreeMojo/issues/264)
+- [x] [Arm](https://github.com/SethKitchen/ThreeMojo/wiki/Arm): the humerus, radius and ulna hung from the scapula, with joint tissues, muscles, vessels, nerves, lymph, skin and hair [#265](https://github.com/SethKitchen/ThreeMojo/issues/265)
+- [x] [Hand](https://github.com/SethKitchen/ThreeMojo/wiki/Hand): the carpals, metacarpals and the phalanges of each finger, with joint tissues, muscles and tendons, the later layers, skin and hair [#266](https://github.com/SethKitchen/ThreeMojo/issues/266)
+- [x] [Head](https://github.com/SethKitchen/ThreeMojo/wiki/Head): the cervical vertebrae, the skull and the mandible, with joint tissues, muscles, vessels, nerves, lymph, skin and hair [#271](https://github.com/SethKitchen/ThreeMojo/issues/271)
+- [x] [Genome](https://github.com/SethKitchen/ThreeMojo/wiki/Genome): genes for skin tone, the frame and the face, inheritance, eyes, a scanned face with its own shape, and strand hair [#272](https://github.com/SethKitchen/ThreeMojo/issues/272)
+- [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality): quality levels that fit a humanoid to a triangle budget, from 90,000 to one million, by edge collapse [#269](https://github.com/SethKitchen/ThreeMojo/issues/269)
+- [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot
+- [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
+- [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
+
 ### Out of scope
 
 Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.

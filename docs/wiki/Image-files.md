@@ -107,6 +107,16 @@ The inverse cosine transform is the separable float one, the standard's own defi
 
 Two decoders agree on a JPEG to within a level or two and never to the bit. `tests/test_jpeg.mojo` holds this one to two levels of libjpeg's output. One checkered test picture with sharp chroma edges is held to three levels.
 
+### Speed
+
+A 2048 by 2048 color JPEG decodes in about 0.37 seconds, and a gray one in about 0.13 seconds. Three things make it fast:
+
+- The bit reader reads whole bytes ahead into a buffer of up to 56 bits. It stops at a marker, so a bit past the end of a scan is still refused.
+- Each Huffman table has a lookup of 512 entries. One look at the next nine bits gives the symbol of every code of nine bits or fewer. A longer code is read a bit at a time.
+- The inverse transform works in stack arrays, one block after another. Each chroma plane is upsampled once for the whole image.
+
+The pixels are the same as before, bit for bit.
+
 ### Integrity checks
 
 The decoder checks that every marker segment fits and that the frame header comes once and before the scans. It checks that every table a scan names was defined and holds no zero, and that each scan names components the frame has. It checks that the restart markers arrive in order and that the end marker closes the file. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
