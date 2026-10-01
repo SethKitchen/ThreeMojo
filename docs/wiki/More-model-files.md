@@ -849,6 +849,10 @@ The loader refuses these, with a message that names the problem. three.js throws
 
 ## MDD
 
+The reader checks that declared time and position counts fit in the file
+before it allocates point buffers. An oversized count in a short file
+raises an error without reserving the declared memory.
+
 `loaders/mdd.mojo`. `read_mdd(path)` reads a point cache into morph targets and their times. `mdd_clip` makes the clip that plays them. three.js: `MDDLoader`.
 
 ```mojo
