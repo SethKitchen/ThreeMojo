@@ -35,7 +35,7 @@ The port follows the CARLA source at commit `1360bb9`. The records come from `Li
 
 ## Step a world
 
-`CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world.
+`CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world. External forces and torques applied before the tick act through every substep. They are cleared after the tick.
 
 ```mojo
 from extensions.carla.physics.shape import PhysicsMaterial
