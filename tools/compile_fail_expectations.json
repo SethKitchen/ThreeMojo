@@ -3571,6 +3571,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/add_luminance_to_illuminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Illuminance' to 'Luminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_actor_attribute_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4420,6 +4432,18 @@
       "call expansion failed with parameter value(s): (\"length\": 3, \"mass\": 0, \"time\": 0, \"angle\": 0)",
       "constraint failed: sqrt needs an even length exponent",
       "function instantiation failed"
+    ]
+  },
+  "tests/compile_fail/subtract_illuminance_from_luminance.mojo": {
+    "errors": [
+      {
+        "line": 8,
+        "column": 51,
+        "message": "invalid call to '__sub__': value passed to 'other' cannot be converted from 'Illuminance' to 'Luminance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/torso_contents_are_not_a_bare_int.mojo": {
