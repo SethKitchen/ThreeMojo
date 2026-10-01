@@ -752,5 +752,89 @@ def test_a_nurbs_volume_refuses_points_that_do_not_fill_a_box() raises:
         )
 
 
+def test_nurbs_degree_must_be_below_each_control_point_count() raises:
+    var point = Vector4(2, 3, 4, 1)
+    for degree in [1, 2, Int.MAX]:
+        with assert_raises(contains="degree"):
+            _ = NURBSCurve(degree, [0, 0, 1, 1], [point])
+    with assert_raises(contains="degree"):
+        _ = NURBSSurface(1, 0, [0, 0, 1], [0, 1], [[point]])
+    with assert_raises(contains="degree"):
+        _ = NURBSSurface(0, 1, [0, 1], [0, 0, 1], [[point]])
+    with assert_raises(contains="degree"):
+        _ = NURBSVolume(1, 0, 0, [0, 0, 1], [0, 1], [0, 1], [[[point]]])
+    with assert_raises(contains="degree"):
+        _ = NURBSVolume(0, 1, 0, [0, 1], [0, 0, 1], [0, 1], [[[point]]])
+    with assert_raises(contains="degree"):
+        _ = NURBSVolume(0, 0, 1, [0, 1], [0, 1], [0, 0, 1], [[[point]]])
+
+
+def test_nurbs_active_knot_interval_must_be_nonempty_on_each_axis() raises:
+    var point = Vector4(2, 3, 4, 1)
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSCurve(1, [0, 0, 0, 0], [point, point])
+    # The entire knot vector has width, but the active interval does not.
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSCurve(1, [0, 1, 1, 2], [point, point])
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSSurface(
+            2, 3, [0, 0, 1, 1, 2, 2], [0, 0, 0, 0, 1, 1, 1, 1], surface_points()
+        )
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSSurface(
+            2, 3, [0, 0, 0, 1, 1, 1], [0, 0, 0, 1, 1, 2, 2, 2], surface_points()
+        )
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSVolume(
+            1,
+            2,
+            1,
+            [0, 1, 1, 2],
+            [0, 0, 0, 1, 1, 1],
+            [0, 0, 1, 1],
+            volume_points(),
+        )
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSVolume(
+            1,
+            2,
+            1,
+            [0, 0, 1, 1],
+            [0, 0, 1, 1, 2, 2],
+            [0, 0, 1, 1],
+            volume_points(),
+        )
+    with assert_raises(contains="active knot interval"):
+        _ = NURBSVolume(
+            1,
+            2,
+            1,
+            [0, 0, 1, 1],
+            [0, 0, 0, 1, 1, 1],
+            [0, 1, 1, 2],
+            volume_points(),
+        )
+
+
+def test_valid_repeated_knots_and_selected_mapping_are_preserved() raises:
+    var points: List[Vector4] = [
+        Vector4(0, 0, 0, 1),
+        Vector4(1, 0, 0, 1),
+        Vector4(2, 0, 0, 1),
+        Vector4(3, 0, 0, 1),
+        Vector4(4, 0, 0, 1),
+    ]
+    var repeated = NURBSCurve(2, [0, 0, 0, 0.5, 0.5, 1, 1, 1], points)
+    near3(repeated.point3(0), [0, 0, 0], 0)
+    near3(repeated.point3(0.5), [2, 0, 0], 0)
+    near3(repeated.point3(1), [4, 0, 0], 0)
+    var reverse = NURBSCurve(1, [0, 0, 1, 1], [points[0], points[4]], 3, 0)
+    near3(reverse.point3(0.25), [3, 0, 0], 0)
+    var selected = NURBSCurve(1, [0, 0, 1, 1], [points[0], points[4]], 0, 0)
+    near3(selected.point3(0.75), [0, 0, 0], 0)
+    var constant = NURBSCurve(0, [0, 1], [Vector4(2, 3, 4, 1)])
+    near3(constant.point3(0.5), [2, 3, 4], 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -461,14 +461,18 @@ def _checked_knots(
         A copy of the knots.
 
     Raises:
-        Error: If the degree is negative, a knot is not finite, the knots
-            fall anywhere, or there are not `points + degree + 1` of them.
+        Error: If the degree is negative or not below the point count,
+            a knot is nonfinite, the knots fall, their count is incorrect,
+            or the active knot interval has zero width.
     """
     if degree < 0:
         raise Error("A NURBS degree cannot be negative")
     if points < 1:
         raise Error("A NURBS spline needs one control point at least")
-    if len(knots) != points + degree + 1:
+    if degree >= points:
+        raise Error("A NURBS degree must be below its control point count")
+    # Subtract from the existing length instead of adding caller counts.
+    if len(knots) <= points or len(knots) - points - 1 != degree:
         raise Error(
             "A NURBS spline needs as many knots as its control points and"
             " its degree and one more"
@@ -479,6 +483,8 @@ def _checked_knots(
             raise Error("A NURBS knot must be finite")
         if index > 0 and knots[index] < knots[index - 1]:
             raise Error("NURBS knots cannot fall")
+    if knots[degree] >= knots[points]:
+        raise Error("A NURBS active knot interval must have positive width")
     return knots.copy()
 
 
@@ -534,7 +540,7 @@ struct NURBSCurve(SpaceCurve):
             start_knot: The knot `t` of zero maps to. The first unless
                 said otherwise.
             end_knot: The knot `t` of one maps to. The last unless said
-                otherwise.
+                otherwise. This index can equal or precede `start_knot`.
 
         Raises:
             Error: If the knots do not fit the degree and the points, a
