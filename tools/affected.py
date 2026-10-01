@@ -15,6 +15,10 @@ With FILE..., prints the FILEs that the change can affect, in their order:
   them: a module beside the importer first, then the repo root.
 - A file under `assets/` affects each `.mojo` file whose source quotes a path
   that the asset's path starts with, as `"assets/draco/"` does.
+- A changed test or test helper also selects the library it exercises and
+  every suite that can reach that library, so coverage loss is checked.
+  Removed imports use the full check because the current graph no longer
+  describes the test's former coverage obligations.
 - Documentation (`*.md`, `docs/`, `out/`) affects no `.mojo` file.
 - Any other change affects everything: the Makefile, the CI workflow, the
   coverage tool (it decides what coverage means), a deleted test suite (its
@@ -58,7 +62,7 @@ def git(*args):
             capture_output=True,
             text=True,
         ).stdout
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, UnicodeError, subprocess.CalledProcessError):
         return None
 
 
@@ -165,6 +169,18 @@ def resolve(name, importer, known):
     return []
 
 
+def reachable(seeds, edges):
+    """Return the transitive closure of `seeds` through `edges`."""
+    found = set()
+    pending = list(seeds)
+    while pending:
+        path = pending.pop()
+        if path not in found:
+            found.add(path)
+            pending.extend(edges.get(path, ()))
+    return found
+
+
 def affected_set(changed):
     """Return the `.mojo` files a change affects, or ALL."""
     for path, deleted in changed.items():
@@ -180,29 +196,67 @@ def affected_set(changed):
 
     files = mojo_files()
     known = set(files) | {p for p in changed if p.endswith(".mojo")}
-    importers = {}
+    importers, imports = {}, {}
     seeds = {p for p in changed if p.endswith(".mojo")}
     assets = [p for p in changed if p.startswith("assets/")]
     for path in files:
-        with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
-            source = handle.read()
+        try:
+            with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
+                source = handle.read()
+        except (OSError, UnicodeError):
+            return ALL
         for name in imported_names(source):
             for target in resolve(name, path, known):
                 if target != path:
                     importers.setdefault(target, set()).add(path)
+                    imports.setdefault(path, set()).add(target)
         for quoted in QUOTED_ASSET.findall(source):
             if any(asset.startswith(quoted) for asset in assets):
                 seeds.add(path)
 
-    affected = set()
-    pending = list(seeds)
-    while pending:
-        path = pending.pop()
-        if path in affected:
-            continue
-        affected.add(path)
-        pending.extend(importers.get(path, ()))
+    affected = reachable(seeds, importers)
+    if any(path.startswith("tests/") for path in seeds):
+        # An edited test can stop exercising unchanged library code. Measure
+        # its imports too, with all the suites that can reach those modules.
+        # Include users of a changed helper, not only the helper's imports.
+        tests = {path for path in affected if path.startswith("tests/")}
+        measured = reachable(tests, imports)
+        affected.update(reachable(measured, importers))
     return affected
+
+
+def test_imports_removed(changed, base):
+    """Return True if a changed test drops imports, or its past is unknown.
+
+    The current graph cannot reach an import a test no longer names. Fall
+    back to the full check rather than lose that former coverage obligation.
+    Added tests have no former imports; their current graph is sufficient.
+    """
+    tests = [path for path in changed
+             if path.startswith("tests/") and path.endswith(".mojo")]
+    if not tests:
+        return False
+    merge_base = git("merge-base", base, "HEAD")
+    if merge_base is None:
+        return True
+    revision = merge_base.strip()
+    tracked = git("ls-tree", "-r", "--name-only", "-z", revision, "--", *tests)
+    if tracked is None:
+        return True
+    for path in filter(None, tracked.split("\0")):
+        if changed[path]:
+            return True
+        before = git("show", revision + ":" + path)
+        if before is None:
+            return True
+        try:
+            with open(os.path.join(ROOT, path), encoding="utf-8") as source:
+                after = source.read()
+        except (OSError, UnicodeError):
+            return True
+        if set(imported_names(before)) - set(imported_names(after)):
+            return True
+    return False
 
 
 def main():
@@ -214,6 +268,8 @@ def main():
     options = parser.parse_args()
 
     changed = changed_paths(options.base)
+    if changed is not None and test_imports_removed(changed, options.base):
+        changed = None
     if options.list:
         if changed is None or affected_set(changed) == ALL:
             print(ALL)

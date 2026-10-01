@@ -106,9 +106,10 @@ OUT_DIR := out
 # and checks everything on a push to main.
 #
 # Coverage stays exact for each module it measures: every suite that can
-# reach a measured module runs. What it cannot see is a test change that
-# lowers the coverage of a module the change did not reach. The full run on
-# main sees that.
+# reach a measured module runs. A changed test or helper also measures the
+# library imported by its affected tests, so lost coverage is checked before
+# merge rather than deferred to the full run on main. Removed test imports
+# conservatively select the full check, including their former dependencies.
 AFFECTED :=
 COMPILE_FAIL_RUN := $(COMPILE_FAIL)
 ifneq ($(strip $(AFFECTED)),)
