@@ -198,6 +198,21 @@ def test_flat_triangles_reduce_to_segments_or_points() raises:
     assert_true(
         _near(closest_on_triangle(probe, origin, origin, origin)[0], origin)
     )
+    # Every longest-edge choice, including both clamped endpoints.
+    var corners: List[Vector3] = [origin, tip, middle]
+    var probes: List[Float32] = [-1.0, 0.5, 2.0]
+    for first in range(3):
+        var a = corners[first]
+        var b = corners[(first + 1) % 3]
+        var c = corners[(first + 2) % 3]
+        for y in probes:
+            var result = closest_on_triangle(Vector3(1, y, 0), a, b, c)
+            var expected = Vector3(0, min(Float32(1), max(Float32(0), y)), 0)
+            assert_true(_near(result[0], expected))
+            var reconstructed = (
+                a * (1 - result[1] - result[2]) + b * result[1] + c * result[2]
+            )
+            assert_true(_near(reconstructed, expected))
     var field = MeshField([origin, origin, tip], [0, 1, 2])
     assert_true(abs(field.distance(probe) - 1) < 1e-6)
 

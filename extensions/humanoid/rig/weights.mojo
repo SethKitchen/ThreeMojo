@@ -201,9 +201,10 @@ def _welded_edges(
     var weld = List[Int](capacity=count)
     for v in range(count):  # pragma: no branch
         var p = points[v]
-        var key = (
-            (Int(p.x * 1e5) * 1000003) ^ (Int(p.y * 1e5) * 999983)
-        ) ^ Int(p.z * 1e5)
+        var px = Int(p.x * 1e5)
+        var py = Int(p.y * 1e5)
+        var pz = Int(p.z * 1e5)
+        var key = ((px * 1000003) ^ (py * 999983)) ^ pz
         # The hash selects a bucket, not a position: distinct coordinates
         # can have the same XOR. Only equal quantized coordinates weld.
         if key not in first:
@@ -212,9 +213,9 @@ def _welded_edges(
         for candidate in first[key]:
             var q = points[candidate]
             if (
-                Int(p.x * 1e5) == Int(q.x * 1e5)
-                and Int(p.y * 1e5) == Int(q.y * 1e5)
-                and Int(p.z * 1e5) == Int(q.z * 1e5)
+                px == Int(q.x * 1e5)
+                and py == Int(q.y * 1e5)
+                and pz == Int(q.z * 1e5)
             ):
                 same = candidate
                 break
