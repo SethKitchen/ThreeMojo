@@ -134,6 +134,8 @@ A three.js group holds its children. Here a group is a scene node, and a mesh na
 
 The knots must not fall, and their count must be the number of control points, plus the degree, plus one. three.js does not check this.
 
+Weighted derivatives above the polynomial degree are zero, including the weight component. This corrects three.js's padding weight of one. Constant NURBS curves have zero tangents. Rational curves can still have nonzero higher derivatives when their weights vary.
+
 ## Named curves
 
 `math/curve_extras.mojo` has three.js's fourteen named curves. `ExtraCurveKind` is a type, and each curve has a function that makes it.
