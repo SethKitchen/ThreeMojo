@@ -21,6 +21,7 @@ from loaders.md2 import (
     parse_md2,
     read_md2,
 )
+from std.math import isfinite
 from std.memory import bitcast
 from std.pathlib import Path
 from std.testing import (
@@ -211,6 +212,27 @@ def test_refusals() raises:
     assert_equal(model.geometry.vertex_count(), 0)
     assert_equal(model.frames[0].name, "pose")
     assert_equal(len(model.animations), 0)
+
+
+def test_skin_dimensions_must_be_positive_before_uv_division() raises:
+    for field in [2, 3]:
+        for value in [0, -1, -(Int(1) << 31)]:
+            var bytes = Path("assets/md2/fixture.md2").read_bytes()
+            var encoded = i32(value)
+            for byte in range(4):
+                bytes[field * 4 + byte] = encoded[byte]
+            with assert_raises(contains="skin dimensions must be positive"):
+                _ = parse_md2(bytes)
+    # The smallest legal dimensions still load; UVs may validly exceed one.
+    var bytes = Path("assets/md2/fixture.md2").read_bytes()
+    for field in [2, 3]:
+        var encoded = i32(1)
+        for byte in range(4):
+            bytes[field * 4 + byte] = encoded[byte]
+    var model = parse_md2(bytes)
+    assert_true(model.geometry.vertex_count() > 0)
+    for value in model.geometry.clone_attribute(String(UV)).packed():
+        assert_true(isfinite(value))
 
 
 def main() raises:
