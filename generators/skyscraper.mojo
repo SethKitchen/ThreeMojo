@@ -154,6 +154,20 @@ struct Affine(ImplicitlyCopyable):
     var z_axis: Vec3d
     var position: Vec3d
 
+    def direction(self, v: Vec3d) -> Vec3d:
+        """Return a direction carried by the linear part of the placement.
+
+        Args:
+            v: The direction.
+
+        Returns:
+            The transformed direction, without the placement's translation.
+
+        Raises:
+            None.
+        """
+        return self.x_axis * v.x + self.y_axis * v.y + self.z_axis * v.z
+
     def point(self, p: Vec3d) -> Vec3d:
         """Return a point carried by the placement.
 
@@ -163,9 +177,7 @@ struct Affine(ImplicitlyCopyable):
         Returns:
             The placed point.
         """
-        return (
-            self.x_axis * p.x + self.y_axis * p.y + self.z_axis * p.z
-        ) + self.position
+        return self.direction(p) + self.position
 
     def normal_turn(self) -> Affine:
         """Return the matrix that carries a normal, the inverse transpose
@@ -1295,7 +1307,7 @@ struct _Baked:
                         Float64(p[v * 3 + 2]),
                     )
                 )
-                var normal = turn.point(
+                var normal = turn.direction(
                     Vec3d(
                         Float64(n[v * 3]),
                         Float64(n[v * 3 + 1]),
