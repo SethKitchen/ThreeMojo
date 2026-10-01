@@ -322,7 +322,8 @@ struct LightProbeGrid(Copyable, Movable):
         Raises:
             Error: If a setting is invalid, the probe counts cannot be
                 represented on both backends, the storage does not match
-                the counts, or a probe's coefficients are not finite.
+                the counts, or a probe's coefficients are not finite
+                before or after intensity scaling.
         """
         var amount = self._validate_settings()
         if len(self.probes) != amount:
@@ -332,6 +333,12 @@ struct LightProbeGrid(Copyable, Movable):
         for index in range(len(self.probes)):
             if not self.probes[index].is_finite():
                 raise Error("A light probe grid's coefficients must be finite")
+            var scaled = self.probes[index]
+            scaled.scale(self.intensity)
+            if not scaled.is_finite():
+                raise Error(
+                    "A light probe grid's scaled coefficients must be finite"
+                )
 
     def _validate_settings(self) raises -> Int:
         """Check settings before allocation or before adopting stored probes."""

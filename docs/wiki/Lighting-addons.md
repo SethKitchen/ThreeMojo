@@ -121,7 +121,7 @@ three.js: `new LightProbeGrid( width, height, depth, widthProbes, heightProbes, 
 | `intensity` | `intensity` | What the irradiance is multiplied by. |
 | `falloff` | `falloff` | How far outside the box the grid fades out. Zero applies the grid everywhere. |
 
-`validate()` requires one stored probe per grid point and finite coefficients. Call it after edits to the counts or probe array. The renderer and `Lighting` check a nonempty grid before they adopt it. Counts must fit the shared host and device indices; invalid counts fail before allocation.
+`validate()` requires one stored probe per grid point and finite coefficients before and after intensity scaling. Call it after edits to the counts or probe array. The renderer and `Lighting` check a nonempty grid before they adopt it. Counts must fit the shared host and device indices; invalid counts fail before allocation.
 
 ### The bake
 

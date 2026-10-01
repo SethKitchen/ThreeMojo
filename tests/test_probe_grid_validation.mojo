@@ -6,7 +6,12 @@
 """Probe storage and device-index boundary regressions for issue #359."""
 
 from core.scene import Scene
-from lights.light_probe_grid import LightProbeGrid, MAX_GRID_AXIS
+from lights.light_probe_grid import (
+    LightProbeGrid,
+    MAX_GRID_AXIS,
+    _default_probes,
+    _probe_count,
+)
 from lights.lighting import Lighting
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector3 import Vector3
@@ -89,6 +94,30 @@ def test_empty_sentinel_and_valid_interpolation_keep_their_behavior() raises:
     grid.validate()
     var sh = grid.sh_at(Vector3(0, 0, 0), Vector3(0, 0, 0))
     assert_equal(sh.lanes[0], Float32(4))
+    _ = Lighting(Scene(), probe_grid=grid)
+
+
+def test_exact_count_boundaries_are_accepted_without_allocating() raises:
+    assert_equal(_probe_count(MAX_GRID_AXIS, 1, 1), MAX_GRID_AXIS)
+    assert_equal(_probe_count(1, MAX_GRID_AXIS, 1), MAX_GRID_AXIS)
+    assert_equal(_probe_count(1, 1, MAX_GRID_AXIS), MAX_GRID_AXIS)
+    assert_equal(
+        _default_probes(Length(Float32(MAX_GRID_AXIS - 1), METER)),
+        MAX_GRID_AXIS,
+    )
+
+
+def test_intensity_overflow_is_rejected_before_lighting_adopts_the_grid() raises:
+    var grid = LightProbeGrid(width_probes=1, height_probes=1, depth_probes=1)
+    grid.probes[0].lanes[0] = 1e30
+    grid.intensity = 1e30
+    with assert_raises(contains="scaled coefficients"):
+        grid.validate()
+    with assert_raises(contains="scaled coefficients"):
+        _ = Lighting(Scene(), probe_grid=grid)
+    # Large but representable products remain valid.
+    grid.intensity = 1e-10
+    grid.validate()
     _ = Lighting(Scene(), probe_grid=grid)
 
 
