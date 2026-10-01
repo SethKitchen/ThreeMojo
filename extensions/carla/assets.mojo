@@ -1058,7 +1058,7 @@ struct AssetRegistry(Movable):
                     image, REPEAT, BILINEAR, spaces[index], True, IGNORED
                 )
         else:
-            # Every pointer is to a local that outlives `wait`.
+            # Two images or more come here; every pointer outlives `wait`.
             var group = TaskGroup()
             for index in range(count):  # pragma: no branch
                 group.create_task(
@@ -1073,7 +1073,7 @@ struct AssetRegistry(Movable):
                     )
                 )
             group.wait()
-            for index in range(count):
+            for index in range(count):  # pragma: no branch
                 if errors[index].byte_length() > 0:
                     raise Error(paths[index] + ": " + errors[index])
         for index in range(count):
