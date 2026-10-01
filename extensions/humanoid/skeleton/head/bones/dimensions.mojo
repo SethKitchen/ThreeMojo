@@ -308,7 +308,7 @@ def _cervical(mut sweeps: List[Sweep], h: HeadDimensions, index: Int):
     var w = h.widths[index]
     var d = h.depths[index]
     var tall = h.heights[index]
-    var body = Sweep(Vector3(1, 0, 0))
+    var body = Sweep(Vector3(1, 0, 0), flat_y=True)
     body.add(c - Vector3(0, 0.5 * tall, 0), w, d)
     body.add(c + Vector3(0, 0.5 * tall, 0), w, d)
     sweeps.append(body^)
