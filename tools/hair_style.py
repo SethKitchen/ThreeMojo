@@ -46,6 +46,7 @@ import sys
 
 VERSION = 1
 POINTS = 16
+TFX_HEADER_BYTES = 160
 # The mohawk's crest, as angles from the top of its circle toward the
 # back, in degrees: the part of Ratboy's that is kept, and the arc of a
 # human scalp's midline from the hairline to the nape it goes on.
@@ -66,22 +67,35 @@ HUMAN = (8.1, 9.3, 10.6)
 
 
 def read_tfx(path):
-    """Return a TressFX file's strands, each a list of (x, y, z)."""
+    """Return finite positions from a validated TressFX 4 file.
+
+    The offline converter resamples any strand with at least two points;
+    the upstream GPU simulation's power-of-two point count does not apply.
+    Malformed headers, offsets, and positions raise ValueError.
+    """
     with open(path, "rb") as source:
         data = source.read()
-    if len(data) < 16:
-        raise ValueError("Not a TressFX file: " + path)
-    _, strands, points, offset = struct.unpack_from("<fIII", data, 0)
+    if len(data) < TFX_HEADER_BYTES:
+        raise ValueError(f"Not a complete TressFX header: {path}")
+    version, strands, points, offset = struct.unpack_from("<fIII", data, 0)
+    if not math.isfinite(version) or not 4.0 <= version < 5.0:
+        raise ValueError(f"The converter requires the TressFX 4 layout: {path}")
     if strands == 0 or points < 2:
-        raise ValueError("A TressFX file with no strands: " + path)
+        raise ValueError(f"A TressFX file with no strands: {path}")
+    if offset < TFX_HEADER_BYTES or offset % 8:
+        raise ValueError(f"Invalid TressFX position offset: {path}")
     if offset + strands * points * 16 > len(data):
-        raise ValueError("The TressFX file ends early: " + path)
+        raise ValueError(f"The TressFX file ends early: {path}")
     result = []
     for s in range(strands):
         strand = []
         for i in range(points):
+            # Each position is FLOAT4; the converter uses xyz, not w.
             at = offset + 16 * (s * points + i)
-            strand.append(struct.unpack_from("<3f", data, at))
+            position = struct.unpack_from("<3f", data, at)
+            if not all(math.isfinite(value) for value in position):
+                raise ValueError(f"Non-finite TressFX position at strand {s}, point {i}: {path}")
+            strand.append(position)
         result.append(strand)
     return result
 

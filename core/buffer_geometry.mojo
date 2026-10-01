@@ -124,6 +124,23 @@ comptime COLOR = "color"
 comptime TANGENT = "tangent"
 
 
+def _run_end(start: Int, count: Int, total: Int) -> Int:
+    """Return a run's clamped end without adding unbounded integers.
+
+    Args:
+        start: A nonnegative first slot.
+        count: The slot count, or a negative value for the remaining stream.
+        total: The nonnegative stream length.
+
+    Returns:
+        An end from zero through `total`.
+    """
+    var first = min(start, total)
+    if count < 0:
+        return total
+    return first + min(count, total - first)
+
+
 def _shift(mut attribute: BufferAttribute, offset: Vector3) raises:
     """Move every item of a position attribute by one offset.
 
@@ -525,13 +542,14 @@ struct BufferGeometry(Movable):
         if not self.draw_range.is_valid():
             raise Error("A draw range cannot start or run a negative distance")
         var total = self.stream_length()
-        var first = max(start, self.draw_range.start)
-        var end = total
-        if count >= 0:
-            end = min(end, start + count)
+        var first = min(max(start, self.draw_range.start), total)
+        var end = _run_end(start, count, total)
         if Bool(self.draw_range.count):
             end = min(
-                end, self.draw_range.start + self.draw_range.count.value()
+                end,
+                _run_end(
+                    self.draw_range.start, self.draw_range.count.value(), total
+                ),
             )
         return self.triangle_run(first, max(0, end - first))
 
@@ -553,8 +571,8 @@ struct BufferGeometry(Movable):
         var first = min(self.draw_range.start, total)
         var end = total
         if Bool(self.draw_range.count):
-            end = min(
-                end, self.draw_range.start + self.draw_range.count.value()
+            end = _run_end(
+                self.draw_range.start, self.draw_range.count.value(), total
             )
         return (first, max(0, end - first))
 
@@ -1496,9 +1514,18 @@ struct BufferGeometry(Movable):
             The group's corners.
 
         Raises:
-            Error: If the group reaches past the end of the stream, or an
-                index entry points past the last vertex.
+            Error: If the group has a negative start or count, reaches
+                past the end of the stream, or an index entry points
+                past the last vertex. A geometry with no positions and
+                no index has an empty stream.
         """
+        var total = 0
+        if self.is_indexed() or self.has_attribute(POSITION):
+            total = self.stream_length()
+        if group.start < 0 or group.count < 0 or group.start > total:
+            raise Error("A group must lie inside the triangle stream")
+        if group.count > total - group.start:
+            raise Error("A group must lie inside the triangle stream")
         var slots = List[Int]()
         for slot in range(group.start, group.start + group.count):
             slots.append(self.vertex_at(slot))
@@ -1535,9 +1562,7 @@ struct BufferGeometry(Movable):
             raise Error("A run cannot start before the stream")
         var total = self.stream_length()
         var first = min(start, total)
-        var end = total
-        if count >= 0:
-            end = min(start + count, total)
+        var end = _run_end(start, count, total)
         return (first, max(0, end - first) // 3)
 
     def vertex_at(self, slot: Int) raises -> Int:
@@ -1603,8 +1628,8 @@ struct BufferGeometry(Movable):
 
         Raises:
             Error: If the geometry has no `position`, `normal` or `uv`, if
-                those hold too few numbers a vertex, or if an index entry
-                points past the last vertex.
+                those hold too few numbers a vertex, a group has a negative
+                start or count, or an index entry points past the last vertex.
         """
         var count = self.vertex_count()
         var runs = self._runs()
@@ -1617,8 +1642,11 @@ struct BufferGeometry(Movable):
         # `_runs` gives one run at least, so neither loop over the runs can
         # run zero times.
         for run in runs:  # pragma: no branch
-            var end = min(run.start + run.count, total)
-            for slot in range(run.start, end - 2, 3):
+            if run.start < 0 or run.count < 0:
+                raise Error("A group cannot start or run a negative distance")
+            var first = min(run.start, total)
+            var end = _run_end(run.start, run.count, total)
+            for slot in range(first, end - 2, 3):
                 var a = self.vertex_at(slot)
                 var b = self.vertex_at(slot + 1)
                 var c = self.vertex_at(slot + 2)
@@ -1641,8 +1669,9 @@ struct BufferGeometry(Movable):
                     along_v[vertex].add(v_way)
         var tangents = List[Float32](length=count * 4, fill=0.0)
         for run in runs:  # pragma: no branch
-            var end = min(run.start + run.count, total)
-            for slot in range(run.start, end):
+            var first = min(run.start, total)
+            var end = _run_end(run.start, run.count, total)
+            for slot in range(first, end):
                 var vertex = self.vertex_at(slot)
                 var normal = normals.vector3(vertex)
                 var u_way = along_u[vertex]

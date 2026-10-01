@@ -11,6 +11,10 @@ runs the program, passes its output through, and exits with an error when
 one test took longer than `--seconds`. A slow test is a slow library: make
 the code under test faster, not the test smaller.
 
+The GPU Make targets use `--results-only` to validate the same output
+contract while retaining their existing timeout policy. The device target
+keeps its separate whole-suite hang budget.
+
 The limit applies to each test and not to the suite. `TestSuite` holds all
 of its output until the program exits, through a pipe and a terminal alike,
 so nothing can see one test end while the suite runs. The check therefore
@@ -115,12 +119,17 @@ def budget(seconds, tests):
 def main(argv):
     """Run the suite, and return its exit code or the failure's."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--seconds", type=float, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--seconds", type=float)
+    mode.add_argument("--results-only", action="store_true",
+                      help="validate results; the caller owns timeout policy")
     parser.add_argument("--suite", required=True)
     parser.add_argument("command", nargs="+")
     args = parser.parse_args(argv)
-    with open(args.suite, encoding="utf-8") as source:
-        limit = budget(args.seconds, count_tests(source.read()))
+    limit = None
+    if not args.results_only:
+        with open(args.suite, encoding="utf-8") as source:
+            limit = budget(args.seconds, count_tests(source.read()))
     try:
         with isolated_environment() as environment:
             run = subprocess.run(
@@ -141,7 +150,7 @@ def main(argv):
         return TIMED_OUT
     output = run.stdout.decode("utf-8", "replace")
     sys.stdout.write(output)
-    slow = slow_tests(output, args.seconds)
+    slow = [] if args.results_only else slow_tests(output, args.seconds)
     for name, took in slow:
         print(
             f"{args.suite}: {name} took {took:.2f}s, over the "

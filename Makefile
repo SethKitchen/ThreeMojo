@@ -106,9 +106,10 @@ OUT_DIR := out
 # and checks everything on a push to main.
 #
 # Coverage stays exact for each module it measures: every suite that can
-# reach a measured module runs. What it cannot see is a test change that
-# lowers the coverage of a module the change did not reach. The full run on
-# main sees that.
+# reach a measured module runs. A changed test or helper also measures the
+# library imported by its affected tests, so lost coverage is checked before
+# merge rather than deferred to the full run on main. Removed test imports
+# conservatively select the full check, including their former dependencies.
 AFFECTED :=
 COMPILE_FAIL_RUN := $(COMPILE_FAIL)
 ifneq ($(strip $(AFFECTED)),)
@@ -356,7 +357,8 @@ test-gpu-device:
 	@printf '%s\n' $(filter-out $(GPU_HOST_TESTS),$(GPU_TESTS)) \
 	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
@@ -375,7 +377,8 @@ test-gpu-host: $(TEST_GPU_HOST_STAMP)
 $(TEST_GPU_HOST_STAMP):
 	@printf '%s\n' $(GPU_HOST_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some GPU host suites FAILED."; exit 1; }
 	@echo "All $(words $(GPU_HOST_TESTS)) GPU host suites passed."

@@ -102,6 +102,8 @@ three.js recomputes a bounding box or sphere that it has cached. Here the bounds
 
 ## Draw range
 
+Range readers clamp the start and count before adding them. Large nonnegative counts stay inside the triangle or vertex stream.
+
 ```mojo
 geometry.set_draw_range(6, 12)     # index entries 6 to 17: triangles 2 to 5
 geometry.set_draw_range(0)         # every slot again: three.js's Infinity
@@ -668,6 +670,8 @@ The tolerance is a plain number and not a `Length`. It applies to every attribut
 A key is clamped to `KEY_LIMIT`, nine times ten to the eighteenth. JavaScript's `~~` wraps at two to the thirty-first instead. The two differ only for a tolerance far below any real one.
 
 The result is indexed. Its index must hold whole triangles, so a geometry of loose points that is not a multiple of three raises.
+
+Welding keeps the draw range and groups because each triangle keeps its place in the stream. It also keeps the name, user data, type, parameters and stored shapes. Mutable data is copied, so changes to the result leave the source alone.
 
 ### Creased normals
 
