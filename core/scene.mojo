@@ -938,8 +938,8 @@ struct Scene(Movable):
                 current; the parent's world transform is not a rotation and
                 a positive uniform scale -- a nonuniform scale, a shear, a
                 mirror or a flattened axis leaves no frame the facing
-                survives the trip into; the node's `up` is zero or not
-                finite. A target at the node or straight
+                survives the trip into; either position is not finite;
+                or the node's `up` is zero or not finite. A target at the node or straight
                 along up is not refused: `facing` settles both, as three.js
                 does.
         """

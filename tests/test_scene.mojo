@@ -16,7 +16,7 @@ from materials.material import MaterialId
 from math.vector3 import Vector3
 from math.matrix4 import Matrix4
 from objects.mesh import Mesh
-from std.math import cos, sin
+from std.math import cos, inf, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -778,7 +778,7 @@ def test_an_up_that_names_no_direction_is_refused() raises:
     node.up = Vector3(0, 0, 0)
     with assert_raises(contains="up direction"):
         node.look_at(Vector3(0, 0, 0))
-    node.up = Vector3(1e30, 1e30, 0)
+    node.up = Vector3(inf[DType.float32](), 1, 0)
     with assert_raises(contains="up direction"):
         node.look_at(Vector3(0, 0, 0))
     assert_true(node.quaternion == before)
