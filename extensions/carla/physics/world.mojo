@@ -150,7 +150,7 @@ struct PhysicsWorld(Movable):
     # The body each triangle belongs to.
     var _triangle_body: List[Int]
     var _dirty: Bool
-    # Moving bodies, sorted by the low x of their bounds.
+    # Non-mesh bodies, sorted by the low x of their bounds.
     var _order: List[Int]
 
     def __init__(out self):
@@ -195,7 +195,7 @@ struct PhysicsWorld(Movable):
                 )
                 self._triangle_body.append(id)
             self._dirty = True
-        elif body.kind != STATIC:
+        else:
             self._order.append(id)
         self.bodies.append(body^)
         return BodyId(id)
