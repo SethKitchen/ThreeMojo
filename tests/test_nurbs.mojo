@@ -475,10 +475,10 @@ def test_a_nurbs_curve_of_unit_weights_and_of_degree_zero() raises:
     )
     near3(steps.point3(0.25), [1, 2, 3])
     near3(steps.point3(0.75), [4, 5, 6])
-    near3(
-        steps.tangent3(0.25),
-        [-0.2672612419124244, -0.5345224838248488, -0.8017837257372732],
-    )
+    # Each open knot span is a constant point, so its tangent is zero.
+    # three.js's nonzero padding weight creates a false tangent here.
+    near3(steps.tangent3(0.25), [0, 0, 0])
+    near3(steps.tangent3(0.75), [0, 0, 0])
     # The first tangent leans along x and y alike, so z is least.
     var frames = frames3_of(arch, 2)
     for index in range(3):
@@ -498,7 +498,7 @@ def test_a_straight_nurbs_curve_has_frames_that_do_not_turn() raises:
     near3(first.normals[0], [0, -1, 0], 1e-12)
 
 
-def test_nurbs_derivatives_match_three() raises:
+def test_nurbs_derivatives_match_the_polynomial_and_basis() raises:
     var arch: List[Point4] = [
         Point4(0, 0, 0, 1),
         Point4(1, 1, 0, 1),
@@ -509,8 +509,9 @@ def test_nurbs_derivatives_match_three() raises:
     near3(ders[0], [0.8, 0.48, 0])
     near3(ders[1], [2, 0.3999999999999999, 0])
     near3(ders[2], [0, -4, 0])
-    near3(ders[3], [-0.8, -0.48, 0])
-    near3(ders[4], [-8.8, -2.0799999999999996, 0])
+    # The quadratic x=2t, y=2t(1-t) has no third or fourth derivative.
+    near3(ders[3], [0, 0, 0])
+    near3(ders[4], [0, 0, 0])
     var basis = basis_function_derivatives(4, 0.37, 3, 3, nurbs_knots())
     var expected: List[List[Float64]] = [
         [
@@ -530,6 +531,31 @@ def test_nurbs_derivatives_match_three() raises:
     near(k_over_i(5, 2), 10, 0)
     near(k_over_i(3, 0), 1, 0)
     near(k_over_i(1, 1), 1, 0)
+
+
+def test_weighted_line_has_correct_rational_higher_derivatives() raises:
+    # With these weights x(t)=2t/(1+t), which is not a polynomial even
+    # though its homogeneous numerator and denominator have degree one.
+    var points: List[Point4] = [Point4(0, 0, 0, 1), Point4(1, 0, 0, 2)]
+    var derivatives = nurbs_derivatives(1, [0, 0, 1, 1], points, 0.5, 3)
+    assert_equal(len(derivatives), 5)
+    near3(derivatives[0], [Float64(2) / 3, 0, 0], 1e-12)
+    near3(derivatives[1], [Float64(8) / 9, 0, 0], 1e-12)
+    near3(derivatives[2], [Float64(-32) / 27, 0, 0], 1e-12)
+    near3(derivatives[3], [Float64(64) / 27, 0, 0], 1e-12)
+    near3(derivatives[4], [Float64(-512) / 81, 0, 0], 1e-12)
+
+
+def test_constant_nurbs_points_have_zero_tangents_and_derivatives() raises:
+    var curve = NURBSCurve(0, [0, 1], [Vector4(2, 3, 4, 2)])
+    for t in [Float64(0.1), Float64(0.5), Float64(0.9)]:
+        near3(curve.tangent3(t), [0, 0, 0], 0)
+        near3(curve.point3(t + 0.0001) - curve.point3(t - 0.0001), [0, 0, 0], 0)
+    var points: List[Point4] = [Point4(2, 3, 4, 1), Point4(2, 3, 4, 2)]
+    var derivatives = nurbs_derivatives(1, [0, 0, 1, 1], points, 0.5, 3)
+    near3(derivatives[0], [2, 3, 4], 0)
+    for index in range(1, len(derivatives)):
+        near3(derivatives[index], [0, 0, 0], 0)
 
 
 def test_a_nurbs_curve_refuses_knots_and_points_that_do_not_fit() raises:
