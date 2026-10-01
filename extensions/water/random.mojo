@@ -58,7 +58,8 @@ def gaussian_pair(u: Float64, v: Float64) -> Float64:
     """Return the Box-Muller sample Clearwater draws from two uniforms.
 
     Args:
-        u: A uniform sample in `(0, 1)`. Zero is replaced so `log` is defined.
+        u: A uniform sample in `(0, 1)`. Zero is replaced with `1e-12`
+            so `log` is defined.
         v: A uniform sample in `[0, 1)`.
 
     Returns:
