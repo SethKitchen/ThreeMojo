@@ -2,6 +2,8 @@
 
 `add_head` attaches the neck and the head: the seven cervical vertebrae, the skull, the mandible, the teeth and the hyoid, and their joint tissues. It also attaches the muscles of the neck, the jaw and the face, and the head's vessels, nerves, lymph nodes, skin, hair and eyes.
 
+For engineering use and representation limits, see [Humanoid fidelity](Humanoid-fidelity).
+
 ![A six-foot male neck and head turn twice: bones, joint tissues and muscles on the left, and skin, hair and eyes on the right](out/head.png)
 
 The neck and the head share the pelvis frame. The origin is the midpoint of the two hip joint centers. Plus y is proximal, plus x is body-right and plus z is anterior. The package is `extensions/humanoid/skeleton/head/`. The neck stands on the first thoracic vertebra of the [Torso](Torso).
@@ -96,7 +98,7 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
 4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.
 
-`HeadSkinField` is the smooth union of the scan and the modeled solids. The modeled anatomy stays inside the skin.
+`HeadSkinField` is the smooth union of the scan and the modeled solids. This fit does not test every anatomical part for containment.
 
 The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.
 

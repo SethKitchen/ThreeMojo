@@ -324,6 +324,30 @@ def _closest(p, a, b, c):
         return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
 
     ab, ac, ap = sub(b, a), sub(c, a), sub(p, a)
+    normal = _normal(a, b, c)
+    if dot(normal, normal) == 0:
+        # A flat triangle is the segment between its farthest corners.
+        edges = (
+            (a, b, (0.0, 0.0), (1.0, 0.0)),
+            (a, c, (0.0, 0.0), (0.0, 1.0)),
+            (b, c, (1.0, 0.0), (0.0, 1.0)),
+        )
+        start, end, w0, w1 = max(
+            edges, key=lambda e: dot(sub(e[1], e[0]), sub(e[1], e[0]))
+        )
+        direction = sub(end, start)
+        length2 = dot(direction, direction)
+        t = (
+            max(0.0, min(1.0, dot(sub(p, start), direction) / length2))
+            if length2 else 0.0
+        )
+        q = tuple(start[k] + direction[k] * t for k in range(3))
+        gap = sub(q, p)
+        return (
+            dot(gap, gap),
+            w0[0] + (w1[0] - w0[0]) * t,
+            w0[1] + (w1[1] - w0[1]) * t,
+        )
     d1, d2 = dot(ab, ap), dot(ac, ap)
     if d1 <= 0 and d2 <= 0:
         v, w = 0.0, 0.0
@@ -363,6 +387,8 @@ def follow(points, coarse, skin_end, cell=0.015):
     weights on the second and the third. A vertex of the coarse copy
     follows itself.
     """
+    if skin_end > 0 and not coarse:
+        raise ValueError("Skin followers need coarse triangles")
     used = sorted({v for t in coarse for v in t})
     local = {v: i for i, v in enumerate(used)}
     edges = sorted(
@@ -393,10 +419,14 @@ def follow(points, coarse, skin_end, cell=0.015):
         home = key(points[v])
         best = None
         reach = 1
-        while best is None:
+        while True:
             for i in range(home[0] - reach, home[0] + reach + 1):
                 for j in range(home[1] - reach, home[1] + reach + 1):
                     for m in range(home[2] - reach, home[2] + reach + 1):
+                        if reach > 1 and max(
+                            abs(i - home[0]), abs(j - home[1]), abs(m - home[2])
+                        ) < reach:
+                            continue
                         for index in cells.get((i, j, m), []):
                             t = coarse[index]
                             d, wb, wc = _closest(
@@ -404,6 +434,10 @@ def follow(points, coarse, skin_end, cell=0.015):
                             )
                             if best is None or d < best[0]:
                                 best = (d, t, wb, wc)
+            # Every unvisited cell lies at least reach * cell away.
+            # A populated ring alone does not prove its closest is best.
+            if best is not None and best[0] <= (reach * cell) ** 2:
+                break
             reach += 1
         _, t, wb, wc = best
         followers.append((local[t[0]], local[t[1]], local[t[2]], wb, wc))

@@ -257,7 +257,7 @@ from extensions.humanoid.skeleton.torso.vessels.dimensions import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from std.math import nan, pi
+from std.math import inf, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -897,6 +897,18 @@ def test_add_upper_limb_draws_the_arm_and_its_hand() raises:
             RIGHT,
             ArmContents(0),
         )
+
+
+def test_arm_muscle_scale_must_be_finite() raises:
+    for invalid in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        var dims = arm_muscle_dimensions(_person())
+        dims.scale = invalid
+        with assert_raises(contains="scale"):
+            dims.validate()
 
 
 def main() raises:

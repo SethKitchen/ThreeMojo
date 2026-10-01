@@ -14783,3 +14783,46 @@ def test_scene_splats_mix_with_transparent_meshes_on_both_backends() raises:
         splats=frame.splats,
     )
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+def test_both_backends_draw_marschner_strand_colors() raises:
+    from extensions.humanoid.skeleton.head.hair.shading import (
+        HairLook,
+        marschner,
+    )
+
+    if skipped_for_lack_of_a_gpu("Marschner strand colors"):
+        return
+    var color = marschner(
+        HairLook(Vector3(0.3, 0.1, 0.05)),
+        Vector3(0, 0.8, 0.6),
+        Vector3(0, -0.8, 0.6),
+        Vector3(0, 1, 0),
+    )
+    var assets = Assets()
+    var tint = FloatColor(color.x, color.y, color.z)
+    var shape = assets.geometries.add(
+        line_segments_geometry(
+            [Vector3(0, -0.8, 0), Vector3(0, 0.8, 0)], [tint, tint]
+        )
+    )
+    var material = assets.materials.add(
+        line_material(line_width=LineWidth(pixels=3), vertex_colors=True)
+    )
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_wide_line(LineSegments2(shape, material, node))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32)
+    renderer.background = BACKGROUND
+    var host = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = render_triangles(
+        frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
+    )
+    assert_true(count_background(host, BACKGROUND) < 32 * 32)
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)

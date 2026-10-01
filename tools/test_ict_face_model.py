@@ -51,6 +51,33 @@ def _grid(n):
 
 
 class ConverterTests(unittest.TestCase):
+    def test_closest_handles_degenerate_triangles(self):
+        self.assertEqual(
+            ict_face_model._closest((1, .5, 0), (0, 0, 0), (0, 0, 0), (0, 1, 0)),
+            (1.0, 0.0, 0.5),
+        )
+        self.assertEqual(
+            ict_face_model._closest((1, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)),
+            (1.0, 0.0, 0.0),
+        )
+
+    def test_follow_searches_past_the_first_populated_ring(self):
+        from ict_face_model import follow
+
+        points = [
+            (.01485, .01485, .01485),
+            (-.01485, -.01485, -.01485),
+            (-.01484, -.01485, -.01485),
+            (-.01485, -.01484, -.01485),
+            (.03015, .01485, .01485),
+            (.03015, .01486, .01485),
+            (.03015, .01485, .01486),
+        ]
+        used, _, followers = follow(points, [(1, 2, 3), (4, 5, 6)], 1)
+        self.assertEqual(tuple(used[i] for i in followers[0][:3]), (4, 5, 6))
+        with self.assertRaisesRegex(ValueError, "coarse triangles"):
+            follow(points, [], 1)
+
     def test_converts_a_small_model(self):
         with tempfile.TemporaryDirectory() as folder:
             files = {

@@ -9,6 +9,9 @@ from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.surface_nets import (
+    _Grid,
+    _sample_indices,
+    UNSAMPLED,
     mesh_surface,
     project_to_surface,
     surface_gradient,
@@ -231,6 +234,20 @@ def test_sculpt_joins_and_carves() raises:
     # A carving far from the point is skipped.
     assert_equal(chain.carved(-0.01, Vector3(0, -1, 0)), -0.01)
     assert_true(chain.low.y < 0 and chain.high.y > 0.2)
+
+
+def test_adjacent_blocks_assign_each_sample_once() raises:
+    var grid = _Grid(Vector3(0, 0, 0), 1, 8, 4, 4)
+    var values = List[Float32](length=9 * 5 * 5, fill=UNSAMPLED)
+    values[0] = 42
+    var pending = _sample_indices(values, grid, [0, 1, 0], 2, 1)
+    assert_equal(len(pending), 9 * 5 * 5 - 1)
+    var seen = List[Bool](length=len(values), fill=False)
+    for at in pending:
+        assert_false(seen[at])
+        seen[at] = True
+    assert_false(seen[0])
+    assert_equal(values[0], 42)
 
 
 def main() raises:

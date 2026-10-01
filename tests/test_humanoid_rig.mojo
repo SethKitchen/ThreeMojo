@@ -52,6 +52,7 @@ from extensions.humanoid.rig.joints import (
     named_joints,
 )
 from extensions.humanoid.rig.weights import (
+    _welded_edges,
     bone_weights,
     part_legs,
     rigid_weights,
@@ -397,6 +398,33 @@ def test_colors_are_carried_to_a_decimated_skin() raises:
     ref carried = target.attribute_view(String(COLOR))
     assert_equal(carried.component(0, 1), 1)
     assert_equal(carried.component(1, 0), 1)
+
+
+def test_weld_hash_collisions_do_not_join_distinct_positions() raises:
+    var p = Vector3(0.00001001, 0.00001001, 0.00108001)
+    var graph = _welded_edges([Vector3(0, 0, 0), p, p], List[Int]())
+    var first = graph[0][0]
+    var second = graph[0][1]
+    var third = graph[0][2]
+    assert_equal(first, 0)
+    assert_equal(second, 1)
+    assert_equal(third, 1)
+
+
+def test_attribute_transfer_searches_past_the_first_populated_ring() raises:
+    var source = _mesh(
+        [Vector3(-0.0099, -0.0099, -0.0099), Vector3(0.0201, 0.0099, 0.0099)],
+        [],
+    )
+    source.set_attribute(
+        String(COLOR), BufferAttribute([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3)
+    )
+    var target = _mesh([Vector3(0.0099, 0.0099, 0.0099)], [])
+    carry_attributes(source, target)
+    assert_equal(target.attribute_view(String(COLOR)).component(0, 1), 1)
+    var empty = _mesh([], [])
+    with assert_raises(contains="source vertices"):
+        carry_attributes(empty, target)
 
 
 def main() raises:

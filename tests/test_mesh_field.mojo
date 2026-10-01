@@ -181,5 +181,26 @@ def test_a_mesh_field_refuses_a_bad_mesh() raises:
         _ = MeshField(points.copy(), negative^)
 
 
+def test_flat_triangles_reduce_to_segments_or_points() raises:
+    var origin = Vector3(0, 0, 0)
+    var tip = Vector3(0, 1, 0)
+    var middle = Vector3(0, 0.5, 0)
+    var probe = Vector3(1, 0.5, 0)
+    var repeated = closest_on_triangle(probe, origin, origin, tip)
+    assert_true(_near(repeated[0], middle))
+    assert_true(abs(repeated[2] - 0.5) < 1e-6)
+    assert_true(
+        _near(closest_on_triangle(probe, origin, tip, origin)[0], middle)
+    )
+    assert_true(
+        _near(closest_on_triangle(probe, middle, origin, tip)[0], middle)
+    )
+    assert_true(
+        _near(closest_on_triangle(probe, origin, origin, origin)[0], origin)
+    )
+    var field = MeshField([origin, origin, tip], [0, 1, 2])
+    assert_true(abs(field.distance(probe) - 1) < 1e-6)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

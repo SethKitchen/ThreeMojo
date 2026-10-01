@@ -156,8 +156,13 @@ def marschner(
     var cos_d = _cos_half(cos_i * cos_r + sin_i * sin_r)
     var light_perp = to_light - tangent * sin_i
     var camera_perp = to_camera - tangent * sin_r
-    var cos_phi = light_perp.dot(camera_perp) / sqrt(
-        light_perp.length() * camera_perp.length() + Float32(1e-4)
+    var cos_phi = min(
+        Float32(1),
+        max(
+            Float32(-1),
+            light_perp.dot(camera_perp)
+            / max(light_perp.length() * camera_perp.length(), Float32(1e-4)),
+        ),
     )
     var cos_half_phi = _cos_half(cos_phi)
     var beta2 = look.roughness * look.roughness
