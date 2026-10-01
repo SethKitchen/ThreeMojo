@@ -6,6 +6,9 @@ The `extensions/carla/` modules port the CARLA driving simulator: everything tha
 
 ![An RGB image with LiDAR points, a semantic image and a depth image](out/carla.png)
 
+Images can include CC BY 4.0 CARLA vehicles and town content.
+Keep the [asset credits](CARLA-assets#credit-the-assets) with shared images.
+
 CARLA is by the Computer Vision Center at the Universitat Autonoma de Barcelona (MIT). This port follows CARLA's source at commit `1360bb9`. See [Extensions](Extensions).
 
 To render the images, run `mojo run -I . examples/carla_town.mojo out/carla_town.png` and `mojo run -I . examples/carla.mojo out/carla.png`. Each view is 800 x 600, the size of CARLA's default RGB camera.

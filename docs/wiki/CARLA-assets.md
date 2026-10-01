@@ -26,11 +26,31 @@ To fetch one entry, give its id, for example `fetch carla.vehicle.audi.a2`. The 
 
 ## Credit the assets
 
-CARLA's vehicles are CC BY 4.0, so each image or video that shows them must credit them. Print the credit list:
+The 41 vehicles and six towns are CC BY 4.0. Shared renders and asset
+packages must carry their applicable credits, source links, license link
+and conversion notices. The code license does not replace the asset license.
+
+The committed [attribution catalog](https://github.com/SethKitchen/ThreeMojo/blob/main/assets/carla/ATTRIBUTION.md)
+lists all 47 entries and credits the 11 CC0 entries as a courtesy.
+It is a complete catalog, not a list of assets proven present in one image.
+
+The three CARLA gallery targets write a `.credits.md` file beside the
+output. Keep it with the gallery and its component images when sharing them.
+For a direct example run, generate that file yourself:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py credits --output CREDITS.md
+python3 assets/carla/tools/carla_assets.py credits --all --output out/carla.credits.md
 ```
+
+After editing the manifest, update the committed catalog:
+
+```sh
+python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/ATTRIBUTION.md
+```
+
+`make test-tools` checks that the catalog still matches the manifest.
+Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
+The current share links are not a durable distribution guarantee.
 
 ## The CARLA vehicles
 

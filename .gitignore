@@ -10,10 +10,9 @@
 # records. Regenerated from scratch by every `make coverage`.
 coverage/build/
 
-# Regenerated dumps. The APNG figures in out/ are committed so the wiki
-# can show them.
+# Generated outputs. Existing tracked PNG figures still update normally.
+# Add new documentation images explicitly after compression and review.
 /out/*
-!/out/*.png
 *.ppm
 
 # Compiled binaries from `mojo build`.

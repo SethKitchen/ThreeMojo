@@ -63,3 +63,18 @@ Write the first line as a statement of what the commit does, in fewer than 72 ch
 ## License
 
 Your contribution is licensed on the same terms as the project, including the commercial licensing in [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+## Rendered gallery files
+
+Run `make out/NAME.png` to render one example. Its prerequisites include its
+imports and quoted assets. An unrelated extension does not rebuild the image.
+Use `make -B out/NAME.png` after changing an external asset cache.
+
+Each gallery target compresses its PNG or APNG after rendering. Compression
+keeps the samples, frame timing and metadata. `make optimize-images` compresses
+all tracked gallery PNG files without rendering them again.
+
+New files in `out/` are ignored. To add a documentation image, review it,
+compress it with `python3 tools/optimize_png.py out/NAME.png`, then use
+`git add -f out/NAME.png`. Existing tracked images still update normally.
+Compression does not remove old files from Git history.

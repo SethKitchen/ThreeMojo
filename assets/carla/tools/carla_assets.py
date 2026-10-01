@@ -448,7 +448,11 @@ def credits(manifest, everything=False):
         return text
 
     required = [e for e in manifest['entries'] if e['license'] == 'CC-BY-4.0']
-    lines = ['## Credits', '']
+    lines = ['## Credits', '',
+             'This catalog lists the manifest assets, not the contents of one image.',
+             'Keep the applicable credits with shared renders and asset packages.',
+             'Rendered outputs can use the full catalog when an exact used-asset list is unavailable.',
+             'The asset licenses are separate from the ThreeMojo code license.', '']
     if required:
         lines += [line(e) for e in sorted(required, key=lambda e: e['id'])]
     else:
