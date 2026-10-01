@@ -327,7 +327,7 @@ struct SkinnedMesh(Copyable, Movable):
 def normalized_skin_weights(
     four: SIMD[DType.float32, BONES_PER_VERTEX]
 ) -> SIMD[DType.float32, BONES_PER_VERTEX]:
-    """Return one vertex's weights scaled to sum to one, as three.js's
+    """Return one vertex's weights with Manhattan length one, as three.js's
     `SkinnedMesh.normalizeSkinWeights` scales them.
 
     The divisor is the Manhattan length, the sum of the magnitudes. When
@@ -335,20 +335,24 @@ def normalized_skin_weights(
     three.js does "something reasonable".
 
     Args:
-        four: The vertex's four weights.
+        four: The vertex's four finite weights.
 
     Returns:
         The four weights, scaled.
+
+    Raises:
+        Nothing. This arithmetic helper does not validate inputs.
     """
-    var total = abs(four).reduce_add()
+    var wide = four.cast[DType.float64]()
+    var total = abs(wide).reduce_add()
     if total == 0:
         return SIMD[DType.float32, BONES_PER_VERTEX](1, 0, 0, 0)
-    return four / total
+    return (wide / total).cast[DType.float32]()
 
 
 def normalize_skin_weights(mut geometry: BufferGeometry) raises:
-    """Scale every vertex's skin weights to sum to one, in place: three.js's
-    `SkinnedMesh.normalizeSkinWeights`.
+    """Scale every vertex's skin weights to Manhattan length one, in place:
+    three.js's `SkinnedMesh.normalizeSkinWeights`.
 
     Args:
         geometry: The geometry, which must carry `skinWeight`.
