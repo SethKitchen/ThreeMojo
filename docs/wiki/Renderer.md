@@ -90,6 +90,8 @@ A `NORMALS` or `DEPTH` material writes data under either lit mode. See [Material
 
 `set_shading` refuses a mode that is none of the three.
 
+Cube captures keep the renderer's clipping planes, light probe grid, LTC tables, shadow settings, material override and node time. Each face uses its own full viewport and no tone mapping. A probe bake uses only the grid supplied to `scene_cube`, so it does not bake the renderer's grid into itself.
+
 ## Anti-aliasing
 
 `set_antialias(True)` is three.js's `antialias`. `render`, `render_array` and `render_cube` then draw the frame at `SUPERSAMPLE` times the size each way, two, and average every block of four pixels into one.
