@@ -358,6 +358,8 @@ By earcut, as three.js cuts it. `shape_geometry` builds the same arrays as three
 
 `triangulate(shape, curve_segments)` returns the points, the triangles and where each contour starts. `extract_points` returns the sampled contours after the checks below.
 
+Area and winding use a shared calculation with coordinates relative to one contour point and sums in doubles. Moving a small shape far from the origin does not change its winding or make its area disappear.
+
 ### What is refused
 
 A hole outside the outline, or inside another hole, is refused. A contour with fewer than three corners, or with no area, is refused too. three.js builds something from each of these and gives no error. The checks change no point, so a shape that passes is built as three.js builds it. An outline that crosses itself is filled in by earcut, as in three.js.

@@ -214,6 +214,21 @@ def test_is_clockwise_reads_the_signed_area() raises:
     assert_false(is_clockwise([Vector2(0, 0), Vector2(1, 0), Vector2(2, 0)]))
 
 
+def test_translated_shapes_keep_their_area_holes_and_caps() raises:
+    """Contour validation and triangulation ignore the world offset."""
+    for offset in [Float32(-100000), Float32(0), Float32(100000)]:
+        var shape = Shape(box_path(offset, offset, offset + 4, offset + 4))
+        shape.add_hole(box_path(offset + 1, offset + 1, offset + 2, offset + 2))
+        var cut = triangulate(shape, 1)
+        assert_equal(filled_area(cut), 15)
+        assert_equal(covered_by(cut, Vector2(offset + 1.5, offset + 1.5)), 0)
+        var solid = extrude(shape, Length(1, METER), curve_segments=1)
+        ref normals = solid.attribute_view(NORMAL)
+        var caps = solid.groups[0].count
+        for vertex in range(caps):
+            assert_equal(abs(normals.component(vertex, 2)), 1)
+
+
 def test_extent_is_the_box_around_a_contour() raises:
     var points: List[Vector2] = [
         Vector2(1, 1),
