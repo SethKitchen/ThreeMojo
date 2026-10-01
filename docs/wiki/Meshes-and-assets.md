@@ -157,7 +157,9 @@ A deleted instance keeps its index until `add_instance` uses the index again. Th
 
 three.js's ranges are memory in the shared buffers. Here they are bookkeeping only: the same starts, counts and refusals, with no copy behind them. `add_geometry` refuses a range that does not fit in `max_vertex_count` and `max_index_count`. It also refuses a geometry with an index when the ranges before it have none, and the other way round. A freed range slot is used again by the next `add_geometry`. `optimize` moves the ranges in use down, in the order they lie, as three.js does.
 
-`set_instance_count` first drops the deleted instances at the end, as three.js does. It refuses a count below an index in use. `set_geometry_size` refuses a size below a range in use. An instance can still draw a geometry that has no range, as before the ranges were ported.
+An empty batch regains all of its reserved capacity. Reservation checks occur before endpoint addition, so large counts cannot wrap past the capacity limit.
+
+`set_instance_count` first drops the deleted instances at the end, as three.js does. It refuses a count below an index in use. `set_geometry_size` refuses a negative size or a size below a range in use. An instance can still draw a geometry that has no range, as before the ranges were ported.
 
 ### Culling
 
