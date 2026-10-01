@@ -532,6 +532,8 @@ var clip = md2_clip(model, 0, MeshIndex(0))
 | `frames` | Each frame's name, and a position and a normal for each vertex of the geometry. |
 | `animations` | Each animation's name and frames. |
 
+Frame starts follow the declared byte stride, including padding after the vertices.
+
 Positions and normals turn from z up to y up, as in three.js. Each frame is also a morph target of the geometry, named by the frame. The morph targets are whole, not relative.
 
 three.js puts frames in an animation by their names: `run1` to `run6` are the animation `run`. `md2_clip` makes one track for each frame of an animation, at ten frames each second. A track goes to one at the time of its frame, and to zero at the times of the frames next to it. When `loop` is True, a track whose first key is at zero gets one more key at the end, as three.js does.
@@ -548,6 +550,7 @@ The loader refuses these, with a message that names the problem:
 - A file that is not `IDP2` version 8, or whose size is not the end in its header. three.js logs these and returns nothing.
 - A file that ends inside a value, and a model with no frames.
 - A zero or negative skin width or height, before dividing texture coordinates.
+- Negative header counts, invalid section offsets or spans, and a frame size too short for its vertex count.
 - A vertex, texture coordinate or normal index that is past its list.
 
 ### Example
