@@ -27,6 +27,19 @@ def successful_output(name='test_a', milliseconds=1):
 
 
 class RunSuiteTests(unittest.TestCase):
+    def test_results_only_retains_output_and_child_failure_checks(self):
+        for output, child_status, expected in (
+            ('', 0, 1),
+            ('FAIL [ 1.0 ] test_bad', 0, 1),
+            ('SKIP (no accelerator): test_a\n' + successful_output(), 0, 0),
+            (successful_output(milliseconds=6000), 0, 0),
+            (successful_output(), 7, 7),
+        ):
+            self.assertEqual(run_suite.main([
+                '--results-only', '--suite', 'unused.mojo', '--',
+                sys.executable, '-c', f'print({output!r});raise SystemExit({child_status})',
+            ]), expected)
+
     def test_counts_only_test_functions(self):
         text = "def test_a() raises:\n    pass\n\ndef helper():\n    pass\n" \
                "def test_b():\n    pass\n    def test_nested():\n        pass\n"

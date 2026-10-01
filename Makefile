@@ -356,7 +356,8 @@ test-gpu-device:
 	@printf '%s\n' $(filter-out $(GPU_HOST_TESTS),$(GPU_TESTS)) \
 	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
@@ -375,7 +376,8 @@ test-gpu-host: $(TEST_GPU_HOST_STAMP)
 $(TEST_GPU_HOST_STAMP):
 	@printf '%s\n' $(GPU_HOST_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some GPU host suites FAILED."; exit 1; }
 	@echo "All $(words $(GPU_HOST_TESTS)) GPU host suites passed."
