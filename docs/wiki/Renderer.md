@@ -106,6 +106,8 @@ The depth of an output pixel is the nearest of its four.
 
 ### A size in pixels is scaled with the frame
 
+`scaled` and `resized` keep the draw filter, selected OIT draw, vertex snapping and UV-space mesh selection. They also keep the light probe grid. `resized` draws across its new target, with a full viewport and no scissor test. It keeps the clear flags and the anti-aliasing setting.
+
 A point's `PointsMaterial` size and a line's one-pixel thickness are measured in the pixels of the finished image. The renderer carries a `render_scale`: one usually, and `SUPERSAMPLE` in the renderer `supersampled()` returns. `attenuated_size` converts a point's size with it, and `rasterize_frame` draws each line that many raster pixels wide.
 
 Without it, turning anti-aliasing on shrank both. An eight-pixel point covered 64 pixels with the setting off and 16 with it on. A one-pixel line resolved to half coverage, which is a gray line where a white one was asked for. Anti-aliasing must change how cleanly an edge is drawn, not how large an object is.
