@@ -170,7 +170,8 @@ def replace_sun_lights(
     plain directional light: no cascade, its shadow camera a square the
     casters' radius to each side, from half the radius to three and a
     half, standing two radii from their middle, back toward the sun. The
-    others light nothing until `restore_sun_lights`.
+    others light nothing until `restore_sun_lights`. All replacement
+    values and node references are checked before the first scene write.
 
     Args:
         scene: The scene, updated.
@@ -186,6 +187,9 @@ def replace_sun_lights(
     var sphere = caster_sphere(scene, assets)
     var center = sphere[0]
     var radius = sphere[1]
+    var changed_slots = List[Int]()
+    var changed_lights = List[Light]()
+    var moved_positions = List[Vector3]()
     for index in range(len(scene.lights)):
         var light = scene.lights[index]
         if (
@@ -196,24 +200,32 @@ def replace_sun_lights(
         ):
             continue
         if not light.cascade.last:
-            scene.lights[index].intensity = 0
-            continue
-        var toward = scene.world_position(light.node) - scene.world_position(
-            light.target
-        )
-        toward.normalize()
-        saved.nodes.append(light.node)
-        saved.positions.append(scene.node(light.node).position)
-        saved.nodes.append(light.target)
-        saved.positions.append(scene.node(light.target).position)
-        light.cascade = ShadowCascade.none()
-        light.shadow.set_extent(Length(radius, METER))
-        light.shadow.near = Length(radius * 0.5, METER)
-        light.shadow.far = Length(radius * 3.5, METER)
-        var stand = center + toward * (radius * 2)
-        scene.node(light.node).set_position(stand.x, stand.y, stand.z)
-        scene.node(light.target).set_position(center.x, center.y, center.z)
-        scene.lights[index] = light
+            light.intensity = 0
+        else:
+            var toward = scene.world_position(
+                light.node
+            ) - scene.world_position(light.target)
+            toward.normalize()
+            saved.nodes.append(light.node)
+            saved.positions.append(scene.get(light.node).position)
+            saved.nodes.append(light.target)
+            saved.positions.append(scene.get(light.target).position)
+            light.cascade = ShadowCascade.none()
+            light.shadow.set_extent(Length(radius, METER))
+            light.shadow.near = Length(radius * 0.5, METER)
+            light.shadow.far = Length(radius * 3.5, METER)
+            moved_positions.append(center + toward * (radius * 2))
+            moved_positions.append(center)
+        light.validate()
+        changed_slots.append(index)
+        changed_lights.append(light)
+    # Resolve every world transform before any node edit makes the scene
+    # stale, and reject invalid references before changing the first sun.
+    for index in range(len(changed_slots)):
+        scene.lights[changed_slots[index]] = changed_lights[index]
+    for index in range(len(saved.nodes)):
+        var at = moved_positions[index]
+        scene.node(saved.nodes[index]).set_position(at.x, at.y, at.z)
     scene.update()
     return saved^
 

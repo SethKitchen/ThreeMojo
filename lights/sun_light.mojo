@@ -47,7 +47,7 @@ from cameras.camera import Camera
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.csm import CsmFrustum
-from lights.light import directional_light
+from lights.light import DIRECTIONAL, Light, directional_light
 from lights.shadow import LightShadow, SUN_BLEND, ShadowCascade
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -191,9 +191,10 @@ def fit_sun[
         The fit.
 
     Raises:
-        Error: If the sun is at the origin, or the camera's view or
-            projection is refused.
+        Error: If the shadow settings are invalid, the sun is at the
+            origin, or the camera's view or projection is refused.
     """
+    shadow.validate()
     var length = position.length()
     if not isfinite(length) or length == 0:
         raise Error("A sun at the origin has no direction")
@@ -338,6 +339,8 @@ struct SunLight(Movable):
         Raises:
             Error: If `Light.validate` refuses the intensity.
         """
+        if not isfinite(intensity) or intensity < 0:
+            raise Error("A light's intensity must be finite and not negative")
         self.color = color
         self.intensity = intensity
         self.cast_shadow = False
@@ -372,7 +375,8 @@ struct SunLight(Movable):
         `SunShadowNode.renderShadow`, and update the scene.
 
         Each cascade light takes the sun's color, intensity, shadow and
-        `cast_shadow`, and its slice of the view.
+        `cast_shadow`, and its slice of the view. All candidate lights and
+        node references are checked before the scene is changed.
 
         Args:
             scene: The scene holding the sun, updated.
@@ -383,20 +387,14 @@ struct SunLight(Movable):
                 sun is at the origin, the shadow is refused by
                 `LightShadow.validate`, or the camera's view is refused.
         """
-        # One light per cascade, always.
-        for index in range(len(self.lights)):  # pragma: no branch
-            var at = self.lights[index]
-            if at >= len(scene.lights) or (
-                scene.lights[at].node != self.nodes[index]
-            ):
-                raise Error("A sun's cascades are not in this scene")
-        self.shadow.validate()
+        self._check_cascades(scene)
         var fit = fit_sun(
             scene, camera, scene.world_position(self.node), self.shadow
         )
+        var changes = List[Light]()
         for index in range(SUN_CASCADES):  # pragma: no branch
             ref cascade = fit.cascades[index]
-            ref light = scene.lights[self.lights[index]]
+            var light = scene.lights[self.lights[index]]
             light.color = self.color
             light.intensity = self.intensity
             light.cast_shadow = self.cast_shadow
@@ -408,8 +406,45 @@ struct SunLight(Movable):
             light.cascade = cascade.band(index == SUN_CASCADES - 1)
             light.validate()
             var aim = cascade.position + fit.direction
+            if not (_finite_point(cascade.position) and _finite_point(aim)):
+                raise Error("A sun's cascade position must be finite")
+            changes.append(light)
+        # All lights and node references are valid before the first write.
+        for index in range(SUN_CASCADES):  # pragma: no branch
+            ref cascade = fit.cascades[index]
+            var aim = cascade.position + fit.direction
+            scene.lights[self.lights[index]] = changes[index]
             scene.node(self.nodes[index]).set_position(
                 cascade.position.x, cascade.position.y, cascade.position.z
             )
             scene.node(self.targets[index]).set_position(aim.x, aim.y, aim.z)
         scene.update()
+
+    def _check_cascades(self, scene: Scene) raises:
+        """Check each cascade mapping without changing the scene."""
+        if (
+            len(self.lights) != SUN_CASCADES
+            or len(self.nodes) != SUN_CASCADES
+            or len(self.targets) != SUN_CASCADES
+        ):
+            raise Error("A sun needs two complete cascade mappings")
+        if self.lights[0] == self.lights[1]:
+            raise Error("A sun needs two distinct cascade lights")
+        for index in range(SUN_CASCADES):  # pragma: no branch
+            var at = self.lights[index]
+            if at < 0 or at >= len(scene.lights):
+                raise Error("A sun's cascades are not in this scene")
+            ref light = scene.lights[at]
+            if (
+                light.kind != DIRECTIONAL
+                or light.node != self.nodes[index]
+                or light.target != self.targets[index]
+            ):
+                raise Error("A sun's cascades are not in this scene")
+            _ = scene.get(self.nodes[index])
+            _ = scene.get(self.targets[index])
+
+
+def _finite_point(point: Vector3) -> Bool:
+    """Return True if every coordinate is finite."""
+    return isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
