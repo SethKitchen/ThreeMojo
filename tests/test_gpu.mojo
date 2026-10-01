@@ -14500,7 +14500,11 @@ def _models_on_both(
         frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
-        Lighting(scene, eye=camera_position(scene, camera)),
+        Lighting(
+            scene,
+            eye=camera_position(scene, camera),
+            profiles=renderer.spot_profiles(scene, assets),
+        ),
         lines=frame.segments,
         draws=frame.draws,
         points=frame.points,
@@ -14611,6 +14615,30 @@ def test_both_backends_march_a_volume_node_material_alike() raises:
             "the volume drew nothing",
         )
         assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_shape_volume_rays_with_spot_profiles() raises:
+    # Each beam must change the image from an ordinary spot cone, and
+    # the host/device must still agree through the volume's full ray.
+    if skipped_for_lack_of_a_gpu("volume rays use spot profiles"):
+        return
+    from lights.light import CONE_SPOT
+    from tests.test_volume_profile_rendering import profiled_volume_scene
+
+    for style in range(2):
+        var assets = Assets()
+        var scene = profiled_volume_scene(assets, style == 1)
+        var eye = Vector3(0.4, 0.3, 4)
+        var shaped = _models_on_both(scene, assets, eye)
+        assert_equal(count_mismatches(shaped[0], shaped[1], tolerance=1), 0)
+        scene.lights[0].spot_shape = CONE_SPOT
+        scene.lights[0].ies_map = NO_TEXTURE
+        var plain = _models_on_both(scene, assets, eye)
+        assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)
+        assert_true(
+            count_mismatches(shaped[0], plain[0], tolerance=1) > 20,
+            "the volume ignored its spot beam profile",
+        )
 
 
 # --- compute nodes -----------------------------------------------------------
