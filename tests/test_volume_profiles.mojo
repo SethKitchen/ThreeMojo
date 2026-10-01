@@ -89,7 +89,7 @@ def test_a_black_ies_profile_leaves_volume_steps_dark() raises:
     assert_equal(light.z, Float32(0))
 
 
-def test_an_ies_profile_scales_the_volume_before_distance_falloff() raises:
+def test_an_ies_profile_scales_each_step_with_distance_falloff() raises:
     var lighting = _ies(0.25)
     var n = Vector3(0, 0, 1)
     assert_almost_equal(
