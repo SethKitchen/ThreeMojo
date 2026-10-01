@@ -44,6 +44,22 @@ def _addresses(values: List[Int], low: Int, size: Int) raises:
                 raise Error("Object JSON: a node texture offset is repeated")
 
 
+def _sampler_spans(
+    program: nodes.NodeProgram, offsets: List[Int], expected: nodes.ValueType
+) raises:
+    """Keep sampler ids out of numeric uniforms that can overwrite them."""
+    for address in offsets:
+        for index in range(len(program.uniform_offsets)):
+            var first = program.uniform_offsets[index]
+            var type = program.uniform_types[index]
+            if address < first + nodes._pool_size(type) and first < address + 4:
+                if address != first or type != expected:
+                    raise Error(
+                        "Object JSON: a sampler overlaps a uniform of another"
+                        " type"
+                    )
+
+
 def validate_surface_program(program: nodes.NodeProgram) raises:
     """Check the storage read by a serialized surface node program.
 
@@ -105,6 +121,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             program.uniform_offsets[index], nodes._pool_size(type), pool, size
         )
         for prior in range(index):
+            var before = program.uniform_offsets[prior]
+            var first = program.uniform_offsets[index]
+            if first < before + nodes._pool_size(
+                program.uniform_types[prior]
+            ) and before < first + nodes._pool_size(type):
+                raise Error("Object JSON: node uniform spans overlap")
             if program.uniform_names[prior] == program.uniform_names[index]:
                 raise Error("Object JSON: a node uniform name is repeated")
     if len(program.attribute_names) != len(program.attribute_offsets) or len(
@@ -128,6 +150,14 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 raise Error("Object JSON: a node attribute name is repeated")
     _addresses(program.texture_offsets, pool, size)
     _addresses(program.cube_offsets, pool, size)
+    _sampler_spans(program, program.texture_offsets, nodes.NODE_SAMPLER)
+    _sampler_spans(program, program.cube_offsets, nodes.NODE_SAMPLER_CUBE)
+    for texture in program.texture_offsets:
+        for cube in program.cube_offsets:
+            if texture < cube + 4 and cube < texture + 4:
+                raise Error(
+                    "Object JSON: texture and cube sampler spans overlap"
+                )
     var graph = nodes.NodeGraph()
     for output in range(nodes.NODE_OUTPUT_COUNT):
         for instruction in range(counts[output]):

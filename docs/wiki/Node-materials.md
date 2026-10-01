@@ -611,7 +611,7 @@ three.js writes each node of the graph with its type and its inputs. This port w
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
-The reader checks the compiled program before a renderer can use it. Each instruction, register, constant, matrix, uniform and custom attribute must fit its storage. Every texture read must have an offset in the serialized texture list. Invalid code raises an error at load time.
+The reader checks the compiled program before a renderer can use it. Each instruction, register, constant, matrix, uniform and custom attribute must fit its storage. Every texture read must have an offset in the serialized texture list. Uniform spans cannot overlap, and a sampler cannot share storage with a numeric uniform. Invalid code raises an error at load time.
 
 ### three.js's node JSON
 

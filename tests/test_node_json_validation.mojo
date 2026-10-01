@@ -217,5 +217,58 @@ def test_viewport_programs_declare_their_scene_read() raises:
         _read(program)
 
 
+def test_uniform_spans_cannot_alias_each_other() raises:
+    var graph = nodes.NodeGraph()
+    var a = graph.uniform("a", Vector3(1, 0, 0))
+    var b = graph.uniform("b", Vector3(0, 1, 0))
+    graph.set_output(nodes.COLOR_NODE, graph.add(a, b))
+    var program = graph.compile()
+    var old = program.uniform_offsets[1]
+    var alias = program.uniform_offsets[0] + 1
+    program.uniform_offsets[1] = alias
+    var start = Int(program.code[nodes.COLOR_NODE.value * 2])
+    var count = Int(program.code[nodes.COLOR_NODE.value * 2 + 1])
+    for index in range(count):
+        var at = start + index * nodes.INSTRUCTION_FLOATS
+        if (
+            Int(program.code[at]) == nodes.NODE_UNIFORM.value
+            and Int(program.code[at + nodes.INSTRUCTION_IMMEDIATE]) == old
+        ):
+            program.code[at + nodes.INSTRUCTION_IMMEDIATE] = Float32(alias)
+    with assert_raises(contains="uniform spans overlap"):
+        _read(program)
+
+
+def test_sampler_uniforms_cannot_be_retyped_as_numeric_values() raises:
+    for cube in [False, True]:
+        var graph = nodes.NodeGraph()
+        var sample = graph.texture_cube(
+            graph.cube_uniform("map"), graph.vec3(0, 0, 1)
+        ) if cube else graph.texture(graph.texture_uniform("map"), graph.uv())
+        graph.set_output(nodes.FRAGMENT_NODE, sample)
+        var program = graph.compile()
+        program.uniform_types[0] = nodes.NODE_FLOAT
+        with assert_raises(contains="sampler"):
+            _read(program)
+
+
+def test_anonymous_sampler_slots_cannot_hide_inside_a_matrix_uniform() raises:
+    var graph = nodes.NodeGraph()
+    _ = graph.uniform("matrix", Matrix4())
+    var sample = graph.texture(graph.texture_uniform("map"), graph.uv())
+    graph.set_output(nodes.FRAGMENT_NODE, sample)
+    var program = graph.compile()
+    var alias = program.uniform_offsets[0] + 1
+    program.texture_offsets[0] = alias
+    var start = Int(program.code[nodes.FRAGMENT_NODE.value * 2])
+    var count = Int(program.code[nodes.FRAGMENT_NODE.value * 2 + 1])
+    for index in range(count):
+        var at = start + index * nodes.INSTRUCTION_FLOATS
+        if Int(program.code[at]) == nodes.NODE_TEXTURE.value:
+            program.code[at + nodes.INSTRUCTION_IMMEDIATE] = Float32(alias)
+    with assert_raises(contains="sampler"):
+        _read(program)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
