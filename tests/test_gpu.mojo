@@ -12377,6 +12377,27 @@ def test_both_backends_read_a_3d_and_an_array_texture_alike() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_a_rejected_volume_upload_keeps_the_previous_texture_state() raises:
+    from render.texture import data_texture
+
+    if skipped_for_lack_of_a_gpu(
+        "a rejected volume upload keeps its old state"
+    ):
+        return
+    var renderer = GpuRenderer(2, 2)
+    renderer.set_textures(TextureStore())
+    var textures = TextureStore()
+    _ = textures.add(data_texture(1, 1, [1.0, 0.0, 0.0, 1.0]))
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    volumes.textures[0].image.width = (1 << 24) + 1
+    with assert_raises(contains="exactly representable"):
+        renderer.set_textures(textures, volumes=volumes)
+    assert_equal(renderer.uploaded, 0)
+    assert_equal(len(renderer.volume_starts), 0)
+    assert_equal(len(renderer.volume_floats), 0)
+
+
 def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
     if skipped_for_lack_of_a_gpu("the gpu refuses a stacked texture"):
         return
