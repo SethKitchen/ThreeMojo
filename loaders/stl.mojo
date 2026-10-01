@@ -449,7 +449,12 @@ def parse_stl_text(text: String) raises -> StlModel:
             no normal or other than three vertices, a coordinate is not a
             number or not finite, or a word is not STL at all.
     """
-    var words = _Words(text)
+    # A UTF-8 BOM is an encoding marker only at the start of the file.
+    var source = text
+    if source.startswith(chr(0xFEFF)):
+        var trimmed = String(source[byte=3:])
+        source = trimmed^
+    var words = _Words(source)
     var positions = List[Float32]()
     var normals = List[Float32]()
     var solids = List[StlSolid]()
