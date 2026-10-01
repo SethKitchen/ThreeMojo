@@ -1115,6 +1115,7 @@ struct CarlaRenderer(Movable):
         for i in range(len(self.coverage_sources)):
             if self.coverage_sources[i] == source:
                 slot = i
+                break
         if source in self.coverage_read:
             return self.coverage_maps[slot]
         var texture = Texture(copy=self.assets.textures.get(source))
@@ -1203,6 +1204,8 @@ struct CarlaRenderer(Movable):
             settings.image_width, settings.image_height, self.workers
         )
         renderer.tone_mapping = NO_TONE_MAPPING
+        renderer.local_clipping_enabled = self.renderer.local_clipping_enabled
+        renderer.clipping_planes = self.renderer.clipping_planes.copy()
         var frame = RenderTarget(
             settings.image_width, settings.image_height, Color(0, 0, 0)
         )

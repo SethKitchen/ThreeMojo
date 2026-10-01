@@ -13,7 +13,9 @@ from extensions.carla.mesh_factory import ROAD_SURFACE
 from extensions.carla.sensor import ROAD, VEGETATION
 from extensions.carla.weather import weather_preset
 from geometries.box import box
-from materials.material import Material
+from materials.material import BACK_SIDE, Material
+from math.bounds import Plane
+from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.texture import COVERAGE, Texture, float_texture
@@ -111,6 +113,18 @@ def test_sensor_overrides_refresh_alpha_and_preserve_coverage_settings() raises:
         view.assets.materials.get(covered_flat).alpha_to_coverage, True
     )
 
+    var alpha_only = Material(
+        Color(255, 255, 255), side=BACK_SIDE, alpha_map=map, alpha_test=0.25
+    )
+    alpha_only.set_clipping_planes([Plane(Vector3(1, 0, 0), -100)])
+    var alpha_id = view.assets.materials.add(alpha_only)
+    var override_id = view._sensor_material(alpha_id, ROAD)
+    var alpha_flat = view.assets.materials.get(override_id)
+    assert_equal(alpha_flat.side, BACK_SIDE)
+    assert_equal(alpha_flat.alpha_map, map)
+    assert_equal(alpha_flat.clip_plane_count, 1)
+    assert_equal(alpha_flat.clipping_planes()[0].constant, -100)
+
 
 def test_cutout_depth_and_capture_materials_are_stable() raises:
     var camera = ActorId(0)
@@ -143,6 +157,18 @@ def test_cutout_depth_and_capture_materials_are_stable() raises:
             assert_equal(before.get_pixel(x, y).r, after.get_pixel(x, y).r)
             assert_equal(before.get_pixel(x, y).g, after.get_pixel(x, y).g)
             assert_equal(before.get_pixel(x, y).b, after.get_pixel(x, y).b)
+    # Make the foreground opaque, then hide it with a local clipping plane.
+    view.assets.textures.textures[map.value].pixels[3] = 255
+    var clipped = view.assets.materials.get(material)
+    clipped.set_clipping_planes([Plane(Vector3(1, 0, 0), -100)])
+    view.assets.materials.materials[material.value] = clipped
+    view.renderer.local_clipping_enabled = True
+    var local = view.render_depth(world, camera)
+    for y in range(before.height):
+        for x in range(before.width):
+            assert_equal(before.get_pixel(x, y).r, local.get_pixel(x, y).r)
+            assert_equal(before.get_pixel(x, y).g, local.get_pixel(x, y).g)
+            assert_equal(before.get_pixel(x, y).b, local.get_pixel(x, y).b)
     var count = view.assets.materials.count()
     var images = view.assets.textures.count()
     _ = view.render_semantic(world, camera)
