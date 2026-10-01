@@ -98,7 +98,17 @@ Volume(8.0).sqrt()                           # error: odd exponent
 rotation_z(90.0)                             # error: needs an Angle
 ```
 
-A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, and `make compile-fail` asserts that the compiler rejects every one.
+A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, and `make compile-fail` checks that the compiler rejects every one.
+
+The check first builds a valid control. Each negative case must then produce
+a source error in that case. A missing compiler, missing import, error in a
+dependency, crash or timeout fails the check. A failed build alone is not a
+valid rejection.
+
+Each case has expected error locations and messages in
+`tools/compile_fail_expectations.json`. An unexpected source error also fails.
+Review the case before you update an expectation. Do not accept new errors
+just to make the check pass.
 
 ## Clock
 
