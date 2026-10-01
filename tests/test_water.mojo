@@ -40,6 +40,7 @@ from extensions.water.optics import (
     hash12,
     max,
     refract,
+    refracted_sun,
     sky_radiance,
     smith_visibility,
     sun_direction,
@@ -86,6 +87,7 @@ from extensions.water.view import (
     require_view,
 )
 from math.vector3 import Vector3
+from std.math import sqrt
 from render.png import SRGB, DecodedImage
 from std.testing import (
     TestSuite,
@@ -773,6 +775,70 @@ def _ripples(laplacian: Float32) raises -> RippleField:
 
 def sun_clock(seconds: Float32) -> Duration:
     return Duration(seconds, SECOND)
+
+
+def test_flat_caustics_conserve_energy_on_shared_edges() raises:
+    # Every center falls on a cell diagonal. It must belong to one triangle.
+    var grid = ComplexField(SpectrumResolution(4))
+    var surface = SurfaceField(Length(4.0), grid^)
+    var image = render_caustics(surface, Vector3(0, 1, 0), Length(1), 4, 4)
+    for y in range(4):
+        for x in range(4):
+            for channel in range(3):
+                assert_almost_equal(image.channel(x, y, channel), Float32(1))
+    # Either winding must select the same pixels; a collapsed face adds none.
+    var first = caustic_covers(0.5, 0.5, 0, 0, 1, 0, 0, 1, 1)
+    var reversed = caustic_covers(0.5, 0.5, 0, 0, 0, 1, 1, 0, -1)
+    var second = caustic_covers(0.5, 0.5, 1, 0, 1, 1, 0, 1, 1)
+    assert_equal(first, reversed)
+    assert_true(first != second)
+    assert_true(not caustic_covers(0.5, 0.5, 0, 0, 1, 1, 2, 2, 0))
+
+
+def test_water_samples_use_texture_texel_centers() raises:
+    var grid = ComplexField(SpectrumResolution(8))
+    for y in range(8):
+        for x in range(8):
+            grid.put(x, y, 0, Float32(x))
+    var surface = SurfaceField(Length(8), grid^)
+    assert_almost_equal(sample_surface(surface, 2.5, 2.5).height, Float32(2))
+    assert_almost_equal(
+        sample_surface_smooth(surface, 2.5, 2.5).height, Float32(2)
+    )
+    assert_almost_equal(
+        sample_surface_filtered(surface, 2.5, 2.5, 0, 0, 0, 0, False).height,
+        Float32(2),
+    )
+    # Repeat sampling wraps the half-texel on the left, rather than shifting it.
+    assert_almost_equal(sample_surface(surface, 0, 2.5).height, Float32(3.5))
+    var pixels: List[Float32] = [1, 0, 0, 0, 1, 0]
+    var bed = PebbleBed(2, 1, pixels^)
+    assert_almost_equal(sample_pebble(bed, 0.25, 0.5).r, Float32(1))
+    assert_almost_equal(sample_pebble(bed, 0.25, 0.5).g, Float32(0))
+    assert_almost_equal(
+        sample_pebble_grad(bed, 0.75, 0.5, 0, 0, 0, 0).g, Float32(1)
+    )
+
+
+def test_underwater_sun_keeps_its_incident_direction() raises:
+    var sun = sun_direction()
+    var ray = refracted_sun(sun)
+    var eta = 1.0 / water_ior()
+    assert_true(ray.hit)
+    assert_almost_equal(ray.x, -sun.x * eta)
+    assert_almost_equal(ray.z, -sun.z * eta)
+    assert_almost_equal(ray.y, -sqrt(1.0 - eta * eta * (1.0 - sun.y * sun.y)))
+    assert_true(ray.y > -0.9)
+    var vertical = refracted_sun(Vector3(0, 1, 0))
+    assert_almost_equal(vertical.y, Float32(-1))
+
+
+def test_spectrum_and_glare_refuse_invalid_sizes_at_entry() raises:
+    for side in [0, -4, 3, 512]:
+        with assert_raises(contains="power of two"):
+            _ = build_spectrum(SpectrumResolution(side), Length(4.6), 0.078)
+        with assert_raises(contains="power of two"):
+            _ = glare_kernels(SpectrumResolution(side))
 
 
 def main() raises:

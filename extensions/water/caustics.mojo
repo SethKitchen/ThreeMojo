@@ -296,6 +296,8 @@ def _splat(
     var cx = ((floor_x[sc] - shift_x) / patch + ox) * Float32(n)
     var cy = ((floor_z[sc] - shift_z) / patch + oz) * Float32(n)
     var area2 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if area2 == 0.0:
+        return
     var projected = abs(area2 * 0.5)
     # Pixel area is `projected`. Source meters per pixel times `(C/L)^2`
     # is the shader's `area * uNorm`, and a flat surface lands near 1.
@@ -351,14 +353,32 @@ def caustic_covers(
         area2: Twice the signed area of the triangle, in pixel space.
 
     Returns:
-        True when the barycentric weights all share the triangle's sign.
+        True for interior pixels and one side of each shared edge. A
+        degenerate triangle covers no pixel.
     """
     var w0 = (bx - px) * (cy - py) - (by - py) * (cx - px)
     var w1 = (cx - px) * (ay - py) - (cy - py) * (ax - px)
     var w2 = (ax - px) * (by - py) - (ay - py) * (bx - px)
+    if area2 == 0.0:
+        return False
+    var sign = Float32(1.0)
     if area2 < 0.0:
-        return w0 <= 0.0 and w1 <= 0.0 and w2 <= 0.0
-    return w0 >= 0.0 and w1 >= 0.0 and w2 >= 0.0
+        sign = -1.0
+    return (
+        _edge_covers(w0 * sign, (cx - bx) * sign, (cy - by) * sign)
+        and _edge_covers(w1 * sign, (ax - cx) * sign, (ay - cy) * sign)
+        and _edge_covers(w2 * sign, (bx - ax) * sign, (by - ay) * sign)
+    )
+
+
+def _edge_covers(weight: Float32, dx: Float32, dy: Float32) -> Bool:
+    # A half-open edge rule gives a shared edge to exactly one triangle.
+    # Reverse-wound triangles reverse the edge before reaching this rule.
+    if weight > 0.0:
+        return True
+    if weight < 0.0:
+        return False
+    return dy < 0.0 or (dy == 0.0 and dx > 0.0)
 
 
 def _min3(a: Float32, b: Float32, c: Float32) -> Float32:

@@ -14,7 +14,7 @@ real-valued height.
 
 from extensions.water.field import ComplexField, complex_mul
 from extensions.water.random import Mulberry32
-from extensions.water.resolution import SpectrumResolution
+from extensions.water.resolution import require_resolution, SpectrumResolution
 from std.math import cos, exp, floor, hypot, log, sin, sqrt
 from units.si import SECOND, Duration, Length
 
@@ -124,6 +124,7 @@ def build_spectrum(
         raise Error("Ocean patch length must be positive")
     if target_slope <= 0.0:
         raise Error("Ocean target slope must be positive")
+    require_resolution(resolution)
     var n = resolution.value
     var re = List[Float32](length=n * n, fill=0.0)
     var im = List[Float32](length=n * n, fill=0.0)

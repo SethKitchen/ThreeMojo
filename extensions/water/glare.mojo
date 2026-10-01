@@ -15,7 +15,7 @@ stay hairlines.
 
 from extensions.water.field import ComplexField, complex_mul, fft2
 from extensions.water.random import Mulberry32
-from extensions.water.resolution import SpectrumResolution
+from extensions.water.resolution import require_resolution, SpectrumResolution
 from std.math import cos, hypot, sin
 
 
@@ -121,6 +121,7 @@ def glare_kernels(resolution: SpectrumResolution) raises -> GlareKernels:
     Raises:
         Error: If `resolution` is not valid.
     """
+    require_resolution(resolution)
     var n = resolution.value
     var radius = Float32(n) * 0.11
     var spatial = List[Float32](length=n * n * 3, fill=0.0)
@@ -164,6 +165,7 @@ def glare_kernels(resolution: SpectrumResolution) raises -> GlareKernels:
 def _power_spectrum(
     aperture: List[Float32], resolution: SpectrumResolution
 ) raises -> List[Float32]:
+    require_resolution(resolution)
     var n = resolution.value
     var field = ComplexField(resolution)
     for y in range(n):  # pragma: no branch
