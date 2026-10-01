@@ -356,4 +356,8 @@ A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. The
 
 `normalize(value, component)` and `denormalize(value, component)` convert between a number and a stored integer. `component` is a `ComponentType`, such as `UINT8_COMPONENT`. three.js reads it from the typed array.
 
-`SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform.
+`ceil_power_of_two` and `floor_power_of_two` require a positive integer.
+The ceiling raises an error if its result cannot fit in `Int`.
+The floor accepts every positive `Int`, including `Int.MAX`.
+
+`SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.

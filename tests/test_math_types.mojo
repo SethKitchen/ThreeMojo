@@ -277,6 +277,19 @@ def test_scalar_helpers() raises:
         _ = floor_power_of_two(-2)
 
 
+def test_power_of_two_helpers_do_not_overflow_at_the_int_limit() raises:
+    var highest = Int.MAX // 2 + 1
+    assert_equal(ceil_power_of_two(highest - 1), highest)
+    assert_equal(ceil_power_of_two(highest), highest)
+    assert_equal(floor_power_of_two(highest - 1), highest // 2)
+    assert_equal(floor_power_of_two(highest), highest)
+    assert_equal(floor_power_of_two(highest + 1), highest)
+    assert_equal(floor_power_of_two(Int.MAX), highest)
+    for value in [highest + 1, Int.MAX]:
+        with assert_raises(contains="does not fit in Int"):
+            _ = ceil_power_of_two(value)
+
+
 def test_the_seeded_generator_matches_three_js() raises:
     # The first three numbers three.js's seededRandom(42) returns.
     var random = SeededRandom(42)
