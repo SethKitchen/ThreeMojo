@@ -43,6 +43,9 @@ from units.si import Angle
 # chain of products; a real shear or scale is thousands of times past this.
 comptime FRAME_TOLERANCE = Float32(1e-4)
 
+# The common look-at basis perturbs a parallel direction by this amount.
+comptime _LOOK_AT_NUDGE = Float32(0.0001)
+
 
 def _finite_direction(vector: Vector3) -> Bool:
     """Return whether all three direction components are finite."""
@@ -863,9 +866,9 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             # Nudge along an axis that is not the dominant direction.
             # This keeps the usual y/z-up choice and works at any scale.
             if abs(z.z) > max(abs(z.x), abs(z.y)):
-                z.x += 0.0001
+                z.x += _LOOK_AT_NUDGE
             else:
-                z.z += 0.0001
+                z.z += _LOOK_AT_NUDGE
             z = _unit_direction(z)
             x = _cross_direction(above, z)
         x = _unit_direction(x)
