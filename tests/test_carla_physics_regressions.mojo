@@ -66,6 +66,45 @@ def test_static_primitives_stop_a_dynamic_sphere() raises:
         )
 
 
+def test_dynamic_box_and_capsule_meet_static_round_shapes() raises:
+    for use_box in [True, False]:
+        var world = PhysicsWorld()
+        world.gravity = Vector3(0, 0, 0)
+        var moving = Shape.capsule(Length(0.5), Length(0.5))
+        var fixed = Shape.sphere(Length(1))
+        if use_box:
+            moving = Shape.box(Length(0.5), Length(0.5), Length(0.5))
+            fixed = Shape.capsule(Length(1), Length(0.5))
+        var body = RigidBody(
+            DYNAMIC,
+            moving^,
+            Mass(1),
+            Vector3(-2, 0, 0),
+            Quaternion.identity(),
+        )
+        body.linear_velocity = Vector3(1, 0, 0)
+        var id = world.add_body(body^)
+        # Insert the static after the dynamic to exercise reversed pair order.
+        _ = world.add_body(
+            RigidBody(
+                STATIC,
+                fixed^,
+                Mass(0),
+                Vector3(0, 0, 0),
+                Quaternion.identity(),
+            )
+        )
+        var contacts = 0
+        for _ in range(300):
+            world.step(Duration(0.01, SECOND))
+            contacts += world.contact_count
+        assert_true(contacts > 0)
+        assert_almost_equal(world.bodies[id.value].position.x, -1.5, atol=0.006)
+        assert_almost_equal(
+            world.bodies[id.value].linear_velocity.x, 0, atol=1e-5
+        )
+
+
 def test_external_force_and_torque_span_the_tick() raises:
     for substeps in [1, 5]:
         var sim = CarlaPhysics()
