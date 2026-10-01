@@ -174,6 +174,8 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         var ml_mid = dimensions.midshaft_ml.value * 0.5
         var ap_mid = dimensions.midshaft_ap.value * 0.5
         var bow = dimensions.lateral_bow.value
+        if dimensions.side == LEFT:
+            bow = -bow
         self.head = dimensions.head_center
         self.head_r = Vector3(0.82 * head_r, 0.72 * head_r, 0.68 * head_r)
         self.styloid = dimensions.styloid
@@ -228,7 +230,12 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         box.include_ellipsoid(self.styloid, self.styloid_r)
         box.include_ellipsoid(self.malleolus, self.malleolus_r)
         box.include_sphere(self.s0, max(self.ml0, self.ap0))
+        box.include_sphere(self.s1, max(self.ml1, self.ap1))
+        box.include_sphere(self.s2, max(self.ml2, self.ap2))
+        box.include_sphere(self.s3, max(self.ml3, self.ap3))
         box.include_sphere(self.s4, max(self.ml4, self.ap4))
+        box.include_sphere(self.neck_a, self.neck_ra)
+        box.include_sphere(self.neck_b, self.neck_rb)
         var padded = box.padded(0.018 * L + Float32(0.003))
         self.low = padded.low
         self.high = padded.high

@@ -1,6 +1,6 @@
 # Segment inertia
 
-`segment_inertia` returns the mass, the center of mass and the inertia tensor of a thigh, a shank or a foot. A rigid-body or musculoskeletal simulation can take them directly.
+`segment_inertia` returns the mass, the center of mass and the inertia tensor of a thigh, a shank or a foot. These are estimates for the authored template. They are not validated inertial properties of a real person.
 
 The module is `extensions/humanoid/skeleton/limb/inertia.mojo`. This is not a three.js port. See [Extensions](Extensions).
 
@@ -62,4 +62,10 @@ De Leva reports 41%, 45% and 44% for the three centers, and radii of 33% and 15%
 
 ## Limits
 
-Stature must lie in 1.2 m through 2.5 m. `Sex` must be `MALE` or `FEMALE`. `BodySide` must be `RIGHT` or `LEFT`. The body above the hip is not modeled, so there is no body mass to take fractions of.
+Stature must lie in 1.2 m through 2.5 m. `Sex` must be `MALE` or `FEMALE`. `BodySide` must be `RIGHT` or `LEFT`. This integral covers only the thigh, shank and foot. It does not return whole-body mass or inertia.
+
+For engineering use, validate the geometry, tissue assignments and segment boundaries against the intended subject and task. Check grid convergence at more than one step size. A nonzero result or a passing rendering test does not establish physical accuracy.
+
+The skin loft is a geometric envelope. It is not a measured tissue boundary. Small tissues use the density approximations listed above. Per-part solids can overlap. Do not sum their mass reports to estimate whole-body mass. The model has no constitutive law, muscle activation, joint-contact solver or uncertainty estimate.
+
+Animation, facial shape changes and mesh simplification do not update this integral. Keep the anatomical spec and physical model separate from visual meshes. Do not compute physical properties from diagrammatically widened vessels, baked textures or a game mesh.

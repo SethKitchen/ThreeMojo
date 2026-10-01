@@ -386,6 +386,12 @@ struct MeniscusField(DistanceField, ImplicitlyCopyable):
             self.r2 = 1.00 * tube
             self.r3 = 0.92 * tube
             self.r4 = 0.98 * tube
+        if dimensions.side == LEFT:
+            self.p0.x = 2 * center.x - self.p0.x
+            self.p1.x = 2 * center.x - self.p1.x
+            self.p2.x = 2 * center.x - self.p2.x
+            self.p3.x = 2 * center.x - self.p3.x
+            self.p4.x = 2 * center.x - self.p4.x
         self.k = 0.55 * tube
         self.epsilon = 0.18 * tube
         var box = empty_bounds()

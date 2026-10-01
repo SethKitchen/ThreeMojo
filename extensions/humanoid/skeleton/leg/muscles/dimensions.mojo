@@ -68,7 +68,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     pelvis_dimensions,
 )
 from math.vector3 import Vector3
-from std.math import sqrt
+from std.math import isfinite, sqrt
 from units.si import Length
 
 
@@ -211,12 +211,19 @@ struct MuscleDimensions(ImplicitlyCopyable):
         check_spec(self.stature, self.sex, self.side, "muscle")
         if not self.athleticism.is_valid():
             raise Error("A muscle needs a toned or untoned athleticism")
-        if self.scale <= 0:
+        if not isfinite(self.scale) or self.scale <= 0:
             raise Error("A muscle radius scale must be positive")
-        if self.k <= 0:
+        if not isfinite(self.k) or self.k <= 0:
             raise Error("A muscle blend radius must be positive")
-        if self.epsilon <= 0:
+        if not isfinite(self.epsilon) or self.epsilon <= 0:
             raise Error("A muscle gradient step must be positive")
+        for slot in range(BELLY_SLOTS):
+            if not isfinite(self.bellies[slot]):
+                raise Error("A packed muscle station must be finite")
+            if slot % 4 >= 2 and self.bellies[slot] <= -1:
+                raise Error(
+                    "A packed muscle radius multiplier must be positive"
+                )
         finite_point(self.hip, "hip", "muscle")
         finite_point(self.gt, "greater trochanter", "muscle")
         finite_point(self.lt, "lesser trochanter", "muscle")
@@ -316,11 +323,11 @@ struct MuscleField(DistanceField, ImplicitlyCopyable):
         self.k = dimensions.k
         self.epsilon = dimensions.epsilon
         var box = empty_bounds()
-        box.include_sphere(self.p0, self.r0)
-        box.include_sphere(self.p1, self.r1)
-        box.include_sphere(self.p2, self.r2)
-        box.include_sphere(self.p3, self.r3)
-        box.include_sphere(self.p4, self.r4)
+        box.include_sphere(self.p0, max(self.r0, self.a0))
+        box.include_sphere(self.p1, max(self.r1, self.a1))
+        box.include_sphere(self.p2, max(self.r2, self.a2))
+        box.include_sphere(self.p3, max(self.r3, self.a3))
+        box.include_sphere(self.p4, max(self.r4, self.a4))
         var padded = box.padded(0.006 + self.r2)
         self.low = padded.low
         self.high = padded.high
