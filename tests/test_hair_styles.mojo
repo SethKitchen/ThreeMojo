@@ -22,13 +22,21 @@ from extensions.humanoid.skeleton.head.hair.geometry import (
 from extensions.humanoid.skeleton.head.hair.groom import (
     GroomSpec,
     HairBody,
+    HairGroom,
     groom_hair,
 )
 from extensions.humanoid.skeleton.head.hair.styles import (
+    BOB,
+    BRAID,
     BUN,
     GROWN,
+    HALF_UP,
+    HIGH_PONYTAIL,
     LONG,
+    PIGTAILS,
+    PIXIE,
     PONYTAIL,
+    SPACE_BUNS,
     LAYERED,
     MOHAWK,
     HairStyle,
@@ -84,8 +92,18 @@ def _file(
 def test_a_hair_style_is_named() raises:
     assert_true(MOHAWK.is_valid())
     assert_false(HairStyle(-1).is_valid())
-    assert_false(HairStyle(6).is_valid())
-    assert_equal(len(named_hair_styles()), 6)
+    assert_false(HairStyle(13).is_valid())
+    assert_equal(len(named_hair_styles()), 13)
+    assert_equal(hair_style_label(HIGH_PONYTAIL), "high ponytail")
+    assert_equal(hair_style_label(PIXIE), "pixie")
+    assert_true(BOB.is_designed() and not GROWN.is_designed())
+    assert_true(not MOHAWK.is_designed() and not HairStyle(99).is_designed())
+    assert_equal(PIGTAILS.ties(), 2)
+    assert_equal(SPACE_BUNS.ties(), 2)
+    assert_equal(BRAID.ties(), 1)
+    assert_equal(HALF_UP.ties(), 1)
+    assert_equal(BOB.ties(), 0)
+    assert_true(HALF_UP.is_designed() and not HALF_UP.is_tied())
     assert_equal(hair_style_label(LONG), "long")
     assert_equal(hair_style_label(PONYTAIL), "ponytail")
     assert_equal(hair_style_label(BUN), "bun")
@@ -94,14 +112,14 @@ def test_a_hair_style_is_named() raises:
     assert_equal(hair_style_label(GROWN), "grown")
     assert_equal(hair_style_label(LAYERED), "layered")
     assert_equal(hair_style_label(MOHAWK), "mohawk")
-    assert_equal(hair_style_label(HairStyle(9)), "hair style")
+    assert_equal(hair_style_label(HairStyle(99)), "hair style")
     assert_equal(hair_style_path(LAYERED), "assets/hair/layered.bin")
     with assert_raises(contains="no file"):
         _ = hair_style_path(GROWN)
     with assert_raises(contains="no file"):
         _ = hair_style_path(PONYTAIL)
     with assert_raises(contains="named style"):
-        _ = hair_style_path(HairStyle(9))
+        _ = hair_style_path(HairStyle(99))
 
 
 def test_a_style_file_is_read() raises:
@@ -176,7 +194,7 @@ def test_a_style_is_laid_on_the_head() raises:
             ):  # pragma: no branch
                 assert_true(skin.distance(groom.points[index]) > 0)
     with assert_raises(contains="named style"):
-        _ = groom_hair(dims, spec, 1, HairStyle(9))
+        _ = groom_hair(dims, spec, 1, HairStyle(99))
 
 
 def _curled(curl: Float32) raises -> HeadMuscleDimensions:
@@ -252,6 +270,83 @@ def test_long_tied_and_bunned_hair_is_designed() raises:
         _ = groom_hair(dims, none, 1, BUN)
 
 
+def _tips(groom: HairGroom) -> List[Vector3]:
+    """Return the last point of every strand."""
+    var tips = List[Vector3]()
+    for strand in range(len(groom)):  # pragma: no branch
+        tips.append(groom.points[groom.starts[strand + 1] - 1])
+    return tips^
+
+
+def test_hair_is_tied_on_both_sides() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var spec = GroomSpec(dims, 16, 0)
+    # Pigtails fall on both sides, below the ears.
+    var left = 0
+    var right = 0
+    for tip in _tips(groom_hair(dims, spec, 1, PIGTAILS)):  # pragma: no branch
+        assert_true(tip.y < h.at(0, 70.0, 0).y)
+        if tip.x > 0:
+            right += 1
+        else:
+            left += 1
+    assert_true(left > 0 and right > 0)
+    # Space buns coil on both sides of the crown.
+    var sides = 0
+    var other = 0
+    for tip in _tips(
+        groom_hair(dims, spec, 1, SPACE_BUNS)
+    ):  # pragma: no branch
+        assert_true(tip.y > h.at(0, 78.0, 0).y)
+        if tip.x > 0:
+            sides += 1
+        else:
+            other += 1
+    assert_true(sides > 0 and other > 0)
+
+
+def test_a_braid_and_a_high_ponytail_hang_behind() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var spec = GroomSpec(dims, 12, 0)
+    for tip in _tips(groom_hair(dims, spec, 1, BRAID)):  # pragma: no branch
+        assert_true(tip.y < h.at(0, 50.0, 0).y)
+        assert_true(tip.z < h.at(0, 0, -8.0).z)
+    # The high ponytail's tail springs from high on the crown.
+    var high = groom_hair(dims, spec, 1, HIGH_PONYTAIL)
+    var top = Float32(-1e9)
+    for p in high.points:  # pragma: no branch
+        top = max(top, p.y)
+    assert_true(top > h.at(0, 82.0, 0).y)
+
+
+def test_cut_styles_end_where_they_are_cut() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var spec = GroomSpec(dims, 16, 0)
+    # A bob is cut level at the jaw: no hair falls far below it.
+    var bob = groom_hair(dims, spec, 1, BOB)
+    for p in bob.points:  # pragma: no branch
+        assert_true(p.y > h.at(0, 61.0, 0).y)
+    # A pixie's strands are a few centimeters long.
+    var pixie = groom_hair(dims, spec, 1, PIXIE)
+    for strand in range(len(pixie)):  # pragma: no branch
+        var root = pixie.points[pixie.starts[strand]]
+        var tip = pixie.points[pixie.starts[strand + 1] - 1]
+        assert_true((tip - root).length() < h.cm(8.0))
+    # Half up: the top is tied short at the back, the rest falls long.
+    var half = groom_hair(dims, spec, 1, HALF_UP)
+    var long = 0
+    var short = 0
+    for tip in _tips(half):  # pragma: no branch
+        if tip.y < h.at(0, 58.0, 0).y:
+            long += 1
+        else:
+            short += 1
+    assert_true(long > 0 and short > 0)
+
+
 def test_hair_falls_against_the_head_and_the_body() raises:
     var dims = _dims()
     var h = dims.head.copy()
@@ -286,7 +381,7 @@ def test_a_mohawk_shaves_the_sides() raises:
     crown = crown + skin.gradient(crown) * (h.cm(0.3) - skin.distance(crown))
     assert_true(mohawk.distance(crown) < 0)
     with assert_raises(contains="named style"):
-        _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(9))
+        _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(99))
     var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8, 1, MOHAWK)
     assert_true(shell.triangle_count() > 0)
 

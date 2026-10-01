@@ -6,15 +6,25 @@
 """Hairstyles: how a head of hair is cut and laid.
 
 `GROWN` is the groom's own hair, grown from the scalp and combed down
-to the length `HAIR_LENGTH` asks for. Three more are designed on the
+to the length `HAIR_LENGTH` asks for. Ten more are designed on the
 groom's own guides:
 
 - `LONG`: parted down the middle and falling past the shoulders.
 - `PONYTAIL`: gathered to a tie at the back of the head, and a tail
   that springs back from it and falls.
 - `BUN`: gathered higher, and coiled round a ball on the tie.
+- `HIGH_PONYTAIL`: gathered high on the crown, with a longer tail.
+- `PIGTAILS`: parted down the middle and gathered to a tie behind each
+  ear.
+- `SPACE_BUNS`: parted down the middle and coiled into a bun on each
+  side of the crown.
+- `BRAID`: gathered at the nape into one braid of three strands.
+- `HALF_UP`: the top gathered to a small tail at the back, the rest
+  falling long.
+- `BOB`: parted down the middle and cut level at the jaw.
+- `PIXIE`: cropped short and combed forward and down.
 
-The last two are strands an artist groomed, kept in `assets/hair/`:
+Two are strands an artist groomed, kept in `assets/hair/`:
 
 - `LAYERED`: Sintel's hair, a layered cut to the jaw with a fringe,
   from Sintel Lite 2.57b by BenDansie. (c) the Blender Foundation,
@@ -63,15 +73,36 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named style."""
-        return self.value >= 0 and self.value <= BUN.value
+        return self.value >= 0 and self.value <= PIXIE.value
 
     def is_scanned(self) -> Bool:
         """Return True for a style an artist groomed, kept in a file."""
         return self == LAYERED or self == MOHAWK
 
+    def is_designed(self) -> Bool:
+        """Return True for a style the groom designs on its guides."""
+        return self.is_valid() and self != GROWN and not self.is_scanned()
+
     def is_tied(self) -> Bool:
-        """Return True for a style gathered into a tie."""
-        return self == PONYTAIL or self == BUN
+        """Return True for a style that gathers all of its hair into
+        ties."""
+        return (
+            self == PONYTAIL
+            or self == BUN
+            or self == HIGH_PONYTAIL
+            or self == PIGTAILS
+            or self == SPACE_BUNS
+            or self == BRAID
+        )
+
+    def ties(self) -> Int:
+        """Return how many ties the style gathers its hair to: none, one,
+        or one on each side."""
+        if self == PIGTAILS or self == SPACE_BUNS:
+            return 2
+        if self.is_tied() or self == HALF_UP:
+            return 1
+        return 0
 
 
 comptime GROWN = HairStyle(0)
@@ -80,6 +111,13 @@ comptime MOHAWK = HairStyle(2)
 comptime LONG = HairStyle(3)
 comptime PONYTAIL = HairStyle(4)
 comptime BUN = HairStyle(5)
+comptime HIGH_PONYTAIL = HairStyle(6)
+comptime PIGTAILS = HairStyle(7)
+comptime SPACE_BUNS = HairStyle(8)
+comptime BRAID = HairStyle(9)
+comptime HALF_UP = HairStyle(10)
+comptime BOB = HairStyle(11)
+comptime PIXIE = HairStyle(12)
 
 
 def hair_style_label(style: HairStyle) -> String:
@@ -89,31 +127,39 @@ def hair_style_label(style: HairStyle) -> String:
         style: A style, named or not.
 
     Returns:
-        `"grown"`, `"layered"`, `"mohawk"`, `"long"`, `"ponytail"` or
-        `"bun"`, or `"hair style"` when `style` is not named.
+        Its name in lower case, as `"grown"`, `"high ponytail"` or
+        `"pixie"`, or `"hair style"` when `style` is not named.
     """
-    if style == GROWN:
-        return "grown"
-    if style == LAYERED:
-        return "layered"
-    if style == MOHAWK:
-        return "mohawk"
-    if style == LONG:
-        return "long"
-    if style == PONYTAIL:
-        return "ponytail"
-    if style == BUN:
-        return "bun"
-    return "hair style"
+    var names: List[String] = [
+        "grown",
+        "layered",
+        "mohawk",
+        "long",
+        "ponytail",
+        "bun",
+        "high ponytail",
+        "pigtails",
+        "space buns",
+        "braid",
+        "half up",
+        "bob",
+        "pixie",
+    ]
+    if not style.is_valid():
+        return "hair style"
+    return names[style.value]
 
 
 def named_hair_styles() -> List[HairStyle]:
     """Return every named style in a stable order.
 
     Returns:
-        `GROWN`, `LAYERED`, `MOHAWK`, `LONG`, `PONYTAIL` and `BUN`.
+        `GROWN` through `PIXIE`.
     """
-    return [GROWN, LAYERED, MOHAWK, LONG, PONYTAIL, BUN]
+    var all = List[HairStyle]()
+    for value in range(PIXIE.value + 1):  # pragma: no branch
+        all.append(HairStyle(value))
+    return all^
 
 
 def hair_style_path(style: HairStyle) raises -> String:

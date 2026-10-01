@@ -227,15 +227,26 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `LONG` | Parted down the middle, and falling 34 to 50 cm, past the shoulders. |
 | `PONYTAIL` | Combed back to a tie at the back of the head. A tail of 20 to 32 cm springs back from the tie and falls. |
 | `BUN` | Combed up to a tie at the top of the back of the head, and coiled round a ball on it. |
+| `HIGH_PONYTAIL` | Combed up to a tie high on the crown. A tail of 26 to 38 cm springs from it. |
+| `PIGTAILS` | Parted down the middle and tied behind each ear. Each tail is 16 to 26 cm. |
+| `SPACE_BUNS` | Parted down the middle and coiled into a small bun on each side of the crown. |
+| `BRAID` | Combed back to a tie at the nape, and woven into one braid of three strands, 30 to 36 cm long. |
+| `HALF_UP` | The hair above the temples is tied in a short tail at the back. The rest falls long. |
+| `BOB` | Parted down the middle and cut level at the jaw. |
+| `PIXIE` | Cropped short, 3 to 6.5 cm, and combed forward and down. |
 
 An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`.
 
-The groom designs `LONG`, `PONYTAIL` and `BUN` on its own guides. Each guide grows from a root on the scalp's hair:
+The groom designs the other ten on its own guides. Each guide grows from a root on the scalp's hair:
 
-- For `LONG`, the guide walks over the hair away from the part and down, to the ears. Then it hangs to its length and sways a little.
-- For a tied style, the guide follows the arc from its root to the tie, round the cranium's middle. So hair from the brow goes up over the crown, and hair from the temple goes back over the ear. The arc arches up a little in its middle, so the hair clears the ear. Each point is laid on the hair.
+- Loose hair walks over the hair away from the part and down, to the ears. Then it hangs to its length and sways a little. A bob's hangs only to its cut.
+- A pixie's walks forward and down, as far as it is long.
+- Tied hair follows the arc from its root to its tie, round the cranium's middle. A style with a tie on each side takes the nearer one. Hair from the brow goes up over the crown, and hair from the temple goes back over the ear. The arc arches up a little in its middle, so the hair clears the ear.
+- Past the tie, a tail springs back and falls. A bun climbs over its ball and coils round it. A braid falls in three lanes, each a third of a turn behind the next, which cross over one another.
 
-Each strand is then lifted out of the head's skin and the body's grid. Tied hair is pulled taut over the scalp: it curls only past the tie, and its shell does not stand fuller for the curl. Long and tied hair keep a thin shell, so the strands are what shows.
+Each strand is then lifted out of the head's skin and the body's grid. A lifted point carries the rest of its strand with it, so long hair drapes over the shoulders and does not break. Tied hair is pulled taut over the scalp: it curls only past the tie, and its shell does not stand fuller for the curl. Every designed style keeps a thin shell, so the strands are what shows. A tied style's roots reach down to the nape, which shows when the hair is pulled up.
+
+`examples/hairstyles.mojo` draws one woman in every style and writes `out/hairstyles.png`. Each head is seen from behind and to one side.
 
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 

@@ -37,18 +37,28 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from extensions.humanoid.genome import HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.field import DistanceField, smin
-from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
+from extensions.humanoid.skeleton.head.frame import (
+    HeadDimensions,
+    HeadMuscleDimensions,
+)
 from extensions.humanoid.skeleton.head.hair.dimensions import (
     SCALP_HAIR,
     HairShape,
 )
 from extensions.humanoid.skeleton.head.hair.styles import (
+    BOB,
+    BRAID,
     BUN,
     GROWN,
+    HALF_UP,
+    HIGH_PONYTAIL,
     LAYERED,
     LONG,
     MOHAWK,
+    PIGTAILS,
+    PIXIE,
     PONYTAIL,
+    SPACE_BUNS,
     HairStyle,
     HairStyleFile,
     hair_style_path,
@@ -85,6 +95,11 @@ comptime BUN_TIE_Y = Float32(83.0)
 comptime BUN_TIE_Z = Float32(-6.5)
 comptime TAIL_SPREAD = Float32(2.0)
 comptime BUN_RADIUS = Float32(3.2)
+# How far down roots are sought for a style with a tie: the lowest
+# upward part of a direction from the cranium's middle.
+comptime NAPE_LOWEST = Float32(-0.7)
+# How far a bun's ball sits out from its tie, in its radius.
+comptime BUN_FLOAT = Float32(1.25)
 comptime LONG_HANGS_Y = Float32(70.0)
 comptime PART_SPREAD = Float32(0.9)
 comptime MAX_STEPS = 60
@@ -104,6 +119,43 @@ comptime LONG_SHORTEST = Float32(34.0)
 comptime LONG_LONGEST = Float32(50.0)
 comptime TAIL_SHORTEST = Float32(20.0)
 comptime TAIL_LONGEST = Float32(32.0)
+comptime HIGH_TAIL_SHORTEST = Float32(26.0)
+comptime HIGH_TAIL_LONGEST = Float32(38.0)
+comptime PIGTAIL_SHORTEST = Float32(16.0)
+comptime PIGTAIL_LONGEST = Float32(26.0)
+comptime BRAID_SHORTEST = Float32(30.0)
+comptime BRAID_LONGEST = Float32(36.0)
+comptime HALF_TAIL_SHORTEST = Float32(9.0)
+comptime HALF_TAIL_LONGEST = Float32(15.0)
+comptime PIXIE_SHORTEST = Float32(3.0)
+comptime PIXIE_LONGEST = Float32(6.5)
+# More ties, in template centimeters: a high ponytail's on the crown; a
+# pigtail's behind each ear; a space bun's on each side of the crown; a
+# braid's at the nape; and a half-up's at the back of the head, which
+# gathers the hair rooted above its line.
+comptime HIGH_TIE_Y = Float32(82.5)
+comptime HIGH_TIE_Z = Float32(-8.0)
+comptime PIGTAIL_X = Float32(6.5)
+comptime PIGTAIL_Y = Float32(72.0)
+comptime PIGTAIL_Z = Float32(-7.5)
+comptime SPACE_BUN_X = Float32(5.0)
+comptime SPACE_BUN_Y = Float32(82.5)
+comptime SPACE_BUN_Z = Float32(-2.5)
+comptime SPACE_BUN_RADIUS = Float32(2.4)
+comptime BRAID_TIE_Y = Float32(70.5)
+comptime BRAID_TIE_Z = Float32(-10.5)
+comptime HALF_TIE_Y = Float32(78.5)
+comptime HALF_TIE_Z = Float32(-10.5)
+comptime HALF_LINE_Y = Float32(78.0)
+# How wide a braid is, and how far it falls over one turn of its weave.
+comptime BRAID_WIDTH = Float32(1.6)
+comptime BRAID_TWIST = Float32(4.0)
+# A bob is cut level at this height, in template centimeters.
+comptime BOB_CUT_Y = Float32(63.0)
+# Which way a pixie is combed: out to the side and forward, against
+# down.
+comptime PIXIE_SPREAD = Float32(0.35)
+comptime PIXIE_FORWARD = Float32(0.6)
 # How many Newton steps lift a laid strand's point out of the skin.
 comptime LIFT_STEPS = 6
 
@@ -449,14 +501,23 @@ def _strand_of(starts: List[Int], index: Int) -> Int:
 
 
 def _onto(
-    field: GroomField, start: Vector3, level: Float32, probe: Float32
+    field: GroomField,
+    start: Vector3,
+    level: Float32,
+    probe: Float32,
+    reach: Float32 = 0,
 ) -> Vector3:
-    """Return `start` walked onto the level `level` of `field`."""
+    """Return `start` walked onto the level `level` of `field`. With a
+    `reach` above zero, no step goes further than it, so a point where
+    the field is flat is not flung far off."""
     var p = start
     for _ in range(3):  # pragma: no branch
         var g = surface_gradient(field, p, probe)
         var g2 = max(g.dot(g), Float32(1e-12))
-        p = p - g * ((field.distance(p) - level) / g2)
+        var move = g * ((field.distance(p) - level) / g2)
+        if reach > 0 and move.length() > reach:
+            move = move * (reach / move.length())
+        p = p - move
     return p
 
 
@@ -472,17 +533,18 @@ def _root(
     level: Float32,
     probe: Float32,
     tries: Int,
+    lowest: Float32 = Float32(-0.35),
 ) -> Tuple[Bool, Vector3]:
     """Return a root on the hair for one guide, and whether one was found.
 
-    Each try takes a direction from the cranium's center, walks in from
-    outside to the level, and keeps the point only where the hair covers
-    the skin there.
+    Each try takes a direction from the cranium's center, no lower than
+    `lowest` in its upward part, walks in from outside to the level, and
+    keeps the point only where the hair covers the skin there.
     """
     for attempt in range(tries):
         var salt = attempt * 7 + 11
         var turn = Float32(2 * pi) * _unit(key, salt)
-        var up = Float32(-0.35) + Float32(1.35) * _unit(key, salt + 1)
+        var up = lowest + (1 - lowest) * _unit(key, salt + 1)
         var flat = sqrt(max(Float32(0), 1 - up * up))
         var ray = Vector3(flat * cos(turn), up, flat * sin(turn))
         var p = center + ray * Float32(0.25)
@@ -724,14 +786,17 @@ def _finish[
     key: Int,
     snap: Bool,
     taut: Float32 = 0,
+    drape: Bool = False,
 ):
     """Curl a laid or designed strand, keep it off the skin, and add it
     and its followers to the groom.
 
     A laid strand was not grown on this head's skin: with `snap` its root
     is walked onto the skin, and the strand goes with it. Any point that
-    would pass under `body` is lifted back out, a little at a time. Its
-    first `taut` meters are pulled straight, and do not curl.
+    would pass under `body` is lifted back out, a little at a time. With
+    `drape`, the rest of the strand moves with each point lifted, so it
+    falls over the body as hair does and does not break. Its first
+    `taut` meters are pulled straight, and do not curl.
     """
     ref skin = field.hair.skin
     var top = spec.lift + spec.rise
@@ -752,8 +817,10 @@ def _finish[
         )
         depths.append(0)
     _curl(points, normals, depths, spec, key, taut)
+    var carry = Vector3(0, 0, 0)
     for k in range(len(points)):  # pragma: no branch
-        var p = points[k]
+        var p = points[k] + carry
+        var start = p
         var d = body.distance(p)
         if k > 0:
             for _ in range(LIFT_STEPS):  # pragma: no branch
@@ -765,6 +832,8 @@ def _finish[
                     move = move * (spec.step / move.length())
                 p = p + move
                 d = body.distance(p)
+            if drape:
+                carry = carry + (p - start)
             normals[k] = _unit_vector(
                 surface_gradient(body, p, probe), Vector3(0, 1, 0)
             )
@@ -781,14 +850,15 @@ def _designed(
     seed: Int,
     style: HairStyle,
 ) raises -> HairGroom:
-    """Design a long, a ponytail or a bun style on the head.
+    """Design a style on the head's own guides.
 
-    Each guide grows from a root on the scalp's hair. It is combed over
-    the skin, away from a part down the middle of the crown for `LONG`,
-    or toward the tie at the back of the head for `PONYTAIL` and `BUN`.
-    Long hair then hangs past the scalp to its length; a ponytail's tail
-    springs back from the tie and falls; a bun's coils round a ball on
-    the tie.
+    Each guide grows from a root on the scalp's hair. Hair a style ties
+    is combed along the arc from its root to its tie: the nearer tie,
+    for a style with one on each side. It then springs back from the
+    tie and falls as a tail, coils round a bun, or is woven into a
+    braid. Loose hair is combed over the scalp away from a part down the
+    middle, and then hangs: to its length, or to a level cut for a bob.
+    A pixie's is combed forward and down, a few centimeters.
     """
     var field = GroomField(dimensions, style)
     var h = dimensions.head.copy()
@@ -801,58 +871,189 @@ def _designed(
     var probe = h.cm(0.08)
     var center = h.at(0, 76.0, -1.0)
     var cranium = h.at(0, CRANIUM_CENTER_Y, -1.0)
-    var tie = h.at(0, TAIL_TIE_Y, TAIL_TIE_Z)
-    if style == BUN:
-        tie = h.at(0, BUN_TIE_Y, BUN_TIE_Z)
-    # The tie lies on the hair, out from the cranium's middle.
-    tie = _onto(field, tie, spec.lift, probe)
-    var away = _unit_vector(tie - cranium, Vector3(0, 0, -1))
+    # The ties, each on the hair, out from the cranium's middle.
+    var ties = List[Vector3]()
+    if style.ties() == 2:
+        var at = Vector3(PIGTAIL_X, PIGTAIL_Y, PIGTAIL_Z)
+        if style == SPACE_BUNS:
+            at = Vector3(SPACE_BUN_X, SPACE_BUN_Y, SPACE_BUN_Z)
+        ties.append(h.at(at.x, at.y, at.z))
+        ties.append(h.at(-at.x, at.y, at.z))
+    else:
+        var at = Vector3(0, TAIL_TIE_Y, TAIL_TIE_Z)
+        if style == BUN:
+            at = Vector3(0, BUN_TIE_Y, BUN_TIE_Z)
+        elif style == HIGH_PONYTAIL:
+            at = Vector3(0, HIGH_TIE_Y, HIGH_TIE_Z)
+        elif style == BRAID:
+            at = Vector3(0, BRAID_TIE_Y, BRAID_TIE_Z)
+        elif style == HALF_UP:
+            at = Vector3(0, HALF_TIE_Y, HALF_TIE_Z)
+        ties.append(h.at(at.x, at.y, at.z))
+    var aways = List[Vector3]()
+    for k in range(len(ties)):  # pragma: no branch
+        ties[k] = _onto(field, ties[k], spec.lift, probe)
+        aways.append(_unit_vector(ties[k] - cranium, Vector3(0, 0, -1)))
+    var half = h.at(0, HALF_LINE_Y, 0).y
     var groom = HairGroom()
     for guide in range(spec.guides):  # pragma: no branch
         var key = seed * 100003 + guide
-        var found = _root(field, center, key, spec.lift, probe, spec.root_tries)
+        # Hair pulled up shows the nape, so the roots reach down to it.
+        var found = _root(
+            field,
+            center,
+            key,
+            spec.lift,
+            probe,
+            spec.root_tries,
+            NAPE_LOWEST if style.ties() > 0 else Float32(-0.35),
+        )
         if not found[0]:
             continue
         var strand = List[Vector3]()
         var p = found[1]
         strand.append(p)
         var travelled = Float32(0)
-        var target = h.cm(LONG_SHORTEST) + h.cm(
-            LONG_LONGEST - LONG_SHORTEST
-        ) * _unit(key, 2)
-        if style == PONYTAIL:
-            target = h.cm(TAIL_SHORTEST) + h.cm(
-                TAIL_LONGEST - TAIL_SHORTEST
+        var tied = style.is_tied() or (style == HALF_UP and p.y > half)
+        # A strand goes to the nearer tie.
+        var which = 0
+        if len(ties) == 2 and (p - ties[1]).length() < (p - ties[0]).length():
+            which = 1
+        var length = _length(style, h, key)
+        if style == HALF_UP and tied:
+            length = h.cm(HALF_TAIL_SHORTEST) + h.cm(
+                HALF_TAIL_LONGEST - HALF_TAIL_SHORTEST
             ) * _unit(key, 2)
-        if style == LONG:
-            # Over the scalp, away from the part and down.
+        if tied:
+            travelled = _arc(field, strand, cranium, ties[which], spec, probe)
+        else:
+            # Over the scalp: away from the part and down, or for a
+            # pixie forward and down, as far as it is long.
+            var side = Float32(1) if p.x >= 0 else Float32(-1)
+            var want = Vector3(side * PART_SPREAD, -1, -Float32(0.15))
+            if style == PIXIE:
+                want = Vector3(side * PIXIE_SPREAD, -1, PIXIE_FORWARD)
             for _ in range(MAX_STEPS):  # pragma: no branch
-                if p.y < h.at(0, LONG_HANGS_Y, 0).y:
+                if style == PIXIE and travelled >= length:
+                    break
+                if style != PIXIE and p.y < h.at(0, LONG_HANGS_Y, 0).y:
                     break
                 var n = _normal(field, p, probe)
-                var side = Float32(1) if p.x >= 0 else Float32(-1)
-                var want = Vector3(side * PART_SPREAD, -1, -Float32(0.15))
                 var t = want - n * n.dot(want)
                 var q = _onto(
-                    field, p + _unit_vector(t, t) * spec.step, spec.lift, probe
+                    field,
+                    p + _unit_vector(t, t) * spec.step,
+                    spec.lift,
+                    probe,
+                    spec.step,
                 )
                 travelled += (q - p).length()
                 p = q
                 strand.append(p)
-        else:
-            travelled = _arc(field, strand, cranium, tie, spec, probe)
-        if style == LONG:
-            _hang(strand, target - travelled, spec.step, key)
-        elif style == PONYTAIL:
-            _tail(strand, tie, away, target, spec.step, h.cm(TAIL_SPREAD), key)
-        else:
-            _coil(strand, tie, away, h.cm(BUN_RADIUS), spec.step, key)
+        if style == BOB:
+            _hang(
+                strand,
+                h.cm(LONG_LONGEST),
+                spec.step,
+                key,
+                h.at(0, BOB_CUT_Y, 0).y,
+            )
+        elif style == LONG or (style == HALF_UP and not tied):
+            _hang(strand, length - travelled, spec.step, key)
+        elif style == BUN or style == SPACE_BUNS:
+            var radius = h.cm(BUN_RADIUS)
+            if style == SPACE_BUNS:
+                radius = h.cm(SPACE_BUN_RADIUS)
+            _coil(strand, ties[which], aways[which], radius, spec.step, key)
+        elif style == BRAID:
+            _braid(
+                strand,
+                ties[which],
+                aways[which],
+                length,
+                spec.step,
+                h.cm(BRAID_WIDTH),
+                h.cm(BRAID_TWIST),
+                key,
+            )
+        elif style != PIXIE:
+            _tail(
+                strand,
+                ties[which],
+                aways[which],
+                length,
+                spec.step,
+                h.cm(TAIL_SPREAD),
+                key,
+            )
         # Hair gathered to a tie is pulled straight over the scalp.
-        var taut = travelled if style.is_tied() else Float32(0)
-        _finish(groom, strand, field, body, spec, probe, key, False, taut)
+        var taut = travelled if tied else Float32(0)
+        _finish(groom, strand, field, body, spec, probe, key, False, taut, True)
     if len(groom) == 0:
         raise Error("No guide found a root on the scalp's hair")
     return groom^
+
+
+def _length(style: HairStyle, h: HeadDimensions, key: Int) -> Float32:
+    """Return how long one strand of a designed style is, from its root
+    or from its tie to its tip, in meters."""
+    var shortest = LONG_SHORTEST
+    var longest = LONG_LONGEST
+    if style == PONYTAIL:
+        shortest = TAIL_SHORTEST
+        longest = TAIL_LONGEST
+    elif style == HIGH_PONYTAIL:
+        shortest = HIGH_TAIL_SHORTEST
+        longest = HIGH_TAIL_LONGEST
+    elif style == PIGTAILS:
+        shortest = PIGTAIL_SHORTEST
+        longest = PIGTAIL_LONGEST
+    elif style == BRAID:
+        shortest = BRAID_SHORTEST
+        longest = BRAID_LONGEST
+    elif style == PIXIE:
+        shortest = PIXIE_SHORTEST
+        longest = PIXIE_LONGEST
+    return h.cm(shortest) + h.cm(longest - shortest) * _unit(key, 2)
+
+
+def _braid(
+    mut strand: List[Vector3],
+    tie: Vector3,
+    away: Vector3,
+    length: Float32,
+    step: Float32,
+    width: Float32,
+    twist: Float32,
+    key: Int,
+):
+    """Weave a strand into a braid of three that hangs from the tie.
+
+    The braid's middle springs back from the tie and falls. Each strand
+    belongs to one of three lanes. A lane swings from side to side about
+    the middle, a third of a turn after the one before it, and from front
+    to back twice as often, so the three cross over one another in turn.
+    The braid narrows a little toward its tip.
+    """
+    var lane = Float32(key % 3)
+    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
+    var angle = Float32(2 * pi) * _unit(key, 71)
+    var spread = width * Float32(0.2) * sqrt(_unit(key, 73))
+    var core = tie
+    var going = away
+    var along = Float32(0)
+    while along < length:
+        going = _unit_vector(going * Float32(0.8) + Vector3(0, -0.45, 0), going)
+        core = core + going * step
+        along += step
+        var back = _unit_vector(_cross(across, going), away)
+        var a = Float32(2 * pi) * (lane / 3 + along / twist)
+        var w = width * (1 - Float32(0.35) * along / length)
+        strand.append(
+            core
+            + across * (w * sin(a) + spread * cos(angle))
+            + back * (w * Float32(0.35) * sin(2 * a) + spread * sin(angle))
+        )
 
 
 def _arc(
@@ -892,7 +1093,11 @@ def _arc(
             ub,
         )
         var q = _onto(
-            field, middle + d * (ra + (rb - ra) * t), spec.lift, probe
+            field,
+            middle + d * (ra + (rb - ra) * t),
+            spec.lift,
+            probe,
+            spec.step,
         )
         travelled += (q - p).length()
         p = q
@@ -900,9 +1105,16 @@ def _arc(
     return travelled
 
 
-def _hang(mut strand: List[Vector3], length: Float32, step: Float32, key: Int):
-    """Let a strand fall `length` further, bending down from the way it
-    was going, and swaying a little out of line with its neighbors."""
+def _hang(
+    mut strand: List[Vector3],
+    length: Float32,
+    step: Float32,
+    key: Int,
+    floor: Float32 = -1e9,
+):
+    """Let a strand fall `length` further, or down to `floor`, bending
+    down from the way it was going, and swaying a little out of line
+    with its neighbors."""
     var last = len(strand) - 1
     # The way the strand was going over the scalp, or down from a root
     # that did not move.
@@ -912,7 +1124,7 @@ def _hang(mut strand: List[Vector3], length: Float32, step: Float32, key: Int):
     var drift = Vector3(_signed(key, 41), 0, _signed(key, 43)) * Float32(0.08)
     var left = length
     var p = strand[last]
-    while left > 0:
+    while left > 0 and p.y > floor:
         going = _unit_vector(
             going * Float32(0.6) + Vector3(0, -1, 0) + drift, going
         )
@@ -958,19 +1170,35 @@ def _coil(
     step: Float32,
     key: Int,
 ):
-    """Wind a strand round the ball of a bun that sits on the tie."""
-    var middle = tie + away * radius
+    """Wind a strand round the ball of a bun that sits on the tie, a
+    little out from it, so the ball does not sink into the head.
+
+    The strand climbs from the tie over the ball's surface to the circle
+    it winds round, so it never cuts through the ball.
+    """
+    var middle = tie + away * (radius * BUN_FLOAT)
     var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
     var up = _cross(across, away)
     var lean = Float32(-0.9) + Float32(1.8) * _unit(key, 61)
     var start = Float32(2 * pi) * _unit(key, 63)
     var turns = Float32(1.2) + _unit(key, 65)
+    var c = sqrt(max(Float32(0), 1 - lean * lean))
+    # Round the ball: a circle tipped by `lean` out of the plane square to
+    # the head.
+    var first = (across * cos(start) + up * sin(start)) * c + away * lean
+    var bottom = away * -1
+    var climb = Int(
+        acos(min(Float32(1), max(Float32(-1), bottom.dot(first))))
+        * radius
+        / step
+    )
+    for k in range(1, climb + 1):  # pragma: no branch
+        var t = Float32(k) / Float32(climb + 1)
+        var d = _unit_vector(bottom * (1 - t) + first * t, first)
+        strand.append(middle + d * radius)
     var count = Int(turns * Float32(2 * pi) * radius / step) + 1
     for k in range(count):  # pragma: no branch
         var a = start + Float32(2 * pi) * turns * Float32(k) / Float32(count)
-        var c = sqrt(max(Float32(0), 1 - lean * lean))
-        # Round the ball: a circle tipped by `lean` out of the plane square
-        # to the head.
         var ring = (across * cos(a) + up * sin(a)) * c + away * lean
         strand.append(middle + ring * radius)
 
