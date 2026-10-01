@@ -238,5 +238,38 @@ def test_an_async_def_body_is_executable() raises:
     assert_true(scanner.is_executable("    print(index)"))
 
 
+def test_escaped_quotes_and_backslashes_do_not_hide_the_next_line() raises:
+    assert_equal(
+        executable_lines(
+            String('def f():\n    var text = "\\"("\n    return 1\n')
+        ),
+        [2, 3],
+    )
+    assert_equal(
+        executable_lines(
+            String("def f():\n    var text = '\\'['\n    return 1\n")
+        ),
+        [2, 3],
+    )
+    assert_equal(
+        executable_lines(
+            String('def f():\n    var text = "\\\\"\n    return 1\n')
+        ),
+        [2, 3],
+    )
+    assert_equal(
+        executable_lines(
+            String('def f():\n    var text = "\\\\\\"{"\n    return 1\n')
+        ),
+        [2, 3],
+    )
+    assert_equal(
+        executable_lines(
+            String('def f():\n    var text = "\\\\" + "("\n    return 1\n')
+        ),
+        [2, 3],
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
