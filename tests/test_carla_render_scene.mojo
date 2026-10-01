@@ -823,8 +823,14 @@ def test_actor_visuals_follow_the_world() raises:
     assert_equal(len(visuals.walkers), 2)
     # The two sedans share one model; the van has its own.
     assert_equal(len(visuals.models), 2)
+    var meshes = len(scene.meshes)
+    var lights = len(scene.lights)
     world.set_light_state(cars[0], LIGHT_LOW_BEAM | LIGHT_BRAKE)
     visuals.sync(world, scene, assets)
+    assert_equal(len(visuals.vehicles), 3)
+    assert_equal(len(visuals.walkers), 2)
+    assert_equal(len(scene.meshes), meshes)
+    assert_equal(len(scene.lights), lights)
     var v = visuals.vehicles[0].copy()
     assert_equal(
         assets.materials.get(v.heads).emissive_intensity, LOW_BEAM_GLOW

@@ -74,6 +74,7 @@ from math.vector3 import Vector3
 from render.cube_texture_store import SCENE_ENVIRONMENT
 from objects.mesh import Mesh
 from render.framebuffer import Color
+from std.collections import Set
 from std.math import cos, pow, sin, sqrt
 from units.si import DEGREE, METER, Angle, Length
 
@@ -1163,12 +1164,20 @@ struct ActorVisuals(Movable):
                 be read.
         """
         self._shared(assets)
+        # Rebuild these indexes from the public lists in one pass. Repeated
+        # syncs must not search all existing models for every live actor.
+        var vehicles = Set[Int]()
+        var walkers = Set[Int]()
+        for v in self.vehicles:
+            vehicles.add(v.actor.value)
+        for w in self.walkers:
+            walkers.add(w.actor.value)
         # A world always has its spectator.
         for id in world.get_actors():  # pragma: no branch
             var kind = world.actor(id).kind
-            if kind == VEHICLE_ACTOR and self._vehicle_index(id) < 0:
+            if kind == VEHICLE_ACTOR and id.value not in vehicles:
                 self._add_vehicle(world, id, scene, assets, registry)
-            if kind == WALKER_ACTOR and self._walker_index(id) < 0:
+            if kind == WALKER_ACTOR and id.value not in walkers:
                 self._add_walker(world, id, scene, assets, registry)
         for v in self.vehicles:
             var alive = world.is_alive(v.actor)
@@ -1236,20 +1245,6 @@ struct ActorVisuals(Movable):
         ref target = scene.node(node)
         target.set_rotation_from_matrix(matrix)
         target.set_position(at.x, at.z, at.y)
-
-    def _vehicle_index(self, id: ActorId) -> Int:
-        """Return a vehicle's model's index, or -1."""
-        for i in range(len(self.vehicles)):
-            if self.vehicles[i].actor == id:
-                return i
-        return -1
-
-    def _walker_index(self, id: ActorId) -> Int:
-        """Return a walker's model's index, or -1."""
-        for i in range(len(self.walkers)):
-            if self.walkers[i].actor == id:
-                return i
-        return -1
 
 
 def _glow(mut assets: Assets, id: MaterialId, intensity: Float32) raises:

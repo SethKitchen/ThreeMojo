@@ -420,7 +420,8 @@ struct LogReader(Movable):
         """Read a string: a `uint16` length and that many bytes.
 
         Returns:
-            The text, or what the file still holds of it.
+            The text, or empty text with `failed` set if the bytes are
+            incomplete or are not valid UTF-8.
         """
         var n = self.u16()
         var at = self._take(n)
@@ -429,7 +430,11 @@ struct LogReader(Movable):
         var part = List[UInt8]()
         for i in range(n):
             part.append(self.bytes[at + i])
-        return String(unsafe_from_utf8=part)
+        try:
+            return String(from_utf8=Span(part))
+        except:
+            self.failed = True
+            return String()
 
 
 # --- writing ---------------------------------------------------------------------
