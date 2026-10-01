@@ -671,6 +671,8 @@ A key is clamped to `KEY_LIMIT`, nine times ten to the eighteenth. JavaScript's 
 
 The result is indexed. Its index must hold whole triangles, so a geometry of loose points that is not a multiple of three raises.
 
+Welding keeps the draw range and groups because each triangle keeps its place in the stream. It also keeps the name, user data, type, parameters and stored shapes. Mutable data is copied, so changes to the result leave the source alone.
+
 ### Creased normals
 
 `to_creased_normals` makes the geometry non-indexed first. Many triangles can meet at the position of a corner. The corner's normal is the sum of the normals of those that turn from its own triangle by less than the crease angle. The crease angle is sixty degrees unless you give another, as in three.js.
