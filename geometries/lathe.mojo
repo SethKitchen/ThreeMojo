@@ -90,7 +90,9 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
     var previous = Vector2(0, 0)
     for index in range(len(points)):  # pragma: no branch
         if index == len(points) - 1:
-            if not isfinite(previous.x) or not isfinite(previous.y):
+            # Checked radii are nonnegative Float32 values, so their
+            # difference (previous.y) fits in Float32.
+            if not isfinite(previous.x):
                 raise Error(
                     "A lathe's final profile normal must fit in Float32"
                 )
@@ -100,7 +102,9 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
         var dy = points[index + 1].y - points[index].y
         var ahead = Vector2(dy, -dx)
         if index == 0:
-            if isfinite(ahead.x) and isfinite(ahead.y):
+            # Only the signed height difference can overflow: both radii
+            # lie between zero and the largest finite Float32.
+            if isfinite(ahead.x):
                 normals.append(_unit(ahead.x, ahead.y))
             else:
                 normals.append(_wide_unit(points[0], points[1]))

@@ -253,9 +253,6 @@ struct SeededRandom(Copyable, Movable):
             A finite value in `[low, high)` for finite bounds with
             `low < high`. Equal finite bounds return `low`. Each call
             advances the generator once. Other bounds keep IEEE arithmetic.
-
-        Raises:
-            None.
         """
         var sample = Float32(self.next())
         var span = high - low

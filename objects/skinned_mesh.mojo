@@ -332,16 +332,14 @@ def normalized_skin_weights(
 
     The divisor is the Manhattan length, the sum of the magnitudes. When
     every weight is zero, the first bone takes all of the vertex, as
-    three.js does "something reasonable".
+    three.js does "something reasonable". This arithmetic helper does not
+    validate inputs.
 
     Args:
         four: The vertex's four finite weights.
 
     Returns:
         The four weights, scaled.
-
-    Raises:
-        Nothing. This arithmetic helper does not validate inputs.
     """
     var wide = four.cast[DType.float64]()
     var total = abs(wide).reduce_add()

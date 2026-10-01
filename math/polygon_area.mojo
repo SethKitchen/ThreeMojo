@@ -23,9 +23,6 @@ def signed_area64(contour: List[Vector2]) -> Float64:
         The area in square meters, positive for counterclockwise winding.
         Fewer than three points give zero. The result stays in doubles so
         a winding test does not lose a small nonzero area to Float32.
-
-    Raises:
-        None.
     """
     var count = len(contour)
     if count < 3:

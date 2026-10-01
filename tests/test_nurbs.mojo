@@ -836,5 +836,17 @@ def test_valid_repeated_knots_and_selected_mapping_are_preserved() raises:
     near3(constant.point3(0.5), [2, 3, 4], 0)
 
 
+def test_nurbs_rejects_knots_no_longer_than_control_points() raises:
+    var point = Vector4(2, 3, 4, 1)
+    # These have valid degrees but not enough knots even to enclose the
+    # control points. Empty and exactly-equal lengths must both refuse.
+    for count in range(3):
+        var knots = List[Float64]()
+        for index in range(count):
+            knots.append(Float64(index))
+        with assert_raises(contains="as many knots"):
+            _ = NURBSCurve(1, knots, [point, point])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

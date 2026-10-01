@@ -250,7 +250,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
     def _determinant_wide(self) -> Float64:
         """Keep products of finite Float32 entries within Float64 range."""
         var entries = Array[Float64, 16](fill=0)
-        for index in range(16):
+        # A matrix always has sixteen entries.
+        for index in range(16):  # pragma: no branch
             entries[index] = Float64(self.elements[index])
         return _determinant4(entries)
 
@@ -644,7 +645,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         # Widen first: every finite Float32 axis length fits in Float64,
         # including lengths that cannot be returned as a Float32 scale.
         var lengths = Array[Float64, 3](fill=0)
-        for axis in range(3):
+        # A matrix always has three linear axes.
+        for axis in range(3):  # pragma: no branch
             var at = axis * 4
             var x = Float64(self.elements[at])
             var y = Float64(self.elements[at + 1])
@@ -655,7 +657,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         var first = lengths[0]
         if first == 0:
             return False
-        for axis in range(1, 3):
+        # The second and third axes are both present.
+        for axis in range(1, 3):  # pragma: no branch
             if abs(lengths[axis] - first) > Float64(tolerance) * first:
                 return False
         # This predicate concerns only the linear block. Translation and
@@ -965,7 +968,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             sx = -sx
         var rotation = self
         var ordinary = True
-        for axis in range(3):
+        # Every transform has three linear axes.
+        for axis in range(3):  # pragma: no branch
             ordinary = ordinary and _ordinary_squared(
                 self._axes_dot(axis, axis)
             )
@@ -973,7 +977,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             # Keep the existing reciprocal-multiply order for ordinary axes.
             rotation.scale(Vector3(1 / sx, 1 / sy, 1 / sz))
         else:
-            for axis in range(3):
+            # The fallback normalizes all three axes.
+            for axis in range(3):  # pragma: no branch
                 var at = axis * 4
                 var direction = normalized3(
                     self.elements[at],

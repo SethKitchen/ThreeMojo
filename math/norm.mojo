@@ -34,9 +34,6 @@ def length2[
     Returns:
         The length. A finite input can return infinity only if its length
         cannot fit in the input type. Nonfinite inputs follow IEEE arithmetic.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y
     if _ordinary_squared(squared):
@@ -65,9 +62,6 @@ def normalized2[
         cannot fit in the input type. A zero input stays unchanged. A NaN
         squared norm leaves the input unchanged. An input that contains
         infinity divides by infinity, as vector normalization does.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y
     if _ordinary_squared(squared):
@@ -100,9 +94,6 @@ def length3[
     Returns:
         The length. A finite input can return infinity only if its length
         cannot fit in the input type. Nonfinite inputs follow IEEE arithmetic.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y + z * z
     if _ordinary_squared(squared):
@@ -133,9 +124,6 @@ def normalized3[
         cannot fit in the input type. A zero input stays unchanged. A NaN
         squared norm leaves the input unchanged. An input that contains
         infinity divides by infinity, as vector normalization does.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y + z * z
     if _ordinary_squared(squared):
@@ -172,9 +160,6 @@ def length4[
     Returns:
         The length. A finite input can return infinity only if its length
         cannot fit in the input type. Nonfinite inputs follow IEEE arithmetic.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y + z * z + w * w
     if _ordinary_squared(squared):
@@ -207,9 +192,6 @@ def normalized4[
         cannot fit in the input type. A zero input stays unchanged. A NaN
         squared norm leaves the input unchanged. An input that contains
         infinity divides by infinity, as vector normalization does.
-
-    Raises:
-        None.
     """
     var squared = x * x + y * y + z * z + w * w
     if _ordinary_squared(squared):

@@ -486,5 +486,29 @@ def test_failed_rebuild_clears_the_previous_distribution() raises:
     assert_equal(sampler.sample().face, 0)
 
 
+def test_nonfinite_positions_refuse_rebuild_and_clear_distribution() raises:
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        for component in range(9):
+            var sampler = MeshSurfaceSampler(
+                _triangle_at_scale(1), SeededRandom(1)
+            )
+            sampler.build()
+            assert_equal(len(sampler.distribution), 1)
+            var positions: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0]
+            positions[component] = bad
+            sampler.geometry.set_attribute(
+                POSITION, BufferAttribute(positions^, 3)
+            )
+            with assert_raises(contains="triangle's weight"):
+                sampler.build()
+            assert_equal(len(sampler.distribution), 0)
+            with assert_raises():
+                _ = sampler.sample()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

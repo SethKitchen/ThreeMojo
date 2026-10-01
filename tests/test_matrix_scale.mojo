@@ -191,5 +191,24 @@ def test_rotation_predicates_refuse_nonfinite_axes_and_bad_tolerances() raises:
     assert_true(matrix.extract_rotation() == Matrix4())
 
 
+def test_each_axis_scale_overflow_preserves_decomposition_outputs() raises:
+    for axis in range(3):
+        var matrix = Matrix4()
+        # Only this axis has length sqrt(2) * 3e38. Each entry is finite,
+        # and each other axis keeps its representable identity length.
+        matrix.elements[axis * 4] = 3e38
+        matrix.elements[axis * 4 + 1] = 3e38
+        matrix.elements[axis * 4 + 2] = 0
+        assert_true(matrix.is_finite())
+        var position = Vector3(7, 8, 9)
+        var turn = Quaternion(0, 1, 0, 0)
+        var size = Vector3(2, 3, 4)
+        with assert_raises(contains="fit in Float32"):
+            matrix.decompose(position, turn, size)
+        assert_true(position == Vector3(7, 8, 9))
+        assert_true(turn == Quaternion(0, 1, 0, 0))
+        assert_true(size == Vector3(2, 3, 4))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

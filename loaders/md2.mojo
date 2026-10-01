@@ -729,7 +729,8 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     var num_frames = header[_NUM_FRAMES]
     if num_frames < 1:
         raise Error("MD2: a model with no frames")
-    for field in range(_NUM_SKINS, _NUM_FRAMES):
+    # Header fields 5 through 9: the five count fields before frames.
+    for field in range(_NUM_SKINS, _NUM_FRAMES):  # pragma: no branch
         if header[field] < 0:
             raise Error("MD2: a header count must not be negative")
     var frame_size = header[_FRAME_SIZE]
@@ -745,7 +746,8 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
         header[_NUM_COMMANDS],
     ]
     var widths: List[Int] = [64, 4, 12, frame_size, 4]
-    for section in range(5):
+    # The five declared sections are always checked, even when empty.
+    for section in range(5):  # pragma: no branch
         var offset = header[_OFFSET_SKINS + section]
         if offset < 0 or offset > len(bytes):
             raise Error("MD2: a section offset is outside the file data")

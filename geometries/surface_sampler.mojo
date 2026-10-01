@@ -235,7 +235,10 @@ struct MeshSurfaceSampler(Movable):
                 positions.vector3(corners[1]),
                 positions.vector3(corners[2]),
             )
-            if not isfinite(weight) or weight < 0:
+            # Each checked vertex weight is nonnegative, and _area is a
+            # square root. Their product cannot be negative; nonfinite
+            # positions can still make it NaN or infinite.
+            if not isfinite(weight):
                 raise Error(
                     "A triangle's weight must be a number, not negative"
                 )

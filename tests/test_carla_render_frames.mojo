@@ -43,5 +43,42 @@ def test_render_rgb_semantic_and_depth() raises:
     assert_equal(len(tags), len(view.scene.meshes))
 
 
+def test_empty_custom_draw_list_captures_sky_and_restores_state() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var view = _renderer(world)
+    view.update(world)
+    # Scene draw lists are swappable. Keep the corresponding tag and
+    # actor-model lists in sync when replacing the town with an empty view.
+    view.scene.meshes.clear()
+    view.town.tags.clear()
+    view.props.tags.clear()
+    view.actors.vehicles.clear()
+    view.actors.walkers.clear()
+    var background = view.scene.background
+    var materials = view.assets.materials.count()
+    assert_equal(len(view.semantic_tags(world)), 0)
+    var semantic = view.render_semantic(world, camera)
+    assert_equal(semantic.width, 16)
+    assert_equal(semantic.height, 12)
+    assert_equal(len(view.scene.meshes), 0)
+    assert_equal(view.scene.background.kind, background.kind)
+    assert_equal(view.scene.background.cube, background.cube)
+    var depth = view.render_depth(world, camera)
+    assert_equal(depth.width, 16)
+    assert_equal(depth.height, 12)
+    for y in range(semantic.height):
+        for x in range(semantic.width):
+            _same(semantic.get_pixel(x, y), cityscapes_color(SKY))
+            # CARLA reserves the far depth (1000 meters) for the sky.
+            assert_equal(decode_depth(depth.get_pixel(x, y)).to(METER), 1000)
+    assert_equal(len(view.scene.meshes), 0)
+    assert_equal(view.scene.background.kind, background.kind)
+    assert_equal(view.scene.background.cube, background.cube)
+    assert_equal(view.assets.materials.count(), materials)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

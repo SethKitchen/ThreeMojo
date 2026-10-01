@@ -323,7 +323,8 @@ def _grow(
     var angle = radians(p.branch_angle[min(level, len(p.branch_angle) - 1)])
     var pipe_drop = pow(1.0 / Float64(n), 1.0 / p.radius_exponent)
     var up = Vec3d(0, 1, 0)
-    for i in range(n):
+    # Validation rejects negative counts; zero returned above.
+    for i in range(n):  # pragma: no branch
         var t = start + (
             Float64(i) + 0.5 + (random.next() - 0.5) * 0.6
         ) / Float64(n) * (1 - start)

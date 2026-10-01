@@ -2570,5 +2570,41 @@ def test_a_torus_knot_needs_radii_segments_and_windings() raises:
         _ = torus_knot(two, tenth, 48, 8, 2, 0)
 
 
+def test_lathe_radial_cancellation_keeps_a_horizontal_corner_normal() raises:
+    # Rounded adjacent radial differences cancel, but the outer radii
+    # differ by one. Equal outer heights make the corner face down.
+    var geometry = lathe(profile([0, 0, 1e20, 1, 1, 0]), 3)
+    var normal = geometry.attribute_view(String(NORMAL)).vector3(1)
+    assert_true(
+        isfinite(normal.x) and isfinite(normal.y) and isfinite(normal.z)
+    )
+    assert_equal(normal.x, Float32(0))
+    assert_equal(normal.y, Float32(-1))
+    assert_equal(normal.z, Float32(0))
+
+
+def test_lathe_refuses_a_nonfinite_radius_independently() raises:
+    with assert_raises(contains="finite"):
+        _ = lathe(profile([nan[DType.float32](), 0, 1, 1]), 3)
+
+
+def test_lathe_largest_radius_difference_keeps_finite_normals() raises:
+    var maximum = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    for sign in [Float32(-1), Float32(1)]:
+        var points = profile([0, 0, maximum, 0])
+        if sign > 0:
+            points = profile([maximum, 0, 0, 0])
+        var geometry = lathe(points, 1)
+        ref normals = geometry.attribute_view(String(NORMAL))
+        var first = normals.vector3(0)
+        var last = normals.vector3(1)
+        assert_true(
+            isfinite(first.x) and isfinite(first.y) and isfinite(first.z)
+        )
+        assert_true(isfinite(last.x) and isfinite(last.y) and isfinite(last.z))
+        assert_equal(first.y, sign)
+        assert_equal(last.y, sign * maximum)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

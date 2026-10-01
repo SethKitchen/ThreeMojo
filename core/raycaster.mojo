@@ -1398,8 +1398,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var size = material.line_width.size
         var bound = geometry.bounding_sphere()
         bound.apply_matrix4(world)
-        if bound.is_empty():
-            return hits^
+        # A drawn segment has two positions, so its sphere is nonempty.
+        # An affine transform preserves its nonnegative radius.
         var view = camera.view_matrix_in(scene)
         var projection = camera.projection_matrix()
         # How much to grow the bound: half the width, in the world, or

@@ -154,13 +154,13 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
     if from_points.count() == 0 and to_points.count() > 0:
         raise Error("Attribute transfer needs source vertices")
     var cells = Dict[Int, List[Int]]()
-    for v in range(from_points.count()):  # pragma: no branch
+    for v in range(from_points.count()):
         var key = _key(from_points.vector3(v))
         if key not in cells:
             cells[key] = List[Int]()
         cells[key].append(v)
     var nearest = List[Int](capacity=to_points.count())
-    for v in range(to_points.count()):  # pragma: no branch
+    for v in range(to_points.count()):
         var p = to_points.vector3(v)
         var best = 0
         var closest = Float32(1e30)
@@ -202,7 +202,7 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
         ref values = source.attribute_view(name)
         var size = values.item_size
         var data = List[Float32](capacity=size * len(nearest))
-        for v in range(len(nearest)):  # pragma: no branch
+        for v in range(len(nearest)):
             for c in range(size):  # pragma: no branch
                 data.append(values.component(nearest[v], c))
         target.set_attribute(name, BufferAttribute(data^, size))
