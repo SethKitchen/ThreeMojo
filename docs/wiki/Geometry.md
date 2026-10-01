@@ -559,7 +559,7 @@ var soft = rounded_box(Length(2, METER), Length(1, METER), Length(1, METER))   #
 var pill = rounded_box(Length(1, METER), Length(1, METER), Length(1, METER), 4, Length(0.5, METER))
 ```
 
-A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half.
+A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half. The extents and radius must be finite.
 
 The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat.
 
@@ -876,7 +876,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
-- A sweep must be positive and at most one turn.
+- A sweep must be finite, positive and at most one turn.
 - A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
 - Either every morph target carries normals or none does.
 - A morph influence must be a number, and there are eight of them.

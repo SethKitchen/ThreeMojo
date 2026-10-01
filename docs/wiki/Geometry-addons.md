@@ -43,7 +43,7 @@ A triangle with two corners in one place is dropped, as in three.js. three.js ra
 
 ## Box lines
 
-`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box.
+`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive.
 
 ## Tessellate
 
