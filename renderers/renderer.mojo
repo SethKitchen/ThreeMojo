@@ -182,7 +182,7 @@ from objects.line import (
     segment_count,
     segment_ends,
 )
-from objects.line_segments2 import cap_steps, dash_spans
+from objects.line_segments2 import cap_steps, dash_spans, drawn_segments
 from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skinned_mesh import (
@@ -3759,7 +3759,9 @@ def _emit_wide_line(
         )
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
-    var segments = segment_count(SEGMENTS, count)
+    var visible = drawn_segments(geometry)
+    var first_vertex = visible[0]
+    var segments = visible[1]
     var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
     var colors = _vertex_colors(geometry, material.vertex_colors, base, count)
     var dashed = material.is_dashed()
@@ -3817,7 +3819,7 @@ def _emit_wide_line(
     for segment in range(segments):
         var ends = List[ClipVertex]()
         for side in range(2):  # pragma: no branch
-            var vertex = segment * 2 + side
+            var vertex = first_vertex + segment * 2 + side
             var placed = world.transform_point(positions.vector3(vertex))
             ends.append(
                 ClipVertex(

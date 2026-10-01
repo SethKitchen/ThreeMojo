@@ -139,6 +139,7 @@ from math.sort_utils import radix_sort
 from core.geometry_store import GeometryId
 from materials.material import BACK_SIDE, FRONT_SIDE, MaterialId
 from objects.line import SEGMENTS, segment_count, segment_ends
+from objects.line_segments2 import drawn_segments
 from objects.mesh import Mesh
 from std.math import cos, inf, isnan, max, min, sin
 from std.memory import bitcast
@@ -1372,8 +1373,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         Raises:
             Error: If no wide line has that index, either dimension is not
                 positive, the line names a node, a geometry or a material
-                that is not there, its geometry has no positions or an odd
-                count of them, or the camera's view cannot be read.
+                that is not there, its geometry is indexed, has no
+                positions or an odd count of them, its draw range is
+                invalid, or the camera's view cannot be read.
         """
         if index < 0 or index >= len(scene.wide_lines):
             raise Error("No wide line has that index")
@@ -1386,7 +1388,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         ref geometry = assets.geometries.get(line.geometry)
         var material = assets.materials.get(line.material)
         ref positions = geometry.attribute_view(String(POSITION))
-        var segments = segment_count(SEGMENTS, positions.count())
+        var visible = drawn_segments(geometry)
+        var first_vertex = visible[0]
+        var segments = visible[1]
+        if segments == 0:
+            return hits^
         var world = scene.world_matrix(line.node)
         var size = material.line_width.size
         var bound = geometry.bounding_sphere()
@@ -1425,11 +1431,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         )
         var target = Vector2(aim.x * half_x, aim.y * half_y)
         var closest_z = -camera.near_distance()
-        # At least one: a bound that is not empty holds a point, and
-        # `segment_count` refused an odd count of them.
+        # At least one: an empty drawn range returned before the bound.
         for segment in range(segments):  # pragma: no branch
-            var start = world.transform_point(positions.vector3(segment * 2))
-            var end = world.transform_point(positions.vector3(segment * 2 + 1))
+            var vertex = first_vertex + segment * 2
+            var start = world.transform_point(positions.vector3(vertex))
+            var end = world.transform_point(positions.vector3(vertex + 1))
             var nearest = self.ray.distance_sq_to_segment(start, end)
             var struck: Bool
             if material.line_width.world_units:
@@ -1460,7 +1466,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 index,
                 -1,
                 shape,
-                segment,
+                vertex // 2,
             )
             hit.point_on_line = nearest.on_segment
             hits.append(hit)
