@@ -35,8 +35,8 @@ two frames, whose three.js tracks
 have two keys at one time. Where three.js logs and returns nothing or
 reads `undefined`, this refuses: a file that is not `IDP2` version 8, or
 whose size is not the header's end; a file that ends inside a part; a
-model with no frames; and an index past its vertices, its texture
-coordinates or the normal table.
+model with no frames or nonpositive skin dimensions; and an index past
+its vertices, its texture coordinates or the normal table.
 """
 
 from animation.animation_clip import AnimationClip
@@ -699,6 +699,8 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
         raise Error("MD2: not a valid MD2 file")
     if header[16] != len(bytes):
         raise Error("MD2: the file's size is not its header's end")
+    if header[2] <= 0 or header[3] <= 0:
+        raise Error("MD2: skin dimensions must be positive")
     var skin_width = Float64(header[2])
     var skin_height = Float64(header[3])
     var num_vertices = header[6]

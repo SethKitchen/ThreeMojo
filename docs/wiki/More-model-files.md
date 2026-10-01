@@ -547,6 +547,7 @@ The loader refuses these, with a message that names the problem:
 
 - A file that is not `IDP2` version 8, or whose size is not the end in its header. three.js logs these and returns nothing.
 - A file that ends inside a value, and a model with no frames.
+- A zero or negative skin width or height, before dividing texture coordinates.
 - A vertex, texture coordinate or normal index that is past its list.
 
 ### Example
