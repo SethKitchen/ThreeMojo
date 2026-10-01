@@ -185,5 +185,37 @@ def test_nonfinite_control_words_are_rejected_before_integer_conversion() raises
             validate_surface_program(program)
 
 
+def test_uniform_instructions_need_declared_uniform_offsets() raises:
+    var program = _program()
+    var undeclared = len(program.code)
+    for value in [Float32(0.25), Float32(0.5), Float32(1), Float32(0)]:
+        program.code.append(value)
+    program.code[nodes.PROGRAM_HEADER + nodes.INSTRUCTION_IMMEDIATE] = Float32(
+        undeclared
+    )
+    with assert_raises(contains="uniform instruction lacks its offset"):
+        _read(program)
+
+
+def test_attribute_names_are_unique() raises:
+    var program = _program()
+    for _ in range(2):
+        program.attribute_names.append("extra")
+        program.attribute_offsets.append(0)
+        program.attribute_widths.append(1)
+    with assert_raises(contains="attribute name is repeated"):
+        _read(program)
+
+
+def test_viewport_programs_declare_their_scene_read() raises:
+    var graph = nodes.NodeGraph()
+    graph.set_output(nodes.FRAGMENT_NODE, graph.viewport_texture(graph.uv()))
+    var program = graph.compile()
+    _read(program)
+    program.reads_scene = False
+    with assert_raises(contains="declare readsScene"):
+        _read(program)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

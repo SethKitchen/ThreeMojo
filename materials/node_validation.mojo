@@ -123,6 +123,9 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             0,
             nodes.MAX_ATTRIBUTE_FLOATS,
         )
+        for prior in range(index):
+            if program.attribute_names[prior] == program.attribute_names[index]:
+                raise Error("Object JSON: a node attribute name is repeated")
     _addresses(program.texture_offsets, pool, size)
     _addresses(program.cube_offsets, pool, size)
     var graph = nodes.NodeGraph()
@@ -166,6 +169,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             )
             if kind == nodes.NODE_CONSTANT or kind == nodes.NODE_UNIFORM:
                 _span(immediate, 4, pool, size)
+                if kind == nodes.NODE_UNIFORM and not _contains(
+                    program.uniform_offsets, immediate
+                ):
+                    raise Error(
+                        "Object JSON: a uniform instruction lacks its offset"
+                    )
             elif (
                 kind == nodes.NODE_MATRIX_VECTOR
                 or kind == nodes.NODE_VECTOR_MATRIX
@@ -176,12 +185,15 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                         "Object JSON: a node matrix must be three or four wide"
                     )
                 var first = immediate // 8
-                _span(
-                    first,
-                    width * width,
-                    nodes.PROGRAM_VIEW if first == nodes.PROGRAM_VIEW else pool,
-                    size,
-                )
+                if first == nodes.PROGRAM_VIEW:
+                    _span(
+                        first,
+                        width * width,
+                        nodes.PROGRAM_VIEW,
+                        nodes.PROGRAM_VIEW + 16,
+                    )
+                else:
+                    _span(first, width * width, pool, size)
             elif (
                 kind == nodes.NODE_TEXTURE
                 or kind == nodes.NODE_TEXTURE_LEVEL
