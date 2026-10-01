@@ -1,6 +1,8 @@
 # Benchmarks
 
-This page records compile time, run time and peak memory for every example. The same scene, size and frame count run in three.js. A standalone probe compares Mojo 1.1 to Mojo 1.0.
+This page records compile time, run time and peak memory for the examples in `bench/catalog.json`. The catalog is a subset of the example programs. The same scene, size and frame count run in three.js. A standalone probe compares Mojo 1.1 to Mojo 1.0.
+
+Each table states its measurement date. These results do not measure later code changes.
 
 The numbers come from two machines: a Linux desktop under WSL 2 and a Mac on Apple Silicon. Each machine has its own tables. The colors compare two cells on one machine only. The refresh command is in [How to measure examples](How-to-measure-examples).
 
@@ -44,7 +46,7 @@ On the Apple M4 Max, the examples run a median of 3.0 times faster than on the R
 |---|---|
 | compile | `mojo build`, in seconds. Paired in the 1.0 table. |
 | run | The built binary or the Node process, whole, in seconds |
-| frames | The draw loop alone, timed inside the Node process |
+| frames | The draw loop alone, timed inside the process |
 | RSS | Peak resident set of that run, in MiB |
 
 Paired columns sit next to each other. Dark green is faster by 30% or more. Light green is faster by 10% to 30%. Yellow is within 10%. A cell with no color is the slower side, or a value with no pair.
@@ -55,7 +57,7 @@ ThreeMojo transforms, clips, lights, textures and composites every frame in line
 
 `webgl` is three.js drawing with WebGL 2. The context comes from `webgl-node`. On Linux it needs `libGLESv2` on the library path. See [How to measure examples](How-to-measure-examples).
 
-Read a frames column against the ThreeMojo `run` column minus the Mojo baseline. The baselines under [Machines](#machines) say what each process costs before it draws.
+A frames column excludes process startup and output-file encoding. Compare frame columns when both are present. Whole-process run time also includes those costs. The baselines under [Machines](#machines) show process startup cost.
 
 The pin is Mojo 1.1. The 1.0 column is the same source built by Mojo 1.0.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 

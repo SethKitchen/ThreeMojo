@@ -7,13 +7,13 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 [![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
 [![mojo](https://img.shields.io/badge/Mojo-1.1.0-fe5c1c)](https://mojolang.org)
-[![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
+[![coverage requirement](https://img.shields.io/badge/coverage_requirement-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-blue)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
 
 ![A brick-textured cube, lit by a lamp, with the camera circling it](out/photo.png)
 
 Rendered by `examples/photo.mojo`: a PNG decoded by this project, on a cube, seen from a camera that rides the scene graph.
 
-ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. It depends on the Mojo standard library and nothing else. The GPU backend is one file and needs MAX.
+ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. The core CPU renderer uses the Mojo standard library. The optional GPU backend needs MAX.
 
 The project exists to learn graphics and Mojo from first principles. It is not a drop-in replacement for three.js. The [feature checklist](#features) says what is ported.
 
@@ -50,7 +50,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 ## Features
 
-A ticked item is ported, tested with full coverage, and documented on the linked wiki page. Each item has a GitHub issue.
+A ticked item has a port, tests and documentation on the linked wiki page. Each item has a GitHub issue. The coverage badge states the required threshold, not the result for an unverified revision. Confirm a revision's results from its completed checks. See [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#limits) for known measurement limits.
 
 Every three.js feature in scope is ported: 215 features, and none is open. Each wiki page lists what its port leaves out, under "What is not ported". [Out of scope](#out-of-scope) lists what the port leaves out on purpose, and why. Open the dropdown under a section to see what is ported.
 
