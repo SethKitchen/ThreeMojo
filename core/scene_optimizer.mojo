@@ -23,7 +23,9 @@ storage and interleaved values, and the index.
 batched. A batch shares its parent, visibility, layers, render order,
 culling, and shadow settings. Meshes with children, co-located objects,
 user data, morphs, custom shadow materials, instanced attributes, or a
-restricted draw range stay in place. Nodes in `keep` also stay in place.
+restricted draw range stay in place. Gyroscopes, clipping groups, light
+targets, LOD levels, and skeleton bones stay in place too. Nodes in `keep`
+also stay in place.
 Use `keep` for camera nodes and for nodes that animation or application
 code must continue to address. Optimization captures each eligible mesh's
 current local transform; later changes to that original node do not move
@@ -361,6 +363,9 @@ def _carries(scene: Scene, node: NodeId, except_mesh: Int = -1) -> Bool:
     for at in range(len(scene.skinned_meshes)):
         if scene.skinned_meshes[at].node == node:
             return True
+        for bone in scene.skinned_meshes[at].skeleton.bones:
+            if bone.node == node:
+                return True
     for at in range(len(scene.instanced_meshes)):
         if scene.instanced_meshes[at].node == node:
             return True
@@ -368,11 +373,14 @@ def _carries(scene: Scene, node: NodeId, except_mesh: Int = -1) -> Bool:
         if scene.batched_meshes[at].node == node:
             return True
     for at in range(len(scene.lights)):
-        if scene.lights[at].node == node:
+        if scene.lights[at].node == node or scene.lights[at].target == node:
             return True
     for at in range(len(scene.lods)):
         if scene.lods[at].node == node:
             return True
+        for level in scene.lods[at].levels:
+            if level.object == node:
+                return True
     for at in range(len(scene.lines)):
         if scene.lines[at].node == node:
             return True
@@ -387,6 +395,9 @@ def _carries(scene: Scene, node: NodeId, except_mesh: Int = -1) -> Bool:
             return True
     for at in range(len(scene.wide_lines)):
         if scene.wide_lines[at].node == node:
+            return True
+    for group in scene.clipping_groups:
+        if group.node == node:
             return True
     return False
 
@@ -502,6 +513,9 @@ struct SceneOptimizer(Movable):
     ) raises -> Bool:
         """Keep dynamic state and nodes that carry other scene content."""
         ref mesh = scene.meshes[index]
+        var kind = scene.get(mesh.node).object_type
+        if kind != OBJECT3D_TYPE and kind != GROUP_TYPE:
+            return False
         for kept in self.keep:
             if kept == mesh.node:
                 return False
