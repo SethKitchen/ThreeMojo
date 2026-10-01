@@ -2390,7 +2390,8 @@ struct Lighting(Movable):
         the point lights and then the spot lights. A directional light has
         no distance and adds nothing, as three.js skips it. A spot light
         adds nothing at its own position, where it has no direction. Each
-        light is `shadowed_twice`, not scaled.
+        light is `shadowed_twice`, not scaled. Spot lights use their cone,
+        IES profile or projector frame at the ray step, as surfaces do.
 
         Args:
             position: Where the step is, in world space.
@@ -2419,11 +2420,10 @@ struct Lighting(Movable):
             var distance = toward.length()
             if distance == 0:
                 continue
-            var rim = smoothstep(
-                self.cone_cosines[index],
-                self.penumbra_cosines[index],
-                toward.dot(self.spot_directions[index]) / distance,
-            )
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = self.spot_attenuation(index, angle_cos, position)
+            if rim <= 0:
+                continue
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = total + shadowed_twice(

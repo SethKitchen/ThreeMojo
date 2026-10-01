@@ -99,7 +99,7 @@ var lighting = Lighting(
 )
 ```
 
-`Lighting.spot_attenuation` gives the beam of one spot light. Every lit kind reads it where it read the cone. That is the diffuse term, the highlight, the toon ramp, the scattered light, the physical lobe and the Gouraud vertex.
+`Lighting.spot_attenuation` gives the beam of one spot light. Every lit kind reads it where it read the cone. That is the diffuse term, the highlight, the toon ramp, the scattered light, the physical lobe, the Gouraud vertex and each volume ray step.
 
 ## Light probe grid
 
