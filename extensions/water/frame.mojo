@@ -60,6 +60,9 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from std.math import cos, exp, pow, sin, sqrt, tan
 from units.si import DEGREE, SECOND, Angle, Duration, Length
 
+# Clearwater biases the caustic lookup one mip level to smooth concentrated light.
+comptime CAUSTIC_LOD_BIAS = Float32(1.0)
+
 
 @fieldwise_init
 struct CameraLook(ImplicitlyCopyable):
@@ -548,7 +551,7 @@ def _caustic_grad(
         Float32(field.n),
         Float32(field.n),
         8.0,
-        1.0,
+        CAUSTIC_LOD_BIAS,
         Float32(len(field.mip_n)),
     )
     var acc = Vector3(0.0, 0.0, 0.0)

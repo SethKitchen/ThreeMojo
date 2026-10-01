@@ -16,6 +16,11 @@ from math.vector3 import Vector3
 from std.math import abs, floor, hypot, sqrt
 from units.si import Length
 
+# Clearwater caps unresolved point focusing rather than emitting infinite light.
+comptime MAX_CAUSTIC_INTENSITY = Float32(40.0)
+# Clamp the flat-surface registration at grazing sun angles, as upstream does.
+comptime MIN_SUN_Y = Float32(0.05)
+
 
 struct CausticField(Movable):
     """A square caustic texture, three additive channels."""
@@ -95,8 +100,8 @@ def flat_shift(sun: Vector3, depth: Float32) -> Tuple[Float32, Float32]:
         The world-space shift subtracted from the caustic lookup.
     """
     var sy = sun.y
-    if sy < 0.05:
-        sy = 0.05
+    if sy < MIN_SUN_Y:
+        sy = MIN_SUN_Y
     var sin_i2 = 1.0 - sy * sy
     if sin_i2 < 0.0:
         sin_i2 = 0.0
@@ -302,8 +307,8 @@ def _splat(
     # Pixel area is `projected`. Source meters per pixel times `(C/L)^2`
     # is the shader's `area * uNorm`, and a flat surface lands near 1.
     var intensity = source_area / projected * norm
-    if intensity > 40.0:
-        intensity = 40.0
+    if intensity > MAX_CAUSTIC_INTENSITY:
+        intensity = MAX_CAUSTIC_INTENSITY
     var min_x = _min3(ax, bx, cx)
     var max_x = _max3(ax, bx, cx)
     var min_y = _min3(ay, by, cy)

@@ -6,6 +6,7 @@
 """Clearwater's spectrum, ripples, caustics, glare and graded frame."""
 
 from extensions.water.caustics import (
+    _splat,
     CausticField,
     caustic_covers,
     flat_shift,
@@ -839,6 +840,26 @@ def test_spectrum_and_glare_refuse_invalid_sizes_at_entry() raises:
             _ = build_spectrum(SpectrumResolution(side), Length(4.6), 0.078)
         with assert_raises(contains="power of two"):
             _ = glare_kernels(SpectrumResolution(side))
+
+
+def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
+    var image = CausticField(1, Length(1))
+    var x = List[Float32](length=9, fill=0.5)
+    var z = List[Float32](length=9, fill=0.5)
+    var live = List[Int](length=9, fill=1)
+    # A point has no area and deposits no light, even on a pixel center.
+    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
+    assert_almost_equal(image.channel(0, 0, 1), Float32(0))
+    # A small but nonzero triangle retains its energy cap. An epsilon-area
+    # rejection would erase this valid focus instead of bounding it.
+    x[1] = 0.49
+    z[1] = 0.49
+    x[4] = 0.51
+    z[4] = 0.49
+    x[7] = 0.5
+    z[7] = 0.51
+    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
+    assert_almost_equal(image.channel(0, 0, 1), Float32(40))
 
 
 def main() raises:
