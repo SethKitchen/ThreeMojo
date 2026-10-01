@@ -101,11 +101,16 @@ def _statement_colon(line: String) -> Int:
     """
     var depth = 0
     var quote = String("")
+    var escaped = False
     var index = 0
     var found = -1
     for cp in line.codepoint_slices():
         if quote != "":
-            if cp == quote:
+            if escaped:
+                escaped = False
+            elif cp == "\\":
+                escaped = True
+            elif cp == quote:
                 quote = String("")
         elif cp == '"' or cp == "'":
             quote = String(cp)
@@ -129,9 +134,14 @@ def _strip_comment(line: String) -> String:
     """
     var out = String("")
     var quote = String("")
+    var escaped = False
     for cp in line.codepoint_slices():
         if quote != "":
-            if cp == quote:
+            if escaped:
+                escaped = False
+            elif cp == "\\":
+                escaped = True
+            elif cp == quote:
                 quote = String("")
         elif cp == '"' or cp == "'":
             quote = String(cp)
@@ -197,12 +207,17 @@ def split_conditions(condition: String) raises -> List[String]:
     var current = String("")
     var depth = 0
     var quote = String("")
+    var escaped = False
     var index = 0
 
     while index < len(chars):
         var ch = chars[index]
         if quote != "":
-            if ch == quote:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
                 quote = String("")
             current += ch
             index += 1

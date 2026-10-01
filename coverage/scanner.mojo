@@ -47,10 +47,15 @@ def _bracket_delta(line: String) -> Int:
     """Return opened-minus-closed brackets on `line`, ignoring string bodies."""
     var depth = 0
     var quote = String("")
+    var escaped = False
     for cp in line.codepoint_slices():
         if quote != "":
-            # Inside a string literal; only its matching quote matters.
-            if cp == quote:
+            # A quote after an odd backslash run stays inside the literal.
+            if escaped:
+                escaped = False
+            elif cp == "\\":
+                escaped = True
+            elif cp == quote:
                 quote = String("")
             continue
         if cp == '"' or cp == "'":
