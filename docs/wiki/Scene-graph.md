@@ -271,6 +271,8 @@ camera.layers.enable(1)              # the camera sees layer one as well
 
 ## Visibility, names and render order
 
+A hidden or removed ancestor hides every descendant, including a `Gyroscope`. A gyroscope keeps its own rotation. It still inherits visibility from its parent.
+
 `Object3D` carries four more fields, as three.js's `Object3D` does.
 
 | Field | Default | Meaning |

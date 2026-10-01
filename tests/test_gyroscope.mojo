@@ -22,6 +22,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_true,
 )
 from units.si import Angle, RADIAN
@@ -145,6 +146,54 @@ def test_a_gyroscope_is_written_as_an_object3d() raises:
     var text = object_to_json(scene, Assets())
     assert_true(text.find('"type":"Object3D"') >= 0)
     assert_equal(Object3D().object_type, OBJECT3D_TYPE)
+
+
+def test_a_gyroscope_inherits_ancestor_visibility() raises:
+    var scene = _world()
+    var spinner = NodeId(1)
+    var child = NodeId(2)
+    var before = scene.world_position(spinner)
+    assert_true(scene.is_shown(spinner))
+    assert_true(scene.is_shown(child))
+    scene.node(NodeId(0)).visible = False
+    scene.update()
+    assert_false(scene.is_shown(spinner))
+    assert_false(scene.is_shown(child))
+    var after = scene.world_position(spinner)
+    assert_equal(after.x, before.x)
+    assert_equal(after.y, before.y)
+    assert_equal(after.z, before.z)
+    scene.node(NodeId(0)).visible = True
+    scene.update()
+    assert_true(scene.is_shown(spinner))
+    assert_true(scene.is_shown(child))
+    scene.node(spinner).visible = False
+    scene.update()
+    assert_false(scene.is_shown(spinner))
+    assert_false(scene.is_shown(child))
+
+
+def test_a_removed_ancestor_hides_a_gyroscope_until_reattached() raises:
+    var scene = _world()
+    var root = NodeId(0)
+    var spinner = NodeId(1)
+    var child = NodeId(2)
+    scene.remove(root)
+    scene.update()
+    assert_false(scene.in_scene(spinner))
+    assert_false(scene.is_shown(spinner))
+    assert_false(scene.is_shown(child))
+    scene.add(root)
+    scene.update()
+    assert_true(scene.is_shown(spinner))
+    assert_true(scene.is_shown(child))
+    scene.node(root).visible = False
+    scene.update()
+    assert_false(scene.is_shown(spinner))
+    scene.add(spinner)
+    scene.update()
+    assert_true(scene.is_shown(spinner))
+    assert_true(scene.is_shown(child))
 
 
 def main() raises:

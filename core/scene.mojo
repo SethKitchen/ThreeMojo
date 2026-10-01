@@ -992,6 +992,10 @@ struct Scene(Movable):
                 node.matrix = node.local_matrix()
             var parent = node.parent
             var shown = node.visible and not self._removed[index]
+            # Visibility follows ancestry, even when a gyroscope keeps
+            # its own rotation instead of inheriting the parent's.
+            if parent != NO_PARENT:
+                shown = shown and self._shown[parent.value]
             if parent == NO_PARENT:
                 self._world[index] = Matrix4(copy=node.matrix)
             elif node.object_type == GYROSCOPE_TYPE:
@@ -1002,7 +1006,6 @@ struct Scene(Movable):
                 var combined = Matrix4(copy=self._world[parent.value])
                 combined.multiply(node.matrix)
                 self._world[index] = combined^
-                shown = shown and self._shown[parent.value]
             self._shown[index] = shown
         self._stale = False
 
