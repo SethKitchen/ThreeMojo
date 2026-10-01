@@ -720,6 +720,19 @@ struct GltfModel(Copyable, Movable):
         return found^
 
 
+def _decode_batch_size(remaining: Int, workers: Int) -> Int:
+    """Return the number of pending images one decode batch can own.
+
+    Args:
+        remaining: The nonnegative number of images still to decode.
+        workers: The requested limit; one or less uses one image.
+
+    Returns:
+        No more than `remaining` and `max(1, workers)` images.
+    """
+    return min(remaining, max(1, workers))
+
+
 async def _decode_one(
     bytes: MutPointer[List[UInt8], MutAnyOrigin],
     samplings: MutPointer[GltfSampler, MutAnyOrigin],
@@ -859,6 +872,8 @@ def load_gltf(
     metal and roughness maps as numbers) is decoded and mipmapped first,
     `workers` at a time, and the materials find them built. A texture an
     extension reads is decoded when it is read, as with one worker.
+    Each batch releases its input bytes and transfers its completed
+    textures before the next batch reads any image.
 
     Args:
         text: The JSON.
@@ -1734,46 +1749,70 @@ struct _Loader(Movable):
                     textures.append(index)
                     spaces.append(slot[2])
         var count = len(textures)
-        var bytes = List[List[UInt8]]()
-        var samplings = List[GltfSampler]()
-        var built = List[Texture]()
-        for k in range(count):
-            bytes.append(self.image_bytes(self.texture_images[textures[k]]))
-            samplings.append(self.texture_samplers[textures[k]])
-            var texel: List[UInt8] = [0, 0, 0, 255]
-            built.append(
-                Texture(1, 1, texel^, REPEAT, BILINEAR, LINEAR, False, IGNORED)
-            )
-        var errors = List[String](length=count, fill=String(""))
-        # Every pointer is to a local that outlives `wait`: each is read
-        # again after it, so none is destroyed while a task reads it.
-        var group = TaskGroup()
-        for k in range(count):
-            group.create_task(
-                _decode_one(
-                    bytes.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                    samplings.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                    spaces.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                    built.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                    errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                    k,
+        var first = 0
+        while first < count:
+            # Own only one bounded batch of compressed bytes and decoded
+            # results. Wait and publish it before reading the next batch.
+            # first < count and the worker floor make every batch nonempty.
+            var batch = _decode_batch_size(count - first, workers)
+            var bytes = List[List[UInt8]]()
+            var samplings = List[GltfSampler]()
+            var batch_spaces = List[ColorSpace]()
+            var built = List[Texture]()
+            for k in range(batch):  # pragma: no branch
+                var index = first + k
+                bytes.append(
+                    self.image_bytes(self.texture_images[textures[index]])
                 )
-            )
-        group.wait()
-        for k in range(count):
-            if errors[k].byte_length() > 0:
-                raise Error(errors[k])
-            var texture = Texture(copy=built[k])
-            texture.wrap_t = samplings[k].wrap_t
-            texture.min_filter = samplings[k].min_filter
-            texture.flip_y = False
-            var id = assets.textures.add(texture^)
-            if spaces[k] == SRGB:
-                self.model.color_textures[textures[k]] = id
-            else:
-                self.model.data_textures[textures[k]] = id
-        # The images the tasks read, kept to here.
-        _ = len(bytes)
+                samplings.append(self.texture_samplers[textures[index]])
+                batch_spaces.append(spaces[index])
+                var texel: List[UInt8] = [0, 0, 0, 255]
+                built.append(
+                    Texture(
+                        1, 1, texel^, REPEAT, BILINEAR, LINEAR, False, IGNORED
+                    )
+                )
+            var errors = List[String](length=batch, fill=String(""))
+            # Every pointer is to a local that outlives `wait`: no list
+            # is resized or consumed while its tasks can still access it.
+            var group = TaskGroup()
+            for k in range(batch):  # pragma: no branch
+                group.create_task(
+                    _decode_one(
+                        bytes.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        samplings.unsafe_ptr().unsafe_origin_cast[
+                            MutAnyOrigin
+                        ](),
+                        batch_spaces.unsafe_ptr().unsafe_origin_cast[
+                            MutAnyOrigin
+                        ](),
+                        built.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        k,
+                    )
+                )
+            group.wait()
+            # Reverse once so popping moves results in source order.
+            built.reverse()
+            for k in range(batch):  # pragma: no branch
+                if errors[k].byte_length() > 0:
+                    raise Error(errors[k])
+                # Move the completed texture, retaining its stable source
+                # order without copying its pixels and mipmaps again.
+                var texture = built.pop()
+                texture.wrap_t = samplings[k].wrap_t
+                texture.min_filter = samplings[k].min_filter
+                texture.flip_y = False
+                var id = assets.textures.add(texture^)
+                var index = first + k
+                if spaces[index] == SRGB:
+                    self.model.color_textures[textures[index]] = id
+                else:
+                    self.model.data_textures[textures[index]] = id
+            # The images and color spaces the tasks read, kept to here.
+            _ = len(bytes)
+            _ = len(batch_spaces)
+            first += batch
 
     def image_of(self, texture: Int) raises -> Int:
         """Return the image a texture reads: its `KHR_texture_basisu`
