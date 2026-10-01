@@ -799,8 +799,9 @@ struct LocalizationStage(Movable):
             shared.parameters.update_imported_route(actor, route^)
 
     def remove_actor(mut self, actor: ActorId) raises:
-        """Forget a vehicle, `RemoveActor`. As in CARLA, its junction
-        entrance record stays.
+        """Forget a vehicle and its junction entrance record, `RemoveActor`.
+
+        Unlike CARLA, no junction indices survive actor removal.
 
         Args:
             actor: The vehicle.
