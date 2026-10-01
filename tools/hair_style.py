@@ -90,6 +90,7 @@ def read_tfx(path):
     for s in range(strands):
         strand = []
         for i in range(points):
+            # Each position is FLOAT4; the converter uses xyz, not w.
             at = offset + 16 * (s * points + i)
             position = struct.unpack_from("<3f", data, at)
             if not all(math.isfinite(value) for value in position):
