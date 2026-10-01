@@ -335,10 +335,13 @@ def normalized_skin_weights(
     three.js does "something reasonable".
 
     Args:
-        four: The vertex's four weights.
+        four: The vertex's four finite weights.
 
     Returns:
         The four weights, scaled.
+
+    Raises:
+        Nothing. This arithmetic helper does not validate inputs.
     """
     var wide = four.cast[DType.float64]()
     var total = abs(wide).reduce_add()
