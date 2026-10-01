@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
     flip_x,
+    smax,
     smin,
 )
 from extensions.humanoid.skeleton.hand.assembly import add_hand
@@ -279,8 +280,43 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         return field_gradient(self, point, self.epsilon)
 
 
+# How round the parting of the legs is, in its half-widths.
+comptime PART_ROUND = Float32(3.0)
+
+
+struct PartedBody(Copyable, DistanceField, Movable):
+    """A body's skin with its legs parted below the crotch by a slot
+    wide enough for a mesh to see: what an animated body needs, since
+    legs that touch are one surface and cannot swing apart."""
+
+    var body: BodySkinField
+    var half: Float32
+    var top: Float32
+
+    def __init__(out self, var body: BodySkinField, half: Float32):
+        """Part a body's legs.
+
+        Args:
+            body: The body's skin.
+            half: Half the slot's width, in meters.
+        """
+        self.top = body.lower.crotch_top
+        self.body = body^
+        self.half = half
+
+    def distance(self, point: Vector3) -> Float32:
+        """Return how far `point` lies outside the parted skin."""
+        # Rounded wide, so each thigh's inner side curves as a thigh's
+        # does rather than lying flat against the other.
+        var slot = max(abs(point.x) - self.half, point.y - self.top)
+        return smax(self.body.distance(point), -slot, self.half * PART_ROUND)
+
+
 def body_skin_mesh(
-    spec: HumanoidSpec, detail: Int = 56, workers: Int = 1
+    spec: HumanoidSpec,
+    detail: Int = 56,
+    workers: Int = 1,
+    parted: Float32 = 0,
 ) raises -> BufferGeometry:
     """Return one skin over the torso, the pelvis, both legs, both arms,
     the neck and the head, down to the wrists.
@@ -297,6 +333,10 @@ def body_skin_mesh(
         detail: Cells along the body, eight through sixty-four,
             fifty-six by default.
         workers: How many threads mesh it. One by default.
+        parted: Half the width of a slot that parts the legs below the
+            crotch, in meters, or zero to leave the thighs touching as
+            they stand. An animated body needs one about as wide as a
+            cell of the mesh.
 
     Returns:
         A geometry with `position`, `normal`, `uv` and `color`
@@ -309,19 +349,25 @@ def body_skin_mesh(
     check_detail(detail, "body skin")
     var field = BodySkinField(spec)
     var parts = List[BufferGeometry]()
-    parts.append(
-        mesh_surface(
-            field,
-            field.low,
-            Vector3(
-                field.high.x, field.head_split + field.head_lap, field.high.z
-            ),
-            detail,
-            "body skin",
-            workers,
-            4,
-        )
+    var top = Vector3(
+        field.high.x, field.head_split + field.head_lap, field.high.z
     )
+    if parted > 0:
+        parts.append(
+            mesh_surface(
+                PartedBody(field.copy(), parted),
+                field.low,
+                top,
+                detail,
+                "body skin",
+                workers,
+                4,
+            )
+        )
+    else:
+        parts.append(
+            mesh_surface(field, field.low, top, detail, "body skin", workers, 4)
+        )
     # The head is the scan's own mesh, on the same surface.
     parts.append(
         scan_skin_mesh(

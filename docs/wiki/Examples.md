@@ -111,6 +111,7 @@ mkdir -p out
 | `expressions.mojo` | `expressions.png` | [Head](Head) |
 | `talking.mojo` | `talking.png` | [Head](Head) |
 | `hairstyles.mojo` | `hairstyles.png` | [Head](Head) |
+| `game_humanoid.mojo` | `game_humanoid.png` | [Game humanoid](Game-humanoid) |
 | `water.mojo` | `water.png` | [Water](Water) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.

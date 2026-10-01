@@ -15,6 +15,11 @@ extensions/
   humanoid/
     spec.mojo          HumanoidSpec: stature, sex, athleticism and genome
     genome.mojo        Genome, Gene, Expression, inheritance
+    rig/
+      joints.mojo      the nineteen joints of a game skeleton
+      weights.mojo     skin weights measured over the skin
+      clips.mojo       idle, walk, run, jump and wave
+      game.mojo        a skinned humanoid on its skeleton
     sex.mojo           MALE, FEMALE
     side.mojo          RIGHT, LEFT
     athleticism.mojo   UNTONED, TONED

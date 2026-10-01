@@ -84,6 +84,7 @@
 - [Hand](Hand)
 - [Head](Head)
 - [Genome](Genome)
+- [Game humanoid](Game-humanoid)
 - [Mesh quality](Mesh-quality)
 - [Segment inertia](Segment-inertia)
 
