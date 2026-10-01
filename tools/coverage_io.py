@@ -61,12 +61,13 @@ class Reducer:
         payload = record[len(BRANCH):]
         head, colon, state = payload.rpartition(b':')
         base, dot, position = head.rpartition(b'.')
+        if colon and state not in (b'T', b'F'):
+            raise ValueError(f'Malformed branch outcome: {record!r}')
         if not colon or (dot and not position.isdigit()):
             # Malformed: passed as it is, for the report to refuse.
             self.write(line)
             return
         self._payload(payload)
-        state = b'T' if state == b'T' else b'F'
         if dot:
             self.pending.setdefault(base, {})[int(position)] = state
             return

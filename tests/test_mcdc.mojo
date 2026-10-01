@@ -238,6 +238,26 @@ def test_malformed_branch_record_is_rejected() raises:
     assert_true(raised)
 
 
+def test_malformed_outcome_cannot_become_a_false_evaluation() raises:
+    var states = List[String]()
+    states.append("")
+    states.append("garbage")
+    states.append("t")
+    states.append("False")
+    states.append("T:extra")
+    var ids = List[String]()
+    ids.append("m:4")
+    ids.append("m:4.0")
+    for state in states:
+        for id in ids:
+            var raised = False
+            try:
+                _ = parse_traces("COVBRANCH:" + id + ":" + state + "\n")
+            except e:
+                raised = True
+            assert_true(raised)
+
+
 def test_find_trace_reports_a_missing_decision() raises:
     assert_equal(
         find_trace(parse_traces(String(BOTH_TRUE)), String("m:99")), -1
