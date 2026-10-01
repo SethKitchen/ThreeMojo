@@ -9,22 +9,8 @@ The bit operations match JavaScript `Math.imul` and `>>>`, so a seed of
 7 draws the same sequence as the original page.
 """
 
+from math.random import mulberry32_step
 from std.math import cos, log, pi, sqrt
-
-
-def _i32(value: Int) -> Int:
-    var bits = value & 0xFFFFFFFF
-    if bits >= 0x80000000:
-        return bits - 0x100000000
-    return bits
-
-
-def _imul(left: Int, right: Int) -> Int:
-    return _i32(_i32(left) * _i32(right))
-
-
-def _ushr(value: Int, shift: Int) -> Int:
-    return (value & 0xFFFFFFFF) >> shift
 
 
 struct Mulberry32:
@@ -47,14 +33,10 @@ struct Mulberry32:
         Returns:
             The next mulberry32 value, as JavaScript divides it.
         """
-        var a = _i32(self.state + 0x6D2B79F5)
-        self.state = a & 0xFFFFFFFF
-        var ua = self.state
-        var t = _imul(ua ^ _ushr(ua, 15), 1 | ua)
-        var ut = t & 0xFFFFFFFF
-        t = _i32(t + _imul(ut ^ _ushr(ut, 7), 61 | ut)) ^ t
-        var mixed = _ushr(t ^ _ushr(t, 14), 0)
-        return Float64(mixed) / 4294967296.0
+        var state = UInt32(self.state & 0xFFFFFFFF)
+        var value = mulberry32_step(state)
+        self.state = Int(state)
+        return value
 
     def gauss(mut self) -> Float64:
         """Draw one standard normal sample, as Clearwater's `gauss` does.

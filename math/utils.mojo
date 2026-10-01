@@ -16,6 +16,7 @@ here keeps a generator and asks it.
 """
 
 from math.quaternion import Quaternion
+from math.random import mulberry32_step
 from math.smoothstep import smoothstep
 from std.math import cos, exp, floor, sin
 from units.si import Angle, Duration, SECOND
@@ -182,12 +183,14 @@ def ceil_power_of_two(value: Int) raises -> Int:
         The power of two.
 
     Raises:
-        Error: If the value is not positive.
+        Error: If the value is not positive or its ceiling does not fit in Int.
     """
     if value <= 0:
         raise Error("Only a positive number has a power of two above it")
     var power = 1
     while power < value:
+        if power > Int.MAX // 2:
+            raise Error("The power of two above this value does not fit in Int")
         power <<= 1
     return power
 
@@ -207,7 +210,8 @@ def floor_power_of_two(value: Int) raises -> Int:
     if value <= 0:
         raise Error("Only a positive number has a power of two below it")
     var power = 1
-    while power * 2 <= value:
+    # Divide the bound first so the comparison cannot overflow.
+    while power <= value // 2:
         power <<= 1
     return power
 
@@ -235,11 +239,7 @@ struct SeededRandom(Copyable, Movable):
         Returns:
             A number from zero up to, not including, one.
         """
-        self.state = self.state + 0x6D2B79F5
-        var t = self.state
-        t = (t ^ (t >> 15)) * (t | 1)
-        t ^= t + (t ^ (t >> 7)) * (t | 61)
-        return Float64(t ^ (t >> 14)) / 4294967296.0
+        return mulberry32_step(self.state)
 
     def float_in(mut self, low: Float32, high: Float32) -> Float32:
         """Return a number in a range. three.js: `randFloat`.
