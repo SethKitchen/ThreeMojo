@@ -99,7 +99,7 @@ def test_public_sun_fitting_checks_shadow_settings_first() raises:
 
 
 def test_csm_mapping_and_frustum_shapes_are_checked_before_update() raises:
-    for mode in range(8):
+    for mode in range(9):
         var scene = Scene()
         var camera = _camera()
         var csm = CSM(scene, camera, shadow_map_size=8)
@@ -119,8 +119,10 @@ def test_csm_mapping_and_frustum_shapes_are_checked_before_update() raises:
             _ = csm.frustums[0].near.pop()
         elif mode == 6:
             _ = csm.frustums[0].far.pop()
-        else:
+        elif mode == 7:
             scene.lights[csm.lights[0]].kind = POINT
+        else:
+            csm.shadow_map_size = 0
         with assert_raises():
             csm.update(scene, camera)
         assert_equal(scene.world_position(node).y, before.y)

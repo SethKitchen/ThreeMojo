@@ -516,6 +516,8 @@ struct CSM(Movable):
                 the camera's view is refused.
         """
         self._check_lights(scene)
+        if self.shadow_map_size < 1:
+            raise Error("A CSM shadow map size must be positive")
         if len(self.frustums) != self.cascades:
             raise Error("A CSM needs one frustum per cascade")
         for frustum in self.frustums:

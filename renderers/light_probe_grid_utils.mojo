@@ -172,6 +172,7 @@ def replace_sun_lights(
     half, standing two radii from their middle, back toward the sun. The
     others light nothing until `restore_sun_lights`. All replacement
     values and node references are checked before the first scene write.
+    The snapshot keeps the entire light list for `restore_sun_lights`.
 
     Args:
         scene: The scene, updated.
@@ -231,8 +232,8 @@ def replace_sun_lights(
 
 
 def restore_sun_lights(mut scene: Scene, saved: SunReplacement) raises:
-    """Put back what `replace_sun_lights` changed, three.js's
-    `restoreSunLights`.
+    """Put back the complete saved light list and moved node positions,
+    three.js's `restoreSunLights`.
 
     Args:
         scene: The scene.
