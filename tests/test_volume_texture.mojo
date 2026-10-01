@@ -392,5 +392,42 @@ def test_assets_start_with_empty_volume_stores() raises:
     assert_equal(assets.data_array_textures.count(), 1)
 
 
+def test_volume_extents_refuse_overflow_before_allocation() raises:
+    var big = Int(1) << 32
+    var cube = Int(1) << 22
+    var shapes: List[List[Int]] = [
+        [big, big, 1],
+        [cube, cube, cube],
+        [Int.MAX // 4 + 1, 1, 1],
+    ]
+    for shape in shapes:
+        for channels in range(1, 5):
+            with assert_raises(contains="size cannot fit"):
+                _ = VolumeImage.of_bytes(
+                    shape[0], shape[1], shape[2], List[UInt8](), channels
+                )
+            with assert_raises(contains="size cannot fit"):
+                _ = VolumeImage.of_floats(
+                    shape[0], shape[1], shape[2], List[Float32](), channels
+                )
+        var edited = VolumeImage(
+            shape[0],
+            shape[1],
+            shape[2],
+            UNSIGNED_BYTE_TYPE,
+            List[UInt8](),
+            List[Float32](),
+        )
+        with assert_raises(contains="size cannot fit"):
+            edited.validate()
+        edited.texel_type = FLOAT_TYPE
+        with assert_raises(contains="size cannot fit"):
+            edited.validate()
+    # The last representable RGBA count reaches the storage check, without
+    # trying to allocate its missing payload.
+    with assert_raises(contains="length does not match"):
+        _ = VolumeImage.of_bytes(Int.MAX // 4, 1, 1, List[UInt8]())
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

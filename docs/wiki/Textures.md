@@ -587,6 +587,8 @@ A `VolumeImage` holds the texels. It is three.js's `texture.image`, `{ data, wid
 | `VolumeImage.of_bytes(width, height, depth, bytes, channels=4)` | `UnsignedByteType` | One through four bytes a texel. |
 | `VolumeImage.of_floats(width, height, depth, floats, channels=4)` | `FloatType` | One through four finite floats a texel. |
 
+The dimensions must be positive, and their product times four must fit in `Int`. Builders and `validate()` reject an overflowing size before multiplying or allocating. The supplied storage must match the dimensions exactly. LUT image loaders also check decoded pixel storage before transposing it.
+
 A texel with fewer than four channels fills red first. A color channel that it does not reach is zero. A missing alpha is one. That is how WebGL samples a `RedFormat` or an `RGFormat` texture. The image is stored as RGBA.
 
 ### The texture
