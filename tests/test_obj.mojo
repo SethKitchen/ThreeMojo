@@ -485,5 +485,49 @@ def test_a_read_model_renders() raises:
     assert_true(drawn < 24 * 18, "the cube filled the image")
 
 
+def scaled_polygon(scale: Float64, concave: Bool, reversed: Bool) -> String:
+    """Build the same finite polygon at several physical scales."""
+    var text = String()
+    var corners: List[SIMD[DType.float64, 2]] = [
+        SIMD[DType.float64, 2](0, 0),
+        SIMD[DType.float64, 2](2, 0),
+        SIMD[DType.float64, 2](
+            Float64(0.5) if concave else Float64(2),
+            Float64(0.5) if concave else Float64(1),
+        ),
+        SIMD[DType.float64, 2](0, 1),
+    ]
+    for corner in corners:
+        text += (
+            "v "
+            + String(corner[0] * scale)
+            + " "
+            + String(corner[1] * scale)
+            + " 0\n"
+        )
+    text += "f 4 3 2 1\n" if reversed else "f 1 2 3 4\n"
+    return text^
+
+
+def test_polygon_convexity_is_independent_of_finite_scale() raises:
+    for scale in [
+        Float64(1e-30),
+        Float64(1e-15),
+        Float64(1),
+        Float64(1e20),
+        Float64(1e37),
+    ]:
+        for reversed in [False, True]:
+            var convex = parse_obj(scaled_polygon(scale, False, reversed))
+            assert_equal(convex.objects[0].geometry.triangle_count(), 2)
+            with assert_raises(contains="not convex"):
+                _ = parse_obj(scaled_polygon(scale, True, reversed))
+    var translated = parse_obj(
+        "v 100000 100000 0\nv 100001 100000 0\n"
+        "v 100001 100001 0\nv 100000 100001 0\nf 1 2 3 4\n"
+    )
+    assert_equal(translated.objects[0].geometry.triangle_count(), 2)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
