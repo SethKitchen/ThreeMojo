@@ -91,8 +91,12 @@ def main(argv=None):
     parser.add_argument("--urls")
     args = parser.parse_args(argv)
     manifest = tool.load_manifest(args.manifest)
-    index = json.load(open(args.index, encoding="utf-8"))
-    urls = json.load(open(args.urls, encoding="utf-8")) if args.urls else {}
+    with open(args.index, encoding="utf-8") as source:
+        index = json.load(source)
+    urls = {}
+    if args.urls:
+        with open(args.urls, encoding="utf-8") as source:
+            urls = json.load(source)
     old = {e["id"]: e for e in manifest["entries"]}
     kept = [e for e in manifest["entries"] if not e["id"].startswith(PREFIX)]
     added = []
