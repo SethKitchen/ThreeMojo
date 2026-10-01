@@ -29,6 +29,8 @@ The tests that open no device, and only lay data out on the host, are in
 `tests/test_gpu_layout.mojo`. CI runs that suite on a runner with no GPU.
 """
 
+from max.gpu.host import DeviceContext
+
 from render.color_spaces import (
     ColorSpaceId,
     DISPLAY_P3_COLOR_SPACE,
@@ -14894,29 +14896,50 @@ def test_both_backends_keep_subpixel_wide_line_caps() raises:
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
 
 
-def scalar_math_kernel(
-    output: MutPointer[Float32, MutAnyOrigin],
-    inputs: MutPointer[Float32, MutAnyOrigin],
-    count: Int32,
-):
-    """Evaluate shared scalar trigonometry on device inputs."""
-    from max.gpu import global_idx
-    from math.arc_tangent import atan2_float32, atan_float32
-    from math.sine import sin_float32
+struct _ScalarMathKernels:
+    """Keep device-only entries out of the host test discovery list."""
 
-    var at = Int(global_idx.x)
-    if at >= Int(count):
-        return
-    var x = inputs[unsafe_offset=at]
-    output[unsafe_offset=3 * at] = sin_float32(x)
-    output[unsafe_offset=3 * at + 1] = atan_float32(x)
-    output[unsafe_offset=3 * at + 2] = atan2_float32(
-        x, inputs[unsafe_offset=(at + 1) % Int(count)]
-    )
+    @staticmethod
+    def scalar_math_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate shared scalar trigonometry on device inputs."""
+        from max.gpu import global_idx
+        from math.arc_tangent import atan2_float32, atan_float32
+        from math.sine import sin_float32
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var x = inputs[unsafe_offset=at]
+        output[unsafe_offset=3 * at] = sin_float32(x)
+        output[unsafe_offset=3 * at + 1] = atan_float32(x)
+        output[unsafe_offset=3 * at + 2] = atan2_float32(
+            x, inputs[unsafe_offset=(at + 1) % Int(count)]
+        )
+
+    @staticmethod
+    def norm_kernel[
+        dtype: DType
+    ](
+        output: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+        inputs: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate shared scalar norms on device inputs."""
+        from max.gpu import global_idx
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var values = norm_sample(inputs[unsafe_offset=at])
+        for component in range(12):
+            output[unsafe_offset=12 * at + component] = values[component]
 
 
 def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
-    from max.gpu.host import DeviceContext
     from math.arc_tangent import atan2_float32, atan_float32
     from math.sine import sin_float32
     from std.math import isnan, nan
@@ -14949,7 +14972,7 @@ def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
     with device_inputs.map_to_host() as host:
         for at in range(len(inputs)):
             host[at] = inputs[at]
-    context.enqueue_function[scalar_math_kernel](
+    context.enqueue_function[_ScalarMathKernels.scalar_math_kernel](
         output.unsafe_ptr(),
         device_inputs.unsafe_ptr(),
         Int32(len(inputs)),
@@ -15009,29 +15032,10 @@ def norm_sample[
     return result^
 
 
-def norm_kernel[
-    dtype: DType
-](
-    output: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
-    inputs: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
-    count: Int32,
-):
-    """Evaluate shared scalar norms on device inputs."""
-    from max.gpu import global_idx
-
-    var at = Int(global_idx.x)
-    if at >= Int(count):
-        return
-    var values = norm_sample(inputs[unsafe_offset=at])
-    for component in range(12):
-        output[unsafe_offset=12 * at + component] = values[component]
-
-
 def check_norm_parity[
     dtype: DType
 ](inputs: List[SIMD[dtype, 1]], tolerance: Float64) raises:
     """Compare CPU and GPU helpers over finite extreme scales."""
-    from max.gpu.host import DeviceContext
 
     var context = DeviceContext()
     var device_inputs = context.enqueue_create_buffer[dtype](len(inputs))
@@ -15039,7 +15043,7 @@ def check_norm_parity[
     with device_inputs.map_to_host() as host:
         for at in range(len(inputs)):
             host[at] = inputs[at]
-    context.enqueue_function[norm_kernel[dtype]](
+    context.enqueue_function[_ScalarMathKernels.norm_kernel[dtype]](
         output.unsafe_ptr(),
         device_inputs.unsafe_ptr(),
         Int32(len(inputs)),
