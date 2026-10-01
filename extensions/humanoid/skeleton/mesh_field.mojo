@@ -61,6 +61,43 @@ def _cross(a: Vector3, b: Vector3) -> Vector3:
     )
 
 
+def _closest_on_flat_triangle(
+    p: Vector3, a: Vector3, b: Vector3, c: Vector3
+) -> Tuple[Vector3, Float32, Float32, Int]:
+    """Reduce a zero-area triangle to its longest segment, or a point."""
+    var ab = b - a
+    var ac = c - a
+    var bc = c - b
+    var ab2 = ab.dot(ab)
+    var ac2 = ac.dot(ac)
+    var bc2 = bc.dot(bc)
+    if max(ab2, max(ac2, bc2)) == 0:
+        return (a, Float32(0), Float32(0), ON_A)
+    if ab2 >= ac2 and ab2 >= bc2:
+        var t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / ab2))
+        var part = ON_AB
+        if t == 0:
+            part = ON_A
+        elif t == 1:
+            part = ON_B
+        return (a + ab * t, t, Float32(0), part)
+    if ac2 >= bc2:
+        var t = min(Float32(1), max(Float32(0), (p - a).dot(ac) / ac2))
+        var part = ON_CA
+        if t == 0:
+            part = ON_A
+        elif t == 1:
+            part = ON_C
+        return (a + ac * t, Float32(0), t, part)
+    var t = min(Float32(1), max(Float32(0), (p - b).dot(bc) / bc2))
+    var part = ON_BC
+    if t == 0:
+        part = ON_B
+    elif t == 1:
+        part = ON_C
+    return (b + bc * t, 1 - t, t, part)
+
+
 def closest_on_triangle(
     p: Vector3, a: Vector3, b: Vector3, c: Vector3
 ) -> Tuple[Vector3, Float32, Float32, Int]:
@@ -83,6 +120,9 @@ def closest_on_triangle(
     """
     var ab = b - a
     var ac = c - a
+    var area = _cross(ab, ac)
+    if area.dot(area) == 0:
+        return _closest_on_flat_triangle(p, a, b, c)
     var ap = p - a
     var d1 = ab.dot(ap)
     var d2 = ac.dot(ap)

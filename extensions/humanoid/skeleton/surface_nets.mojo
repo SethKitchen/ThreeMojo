@@ -291,49 +291,52 @@ def _edge_quad(
     return q
 
 
+def _sample_indices(
+    mut values: List[Float32], grid: _Grid, blocks: List[Int], bx: Int, by: Int
+) -> List[Int]:
+    """List each unsampled lattice point once, before workers start.
+
+    A zero reserves a slot. No field sample is read until the workers
+    finish and replace all reservations with the actual distances.
+    """
+    var pending = List[Int]()
+    for block in blocks:
+        var i0 = (block % bx) * BLOCK
+        var j0 = ((block // bx) % by) * BLOCK
+        var k0 = (block // (bx * by)) * BLOCK
+        for k in range(k0, k0 + BLOCK + 1):
+            for j in range(j0, j0 + BLOCK + 1):
+                for i in range(i0, i0 + BLOCK + 1):
+                    var at = grid.index(i, j, k)
+                    if values[at] == UNSAMPLED:
+                        pending.append(at)
+                        values[at] = 0
+    return pending^
+
+
 async def _sample_task[
     F: DistanceField
 ](
     field: Pointer[F, ImmutAnyOrigin],
     grid: _Grid,
     values: MutPointer[Float32, MutAnyOrigin],
-    blocks: MutPointer[Int, MutAnyOrigin],
+    pending: MutPointer[Int, MutAnyOrigin],
     first: Int,
     past: Int,
-    bx: Int,
-    by: Int,
 ):
-    """Sample every lattice point of a run of near blocks.
+    """Sample a disjoint run of unique lattice indices.
 
-    Two blocks share the points on their common face. Both tasks write
-    the same value there, so the order does not matter.
-
-    Args:
-        field: The implicit solid.
-        grid: The fine lattice.
-        values: The samples, written in place.
-        blocks: The near blocks' indices.
-        first: This task's first block in `blocks`.
-        past: One past its last.
-        bx: Blocks along x.
-        by: Blocks along y.
+    Every slot has one writer. Adjacent blocks share lattice points,
+    so partitioning blocks alone would race on their common boundaries.
     """
-    for slot in range(first, past):  # pragma: no branch
-        var block = blocks[unsafe_offset=slot]
-        var i = block % bx
-        var j = (block // bx) % by
-        var k = block // (bx * by)
-        var i0 = i * BLOCK
-        var j0 = j * BLOCK
-        var k0 = k * BLOCK
-        for fk in range(k0, k0 + BLOCK + 1):  # pragma: no branch
-            for fj in range(j0, j0 + BLOCK + 1):  # pragma: no branch
-                for fi in range(i0, i0 + BLOCK + 1):  # pragma: no branch
-                    var at = grid.index(fi, fj, fk)
-                    if values[unsafe_offset=at] == UNSAMPLED:
-                        values[unsafe_offset=at] = field[].distance(
-                            grid.point(fi, fj, fk)
-                        )
+    var row = grid.nx + 1
+    var plane = row * (grid.ny + 1)
+    for slot in range(first, past):
+        var at = pending[unsafe_offset=slot]
+        var i = at % row
+        var j = (at // row) % (grid.ny + 1)
+        var k = at // plane
+        values[unsafe_offset=at] = field[].distance(grid.point(i, j, k))
 
 
 async def _vertex_task[
@@ -471,7 +474,8 @@ def mesh_surface[
                 if _near(values, grid, i, j, k, reach):
                     active[i + bx * (j + by * k)] = True
                     near.append(i + bx * (j + by * k))
-    var tasks = max(1, min(threads, len(near)))
+    var pending = _sample_indices(values, grid, near, bx, by)
+    var tasks = max(1, min(threads, len(pending)))
     var samplers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         samplers.create_task(
@@ -479,15 +483,13 @@ def mesh_surface[
                 Pointer(to=field).unsafe_origin_cast[ImmutAnyOrigin](),
                 grid,
                 values.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                near.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                task * len(near) // tasks,
-                (task + 1) * len(near) // tasks,
-                bx,
-                by,
+                pending.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * len(pending) // tasks,
+                (task + 1) * len(pending) // tasks,
             )
         )
     samplers.wait()
-    _ = len(near)
+    _ = len(pending)
     # One vertex in each crossed cell, walked onto the surface.
     var cells = List[Int32](length=grid.nx * grid.ny * grid.nz, fill=-1)
     var crossed = List[Int]()

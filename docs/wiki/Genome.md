@@ -1,6 +1,8 @@
 # Genome
 
-A `Genome` sets the heritable traits of a humanoid. It sets the skin's tone, the hair's and the eyes' color, the frame's proportions, and the shape of the head and the face. Give a genome to `HumanoidSpec`, and every layer of the body reads it.
+A `Genome` sets the heritable traits of a humanoid. It sets the skin's tone, the hair's and the eyes' color, the frame's proportions, and the shape of the head and the face. Give a genome to `HumanoidSpec` to select these visual and template controls.
+
+For engineering use and representation limits, see [Humanoid fidelity](Humanoid-fidelity).
 
 ![Six heads from six genomes turn a little to each side](out/genomes.png)
 
@@ -87,7 +89,9 @@ The genes are authored controls. They are not a model of the loci that set these
 
 The skin's genes set its looks. `skin_tone(genome)` walks a ramp of six swatches for `MELANIN`, then moves the result toward pink or olive for `UNDERTONE`. `skin_albedo(size, genome)` adds broad blotches of redness and pigment, pores, freckles and a rare mole. `hair_tone` and `iris_tone` do the same for the hair and the iris. See [Head](Head#skin-and-hair).
 
-The head's and the face's genes move the head's landmarks. Each landmark is authored in centimeters on the six-foot template, and `HeadMorph` moves it before the frame places it. Each gene is a smooth displacement in its own region. The nose's genes move the points near the nose, and the eyes' genes the points round each orbit. The skull, the muscles, the vessels, the skin and the hair all move together, so the anatomy stays inside the skin. Below the base of the neck the morph does nothing, so the neck still meets the torso.
+The head's and the face's genes move the head's landmarks. Each landmark is authored in centimeters on the six-foot template, and `HeadMorph` moves it before the frame places it. Each gene is a smooth displacement in its own region. The nose's genes move the points near the nose, and the eyes' genes the points round each orbit. These authored controls move several layers through one frame.
+
+The separate scanned identity modes do not deform every anatomical layer. Containment is not guaranteed. Below the base of the neck the morph does nothing, so the neck still meets the torso.
 
 The ears are skin and cartilage alone, so the skin shapes them itself. `warp_ear(point, size, protrusion, lobe)` moves each point of the scanned ear: it grows about its root, its back edge stands out, and its lobe hangs lower. `ear_weight(point)` says how much of the ear a point is. See [Head](Head#skin-and-hair).
 

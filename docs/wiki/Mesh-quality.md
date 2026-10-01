@@ -2,6 +2,8 @@
 
 A `Quality` level sets how many triangles one humanoid holds. `LOW` keeps 90,000 triangles for a whole body. `XHIGH` keeps one million.
 
+For engineering use and representation limits, see [Humanoid fidelity](Humanoid-fidelity).
+
 ![A six-foot male body below the neck at HIGH quality: bones, joint tissues and muscles on the left, the skin on the right](out/torso.png)
 
 The module is `extensions/humanoid/quality.mojo`. The simplifier is `extensions/humanoid/skeleton/simplify.mojo`. This is not a three.js port. See [Extensions](Extensions).

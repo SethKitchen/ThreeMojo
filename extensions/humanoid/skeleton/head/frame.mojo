@@ -37,6 +37,7 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.torso.sweep import floats
 from math.vector3 import Vector3
+from std.math import isfinite
 from units.si import Length
 
 # Cervical vertebrae, C1 to C7.
@@ -285,8 +286,10 @@ struct HeadMuscleDimensions(Copyable, Movable):
         self.head.validate()
         if not self.athleticism.is_valid():
             raise Error("A head muscle needs a toned or untoned athleticism")
-        if self.scale <= 0:
-            raise Error("A head muscle radius scale must be positive")
+        if not isfinite(self.scale) or self.scale <= 0:
+            raise Error(
+                "A head muscle radius scale must be finite and positive"
+            )
 
 
 def head_muscle_dimensions(spec: HumanoidSpec) raises -> HeadMuscleDimensions:

@@ -146,10 +146,13 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
         target: The decimated mesh, in the same frame.
 
     Raises:
-        Error: If either mesh has no positions.
+        Error: If either mesh has no positions, or a nonempty target
+            has no source vertices.
     """
     ref from_points = source.attribute_view(String(POSITION))
     ref to_points = target.attribute_view(String(POSITION))
+    if from_points.count() == 0 and to_points.count() > 0:
+        raise Error("Attribute transfer needs source vertices")
     var cells = Dict[Int, List[Int]]()
     for v in range(from_points.count()):  # pragma: no branch
         var key = _key(from_points.vector3(v))
@@ -162,10 +165,15 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
         var best = 0
         var closest = Float32(1e30)
         var ring = 1
-        while closest > Float32(1e29):
+        while True:
             for dx in range(-ring, ring + 1):  # pragma: no branch
                 for dy in range(-ring, ring + 1):  # pragma: no branch
                     for dz in range(-ring, ring + 1):  # pragma: no branch
+                        if (
+                            ring > 1
+                            and max(abs(dx), max(abs(dy), abs(dz))) < ring
+                        ):
+                            continue
                         var key = _key(
                             p
                             + Vector3(
@@ -181,6 +189,10 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
                             if d < closest:
                                 closest = d
                                 best = s
+            # An unvisited cell is at least this far away. Leave one
+            # extra cell for the grid key's floating-point rounding.
+            if closest <= Float32(ring - 1) * CARRY_CELL:
+                break
             ring += 1
         nearest.append(best)
     var names: List[String] = [String(COLOR), String(THINNESS)]

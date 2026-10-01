@@ -2,6 +2,8 @@
 
 A game humanoid is one person's skin on a skeleton, ready to animate. Build it once, bake it to a glTF file, and load the file in the game. It draws at more than 24 frames a second.
 
+For engineering use and representation limits, see [Humanoid fidelity](Humanoid-fidelity).
+
 ```mojo
 from extensions.humanoid.rig.clips import walk_clip
 from extensions.humanoid.rig.game import add_game_humanoid

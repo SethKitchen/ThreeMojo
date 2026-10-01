@@ -181,5 +181,41 @@ def test_a_mesh_field_refuses_a_bad_mesh() raises:
         _ = MeshField(points.copy(), negative^)
 
 
+def test_flat_triangles_reduce_to_segments_or_points() raises:
+    var origin = Vector3(0, 0, 0)
+    var tip = Vector3(0, 1, 0)
+    var middle = Vector3(0, 0.5, 0)
+    var probe = Vector3(1, 0.5, 0)
+    var repeated = closest_on_triangle(probe, origin, origin, tip)
+    assert_true(_near(repeated[0], middle))
+    assert_true(abs(repeated[2] - 0.5) < 1e-6)
+    assert_true(
+        _near(closest_on_triangle(probe, origin, tip, origin)[0], middle)
+    )
+    assert_true(
+        _near(closest_on_triangle(probe, middle, origin, tip)[0], middle)
+    )
+    assert_true(
+        _near(closest_on_triangle(probe, origin, origin, origin)[0], origin)
+    )
+    # Every longest-edge choice, including both clamped endpoints.
+    var corners: List[Vector3] = [origin, tip, middle]
+    var probes: List[Float32] = [-1.0, 0.5, 2.0]
+    for first in range(3):
+        var a = corners[first]
+        var b = corners[(first + 1) % 3]
+        var c = corners[(first + 2) % 3]
+        for y in probes:
+            var result = closest_on_triangle(Vector3(1, y, 0), a, b, c)
+            var expected = Vector3(0, min(Float32(1), max(Float32(0), y)), 0)
+            assert_true(_near(result[0], expected))
+            var reconstructed = (
+                a * (1 - result[1] - result[2]) + b * result[1] + c * result[2]
+            )
+            assert_true(_near(reconstructed, expected))
+    var field = MeshField([origin, origin, tip], [0, 1, 2])
+    assert_true(abs(field.distance(probe) - 1) < 1e-6)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
