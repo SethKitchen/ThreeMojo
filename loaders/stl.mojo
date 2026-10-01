@@ -15,8 +15,8 @@ and nothing shared between them. It comes in two encodings, and
   binary, whatever its header holds.
 - ASCII: text, `solid name`, then `facet normal x y z`, `outer loop`,
   three `vertex x y z`, `endloop`, `endfacet`, and `endsolid`. A file
-  that is not exactly as long as a binary one and holds `solid` in its
-  first ten bytes is read as text; anything else is binary.
+  that is not exactly as long as a binary one and holds `solid` starting
+  at byte offset zero through four is read as text; anything else is binary.
 
 The geometry comes out non-indexed, as three.js's does: three corners a
 face, each with the face's normal as its `normal`, since the format has
