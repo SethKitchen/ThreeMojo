@@ -403,6 +403,57 @@ def test_each_broken_rule_is_refused() raises:
         _manifest(_entry("x", "town", _file("support", "a.bin"))),
         "town entry needs its model file",
     )
+    # Members of the wrong type: an id, a title, the files, an archive's
+    # members and the entries.
+    var common = (
+        '"kind": "model", "license": "CC0-1.0", "author": "A", "source":'
+        ' "s", "provenance": "p"'
+    )
+    _refused(
+        _manifest('{"id": 5, ' + common + ', "files": []}'),
+        "needs the string id",
+    )
+    _refused(
+        _manifest(
+            _entry(
+                "x",
+                "texture_set",
+                _file("albedo", "a.jpg"),
+                ', "tile_meters": 2, "title": 5',
+            )
+        ),
+        "title must be a string",
+    )
+    _refused(_manifest('{"id": "x", ' + common + "}"), "needs a list of files")
+    _refused(
+        _manifest(
+            _entry(
+                "x",
+                "texture_set",
+                (
+                    '{"role": "archive", "url": null, "path": "a.zip",'
+                    ' "extract": 5}'
+                ),
+                ', "tile_meters": 2',
+            )
+        ),
+        "must list what it extracts",
+    )
+    _refused('{"format": 1, "entries": 5}', "needs a list of entries")
+    # An archive that extracts nothing adds no file.
+    var empty = parse_manifest(
+        _manifest(
+            _entry(
+                "x",
+                "texture_set",
+                _file("albedo", "a.jpg")
+                + ', {"role": "archive", "url": null, "path": "a.zip",'
+                ' "extract": []}',
+                ', "tile_meters": 2',
+            )
+        )
+    )
+    assert_equal(len(empty.entries[0].files), 1)
     # Two entries with one id, and bindings that break a rule.
     _refused(
         _manifest(_texture_set() + ", " + _texture_set()), "share the id scan"
@@ -751,7 +802,7 @@ def test_preload_refuses_a_file_that_is_not_an_image() raises:
 # string at a level past the far one. Its scene lists three lamp heads.
 comptime TOWN_GLTF = (
     '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":'
-    '[0,1,2,3,4,5,6],"extras":{"carla_lamps":[0,5,0,10,5,0,100,5,0]}}],'
+    '[0,1,2,3,4,5,6,7],"extras":{"carla_lamps":[0,5,0,10,5,0,100,5,0]}}],'
     '"nodes":['
     '{"name":"building_0_0_lod0","mesh":0,"extras":{"carla_kind":"building",'
     '"carla_lod":0}},'
@@ -764,7 +815,9 @@ comptime TOWN_GLTF = (
     '{"name":"traffic_light_1_0_lod0","mesh":4,"extras":{"carla_kind":'
     '"traffic_light","carla_lod":0}},'
     '{"name":"odd","mesh":5},'
-    '{"name":"stone_0_0_lod9","mesh":6,"extras":{"carla_kind":7}}],'
+    '{"name":"stone_0_0_lod9","mesh":6,"extras":{"carla_kind":7}},'
+    '{"name":"traffic_sign_1_0_lod0","mesh":7,"extras":{"carla_kind":'
+    '"traffic_sign","carla_lod":0}}],'
     '"buffers":[{"byteLength":36,"uri":'
     '"data:application/octet-stream;base64,'
     'AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"}],'
@@ -779,16 +832,23 @@ comptime TOWN_GLTF = (
     '{"primitives":[{"attributes":{"POSITION":0},"material":1}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":2}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
+    '{"primitives":[{"attributes":{"POSITION":0},"material":0}]},'
     '{"primitives":[{"attributes":{"POSITION":0},"material":0}]}]}'
 )
 
 
 def town_registry() raises -> AssetRegistry:
     """A registry whose cache holds the town package, as `town.Town02`,
-    and the rigged model as a town that cannot be used."""
+    the rigged model as a town that cannot be used, and the package with
+    no lamps and no lamp glass, as `town.Town03`."""
     var folder = "/tmp/threemojo_carla_town/"
     makedirs(folder, exist_ok=True)
     Path(folder + "town.gltf").write_text(TOWN_GLTF)
+    Path(folder + "plain.gltf").write_text(
+        String(TOWN_GLTF)
+        .replace(',"extras":{"carla_lamps":[0,5,0,10,5,0,100,5,0]}', "")
+        .replace('{"extras":{"carla":"lamp"}}', "{}")
+    )
     Path(folder + "rigged.gltf").write_bytes(
         Path("assets/gltf/three_export.gltf").read_bytes()
     )
@@ -797,8 +857,10 @@ def town_registry() raises -> AssetRegistry:
             _manifest(
                 _entry("town", "town", _file("model", "town.gltf"))
                 + ", "
-                + _entry("rigged", "town", _file("model", "rigged.gltf")),
-                '{"town.Town02": "town"}',
+                + _entry("rigged", "town", _file("model", "rigged.gltf"))
+                + ", "
+                + _entry("plain", "town", _file("model", "plain.gltf")),
+                '{"town.Town02": "town", "town.Town03": "plain"}',
             )
         ),
         folder,
@@ -825,7 +887,7 @@ def test_a_town_is_placed_as_it_is_in_tiles() raises:
     var placed = registry.place_town(
         index, scene, assets, parent, Length(10, METER)
     )
-    assert_equal(placed.mesh_count, 7)
+    assert_equal(placed.mesh_count, 8)
     assert_equal(placed.kinds[0], "building")
     assert_equal(placed.kinds[2], "road_line")
     # A node with no kind, or a kind that is not a string, is a prop.

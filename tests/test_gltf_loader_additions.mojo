@@ -545,5 +545,21 @@ def test_workers_refuse_what_one_worker_refuses() raises:
         _ = load_gltf(missing, List[UInt8](), "", scene, assets, 4)
 
 
+def test_workers_read_a_file_with_no_materials() raises:
+    var text = doc(
+        ',"buffers":[{"byteLength":36,"uri":"data:application/octet-stream;base64,'
+        + TRI
+        + '"}]'
+        + ',"bufferViews":[{"buffer":0,"byteLength":36}]'
+        + ',"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}]'
+        + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}]'
+        + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = load_gltf(text, List[UInt8](), "", scene, assets, 4)
+    assert_equal(model.mesh_count, 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

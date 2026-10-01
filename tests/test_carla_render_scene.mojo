@@ -1186,8 +1186,9 @@ def test_render_a_fisheye_camera() raises:
 
 # The town from a registry.
 
-# A car of one triangle drawn three times: its paint, its head lamps and
-# its tail lamps, as the vehicle exporter tags them.
+# A car of one triangle drawn four times: its paint, its head lamps and
+# its tail lamps, as the vehicle exporter tags them, and a part it does
+# not tag.
 comptime SCANNED_CAR = (
     '{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],'
     '"nodes":[{"mesh":0}],"buffers":[{"byteLength":36,"uri":'
@@ -1196,10 +1197,11 @@ comptime SCANNED_CAR = (
     '"bufferViews":[{"buffer":0,"byteLength":36}],"accessors":'
     '[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3",'
     '"min":[0,0,0],"max":[1,1,0]}],"materials":[{"extras":{"carla":'
-    '"paint"}},{"extras":{"carla":"heads"}},{"extras":{"carla":"tails"}}],'
-    '"meshes":[{"primitives":[{"attributes":{"POSITION":0},"material":0},'
-    '{"attributes":{"POSITION":0},"material":1},{"attributes":'
-    '{"POSITION":0},"material":2}]}]}'
+    '"paint"}},{"extras":{"carla":"heads"}},{"extras":{"carla":"tails"}},'
+    '{}],"meshes":[{"primitives":[{"attributes":{"POSITION":0},'
+    '"material":0},{"attributes":{"POSITION":0},"material":1},'
+    '{"attributes":{"POSITION":0},"material":2},{"attributes":'
+    '{"POSITION":0},"material":3}]}]}'
 )
 
 
@@ -1333,16 +1335,19 @@ def test_a_town_package_stands_in_for_the_dressing() raises:
     ref town = view.town
     assert_true(Bool(town.package))
     # The town's meshes are the package's, and no procedural dressing.
-    assert_equal(len(town.tags), 7)
+    assert_equal(len(town.tags), 8)
     assert_true(town.tags[0] == BUILDING)
     assert_true(town.tags[2] == ROAD_LINE)
     assert_false(town.settings.buildings)
     # A light for each of the package's three lamps, the pool being larger.
     assert_equal(len(town.lamp_lights), 3)
     assert_equal(len(town.lamp_glass), 1)
-    # The package's traffic light is hidden: the props draw the map's.
+    # The package's traffic light and sign are hidden: the props draw the
+    # map's.
     var light = town.package.value().first_mesh + 4
     assert_false(view.scene.get(view.scene.meshes[light].node).visible)
+    var sign = town.package.value().first_mesh + 7
+    assert_false(view.scene.get(view.scene.meshes[sign].node).visible)
     # The paint and the road share one material, which the rain wets.
     assert_equal(len(town.wet_materials), 1)
     view.update(world)
@@ -1380,7 +1385,21 @@ def test_a_town_package_stands_in_for_the_dressing() raises:
         world, other^, 1, 8, False, registry=town_registry()
     )
     assert_false(Bool(procedural.town.package))
-    assert_true(len(procedural.town.tags) > 7)
+    assert_true(len(procedural.town.tags) > 8)
+    # A package with no lamps lights none, and its pool has nothing to
+    # follow.
+    var plain = _small()
+    plain.package = "Town03"
+    var dark = CarlaRenderer(
+        world, plain^, 1, 8, False, registry=town_registry()
+    )
+    assert_equal(len(dark.town.lamp_lights), 0)
+    assert_equal(len(dark.town.lamp_glass), 0)
+    dark.town.place_lamps(dark.scene, Vector3(0, 0, 0))
+    _ = dark.render_rgb(world, camera)
+    # A camera draws at least its own size.
+    with assert_raises(contains="supersamples by one or more"):
+        _ = CarlaRenderer(world, _small(), 1, 8, True, 0)
 
 
 def test_each_town_kind_has_its_tag_and_its_shadow() raises:
@@ -1408,6 +1427,36 @@ def test_each_town_kind_has_its_tag_and_its_shadow() raises:
     for kind in kinds:
         assert_equal(town_kind_tag(kind[0]).value, kind[1])
         assert_equal(town_kind_casts(kind[0]), kind[2])
+
+
+def test_a_road_set_with_no_roughness_and_a_town_with_no_trees() raises:
+    # A road photoscan with only its color: the puddles keep the
+    # procedural roughness.
+    var registry = AssetRegistry(
+        parse_manifest(
+            '{"format": 1, "entries": [{"id": "flat", "kind": "texture_set",'
+            ' "license": "CC0-1.0", "author": "A", "source": "s",'
+            ' "provenance": "p", "tile_meters": 2, "files": [{"role":'
+            ' "albedo", "url": null, "sha256": "'
+            + "0" * 64
+            + '", "path": "gltf/checker.png"}]}], "bindings":'
+            ' {"surface.road": "flat"}}'
+        ),
+        "assets",
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var town = Town(_map(), scene, assets, _small(), registry)
+    assert_true(len(town.tags) > 0)
+    # A path with no driving lane has no tree: the tree model is never
+    # placed.
+    var bare_scene = Scene()
+    var bare_assets = Assets()
+    var bare = Town(
+        _path_map(), bare_scene, bare_assets, _small(), _scanned_registry()
+    )
+    for tag in bare.tags:
+        assert_false(tag == VEGETATION)
 
 
 def main() raises:

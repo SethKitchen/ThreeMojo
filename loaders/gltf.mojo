@@ -1721,7 +1721,8 @@ struct _Loader(Movable):
             slots.append((node, "emissiveTexture", SRGB))
             slots.append((node, "normalTexture", LINEAR))
             slots.append((node, "occlusionTexture", LINEAR))
-            for slot in slots:
+            # Three slots at least, appended above.
+            for slot in slots:  # pragma: no branch
                 var index = self.texture_reference(slot[0], slot[1])
                 if index < 0 or index >= len(self.texture_images):
                     continue

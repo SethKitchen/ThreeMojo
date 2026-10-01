@@ -911,7 +911,10 @@ struct ActorVisuals(Movable):
             # CARLA paints a car from its blueprint's color and lights its
             # lamps from its light state: the model wears the procedural
             # car's paint and lamps.
-            for m in range(first, first + placed.mesh_count):
+            # `place_model` refuses a model with no mesh.
+            for m in range(
+                first, first + placed.mesh_count
+            ):  # pragma: no branch
                 var own = scene.meshes[m].material
                 if own in placed.paint:
                     scene.meshes[m].material = paint

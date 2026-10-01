@@ -675,7 +675,8 @@ def set_thresholds(mut composer: EffectComposer, exposure: Float32):
     The thresholds become `BLOOM_THRESHOLD` and `FLARE_THRESHOLD` over the
     exposure, so a pixel blooms when its exposed light passes them.
     """
-    for index in range(len(composer.passes)):
+    # The render pass always comes first.
+    for index in range(len(composer.passes)):  # pragma: no branch
         if composer.passes[index].kind == BLOOM:
             composer.passes[index].threshold = BLOOM_THRESHOLD / exposure
         elif composer.passes[index].kind == LENSFLARE:
@@ -956,7 +957,8 @@ struct CarlaRenderer(Movable):
         self.sun.update(self.scene, view)
         var outputs = frame_outputs(composer.passes)
         var has_normals = False
-        for o in outputs:
+        # A frame always writes its color.
+        for o in outputs:  # pragma: no branch
             if o == OUTPUT_NORMAL:
                 has_normals = True
         if not has_normals:

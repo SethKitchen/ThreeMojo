@@ -1316,7 +1316,8 @@ struct Town(Movable):
         for k in range(len(self.lamp_bulbs)):
             var best = -1
             var nearest = Float32(0)
-            for i in range(len(self.package_lamps)):
+            # A light stands at a lamp, so there is one.
+            for i in range(len(self.package_lamps)):  # pragma: no branch
                 var d = (self.package_lamps[i] - eye).length_sq()
                 if not taken[i] and (best < 0 or d < nearest):
                     best = i
@@ -1532,7 +1533,8 @@ struct Town(Movable):
                         Vector3(TREE_HEIGHT, TREE_HEIGHT, TREE_HEIGHT),
                     )
                     first = placed.copy()
-                for _ in range(placed.mesh_count):
+                # `place_model` refuses a model with no mesh.
+                for _ in range(placed.mesh_count):  # pragma: no branch
                     self.tags.append(VEGETATION)
                 k += 1
             return
@@ -1553,59 +1555,69 @@ struct Town(Movable):
         leaves.map = assets.textures.add(Texture(copy=foliage.color))
         leaves.normal_map = assets.textures.add(Texture(copy=foliage.normal))
         self.materials.leaves = assets.materials.add(leaves)
-        var trunks = List[BufferGeometry]()
-        var crowns = List[BufferGeometry]()
         var node = scene.add(Object3D())
-        var n = 0
-        for tree in trees:
-            var at = tree.transform.location
-            var size = Float32(0.8) + hash2(n, 5, self.settings.seed) * 0.5
-            var pose = _pose(
-                at, Angle(hash2(n, 7, self.settings.seed) * 360, DEGREE)
+        # A few neighbors to a mesh, so a camera culls the trees it does
+        # not see: one mesh for every tree was in every view.
+        var first = 0
+        while first < len(trees):
+            var last = min(first + TREES_PER_MESH, len(trees))
+            var trunks = List[BufferGeometry]()
+            var crowns = List[BufferGeometry]()
+            # A chunk holds at least one tree.
+            for n in range(first, last):  # pragma: no branch
+                self._tree(trees[n].transform.location, n, trunks, crowns)
+            self._add_tree_meshes(scene, assets, node, trunks, crowns)
+            first = last
+
+    def _tree(
+        self,
+        at: Vector3,
+        n: Int,
+        mut trunks: List[BufferGeometry],
+        mut crowns: List[BufferGeometry],
+    ) raises:
+        """Add the `n`th procedural tree's trunk and crowns, standing at
+        `at` in CARLA's frame."""
+        var size = Float32(0.8) + hash2(n, 5, self.settings.seed) * 0.5
+        var pose = _pose(
+            at, Angle(hash2(n, 7, self.settings.seed) * 360, DEGREE)
+        )
+        trunks.append(
+            _placed(
+                _translated(
+                    cylinder(
+                        Length(0.1, METER),
+                        Length(0.16, METER),
+                        Length(4.6, METER),
+                        8,
+                    ),
+                    0,
+                    2.1,
+                    0,
+                ),
+                pose,
             )
-            trunks.append(
+        )
+        var crown = lumpy_crown(Length(1.5 * size, METER), n)
+        crown.scale(1, 1.15, 1)
+        crowns.append(
+            _placed(_translated(crown^, 0, 4.6 + 1.3 * size, 0), pose)
+        )
+        # A constant count, more than zero.
+        for k in range(3):  # pragma: no branch
+            var turn = Float32(k) * 2.1 + hash2(n, k, 3) * 1.2
+            var side = lumpy_crown(Length(0.95 * size, METER), n * 3 + k)
+            crowns.append(
                 _placed(
                     _translated(
-                        cylinder(
-                            Length(0.1, METER),
-                            Length(0.16, METER),
-                            Length(4.6, METER),
-                            8,
-                        ),
-                        0,
-                        2.1,
-                        0,
+                        side^,
+                        cos(turn) * 1.0 * size,
+                        4.1 + 0.9 * size + hash2(n, k, 4) * 0.8,
+                        sin(turn) * 1.0 * size,
                     ),
                     pose,
                 )
             )
-            var crown = lumpy_crown(Length(1.5 * size, METER), n)
-            crown.scale(1, 1.15, 1)
-            crowns.append(
-                _placed(_translated(crown^, 0, 4.6 + 1.3 * size, 0), pose)
-            )
-            # A constant count, more than zero.
-            for k in range(3):  # pragma: no branch
-                var turn = Float32(k) * 2.1 + hash2(n, k, 3) * 1.2
-                var side = lumpy_crown(Length(0.95 * size, METER), n * 3 + k)
-                crowns.append(
-                    _placed(
-                        _translated(
-                            side^,
-                            cos(turn) * 1.0 * size,
-                            4.1 + 0.9 * size + hash2(n, k, 4) * 0.8,
-                            sin(turn) * 1.0 * size,
-                        ),
-                        pose,
-                    )
-                )
-            n += 1
-            # A few neighbors to a mesh, so a camera culls the trees it
-            # does not see: one mesh for every tree was in every view.
-            if n % TREES_PER_MESH == 0 or n == len(trees):
-                self._add_tree_meshes(scene, assets, node, trunks, crowns)
-                trunks = List[BufferGeometry]()
-                crowns = List[BufferGeometry]()
 
     def _add_tree_meshes(
         mut self,

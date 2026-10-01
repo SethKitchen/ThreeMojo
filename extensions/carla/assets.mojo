@@ -238,7 +238,8 @@ def asset_role_of(name: String) raises -> AssetRole:
         "model",
         "support",
     ]
-    for index in range(len(names)):
+    # A constant list, never empty.
+    for index in range(len(names)):  # pragma: no branch
         if names[index] == name:
             return AssetRole(index)
     raise Error("An asset file's role is not one the registry reads: " + name)
