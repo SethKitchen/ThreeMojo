@@ -27,9 +27,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
     SoftMass,
     SoftOccupancy,
     SoftTissue,
-    arterial_tissue,
     classify_soft,
-    venous_tissue,
+    vessel_tissue,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
@@ -74,7 +73,7 @@ def head_vessel_mass(spec: HumanoidSpec, part: HeadVessel) raises -> SoftMass:
         Error: If `spec` or `part` is refused.
     """
     return head_vessel_mass_from_dimensions(
-        head_muscle_dimensions(spec), part, _vessel_tissue(part)
+        head_muscle_dimensions(spec), part, vessel_tissue(is_head_artery(part))
     )
 
 
@@ -101,10 +100,3 @@ def head_vessel_mass_from_dimensions(
         Volume(volume, CUBIC_METER),
         Mass(tissue.wet_density.value * volume, KILOGRAM),
     )
-
-
-def _vessel_tissue(part: HeadVessel) raises -> SoftTissue:
-    """Return arterial tissue for an artery and venous tissue for a vein."""
-    if is_head_artery(part):
-        return arterial_tissue()
-    return venous_tissue()

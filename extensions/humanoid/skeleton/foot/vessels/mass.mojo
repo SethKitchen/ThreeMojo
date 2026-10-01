@@ -29,9 +29,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
     SoftMass,
     SoftOccupancy,
     SoftTissue,
-    arterial_tissue,
     classify_soft,
-    venous_tissue,
+    vessel_tissue,
 )
 from math.vector3 import Vector3
 from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
@@ -73,9 +72,7 @@ def foot_vessel_mass(
     Raises:
         Error: If `spec`, `side` or `part` is refused.
     """
-    var tissue = venous_tissue()
-    if is_artery(part):
-        tissue = arterial_tissue()
+    var tissue = vessel_tissue(is_artery(part))
     return foot_vessel_mass_from_dimensions(
         foot_dimensions(spec.stature, spec.sex, side), part, tissue
     )

@@ -29,9 +29,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
     SoftMass,
     SoftOccupancy,
     SoftTissue,
-    arterial_tissue,
     classify_soft,
-    venous_tissue,
+    vessel_tissue,
 )
 from math.vector3 import Vector3
 from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
@@ -76,7 +75,7 @@ def vessel_mass(
         Error: If `spec`, `side` or `part` is refused.
     """
     return vessel_mass_from_dimensions(
-        muscle_dimensions(spec, side), part, _tissue_of(part)
+        muscle_dimensions(spec, side), part, vessel_tissue(is_artery(part))
     )
 
 
@@ -109,20 +108,3 @@ def vessel_mass_from_dimensions(
         Volume(volume, CUBIC_METER),
         Mass(tissue.wet_density.value * volume, KILOGRAM),
     )
-
-
-def _tissue_of(part: VesselPart) raises -> SoftTissue:
-    """Return the template tissue for `part`.
-
-    Args:
-        part: A named vessel.
-
-    Returns:
-        Arterial or venous tissue.
-
-    Raises:
-        Error: If `part` is not named.
-    """
-    if is_artery(part):
-        return arterial_tissue()
-    return venous_tissue()

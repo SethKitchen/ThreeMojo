@@ -30,9 +30,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
     SoftMass,
     SoftOccupancy,
     SoftTissue,
-    arterial_tissue,
     classify_soft,
-    venous_tissue,
+    vessel_tissue,
 )
 from math.vector3 import Vector3
 from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
@@ -79,9 +78,7 @@ def pelvis_vessel_mass(
     Raises:
         Error: If `spec` or `part` is refused.
     """
-    var tissue = venous_tissue()
-    if is_pelvic_artery(part):
-        tissue = arterial_tissue()
+    var tissue = vessel_tissue(is_pelvic_artery(part))
     return pelvis_vessel_mass_from_dimensions(
         pelvis_muscle_dimensions(spec), part, tissue
     )
