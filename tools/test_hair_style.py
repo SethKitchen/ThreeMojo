@@ -82,6 +82,46 @@ class ConverterTests(unittest.TestCase):
         still = hair_style.resample([(1, 1, 1), (1, 1, 1)], 3)
         self.assertEqual(still, [(1, 1, 1)] * 3)
 
+    def test_rejects_invalid_versions_offsets_and_nonfinite_positions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'hair.tfx')
+            _tfx(path, [[(0, 0, 0), (0, 1, 0), (0, 3, 0)]])
+            with open(path, 'rb') as source:
+                valid = source.read()
+            malformed = []
+            for version in (3.0, 5.0, 99.0, math.nan, math.inf):
+                data = bytearray(valid)
+                struct.pack_into('<f', data, 0, version)
+                malformed.append(data)
+            for offset in (0, 16, 152, 161, len(valid) + 8):
+                data = bytearray(valid)
+                struct.pack_into('<I', data, 12, offset)
+                malformed.append(data)
+            for component in range(3):
+                for value in (math.nan, math.inf, -math.inf):
+                    data = bytearray(valid)
+                    struct.pack_into('<f', data, 160 + component * 4, value)
+                    malformed.append(data)
+            malformed.append(valid[:159])
+            target = os.path.join(folder, 'existing.bin')
+            with open(target, 'wb') as output:
+                output.write(b'preserve')
+            for data in malformed:
+                with open(path, 'wb') as output:
+                    output.write(data)
+                with self.assertRaises(ValueError):
+                    hair_style.read_tfx(path)
+                with self.assertRaises(ValueError):
+                    hair_style.convert('layered', path, target)
+                with open(target, 'rb') as output:
+                    self.assertEqual(output.read(), b'preserve')
+            padded = bytearray(valid[:160] + bytes(8) + valid[160:])
+            struct.pack_into('<f', padded, 0, 4.1)
+            struct.pack_into('<I', padded, 12, 168)
+            with open(path, 'wb') as output:
+                output.write(padded)
+            self.assertEqual(hair_style.read_tfx(path), [[(0, 0, 0), (0, 1, 0), (0, 3, 0)]])
+
     def test_fits_a_cranium_and_a_crest(self):
         radii = (0.08, 0.09, 0.1)
         roots = [s[0] for s in _head(radii)]
