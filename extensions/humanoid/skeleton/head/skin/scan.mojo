@@ -31,6 +31,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
+from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.genome import (
     EAR_LOBE,
     EAR_PROTRUSION,
@@ -140,7 +141,9 @@ def scan_model() raises -> FaceModel:
     Raises:
         Error: If `FACE_MODEL_PATH` cannot be read.
     """
-    return FaceModel(FACE_MODEL_PATH, FACE_SHAPES, True)
+    return FaceModel(
+        humanoid_asset_path(String(FACE_MODEL_PATH)), FACE_SHAPES, True
+    )
 
 
 def rest_expression(model: FaceModel) raises -> List[Float32]:

@@ -25,6 +25,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from std.os import remove
+from test_scratch import temporary_path
 from std.pathlib import Path
 from units.si import DEGREE
 from std.testing import (
@@ -190,7 +191,7 @@ def test_an_image_is_read_from_beside_the_document() raises:
     var image = Framebuffer(2, 2, Color(255, 0, 0))
     image.set_pixel(1, 0, Color(0, 255, 0))
     image.set_pixel(0, 1, Color(0, 0, 255))
-    var folder = "/tmp/threemojo_materialx_"
+    var folder = temporary_path("threemojo_materialx_")
     Path(folder + "checker.png").write_bytes(encode_png(image))
     Path(folder + "tiled.mtlx").write_text(TILED)
     var assets = Assets()
@@ -934,7 +935,9 @@ def test_what_a_document_cannot_say_is_refused() raises:
 
 def test_an_image_reads_the_coordinates_by_default() raises:
     var image = Framebuffer(1, 1, Color(255, 255, 255))
-    Path("/tmp/threemojo_materialx_white.png").write_bytes(encode_png(image))
+    Path(temporary_path("threemojo_materialx_white.png")).write_bytes(
+        encode_png(image)
+    )
     var assets = Assets()
     var read = read_materialx(
         (
@@ -944,14 +947,14 @@ def test_an_image_reads_the_coordinates_by_default() raises:
             ' name="out" type="color3" nodename="n" /></nodegraph></materialx>'
         ),
         assets,
-        "/tmp/",
+        temporary_path(""),
     )
     ref program = assets.programs.get(assets.materials.get(read.ids[0]).nodes)
     assert_equal(len(program.textures), 1)
     assert_equal(assets.textures.count(), 1)
 
 
-comptime CORNERS = """<materialx fileprefix="/tmp/threemojo_mtlx_">
+comptime CORNERS = """<materialx fileprefix="__TEST_PREFIX__">
   <image name="loose" type="color3">
     <input name="file" type="filename" value="px.png" />
   </image>
@@ -1025,11 +1028,19 @@ def test_the_corners_of_the_reader() raises:
     var numbers = mtlx_numbers("1\t2\n3|4")
     assert_equal(len(numbers), 4)
     assert_equal(numbers[3], 4)
-    Path("/tmp/threemojo_mtlx_px.png").write_bytes(
+    Path(temporary_path("threemojo_mtlx_px.png")).write_bytes(
         encode_png(Framebuffer(1, 1, Color(255, 255, 255)))
     )
     var assets = Assets()
-    var read = read_materialx(CORNERS, assets)
+    var read = read_materialx(
+        String(CORNERS).replace(
+            "__TEST_PREFIX__",
+            temporary_path("threemojo_mtlx_")
+            .replace("&", "&amp;")
+            .replace('"', "&quot;"),
+        ),
+        assets,
+    )
     assert_equal(len(read.ids), 1)
     # The one image, read once though three nodes name it.
     assert_equal(assets.textures.count(), 1)

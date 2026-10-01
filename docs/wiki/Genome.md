@@ -133,3 +133,19 @@ The skin is tinted: every mesh it paints must carry a `color` attribute. The hea
 .venv/bin/mojo run -I . examples/genomes.mojo out/genomes.png high 24
 .venv/bin/mojo run -I . examples/family.mojo out/family.png high 36
 ```
+
+
+## Locate the face and hair data
+
+Set `THREEMOJO_ASSET_ROOT` when a compiled program runs outside the repository.
+Its value is the absolute path to the `assets` directory.
+High-level scanned heads and named scanned hairstyles read data from this root.
+
+```sh
+export THREEMOJO_ASSET_ROOT="/path/to/ThreeMojo/assets"
+/path/to/compiled-example
+```
+
+When the variable is unset or empty, the existing repository-relative paths
+remain in use. `FaceModel(path)` still reads the explicit path you pass.
+Missing data raises the loader's file error. The setting does not download data.

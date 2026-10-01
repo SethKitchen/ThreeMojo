@@ -14,6 +14,7 @@ from coverage.report import (
     parse_hits,
     parse_manifest,
 )
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -106,7 +107,7 @@ def test_a_capture_read_in_pieces_reads_as_a_whole() raises:
     # Pieces of three bytes cut records apart, one piece holds no newline
     # at all, and the last line has none after it: the hits and the traces
     # must still be those of the whole text.
-    var path = String("/tmp/threemojo-test-report-capture.txt")
+    var path = temporary_path("threemojo-test-report-capture.txt")
     Path(path).write_text(String(CAPTURE))
     var whole_hits = parse_hits(String(CAPTURE))
     var whole_traces = parse_traces(String(CAPTURE))

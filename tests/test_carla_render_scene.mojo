@@ -189,6 +189,7 @@ from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
 from std.math import atan, log2, pi, pow, sqrt
 from std.os import makedirs
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -1115,7 +1116,7 @@ def _scanned_registry() raises -> AssetRegistry:
     """A cache in /tmp of the repository's fixtures: a checker for every
     surface, a Radiance panorama for every sky, a box for the tree and the
     walkers, and the tagged car for every vehicle."""
-    var folder = "/tmp/threemojo_carla_scanned/"
+    var folder = temporary_path("threemojo_carla_scanned/")
     makedirs(folder, exist_ok=True)
     for name in ["gltf/checker.png", "gltf/box.gltf", "gltf/box.bin"]:
         Path(folder + name.split("/")[1]).write_bytes(

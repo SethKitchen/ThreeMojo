@@ -145,6 +145,7 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from std.memory import bitcast
 from std.os import makedirs
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -771,7 +772,7 @@ def test_a_file_that_is_not_a_recording() raises:
 
 
 def test_the_file_forms_of_the_queries() raises:
-    var dir = "/tmp/threemojo_recorder_queries/"
+    var dir = temporary_path("threemojo_recorder_queries/")
     makedirs(dir, exist_ok=True)
     Path(dir + "full.log").write_bytes(_full_log())
     Path(dir + "collisions.log").write_bytes(_collisions_log())

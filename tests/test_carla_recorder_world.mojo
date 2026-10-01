@@ -129,6 +129,7 @@ from extensions.carla.weather import WeatherParameters, weather_preset
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
 from math.vector4 import Vector4
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -548,17 +549,19 @@ def test_recorder_calls_do_nothing_when_off() raises:
 def test_stop_writes_the_file() raises:
     var world = _world()
     var r = Recorder()
-    var path = r.start(world, "recorder_test.log", "Town", False, 0, "/tmp/")
-    assert_equal(path, "/tmp/recorder_test.log")
+    var path = r.start(
+        world, "recorder_test.log", "Town", False, 0, temporary_path("")
+    )
+    assert_equal(path, temporary_path("recorder_test.log"))
     _ = r.tick(world)
     var bytes = r.bytes()
     r.stop()
     var written = Path(path).read_bytes()
     assert_equal(len(written), len(bytes))
     # A second start stops the first and starts again.
-    _ = r.start(world, "/tmp/recorder_test2.log", "Town", False, 0)
+    _ = r.start(world, temporary_path("recorder_test2.log"), "Town", False, 0)
     _ = r.start(world, "", "Town", False, 0)
-    assert_true(Path("/tmp/recorder_test2.log").exists())
+    assert_true(Path(temporary_path("recorder_test2.log")).exists())
     r.stop()
 
 
@@ -729,11 +732,17 @@ def test_start_time_and_duration() raises:
 
 def test_replay_file_and_a_missing_file() raises:
     var rec = _record(3)
-    Path("/tmp/replay_test.log").write_bytes(rec.bytes)
+    Path(temporary_path("replay_test.log")).write_bytes(rec.bytes)
     var world = _world()
     var replay = Replayer()
-    var text = replay.replay_file(world, "replay_test.log", saved_dir="/tmp/")
-    assert_true(text.startswith("Replaying File: /tmp/replay_test.log\n"))
+    var text = replay.replay_file(
+        world, "replay_test.log", saved_dir=temporary_path("")
+    )
+    assert_true(
+        text.startswith(
+            "Replaying File: " + temporary_path("replay_test.log") + "\n"
+        )
+    )
     assert_true(replay.is_enabled())
     var missing = replay.replay_file(world, "/nonexistent/x.log")
     assert_equal(
