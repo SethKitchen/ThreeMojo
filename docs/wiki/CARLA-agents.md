@@ -143,6 +143,7 @@ A walker that moves less than 0.5 m in 4 s gets a new random route, as in CARLA.
 
 ## Differences from CARLA
 
+- A local planner that reaches a dead end keeps returning full brake on later steps, even with automatic waypoint generation enabled. It does not read an empty queue.
 - The agents take the world at each call. CARLA's agents keep a reference to the world.
 - The random choices use a seeded minimal-standard generator, not Python's `random` module.
 - A lane change takes `OPTION_CHANGE_LANE_LEFT` or `OPTION_CHANGE_LANE_RIGHT` in place of the strings "left" and "right".

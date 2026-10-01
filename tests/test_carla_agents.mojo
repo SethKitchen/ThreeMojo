@@ -723,6 +723,15 @@ def test_local_planner_end_of_the_road() raises:
     assert_equal(stop.brake, 1)
     assert_equal(stop.throttle, 0)
     assert_false(Bool(planner.get_incoming_waypoint_and_direction()))
+    # Automatic generation remains enabled, but exhaustion is stable.
+    assert_false(planner.stop_waypoint_creation)
+    for _ in range(3):
+        stop = planner.run_step(world)
+        assert_equal(stop.brake, 1)
+        assert_equal(stop.throttle, 0)
+        assert_true(planner.done())
+    planner.compute_next_waypoints(world.map, 5)
+    assert_true(planner.done())
     # A planner with no waypoint creation keeps an empty queue.
     planner.set_offset(Length(0.5, METER))
     assert_equal(planner.controller.lateral.offset.value, 0.5)
