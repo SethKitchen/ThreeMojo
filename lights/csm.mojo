@@ -37,7 +37,7 @@ not ported; `CSMHelper` is `helpers.csm`.
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from lights.light import directional_light
+from lights.light import DIRECTIONAL, directional_light
 from lights.shadow import ShadowCascade
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -516,6 +516,14 @@ struct CSM(Movable):
                 the camera's view is refused.
         """
         self._check_lights(scene)
+        if self.shadow_map_size < 1:
+            raise Error("A CSM shadow map size must be positive")
+        if len(self.frustums) != self.cascades:
+            raise Error("A CSM needs one frustum per cascade")
+        for frustum in self.frustums:
+            if len(frustum.near) != 4 or len(frustum.far) != 4:
+                raise Error("A CSM frustum needs four corners per plane")
+
         var orientation = Matrix4()
         orientation.look_at(
             Vector3(0, 0, 0), self.light_direction, Vector3(0, 1, 0)
@@ -570,6 +578,7 @@ struct CSM(Movable):
         Raises:
             Error: If a node the CSM added is gone from the scene.
         """
+        self._check_lights(scene)
         # One node per cascade, and at least one cascade.
         for index in range(len(self.nodes)):  # pragma: no branch
             scene.remove_from_parent(self.targets[index])
@@ -592,14 +601,26 @@ struct CSM(Movable):
             scene.lights[self.lights[index]].cascade = ShadowCascade.none()
 
     def _check_lights(self, scene: Scene) raises:
-        """Refuse a scene that no longer holds the lights this added."""
-        # One light per cascade, and at least one cascade.
-        for index in range(len(self.lights)):  # pragma: no branch
+        """Refuse missing or malformed cascade mappings before indexing."""
+        if (
+            self.cascades < 1
+            or len(self.lights) != self.cascades
+            or len(self.nodes) != self.cascades
+            or len(self.targets) != self.cascades
+        ):
+            raise Error("A CSM needs one complete mapping per cascade")
+        for index in range(self.cascades):  # pragma: no branch
             var at = self.lights[index]
-            if at >= len(scene.lights) or scene.lights[at].node != (
-                self.nodes[index]
+            if at < 0 or at >= len(scene.lights):
+                raise Error("A CSM's lights are not in this scene")
+            if (
+                scene.lights[at].kind != DIRECTIONAL
+                or scene.lights[at].node != self.nodes[index]
+                or scene.lights[at].target != self.targets[index]
             ):
                 raise Error("A CSM's lights are not in this scene")
+            _ = scene.get(self.nodes[index])
+            _ = scene.get(self.targets[index])
 
 
 def _check_breaks(breaks: List[Float32], cascades: Int) raises:
