@@ -315,7 +315,9 @@ A profile revolved around the y axis. Each point has `x` out from the axis and `
 
 The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first point faces the way its segment does.
 
-The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that.
+The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that. The builder refuses a final segment normal whose components cannot fit in `Float32`.
+
+Cylinder and lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
 
 A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 
