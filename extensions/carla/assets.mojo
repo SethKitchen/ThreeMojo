@@ -56,6 +56,7 @@ from extensions.carla.mesh_factory import (
 )
 from extensions.carla.render_textures import SurfaceMaps
 from loaders.gltf import decode_image, read_gltf
+from loaders.image_batch import TextureDecodeBatch
 from loaders.json import (
     ARRAY,
     JsonDocument,
@@ -852,16 +853,26 @@ async def _read_one(
     textures: MutPointer[Texture, MutAnyOrigin],
     errors: MutPointer[String, MutAnyOrigin],
     index: Int,
+    first: Int,
 ):
     """Decode one cached image as `AssetRegistry._decode` does, as a task
     of `AssetRegistry.preload`; an error is carried back as its text."""
     try:
-        var image = decode_image(Path(paths[unsafe_offset=index]).read_bytes())
+        var image = decode_image(
+            Path(paths[unsafe_offset=first + index]).read_bytes()
+        )
         textures[unsafe_offset=index] = texture_from(
-            image, REPEAT, BILINEAR, spaces[unsafe_offset=index], True, IGNORED
+            image,
+            REPEAT,
+            BILINEAR,
+            spaces[unsafe_offset=first + index],
+            True,
+            IGNORED,
         )
     except e:
-        errors[unsafe_offset=index] = String(e)
+        errors[unsafe_offset=index] = (
+            paths[unsafe_offset=first + index] + ": " + String(e)
+        )
 
 
 def _texture_key(path: String, space: ColorSpace) -> String:
@@ -1006,7 +1017,10 @@ struct AssetRegistry(Movable):
 
         A 2048-texel photoscan takes a few tenths of a second to decode,
         and a town reads twenty of them, some twice: a curb and a wall can
-        wear one set. After this, `texture_set` copies them.
+        wear one set. The batch results move into the cache without
+        copying their pixels or mipmaps. After this, `texture_set` copies
+        them so a caller can change its maps without changing the cache.
+        All batches must succeed before the cache receives any results.
 
         The registry keeps `workers`, and `place_model` and `place_town`
         decode their glTF's images as many at a time.
@@ -1047,38 +1061,53 @@ struct AssetRegistry(Movable):
                     paths.append(path)
                     spaces.append(space)
         var count = len(paths)
-        var textures = List[Texture]()
-        for _ in range(count):
-            textures.append(_flat(0, LINEAR))
-        var errors = List[String](length=count, fill=String(""))
-        if workers <= 1 or count <= 1:
-            for index in range(count):
-                var image = decode_image(Path(paths[index]).read_bytes())
-                textures[index] = texture_from(
-                    image, REPEAT, BILINEAR, spaces[index], True, IGNORED
+        var textures = List[Texture](capacity=count)
+        var first = 0
+        while first < count:
+            var decoded = TextureDecodeBatch(count - first, workers)
+            var batch = len(decoded.textures)
+            if workers <= 1:
+                var image = decode_image(Path(paths[first]).read_bytes())
+                decoded.textures[0] = texture_from(
+                    image, REPEAT, BILINEAR, spaces[first], True, IGNORED
                 )
-        else:
-            # Two images or more come here; every pointer outlives `wait`.
-            var group = TaskGroup()
-            for index in range(count):  # pragma: no branch
-                group.create_task(
-                    _read_one(
-                        paths.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                        spaces.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                        textures.unsafe_ptr().unsafe_origin_cast[
-                            MutAnyOrigin
-                        ](),
-                        errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                        index,
+            else:
+                # All input and result storage outlives this join. The
+                # task count and result slots share one worker bound.
+                var group = TaskGroup()
+                for index in range(batch):  # pragma: no branch
+                    group.create_task(
+                        _read_one(
+                            paths.unsafe_ptr().unsafe_origin_cast[
+                                MutAnyOrigin
+                            ](),
+                            spaces.unsafe_ptr().unsafe_origin_cast[
+                                MutAnyOrigin
+                            ](),
+                            decoded.textures.unsafe_ptr().unsafe_origin_cast[
+                                MutAnyOrigin
+                            ](),
+                            decoded.errors.unsafe_ptr().unsafe_origin_cast[
+                                MutAnyOrigin
+                            ](),
+                            index,
+                            first,
+                        )
                     )
-                )
-            group.wait()
-            for index in range(count):  # pragma: no branch
-                if errors[index].byte_length() > 0:
-                    raise Error(paths[index] + ": " + errors[index])
+                group.wait()
+                decoded.check()
+            # Keep completed results in source order. Move their pixel
+            # and mip buffers instead of copying them a second time.
+            decoded.textures.reverse()
+            for _ in range(batch):  # pragma: no branch
+                textures.append(decoded.textures.pop())
+            first += batch
+        # Publish only after every batch succeeds. A failed preload does
+        # not add partial cache entries, and a retry reads the same keys.
+        textures.reverse()
         for index in range(count):
             self.decoded_keys.append(_texture_key(paths[index], spaces[index]))
-            self.decoded.append(Texture(copy=textures[index]))
+            self.decoded.append(textures.pop())
 
     def texture_set(self, index: Int) raises -> TextureSet:
         """Read a cached texture set.

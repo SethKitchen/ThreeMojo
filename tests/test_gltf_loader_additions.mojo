@@ -17,11 +17,11 @@ from core.scene import Scene
 from exporters.gltf import encode_base64
 from loaders.gltf import (
     GltfModel,
-    _decode_batch_size,
     is_ktx2,
     is_supported_extension,
     load_gltf,
 )
+from loaders.image_batch import decode_batch_size
 from materials.material import BASIC, NO_TEXTURE, PHYSICAL, STANDARD
 from objects.line import LOOP, SEGMENTS, STRIP
 from render.framebuffer import Color
@@ -485,15 +485,15 @@ comptime CORE_MAPS = (
 
 
 def test_decode_batches_never_exceed_the_worker_limit() raises:
-    assert_equal(_decode_batch_size(0, 2), 0)
-    assert_equal(_decode_batch_size(3, 0), 1)
-    assert_equal(_decode_batch_size(3, 1), 1)
+    assert_equal(decode_batch_size(0, 2), 0)
+    assert_equal(decode_batch_size(3, 0), 1)
+    assert_equal(decode_batch_size(3, 1), 1)
     for workers in range(2, 9):
         for total in range(1, 18):
             var remaining = total
             var batches = 0
             while remaining > 0:
-                var batch = _decode_batch_size(remaining, workers)
+                var batch = decode_batch_size(remaining, workers)
                 assert_true(batch > 0)
                 assert_true(batch <= workers)
                 assert_true(batch <= remaining)
