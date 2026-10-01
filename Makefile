@@ -319,7 +319,8 @@ $(TEST_CPU_STAMP):
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@xargs -n 2 -P $(JOBS) \
-	      sh -c 'name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
+	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
+	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
 	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1 && python3 tools/run_suite.py \
 	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"); \
