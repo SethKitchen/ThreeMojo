@@ -63,7 +63,8 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo
 # tests/test_gpu.mojo, and went stale there for a week: that suite fails
 # every device test on a machine without a GPU, so seven failing layout
 # assertions among two hundred device failures were not seen.
-GPU_HOST_TESTS   := tests/test_gpu_layout.mojo
+GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
+                    tests/test_gpu_volume_packing.mojo
 GPU_TESTS        := tests/test_gpu.mojo $(GPU_HOST_TESTS)
 GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo
 
