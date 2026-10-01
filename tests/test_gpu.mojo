@@ -14973,3 +14973,95 @@ def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
                         bitcast[DType.uint32](actual),
                         bitcast[DType.uint32](expected[component]),
                     )
+
+
+def norm_sample[
+    dtype: DType
+](value: SIMD[dtype, 1]) -> Array[SIMD[dtype, 1], 12]:
+    """Evaluate the shared norm helpers in either scalar precision."""
+    from math.norm import (
+        length2,
+        length3,
+        length4,
+        normalized2,
+        normalized3,
+        normalized4,
+    )
+
+    var n2 = normalized2(value, -value)
+    var n3 = normalized3(value, -value, value)
+    var n4 = normalized4(value, -value, value, -value)
+    var divisor = value if value != 0 else SIMD[dtype, 1](1)
+    var result: Array[SIMD[dtype, 1], 12] = [
+        n2[0],
+        n2[1],
+        n3[0],
+        n3[1],
+        n3[2],
+        n4[0],
+        n4[1],
+        n4[2],
+        n4[3],
+        length2(value, value) / divisor,
+        length3(value, value, value) / divisor,
+        length4(value, value, value, value) / divisor,
+    ]
+    return result^
+
+
+def norm_kernel[
+    dtype: DType
+](
+    output: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+    inputs: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+    count: Int32,
+):
+    """Evaluate shared scalar norms on device inputs."""
+    from max.gpu import global_idx
+
+    var at = Int(global_idx.x)
+    if at >= Int(count):
+        return
+    var values = norm_sample(inputs[unsafe_offset=at])
+    for component in range(12):
+        output[unsafe_offset=12 * at + component] = values[component]
+
+
+def check_norm_parity[
+    dtype: DType
+](inputs: List[SIMD[dtype, 1]], tolerance: Float64) raises:
+    """Compare CPU and GPU helpers over finite extreme scales."""
+    from max.gpu.host import DeviceContext
+
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[dtype](len(inputs))
+    var output = context.enqueue_create_buffer[dtype](12 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[norm_kernel[dtype]](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            var expected = norm_sample(inputs[at])
+            for component in range(12):
+                assert_almost_equal(
+                    host[12 * at + component],
+                    expected[component],
+                    atol=tolerance,
+                )
+
+
+def test_shared_norms_preserve_tiny_and_large_directions() raises:
+    if skipped_for_lack_of_a_gpu("shared norms across scalar ranges"):
+        return
+    var f32: List[Float32] = [0, 1e-30, 1, 1e30]
+    var f64: List[Float64] = [0, 1e-200, 1, 1e200]
+    check_norm_parity(f32, 1e-6)
+    check_norm_parity(f64, 1e-13)

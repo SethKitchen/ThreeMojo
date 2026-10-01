@@ -54,18 +54,9 @@ def _finite_direction(vector: Vector3) -> Bool:
 
 def _unit_direction(vector: Vector3) -> Vector3:
     """Normalize a finite nonzero direction without squared-norm overflow."""
-    var squared = vector.dot(vector)
-    if squared >= Float32(1.1754943508222875e-38) and isfinite(squared):
-        var length = sqrt(squared)
-        return Vector3(vector.x / length, vector.y / length, vector.z / length)
-    var scale = max(abs(vector.x), max(abs(vector.y), abs(vector.z)))
-    var scaled = Vector3(vector.x / scale, vector.y / scale, vector.z / scale)
-    var scaled_length = scaled.length()
-    return Vector3(
-        scaled.x / scaled_length,
-        scaled.y / scaled_length,
-        scaled.z / scaled_length,
-    )
+    var result = vector
+    result.normalize()
+    return result
 
 
 def _cross_direction(first: Vector3, second: Vector3) -> Vector3:

@@ -26,6 +26,7 @@ thresholds and its fallback axes are three.js's.
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, _js_round
+from math.norm import length4, normalized4, _ordinary_squared
 from std.math import acos, ceil, floor, pi, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -114,7 +115,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
     def length(self) -> Float32:
         """Return the Euclidean length of the vector, all four components
         in."""
-        return sqrt(self.dot(self))
+        return length4(self.x, self.y, self.z, self.w)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise.
@@ -140,12 +141,11 @@ struct Vector4(Equatable, ImplicitlyCopyable):
 
     def normalize(mut self):
         """Scale `self` to unit length, leaving a zero vector unchanged."""
-        var magnitude = self.length()
-        if magnitude > 0:
-            self.x /= magnitude
-            self.y /= magnitude
-            self.z /= magnitude
-            self.w /= magnitude
+        var components = normalized4(self.x, self.y, self.z, self.w)
+        self.x = components[0]
+        self.y = components[1]
+        self.z = components[2]
+        self.w = components[3]
 
     def apply_matrix4(mut self, matrix: Matrix4):
         """Multiply `self` by `matrix`, three.js's `applyMatrix4`.
@@ -463,8 +463,11 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             high: The longest.
         """
         var length = self.length()
-        var divisor = length if length != 0 else Float32(1)
-        self = self / divisor * max(low, min(high, length))
+        if _ordinary_squared(self.length_sq()):
+            self = self / length * max(low, min(high, length))
+        else:
+            self.normalize()
+            self = self * max(low, min(high, length))
 
     def floor(mut self):
         """Round each component down, three.js's `floor`."""
