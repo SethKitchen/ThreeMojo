@@ -14,7 +14,7 @@ stores `Float32`, so positions agree to a few `Float32` steps.
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from generators.tree import TreeGenerator, TreeParameters
 from generators.utils import generator_random
-from std.math import inf, nan
+from std.math import inf, isfinite, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -22,7 +22,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER
+from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
 
 comptime TOLERANCE = 2e-5
 
@@ -191,6 +191,143 @@ def test_tree_parameters_are_checked() raises:
     p.taper = nan[DType.float64]()
     with assert_raises(contains="taper"):
         _ = TreeGenerator(p^).build()
+
+
+def _refuses_nonfinite(p: TreeParameters) raises:
+    """Both public generation paths reject nonfinite parameters."""
+    var generator = TreeGenerator(p.copy())
+    with assert_raises(contains="finite"):
+        _ = generator.tubes()
+    with assert_raises(contains="finite"):
+        _ = generator.build()
+
+
+def test_every_scalar_tree_parameter_must_be_finite() raises:
+    """No independent scalar can bypass the common parameter check."""
+    for bad in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        var p = TreeParameters()
+        p.angle_variance = Angle(Float32(bad), DEGREE)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.length_ratio = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.length_variance = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.branch_length_falloff = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.trunk_length = Length(Float32(bad), METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.trunk_radius = Length(Float32(bad), METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.taper = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.taper_curve = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.root_flare = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.flare_frac = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.radius_exponent = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.min_radius = Length(Float32(bad), METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.min_length = Length(Float32(bad), METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.droop = InverseLength(Float32(bad), PER_METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.up_pull = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.section_length = Length(Float32(bad), METER)
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.child_start = bad
+        _refuses_nonfinite(p)
+        p = TreeParameters()
+        p.trunk_clear = bad
+        _refuses_nonfinite(p)
+
+
+def test_each_tree_list_entry_must_be_finite() raises:
+    """Unused tail entries are checked before the tree starts to grow."""
+    for bad in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        for at in [0, 1]:
+            var p = TreeParameters()
+            p.levels = 1
+            p.gnarl = [0.05, 0.1]
+            p.gnarl[at] = bad
+            _refuses_nonfinite(p)
+            p = TreeParameters()
+            p.levels = 1
+            p.branch_angle = [Angle(30, DEGREE), Angle(40, DEGREE)]
+            p.branch_angle[at] = Angle(Float32(bad), DEGREE)
+            _refuses_nonfinite(p)
+
+
+def test_tree_power_and_division_parameters_have_valid_domains() raises:
+    """The tip's zero base cannot have a negative exponent."""
+    var p = TreeParameters()
+    p.taper_curve = -1
+    with assert_raises(contains="taper curve"):
+        _ = TreeGenerator(p^).build()
+    for fraction in [Float64(0), Float64(-0.1)]:
+        p = TreeParameters()
+        p.flare_frac = fraction
+        with assert_raises(contains="flare fraction"):
+            _ = TreeGenerator(p^).build()
+    # A disabled flare does not divide by its fraction. Zero taper curve
+    # makes a constant radius, and a short list repeats at later levels.
+    p = TreeParameters()
+    p.levels = 2
+    p.children = [1]
+    p.branch_angle = [Angle(30, DEGREE)]
+    p.gnarl = [0.0]
+    p.root_flare = 0
+    p.flare_frac = 0
+    p.taper_curve = 0
+    var geometry = TreeGenerator(p^).build()
+    assert_true(geometry.vertex_count() > 48)
+    for name in [String(POSITION), String(NORMAL)]:
+        for number in geometry.attribute_view(name).packed():
+            assert_true(isfinite(number))
+
+
+def test_tree_sections_clamp_before_integer_conversion() raises:
+    """A large finite length-to-step ratio still makes only 24 sections."""
+    var p = TreeParameters()
+    p.levels = 1
+    p.gnarl = [0.0]
+    p.section_length = Length(1e-30, METER)
+    var generator = TreeGenerator(p^)
+    var tubes = generator.tubes()
+    assert_equal(len(tubes), 1)
+    assert_equal(len(tubes[0].rings), 25)
+    var geometry = generator.build()
+    assert_equal(geometry.vertex_count(), 25 * 6)
+    for number in geometry.attribute_view(String(POSITION)).packed():
+        assert_true(isfinite(number))
+    _vertex(geometry, String(POSITION), 24 * 6, 0, 9, -0.189)
 
 
 def main() raises:

@@ -37,6 +37,10 @@ The generators compute in `Float64` and store `Float32`, as three.js does. The t
 
 three.js sets a parameter with a fluent `set<Param>`. In this port, set the field of `parameters` and build again.
 
+All tree parameters and list entries must be finite. The section length and radius exponent must be positive. The taper curve must be zero or more. An active root flare needs a positive flare fraction. These checks run before growth.
+
+A zero child count stops branching. A level past the end of a parameter list reuses its last entry.
+
 ## Terrain
 
 `TerrainGenerator(parameters).build()` bakes a mountain range into one indexed geometry in the ground plane, y up. The generator keeps the height grid. Then `sample_height` and `sample_slope` read the surface.
