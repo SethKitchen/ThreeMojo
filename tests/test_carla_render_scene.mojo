@@ -1215,7 +1215,9 @@ def _scanned_file(role: String, path: String) -> String:
     )
 
 
-def _scanned_entry(id: String, kind: String, files: String, extra: String) -> String:
+def _scanned_entry(
+    id: String, kind: String, files: String, extra: String
+) -> String:
     return (
         '{"id": "'
         + id
@@ -1254,9 +1256,7 @@ def _scanned_registry() raises -> AssetRegistry:
     var entries = (
         _scanned_entry("scan", "texture_set", checker, ', "tile_meters": 2')
         + ", "
-        + _scanned_entry(
-            "sky", "hdri", _scanned_file("hdri", "sky.hdr"), ""
-        )
+        + _scanned_entry("sky", "hdri", _scanned_file("hdri", "sky.hdr"), "")
         + ", "
         + _scanned_entry(
             "box",
@@ -1268,7 +1268,10 @@ def _scanned_registry() raises -> AssetRegistry:
         )
         + ", "
         + _scanned_entry(
-            "car", "model", _scanned_file("model", "car.gltf"), ', "forward": "+x"'
+            "car",
+            "model",
+            _scanned_file("model", "car.gltf"),
+            ', "forward": "+x"',
         )
     )
     var bindings = (
@@ -1280,7 +1283,9 @@ def _scanned_registry() raises -> AssetRegistry:
     )
     return AssetRegistry(
         parse_manifest(
-            '{"format": 1, "entries": [' + entries + '], "bindings": '
+            '{"format": 1, "entries": ['
+            + entries
+            + '], "bindings": '
             + bindings
             + "}"
         ),

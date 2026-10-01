@@ -173,7 +173,7 @@ Three things keep it fast:
 - The CARLA vehicles are simplified to about 35,000 triangles. See [CARLA assets](CARLA-assets).
 - The sun's shadows reach 150 m in front of the camera, `SUN_SHADOW_REACH`. Farther out, the light has no shadow.
 
-With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.2 seconds by day and 1.1 seconds at night, and the town builds in about 4.5 seconds. Town10HD takes about 4 seconds a view, and builds in about 9 seconds. `read_gltf` decodes the package's textures `workers` at a time: the count `AssetRegistry.preload` was given.
+With the Town02 package, an 800 by 600 view on Town02's roads takes about 2.2 seconds by day and 1.1 seconds at night. The town builds in about 4.5 seconds. Town10HD takes about 4 seconds a view, and builds in about 9 seconds. `read_gltf` decodes the package's textures `workers` at a time: the count `AssetRegistry.preload` was given.
 
 ## Limits
 

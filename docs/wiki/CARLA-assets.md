@@ -108,7 +108,7 @@ Use the cooked release, not the carla-content repository. The repository holds u
 
 ## The CARLA towns
 
-Each town package holds one CARLA town as CARLA builds it: its buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
+Each town package holds one CARLA town as CARLA builds it. It has the town's buildings, streets, sidewalks, plants, poles, fences, props and parked vehicles, each where the town puts it. The packages are Town01, Town02, Town03, Town04, Town05 and Town10HD, as `carla.town.<town>.zip`.
 
 A package is two files: one binary glTF file, `carla.town.<town>.glb`, with its buffer and its textures inside, and the town's OpenDRIVE map, `<town>.xodr`. The positions are in the renderer's frame, in meters: three.js x, y and z are CARLA's x, z and y. So the package goes at the origin, with no turn and no scale.
 
@@ -127,7 +127,7 @@ A town's glass is a dark, smooth, partly metal pane that reflects its surroundin
 
 The scene's `extras` list the head of each street lamp, as `carla_lamps`: three numbers for each lamp, in the renderer's frame. The lamps' glass has the material tag `{"carla": "lamp"}`. A renderer draws each tile at one level, chosen by the tile's distance to the camera.
 
-Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. When a town has more than its cap, for example the eight thousand pines of Town04, every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
+Each mesh keeps a share of its triangles, by its kind. Each town also has a cap for each kind at each level. A town can have more than its cap, as Town04 has with its eight thousand pines. Then every mesh of that kind gives up the same share. A tree gives up leaf cards, and each card that stays grows, so the crown stays full. Other meshes are simplified, and their texture seams stay where they are.
 
 Some textures in CARLA's content show a company's mark, a real person, a real institution or a poster of unclear origin. CARLA's license covers CARLA's own work, not these. Each one becomes one flat color, its average. `NEUTRAL` in `carla_gltf_fix.py` names them, and the vehicle packages use the same list.
 

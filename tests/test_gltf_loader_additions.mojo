@@ -485,7 +485,11 @@ comptime CORE_MAPS = (
 
 def test_workers_decode_the_core_maps_as_one_worker_does() raises:
     var text = maps_doc(
-        "[" + png_image() + ',{"uri":"' + ktx2_uri("uastc_gradient.ktx2") + '"}]',
+        "["
+        + png_image()
+        + ',{"uri":"'
+        + ktx2_uri("uastc_gradient.ktx2")
+        + '"}]',
         CORE_MAPS,
     )
     var one_scene = Scene()
@@ -513,9 +517,7 @@ def test_workers_decode_the_core_maps_as_one_worker_does() raises:
         assert_equal(x.flip_y, y.flip_y)
         for at in range(len(x.pixels)):
             assert_equal(x.pixels[at], y.pixels[at])
-    assert_true(
-        many_assets.textures.get(b.emissive_map).color_space == SRGB
-    )
+    assert_true(many_assets.textures.get(b.emissive_map).color_space == SRGB)
 
 
 def test_workers_refuse_what_one_worker_refuses() raises:
@@ -532,7 +534,11 @@ def test_workers_refuse_what_one_worker_refuses() raises:
         _ = load_gltf(broken, List[UInt8](), "", scene, assets, 4)
     # A texture that is not there, which the materials then refuse.
     var missing = maps_doc(
-        "[" + png_image() + ',{"uri":"' + ktx2_uri("uastc_gradient.ktx2") + '"}]',
+        "["
+        + png_image()
+        + ',{"uri":"'
+        + ktx2_uri("uastc_gradient.ktx2")
+        + '"}]',
         '[{"normalTexture":{"index":7}}]',
     )
     with assert_raises(contains="not there"):

@@ -492,14 +492,10 @@ struct HuffmanTable(Movable):
         self.defined = True
         self.lookup = List[Int](length=1 << LOOKAHEAD, fill=0)
         for length in range(1, LOOKAHEAD + 1):  # pragma: no branch
-            for code in range(
-                self.min_code[length], self.max_code[length] + 1
-            ):
+            for code in range(self.min_code[length], self.max_code[length] + 1):
                 var symbol = Int(
                     self.symbols[
-                        self.first_symbol[length]
-                        + code
-                        - self.min_code[length]
+                        self.first_symbol[length] + code - self.min_code[length]
                     ]
                 )
                 var spare = LOOKAHEAD - length
@@ -1538,9 +1534,15 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 pixels[at + 1] = gray
                 pixels[at + 2] = gray
     else:
-        var luma = _full_plane(components[planes[0]], width, height, h_max, v_max)
-        var blue = _full_plane(components[planes[1]], width, height, h_max, v_max)
-        var red = _full_plane(components[planes[2]], width, height, h_max, v_max)
+        var luma = _full_plane(
+            components[planes[0]], width, height, h_max, v_max
+        )
+        var blue = _full_plane(
+            components[planes[1]], width, height, h_max, v_max
+        )
+        var red = _full_plane(
+            components[planes[2]], width, height, h_max, v_max
+        )
         for index in range(width * height):  # pragma: no branch
             var color = ycbcr_to_rgb(luma[index], blue[index], red[index])
             var at = index * DecodedImage.CHANNELS

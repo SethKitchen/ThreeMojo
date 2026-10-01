@@ -1111,7 +1111,9 @@ struct AssetRegistry(Movable):
         )
         var set = TextureSet(
             maps^,
-            self._texture(ao.value(), LINEAR) if Bool(ao) else _flat(255, LINEAR),
+            self._texture(ao.value(), LINEAR) if Bool(ao) else _flat(
+                255, LINEAR
+            ),
             self._texture(bump.value(), LINEAR) if Bool(bump)
             and not Bool(normal) else _flat(0, LINEAR),
             entry.tile,
@@ -1251,7 +1253,6 @@ struct AssetRegistry(Movable):
             tails^,
         )
 
-
     def place_town(
         self,
         index: Int,
@@ -1318,9 +1319,10 @@ struct AssetRegistry(Movable):
             scene.meshes[m].receive_shadow = True
             var node = scene.get(scene.meshes[m].node).copy()
             var kind = String("prop")
-            if node.user_data.has(TOWN_KIND) and node.user_data.kind(
-                TOWN_KIND
-            ) == STRING:
+            if (
+                node.user_data.has(TOWN_KIND)
+                and node.user_data.kind(TOWN_KIND) == STRING
+            ):
                 kind = node.user_data.string(TOWN_KIND)
             kinds.append(kind)
             var tile = town_tile(node.name)
@@ -1367,10 +1369,7 @@ struct AssetRegistry(Movable):
         if model.scene_extras.has(TOWN_LAMPS):
             var document = parse_json(model.scene_extras.json(TOWN_LAMPS))
             var root = document.root()
-            if (
-                document.kind(root) != ARRAY
-                or document.length(root) % 3 != 0
-            ):
+            if document.kind(root) != ARRAY or document.length(root) % 3 != 0:
                 raise Error("A town's lamps must be three numbers each")
             var into = scene.world_matrix(parent)
             for k in range(document.length(root) // 3):

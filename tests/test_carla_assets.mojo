@@ -150,7 +150,9 @@ def _fixtures() -> String:
     var box = _entry(
         "box",
         "model",
-        _file("model", "gltf/box.gltf") + ", " + _file("support", "gltf/box.bin"),
+        _file("model", "gltf/box.gltf")
+        + ", "
+        + _file("support", "gltf/box.bin"),
         ', "forward": "+z", "title": "Box"',
         "CC-BY-4.0",
     )
@@ -178,10 +180,12 @@ def _fixtures() -> String:
         + gone
         + ", "
         + rigged,
-        '{"surface.road": "scan", "surface.curb": "bare", "sky.clear":'
-        ' "sky", "vehicle.audi.a2": "box", "vehicle.gone": "gone",'
-        ' "vehicle.rigged": "rigged",'
-        ' "vehicle.mini.cooper": null, "vehicle.*": null}',
+        (
+            '{"surface.road": "scan", "surface.curb": "bare", "sky.clear":'
+            ' "sky", "vehicle.audi.a2": "box", "vehicle.gone": "gone",'
+            ' "vehicle.rigged": "rigged",'
+            ' "vehicle.mini.cooper": null, "vehicle.*": null}'
+        ),
     )
 
 
@@ -280,7 +284,10 @@ def test_an_archive_contributes_its_members() raises:
             _entry(
                 "loose",
                 "hdri",
-                '{"role": "hdri", "url": null, "sha256": null, "path": "a.hdr"}',
+                (
+                    '{"role": "hdri", "url": null, "sha256": null, "path":'
+                    ' "a.hdr"}'
+                ),
             )
         )
     )
@@ -314,7 +321,9 @@ def test_each_broken_rule_is_refused() raises:
         "the string author",
     )
     _refused(
-        _manifest(_entry("x", "hdri", "", "").replace('"files": []', '"files": 1')),
+        _manifest(
+            _entry("x", "hdri", "", "").replace('"files": []', '"files": 1')
+        ),
         "list of files",
     )
     # A role that does not fit the kind, for each kind.
@@ -354,7 +363,10 @@ def test_each_broken_rule_is_refused() raises:
     _refused(
         _manifest(
             _entry(
-                "x", "texture_set", _file("albedo", "a.jpg"), ', "tile_meters": "2"'
+                "x",
+                "texture_set",
+                _file("albedo", "a.jpg"),
+                ', "tile_meters": "2"',
             )
         ),
         "needs its tile_meters",
@@ -363,7 +375,10 @@ def test_each_broken_rule_is_refused() raises:
     _refused(
         _manifest(
             _entry(
-                "x", "texture_set", _file("normal", "a.jpg"), ', "tile_meters": 2'
+                "x",
+                "texture_set",
+                _file("normal", "a.jpg"),
+                ', "tile_meters": 2',
             )
         ),
         "needs an albedo map",
@@ -466,7 +481,9 @@ def test_the_cache_decides_what_is_used() raises:
     # Bound to null, and not bound at all.
     assert_false(Bool(registry.cached_entry("vehicle.mini.cooper")))
     assert_false(Bool(registry.cached_entry("surface.sidewalk")))
-    assert_equal(registry.model_key("vehicle.mini.cooper"), "vehicle.mini.cooper")
+    assert_equal(
+        registry.model_key("vehicle.mini.cooper"), "vehicle.mini.cooper"
+    )
     assert_equal(registry.model_key("vehicle.tesla.model3"), "vehicle.*")
 
 
@@ -651,7 +668,9 @@ def test_a_model_reports_its_tagged_materials() raises:
     var assets = Assets()
     var parent = scene.add(Object3D())
     scene.update()
-    var placed = registry.place_model(0, scene, assets, parent, Vector3(4, 2, 2))
+    var placed = registry.place_model(
+        0, scene, assets, parent, Vector3(4, 2, 2)
+    )
     assert_equal(placed.mesh_count, 6)
     assert_equal(len(placed.paint), 1)
     assert_equal(len(placed.heads), 1)
@@ -672,7 +691,10 @@ def _preload_manifest(albedo: String) -> String:
     """Two texture sets that share their maps, one bound to null, one
     whose file is not in the cache, and an HDRI."""
     var gone = _entry(
-        "gone", "texture_set", _file("albedo", "gltf/none.png"), ', "tile_meters": 1'
+        "gone",
+        "texture_set",
+        _file("albedo", "gltf/none.png"),
+        ', "tile_meters": 1',
     )
     var shared = _entry(
         "shared",
@@ -687,9 +709,11 @@ def _preload_manifest(albedo: String) -> String:
     var sky = _entry("sky", "hdri", _file("hdri", "hdr_cube/px.hdr"))
     return _manifest(
         _texture_set() + ", " + shared + ", " + gone + ", " + sky,
-        '{"surface.road": "scan", "surface.curb": "shared", "surface.wall":'
-        ' "shared", "surface.sidewalk": "gone", "ground.grass": null,'
-        ' "sky.clear": "sky"}',
+        (
+            '{"surface.road": "scan", "surface.curb": "shared", "surface.wall":'
+            ' "shared", "surface.sidewalk": "gone", "ground.grass": null,'
+            ' "sky.clear": "sky"}'
+        ),
     )
 
 

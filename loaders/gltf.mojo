@@ -779,9 +779,7 @@ def read_gltf(
     var directory = _slice(path, 0, path.rfind("/") + 1)
     if len(bytes) >= 4 and _le32(bytes, 0) == GLB_MAGIC:
         var parts = split_glb(bytes)
-        return load_gltf(
-            parts[0], parts[1], directory, scene, assets, workers
-        )
+        return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
         String(unsafe_from_utf8=bytes),
         List[UInt8](),
