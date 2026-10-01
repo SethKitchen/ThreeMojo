@@ -204,6 +204,8 @@ scene.add_wide_line(Line2(path, ink, node))
 
 A wide-line geometry holds its points in pairs, one pair per segment. That is the layout `SEGMENTS` reads. three.js keeps the same pairs in `instanceStart` and `instanceEnd`. An edges or a wireframe geometry is therefore a wide-line geometry already.
 
+The draw range counts position slots. Drawing and picking start pairs at the first slot in the range. They leave out an unpaired last point. Hit segment numbers, colors, and dash distances still refer to the full geometry.
+
 A `color` attribute of three floats per point gives the vertex colors. The colors are linear, as a mesh's are.
 
 ### The width

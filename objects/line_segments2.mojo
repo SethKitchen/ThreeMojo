@@ -45,6 +45,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.vector3 import Vector3
+from objects.line import SEGMENTS, segment_count
 from render.framebuffer import FloatColor
 from render.linerule import dash_covers
 from std.math import ceil, floor, max, min, pi, sqrt
@@ -204,6 +205,33 @@ def line_geometry(
             tints.append(colors[index])
             tints.append(colors[index + 1])
     return _geometry_of(pairs, tints)
+
+
+def drawn_segments(geometry: BufferGeometry) raises -> Tuple[Int, Int]:
+    """Return the first drawn point and the count of complete wide segments.
+
+    The draw range counts position slots. Pairs begin at its first slot,
+    as for a thin line in `SEGMENTS` mode. One unpaired last point is left
+    out. Colors and line distances still use the original position slots.
+
+    Args:
+        geometry: The unindexed paired-point geometry.
+
+    Returns:
+        The first position slot and the count of complete pairs from it.
+
+    Raises:
+        Error: If the geometry is indexed, has no positions, holds an odd
+            number of points, or has an invalid draw range.
+    """
+    if geometry.is_indexed():
+        raise Error(
+            "A wide line geometry cannot be indexed: its points are paired"
+            " in the order they are given"
+        )
+    _ = segment_count(SEGMENTS, geometry.vertex_count())
+    var visible = geometry.drawn_vertices()
+    return (visible[0], visible[1] // 2)
 
 
 def cap_steps(radius: Float32) -> Int:
