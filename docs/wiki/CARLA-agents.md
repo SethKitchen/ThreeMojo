@@ -166,3 +166,15 @@ Four suites check the agents and the navigation against numbers from outside the
 - `tests/test_carla_agents_drive.mojo`: a basic agent that reaches its destination, stops for a red light and stops behind a car. It also checks the three behavior types, car following, tailgating and the constant velocity agent.
 - `tests/test_carla_navigation.mojo`: the mesh, the paths, the crowd and the walker manager on a hand-made street.
 - `tests/test_carla_navigation_world.mojo`: the town's mesh, a walker that crosses only at the crosswalk, and a walker that waits for green.
+
+## Search queues
+
+The route planner and the pedestrian navigation mesh use one private binary min-heap. A lower search score comes first. Equal scores use the lower node id, as before. Route searches skip entries for closed nodes. Pedestrian searches also skip an old score when a better route has replaced it, and can reopen a closed polygon. Partial paths still end at the closest reached polygon.
+
+Area costs must be finite and at least 1. Both the setter and the read boundary check this, including direct changes to the public cost array. A NaN search score raises an error. Use an excluded area flag to block travel, as CARLA's filters do. This finite-cost check is a port safety rule; upstream Detour does not enforce it in its setter.
+
+Each queue push and pop costs O(log n) for n pending entries. This change does not speed up graph construction or spatial queries. It does not fix the separate topology and lane-boundary issues.
+
+Run `mojo run -I . bench/carla_search_queue_bench.mojo` to compare queue operations at 100, 1,000 and 10,000 entries. This benchmark excludes map lookup and geometry work. The tests compare complete generated route and navigation paths with the previous linear-selection search.
+
+Run `mojo run -I . bench/carla_route_search_bench.mojo` to compare complete searches on generated sparse and wide-frontier graphs with 100, 1,000 and 10,000 nodes. Graph construction is outside the timed region. Both searches must return the same path.

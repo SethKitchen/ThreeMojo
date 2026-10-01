@@ -60,8 +60,9 @@ from extensions.carla.road_info import (
     LANE_STOP,
 )
 from extensions.carla.sensor_noise import SensorRandom
+from extensions.carla.search_queue import _MinCostQueue
 from math.vector3 import Vector3
-from std.math import cos, floor, sin, sqrt
+from std.math import cos, floor, isfinite, sin, sqrt
 from units.si import METER, Length
 
 # CARLA's `MAX_POLYS`: the longest path a query gives.
@@ -220,16 +221,17 @@ struct NavQueryFilter(ImplicitlyCopyable, Writable):
 
         Args:
             area: The area.
-            cost: The cost. It must be at least 1, so the search's
-                heuristic stays a lower bound.
+            cost: The cost. It must be finite and at least 1, so the
+                search's heuristic stays a lower bound.
 
         Raises:
-            Error: If the area is not valid or the cost is below 1.
+            Error: If the area is not valid, the cost is not finite, or
+                the cost is less than 1.
         """
         if not area.is_valid():
             raise Error("Navigation area is not valid")
-        if not (cost >= 1.0):
-            raise Error("An area cost must be at least 1")
+        if not isfinite(cost) or cost < 1.0:
+            raise Error("An area cost must be at least 1 and finite")
         self.costs[area.value] = cost
 
     def area_cost(self, area: NavArea) raises -> Float64:
@@ -242,11 +244,15 @@ struct NavQueryFilter(ImplicitlyCopyable, Writable):
             The cost.
 
         Raises:
-            Error: If the area is not valid.
+            Error: If the area is not valid, its cost is not finite, or
+                its cost is less than 1.
         """
         if not area.is_valid():
             raise Error("Navigation area is not valid")
-        return self.costs[area.value]
+        var cost = self.costs[area.value]
+        if not isfinite(cost) or cost < 1.0:
+            raise Error("An area cost must be at least 1 and finite")
+        return cost
 
 
 def sidewalk_filter() -> NavQueryFilter:
@@ -789,7 +795,8 @@ struct NavMesh(Movable):
             nearest the goal when the goal cannot be reached.
 
         Raises:
-            Error: If an id names no polygon.
+            Error: If an id names no polygon, an area cost is invalid,
+                or a search score is NaN.
         """
         var s = self._check(start)
         var e = self._check(end)
@@ -802,18 +809,17 @@ struct NavMesh(Movable):
         nodes[s].total = nodes[s].heuristic
         nodes[s].open = True
         var best = s
-        var open_count = 1
-        while open_count > 0:
-            var current = -1
-            # One node for each polygon, and one polygon at least.
-            for i in range(len(nodes)):  # pragma: no branch
-                if nodes[i].open and (
-                    current < 0 or nodes[i].total < nodes[current].total
-                ):
-                    current = i
+        var open = _MinCostQueue()
+        open.push(nodes[s].total, s)
+        while len(open) > 0:
+            var entry = open.pop()
+            var current = entry[1]
+            # A cheaper route can supersede a queued score. Closed nodes
+            # can reopen, so check both membership and the current score.
+            if not nodes[current].open or entry[0] != nodes[current].total:
+                continue
             nodes[current].open = False
             nodes[current].closed = True
-            open_count -= 1
             if current == e:
                 best = e
                 break
@@ -833,8 +839,6 @@ struct NavMesh(Movable):
                     heuristic = 0.0
                 if (nodes[n].open or nodes[n].closed) and cost >= nodes[n].cost:
                     continue
-                if not nodes[n].open:
-                    open_count += 1
                 nodes[n].cost = cost
                 nodes[n].heuristic = heuristic
                 nodes[n].total = cost + heuristic
@@ -842,6 +846,7 @@ struct NavMesh(Movable):
                 nodes[n].position = mid
                 nodes[n].open = True
                 nodes[n].closed = False
+                open.push(nodes[n].total, n)
                 if heuristic < nodes[best].heuristic:
                     best = n
         var reversed = List[Int]()

@@ -396,6 +396,7 @@ The anatomy combines measured inputs with authored templates. Validation limits 
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [CARLA runtime bookkeeping](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#disabled-collisions): skip disabled contact pairs, index visual actors and trigger changes, and validate recorder text [#305](https://github.com/SethKitchen/ThreeMojo/issues/305)
+- [x] [CARLA search queues](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#search-queues): deterministic heap selection for route and pedestrian paths [#307](https://github.com/SethKitchen/ThreeMojo/issues/307)
 - [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable rigid bodies, contacts, integration and quantities, with compatible CARLA imports
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
 
