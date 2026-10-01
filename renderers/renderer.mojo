@@ -9286,6 +9286,30 @@ struct Renderer(Movable):
         _raise_band_errors(errors)
         return image^
 
+    def _cube_renderer(
+        self, size: Int, copy_probe_grid: Bool = True
+    ) raises -> Renderer:
+        """Return a fresh cube-face renderer with this scene's light and clip settings.
+
+        The face owns its viewport and history, uses unit exposure with no
+        tone mapping, and writes the usual sRGB image when resolved.
+        Probe baking supplies its own grid and skips copying this one's.
+        """
+        var side = Renderer(size, size, self.workers)
+        side.background = self.background
+        side.shading = self.shading
+        side.depth_mode = self.depth_mode
+        side.clipping_planes = self.clipping_planes.copy()
+        side.local_clipping_enabled = self.local_clipping_enabled
+        side.shadow_map_type = self.shadow_map_type
+        side.shadow_map_transmitted = self.shadow_map_transmitted
+        side.ltc = self.ltc.copy()
+        if copy_probe_grid:
+            side.probe_grid = self.probe_grid.copy()
+        side.time = self.time
+        side.override_material = self.override_material
+        return side^
+
     def render_cube(
         self, scene: Scene, assets: Assets, camera: CubeCamera
     ) raises -> CubeTexture:
@@ -9294,8 +9318,9 @@ struct Renderer(Movable):
         `CubeCamera.update(renderer, scene)`.
 
         Each face is drawn by a renderer of the face's size with this
-        one's background, shading and workers, through `render`, so the
-        scene's own background and every material are in the faces.
+        one's background, shading, workers, lighting resources and clipping,
+        through `render`, so the scene's background and materials reach the
+        faces. Shadow settings, material override and node time carry over.
         The tone mapping is left off, as three.js turns it off around its
         update: the faces are light the main frame will map once, when a
         surface reflects them or the sky shows them.
@@ -9312,11 +9337,8 @@ struct Renderer(Movable):
             Error: Everything `render` raises for one of the six faces, or
                 `CubeCamera.face_camera` for the camera's node.
         """
-        var side = Renderer(camera.size, camera.size, self.workers)
-        side.background = self.background
-        side.shading = self.shading
+        var side = self._cube_renderer(camera.size)
         side.antialias = self.antialias
-        side.depth_mode = self.depth_mode
         var faces = List[Framebuffer]()
         for face in range(FACE_COUNT):  # pragma: no branch
             faces.append(
@@ -9372,8 +9394,8 @@ struct Renderer(Movable):
         scene)` with a `WebGLCubeRenderTarget`.
 
         Each face is drawn by a renderer of the face's size with this
-        one's background, shading, workers and depth mode, as
-        `render_cube` draws them, into `target.image(face, 0)`. The faces
+        one's scene settings, as `render_cube` draws them, into
+        `target.image(face, 0)`. The faces
         keep the light as the target's type stores it. Call
         `target.generate_mipmaps` to fill the levels below.
 
@@ -9391,10 +9413,7 @@ struct Renderer(Movable):
         target.validate()
         if target.kind != TARGET_CUBE:
             raise Error("A cube camera draws into a cube target")
-        var side = Renderer(target.width, target.width, self.workers)
-        side.background = self.background
-        side.shading = self.shading
-        side.depth_mode = self.depth_mode
+        var side = self._cube_renderer(target.width)
         for face in range(FACE_COUNT):  # pragma: no branch
             side.render_into(
                 target.image(face, 0),
