@@ -148,6 +148,8 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
         box.include_ellipsoid(self.base, self.base_r)
         box.include_ellipsoid(self.medial, self.medial_r)
         box.include_ellipsoid(self.lateral, self.lateral_r)
+        box.include_sphere(self.ridge_a, self.ridge_r)
+        box.include_sphere(self.ridge_b, self.ridge_r)
         var padded = box.padded(0.25 * T + Float32(0.004))
         self.low = padded.low
         self.high = padded.high
@@ -168,6 +170,8 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
             PATELLA_ML,
         )
         d = smin(d, sd_ellipsoid(point, self.body, self.body_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
         return smin(
             d,
             sd_segment(

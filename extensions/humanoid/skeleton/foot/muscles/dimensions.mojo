@@ -43,6 +43,7 @@ from extensions.humanoid.skeleton.foot.chain import (
     two_tubes,
 )
 from math.vector3 import Vector3
+from std.math import isfinite
 
 
 @fieldwise_init
@@ -110,11 +111,11 @@ struct FootMuscleDimensions(ImplicitlyCopyable):
         self.foot.validate()
         if not self.athleticism.is_valid():
             raise Error("A foot muscle needs a toned or untoned athleticism")
-        if self.scale <= 0:
+        if not isfinite(self.scale) or self.scale <= 0:
             raise Error("A foot muscle radius scale must be positive")
-        if self.k <= 0:
+        if not isfinite(self.k) or self.k <= 0:
             raise Error("A foot muscle blend radius must be positive")
-        if self.epsilon <= 0:
+        if not isfinite(self.epsilon) or self.epsilon <= 0:
             raise Error("A foot muscle gradient step must be positive")
 
 
