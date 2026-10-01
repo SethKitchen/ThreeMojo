@@ -920,7 +920,7 @@ def read_gltf_gaussian_splats(
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splats(parts[0], parts[1], directory)
     return load_gltf_gaussian_splats(
-        String(unsafe_from_utf8=bytes), List[UInt8](), directory
+        String(from_utf8=Span(bytes)), List[UInt8](), directory
     )
 
 
@@ -1086,5 +1086,5 @@ def read_gltf_gaussian_splat_scene(
             parts[0], parts[1], directory, scene
         )
     return load_gltf_gaussian_splat_scene(
-        String(unsafe_from_utf8=bytes), List[UInt8](), directory, scene
+        String(from_utf8=Span(bytes)), List[UInt8](), directory, scene
     )

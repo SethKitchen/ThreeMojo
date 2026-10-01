@@ -782,7 +782,7 @@ def read_gltf(
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
-        String(unsafe_from_utf8=bytes),
+        String(from_utf8=Span(bytes)),
         List[UInt8](),
         directory,
         scene,
@@ -830,7 +830,7 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
             seen_json = True
-            json = String(unsafe_from_utf8=chunk)
+            json = String(from_utf8=Span(chunk))
         elif kind == GLB_BIN_CHUNK:
             if not seen_json:
                 raise Error("glTF: the first chunk must be JSON")
