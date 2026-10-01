@@ -133,7 +133,7 @@ The pin is Mojo 1.1. The 1.0 column is the same source built by Mojo 1.0.0. The 
 The `cpu-flat` columns fill the same triangles with each material's flat color and a depth test.
 That fill does no lighting, no textures, no sRGB and no transparency, and it writes no file.
 The `webgl` columns are three.js drawing with WebGL 2 through `webgl-node`.
-Read a frames column against the ThreeMojo `run` column minus the Mojo baseline.
+A frames column times the draw loop inside the process. It leaves out starting the process, building the scene and writing a file.
 <!-- /BENCH:EXAMPLES:linux -->
 
 ### macOS
@@ -206,7 +206,7 @@ Read a frames column against the ThreeMojo `run` column minus the Mojo baseline.
 The `cpu-flat` columns fill the same triangles with each material's flat color and a depth test.
 That fill does no lighting, no textures, no sRGB and no transparency, and it writes no file.
 The `webgl` columns are three.js drawing with WebGL 2 through `webgl-node`.
-Read a frames column against the ThreeMojo `run` column minus the Mojo baseline.
+A frames column times the draw loop inside the process. It leaves out starting the process, building the scene and writing a file.
 <!-- /BENCH:EXAMPLES:macos -->
 
 ## Mojo 1.1 against Mojo 1.0
