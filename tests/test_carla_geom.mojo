@@ -1123,7 +1123,7 @@ def test_parse_geo_projection_and_reference() raises:
     assert_true(fractional[0].universal_transverse_mercator.zone == UtmZone(31))
     assert_true(fractional[0].universal_transverse_mercator.north)
     assert_false(Bool(fractional[0].universal_transverse_mercator.offset))
-    assert_equal(fractional[1].longitude_degrees, 6.0)
+    assert_equal(fractional[1].longitude_degrees, 3.0)
     var no_zone = parse_geo_projection_and_reference("+proj=utm", none)
     assert_true(no_zone[0].universal_transverse_mercator.zone == UtmZone(31))
     assert_equal(no_zone[1].longitude_degrees, 0.0)
