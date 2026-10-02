@@ -1162,4 +1162,8 @@ The reader refuses these malformed forms with their byte position:
 
 CRLF and CR become LF in text and CDATA. Raw whitespace in attributes becomes a space; a CRLF pair gives one space. Character references keep the character they name. Quoted delimiters and comments inside a document type do not close it early. No external data is read and declared entities are not expanded.
 
-This is a limited reader, not a complete XML validator. Full name, instruction and prolog grammar checks remain tracked in issue #481.
+Names follow XML 1.0 fifth edition `NameStartChar` and `NameChar`, including their Unicode limits. A processing instruction needs a name and whitespace before its data. Its target cannot be `xml` in any letter case.
+
+An XML declaration can appear only at the start, after an optional byte order mark. Its fields are `version`, optional `encoding`, then optional `standalone`. Version syntax accepts `1.` followed by one or more digits. Each such version uses XML 1.0 character rules. At most one document type declaration can appear before the root. Its name, external identifier and closing delimiters are checked.
+
+This is a limited reader, not a complete XML validator. It does not validate DTD contents or root-name agreement with the DTD. It does not expand DTD entities or load external data. Namespace constraints are not checked. Input is a UTF-8 `String`; an encoding declaration does not transcode it.

@@ -311,5 +311,294 @@ def test_xml_errors_keep_original_byte_offsets() raises:
     assert_equal(parse_xml("<a>&#93;]></a>").text(0), "]]>")
 
 
+def test_xml_name_start_unicode_boundaries() raises:
+    # W3C XML 1.0 fifth edition [4], [4a] and [5]. Test both ends
+    # of every admitted range through element, attribute and PI names.
+    for point in [
+        58,
+        65,
+        90,
+        95,
+        97,
+        122,
+        0xC0,
+        0xD6,
+        0xD8,
+        0xF6,
+        0xF8,
+        0x2FF,
+        0x370,
+        0x37D,
+        0x37F,
+        0x1FFF,
+        0x200C,
+        0x200D,
+        0x2070,
+        0x218F,
+        0x2C00,
+        0x2FEF,
+        0x3001,
+        0xD7FF,
+        0xF900,
+        0xFDCF,
+        0xFDF0,
+        0xFFFD,
+        0x10000,
+        0xEFFFF,
+    ]:
+        var name = chr(point) + "name"
+        var source = (
+            "<?" + name + "?><" + name + " " + name + "='v'></" + name + ">"
+        )
+        var document = parse_xml(source)
+        assert_equal(document.name(0), name)
+        assert_equal(document.attribute(0, name), "v")
+    for point in [
+        0xB6,
+        0xB8,
+        0xBF,
+        0xD7,
+        0xF7,
+        0x37E,
+        0x2000,
+        0x200B,
+        0x200E,
+        0x203E,
+        0x2041,
+        0x206F,
+        0x2190,
+        0x2BFF,
+        0x2FF0,
+        0x3000,
+        0xE000,
+        0xF8FF,
+        0xFDD0,
+        0xFDEF,
+        0xF0000,
+        0x10FFFF,
+    ]:
+        var name = chr(point)
+        refused("<" + name + "/>")
+        refused("<a " + name + "='v'/>")
+        refused("<?" + name + "?><a/>")
+        refused("<a" + name + "/>")
+        refused("<a a" + name + "='v'/>")
+        refused("<a></a" + name + ">")
+        refused("<?a" + name + "?><a/>")
+    for point in [45, 46, 48, 57, 0xB7, 0x300, 0x36F, 0x203F, 0x2040]:
+        var suffix = chr(point)
+        refused("<" + suffix + "a/>")
+        refused("<a " + suffix + "='v'/>")
+        refused("<?" + suffix + "?><a/>")
+        var name = "a" + suffix
+        assert_equal(parse_xml("<" + name + "/>").name(0), name)
+        assert_equal(parse_xml("<a " + name + "='v'/>").attribute(0, name), "v")
+        assert_equal(parse_xml("<?" + name + "?><a/>").count(), 1)
+    # Colon stays admitted, without namespace resolution or QName validation.
+    assert_equal(parse_xml("<::a a::b='1'/>").attribute(0, "a::b"), "1")
+    # A supplementary character outside NameStartChar still belongs in text.
+    assert_equal(
+        parse_xml("<a>" + chr(0x10FFFF) + "</a>").text(0), chr(0x10FFFF)
+    )
+
+
+def test_xml_ascii_name_boundaries() raises:
+    for point in range(128):
+        var start = (
+            point == 58
+            or point == 95
+            or (point >= 65 and point <= 90)
+            or (point >= 97 and point <= 122)
+        )
+        var continuation = (
+            start or point == 45 or point == 46 or (point >= 48 and point <= 57)
+        )
+        var name = chr(point) + "name"
+        if start:
+            assert_equal(parse_xml("<" + name + "/>").name(0), name)
+        else:
+            refused("<" + name + "/>")
+        name = "a" + name
+        if continuation:
+            assert_equal(parse_xml("<" + name + "/>").name(0), name)
+        else:
+            refused("<" + name + "/>")
+
+
+def test_xml_processing_instruction_grammar() raises:
+    for instruction in [
+        "<?pi?>",
+        "<?pi ?>",
+        "<?pi\tdata?>",
+        "<?pi\r\ndata?>",
+        "<?xml-stylesheet href='x'?>",
+        "<?XML-stylesheet?>",
+        "<?xmla?>",
+        "<?x?>",
+        "<?xm?>",
+        "<?pi < > &unknown; %parameter; ' \" ? data?>",
+    ]:
+        assert_equal(parse_xml(instruction + "<a/>").count(), 1)
+        assert_equal(parse_xml("<a>" + instruction + "</a>").text(0), "")
+        assert_equal(parse_xml("<a/>" + instruction).count(), 1)
+        assert_equal(
+            parse_xml("<!DOCTYPE a [" + instruction + "]><a/>").count(), 1
+        )
+    for instruction in [
+        "<??>",
+        "<? ?>",
+        "<?1a?>",
+        "<?a/data?>",
+        "<?a=1?>",
+        "<?a?data?>",
+        "<?a!?>",
+        "<?xml?>",
+        "<?xml version='1.0'?>",
+        "<?XML?>",
+        "<?Xml?>",
+        "<?xMl?>",
+        "<?xmL?>",
+        "<?XMl?>",
+        "<?XmL?>",
+        "<?xML?>",
+        "<?pi ",
+        "<?pi?",
+        "<?pi data?",
+    ]:
+        refused("<a>" + instruction + "</a>")
+        refused("<a/>" + instruction)
+        refused("<!--first-->" + instruction + "<a/>")
+        refused("<!DOCTYPE a [" + instruction + "]><a/>")
+    refused("<??> <a/>")
+    refused("<?XML version='1.0'?><a/>")
+    with assert_raises(contains="XML at byte 9: expected white space"):
+        _ = parse_xml("<a>é<?pi!?></a>")
+
+
+def test_xml_declaration_grammar_and_order() raises:
+    for declaration in [
+        "<?xml version='1.0'?>",
+        '<?xml\tversion = "1.0" ?>',
+        "<?xml\r\nversion='1.1234567890' encoding='UTF-8' standalone='yes'?>",
+        "<?xml version='1.0' standalone = 'no' ?>",
+        "<?xml version='1.0' encoding='aZ09._-'?>",
+        "<?xml version='1.0' encoding='z' standalone='no'?>",
+    ]:
+        assert_equal(parse_xml(declaration + "<a/>").count(), 1)
+        assert_equal(parse_xml("\ufeff" + declaration + "<a/>").count(), 1)
+        for prefix in [
+            " ",
+            "\n",
+            "<!--before-->",
+            "<?pi?>",
+            "<!DOCTYPE a>",
+            declaration,
+        ]:
+            refused(prefix + declaration + "<a/>")
+    for declaration in [
+        "<?xml?>",
+        "<?xml ?>",
+        "<?xml version?>",
+        "<?xml version=1.0?>",
+        "<?xml version='1.0?>",
+        "<?xml version='1.0'>",
+        "<?xml version='2.0'?>",
+        "<?xml version='1.'?>",
+        "<?xml version=''?>",
+        "<?xml version='1.a'?>",
+        "<?xml version='1.0x'?>",
+        "<?xml version='1.0 '?>",
+        "<?xml version='1.&#48;'?>",
+        "<?xml Version='1.0'?>",
+        "<?xml encoding='UTF-8'?>",
+        "<?xml version='1.0' version='1.0'?>",
+        "<?xml version='1.0' unknown='x'?>",
+        "<?xml version='1.0'encoding='UTF-8'?>",
+        "<?xml version='1.0'standalone='yes'?>",
+        "<?xml version='1.0' encoding='UTF-8'standalone='yes'?>",
+        "<?xml version='1.0' encodingExtra='UTF-8'?>",
+        "<?xml version='1.0' standaloneExtra='yes'?>",
+        "<?xml version='1.0' encoding=''?>",
+        "<?xml version='1.0' encoding='1x'?>",
+        "<?xml version='1.0' encoding='UTF 8'?>",
+        "<?xml version='1.0' encoding='é'?>",
+        "<?xml version='1.0' encoding='UTF&x;'?>",
+        "<?xml version='1.0' encoding='UTF/8'?>",
+        "<?xml version='1.0' standalone='YES'?>",
+        "<?xml version='1.0' standalone=''?>",
+        "<?xml version='1.0' standalone='yes' encoding='UTF-8'?>",
+        "<?xml version='1.0' standalone='yes' standalone='no'?>",
+        "<?xml version='1.0' encoding='UTF-8' encoding='UTF-8'?>",
+    ]:
+        refused(declaration + "<a/>")
+
+
+def test_xml_doctype_envelope_and_prolog() raises:
+    for declaration in [
+        "<!DOCTYPE a>",
+        "<!DOCTYPE\ta\r\n>",
+        "<!DOCTYPE a []>",
+        "<!DOCTYPE a[ ] >",
+        "<!DOCTYPE a SYSTEM 'file:///does-not-exist.dtd'>",
+        '<!DOCTYPE a PUBLIC "" "https://example.invalid/no.dtd">',
+        '<!DOCTYPE a PUBLIC "AZaz09 -\'()+,./:=?;!*#@$_%\r\n" "no.dtd" []>',
+        '<!DOCTYPE a SYSTEM "&unknown;<><?xml?>">',
+        "<!DOCTYPE a [<!ENTITY e '[ ] > < ?>'><!ELEMENT a EMPTY>]>",
+        "<!DOCTYPE é [<!--quoted ]--> <?pi ] > ?>]>",
+    ]:
+        assert_equal(parse_xml(declaration + "<a/>").count(), 1)
+        assert_equal(
+            parse_xml(
+                "<?xml version='1.0'?> <!--p--> <?p?> "
+                + declaration
+                + " <?p?> <a/> <!--e--> <?e?>"
+            ).count(),
+            1,
+        )
+        refused(declaration + declaration + "<a/>")
+        refused("<a>" + declaration + "</a>")
+        refused("<a/>" + declaration)
+    for declaration in [
+        "<!DOCTYPE>",
+        "<!DOCTYPEa>",
+        "<!DOCTYPE a",
+        "<!DOCTYPE 1a>",
+        "<!DOCTYPE a junk>",
+        "<!DOCTYPE a SYSTEM>",
+        "<!DOCTYPE a SYSTEM'x'>",
+        "<!DOCTYPE a PUBLIC 'id'>",
+        "<!DOCTYPE a PUBLIC 'id''x'>",
+        "<!DOCTYPE a PUBLIC'id' 'x'>",
+        "<!DOCTYPE a PUBLIC 'id' x>",
+        "<!DOCTYPE a PUBLIC 'a\tb' 'x'>",
+        "<!DOCTYPE a PUBLIC 'é' 'x'>",
+        "<!DOCTYPE a PUBLIC 'a&b' 'x'>",
+        "<!DOCTYPE a PUBLIC 'a[b' 'x'>",
+        "<!DOCTYPE a SYSTEM 'x' PUBLIC 'id' 'x'>",
+        "<!DOCTYPE a [] []>",
+        "<!DOCTYPE a [] junk>",
+        "<!DOCTYPE a [ ] ]>",
+        "<!DOCTYPE a [>",
+        "<!DOCTYPE a SYSTEM 'not closed>",
+        "<!doctype a>",
+        "<!DOCTYPE " + chr(0x10FFFF) + ">",
+    ]:
+        refused(declaration + "<a/>")
+    # DTD contents remain opaque, including bracketed constructs.
+    assert_equal(parse_xml("<!DOCTYPE a [[ignored]]><a/>").count(), 1)
+    # DTD validity is outside this reader: root-name agreement is not checked.
+    assert_equal(parse_xml("<!DOCTYPE different><a/>").name(0), "a")
+    refused(
+        "<!DOCTYPE a [<!ENTITY secret SYSTEM"
+        " 'file:///etc/passwd'>]><a>&secret;</a>"
+    )
+    refused("<!DOCTYPE a [<!ENTITY e 'expanded'>]><a x='&e;'/>")
+    refused("<!DOCTYPE a><!--between--><?pi?><!DOCTYPE a><a/>")
+    refused("<?xml version='1.0'?>")
+    refused("<!DOCTYPE a>")
+    refused("<![CDATA[text]]><a/>")
+    refused("<a/><![CDATA[text]]>")
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
