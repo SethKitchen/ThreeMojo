@@ -191,6 +191,20 @@ def main() raises:
             print(evaluation.values, evaluation.outcome)
 '''
 
+ERRNO_PROBE = '''from std.ffi import external_call
+from std.sys._libc_errno import ErrNo, get_errno
+from std.testing import assert_equal
+
+def main() raises:
+    var record = String("errno probe")
+    var written = external_call["write", Int](
+        -1, record.unsafe_ptr().unsafe_bitcast[NoneType](), record.byte_length()
+    )
+    var error = get_errno()
+    assert_equal(written, -1)
+    assert_equal(error, ErrNo.EBADF)
+'''
+
 BOUNDARY = '''from coverage.runtime import _emit, _emit_hit, hit, branch, begin, leaf, finish
 from std.sys import argv
 from render.tasks import TaskGroup
@@ -301,6 +315,15 @@ def main():
             (folder / 'render').mkdir()
             for filename in ('__init__.mojo', 'tasks.mojo'):
                 shutil.copy(ROOT / 'render' / filename, folder / 'render' / filename)
+        # Exercise the pinned errno accessor without any injected write shim.
+        (work / 'errno-probe.mojo').write_text(ERRNO_PROBE)
+        run([mojo, 'build', '-Werror', str(work / 'errno-probe.mojo'), '-o', str(work / 'errno-probe')])
+        environment = dict(os.environ)
+        for variable in ('LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'THREEMOJO_WRITE_TEST'):
+            environment.pop(variable, None)
+        result = run([str(work / 'errno-probe')], env=environment, timeout=5)
+        assert result.returncode == 0 and not result.stdout and not result.stderr, result
+        (work / 'errno-probe-status.txt').write_text(str(result.returncode) + '\n')
         (native / 'fixture.mojo').write_text(SOURCE)
         run([mojo, 'build', '-Werror', '-I', str(ROOT), str(ROOT / 'coverage/build_cli.mojo'), '-o', str(work / 'build')])
         run([str(work / 'build'), str(rewritten), 'fixture.mojo'], cwd=native)
@@ -387,8 +410,8 @@ def main():
         failures = {}
         for mode in ('-1', '512'):
             result = subprocess.run([str(work / 'boundary'), mode], stdout=subprocess.PIPE,
-                                    stderr=subprocess.DEVNULL, preexec_fn=lambda: os.close(2))
-            assert result.returncode != 0
+                                    stderr=subprocess.DEVNULL, preexec_fn=lambda: os.close(2), timeout=5)
+            assert result.returncode == -signal.SIGABRT, result
             failures[f'closed-{mode}'] = result.returncode
             path = work / f'short-{mode}.txt'
             with path.open('wb') as output:
@@ -409,11 +432,12 @@ def main():
         interrupted = {}
         for size in ('512', '-512'):
             expected_record = run([str(work / 'boundary'), size]).stderr.encode()
-            for mode in ('eintr', 'error', 'short', 'zero'):
+            # Check forwarding independently before exercising errno/retry paths.
+            for mode in ('passthrough', 'eintr', 'error', 'short', 'zero'):
                 environment = dict(os.environ, **{preload: str(library), 'THREEMOJO_WRITE_TEST': mode})
                 result = subprocess.run([str(work / 'boundary'), size], capture_output=True,
                                         env=environment, timeout=5)
-                if mode == 'eintr':
+                if mode in ('passthrough', 'eintr'):
                     assert result.returncode == 0 and result.stderr == expected_record, result
                 else:
                     assert result.returncode == -signal.SIGABRT, (mode, result)
@@ -481,7 +505,7 @@ def main():
             shutil.copy(rewritten / 'manifest.txt', args.output / 'manifest.txt')
         print('PASS: recursive and caught-inner-exception vectors, same-frame abandonment, while/elif/continue/else, '
               'nested callbacks, new evaluation-name/type shadowing, 5 real-pipe 8-task captures, exact raw/reduced vectors, '
-              'UTF-8 511/512-byte writes and 513-byte refusal, repeated EINTR and real-signal recovery, strict write-error refusal')
+              'UTF-8 511/512-byte writes and 513-byte refusal, standalone EBADF errno access, repeated EINTR and real-signal recovery, strict write-error refusal')
 
 
 if __name__ == '__main__':
