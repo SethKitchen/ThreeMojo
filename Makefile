@@ -1438,3 +1438,4 @@ test-tools:
 # five-second limit on each executed test. test-tools remains compiler-free.
 test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
+	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)

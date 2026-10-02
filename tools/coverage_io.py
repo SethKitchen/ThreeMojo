@@ -20,65 +20,66 @@ from test_environment import isolated_environment
 
 LINE = b'COVLINE:'
 BRANCH = b'COVBRANCH:'
+EVALUATION = b'COVEVAL2:'
+MAX_RECORD_BYTES = 512
 
 
 class Reducer:
-    """Keep what the coverage report reads of a probe stream, once each.
+    """Keep distinct hits and complete version 2 evaluation records.
 
-    The report reads two things. Its hit set holds every distinct probe
-    payload. Its MC/DC traces hold each decision's distinct evaluations: the
-    states its condition records left pending, closed by the decision's own
-    record. A suite that runs a probe in a loop repeats both a million
-    times, so the raw stream is gigabytes and the report spent most of a CI
-    run reading it on one core. This keeps:
-
-    - the first occurrence of each payload, written as a `COVLINE:` record,
-      which fills the hit set and which the trace parser skips;
-    - each distinct evaluation, when its decision closes, rebuilt as its
-      pending condition records and then the decision record.
-
-    So the report sees the same hit set and the same evaluations in the same
-    order of first closing, from a few thousand lines. Any other line passes
-    through unchanged, for the failure summary. See `coverage/mcdc.mojo`'s
-    `TraceParser`, whose reading this follows.
+    Completed vectors are assembled inside each function invocation, so the
+    reducer needs no pending operands or inference about evaluation boundaries.
+    Legacy compound records must be recaptured; they cannot certify MC/DC.
     """
 
     def __init__(self, write):
         self.write = write
         self.payloads = set()
-        self.pending = {}
         self.evaluations = set()
 
     def feed(self, line):
-        """Read one raw line of the stream, and write what it adds."""
+        """Read one raw line; reject malformed or ambiguous probe records."""
         record = line.strip()
         if record.startswith(LINE):
             self._payload(record[len(LINE):])
+            return
+        if record.startswith(EVALUATION):
+            if len(record) + 1 > MAX_RECORD_BYTES or not record.endswith(b';') or not line.endswith(b'\n'):
+                raise ValueError(f'Malformed or truncated evaluation record: {record!r}')
+            head, colon, vector = record[len(EVALUATION):-1].rpartition(b':')
+            decision, separator, outcome = head.rpartition(b':')
+            module, delimiter, number = decision.rpartition(b':')
+            if not separator or outcome not in (b'T', b'F'):
+                raise ValueError(f'Malformed evaluation outcome: {record!r}')
+            if not delimiter or not module or not number.isdigit() or int(number) < 1:
+                raise ValueError(f'Malformed evaluation decision ID: {record!r}')
+            if not colon or len(vector) < 2 or any(value not in b'TF-' for value in vector) or not set(vector) & set(b'TF'):
+                raise ValueError(f'Malformed evaluation vector: {record!r}')
+            key = (decision, vector, outcome)
+            if key not in self.evaluations:
+                self.evaluations.add(key)
+                self.write(record + b'\n')
             return
         if not record.startswith(BRANCH):
             self.write(line)
             return
         payload = record[len(BRANCH):]
         head, colon, state = payload.rpartition(b':')
-        base, dot, position = head.rpartition(b'.')
         if colon and state not in (b'T', b'F'):
             raise ValueError(f'Malformed branch outcome: {record!r}')
-        if not colon or (dot and not position.isdigit()):
-            # Malformed: passed as it is, for the report to refuse.
+        if not colon:
             self.write(line)
             return
+        if b'.' in head:
+            raise ValueError('Legacy compound coverage is ambiguous; recapture with protocol 2')
+        module, delimiter, number = head.rpartition(b':')
+        if not delimiter or not module or not number.isdigit() or int(number) < 1:
+            raise ValueError(f'Malformed branch decision ID: {record!r}')
         self._payload(payload)
-        if dot:
-            self.pending.setdefault(base, {})[int(position)] = state
-            return
-        conditions = tuple(sorted(self.pending.pop(head, {}).items()))
-        key = (head, conditions, state)
-        if key in self.evaluations:
-            return
-        self.evaluations.add(key)
-        for index, value in conditions:
-            self.write(BRANCH + head + b'.' + str(index).encode() + b':' + value + b'\n')
-        self.write(BRANCH + head + b':' + state + b'\n')
+        key = (head, b'', state)
+        if key not in self.evaluations:
+            self.evaluations.add(key)
+            self.write(record + b'\n')
 
     def _payload(self, payload):
         if payload not in self.payloads:
@@ -117,7 +118,7 @@ def capture(command, out_path, err_path, *, progress_interval=60):
                     reducer = Reducer(errors.write)
                     for line in process.stderr:
                         records += 1
-                        if first_probe is None and line.lstrip().startswith((LINE, BRANCH)):
+                        if first_probe is None and line.lstrip().startswith((LINE, BRANCH, EVALUATION)):
                             first_probe = time.monotonic()
                             progress('first probe')
                         reducer.feed(line)

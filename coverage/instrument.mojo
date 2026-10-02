@@ -276,17 +276,30 @@ def _is_group(condition: String) raises -> Bool:
     return False
 
 
-def _wrap_leaf(condition: String, id: String, mut count: Int) -> String:
+def _wrap_leaf(
+    condition: String, id: String, mut count: Int, frame: String, stem: String
+) -> String:
     """Wrap one opaque expression without changing its evaluation."""
     var result = (
-        '_cov_branch("' + id + "." + String(count) + '", ' + condition + ")"
+        stem
+        + "leaf("
+        + condition
+        + ", "
+        + frame
+        + ', "'
+        + id
+        + "."
+        + String(count)
+        + '", '
+        + String(count)
+        + ")"
     )
     count += 1
     return result^
 
 
 def _wrap_leaves(
-    condition: String, id: String, mut count: Int
+    condition: String, id: String, mut count: Int, frame: String, stem: String
 ) raises -> String:
     """Wrap Boolean leaves, retaining every logical operator and group.
 
@@ -300,25 +313,25 @@ def _wrap_leaves(
     # arm runs or move a logical operator across the conditional expression.
     for index in range(1, len(parts), 2):
         if parts[index] == " if ":
-            return _wrap_leaf(String(condition.strip()), id, count)
+            return _wrap_leaf(String(condition.strip()), id, count, frame, stem)
     if len(parts) > 1:
         var out = String("")
         for index in range(len(parts)):
             if index % 2 == 1:
                 out += parts[index]
             else:
-                out += _wrap_leaves(parts[index], id, count)
+                out += _wrap_leaves(parts[index], id, count, frame, stem)
         return out^
     var text = parts[0].copy()
     if _is_group(text):
         var inner = _substring(text, 1, _codepoint_count(text) - 1)
-        return "(" + _wrap_leaves(inner, id, count) + ")"
+        return "(" + _wrap_leaves(inner, id, count, frame, stem) + ")"
     var chars = _characters(text)
     if len(chars) > 3 and _word_at(chars, 0, String("not")):
         if _token_boundary(chars[3]):
             var inner = _substring(text, 3, len(chars))
-            return "not " + _wrap_leaves(inner, id, count)
-    return _wrap_leaf(text, id, count)
+            return "not " + _wrap_leaves(inner, id, count, frame, stem)
+    return _wrap_leaf(text, id, count, frame, stem)
 
 
 struct Wrapped(Movable):
@@ -334,7 +347,11 @@ struct Wrapped(Movable):
 
 
 def _wrap_condition(
-    line: String, keyword: String, id: String
+    line: String,
+    keyword: String,
+    id: String,
+    frame: String = "_cov_eval_state0",
+    stem: String = "_cov_eval_",
 ) raises -> Wrapped:
     """Return `line` with its decision and each condition wrapped for probing.
 
@@ -347,12 +364,14 @@ def _wrap_condition(
         line: The physical or joined logical header line.
         keyword: The decision keyword the line begins with.
         id: Probe id for the decision; conditions get `id.0`, `id.1`, ...
+        frame: The private operand buffer in this function invocation.
+        stem: A helper-name prefix absent from the source.
 
     Returns:
         The rewritten line, unchanged if it holds no usable condition.
 
     Raises:
-        Error: Never; present to match the helpers it calls.
+        Error: If the complete UTF-8 evaluation record would exceed 512 bytes.
     """
     var colon = _statement_colon(line)
     if colon < 0:
@@ -371,7 +390,7 @@ def _wrap_condition(
         return Wrapped(String(line), 0)
 
     var conditions = 0
-    var rebuilt = _wrap_leaves(condition, id, conditions)
+    var rebuilt = _wrap_leaves(condition, id, conditions, frame, stem)
     # The decision already measures a single leaf, including a negated leaf.
     # Keep its original spelling, including redundant grouping and whitespace.
     if conditions == 1:
@@ -380,14 +399,42 @@ def _wrap_condition(
 
     # Everything from the colon onward is kept so trailing comments survive.
     var tail = _substring(line, colon, _codepoint_count(line))
+    if conditions == 0:
+        return Wrapped(
+            " " * indent
+            + keyword
+            + '_cov_branch("'
+            + id
+            + '", '
+            + rebuilt
+            + ")"
+            + tail,
+            0,
+        )
+    # A pipe guarantees indivisible writes only through POSIX PIPE_BUF's
+    # portable minimum. Refuse unsupported widths instead of losing probes.
+    if id.byte_length() + conditions + 14 > 512:
+        raise Error(
+            "Coverage evaluation exceeds the 512-byte atomic record limit: "
+            + id
+        )
     return Wrapped(
         " " * indent
         + keyword
-        + '_cov_branch("'
-        + id
-        + '", '
+        + stem
+        + "begin("
+        + frame
+        + ", "
+        + String(conditions)
+        + ") and "
+        + stem
+        + "finish("
         + rebuilt
-        + ")"
+        + ", "
+        + frame
+        + ', "'
+        + id
+        + '")'
         + tail,
         conditions,
     )
@@ -474,16 +521,26 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
     Args:
         source: The original file's full text.
-        module: Short name embedded in probe ids, e.g. "render/rasterizer".
+        module: Name embedded in probe IDs, at most 480 UTF-8 bytes.
 
     Returns:
         The instrumented text, the executable line numbers, and the lines
         holding decisions whose outcomes are tracked.
 
     Raises:
-        Error: Never; present to match the scanner's raising signature.
+        Error: If the module ID exceeds 480 UTF-8 bytes, or a complete
+            evaluation record would exceed 512 bytes including its newline.
     """
+    if module.byte_length() + 32 > 512:
+        raise Error(
+            "Coverage module ID exceeds the 512-byte atomic record limit"
+        )
     var scanner = Scanner()
+    var stem = String("_cov_eval_")
+    while stem in source:
+        stem += "_"
+    var declarations = List[String]()
+    var used_frames = List[Int]()
     var out = String("")
     var lines = List[Int]()
     var branches = List[Int]()
@@ -504,6 +561,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
     # middle of a `range(` argument list.
     var pending_is_loop = False
     var pending_excluded = False
+    var pending_frame = -1
     var closers = List[_LoopCloser]()
 
     for raw in source.splitlines():
@@ -520,8 +578,35 @@ def instrument(source: String, module: String) raises -> Instrumented:
         # file's first expression, so it goes just above the first definition.
         if not import_emitted and not was_prose and not was_continuation:
             if _opens_top_level_block(line):
-                out += PROBE_IMPORT + "\n"
+                out += (
+                    PROBE_IMPORT
+                    + ", begin as "
+                    + stem
+                    + "begin, leaf as "
+                    + stem
+                    + "leaf, finish as "
+                    + stem
+                    + "finish, buffer as "
+                    + stem
+                    + "buffer\n"
+                )
                 import_emitted = True
+
+        if scanner.entry_indent >= 0:
+            var declaration = (
+                " " * scanner.entry_indent
+                + "var "
+                + stem
+                + "state"
+                + String(scanner.entry_number)
+                + " = "
+                + stem
+                + "buffer()\n"
+            )
+            while len(declarations) <= scanner.entry_number:
+                declarations.append(String(""))
+            declarations[scanner.entry_number] = declaration.copy()
+            out += declaration
 
         # Still accumulating a header split over several physical lines.
         if pending != "":
@@ -552,10 +637,18 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     )
                 else:
                     var id = module + ":" + String(pending_line)
-                    var joined = _wrap_condition(pending, pending_keyword, id)
+                    var joined = _wrap_condition(
+                        pending,
+                        pending_keyword,
+                        id,
+                        stem + "state" + String(pending_frame),
+                        stem,
+                    )
                     if joined.text != pending:
                         branches.append(pending_line)
                         conditions.append(joined.conditions)
+                        if joined.conditions > 0:
+                            used_frames.append(pending_frame)
                     out += joined.text + "\n"
                 pending = String("")
             continue
@@ -603,14 +696,23 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     pending = _strip_comment(line)
                     pending_line = number
                     pending_keyword = keyword^
+                    pending_frame = scanner.function_number()
                     pending_is_loop = False
                     pending_excluded = False
                     continue
                 var id = module + ":" + String(number)
-                var wrapped = _wrap_condition(line, keyword, id)
+                var wrapped = _wrap_condition(
+                    line,
+                    keyword,
+                    id,
+                    stem + "state" + String(scanner.function_number()),
+                    stem,
+                )
                 if wrapped.text != line:
                     branches.append(number)
                     conditions.append(wrapped.conditions)
+                    if wrapped.conditions > 0:
+                        used_frames.append(scanner.function_number())
                     emitted = wrapped.text.copy()
 
         out += emitted + "\n"
@@ -622,4 +724,12 @@ def instrument(source: String, module: String) raises -> Instrumented:
     # Loops running to the end of the file still need their trailing probe.
     _close_loops(out, closers, 0)
 
+    # Only compound decisions need a buffer. Unused declarations disappear.
+    for frame in range(len(declarations)):
+        var used = False
+        for candidate in used_frames:
+            if frame == candidate:
+                used = True
+        if not used and declarations[frame] != "":
+            out = out.replace(declarations[frame], "")
     return Instrumented(out^, lines^, branches^, conditions^)

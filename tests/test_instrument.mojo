@@ -156,8 +156,10 @@ def test_compound_condition_wraps_the_decision_and_each_operand() raises:
     assert_equal(result.branches, [2])
     assert_equal(result.conditions, [2])
     assert_true(
-        'if _cov_branch("m:2", _cov_branch("m:2.0", a > 0)'
-        ' and _cov_branch("m:2.1", a < 9)):'
+        "if _cov_eval_begin(_cov_eval_state0, 2) and"
+        ' _cov_eval_finish(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
+        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1),'
+        ' _cov_eval_state0, "m:2"):'
         in result.text
     )
 
@@ -178,8 +180,9 @@ def test_mixed_and_or_keeps_precedence_by_wrapping_only_operands() raises:
     assert_equal(result.conditions, [3])
     # `and` still binds tighter than `or`, because only the leaves are wrapped.
     assert_true(
-        '_cov_branch("m:2.0", a > 0) and _cov_branch("m:2.1", b > 0)'
-        ' or _cov_branch("m:2.2", a < 0)'
+        '_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(b > 0, _cov_eval_state0, "m:2.1", 1) or'
+        ' _cov_eval_leaf(a < 0, _cov_eval_state0, "m:2.2", 2)'
         in result.text
     )
 
@@ -191,8 +194,10 @@ def test_negated_group_measures_its_leaves() raises:
     var result = instrument(source, String("m"))
     assert_equal(result.conditions, [2])
     assert_true(
-        'if _cov_branch("m:2", not (_cov_branch("m:2.0", a)'
-        ' and _cov_branch("m:2.1", b))):'
+        "if _cov_eval_begin(_cov_eval_state0, 2) and _cov_eval_finish(not"
+        ' (_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1)), _cov_eval_state0,'
+        ' "m:2"):'
         in result.text
     )
 
@@ -213,8 +218,12 @@ def test_identifiers_containing_and_or_are_not_split() raises:
     )
     var result = instrument(source, String("m"))
     assert_equal(result.conditions, [2])
-    assert_true('_cov_branch("m:2.0", android)' in result.text)
-    assert_true('_cov_branch("m:2.1", original)' in result.text)
+    assert_true(
+        '_cov_eval_leaf(android, _cov_eval_state0, "m:2.0", 0)' in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(original, _cov_eval_state0, "m:2.1", 1)' in result.text
+    )
 
 
 def test_while_condition_operands_are_split() raises:
@@ -269,8 +278,9 @@ def test_multi_line_condition_spanning_several_operands() raises:
     assert_equal(result.branches, [2])
     assert_equal(result.conditions, [2])
     assert_true(
-        '_cov_branch("m:2", (_cov_branch("m:2.0", a > 0)'
-        ' and _cov_branch("m:2.1", a < 9)))'
+        '_cov_eval_finish((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
+        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
+        ' _cov_eval_state0, "m:2")'
         in result.text
     )
 
@@ -284,8 +294,9 @@ def test_comments_inside_a_multi_line_condition_do_not_swallow_code() raises:
     var result = instrument(source, String("m"))
     assert_equal(result.conditions, [2])
     assert_true(
-        '_cov_branch("m:2", (_cov_branch("m:2.0", a > 0)'
-        ' and _cov_branch("m:2.1", a < 9)))'
+        '_cov_eval_finish((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
+        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
+        ' _cov_eval_state0, "m:2")'
         in result.text
     )
 
@@ -517,9 +528,11 @@ def test_redundant_groups_and_negations_keep_leaf_order() raises:
     )
     assert_equal(result.conditions, [4])
     assert_true(
-        '(((_cov_branch("m:2.0", a) or (_cov_branch("m:2.1", b)'
-        ' and not (_cov_branch("m:2.2", c) or not '
-        '_cov_branch("m:2.3", d))))))):'
+        '(((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) or'
+        ' (_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1) and not'
+        ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2) or not'
+        ' _cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3)))))),'
+        ' _cov_eval_state0, "m:2"):'
         in result.text
     )
 
@@ -533,9 +546,18 @@ def test_call_index_and_comparison_are_atomic_leaves() raises:
         "m",
     )
     assert_equal(result.conditions, [3])
-    assert_true('_cov_branch("m:2.0", call(a or b, "and"))' in result.text)
-    assert_true('_cov_branch("m:2.1", items[index(a and b)])' in result.text)
-    assert_true('_cov_branch("m:2.2", (a or b) == c)' in result.text)
+    assert_true(
+        '_cov_eval_leaf(call(a or b, "and"), _cov_eval_state0, "m:2.0", 0)'
+        in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(items[index(a and b)], _cov_eval_state0, "m:2.1", 1)'
+        in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf((a or b) == c, _cov_eval_state0, "m:2.2", 2)'
+        in result.text
+    )
 
 
 def test_tabs_and_adjacent_groups_delimit_logical_keywords() raises:
@@ -545,8 +567,9 @@ def test_tabs_and_adjacent_groups_delimit_logical_keywords() raises:
     )
     assert_equal(result.conditions, [3])
     assert_true(
-        '((_cov_branch("m:2.0", a)) and (_cov_branch("m:2.1", b)))'
-        ' or not (_cov_branch("m:2.2", c))'
+        '((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)) and'
+        ' (_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1))) or not'
+        ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2))'
         in result.text
     )
 
@@ -571,8 +594,12 @@ def test_multiline_elif_and_while_keep_all_grouped_leaves() raises:
     )
     assert_equal(result.branches, [2, 4, 8])
     assert_equal(result.conditions, [0, 3, 3])
-    assert_true('_cov_branch("m:4.2", c)' in result.text)
-    assert_true('_cov_branch("m:8.2", c)' in result.text)
+    assert_true(
+        '_cov_eval_leaf(c, _cov_eval_state0, "m:4.2", 2)' in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(c, _cov_eval_state0, "m:8.2", 2)' in result.text
+    )
 
 
 def test_escaped_quotes_inside_groups_do_not_create_leaves() raises:
@@ -585,7 +612,9 @@ def test_escaped_quotes_inside_groups_do_not_create_leaves() raises:
     )
     assert_equal(result.conditions, [2])
     assert_true(
-        '_cov_branch("m:2.0", value == "\\" and #:( or [")' in result.text
+        '_cov_eval_leaf(value == "\\" and #:( or [", _cov_eval_state0,'
+        ' "m:2.0", 0)'
+        in result.text
     )
     assert_true("other == 'and or )'" in result.text)
 
@@ -608,7 +637,10 @@ def test_conditional_expressions_stay_opaque() raises:
         "m",
     )
     assert_equal(compound.conditions, [2])
-    assert_true('_cov_branch("m:2.0", not a if choose else b)' in compound.text)
+    assert_true(
+        '_cov_eval_leaf(not a if choose else b, _cov_eval_state0, "m:2.0", 0)'
+        in compound.text
+    )
 
 
 def test_membership_and_chained_comparisons_stay_atomic() raises:
@@ -619,7 +651,10 @@ def test_membership_and_chained_comparisons_stay_atomic() raises:
         "m",
     )
     assert_equal(result.conditions, [2])
-    assert_true('_cov_branch("m:2.0", 0 < 1 not in values)' in result.text)
+    assert_true(
+        '_cov_eval_leaf(0 < 1 not in values, _cov_eval_state0, "m:2.0", 0)'
+        in result.text
+    )
 
 
 def test_empty_and_incomplete_parser_inputs_are_retained() raises:
@@ -653,7 +688,9 @@ def test_group_scanner_handles_other_brackets_and_incomplete_text() raises:
     var result = instrument(source, String("m"))
     assert_true("    stray\n" in result.text)
     assert_true("while False:" in result.text)
-    assert_true('_cov_branch("m:11.0", notable)' in result.text)
+    assert_true(
+        '_cov_eval_leaf(notable, _cov_eval_state0, "m:11.0", 0)' in result.text
+    )
 
 
 def test_triple_quoted_operands_preserve_internal_quotes() raises:
@@ -667,7 +704,9 @@ def test_triple_quoted_operands_preserve_internal_quotes() raises:
     assert_equal(result.conditions, [2])
     assert_equal(result.lines, [2, 3, 4])
     assert_true(
-        '_cov_branch("m:2.1", text == """hello" and )#[word""")' in result.text
+        '_cov_eval_leaf(text == """hello" and )#[word""", _cov_eval_state0,'
+        ' "m:2.1", 1)'
+        in result.text
     )
 
 
@@ -682,7 +721,10 @@ def test_multiline_literal_bytes_survive_header_rewriting() raises:
     assert_equal(result.conditions, [2])
     assert_equal(result.lines, [2, 5, 6])
     assert_true(literal in result.text)
-    assert_true('_cov_branch("m:2.1", text == ' + literal + ")" in result.text)
+    assert_true(
+        "_cov_eval_leaf(text == " + literal + ', _cov_eval_state0, "m:2.1", 1)'
+        in result.text
+    )
 
 
 def test_multiline_constant_does_not_hide_code_or_attract_imports() raises:
@@ -744,6 +786,94 @@ def test_triple_literal_can_start_on_a_continuation_line() raises:
         assert_equal(later.conditions, [2])
         assert_true(literal in first.text)
         assert_true(literal in later.text)
+
+
+def test_buffers_belong_only_to_functions_with_compound_decisions() raises:
+    var result = instrument(
+        (
+            "def simple():\n    if a:\n        return 1\n"
+            "def compound():\n    if a and b:\n        return 2\n"
+        ),
+        "m",
+    )
+    assert_true("var _cov_eval_state0" not in result.text)
+    assert_true("var _cov_eval_state1 = _cov_eval_buffer()" in result.text)
+
+
+def test_nested_definitions_get_separate_invocation_buffers() raises:
+    var result = instrument(
+        (
+            "def outer():\n    def inner():\n        if a and b:\n           "
+            " return 1\n    if c and inner():\n        return 2\n"
+        ),
+        "m",
+    )
+    assert_true(
+        "    var _cov_eval_state0 = _cov_eval_buffer()\n    def inner():"
+        in result.text
+    )
+    assert_true(
+        "        var _cov_eval_state1 = _cov_eval_buffer()" in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(inner(), _cov_eval_state0, "m:5.1", 1)' in result.text
+    )
+
+
+def test_new_generated_names_do_not_collide_with_source_identifiers() raises:
+    var result = instrument(
+        (
+            "def f():\n    var _cov_eval_state0 = True\n"
+            "    if _cov_eval_state0 and other:\n        return 1\n"
+        ),
+        "m",
+    )
+    assert_true("var _cov_eval__state0 = _cov_eval__buffer()" in result.text)
+    assert_true(
+        '_cov_eval__leaf(_cov_eval_state0, _cov_eval__state0, "m:3.0", 0)'
+        in result.text
+    )
+
+
+def test_oversized_records_fail_instead_of_removing_obligations() raises:
+    for source in [
+        "def f():\n    if " + "a and " * 500 + "a:\n        pass\n",
+    ]:
+        var raised = False
+        try:
+            _ = instrument(source, "m")
+        except error:
+            raised = "atomic record limit" in String(error)
+        assert_true(raised)
+    var raised = False
+    try:
+        _ = instrument("def f():\n    return 1\n", "é" * 250)
+    except error:
+        raised = "atomic record limit" in String(error)
+    assert_true(raised)
+
+
+def test_buffer_uses_the_actual_function_body_indentation() raises:
+    var result = instrument("def f():\n  if a and b:\n    return 1\n", "m")
+    assert_true(
+        "\n  var _cov_eval_state0 = _cov_eval_buffer()\n" in result.text
+    )
+
+
+def test_instrumentation_checks_exact_utf8_record_boundaries() raises:
+    for size in [511, 512, 513]:
+        # COVEVAL2: + UTF-8 "é:2" + :T: + vector + semicolon/newline.
+        var width = size - 18
+        var source = (
+            "def f():\n    if " + "a and " * (width - 1) + "a:\n        pass\n"
+        )
+        var raised = False
+        try:
+            var result = instrument(source, "é")
+            assert_equal(result.conditions, [width])
+        except error:
+            raised = True
+        assert_equal(raised, size == 513)
 
 
 def main() raises:

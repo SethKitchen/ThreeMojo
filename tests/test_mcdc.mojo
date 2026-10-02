@@ -7,6 +7,7 @@
 
 from coverage.mcdc import (
     DecisionTrace,
+    TraceParser,
     Evaluation,
     MASKED,
     find_trace,
@@ -18,11 +19,9 @@ from coverage.mcdc import (
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 # `a and b`, evaluated every way the operator allows.
-comptime BOTH_TRUE = "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:T\nCOVBRANCH:m:4:T\n"
-comptime FIRST_FALSE = "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4:F\n"
-comptime SECOND_FALSE = (
-    "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\n"
-)
+comptime BOTH_TRUE = "COVEVAL2:m:4:T:TT;\n"
+comptime FIRST_FALSE = "COVEVAL2:m:4:F:F-;\n"
+comptime SECOND_FALSE = "COVEVAL2:m:4:F:TF;\n"
 
 
 def trace_of(stream: String) raises -> DecisionTrace:
@@ -112,19 +111,13 @@ def test_adding_the_third_case_completes_mcdc() raises:
 
 def test_pair_needs_differing_outcomes() raises:
     # Operand 1 flips, but the decision stays False both times.
-    var stream = String(
-        "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4.1:T\nCOVBRANCH:m:4:F\n"
-        "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\n"
-    )
+    var stream = String("COVEVAL2:m:4:F:FT;\nCOVEVAL2:m:4:F:FF;\n")
     assert_false(is_mcdc_covered(trace_of(stream), 1))
 
 
 def test_pair_needs_other_conditions_held_still() raises:
     # Both operands flip together, so neither is shown to act alone.
-    var stream = String(
-        "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:T\nCOVBRANCH:m:4:T\n"
-        "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\n"
-    )
+    var stream = String("COVEVAL2:m:4:T:TT;\nCOVEVAL2:m:4:F:FF;\n")
     var trace = trace_of(stream)
     assert_false(is_mcdc_covered(trace, 0))
     assert_false(is_mcdc_covered(trace, 1))
@@ -134,9 +127,7 @@ def test_or_decision_reaches_mcdc() raises:
     # `a or b`: True short-circuits, so the three reachable vectors are
     # [T,-]->T, [F,T]->T and [F,F]->F.
     var stream = String(
-        "COVBRANCH:m:9.0:T\nCOVBRANCH:m:9:T\n"
-        "COVBRANCH:m:9.0:F\nCOVBRANCH:m:9.1:T\nCOVBRANCH:m:9:T\n"
-        "COVBRANCH:m:9.0:F\nCOVBRANCH:m:9.1:F\nCOVBRANCH:m:9:F\n"
+        "COVEVAL2:m:9:T:T-;\nCOVEVAL2:m:9:T:FT;\nCOVEVAL2:m:9:F:FF;\n"
     )
     var trace = trace_of(stream)
     assert_true(is_mcdc_covered(trace, 0))
@@ -146,12 +137,7 @@ def test_or_decision_reaches_mcdc() raises:
 def test_three_operand_decision() raises:
     # `a and b and c` with each operand shown to swing the result.
     var stream = String(
-        "COVBRANCH:m:7.0:T\nCOVBRANCH:m:7.1:T\nCOVBRANCH:m:7.2:T\n"
-        "COVBRANCH:m:7:T\n"
-        "COVBRANCH:m:7.0:F\nCOVBRANCH:m:7:F\n"
-        "COVBRANCH:m:7.0:T\nCOVBRANCH:m:7.1:F\nCOVBRANCH:m:7:F\n"
-        "COVBRANCH:m:7.0:T\nCOVBRANCH:m:7.1:T\nCOVBRANCH:m:7.2:F\n"
-        "COVBRANCH:m:7:F\n"
+        "COVEVAL2:m:7:T:TTT;\nCOVEVAL2:m:7:F:F-;\nCOVEVAL2:m:7:F:TF;\nCOVEVAL2:m:7:F:TTF;\n"
     )
     var trace = trace_of(stream)
     assert_true(is_mcdc_covered(trace, 0))
@@ -165,11 +151,7 @@ def test_full_condition_coverage_can_still_miss_mcdc() raises:
     # the outcome while the others are held still, because the only time it is
     # False, operand 2 rescues the decision.
     var stream = String(
-        "COVBRANCH:m:5.0:T\nCOVBRANCH:m:5.1:T\nCOVBRANCH:m:5:T\n"
-        "COVBRANCH:m:5.0:T\nCOVBRANCH:m:5.1:F\nCOVBRANCH:m:5.2:T\n"
-        "COVBRANCH:m:5:T\n"
-        "COVBRANCH:m:5.0:F\nCOVBRANCH:m:5.2:F\nCOVBRANCH:m:5:F\n"
-        "COVBRANCH:m:5.0:F\nCOVBRANCH:m:5.2:T\nCOVBRANCH:m:5:T\n"
+        "COVEVAL2:m:5:T:TT;\nCOVEVAL2:m:5:T:TFT;\nCOVEVAL2:m:5:F:F-F;\nCOVEVAL2:m:5:T:F-T;\n"
     )
     var trace = trace_of(stream)
 
@@ -192,9 +174,7 @@ def test_full_condition_coverage_can_still_miss_mcdc() raises:
 
 
 def test_separate_decisions_get_separate_traces() raises:
-    var traces = parse_traces(
-        String(BOTH_TRUE + "COVBRANCH:m:9.0:T\nCOVBRANCH:m:9:T\n")
-    )
+    var traces = parse_traces(String(BOTH_TRUE + "COVEVAL2:m:9:T:T-;\n"))
     assert_equal(len(traces), 2)
     assert_equal(traces[0].id, String("m:4"))
     assert_equal(traces[1].id, String("m:9"))
@@ -202,10 +182,7 @@ def test_separate_decisions_get_separate_traces() raises:
 
 def test_interleaved_nested_decision_does_not_corrupt_the_outer_vector() raises:
     # A nested decision inside an operand fires its own records first.
-    var stream = String(
-        "COVBRANCH:m:9.0:T\nCOVBRANCH:m:9:T\n"
-        "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:T\nCOVBRANCH:m:4:T\n"
-    )
+    var stream = String("COVEVAL2:m:9:T:T-;\nCOVEVAL2:m:4:T:TT;\n")
     var traces = parse_traces(stream)
     var outer = find_trace(traces, String("m:4"))
     assert_true(outer >= 0)
@@ -214,10 +191,7 @@ def test_interleaved_nested_decision_does_not_corrupt_the_outer_vector() raises:
 
 def test_reentrant_evaluation_closes_the_inner_vector_first() raises:
     # Recursion: the inner call completes before the outer one does.
-    var stream = String(
-        "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4:F\n"
-        "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:T\nCOVBRANCH:m:4:T\n"
-    )
+    var stream = String("COVEVAL2:m:4:F:F-;\nCOVEVAL2:m:4:T:TT;\n")
     var trace = trace_of(stream)
     assert_equal(len(trace.evaluations), 2)
     assert_equal(trace.evaluations[0].value(1), MASKED)
@@ -283,6 +257,92 @@ def test_traces_from_two_captures_merge_decision_by_decision() raises:
     # Nothing to merge changes nothing.
     merge_traces(traces, List[DecisionTrace]())
     assert_equal(len(traces), 2)
+
+
+def test_recursive_outer_operands_survive_inner_completion() raises:
+    var stream = String(
+        "COVLINE:m:4.0:T\nCOVLINE:m:4.0:F\n"
+        "COVEVAL2:m:4:F:F-;\nCOVLINE:m:4.1:F\n"
+        "COVEVAL2:m:4:F:TF;\n"
+    )
+    var trace = trace_of(stream)
+    assert_equal(len(trace.evaluations), 2)
+    assert_equal(trace.evaluations[0].values, [0, -1])
+    assert_equal(trace.evaluations[1].values, [1, 0])
+
+
+def test_abandoned_operands_are_hits_without_evaluations() raises:
+    var stream = String(
+        "COVLINE:m:4.0:T\nCOVLINE:m:4.1:T\n"
+        "COVLINE:m:4.0:F\nCOVEVAL2:m:4:F:F--;\n"
+    )
+    var trace = trace_of(stream)
+    assert_equal(len(trace.evaluations), 1)
+    assert_equal(trace.evaluations[0].values, [0, -1, -1])
+    assert_equal(len(parse_traces("COVLINE:m:4.0:T\n")), 0)
+
+
+def test_legacy_ambiguous_compounds_require_recapture() raises:
+    var raised = False
+    try:
+        _ = parse_traces(
+            "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.0:F\n"
+            "COVBRANCH:m:4:F\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\n"
+        )
+    except error:
+        raised = "recapture" in String(error)
+    assert_true(raised)
+
+
+def test_malformed_complete_vectors_are_rejected() raises:
+    for record in [
+        String("COVEVAL2:m:4:T:TT"),
+        String("COVEVAL2:m:4:T:T;"),
+        String("COVEVAL2:m:4:T:--;"),
+        String("COVEVAL2:m:4:T:TX;"),
+        String("COVEVAL2:m:4:garbage:TT;"),
+        String("COVEVAL2:m:4.0:T:TT;"),
+        String("COVEVAL2:m:0:T:TT;"),
+        String("COVEVAL2::4:T:TT;"),
+        String("COVEVAL2:m:4:T:" + "T" * 512 + ";"),
+    ]:
+        var raised = False
+        try:
+            _ = parse_traces(record + "\n")
+        except error:
+            raised = True
+        assert_true(raised)
+
+
+def test_large_repetition_keeps_only_distinct_vectors() raises:
+    var parser = TraceParser()
+    for _ in range(10000):
+        parser.feed("COVLINE:m:4.1:T")
+        parser.feed("COVEVAL2:m:4:F:F-;")
+        parser.feed("COVEVAL2:m:4:F:TF;")
+    var traces = parser^.finish()
+    assert_equal(len(traces), 1)
+    assert_equal(len(traces[0].evaluations), 2)
+
+
+def test_utf8_record_size_uses_bytes_and_requires_complete_capture() raises:
+    var prefix = String("COVEVAL2:é:1:T:")
+    for size in [511, 512, 513]:
+        var record = prefix + "T" * (size - prefix.byte_length() - 2) + ";\n"
+        assert_equal(record.byte_length(), size)
+        var raised = False
+        try:
+            var trace = trace_of(record)
+            assert_equal(len(trace.evaluations), 1)
+        except error:
+            raised = True
+        assert_equal(raised, size == 513)
+    var raised = False
+    try:
+        _ = parse_traces("COVEVAL2:m:4:T:TT;")
+    except error:
+        raised = True
+    assert_true(raised)
 
 
 def main() raises:
