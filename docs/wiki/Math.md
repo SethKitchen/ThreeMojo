@@ -217,6 +217,14 @@ m.multiply(translation(-10, 0, 0))     # a rotation about (10, 0, 0)
 
 An empty box or sphere holds no points. It is a value, not an error. A box is empty when a corner is inside out on any axis. A sphere is empty when its radius is negative. Every operation treats an empty bound as the set it is.
 
+Empty boxes keep the same set behavior whether their inside-out corners
+are finite or infinite. Every box contains an empty box, and an empty box
+intersects no box. Expanding or translating an empty box keeps it empty.
+A negative size creates an empty box even when rounding would make its two
+corners equal.
+
+A contraction larger than a finite box extent leaves an empty box. This also holds when rounded corners would be equal. Exact half-extent contraction still leaves a nonempty point or face.
+
 Expanding an empty bound by a point gives the bound of that one point. A union with one changes nothing. An overlap test with one is false. A transform leaves one empty.
 
 A question that needs a point of an empty bound raises: `clamp_point`, `distance_to_point` and `distance_to_sphere`.
