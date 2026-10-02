@@ -30,9 +30,10 @@ triangle mesh" (2004).
 
 from math.convex_hull import ConvexHull
 from math.matrix3 import Matrix3
+from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import atan2, isfinite, pi, sqrt
+from std.math import atan2, isfinite, sqrt
 from units.si import Length, METER
 
 # Two hull faces are one face when their normals and offsets agree this
@@ -160,6 +161,89 @@ def any_perpendicular(n: Vector3) -> Vector3:
     return unit_or(cross(n, Vector3(0, 1, 0)), Vector3(0, 0, 1))
 
 
+# Widen before subtracting coordinates or multiplying lengths. All products
+# through degree five of finite Float32 coordinates fit in Float64.
+def _wide(v: Vector3) -> SIMD[DType.float64, 4]:
+    return SIMD[DType.float64, 4](Float64(v.x), Float64(v.y), Float64(v.z), 0)
+
+
+def _wide_cross(
+    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    return SIMD[DType.float64, 4](
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+        0,
+    )
+
+
+def _wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _finite_vector(v: Vector3) raises:
+    for i in range(3):  # pragma: no branch
+        if not isfinite(component(v, i)):
+            raise Error("A mass center or shape position must be finite")
+
+
+def _narrow_finite(value: Float64) raises -> Float32:
+    var out = Float32(value)
+    if not isfinite(out):
+        raise Error("A mass property must fit in Float32")
+    return out
+
+
+def _inertia_determinant(inertia: Matrix3) raises -> Float64:
+    # Sylvester's criterion on the stored values, without a tolerance.
+    for i in range(9):  # pragma: no branch
+        if not isfinite(inertia.elements[i]):
+            raise Error("An inertia tensor must be finite")
+    for i in range(3):  # pragma: no branch
+        for j in range(i + 1, 3):
+            if inertia.elements[3 * i + j] != inertia.elements[3 * j + i]:
+                raise Error("An inertia tensor must be symmetric")
+    var a = Float64(inertia.elements[0])
+    var b = Float64(inertia.elements[1])
+    var d = Float64(inertia.elements[4])
+    if not a > 0:
+        raise Error("An inertia tensor must be positive definite")
+    # Products of two Float32 values are exact in Float64. Cancellation
+    # cannot change the sign of this two-term principal minor.
+    if not a * d - b * b > 0:
+        raise Error("An inertia tensor must be positive definite")
+    var determinant = _determinant3_f32(inertia.elements)
+    if not determinant > 0:
+        raise Error("An inertia tensor must be positive definite")
+    return determinant
+
+
+def _inertia_inverse(inertia: Matrix3) raises -> Matrix3:
+    var determinant = _inertia_determinant(inertia)
+    var a = Float64(inertia.elements[0])
+    var b = Float64(inertia.elements[1])
+    var c = Float64(inertia.elements[2])
+    var d = Float64(inertia.elements[4])
+    var e = Float64(inertia.elements[5])
+    var f = Float64(inertia.elements[8])
+    # Cofactors use only exact two-factor products. Divide by the
+    # determinant itself, not a reciprocal that could overflow first.
+    var inverse = Matrix3()
+    inverse.elements[0] = _narrow_finite((d * f - e * e) / determinant)
+    inverse.elements[4] = _narrow_finite((a * f - c * c) / determinant)
+    inverse.elements[8] = _narrow_finite((a * d - b * b) / determinant)
+    inverse.elements[1] = _narrow_finite((c * e - b * f) / determinant)
+    inverse.elements[2] = _narrow_finite((b * e - c * d) / determinant)
+    inverse.elements[5] = _narrow_finite((b * c - a * e) / determinant)
+    inverse.elements[3] = inverse.elements[1]
+    inverse.elements[6] = inverse.elements[2]
+    inverse.elements[7] = inverse.elements[5]
+    # Narrowing must not turn an invertible tensor into a singular one.
+    _ = _inertia_determinant(inverse)
+    return inverse
+
+
 struct Polyhedron(Copyable, Movable):
     """A convex solid as corners, faces and edges.
 
@@ -204,15 +288,25 @@ struct Polyhedron(Copyable, Movable):
             corners: The corner indices, counter-clockwise from outside.
                 There must be three at least, not all on one line.
         """
-        var a = self.vertices[corners[0]]
-        var b = self.vertices[corners[1]]
-        var normal = Vector3(0, 0, 0)
+        var a = _wide(self.vertices[corners[0]])
+        var b = _wide(self.vertices[corners[1]])
+        var wide_normal = SIMD[DType.float64, 4](0)
         # `corners[1]` above: there are two at least, and a face has three.
         for i in range(2, len(corners)):  # pragma: no branch
-            normal = normal + cross(b - a, self.vertices[corners[i]] - a)
-        normal = unit_or(normal, Vector3(0, 0, 1))
+            wide_normal += _wide_cross(
+                b - a, _wide(self.vertices[corners[i]]) - a
+            )
+        var length = sqrt(_wide_dot(wide_normal, wide_normal))
+        var normal = Vector3(0, 0, 1)
+        if length > 0:
+            wide_normal /= length
+            normal = Vector3(
+                Float32(wide_normal[0]),
+                Float32(wide_normal[1]),
+                Float32(wide_normal[2]),
+            )
         self.normals.append(normal)
-        self.offsets.append(normal.dot(a))
+        self.offsets.append(Float32(_wide_dot(_wide(normal), a)))
         # `corners[0]` above: the list is not empty.
         for i in range(len(corners)):  # pragma: no branch
             self.face_corners.append(corners[i])
@@ -252,10 +346,11 @@ struct Polyhedron(Copyable, Movable):
         Returns:
             A point inside the solid.
         """
-        var sum = Vector3(0, 0, 0)
+        var sum = SIMD[DType.float64, 4](0)
         for v in self.vertices:
-            sum = sum + v
-        return sum / Float32(len(self.vertices))
+            sum += _wide(v)
+        sum /= Float64(len(self.vertices))
+        return Vector3(Float32(sum[0]), Float32(sum[1]), Float32(sum[2]))
 
     def support(self, direction: Vector3) -> Float32:
         """Return how far the solid reaches along a direction.
@@ -373,17 +468,19 @@ def _ordered(
     vertices: List[Vector3], members: List[Int], normal: Vector3
 ) -> List[Int]:
     """Return the corners of one face in counter-clockwise order."""
-    var middle = Vector3(0, 0, 0)
+    var middle = SIMD[DType.float64, 4](0)
     # A face has three corners at least.
     for m in members:  # pragma: no branch
-        middle = middle + vertices[m]
-    middle = middle / Float32(len(members))
+        middle += _wide(vertices[m])
+    middle /= Float64(len(members))
     var u = any_perpendicular(normal)
     var w = cross(normal, u)
     var angles = List[Float32]()
     for m in members:  # pragma: no branch
-        var r = vertices[m] - middle
-        angles.append(atan2(r.dot(w), r.dot(u)))
+        var r = _wide(vertices[m]) - middle
+        angles.append(
+            Float32(atan2(_wide_dot(r, _wide(w)), _wide_dot(r, _wide(u))))
+        )
     var out = members.copy()
     # Insertion sort by angle: a face has few corners.
     for i in range(1, len(out)):  # pragma: no branch
@@ -559,86 +656,135 @@ struct Shape(Copyable, Movable):
             The mass properties, for a uniform density.
 
         Raises:
-            Error: If the shape is a mesh, which has no volume.
+            Error: If the mass or geometry is invalid, the shape is a
+                mesh, or its inertia cannot be stored as a finite,
+                symmetric positive-definite Float32 tensor.
         """
+        _check_size(mass)
+        if not self.kind.is_valid():
+            raise Error("Shape kind is not valid")
+        var props = MassProperties(Vector3(0, 0, 0), Matrix3())
         if self.kind == SPHERE:
-            var i = 0.4 * mass * self.radius * self.radius
-            return MassProperties(Vector3(0, 0, 0), _diagonal(i, i, i))
-        if self.kind == CAPSULE:
-            return MassProperties(Vector3(0, 0, 0), self._capsule(mass))
-        if self.kind == MESH:
+            _check_size(self.radius)
+            var r = Float64(self.radius)
+            var i = _narrow_finite(0.4 * Float64(mass) * r * r)
+            props.inertia = _diagonal(i, i, i)
+        elif self.kind == CAPSULE:
+            props.inertia = self._capsule(mass)
+        elif self.kind == MESH:
             raise Error("A mesh is static and has no mass")
-        return _polyhedron_mass(self.polyhedron, mass)
+        else:
+            props = _polyhedron_mass(self.polyhedron, mass)
+        _ = _inertia_determinant(props.inertia)
+        return props
 
-    def _capsule(self, mass: Float32) -> Matrix3:
-        var r = self.radius
-        var h = 2 * self.half_height
-        var cylinder = Float32(pi) * r * r * h
-        var ball = Float32(4.0 / 3.0 * pi) * r * r * r
-        var mc = mass * cylinder / (cylinder + ball)
-        var ms = mass - mc
+    def _capsule(self, mass: Float32) raises -> Matrix3:
+        _check_size(self.radius)
+        if not (isfinite(self.half_height) and self.half_height >= 0):
+            raise Error("A capsule's half height must be zero or more")
+        var r = Float64(self.radius)
+        var h = 2 * Float64(self.half_height)
+        # Cancel the common pi*r*r. Neither volume nor a small mass
+        # fraction needs to be representable at Float32 precision.
+        var denominator = h + 4 * r / 3
+        var mc = Float64(mass) * h / denominator
+        var ms = Float64(mass) * (4 * r / 3) / denominator
         var axial = mc * r * r * 0.5 + ms * 0.4 * r * r
         var across = mc * (r * r * 0.25 + h * h / 12) + ms * (
             0.4 * r * r + h * h * 0.25 + 0.375 * h * r
         )
-        return _diagonal(across, across, axial)
+        var across32 = _narrow_finite(across)
+        return _diagonal(across32, across32, _narrow_finite(axial))
 
 
 def _check_size(value: Float32) raises:
     if not (isfinite(value) and value > 0):
-        raise Error("A shape's size must be more than zero and finite")
+        raise Error("A shape dimension or mass must be positive and finite")
 
 
-def _polyhedron_mass(poly: Polyhedron, mass: Float32) -> MassProperties:
-    """Return the mass properties of a solid polyhedron of uniform density.
+def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
+    """Integrate in Float64 around an interior reference, then the center.
 
-    Each face is cut into a fan of triangles. Each triangle and a point
-    inside make a tetrahedron, whose volume, first moment and second
-    moment add up.
+    The first pass finds the center. The second integrates covariance
+    about that center directly, without subtracting large moments.
     """
-    var origin = poly.center()
-    var volume = Float32(0)
-    var moment = Vector3(0, 0, 0)
-    # The covariance: the integral of x x^T over the solid.
-    var c = List[Float32](length=9, fill=0)
-    # A solid has four faces at least.
+    if len(poly.vertices) < 4 or poly.face_count() < 4:
+        raise Error("Mass properties need a solid polyhedron")
+    if len(poly.face_start) != poly.face_count() + 1:
+        raise Error("A polyhedron needs a corner range for every face")
+    var origin = SIMD[DType.float64, 4](0)
+    for v in poly.vertices:  # pragma: no branch
+        _finite_vector(v)
+        origin += _wide(v)
+    origin /= Float64(len(poly.vertices))
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
-        var a = poly.vertices[poly.face_corners[first]] - origin
-        # A face has three corners at least: one triangle of the fan.
+        var end = poly.face_start[f + 1]
+        if first < 0 or end > len(poly.face_corners) or end - first < 3:
+            raise Error("A polyhedron face needs three valid corners")
+        for k in range(first, end):  # pragma: no branch
+            var index = poly.face_corners[k]
+            if index < 0 or index >= len(poly.vertices):
+                raise Error("A polyhedron corner index is invalid")
+    var volume = Float64(0)
+    var moment = SIMD[DType.float64, 4](0)
+    for f in range(poly.face_count()):  # pragma: no branch
+        var first = poly.face_start[f]
+        var a = _wide(poly.vertices[poly.face_corners[first]]) - origin
         for k in range(
             first + 1, poly.face_start[f + 1] - 1
         ):  # pragma: no branch
-            var b = poly.vertices[poly.face_corners[k]] - origin
-            var d = poly.vertices[poly.face_corners[k + 1]] - origin
-            var det = a.dot(cross(b, d))
+            var b = _wide(poly.vertices[poly.face_corners[k]]) - origin
+            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - origin
+            var det = _wide_dot(a, _wide_cross(b, d))
             volume += det / 6
-            moment = moment + (a + b + d) * (det / 24)
-            var s = a + b + d
-            var p = [a, b, d]
+            moment += (a + b + d) * (det / 24)
+    if not volume > 0:
+        raise Error("A polyhedron must have positive volume")
+    var center = origin + moment / volume
+    var covariance = List[Float64](length=9, fill=0)
+    for f in range(poly.face_count()):  # pragma: no branch
+        var first = poly.face_start[f]
+        var a = _wide(poly.vertices[poly.face_corners[first]]) - center
+        for k in range(
+            first + 1, poly.face_start[f + 1] - 1
+        ):  # pragma: no branch
+            var b = _wide(poly.vertices[poly.face_corners[k]]) - center
+            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - center
+            var det = _wide_dot(a, _wide_cross(b, d))
+            var total = a + b + d
             for i in range(3):  # pragma: no branch
-                for j in range(3):  # pragma: no branch
-                    var sum = component(s, i) * component(s, j)
-                    for v in p:  # pragma: no branch
-                        sum += component(v, i) * component(v, j)
-                    c[i * 3 + j] += det * sum / 120
-    var density = mass / volume
-    var center = moment / volume
-    var inertia = Matrix3()
-    for i in range(3):  # pragma: no branch
-        for j in range(3):  # pragma: no branch
-            # Shift the covariance from the origin to the center of mass.
-            var cov = density * (
-                c[i * 3 + j]
-                - volume * component(center, i) * component(center, j)
-            )
-            inertia.elements[j * 3 + i] = -cov
-    var trace = -(
-        inertia.elements[0] + inertia.elements[4] + inertia.elements[8]
+                for j in range(i, 3):  # pragma: no branch
+                    covariance[i * 3 + j] += (
+                        det
+                        * (
+                            total[i] * total[j]
+                            + a[i] * a[j]
+                            + b[i] * b[j]
+                            + d[i] * d[j]
+                        )
+                        / 120
+                    )
+    var density = Float64(mass) / volume
+    var inertia = _diagonal(
+        _narrow_finite(density * (covariance[4] + covariance[8])),
+        _narrow_finite(density * (covariance[0] + covariance[8])),
+        _narrow_finite(density * (covariance[0] + covariance[4])),
     )
-    for i in range(3):  # pragma: no branch
-        inertia.elements[i * 4] += trace
-    return MassProperties(center + origin, inertia)
+    inertia.elements[1] = _narrow_finite(-density * covariance[1])
+    inertia.elements[2] = _narrow_finite(-density * covariance[2])
+    inertia.elements[5] = _narrow_finite(-density * covariance[5])
+    inertia.elements[3] = inertia.elements[1]
+    inertia.elements[6] = inertia.elements[2]
+    inertia.elements[7] = inertia.elements[5]
+    return MassProperties(
+        Vector3(
+            _narrow_finite(center[0]),
+            _narrow_finite(center[1]),
+            _narrow_finite(center[2]),
+        ),
+        inertia,
+    )
 
 
 def component(v: Vector3, i: Int) -> Float32:

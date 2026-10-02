@@ -26,12 +26,15 @@ from extensions.physics.shape import (
     PhysicsMaterial,
     Shape,
     cross,
+    _finite_vector,
+    _inertia_inverse,
+    _narrow_finite,
 )
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import isfinite
-from units.si import KILOGRAM, Mass
+from units.si import Mass
 
 
 @fieldwise_init
@@ -267,18 +270,56 @@ struct RigidBody(Copyable, Movable):
 
         Raises:
             Error: If the mass is not more than zero, or the body is not
-                dynamic.
+                dynamic. Also if its derived center, inertia or inverse
+                properties cannot be represented. A failure changes no
+                mass-property field.
         """
         if self.kind != DYNAMIC:
             raise Error("Only a dynamic body has a mass")
-        if not (isfinite(mass.value) and mass.value > 0):
-            raise Error("A dynamic body needs a mass more than zero")
-        var props = self.shape.mass_properties(mass.value)
-        var turn = rotation_matrix(self.shape_rotation)
+        var state = self._mass_state(
+            mass.value, self.shape_position, self.shape_rotation
+        )
         self.mass = mass.value
-        self.inverse_mass = 1 / mass.value
-        self.center_of_mass = turn.transform(props.center) + self.shape_position
-        self.set_inertia(turn * props.inertia * _transposed(turn))
+        self.inverse_mass = state[0]
+        self.center_of_mass = state[1]
+        self.inverse_inertia = state[2]
+
+    def _mass_state(
+        self, mass: Float32, position: Vector3, rotation: Quaternion
+    ) raises -> Tuple[Float32, Vector3, Matrix3]:
+        if not (isfinite(mass) and mass > 0):
+            raise Error("A dynamic body needs a mass more than zero")
+        var inverse_mass = _narrow_finite(1 / Float64(mass))
+        _finite_vector(position)
+        var props = self.shape.mass_properties(mass)
+        var turn = rotation_matrix(rotation)
+        var coordinates = List[Float32]()
+        for i in range(3):  # pragma: no branch
+            var value = Float64(
+                position.x if i == 0 else position.y if i == 1 else position.z
+            )
+            value += Float64(turn.elements[i]) * Float64(props.center.x)
+            value += Float64(turn.elements[3 + i]) * Float64(props.center.y)
+            value += Float64(turn.elements[6 + i]) * Float64(props.center.z)
+            coordinates.append(_narrow_finite(value))
+        var center = Vector3(coordinates[0], coordinates[1], coordinates[2])
+        var inertia = Matrix3()
+        # R I R^T in wide arithmetic. Store each symmetric pair once.
+        for i in range(3):  # pragma: no branch
+            for j in range(i, 3):  # pragma: no branch
+                var value = Float64(0)
+                for k in range(3):  # pragma: no branch
+                    for l in range(3):  # pragma: no branch
+                        value += (
+                            Float64(turn.elements[3 * k + i])
+                            * Float64(props.inertia.elements[3 * l + k])
+                            * Float64(turn.elements[3 * l + j])
+                        )
+                var entry = _narrow_finite(value)
+                inertia.elements[3 * i + j] = entry
+                inertia.elements[3 * j + i] = entry
+        var inverse = _inertia_inverse(inertia)
+        return (inverse_mass, center, inverse)
 
     def set_inertia(mut self, inertia: Matrix3) raises:
         """Set the inertia tensor about the center of mass.
@@ -288,12 +329,14 @@ struct RigidBody(Copyable, Movable):
                 symmetric and positive definite.
 
         Raises:
-            Error: If the body is not dynamic.
+            Error: If the body is not dynamic, the tensor is nonfinite,
+                asymmetric or not positive definite, or its inverse
+                cannot be represented. A failure leaves the old tensor.
         """
         if self.kind != DYNAMIC:
             raise Error("Only a dynamic body can set its inertia")
-        self.inverse_inertia = inertia
-        self.inverse_inertia.invert()
+        var inverse = _inertia_inverse(inertia)
+        self.inverse_inertia = inverse
 
     def set_shape_pose(
         mut self, position: Vector3, rotation: Quaternion
@@ -302,18 +345,28 @@ struct RigidBody(Copyable, Movable):
 
         Args:
             position: Where the shape's origin is, in meters.
-            rotation: How the shape is turned.
+            rotation: How the shape is turned. It is normalized.
 
         Raises:
-            Error: If a disabled dynamic body retains its mass, or
-                `set_mass` refuses the body's mass.
+            Error: If the pose is nonfinite, a disabled dynamic body
+                retains its mass, or `set_mass` refuses the derived mass
+                properties. A failure leaves the pose and mass unchanged.
         """
         if self.kind != DYNAMIC and self._has_dynamic_state:
             raise Error("Restore dynamic mode before changing the shape pose")
-        self.shape_position = position
-        self.shape_rotation = rotation
+        _finite_vector(position)
+        var turn = rotation
+        for value in [turn.x, turn.y, turn.z, turn.w]:  # pragma: no branch
+            if not isfinite(value):
+                raise Error("A shape rotation must be finite")
+        turn.normalize()
         if self.kind == DYNAMIC:
-            self.set_mass(Mass(self.mass, KILOGRAM))
+            var state = self._mass_state(self.mass, position, turn)
+            self.inverse_mass = state[0]
+            self.center_of_mass = state[1]
+            self.inverse_inertia = state[2]
+        self.shape_position = position
+        self.shape_rotation = turn
 
     def set_center_of_mass(mut self, center: Vector3) raises:
         """Move the center of mass, keeping the inertia tensor.
@@ -322,10 +375,12 @@ struct RigidBody(Copyable, Movable):
             center: The new center, in the body's frame, in meters.
 
         Raises:
-            Error: If a disabled dynamic body retains its mass.
+            Error: If the center is nonfinite or a disabled dynamic body
+                retains its mass.
         """
         if self.kind != DYNAMIC and self._has_dynamic_state:
             raise Error("Restore dynamic mode before changing its mass center")
+        _finite_vector(center)
         self.center_of_mass = center
 
     def is_dynamic(self) -> Bool:
