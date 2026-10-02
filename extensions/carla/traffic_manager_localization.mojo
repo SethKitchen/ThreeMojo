@@ -29,7 +29,8 @@ lane changes win, and one at each fork.
 
 **Differences from CARLA.** Where CARLA reads past the end of an empty
 list, which is undefined, this port raises an error, stops the walk, or
-uses the path's first node, as each docstring says.
+uses the path's first node, as each docstring says. Graph walks stop at
+repeated waypoints. A path never adds a place it already contains.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/LocalizationStage.cpp`.
 """
@@ -81,7 +82,7 @@ from extensions.carla.traffic_manager_state import (
     three_point_circle_radius,
 )
 from math.vector3 import Vector3
-from std.collections import Dict, Optional
+from std.collections import Dict, Optional, Set
 from units.si import Length
 
 comptime _DEAD_END = (
@@ -162,6 +163,30 @@ def _span_squared(
     return map.at(buffer[len(buffer) - 1]).distance_squared(
         map.at(buffer[0]).location()
     )
+
+
+def _buffer_places(
+    map: InMemoryMap, buffer: List[SimpleWaypointIndex]
+) raises -> Set[Int]:
+    var visited = Set[Int]()
+    for waypoint in buffer:
+        visited.add(map.at(waypoint).id.value)
+    return visited^
+
+
+def _push_unvisited(
+    actor: ActorId,
+    mut shared: TrafficManagerShared,
+    mut buffer: List[SimpleWaypointIndex],
+    waypoint: SimpleWaypointIndex,
+    mut visited: Set[Int],
+) raises -> Bool:
+    var id = shared.local_map.at(waypoint).id.value
+    if id in visited:
+        return False
+    _push(actor, shared, buffer, waypoint)
+    visited.add(id)
+    return True
 
 
 def _in(list: List[Int], value: Int) -> Bool:
@@ -514,6 +539,8 @@ struct LocalizationStage(Movable):
                 MAX_WPT_DISTANCE.value,
             )
             var start = map.at(change_over_point).location()
+            var visited = Set[Int]()
+            visited.add(change_over_point.value)
             while (
                 map.at(change_over_point).distance_squared(start)
                 < change_over_distance * change_over_distance
@@ -522,7 +549,10 @@ struct LocalizationStage(Movable):
                 var nexts = map.at(change_over_point).next_waypoints.copy()
                 if len(nexts) == 0:
                     break
+                if nexts[0].value in visited:
+                    break
                 change_over_point = nexts[0]
+                visited.add(change_over_point.value)
         return change_over_point
 
     def _extend_randomly(
@@ -532,6 +562,7 @@ struct LocalizationStage(Movable):
         mut shared: TrafficManagerShared,
         mut buffer: List[SimpleWaypointIndex],
     ) raises:
+        var visited = _buffer_places(shared.local_map, buffer)
         while _span_squared(shared.local_map, buffer) <= horizon_square:
             var furthest = buffer[len(buffer) - 1]
             var nexts = shared.local_map.at(furthest).next_waypoints.copy()
@@ -545,12 +576,7 @@ struct LocalizationStage(Movable):
                 shared.marked_for_removal.append(actor)
                 break
             var chosen = nexts[selection]
-            _push(actor, shared, buffer, chosen)
-            if (
-                shared.local_map.at(chosen).id
-                == shared.local_map.at(buffer[0]).id
-            ):
-                # A loop: stop.
+            if not _push_unvisited(actor, shared, buffer, chosen, visited):
                 break
 
     def _extend_and_find_safe_space(
@@ -564,7 +590,12 @@ struct LocalizationStage(Movable):
         start it never found, the path's first node stands in."""
         var a = actor.value
         var known = a in self.vehicles_at_junction_entrance
-        if is_at_junction_entrance and not known:
+        var ready = False
+        if known:
+            ready = self.vehicles_at_junction_entrance[a][1].is_some()
+        # A later fork choice can escape a cycle. Do not let an earlier
+        # incomplete walk hide the exit and safe point now in the buffer.
+        if is_at_junction_entrance and not ready:
             var junction_end_point = NO_SIMPLE_WAYPOINT
             var safe_point = NO_SIMPLE_WAYPOINT
             var entered = False
@@ -598,13 +629,18 @@ struct LocalizationStage(Movable):
                     safe_point = current
             if not found:
                 var abort = False
+                var visited = _buffer_places(shared.local_map, buffer)
                 while not past and not abort:
                     var nexts = shared.local_map.at(
                         current
                     ).next_waypoints.copy()
                     if len(nexts) > 0:
+                        if not _push_unvisited(
+                            actor, shared, buffer, nexts[0], visited
+                        ):
+                            abort = True
+                            break
                         current = nexts[0]
-                        _push(actor, shared, buffer, current)
                         if not shared.local_map.at(current).check_junction():
                             past = True
                             junction_end_point = current
@@ -627,8 +663,11 @@ struct LocalizationStage(Movable):
                         found = True
                         safe_point = current
                     elif len(nexts) > 0:
+                        if not _push_unvisited(
+                            actor, shared, buffer, nexts[0], visited
+                        ):
+                            break
                         current = nexts[0]
-                        _push(actor, shared, buffer, current)
                     else:
                         abort = True
             if (
@@ -720,6 +759,7 @@ struct LocalizationStage(Movable):
             _pop_all_but_first(actor, shared, buffer)
             shared.parameters.remove_upload_path(actor, False)
         var imported = shared.local_map.get_waypoint(path[0])
+        var visited = _buffer_places(shared.local_map, buffer)
         while (
             len(path) > 0
             and _span_squared(shared.local_map, buffer) <= horizon_square
@@ -741,14 +781,27 @@ struct LocalizationStage(Movable):
                 )
                 < 30.0
             ):
+                if shared.local_map.at(imported).id.value not in visited:
+                    if (
+                        shared.local_map.at(chosen).id
+                        != shared.local_map.at(imported).id
+                        and imported
+                        in shared.local_map.at(chosen).next_waypoints
+                    ):
+                        if not _push_unvisited(
+                            actor, shared, buffer, chosen, visited
+                        ):
+                            break
+                    _push(actor, shared, buffer, imported)
+                    visited.add(shared.local_map.at(imported).id.value)
+                # A point already in the buffer is reached, too. Consume
+                # it without duplicating its passing-vehicle ownership.
                 _ = path.pop(0)
-                if imported in shared.local_map.at(chosen).next_waypoints:
-                    _push(actor, shared, buffer, chosen)
-                _push(actor, shared, buffer, imported)
                 if len(path) > 0:
                     imported = shared.local_map.get_waypoint(path[0])
             else:
-                _push(actor, shared, buffer, chosen)
+                if not _push_unvisited(actor, shared, buffer, chosen, visited):
+                    break
         if len(path) == 0:
             shared.parameters.remove_upload_path(actor, True)
         else:
@@ -766,6 +819,7 @@ struct LocalizationStage(Movable):
             _pop_all_but_first(actor, shared, buffer)
             shared.parameters.remove_imported_route(actor, False)
         var next_option = route[0]
+        var visited = _buffer_places(shared.local_map, buffer)
         while (
             len(route) > 0
             and _span_squared(shared.local_map, buffer) <= horizon_square
@@ -787,7 +841,8 @@ struct LocalizationStage(Movable):
                 shared.marked_for_removal.append(actor)
                 break
             var chosen = nexts[selection]
-            _push(actor, shared, buffer, chosen)
+            if not _push_unvisited(actor, shared, buffer, chosen, visited):
+                break
             var chosen_option = shared.local_map.at(chosen).road_option
             if latest_option != chosen_option and next_option == chosen_option:
                 _ = route.pop(0)
@@ -944,6 +999,35 @@ struct LocalizationStage(Movable):
         return out^
 
 
+def _branch_end(
+    map: InMemoryMap, start: SimpleWaypointIndex
+) raises -> SimpleWaypointIndex:
+    # Follow the first successor through a junction and far enough past
+    # it. A branch without such an end cannot rank an imported path.
+    var end = start
+    var entered = False
+    var past = False
+    var visited = Set[Int]()
+    visited.add(end.value)
+    while True:
+        if map.at(end).check_junction():
+            entered = True
+        elif entered:
+            past = True
+        if (
+            past
+            and map.at(start).distance_squared(map.at(end).location()) >= 50.0
+        ):
+            return end
+        var next = first_next(map, end)
+        if not next.is_some():
+            return NO_SIMPLE_WAYPOINT
+        if next.value in visited:
+            return NO_SIMPLE_WAYPOINT
+        end = next
+        visited.add(end.value)
+
+
 def _closest_branch(
     map: InMemoryMap,
     nexts: List[SimpleWaypointIndex],
@@ -951,18 +1035,15 @@ def _closest_branch(
 ) raises -> Int:
     """CARLA's choice of fork for an imported path: the branch whose end
     past the junction is on the imported point's road, or else nearest
-    it."""
+    it. Cyclic or disconnected branches have no end and are skipped.
+    If none has an end, keep the first branch."""
     var imported_road = map.at(imported).waypoint.road_id
     var min_distance = FLOAT_MAX
     var selection = 0
     for k in range(len(nexts)):  # pragma: no branch
-        var end = nexts[k]
-        while not map.at(end).check_junction():
-            end = first_next(map, end)
-        while map.at(end).check_junction():
-            end = first_next(map, end)
-        while map.at(nexts[k]).distance_squared(map.at(end).location()) < 50.0:
-            end = first_next(map, end)
+        var end = _branch_end(map, nexts[k])
+        if not end.is_some():
+            continue
         if map.at(end).waypoint.road_id == imported_road:
             return k
         var distance = map.at(end).distance_squared(map.at(imported).location())

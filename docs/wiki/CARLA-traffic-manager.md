@@ -156,6 +156,7 @@ Each node has a road option: straight, left or right through a junction, lane fo
 
 ## Differences from CARLA
 
+- Graph walks stop at repeated waypoints. A vehicle's path does not add a place already in its buffer, including on later updates. Unreachable imported path points and route options stay pending. A walk trapped in a cycle has no safe point. Later updates retry incomplete junction walks. Fork selection skips branches without an exit and keeps the first branch if none has an exit.
 - Stopping or resetting clears actor tracking and transient junction, hero and physics caches. A new map cannot inherit cached waypoint indices from the old one. Parameter settings remain configured.
 - The remote traffic manager, its server and its client are not ported. They are a network transport.
 - Asynchronous mode has no worker thread. The caller calls `step`.
