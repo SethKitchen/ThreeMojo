@@ -18,6 +18,8 @@ from math.obb import OBB
 from math.ray import Ray
 from math.vector3 import Vector3
 from units.si import DEGREE, Angle
+from std.math import inf, nan
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -877,6 +879,268 @@ def test_apply_matrix4_refusals() raises:
         box.apply_matrix4(scaling(1, 0, 1))
     with assert_raises(contains="flattens"):
         box.apply_matrix4(scaling(1, 1, 0))
+
+
+def assert_transformed_box(original: OBB, matrix: Matrix4) raises:
+    """Check all corners and interior samples against an independent image."""
+    var result = original
+    result.apply_matrix4(matrix)
+    assert_true(result.half_size.x >= 0)
+    assert_true(result.half_size.y >= 0)
+    assert_true(result.half_size.z >= 0)
+    assert_almost_equal(result.rotation.determinant(), 1, atol=TOLERANCE)
+    for first in range(3):
+        assert_almost_equal(result.axis(first).length(), 1, atol=TOLERANCE)
+        for second in range(first + 1, 3):
+            assert_almost_equal(
+                result.axis(first).dot(result.axis(second)), 0, atol=TOLERANCE
+            )
+    for ix in range(-1, 2):
+        for iy in range(-1, 2):
+            for iz in range(-1, 2):
+                var point = original.center
+                point.add(
+                    original.axis(0) * (original.half_size.x * Float32(ix))
+                )
+                point.add(
+                    original.axis(1) * (original.half_size.y * Float32(iy))
+                )
+                point.add(
+                    original.axis(2) * (original.half_size.z * Float32(iz))
+                )
+                assert_true(
+                    result.contains_point(matrix.transform_point(point))
+                )
+    var interior = original.center + original.axis(0) * (
+        original.half_size.x * 0.37
+    )
+    interior.add(original.axis(1) * (original.half_size.y * -0.61))
+    interior.add(original.axis(2) * (original.half_size.z * 0.23))
+    assert_true(result.contains_point(matrix.transform_point(interior)))
+
+
+def test_apply_matrix4_rotated_mirrors() raises:
+    """All mirror axes and odd/even sign sets keep rotated corners (#363)."""
+    var original = OBB(
+        Vector3(0, 0, 0),
+        Vector3(2, 1, 1),
+        Matrix3.from_matrix4(rotation_z(Angle(45, DEGREE))),
+    )
+    for mask in range(8):
+        var sx = Float32(-1) if mask & 1 else Float32(1)
+        var sy = Float32(-1) if mask & 2 else Float32(1)
+        var sz = Float32(-1) if mask & 4 else Float32(1)
+        assert_transformed_box(original, scaling(sx, sy, sz))
+        var move = translation(1, -2, 0.5)
+        move.multiply(rotation_z(Angle(30, DEGREE)))
+        move.multiply(scaling(2 * sx, 2 * sy, 2 * sz))
+        assert_transformed_box(original, move)
+        assert_transformed_box(turned(), move)
+
+
+def assert_obb_bits_equal(actual: OBB, expected: OBB) raises:
+    """Compare every stored bit, including a rejected NaN input."""
+    for index in range(3):
+        assert_equal(
+            bitcast[DType.uint32](actual.center.get_component(index)),
+            bitcast[DType.uint32](expected.center.get_component(index)),
+        )
+        assert_equal(
+            bitcast[DType.uint32](actual.half_size.get_component(index)),
+            bitcast[DType.uint32](expected.half_size.get_component(index)),
+        )
+    for index in range(9):
+        assert_equal(
+            bitcast[DType.uint32](actual.rotation.elements[index]),
+            bitcast[DType.uint32](expected.rotation.elements[index]),
+        )
+
+
+def assert_transform_refused(original: OBB, matrix: Matrix4) raises:
+    """A refused transform must leave every part of its input unchanged."""
+    var box = original
+    with assert_raises():
+        box.apply_matrix4(matrix)
+    assert_obb_bits_equal(box, original)
+
+
+def test_apply_matrix4_geometric_extents() raises:
+    """Independent axis lengths give the geometric sizes before rounding."""
+    var original = OBB(
+        Vector3(0, 0, 0),
+        Vector3(2, 1, 3),
+        Matrix3.from_matrix4(rotation_z(Angle(45, DEGREE))),
+    )
+    for mask in range(8):
+        var sx = Float32(-2) if mask & 1 else Float32(2)
+        var sy = Float32(-2) if mask & 2 else Float32(2)
+        var sz = Float32(-3) if mask & 4 else Float32(3)
+        var matrix = translation(1, -2, 0.5)
+        matrix.multiply(rotation_z(Angle(30, DEGREE)))
+        matrix.multiply(scaling(sx, sy, sz))
+        var box = original
+        box.apply_matrix4(matrix)
+        assert_vector(box.half_size, 4, 2, 9)
+        assert_transformed_box(original, matrix)
+    # A quarter-turn exchanges the two local scale factors.
+    original.rotation = m3(0, 1, 0, -1, 0, 0, 0, 0, 1)
+    var box = original
+    box.apply_matrix4(scaling(-2, 3, -4))
+    assert_vector(box.half_size, 6, 2, 12)
+    assert_transformed_box(original, scaling(-2, 3, -4))
+
+
+def test_apply_matrix4_rejects_shear_atomically() raises:
+    """Nonuniform scale of rotated axes and affine shear are not OBBs."""
+    var original = turned()
+    assert_transform_refused(original, scaling(-2, 3, 4))
+    original.rotation = Matrix3()
+    for first in range(2):
+        for second in range(first + 1, 3):
+            var shear = Matrix4()
+            shear.elements[second * 4 + first] = 0.25
+            assert_transform_refused(original, shear)
+    for axis in range(3):
+        var collapsed = Matrix4()
+        collapsed.elements[axis * 5] = 0
+        assert_transform_refused(original, collapsed)
+    var projective = Matrix4()
+    projective.elements[7] = 0.5
+    assert_transform_refused(original, projective)
+
+
+def test_apply_matrix4_nonfinite_inputs_are_atomic() raises:
+    """Every matrix, center and rotation lane is checked before mutation."""
+    var original = turned()
+    var invalid: List[Float32] = [
+        inf[DType.float32](),
+        -inf[DType.float32](),
+        nan[DType.float32](),
+    ]
+    for value in invalid:
+        for index in range(16):
+            var matrix = Matrix4()
+            matrix.elements[index] = value
+            assert_transform_refused(original, matrix)
+        for index in range(3):
+            var box = original
+            box.center.set_component(index, value)
+            assert_transform_refused(box, Matrix4())
+            box = original
+            box.half_size.set_component(index, value)
+            assert_transform_refused(box, Matrix4())
+        for index in range(9):
+            var box = original
+            box.rotation.elements[index] = value
+            assert_transform_refused(box, Matrix4())
+    for index in range(3):
+        var box = original
+        box.half_size.set_component(index, -1)
+        assert_transform_refused(box, Matrix4())
+
+
+def test_apply_matrix4_output_overflow_is_atomic() raises:
+    """Finite inputs whose center, extent or rounded corner overflows fail."""
+    for index in range(3):
+        var box = OBB(Vector3(0, 0, 0), Vector3(1, 1, 1), Matrix3())
+        box.center.set_component(index, 1e38)
+        assert_transform_refused(box, scaling(10, 10, 10))
+        box.center = Vector3(0, 0, 0)
+        box.half_size.set_component(index, 1e38)
+        assert_transform_refused(box, scaling(10, 10, 10))
+        box.center.set_component(index, 1e38)
+        assert_transform_refused(box, scaling(2, 2, 2))
+
+
+def test_apply_matrix4_source_bound_overflow_is_atomic() raises:
+    """Scaling down cannot repair a nonfinite rounded source corner."""
+    for index in range(3):
+        var box = OBB(Vector3(0, 0, 0), Vector3(1, 1, 1), Matrix3())
+        box.center.set_component(index, 2e38)
+        box.half_size.set_component(index, 2e38)
+        assert_transform_refused(box, scaling(0.5, 0.5, 0.5))
+
+
+def test_apply_matrix4_projection_bound_overflow_is_atomic() raises:
+    """A finite geometric extent can need an unrepresentable error bound."""
+    var huge = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    var box = OBB(
+        Vector3(0, 0, 0),
+        Vector3(huge, 1, 1),
+        Matrix3.from_matrix4(rotation_z(Angle(1, DEGREE))),
+    )
+    assert_transform_refused(box, Matrix4())
+    # This geometric size is below the maximum, but outward rounding would
+    # pass it. Refuse before narrowing the bound, with the original intact.
+    box.half_size.x = bitcast[DType.float32](UInt32(0x7F7FFFFB))
+    box.rotation = Matrix3.from_matrix4(rotation_z(Angle(2, DEGREE)))
+    assert_transform_refused(box, Matrix4())
+
+
+def test_apply_matrix4_half_size_underflow_is_atomic() raises:
+    """A nonzero geometric extent that cannot be stored is refused."""
+    for index in range(3):
+        var box = OBB(Vector3(0, 0, 0), Vector3(1, 1, 1), Matrix3())
+        box.half_size.set_component(index, 1e-30)
+        assert_transform_refused(box, scaling(1e-30, 1e-30, 1e-30))
+
+
+def test_apply_matrix4_finite_scale_boundaries() raises:
+    """Wide axis products handle huge and subnormal nonzero scales."""
+    var tiny = bitcast[DType.float32](UInt32(1))
+    var largest = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    var original = OBB(Vector3(0, 0, 0), Vector3(1, 1, 1), Matrix3())
+    assert_transformed_box(original, scaling(-tiny, tiny, tiny))
+    var box = original
+    box.apply_matrix4(scaling(-tiny, tiny, tiny))
+    assert_equal(bitcast[DType.uint32](box.half_size.x), 2)
+    assert_equal(box.rotation.determinant(), 1)
+    original.half_size = Vector3(largest, 1, 1)
+    box = original
+    box.apply_matrix4(Matrix4())
+    assert_equal(box.half_size.x, largest)
+    assert_transformed_box(original, Matrix4())
+    original.half_size = Vector3(1e-30, 1e-30, 1e-30)
+    box = original
+    box.apply_matrix4(scaling(-1e30, 1e30, 1e30))
+    assert_vector(box.half_size, 1, 1, 1)
+    original.half_size = Vector3(1e30, 1e30, 1e30)
+    box = original
+    box.apply_matrix4(scaling(1e-30, -1e-30, 1e-30))
+    assert_vector(box.half_size, 1, 1, 1)
+    box = OBB()
+    box.apply_matrix4(scaling(-1, 1, 1))
+    assert_true(box.half_size == Vector3(0, 0, 0))
+
+
+def test_apply_matrix4_anisotropic_rounding_bound() raises:
+    """Cancellation error scales with absolute products, not a thin extent."""
+    var original = OBB(
+        Vector3(1, -2, 3),
+        Vector3(1e-8, 1e8, 2),
+        Matrix3.from_matrix4(rotation_z(Angle(45, DEGREE))),
+    )
+    for mask in range(8):
+        var sx = Float32(-1) if mask & 1 else Float32(1)
+        var sy = Float32(-1) if mask & 2 else Float32(1)
+        var sz = Float32(-1) if mask & 4 else Float32(1)
+        var matrix = translation(1, -2, 0.5)
+        matrix.multiply(rotation_z(Angle(30, DEGREE)))
+        matrix.multiply(scaling(sx, sy, sz))
+        assert_transformed_box(original, matrix)
+        var box = original
+        box.apply_matrix4(matrix)
+        # The exact short half size is 1e-8. Float32 cannot resolve that
+        # width beside 1e8. Bound the enlargement independently by a small
+        # multiple of unit roundoff times the long size, never by its ULP.
+        assert_true(box.half_size.x >= original.half_size.x)
+        assert_true(box.half_size.x < 32 * 5.960464477539063e-8 * 1e8)
+        assert_almost_equal(box.half_size.y, 1e8, rtol=2e-6, atol=0)
+        assert_almost_equal(box.half_size.z, 2, rtol=2e-6, atol=0)
+    original = OBB(Vector3(0, 0, 0), Vector3(1e-8, 1e8, 2), Matrix3())
+    var exact = original
+    exact.apply_matrix4(scaling(-1, 1, -1))
+    assert_true(exact.half_size == original.half_size)
 
 
 def main() raises:
