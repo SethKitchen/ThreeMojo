@@ -14,6 +14,9 @@ The expected numbers come from outside this port:
   `assets/carla/town.xodr` and of the two-lane road below, worked out by
   hand: straight lanes 3.5 m wide and road 11's arc of radius 20 m. The
   random choice uses the same minimal-standard generator as this port.
+- Endpoint fixtures include all dead-end topology lanes. Their node ids,
+  lane-change edges and turn decisions correct the inherited narrowing
+  bug; these expectations deliberately differ from pinned CARLA.
 - The route strings list each plan item as road, section, lane, s
   rounded to a millimeter, and road option.
 """
@@ -825,21 +828,22 @@ def test_route_on_the_town() raises:
 
 
 def test_route_nodes_on_the_town() raises:
-    # The nodes of the right turn: the lane pieces' ends rounded to whole
-    # meters, then road 3's loose end at its last sample, unrounded.
+    # Retained road 3 topology gives a regular rounded terminal node,
+    # instead of an unrounded loose end recovered from lane samples.
+    # Road 3/-1 ends at CARLA (78.25, 50): rounding gives (78, 50).
     var map = _town()
     var grp = GlobalRoutePlanner(map, Length(2, METER))
     var nodes = grp.path_search(
         map, Vector3(5.3, 1.75, 0), Vector3(78.25, 35.3, 0)
     )
-    var xs = [0.0, 30.0, 60.0, 78.0, 78.25]
+    var xs = [0.0, 30.0, 60.0, 78.0, 78.0]
     var ys = [2.0, 2.0, 2.0, 20.0, 50.0]
     assert_equal(len(nodes), 5)
     for i in range(5):
         var v = grp.vertex(nodes[i])
         assert_almost_equal(Float64(v.x), xs[i], atol=1e-4)
         assert_almost_equal(Float64(v.y), ys[i], atol=1e-4)
-    assert_true(nodes[4].value < 0)
+    assert_true(nodes[4].value >= 0)
     # The piece of road 1 before the junction: 14 samples, s = 32 to 58.
     var edge = grp.edge(nodes[1], nodes[2])
     assert_equal(edge.length, 15)
@@ -904,9 +908,9 @@ def test_route_on_an_empty_map() raises:
 # --- lane changes --------------------------------------------------------------------
 
 
-comptime _CHANGE_RIGHT = "1,-1,5.3,6;1,-2,16,6;1,-2,16,4;1,-2,18,4;1,-2,20,4;1,-2,22,4;1,-2,24,4;1,-2,26,4;1,-2,28,4;1,-2,30,4;1,-2,32,4;1,-2,34,4;1,-2,36,4;1,-2,38,4;1,-2,40,4;1,-2,42,4;1,-2,44,4;1,-2,46,4;2,-2,0,4;2,-2,0,4;2,-2,2,4;2,-2,4,4;2,-2,6,4;2,-2,8,4;2,-2,10,4;2,-2,12,4;2,-2,14,4;2,-2,16,4;2,-2,18,4;2,-2,20,4;2,-2,22,4;2,-2,24,4;2,-2,26,4;2,-2,28,4"
+comptime _CHANGE_RIGHT = "1,-1,6,4;1,-1,8,4;1,-1,10,4;1,-1,12,4;1,-1,14,4;1,-1,16,4;1,-1,18,4;1,-1,20,4;1,-1,22,4;1,-1,24,4;1,-1,26,4;1,-1,28,4;1,-1,30,4;1,-1,32,4;1,-1,34,4;1,-1,36,4;1,-1,38,4;1,-1,40,4;1,-1,42,4;1,-1,44,4;1,-1,46,4;2,-1,0,4;2,-1,0,6;2,-2,12,6;2,-2,12,4;2,-2,14,4;2,-2,16,4;2,-2,18,4;2,-2,20,4;2,-2,22,4;2,-2,24,4;2,-2,26,4;2,-2,28,4"
 
-comptime _CHANGE_LEFT = "1,-2,5.3,5;1,-1,16,5;1,-1,16,4;1,-1,18,4;1,-1,20,4;1,-1,22,4;1,-1,24,4;1,-1,26,4;1,-1,28,4;1,-1,30,4;1,-1,32,4;1,-1,34,4;1,-1,36,4;1,-1,38,4;1,-1,40,4;1,-1,42,4;1,-1,44,4;1,-1,46,4;2,-1,0,4;2,-1,0,4;2,-1,2,4;2,-1,4,4;2,-1,6,4;2,-1,8,4;2,-1,10,4;2,-1,12,4;2,-1,14,4;2,-1,16,4;2,-1,18,4;2,-1,20,4;2,-1,22,4;2,-1,24,4;2,-1,26,4;2,-1,28,4"
+comptime _CHANGE_LEFT = "1,-2,6,4;1,-2,8,4;1,-2,10,4;1,-2,12,4;1,-2,14,4;1,-2,16,4;1,-2,18,4;1,-2,20,4;1,-2,22,4;1,-2,24,4;1,-2,26,4;1,-2,28,4;1,-2,30,4;1,-2,32,4;1,-2,34,4;1,-2,36,4;1,-2,38,4;1,-2,40,4;1,-2,42,4;1,-2,44,4;1,-2,46,4;2,-2,0,4;2,-2,0,5;2,-1,12,5;2,-1,12,4;2,-1,14,4;2,-1,16,4;2,-1,18,4;2,-1,20,4;2,-1,22,4;2,-1,24,4;2,-1,26,4;2,-1,28,4"
 
 
 def test_lane_change_edges() raises:
@@ -923,7 +927,37 @@ def test_lane_change_edges() raises:
     assert_equal(right.change_waypoint.value().lane_id.value, -2)
     var left = grp.edge(b, a)
     assert_equal(left.type.value, OPTION_CHANGE_LANE_LEFT.value)
-    assert_equal(grp.edge_count(), 6)
+    # Four lane-follow pieces plus two lane-change edges per road.
+    # Retained road 2/-1 and 2/-2 now supply its broken-mark crossings.
+    assert_equal(grp.edge_count(), 8)
+    var a2 = grp.localize(map, Vector3(60, 1.75, 0)).value()[0]
+    var b2 = grp.localize(map, Vector3(60, 5.25, 0)).value()[0]
+    assert_equal(grp.edge(a2, b2).type.value, OPTION_CHANGE_LANE_RIGHT.value)
+    assert_equal(grp.edge(b2, a2).type.value, OPTION_CHANGE_LANE_LEFT.value)
+    # Twenty-three samples at s=2,4,...,46 give each forward edge
+    # weight 24. Changing now scores 0+50; advancing scores 24+3=27,
+    # then changing on road 2 scores 24+0. The graph search must advance.
+    assert_equal(grp.edge(a, a2).length, 24)
+    assert_equal(grp.edge(b, b2).length, 24)
+    var right_nodes = grp.path_search(
+        map, Vector3(5.3, 1.75, 0), Vector3(80.3, 5.25, 0)
+    )
+    assert_equal(len(right_nodes), 4)
+    assert_equal(right_nodes[0], a)
+    assert_equal(right_nodes[1], a2)
+    assert_equal(right_nodes[2], b2)
+    var left_nodes = grp.path_search(
+        map, Vector3(5.3, 5.25, 0), Vector3(80.3, 1.75, 0)
+    )
+    assert_equal(len(left_nodes), 4)
+    assert_equal(left_nodes[0], b)
+    assert_equal(left_nodes[1], b2)
+    assert_equal(left_nodes[2], a2)
+    # Both lane changes are legal. The restored road-2 change gives a
+    # route that follows road 1 first. Its next node is already near the
+    # goal, so the existing cost-plus-distance queue selects that path.
+    # The destination-lane hop skips five 2 m samples after its nearest
+    # sample: s=2 + 5*2 =12. Then lane following continues to s=28.
     var to_right = grp.trace_route(
         map, Vector3(5.3, 1.75, 0), Vector3(80.3, 5.25, 0)
     )
@@ -941,7 +975,7 @@ comptime _ODD_STUB = "1,0,-1,6,4;1,0,-1,8,4;1,0,-1,10,4;1,0,-1,12,4;1,0,-1,14,4;
 
 comptime _ODD_RIGHT = "1,0,-1,6,4;1,0,-1,8,4;1,0,-1,10,4;1,0,-1,12,4;1,0,-1,14,4;1,0,-1,16,4;13,0,-1,0,4;13,0,-1,0,2;13,0,-1,2,2;13,0,-1,4,2;14,0,-1,0,2;14,0,-1,0,2;14,0,-1,2,2;3,0,-1,0,2;3,0,-1,0,4;3,0,-1,2,4;3,0,-1,4,4;3,0,-1,6,4;3,0,-1,8,4"
 
-comptime _ODD_FAR = "1,0,-1,6,4;1,0,-1,8,4;1,0,-1,10,4;1,0,-1,12,4;1,0,-1,14,4;1,0,-1,16,4;1,0,-1,18,4;10,0,-1,0,4;10,0,-1,2,4;10,0,-1,4,4;10,0,-1,6,4;10,0,-1,8,4;10,0,-1,10,4;2,0,-1,0,4;11,0,-1,0,4;11,0,-1,0,4"
+comptime _ODD_FAR = "1,0,-1,6,4;1,0,-1,8,4;1,0,-1,10,4;1,0,-1,12,4;1,0,-1,14,4;1,0,-1,16,4;1,0,-1,18,4;10,0,-1,0,4;10,0,-1,2,4;10,0,-1,4,4;10,0,-1,6,4;10,0,-1,8,4;10,0,-1,10,4;2,0,-1,0,4;11,0,-1,0,4;11,0,-1,0,3"
 
 
 def test_odd_routes() raises:
@@ -974,9 +1008,17 @@ def test_odd_routes() raises:
         _ODD_RIGHT,
     )
     # Road 11 is linked but far away. Its lane piece's samples follow the
-    # first way on, road 10, to the stub's dead end; its loose end is in
-    # the junction and has no vector, so the turn is the edge's own.
+    # first way on, road 10, to the stub's dead end. Retained road 11/-1
+    # has an east-facing exit vector, so the final junction decision is
+    # straight (3), not the vector-less loose end's lane follow (4).
     var far = GlobalRoutePlanner(map, Length(2, METER))
+    var far_nodes = far.localize(map, Vector3(202.3, 1.75, 0)).value()
+    var far_edge = far.edge(far_nodes[0], far_nodes[1])
+    assert_equal(far_edge.entry_waypoint.road_id, RoadId(11))
+    assert_equal(far_edge.exit_waypoint.road_id, RoadId(11))
+    assert_true(Bool(far_edge.exit_vector))
+    assert_almost_equal(far_edge.exit_vector.value().x, 1.0, atol=1e-5)
+    assert_almost_equal(far_edge.exit_vector.value().y, 0.0, atol=1e-5)
     assert_equal(
         _route(
             far.trace_route(map, Vector3(5.3, 1.75, 0), Vector3(202.3, 1.75, 0))
@@ -998,7 +1040,7 @@ def test_odd_graph() raises:
     var map = load_opendrive(ODD)
     var grp = GlobalRoutePlanner(map, Length(2, METER))
     # Lanes -1 to -3 change into each other; lane -1 has no lane to its
-    # left, and lane -4, on the right of lane -3, starts no lane piece.
+    # left. Retained lane -4 adds a right-change edge from lane -3.
     var l1 = grp.localize(map, Vector3(5.3, 1.75, 0)).value()[0]
     var l2 = grp.localize(map, Vector3(5.3, 5.25, 0)).value()[0]
     var l3 = grp.localize(map, Vector3(5.3, 8.75, 0)).value()[0]
@@ -1006,10 +1048,13 @@ def test_odd_graph() raises:
     assert_equal(grp.edge(l2, l1).type.value, OPTION_CHANGE_LANE_LEFT.value)
     assert_equal(grp.edge(l2, l3).type.value, OPTION_CHANGE_LANE_RIGHT.value)
     assert_equal(grp.edge(l3, l2).type.value, OPTION_CHANGE_LANE_LEFT.value)
-    assert_equal(len(grp.successors(l3)), 2)
+    var l4 = grp.localize(map, Vector3(5.3, 12.25, 0)).value()[0]
+    assert_equal(grp.edge(l3, l4).type.value, OPTION_CHANGE_LANE_RIGHT.value)
+    assert_equal(grp.edge(l4, l3).type.value, OPTION_CHANGE_LANE_LEFT.value)
+    assert_equal(len(grp.successors(l3)), 3)
     # Roads 6 and 7 are shorter than one step together: no lane piece.
     assert_false(Bool(grp.localize(map, Vector3(0.2, -48.25, 0))))
-    # A loose end has no edge out.
+    # A terminal lane endpoint has no edge out.
     var nodes = grp.path_search(
         map, Vector3(5.3, 1.75, 0), Vector3(23.25, 20.3, 0)
     )
