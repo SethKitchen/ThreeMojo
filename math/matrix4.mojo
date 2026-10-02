@@ -324,8 +324,44 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         )
 
         var det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14
+        # Include cancellation inside the cofactors in the error bound.
         var terms = (
-            abs(n11 * t11) + abs(n21 * t12) + abs(n31 * t13) + abs(n41 * t14)
+            abs(n11)
+            * (
+                abs(n23 * n34 * n42)
+                + abs(n24 * n33 * n42)
+                + abs(n24 * n32 * n43)
+                + abs(n22 * n34 * n43)
+                + abs(n23 * n32 * n44)
+                + abs(n22 * n33 * n44)
+            )
+            + abs(n21)
+            * (
+                abs(n14 * n33 * n42)
+                + abs(n13 * n34 * n42)
+                + abs(n14 * n32 * n43)
+                + abs(n12 * n34 * n43)
+                + abs(n13 * n32 * n44)
+                + abs(n12 * n33 * n44)
+            )
+            + abs(n31)
+            * (
+                abs(n13 * n24 * n42)
+                + abs(n14 * n23 * n42)
+                + abs(n14 * n22 * n43)
+                + abs(n12 * n24 * n43)
+                + abs(n13 * n22 * n44)
+                + abs(n12 * n23 * n44)
+            )
+            + abs(n41)
+            * (
+                abs(n14 * n23 * n32)
+                + abs(n13 * n24 * n32)
+                + abs(n14 * n22 * n33)
+                + abs(n12 * n24 * n33)
+                + abs(n13 * n22 * n34)
+                + abs(n12 * n23 * n34)
+            )
         )
         if _determinant_needs_wide(det, terms):
             var wide = _inverse_wide[4](self.elements)

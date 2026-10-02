@@ -6,6 +6,7 @@
 """Shared wide fallback for small column-major Float32 matrix inverses."""
 
 from std.math import isfinite
+from math.matrix_determinant import _determinant_f32
 
 
 def _inverse_needs_wide[
@@ -26,7 +27,14 @@ def _inverse_needs_wide[
 
 
 def _determinant_needs_wide(det: Float32, term_magnitude: Float32) -> Bool:
-    """Select wider arithmetic without declaring small determinants singular."""
+    """Select wider arithmetic without declaring small determinants singular.
+
+    The magnitude sums every unsigned monomial, before cofactor cancellation.
+    With entries in the fast-path range, those products are normal Float32.
+    The 1e-5 bound exceeds the rounding bound for at most 32 operations
+    (unit roundoff 2**-24), including rounding in the magnitude sum itself.
+    A failed bound selects exact-sign arithmetic; it never rejects a matrix.
+    """
     return (
         not isfinite(det)
         or abs(det) < Float32(1.1754943508222875e-38)
@@ -34,43 +42,12 @@ def _determinant_needs_wide(det: Float32, term_magnitude: Float32) -> Bool:
     )
 
 
-def _wide_determinant[
-    size: Int
-](entries: Array[Float64, size * size]) -> Float64:
-    """Evaluate small cofactors before elimination can perturb a zero pivot."""
-    comptime assert 1 <= size <= 4
-    comptime if size == 1:
-        return entries[0]
-    else:
-        var determinant = Float64(0)
-        # The remaining determinant orders are two through four.
-        for column in range(size):  # pragma: no branch
-            var minor = Array[Float64, (size - 1) * (size - 1)](fill=0)
-            # Each minor has at least one column and row.
-            for minor_column in range(size - 1):  # pragma: no branch
-                var source_column = minor_column + (
-                    1 if minor_column >= column else 0
-                )
-                for row in range(1, size):  # pragma: no branch
-                    minor[minor_column * (size - 1) + row - 1] = entries[
-                        source_column * size + row
-                    ]
-            var sign = Float64(1) if column % 2 == 0 else Float64(-1)
-            determinant += (
-                sign
-                * entries[column * size]
-                * _wide_determinant[size - 1](minor)
-            )
-        return determinant
-
-
-def _inverse_wide[
+def _inverse_nonfinite[
     size: Int
 ](entries: Array[Float32, size * size]) -> Tuple[
     Bool, Array[Float32, size * size]
 ]:
-    """Use Float64 elimination with partial pivoting; return zeros if singular.
-    """
+    """Preserve the original nonfinite-input propagation and pivot behavior."""
     comptime assert 2 <= size <= 4
     var matrix = Array[Float64, size * size](fill=0)
     var inverse = Array[Float64, size * size](fill=0)
@@ -78,8 +55,6 @@ def _inverse_wide[
     # The static size assertion guarantees a nonempty matrix.
     for index in range(size * size):  # pragma: no branch
         matrix[index] = Float64(entries[index])
-    if _wide_determinant[size](matrix) == 0:
-        return False, result^
     # Every accepted size has at least two rows.
     for index in range(size):  # pragma: no branch
         inverse[index * size + index] = 1
@@ -122,4 +97,46 @@ def _inverse_wide[
     # The static size assertion guarantees a nonempty matrix.
     for index in range(size * size):  # pragma: no branch
         result[index] = Float32(inverse[index])
+    return True, result^
+
+
+def _inverse_wide[
+    size: Int
+](entries: Array[Float32, size * size]) -> Tuple[
+    Bool, Array[Float32, size * size]
+]:
+    """Use exact-sign cofactors for finite inputs; return zeros if singular.
+
+    A rounded elimination pivot can be zero for an invertible matrix, or
+    nonzero for a singular one. Evaluate the determinant and each cofactor
+    from the original entries instead. The expansion estimates retain the
+    exact signs and zeros without a determinant tolerance. All intermediates
+    fit Float64; only final inverse entries are narrowed to Float32.
+    """
+    comptime assert 2 <= size <= 4
+    for index in range(size * size):  # pragma: no branch
+        if not isfinite(entries[index]):
+            return _inverse_nonfinite[size](entries)
+    var result = Array[Float32, size * size](fill=0)
+    var determinant = _determinant_f32[size](entries)
+    if determinant == 0:
+        return False, result^
+    for column in range(size):  # pragma: no branch
+        for row in range(size):  # pragma: no branch
+            var minor = Array[Float32, (size - 1) * (size - 1)](fill=0)
+            for minor_column in range(size - 1):  # pragma: no branch
+                var source_column = minor_column + (
+                    1 if minor_column >= row else 0
+                )
+                for minor_row in range(size - 1):  # pragma: no branch
+                    var source_row = minor_row + (
+                        1 if minor_row >= column else 0
+                    )
+                    minor[minor_column * (size - 1) + minor_row] = entries[
+                        source_column * size + source_row
+                    ]
+            var sign = Float64(1) if (row + column) % 2 == 0 else Float64(-1)
+            result[column * size + row] = Float32(
+                sign * _determinant_f32[size - 1](minor) / determinant
+            )
     return True, result^

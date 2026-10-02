@@ -627,5 +627,24 @@ def test_invalid_mass_properties_are_rejected() raises:
         _ = malformed.mass_properties(1)
 
 
+def test_spd_inertia_inverse_retains_all_determinant_components() raises:
+    # n*J + I is SPD, with eigenvalues 3*n+1, 1, 1. Its exact inverse
+    # is I - n/(3*n+1)*J. This tests determinant magnitude, not only sign.
+    var n = Float32(8000000)
+    var inertia = Matrix3()
+    inertia.set(n + 1, n, n, n, n + 1, n, n, n, n + 1)
+    var body = _body(_box(1, 1, 1))
+    body.set_inertia(inertia)
+    for row in range(3):
+        for column in range(3):
+            var numerator = Float64(16000001) if row == column else Float64(
+                -8000000
+            )
+            _equal(
+                body.inverse_inertia.elements[3 * column + row],
+                Float32(numerator / 24000001),
+            )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
