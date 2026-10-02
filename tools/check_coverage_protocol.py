@@ -8,7 +8,11 @@ limit. Concurrent captures are actual POSIX pipes. No GPU or network is used.
 
 import argparse
 import os
+import select
+import time
 import resource
+import signal
+import sys
 from collections import Counter
 from pathlib import Path
 import shutil
@@ -396,6 +400,78 @@ def main():
         assert result.returncode != 0, 'short write became an accepted vector'
         (work / 'write-failure-status.txt').write_text(str(failures) + '\n')
 
+        # Exercise actual libc calls, including errno, without changing the runtime.
+        library = work / ('write-interposer.dylib' if sys.platform == 'darwin' else 'write-interposer.so')
+        flags = ['-dynamiclib'] if sys.platform == 'darwin' else ['-shared', '-fPIC']
+        run(['cc', '-Wall', '-Wextra', '-Werror', *flags,
+             str(ROOT / 'tools/coverage_write_interposer.c'), '-o', str(library), '-ldl'])
+        preload = 'DYLD_INSERT_LIBRARIES' if sys.platform == 'darwin' else 'LD_PRELOAD'
+        interrupted = {}
+        for size in ('512', '-512'):
+            expected_record = run([str(work / 'boundary'), size]).stderr.encode()
+            for mode in ('eintr', 'error', 'short', 'zero'):
+                environment = dict(os.environ, **{preload: str(library), 'THREEMOJO_WRITE_TEST': mode})
+                result = subprocess.run([str(work / 'boundary'), size], capture_output=True,
+                                        env=environment, timeout=5)
+                if mode == 'eintr':
+                    assert result.returncode == 0 and result.stderr == expected_record, result
+                else:
+                    assert result.returncode == -signal.SIGABRT, (mode, result)
+                    if mode == 'short':
+                        assert result.stderr.startswith(expected_record[:-1]), result
+                        assert result.stderr.count(expected_record[:8]) == 1, result
+                    else:
+                        assert b'COVLINE:' not in result.stderr and b'COVEVAL2:' not in result.stderr, result
+                interrupted[f'{size}-{mode}'] = result.returncode
+        # Fill a real pipe, interrupt its blocked write without SA_RESTART, then drain it.
+        for size in ('512', '-512'):
+            reader, writer = os.pipe()
+            process = None
+            try:
+                os.set_blocking(writer, False)
+                filled = 0
+                while True:
+                    try:
+                        filled += os.write(writer, b'x' * 4096)
+                    except BlockingIOError:
+                        break
+                os.set_blocking(writer, True)
+                environment = dict(os.environ, **{preload: str(library), 'THREEMOJO_WRITE_TEST': 'signal'})
+                process = subprocess.Popen([str(work / 'boundary'), size], stdout=subprocess.PIPE,
+                                           stderr=writer, env=environment)
+                os.close(writer)
+                writer = -1
+                assert select.select([process.stdout], [], [], 5)[0], 'write did not start'
+                assert os.read(process.stdout.fileno(), 6) == b'READY\n'
+                notice = b''
+                deadline = time.monotonic() + 5
+                while b'INTERRUPTED\n' not in notice and time.monotonic() < deadline:
+                    process.send_signal(signal.SIGUSR1)
+                    if select.select([process.stdout], [], [], 0.02)[0]:
+                        notice += os.read(process.stdout.fileno(), 4096)
+                assert b'INTERRUPTED\n' in notice, 'no real write returned EINTR'
+                captured = bytearray()
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    assert select.select([reader], [], [], 1)[0], 'pipe did not drain'
+                    chunk = os.read(reader, 65536)
+                    if not chunk:
+                        break
+                    captured.extend(chunk)
+                assert process.wait(timeout=5) == 0
+                expected_record = run([str(work / 'boundary'), size]).stderr.encode()
+                assert captured == b'x' * filled + expected_record, 'interrupted record changed or repeated'
+                interrupted[f'{size}-real-signal'] = 0
+            finally:
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                    process.communicate()
+                os.close(reader)
+                if writer != -1:
+                    os.close(writer)
+        (work / 'interrupted-write-status.txt').write_text(str(interrupted) + '\n')
+
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
             for path in work.glob('*.txt'):
@@ -405,7 +481,7 @@ def main():
             shutil.copy(rewritten / 'manifest.txt', args.output / 'manifest.txt')
         print('PASS: recursive and caught-inner-exception vectors, same-frame abandonment, while/elif/continue/else, '
               'nested callbacks, new evaluation-name/type shadowing, 5 real-pipe 8-task captures, exact raw/reduced vectors, '
-              'UTF-8 511/512-byte writes and 513-byte refusal')
+              'UTF-8 511/512-byte writes and 513-byte refusal, repeated EINTR and real-signal recovery, strict write-error refusal')
 
 
 if __name__ == '__main__':

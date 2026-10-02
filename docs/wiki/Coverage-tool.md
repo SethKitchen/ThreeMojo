@@ -83,13 +83,13 @@ Recursive calls and concurrent calls have separate local buffers. An exception b
 
 A nested call that catches an exception cannot overwrite its caller's buffer. Normal function lifetime releases the buffer. The parser and reducer do not reconstruct vectors from pending condition records.
 
-Each record uses one POSIX `write` call. The complete UTF-8 record, including its terminator and newline, must fit in 512 bytes. [POSIX write](https://pubs.opengroup.org/onlinepubs/9690949599/functions/write.html) guarantees atomic pipe records through `PIPE_BUF`. The [portable minimum](https://man7.org/linux/man-pages/man7/pipe.7.html) is 512 bytes. Concurrent probe writers cannot split a record.
+Each record uses one successful POSIX `write` call. The complete UTF-8 record, including its terminator and newline, must fit in 512 bytes. [POSIX write](https://pubs.opengroup.org/onlinepubs/9690949599/functions/write.html) guarantees atomic pipe records through `PIPE_BUF`. The [portable minimum](https://man7.org/linux/man-pages/man7/pipe.7.html) is 512 bytes. Concurrent probe writers cannot split a record.
 
 Module IDs must fit in 480 UTF-8 bytes. This reserves enough bytes for line numbers and outcome suffixes. The instrumenter refuses an oversized module ID or decision vector. It does not remove the obligation.
 
-The runtime terminates on an oversized, failed or short write. The parser rejects incomplete vector records. These checks prevent a partial capture from passing as a shorter complete vector.
+A `write` interrupted before any byte is sent returns `-1` with `EINTR`. The runtime retries the complete record only for that result. It terminates on an oversized record, any other error, or a short write, including a zero-byte write. The parser rejects incomplete vector records. These checks prevent a partial capture from passing as a shorter complete vector.
 
-The runtime uses the C library already used by the project. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
+The runtime uses the C library already used by the project. The pinned private `std.sys._libc_errno` adapter reads thread-local `errno` through `__errno_location` on Linux and `__error` on macOS. The native protocol checks inject repeated `EINTR` and other write results, and interrupt a blocked pipe with a real signal. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
 
 All generated helper aliases and local names now avoid source identifiers. See [trait defaults and generated names](#trait-defaults-and-generated-names).
 

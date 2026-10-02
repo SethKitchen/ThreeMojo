@@ -12,11 +12,13 @@ its partial operands. No identity, global state, or implicit nesting is needed.
 
 Each record uses one write of at most 512 bytes, the POSIX minimum PIPE_BUF.
 Concurrent writers to the capture pipe cannot interleave bytes within a record.
-A failed or short write terminates the suite instead of certifying missing data.
+An interrupted write retries the complete record. Other failed or short writes
+terminate the suite instead of certifying missing data.
 """
 
 from std.ffi import external_call
 from std.memory import stack_allocation
+from std.sys._libc_errno import ErrNo, get_errno
 
 comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
@@ -30,11 +32,15 @@ def _emit(record: String):
     var size = record.byte_length()
     if size > MAX_RECORD_BYTES:
         external_call["abort", NoneType]()
-    var written = external_call["write", Int](
-        2, record.unsafe_ptr().unsafe_bitcast[NoneType](), size
-    )
-    if written != size:
-        external_call["abort", NoneType]()
+    while True:
+        var written = external_call["write", Int](
+            2, record.unsafe_ptr().unsafe_bitcast[NoneType](), size
+        )
+        if written == size:
+            return
+        # EINTR reports that no bytes were written. Keep the full record atomic.
+        if written != -1 or get_errno() != ErrNo.EINTR:
+            external_call["abort", NoneType]()
 
 
 @inline(.never)
@@ -55,11 +61,15 @@ def _emit_hit(id: StaticString, suffix: StaticString):
     for value in suffix.as_bytes():
         bytes[unsafe_offset=index] = value
         index += 1
-    var written = external_call["write", Int](
-        2, bytes.unsafe_bitcast[NoneType](), size
-    )
-    if written != size:
-        external_call["abort", NoneType]()
+    while True:
+        var written = external_call["write", Int](
+            2, bytes.unsafe_bitcast[NoneType](), size
+        )
+        if written == size:
+            return
+        # EINTR reports that no bytes were written. Keep the full record atomic.
+        if written != -1 or get_errno() != ErrNo.EINTR:
+            external_call["abort", NoneType]()
 
 
 @inline(.never)
