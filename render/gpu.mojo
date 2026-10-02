@@ -2151,9 +2151,46 @@ def program_starts(programs: NodeProgramStore) -> List[Int]:
     return starts^
 
 
+def _packed_index(value: Int) raises -> Float32:
+    """Encode an address or extent without rounding its integer value."""
+    if value < 0 or value > 2147483647:
+        raise Error("A GPU packed index must fit a nonnegative Int32")
+    var packed = Float32(value)
+    if Int(packed) != value:
+        raise Error(
+            "A GPU packed index must be exactly representable as Float32"
+        )
+    return packed
+
+
+def _packed_offset(base: Int, offset: Int) raises -> Float32:
+    """Encode a combined buffer offset after checking addition bounds."""
+    if (
+        base < 0
+        or offset < 0
+        or base > 2147483647
+        or offset > 2147483647 - base
+    ):
+        raise Error("A GPU packed offset must fit a nonnegative Int32")
+    return _packed_index(base + offset)
+
+
+def _volume_block_size(width: Int, height: Int, depth: Int) raises -> Int:
+    """Check the header and block size before decoding a volume."""
+    if width < 1 or height < 1 or depth < 1:
+        raise Error("A GPU volume needs positive dimensions")
+    _ = _packed_index(width)
+    _ = _packed_index(height)
+    _ = _packed_index(depth)
+    var limit = (2147483647 - VOLUME_HEADER) // 4
+    if width > limit // height // depth:
+        raise Error("A GPU volume block must fit Int32 addressing")
+    return VOLUME_HEADER + width * height * depth * 4
+
+
 def volume_blocks(
     volumes: Data3DTextureStore, arrays: DataArrayTextureStore
-) -> Tuple[List[Float32], List[Int], List[Int]]:
+) raises -> Tuple[List[Float32], List[Int], List[Int]]:
     """Return every 3D and array texture decoded, each a block of
     `VOLUME_HEADER` floats -- width, height, depth, the three wrap modes
     and the filter -- and then its texels, four floats each; and where each
@@ -2165,12 +2202,22 @@ def volume_blocks(
 
     Returns:
         The floats, the 3D textures' starts and the array textures'.
+
+    Raises:
+        Error: If a texture is invalid, a dimension cannot be stored
+            exactly in its Float32 header, or a block exceeds Int32 addressing.
     """
     var floats = List[Float32]()
     var volume_starts = List[Int]()
     var array_starts = List[Int]()
     for index in range(volumes.count()):
         ref volume = volumes.textures[index]
+        var size = _volume_block_size(
+            volume.image.width, volume.image.height, volume.image.depth
+        )
+        if len(floats) > 2147483647 - size:
+            raise Error("GPU volume blocks must fit Int32 addressing")
+        volume.validate()
         volume_starts.append(len(floats))
         _append_block(
             floats,
@@ -2185,6 +2232,12 @@ def volume_blocks(
         )
     for index in range(arrays.count()):
         ref array = arrays.textures[index]
+        var size = _volume_block_size(
+            array.image.width, array.image.height, array.image.depth
+        )
+        if len(floats) > 2147483647 - size:
+            raise Error("GPU volume blocks must fit Int32 addressing")
+        array.validate()
         array_starts.append(len(floats))
         _append_block(
             floats,
@@ -2210,11 +2263,14 @@ def _append_block(
     wrap_r: Int,
     filter: Int,
     texels: List[FloatColor],
-):
-    """Append one decoded texture's header and texels."""
-    floats.append(Float32(width))
-    floats.append(Float32(height))
-    floats.append(Float32(depth))
+) raises:
+    """Append one decoded texture's exact header and texels."""
+    var w = _packed_index(width)
+    var h = _packed_index(height)
+    var d = _packed_index(depth)
+    floats.append(w)
+    floats.append(h)
+    floats.append(d)
     floats.append(Float32(wrap_s))
     floats.append(Float32(wrap_t))
     floats.append(Float32(wrap_r))
@@ -2254,7 +2310,7 @@ def flatten_programs(
     blocks_base: Int = 0,
     volume_starts: List[Int] = List[Int](),
     array_starts: List[Int] = List[Int](),
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return every node program's floats end to end, as they follow the
     fog in the fog buffer.
 
@@ -2270,6 +2326,10 @@ def flatten_programs(
 
     Returns:
         The floats, in id order.
+
+    Raises:
+        Error: If a remapped texture address cannot be stored exactly
+            as a nonnegative Int32 value in a Float32 slot.
     """
     var flat = List[Float32]()
     for index in range(programs.count()):
@@ -2282,20 +2342,22 @@ def flatten_programs(
         for at in range(len(program.cube_offsets)):
             var cube = Int(program.code[program.cube_offsets[at]])
             if cube >= 0:
-                flat[start + program.cube_offsets[at]] = Float32(
-                    cube_base + cube * CUBE_ROWS
+                if cube > 2147483647 // CUBE_ROWS:
+                    raise Error("A GPU cube row must fit Int32 addressing")
+                flat[start + program.cube_offsets[at]] = _packed_offset(
+                    cube_base, cube * CUBE_ROWS
                 )
         for at in range(len(program.volume_offsets)):
             var volume = Int(program.code[program.volume_offsets[at]])
             if volume >= 0 and volume < len(volume_starts):
-                flat[start + program.volume_offsets[at]] = Float32(
-                    blocks_base + volume_starts[volume]
+                flat[start + program.volume_offsets[at]] = _packed_offset(
+                    blocks_base, volume_starts[volume]
                 )
         for at in range(len(program.array_offsets)):
             var array = Int(program.code[program.array_offsets[at]])
             if array >= 0 and array < len(array_starts):
-                flat[start + program.array_offsets[at]] = Float32(
-                    blocks_base + array_starts[array]
+                flat[start + program.array_offsets[at]] = _packed_offset(
+                    blocks_base, array_starts[array]
                 )
     return flat^
 
@@ -9962,10 +10024,12 @@ struct GpuRenderer(Movable):
         Raises:
             Error: If a texture holds a wrap, filter or color space that is
                 none of the named values, a cube texture is refused by
-                `CubeTexture.validate`, or the device buffers cannot be
-                made or filled. Either way nothing on the device has changed.
+                `CubeTexture.validate`, a volume fails validation or cannot be
+                packed exactly, or the device buffers cannot be made or
+                filled. Either way nothing on the device has changed.
         """
         var flattened = flatten_textures(textures, cubes)
+        var blocks = volume_blocks(volumes, arrays)
         ref bytes = flattened[0]
         ref rows = flattened[1]
 
@@ -9993,7 +10057,6 @@ struct GpuRenderer(Movable):
         self.table = table^
         self.uploaded = textures.count()
         self.uploaded_cubes = cubes.count()
-        var blocks = volume_blocks(volumes, arrays)
         self.volume_floats = blocks[0].copy()
         self.volume_starts = blocks[1].copy()
         self.array_starts = blocks[2].copy()

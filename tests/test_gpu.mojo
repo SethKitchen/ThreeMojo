@@ -12379,6 +12379,27 @@ def test_both_backends_read_a_3d_and_an_array_texture_alike() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_a_rejected_volume_upload_keeps_the_previous_texture_state() raises:
+    from render.texture import data_texture
+
+    if skipped_for_lack_of_a_gpu(
+        "a rejected volume upload keeps its old state"
+    ):
+        return
+    var renderer = GpuRenderer(2, 2)
+    renderer.set_textures(TextureStore())
+    var textures = TextureStore()
+    _ = textures.add(data_texture(1, 1, [1.0, 0.0, 0.0, 1.0]))
+    var volumes = Data3DTextureStore()
+    _ = volumes.add(Data3DTexture(a_gpu_stack()))
+    volumes.textures[0].image.width = (1 << 24) + 1
+    with assert_raises(contains="exactly representable"):
+        renderer.set_textures(textures, volumes=volumes)
+    assert_equal(renderer.uploaded, 0)
+    assert_equal(len(renderer.volume_starts), 0)
+    assert_equal(len(renderer.volume_floats), 0)
+
+
 def test_the_gpu_refuses_a_stacked_texture_or_a_cube_it_cannot_read() raises:
     if skipped_for_lack_of_a_gpu("the gpu refuses a stacked texture"):
         return
@@ -14938,6 +14959,22 @@ struct _ScalarMathKernels:
         for component in range(12):
             output[unsafe_offset=12 * at + component] = values[component]
 
+    @staticmethod
+    def matrix_inverse_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate shared matrix inverse paths on device inputs."""
+        from max.gpu import global_idx
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var values = matrix_inverse_sample(inputs[unsafe_offset=at])
+        for component in range(3):
+            output[unsafe_offset=3 * at + component] = values[component]
+
 
 def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
     from math.arc_tangent import atan2_float32, atan_float32
@@ -15092,24 +15129,7 @@ def matrix_inverse_sample(value: Float32) -> Array[Float32, 3]:
     return result^
 
 
-def matrix_inverse_kernel(
-    output: MutPointer[Float32, MutAnyOrigin],
-    inputs: MutPointer[Float32, MutAnyOrigin],
-    count: Int32,
-):
-    """Evaluate shared matrix inverse paths on device inputs."""
-    from max.gpu import global_idx
-
-    var at = Int(global_idx.x)
-    if at >= Int(count):
-        return
-    var values = matrix_inverse_sample(inputs[unsafe_offset=at])
-    for component in range(3):
-        output[unsafe_offset=3 * at + component] = values[component]
-
-
 def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
-    from max.gpu.host import DeviceContext
     from std.math import isfinite
 
     if skipped_for_lack_of_a_gpu("shared matrix inverses across scales"):
@@ -15123,7 +15143,7 @@ def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
     with device_inputs.map_to_host() as host:
         for at in range(len(inputs)):
             host[at] = inputs[at]
-    context.enqueue_function[matrix_inverse_kernel](
+    context.enqueue_function[_ScalarMathKernels.matrix_inverse_kernel](
         output.unsafe_ptr(),
         device_inputs.unsafe_ptr(),
         Int32(len(inputs)),

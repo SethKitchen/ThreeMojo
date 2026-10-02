@@ -44,6 +44,8 @@ An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors
 
 `set_textures` builds the new buffers first and replaces the old ones together with the count. A failed upload leaves the previous upload whole.
 
+Volume and array textures are validated before the upload changes device state. Their dimensions and remapped program addresses must fit Int32 and remain exact in Float32. An address that would round is rejected. Large aligned values can remain exact; the CPU packing tests check these bounds without large allocations.
+
 An antialiased frame is drawn at `Renderer.supersampled()`'s size and shrunk with `render.antialias.downsample`. Pass that renderer's `render_scale` as the draw's `line_width`, or every line thins out when the frame is averaged down. The CPU renderer resolves in linear light instead, which the GPU cannot do while it returns bytes; see [Renderer](Renderer#anti-aliasing). A texture's `anisotropy` crosses in the descriptor table, and the kernel takes the same taps the host takes; see [Textures](Textures#anisotropy).
 
 ### Multisampled targets on the GPU

@@ -14,6 +14,10 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parent.parent
+GPU_ENTRIES = (
+    'tests/test_gpu.mojo', 'tests/test_gpu_layout.mojo',
+    'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
+)
 
 
 class GpuCompileRecipeTests(unittest.TestCase):
@@ -24,7 +28,7 @@ class GpuCompileRecipeTests(unittest.TestCase):
         # Use the maintained lists, including their variable references.
         lists = '\n'.join(re.findall(
             r'^GPU_(?:LIB_SOURCES|HOST_TESTS|TESTS|ENTRY_POINTS)\s*:=.*$',
-            source, re.MULTILINE))
+            source.replace('\\\n', ' '), re.MULTILINE))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'compiler.py').write_text(
@@ -57,10 +61,8 @@ class GpuCompileRecipeTests(unittest.TestCase):
     def test_all_entries_build_with_explicit_target_without_running(self):
         results, calls, stamps = self.run_recipe(extra_entry=True)
         self.assertEqual(results[0].returncode, 0, results[0].stdout + results[0].stderr)
-        self.assertEqual({call[-1] for call in calls}, {
-            'tests/test_gpu.mojo', 'tests/test_gpu_layout.mojo',
-            'bench/raster_bench.mojo', 'tests/new_device.mojo',
-        })
+        self.assertEqual({call[-1] for call in calls},
+                         {*GPU_ENTRIES, 'tests/new_device.mojo'})
         for call in calls:
             self.assertEqual(call[:-1], [
                 'build', '-I', '.', '--target-accelerator=sm_80',
@@ -70,8 +72,7 @@ class GpuCompileRecipeTests(unittest.TestCase):
         self.assertIn('compiled (not run)', results[0].stdout)
 
     def test_any_entry_compile_error_fails_without_stamping(self):
-        for entry in ('tests/test_gpu.mojo', 'tests/test_gpu_layout.mojo',
-                      'bench/raster_bench.mojo'):
+        for entry in GPU_ENTRIES:
             with self.subTest(entry=entry):
                 results, calls, stamps = self.run_recipe(failed_source=entry)
                 self.assertNotEqual(results[0].returncode, 0)
@@ -83,7 +84,7 @@ class GpuCompileRecipeTests(unittest.TestCase):
         results, calls, stamps = self.run_recipe(
             targets=('compile-gpu', 'compile-gpu', '-B compile-gpu'))
         self.assertTrue(all(result.returncode == 0 for result in results))
-        self.assertEqual(len(calls), 6)
+        self.assertEqual(len(calls), 2 * len(GPU_ENTRIES))
         self.assertNotIn('compiled (not run)', results[1].stdout)
         self.assertIn('compiled (not run)', results[2].stdout)
         self.assertEqual(stamps, {'compile-gpu-stamp'})
@@ -92,7 +93,8 @@ class GpuCompileRecipeTests(unittest.TestCase):
         results, calls, stamps = self.run_recipe(
             targets=('lint-gpu MOJOFLAGS="-I ."',))
         self.assertEqual(results[0].returncode, 0, results[0].stdout + results[0].stderr)
-        self.assertEqual([call[0] for call in calls], ['build'] * 3 + ['doc'] * 2)
+        self.assertEqual([call[0] for call in calls],
+                         ['build'] * len(GPU_ENTRIES) + ['doc'] * 2)
         self.assertEqual({call[-1] for call in calls if call[0] == 'doc'},
                          {'render/gpu.mojo', 'render/gpu_vxgi.mojo'})
         self.assertEqual(stamps, {'compile-gpu-stamp', 'lint-gpu-stamp'})
@@ -117,7 +119,7 @@ class GpuCompileRecipeTests(unittest.TestCase):
         }):
             results, calls, stamps = self.run_recipe()
             self.assertEqual(results[0].returncode, 0, results[0].stdout + results[0].stderr)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), len(GPU_ENTRIES))
             self.assertEqual(stamps, {'compile-gpu-stamp'})
 
 
