@@ -39,6 +39,14 @@ three.js sets a parameter with a fluent `set<Param>`. In this port, set the fiel
 
 All tree parameters and list entries must be finite. The section length and radius exponent must be positive. The taper curve must be zero or more. An active root flare needs a positive flare fraction. These checks run before growth.
 
+Finite parameters do not guarantee finite output. `tubes()` raises `Error` if a generated ring or branch length is nonfinite, or a generated direction is zero. Its returned frames have finite unit tangents and normals, perpendicular within floating-point precision. Large finite directions use scale-safe normalization.
+
+Internal child sampling keeps three.js's independently normalized tangent and normal. The sampled pair need not be perpendicular. Each child tube starts with a new perpendicular normal.
+
+`build()` also raises `Error` if a generated vertex is nonfinite or exceeds the finite `Float32` range. A finite skeleton can therefore succeed while its bake fails. Positions that round to zero remain supported. The checks apply to generated values, with no fixed upper bound on finite input parameters.
+
+`up_pull`, `child_start` and `trunk_clear` accept finite values outside zero to one, as the three.js r186 setters do. Positive `up_pull` extrapolates the direction blend; zero and negative values disable it. Child placement clamps the sampled fraction to zero through 0.999. Other child calculations still use the original fraction. These values remain subject to the generated-output checks.
+
 A zero child count stops branching. A level past the end of a parameter list reuses its last entry.
 
 ## Terrain
