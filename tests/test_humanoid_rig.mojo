@@ -52,6 +52,8 @@ from extensions.humanoid.rig.joints import (
     named_joints,
 )
 from extensions.humanoid.rig.weights import (
+    _quantized_coordinate,
+    _weld_key,
     _welded_edges,
     bone_weights,
     part_legs,
@@ -64,6 +66,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from renderers.renderer import available_workers
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -413,6 +416,119 @@ def test_weld_hash_collisions_do_not_join_distinct_positions() raises:
     assert_equal(first, 0)
     assert_equal(second, 1)
     assert_equal(third, 1)
+
+
+def test_weld_quantization_rejects_each_invalid_axis_before_skin_writes() raises:
+    var rig = _rig()
+    var invalid: List[Float32] = [
+        bitcast[DType.float32](UInt32(0x7FC00000)),
+        bitcast[DType.float32](UInt32(0x7F800000)),
+        bitcast[DType.float32](UInt32(0xFF800000)),
+        1e14,
+        -1e14,
+        2e14,
+        -2e14,
+        1e34,
+        -1e34,
+        # First rejected positive coordinate and first rejected negative
+        # neighbor, from exact binary32 product rounding at +/-2**63.
+        bitcast[DType.float32](UInt32(0x56A7C5AC)),
+        bitcast[DType.float32](UInt32(0xD6A7C5AD)),
+    ]
+    for axis in range(3):
+        for value in invalid:
+            var p = Vector3(
+                value if axis == 0 else Float32(0),
+                value if axis == 1 else Float32(0),
+                value if axis == 2 else Float32(0),
+            )
+            # An invalid later point cannot reach a candidate conversion.
+            var points: List[Vector3] = [Vector3(0, 0, 0), p]
+            with assert_raises(contains="Skin positions"):
+                _ = _welded_edges(points, [])
+            for existing in [False, True]:
+                var skin = _mesh(points, [])
+                var before = skin.clone_attribute(String(POSITION)).data.copy()
+                if existing:
+                    skin.set_attribute(
+                        String(SKIN_INDEX), BufferAttribute([7.0, 6, 5, 4], 4)
+                    )
+                    skin.set_attribute(
+                        String(SKIN_WEIGHT),
+                        BufferAttribute([0.4, 0.3, 0.2, 0.1], 4),
+                    )
+                with assert_raises(contains="Skin positions"):
+                    skin_weights(skin, rig)
+                assert_equal(skin.has_attribute(String(SKIN_INDEX)), existing)
+                assert_equal(skin.has_attribute(String(SKIN_WEIGHT)), existing)
+                if existing:
+                    assert_equal(
+                        skin.clone_attribute(String(SKIN_INDEX)).data,
+                        [Float32(7), 6, 5, 4],
+                    )
+                    assert_equal(
+                        skin.clone_attribute(String(SKIN_WEIGHT)).data,
+                        [Float32(0.4), 0.3, 0.2, 0.1],
+                    )
+                # Compare raw bits so an unchanged NaN compares equal.
+                ref after = skin.attribute_view(String(POSITION))
+                for k in range(len(before)):
+                    assert_equal(
+                        bitcast[DType.uint32](after.data[k]),
+                        bitcast[DType.uint32](before[k]),
+                    )
+                assert_equal(len(skin.index), 0)
+
+
+def test_weld_quantization_accepts_exact_integer_domain_neighbors() raises:
+    # Independent binary32 oracle: rounded products are 2**63 - 2**40
+    # and -2**63. Their adjacent outer coordinates are rejected above.
+    var positive = bitcast[DType.float32](UInt32(0x56A7C5AB))
+    var negative = bitcast[DType.float32](UInt32(0xD6A7C5AC))
+    assert_equal(_quantized_coordinate(positive), 9223370937343148032)
+    assert_equal(_quantized_coordinate(negative), Int.MIN)
+    assert_equal(_quantized_coordinate(-positive), -9223370937343148032)
+    assert_equal(_quantized_coordinate(0), 0)
+    assert_equal(_quantized_coordinate(-0.0), 0)
+    for axis in range(3):
+        for value in [positive, negative, -positive]:
+            var p = Vector3(
+                value if axis == 0 else Float32(0),
+                value if axis == 1 else Float32(0),
+                value if axis == 2 else Float32(0),
+            )
+            var graph = _welded_edges([Vector3(0, 0, 0), p, p], [])
+            assert_equal(graph[0], [0, 1, 1])
+
+
+def test_weld_hash_has_explicit_modular_arithmetic() raises:
+    # Exact integer products, masked to 64 bits, give these constants.
+    # Products overflow signed Int even for otherwise supported positions.
+    assert_equal(_weld_key(Int.MAX, Int.MIN, -1), UInt64(0xF4242))
+    assert_equal(_weld_key(Int.MIN, 0, 0), UInt64(0x8000000000000000))
+    assert_equal(_weld_key(1 << 62, 1 << 61, 17), UInt64(0x2000000000000011))
+    assert_equal(_weld_key(-1, -1, -1), UInt64(0xFFFFFFFFFFFFFF93))
+
+
+def test_weld_ordinary_grid_and_adjacency_are_unchanged() raises:
+    var graph = _welded_edges(
+        [
+            Vector3(0.125, -0.25, 0.5),
+            Vector3(0.125001, -0.250001, 0.500001),
+            Vector3(-0.125, 0.25, -0.5),
+            Vector3(-0.0, 0, 0),
+            Vector3(0.000001, -0.000001, 0),
+            Vector3(0.00001, 0, 0),
+        ],
+        [0, 2, 3, 1, 2, 4, 0, 0, 5],
+    )
+    assert_equal(graph[0], [0, 0, 2, 3, 3, 5])
+    assert_equal(graph[1][0], [2, 3, 5])
+    assert_equal(graph[1][1], List[Int]())
+    assert_equal(graph[1][2], [0, 3])
+    assert_equal(graph[1][3], [2, 0])
+    assert_equal(graph[1][4], List[Int]())
+    assert_equal(graph[1][5], [0])
 
 
 def test_attribute_transfer_searches_past_the_first_populated_ring() raises:
