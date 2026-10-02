@@ -1151,10 +1151,15 @@ A text that bends the grammar is refused with the byte it went wrong at. Nesting
 
 The reader reads elements, attributes, text, CDATA sections, comments and processing instructions. It resolves the five named entities and character references. It changes each line ending to a line feed. It skips a document type declaration, so an entity that the declaration names is not known. It does not resolve namespaces: `a:b` is the name of the element.
 
-A text that is not well formed is refused with the byte it went wrong at:
+The reader refuses these malformed forms with their byte position:
 
 - No root element, or text after it. A declaration, a comment, a CDATA section or an instruction that is not closed.
 - A malformed name or tag. An attribute without a quoted value, a `<` in a value, or an attribute given twice.
 - An end tag that does not match, or an element that is not closed.
 - An entity that is not known, or a character reference that names no character.
 - Elements nested deeper than `MAX_XML_DEPTH`.
+- Forbidden XML characters, signed character references, a double hyphen inside a comment, or `]]>` outside CDATA.
+
+CRLF and CR become LF in text and CDATA. Raw whitespace in attributes becomes a space; a CRLF pair gives one space. Character references keep the character they name. Quoted delimiters and comments inside a document type do not close it early. No external data is read and declared entities are not expanded.
+
+This is a limited reader, not a complete XML validator. Full name, instruction and prolog grammar checks remain tracked in issue #481.
