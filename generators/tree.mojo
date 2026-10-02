@@ -118,7 +118,7 @@ struct TreeParameters(Copyable, Movable):
     var min_length: Length
     # How far a branch sags per meter of its step; the trunk does not.
     var droop: InverseLength
-    # How far a child is pulled toward straight up: zero to one.
+    # A positive blend toward up; values above one extrapolate.
     var up_pull: Float64
     # The random wobble on each step of a tube, per level.
     var gnarl: List[Float64]
@@ -214,26 +214,50 @@ struct TreeParameters(Copyable, Movable):
             raise Error("An active root flare needs a positive flare fraction")
 
 
-def _perpendicular(v: Vec3d) -> Vec3d:
+def _finite_vector(v: Vec3d, what: String) raises:
+    """Refuse a generated vector with a nonfinite component."""
+    check_finite(v.x, what)
+    check_finite(v.y, what)
+    check_finite(v.z, what)
+
+
+def _direction(v: Vec3d) raises -> Vec3d:
+    """Normalize a finite, nonzero generated direction."""
+    _finite_vector(v, "A generated tree direction")
+    if v.x == 0 and v.y == 0 and v.z == 0:
+        raise Error("A generated tree direction must be nonzero")
+    return v.normalized()
+
+
+def _perpendicular(v: Vec3d) raises -> Vec3d:
     """Return a unit vector across `v`: its cross product with the axis
     it leans on least, three.js's `perpendicular`."""
     var axis = Vec3d(1, 0, 0) if abs(v.x) < 0.9 else Vec3d(0, 1, 0)
-    return v.cross(axis).normalized()
+    return _direction(v.cross(axis))
 
 
-def _transport(t0: Vec3d, t1: Vec3d, n: Vec3d) -> Vec3d:
+def _transport(t0: Vec3d, t1: Vec3d, n: Vec3d) raises -> Vec3d:
     """Return `n` turned by the turn that takes tangent `t0` to `t1`,
-    three.js's `transport`. Parallel tangents leave it as it is."""
+    three.js's `transport`. A zero turn axis keeps the normal."""
     var axis = t0.cross(t1)
     var s = axis.length()
-    if s < 1e-6:
-        return n
-    return n.rotated(axis * (1.0 / s), atan2(s, t0.dot(t1)))
+    var normal = n
+    if s > 0:
+        normal = n.rotated(axis.normalized(), atan2(s, t0.dot(t1)))
+    # Correct accumulated roundoff. Exact antiparallel tangents have no
+    # unique turn axis; keeping n selects the half-turn about n.
+    return _direction(normal - t1 * normal.dot(t1))
 
 
-def _ring_at(rings: List[TreeRing], t: Float64) -> TreeRing:
+def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
     """Return the frame a fraction of the way along a tube, three.js's
-    `ringAt`."""
+    `ringAt`.
+
+    Keep three.js's independently normalized interpolants for child
+    rotation compatibility. This sampled basis need not be orthogonal.
+    `_grow` constructs a new perpendicular normal for every child tube.
+    """
+    check_finite(t, "A generated child fraction")
     var f = max(0.0, min(0.999, t)) * Float64(len(rings) - 1)
     var i = Int(floor(f))
     var frac = f - Float64(i)
@@ -241,8 +265,8 @@ def _ring_at(rings: List[TreeRing], t: Float64) -> TreeRing:
     ref b = rings[i + 1]
     return TreeRing(
         a.position.lerp(b.position, frac),
-        a.tangent.lerp(b.tangent, frac).normalized(),
-        a.normal.lerp(b.normal, frac).normalized(),
+        _direction(a.tangent.lerp(b.tangent, frac)),
+        _direction(a.normal.lerp(b.normal, frac)),
         a.radius + (b.radius - a.radius) * frac,
     )
 
@@ -280,9 +304,10 @@ def _grow(
     level: Int,
     p: TreeParameters,
     mut random: SeededRandom,
-):
+) raises:
     """Grow one branch as a tube, then its children, three.js's
     `growBranch`."""
+    check_finite(length, "A generated branch length")
     # Clamp in floating point before converting to Int. A finite length
     # and step can have a quotient far outside the integer range.
     var sections = _js_round(
@@ -293,24 +318,23 @@ def _grow(
     var gnarl = p.gnarl[min(level, len(p.gnarl) - 1)]
     var start = p.trunk_clear if level == 0 else p.child_start
     var sag = Float64(p.droop.to(PER_METER)) * step if level > 0 else 0.0
-    var tangent = direction.normalized()
+    var tangent = _direction(direction)
     var normal = _perpendicular(tangent)
     var position = base
     var rings = List[TreeRing]()
     for s in range(sections + 1):  # pragma: no branch
         var t = Float64(s) / Float64(sections)
-        rings.append(
-            TreeRing(
-                position, tangent, normal, _radius_at(p, base_radius, level, t)
-            )
-        )
+        _finite_vector(position, "A generated tree position")
+        var radius = _radius_at(p, base_radius, level, t)
+        check_finite(radius, "A generated tree radius")
+        rings.append(TreeRing(position, tangent, normal, radius))
         if s < sections:
             var dx = _signed(random) * gnarl
             var dy = _signed(random) * gnarl
             var dz = _signed(random) * gnarl
-            var next = Vec3d(
-                tangent.x + dx, tangent.y + dy - sag, tangent.z + dz
-            ).normalized()
+            var next = _direction(
+                Vec3d(tangent.x + dx, tangent.y + dy - sag, tangent.z + dz)
+            )
             normal = _transport(tangent, next, normal)
             position = position + next * step
             tangent = next
@@ -335,7 +359,7 @@ def _grow(
             ring.tangent, roll
         )
         if p.up_pull > 0:
-            child = child.lerp(up, p.up_pull).normalized()
+            child = _direction(child.lerp(up, p.up_pull))
         var child_base = max(
             meters(p.min_radius), min(base_radius * pipe_drop, ring.radius)
         )
@@ -378,12 +402,20 @@ def _bake(tubes: List[TreeTube]) raises -> BufferGeometry:
     return geometry^
 
 
+def _position32(value: Float64) raises -> Float32:
+    """Round a finite generated coordinate within the Float32 range."""
+    check_finite(value, "A generated tree vertex")
+    if abs(value) > 3.4028234663852886e38:
+        raise Error("A generated tree vertex exceeds the Float32 range")
+    return Float32(value)
+
+
 def _write_ring(
     mut positions: List[Float32],
     mut normals: List[Float32],
     ring: TreeRing,
     radial: Int,
-):
+) raises:
     """Write one ring's vertices: a circle round its center in the plane of
     its normal and binormal."""
     var binormal = ring.tangent.cross(ring.normal)
@@ -394,9 +426,9 @@ def _write_ring(
         var nx = c * ring.normal.x + s * binormal.x
         var ny = c * ring.normal.y + s * binormal.y
         var nz = c * ring.normal.z + s * binormal.z
-        positions.append(Float32(ring.position.x + nx * ring.radius))
-        positions.append(Float32(ring.position.y + ny * ring.radius))
-        positions.append(Float32(ring.position.z + nz * ring.radius))
+        positions.append(_position32(ring.position.x + nx * ring.radius))
+        positions.append(_position32(ring.position.y + ny * ring.radius))
+        positions.append(_position32(ring.position.z + nz * ring.radius))
         normals.append(Float32(nx))
         normals.append(Float32(ny))
         normals.append(Float32(nz))
@@ -449,7 +481,8 @@ struct TreeGenerator(Movable):
 
         Raises:
             Error: If the parameters are refused; see
-                `TreeParameters.check`.
+                `TreeParameters.check`. Also if a generated Float64 value
+                is nonfinite or a generated direction is zero.
         """
         self.parameters.check()
         var random = generator_random(self.parameters.seed)
@@ -478,7 +511,7 @@ struct TreeGenerator(Movable):
             The geometry.
 
         Raises:
-            Error: If the parameters are refused; see
-                `TreeParameters.check`.
+            Error: If `tubes()` fails, or a generated vertex is nonfinite
+                or outside the finite Float32 range.
         """
         return _bake(self.tubes())
