@@ -10,8 +10,12 @@ simulator plugin, `Carla/Actor/ActorBlueprintFunctionLibrary.cpp`. A
 missing attribute, or one of another type, gives the default that the
 sensor passes. A number reads as C's `atoi` and `atof` read it, with
 `extensions.carla.blueprint.read_int` and `read_float`. A bool is true
-for "true" in any case and false for any other text.
+for "true" in any case and false for any other text. Physical float
+settings must be finite after conversion to Float32; this check is an
+intentional difference from CARLA's permissive number reader.
 """
+
+from std.math import isfinite
 
 from extensions.carla.blueprint import (
     ATTRIBUTE_BOOL,
@@ -23,6 +27,50 @@ from extensions.carla.blueprint import (
     read_float,
     read_int,
 )
+
+
+def validate_sensor_float(value: Float32, name: String) raises:
+    """Require a physical setting to be finite after Float32 conversion.
+
+    Args:
+        value: The setting in the sensor's arithmetic type.
+        name: The setting's name for an error.
+
+    Raises:
+        Error: If the value is NaN or infinite.
+    """
+    if not isfinite(value):
+        raise Error(name + " must be finite in Float32")
+
+
+def validate_sensor_nonnegative(value: Float32, name: String) raises:
+    """Require a finite, nonnegative physical setting.
+
+    Args:
+        value: The setting in the sensor's arithmetic type.
+        name: The setting's name for an error.
+
+    Raises:
+        Error: If the value is nonfinite or negative.
+    """
+    validate_sensor_float(value, name)
+    if value < 0:
+        raise Error(name + " cannot be negative")
+
+
+def validate_sensor_positive(value: Float32, name: String) raises:
+    """Require a finite, positive physical setting.
+
+    Args:
+        value: The setting in the sensor's arithmetic type.
+        name: The setting's name for an error.
+
+    Raises:
+        Error: If the value is nonfinite or not positive.
+    """
+    validate_sensor_float(value, name)
+    if value <= 0:
+        raise Error(name + " must be positive")
 
 
 def _find(
@@ -50,13 +98,14 @@ def attribute_float(
         The value as `atof` reads it, rounded to a `Float32`.
 
     Raises:
-        Error: Never for these inputs; the number reader's error is passed
-            on.
+        Error: If the selected value is not finite in Float32.
     """
     var text = _find(attributes, id, ATTRIBUTE_FLOAT)
-    if not Bool(text):
-        return default
-    return Float32(read_float(text.value()))
+    var value = default
+    if Bool(text):
+        value = Float32(read_float(text.value()))
+    validate_sensor_float(value, id)
+    return value
 
 
 def attribute_int(

@@ -89,6 +89,9 @@ from extensions.carla.sensor import (
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_float,
+    validate_sensor_nonnegative,
+    validate_sensor_positive,
     attribute_string,
 )
 from extensions.carla.sensor_noise import SensorRandom
@@ -231,6 +234,34 @@ struct PropagationParams(ImplicitlyCopyable):
         self.scenario = URBAN
         self.model = GEOMETRIC
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_float(self.transmit_power, "transmit_power")
+        validate_sensor_float(self.receiver_sensitivity, "receiver_sensitivity")
+        validate_sensor_float(
+            self.combined_antenna_gain, "combined_antenna_gain"
+        )
+        validate_sensor_positive(
+            self.frequency_ghz, "A V2X frequency and reference distance"
+        )
+        validate_sensor_positive(
+            self.reference_distance.value,
+            "A V2X frequency and reference distance",
+        )
+        validate_sensor_nonnegative(
+            self.filter_distance.value, "filter_distance.value"
+        )
+        validate_sensor_nonnegative(
+            self.path_loss_exponent, "path_loss_exponent"
+        )
+        validate_sensor_nonnegative(
+            self.custom_fading_stddev, "custom_fading_stddev"
+        )
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -246,8 +277,7 @@ struct PropagationParams(ImplicitlyCopyable):
             other text keeps the geometric model.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var p = PropagationParams()
         p.transmit_power = attribute_float(attributes, "transmit_power", 21.5)
@@ -281,6 +311,7 @@ struct PropagationParams(ImplicitlyCopyable):
         var model = attribute_string(attributes, "path_loss_model", "geometric")
         if model == "winner":
             p.model = WINNER
+        p.validate()
         return p
 
 
@@ -316,17 +347,12 @@ struct PathLossModel(ImplicitlyCopyable):
             params: The settings.
 
         Raises:
-            Error: If the scenario or the model is not valid, or the
-                frequency or the reference distance is not positive.
+            Error: If the scenario, model, or physical parameters are invalid.
+                Physical values must be finite and in their stated domains.
         """
+        params.validate()
         if not (params.scenario.is_valid() and params.model.is_valid()):
             raise Error("A V2X scenario and loss model must be valid")
-        if not (
-            params.frequency_ghz > 0 and params.reference_distance.value > 0
-        ):
-            raise Error(
-                "A V2X frequency and reference distance must be positive"
-            )
         self.params = params
         self.frequency = Float64(params.frequency_ghz) * 1e9
         self.wavelength = SPEED_OF_LIGHT / self.frequency
@@ -1052,6 +1078,33 @@ struct CamNoise(ImplicitlyCopyable):
         self.yaw_rate_bias = 0
         self.acceleration_stddev = Vector3(0, 0, 0)
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(self.latitude_stddev, "latitude_stddev")
+        validate_sensor_float(self.latitude_bias, "latitude_bias")
+        validate_sensor_nonnegative(self.longitude_stddev, "longitude_stddev")
+        validate_sensor_float(self.longitude_bias, "longitude_bias")
+        validate_sensor_nonnegative(self.altitude_stddev, "altitude_stddev")
+        validate_sensor_float(self.altitude_bias, "altitude_bias")
+        validate_sensor_nonnegative(self.heading_stddev, "heading_stddev")
+        validate_sensor_float(self.heading_bias, "heading_bias")
+        validate_sensor_nonnegative(self.yaw_rate_stddev, "yaw_rate_stddev")
+        validate_sensor_float(self.yaw_rate_bias, "yaw_rate_bias")
+        validate_sensor_nonnegative(self.velocity_stddev, "velocity_stddev")
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.x, "acceleration_stddev.x"
+        )
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.y, "acceleration_stddev.y"
+        )
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.z, "acceleration_stddev.z"
+        )
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -1065,8 +1118,7 @@ struct CamNoise(ImplicitlyCopyable):
             The noise.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var n = CamNoise()
         n.latitude_stddev = attribute_float(attributes, "noise_lat_stddev", 0)
@@ -1087,6 +1139,7 @@ struct CamNoise(ImplicitlyCopyable):
             attribute_float(attributes, "noise_accel_stddev_y", 0),
             attribute_float(attributes, "noise_accel_stddev_z", 0),
         )
+        n.validate()
         return n
 
 
@@ -1144,8 +1197,13 @@ struct CaService(Copyable, Movable):
             generation_delta0: Milliseconds from 2004 to the start.
 
         Raises:
-            Error: If the owner is not alive.
+            Error: If the owner, CAM intervals, or noise settings are invalid.
         """
+        validate_sensor_positive(gen_cam_min, "gen_cam_min")
+        validate_sensor_positive(gen_cam_max, "gen_cam_max")
+        if gen_cam_min > gen_cam_max:
+            raise Error("gen_cam_min must not exceed gen_cam_max")
+        noise.validate()
         var record = world.actor(owner)
         self.owner = owner
         self.vehicle = record.kind == VEHICLE_ACTOR

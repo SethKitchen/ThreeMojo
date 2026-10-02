@@ -91,6 +91,22 @@ A sensor casts its rays against a `RayScene`. `WorldRays` casts against a world'
 
 A hit names its actor and the actor's first semantic tag. A hit on a map surface names no actor. Its tag is the one that `World.project_point` reads there. A hit also carries the velocity of the point and of the actor.
 
+## Physical settings
+
+Physical float settings must be finite in `Float32`. The sensor attribute reader refuses NaN, infinity, and a finite decimal that overflows during conversion. A missing or mistyped attribute keeps its finite default. Metadata strings are not subject to these checks.
+
+Descriptions and sensor constructors also check their domains before they publish state:
+
+- Noise standard deviations, attenuation, and the sensor tick must be nonnegative. Biases and radio power can be negative.
+- Radar range must be positive. Its fields of view are from 0 up to, but not including, 180 degrees. A zero point rate produces no rays.
+- LiDARs require positive range, frequency, point rate, and channel count. Their drop-off rates are from 0 through 1. HSS keeps its CARLA clamp: a nonpositive horizontal resolution becomes 0.01 degrees, and a negative horizontal field of view produces no rays. HSS ignores rotation and point rates; its intensity limit can be zero.
+- Camera contrast thresholds and logarithm epsilon must be positive. RGB gamma, ISO, f-stop, shutter speed, and exposure calibration must be positive. Threshold noise and the refractory period must be nonnegative. A wide-angle lens requires finite coefficients and a positive finite focal length. Its zero-fov attribute still selects the 90-degree fallback.
+- V2X frequency and reference distance must be positive. Its filter distance, path-loss exponent, and fading deviation must be nonnegative. CAM intervals must be positive, with the minimum no greater than the maximum.
+
+These checks are an intentional difference from CARLA's permissive numeric parsing. Boolean parsing still follows CARLA: only `true`, in any letter case, means true. Other text, including `yes`, means false. The generic blueprint can store numeric text that a physical sensor later refuses.
+
+`spawn_sensor` rejects invalid settings without consuming an actor id or a manager slot. If `listen` rejects an existing actor, that actor stays alive and unlistened. Direct IMU, GNSS, radar, DVS, and V2X constructors check descriptions too. These checks do not limit metadata values or change the seeded noise sequence.
+
 ## Noise
 
 Each sensor has its own `SensorRandom`, seeded with its `noise_seed`. The engine is C++'s `std::minstd_rand`, which the C++ standard fixes. The uniform and normal floats follow the GNU C++ library, which CARLA's Linux build uses. The normal is Marsaglia's polar method. A sensor draws in CARLA's order, so one seed gives CARLA's numbers.

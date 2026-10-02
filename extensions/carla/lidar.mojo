@@ -23,6 +23,7 @@ seed.
 from core.assets import Assets
 from core.scene import Scene
 from extensions.carla.capture import nearest_hit
+from extensions.carla.sensor_attributes import validate_sensor_float
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
 from std.math import cos, exp, log, sin, sqrt, trunc
@@ -73,30 +74,62 @@ struct LidarDescription(ImplicitlyCopyable):
         self.dropoff_zero_intensity = 0.4
         self.noise_stddev = Length(0.0, METER)
 
-    def validate(self) raises:
+    def validate(self, rotating: Bool = True) raises:
         """Refuse settings that CARLA would assert on or misread.
 
+        Args:
+            rotating: Whether to check rotating scan rates and sweep limits.
+                HSS scans ignore the rates and clamp a negative sweep to zero.
+
         Raises:
-            Error: If there are no channels, the range, the points per
-                second or the frequency is not positive, the fields of
-                view are out of order, a rate is outside 0 through 1, the
-                intensity limit is not positive, or a length is negative.
+            Error: If a consumed physical value is nonfinite, the scan
+                dimensions or rates are invalid, the fields of view are
+                out of order, a drop-off rate is outside 0 through 1,
+                or attenuation or noise is negative. An HSS intensity
+                limit can be zero; a rotating LiDAR's must be positive.
         """
+        validate_sensor_float(self.range.value, "LiDAR range.value")
+        validate_sensor_float(self.upper_fov.value, "LiDAR upper_fov.value")
+        validate_sensor_float(self.lower_fov.value, "LiDAR lower_fov.value")
+        validate_sensor_float(
+            self.horizontal_fov.value, "LiDAR horizontal_fov.value"
+        )
+        validate_sensor_float(
+            self.atmosphere_attenuation.value,
+            "LiDAR atmosphere_attenuation.value",
+        )
+        validate_sensor_float(
+            self.dropoff_general_rate, "LiDAR dropoff_general_rate"
+        )
+        validate_sensor_float(
+            self.dropoff_zero_intensity, "LiDAR dropoff_zero_intensity"
+        )
+        validate_sensor_float(
+            self.dropoff_intensity_limit, "LiDAR dropoff_intensity_limit"
+        )
+        validate_sensor_float(
+            self.noise_stddev.value, "LiDAR noise_stddev.value"
+        )
         if self.channels < 1:
             raise Error("A LiDAR needs at least one channel")
         if not (self.range.value > 0.0):
             raise Error("A LiDAR needs a positive range")
-        if self.points_per_second < 1:
-            raise Error("A LiDAR needs a positive point rate")
-        if not (self.rotation_frequency.value > 0.0):
-            raise Error("A LiDAR needs a positive rotation frequency")
+        if rotating:
+            validate_sensor_float(
+                self.rotation_frequency.value, "LiDAR rotation_frequency.value"
+            )
+            if self.points_per_second < 1:
+                raise Error("A LiDAR needs a positive point rate")
+            if not (self.rotation_frequency.value > 0.0):
+                raise Error("A LiDAR needs a positive rotation frequency")
         if self.upper_fov.value < self.lower_fov.value:
             raise Error("A LiDAR's upper fov must not be below its lower fov")
-        if not (
-            self.horizontal_fov.value > 0.0
-            and self.horizontal_fov.to(DEGREE) <= 360.0
-        ):
-            raise Error("A LiDAR's horizontal fov must be in (0, 360]")
+        if rotating:
+            if not (
+                self.horizontal_fov.value > 0.0
+                and self.horizontal_fov.to(DEGREE) <= 360.0
+            ):
+                raise Error("A LiDAR's horizontal fov must be in (0, 360]")
         if self.atmosphere_attenuation.value < 0.0:
             raise Error("A LiDAR's attenuation cannot be negative")
         if not (
@@ -106,8 +139,11 @@ struct LidarDescription(ImplicitlyCopyable):
             and self.dropoff_zero_intensity <= 1.0
         ):
             raise Error("A LiDAR drop-off rate must be from 0 through 1")
-        if not (self.dropoff_intensity_limit > 0.0):
-            raise Error("A LiDAR drop-off limit must be positive")
+        if rotating:
+            if not (self.dropoff_intensity_limit > 0.0):
+                raise Error("A LiDAR drop-off limit must be positive")
+        elif self.dropoff_intensity_limit < 0.0:
+            raise Error("An HSS LiDAR drop-off limit cannot be negative")
         if self.noise_stddev.value < 0.0:
             raise Error("A LiDAR's noise cannot be negative")
 

@@ -72,6 +72,9 @@ from extensions.carla.sensor import (
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_float,
+    validate_sensor_nonnegative,
+    validate_sensor_positive,
     attribute_int,
     attribute_string,
 )
@@ -330,11 +333,17 @@ struct WideAngleLens(Copyable, Movable):
             fov: The vertical field of view.
 
         Raises:
-            Error: If the model is not valid or a size is not positive.
+            Error: If the model, size, or physical lens settings are invalid.
         """
         if width <= 0 or height <= 0:
             raise Error("A camera image needs a positive size")
+        validate_sensor_positive(fov.value, "A camera fov")
+        if fov.to(DEGREE) > 360:
+            raise Error("A wide-angle camera fov must not exceed 360 degrees")
+        for coefficient in coefficients:
+            validate_sensor_float(coefficient, "A lens coefficient")
         self.focal_length = compute_distance(model, fov, height, coefficients)
+        validate_sensor_positive(self.focal_length, "A camera focal length")
         self.model = model
         self.coefficients = coefficients^
         self.width = width
@@ -362,7 +371,7 @@ struct WideAngleLens(Copyable, Movable):
             is not zero, and the switches.
 
         Raises:
-            Error: If the image size is not positive.
+            Error: If the image size or physical lens settings are invalid.
         """
         var model = camera_model_of(
             attribute_string(attributes, "camera_model", "perspective")
@@ -386,6 +395,7 @@ struct WideAngleLens(Copyable, Movable):
             Angle(fov, DEGREE),
         )
         var focal = attribute_float(attributes, "focal_length", 0)
+        validate_sensor_nonnegative(focal, "focal_length")
         if focal != 0:
             out.focal_length = focal
         out.perspective = attribute_bool(attributes, "perspective", False)
@@ -399,6 +409,7 @@ struct WideAngleLens(Copyable, Movable):
             )
         if out.fov_mask:
             out.fov_fade_size = attribute_float(attributes, "fov_fade_size", 0)
+            validate_sensor_nonnegative(out.fov_fade_size, "fov_fade_size")
         return out^
 
     def pixel_ray(self, x: Float32, y: Float32) raises -> PixelRay:
@@ -724,6 +735,28 @@ struct DVSConfig(ImplicitlyCopyable):
         self.use_log = True
         self.log_eps = 0.001
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_positive(
+            self.positive_threshold, "An event camera's thresholds"
+        )
+        validate_sensor_positive(
+            self.negative_threshold, "An event camera's thresholds"
+        )
+        validate_sensor_nonnegative(
+            self.sigma_positive_threshold, "sigma_positive_threshold"
+        )
+        validate_sensor_nonnegative(
+            self.sigma_negative_threshold, "sigma_negative_threshold"
+        )
+        validate_sensor_positive(self.log_eps, "log_eps")
+        if self.refractory_period_ns < 0:
+            raise Error("An event camera refractory period cannot be negative")
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -737,8 +770,7 @@ struct DVSConfig(ImplicitlyCopyable):
             The settings. A missing threshold is 0.5, CARLA's fallback.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var c = DVSConfig()
         c.positive_threshold = attribute_float(
@@ -758,6 +790,7 @@ struct DVSConfig(ImplicitlyCopyable):
         )
         c.use_log = attribute_bool(attributes, "use_log", True)
         c.log_eps = attribute_float(attributes, "log_eps", 0.001)
+        c.validate()
         return c
 
 
@@ -829,15 +862,12 @@ struct DVSCamera(Copyable, Movable):
             seed: The seed of the threshold noise.
 
         Raises:
-            Error: If a size or a threshold is not positive; CARLA loops
-                forever on a threshold of zero.
+            Error: If a size is not positive or the configuration is invalid.
+                CARLA loops forever on a threshold of zero.
         """
         if width <= 0 or height <= 0:
             raise Error("An event camera needs a positive size")
-        if not (
-            config.positive_threshold > 0 and config.negative_threshold > 0
-        ):
-            raise Error("An event camera's thresholds must be positive")
+        config.validate()
         self.config = config
         self.rng = SensorRandom(seed)
         self.width = width

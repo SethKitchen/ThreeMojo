@@ -48,6 +48,7 @@ from extensions.carla.pointcloud import (
 )
 from extensions.carla.sensor_attributes import (
     attribute_float,
+    validate_sensor_float,
     attribute_int,
 )
 from extensions.carla.sensor_noise import SensorRandom
@@ -113,19 +114,20 @@ def _fmod(a: Float32, b: Float32) -> Float32:
 
 def lidar_description_from(
     attributes: List[ActorAttributeValue],
+    rotating: Bool = True,
 ) raises -> LidarDescription:
     """Read a LiDAR's settings from its attributes, `SetLidar`.
 
     Args:
         attributes: The actor's attributes.
+        rotating: Whether this is a rotating LiDAR, rather than HSS.
 
     Returns:
         The description. A missing attribute keeps the default of CARLA's
         LiDAR description; a missing range is 10 m.
 
     Raises:
-        Error: Never for these inputs; the number reader's error is passed
-            on.
+        Error: If a physical setting is nonfinite or outside its domain.
     """
     var d = LidarDescription()
     d.channels = attribute_int(attributes, "channels", d.channels)
@@ -174,6 +176,7 @@ def lidar_description_from(
         attribute_float(attributes, "noise_stddev", d.noise_stddev.value),
         METER,
     )
+    d.validate(rotating)
     return d
 
 
@@ -189,12 +192,10 @@ def hss_resolution_from(
         The `horizontal_resolution` attribute, 0.1 degrees without it.
 
     Raises:
-        Error: Never for these inputs; the number reader's error is passed
-            on.
+        Error: If a physical setting is nonfinite or outside its domain.
     """
-    return Angle(
-        attribute_float(attributes, "horizontal_resolution", 0.1), DEGREE
-    )
+    var resolution = attribute_float(attributes, "horizontal_resolution", 0.1)
+    return Angle(resolution, DEGREE)
 
 
 struct SemanticLidarMeasurement(Copyable, Movable):
@@ -505,7 +506,7 @@ def scan_ray_cast_lidar[
 
 def hss_points_per_laser(
     description: LidarDescription, resolution: Angle
-) -> Int:
+) raises -> Int:
     """Return how many rays one HSS laser fires, `AHSSLidar::SimulateLidar`.
 
     Args:
@@ -516,7 +517,12 @@ def hss_points_per_laser(
         The field of view over the step, rounded half away from zero. The
         step is snapped to 0.01 degrees and is 0.01 at least; a negative
         field of view counts as zero.
+
+    Raises:
+        Error: If the resolution or field of view is nonfinite.
     """
+    validate_sensor_float(resolution.value, "horizontal_resolution")
+    validate_sensor_float(description.horizontal_fov.value, "horizontal_fov")
     var step = max(
         _roundf(resolution.to(DEGREE) / _MIN_HSS_RESOLUTION)
         * _MIN_HSS_RESOLUTION,
@@ -551,13 +557,10 @@ def scan_hss_lidar[
         step. The horizontal angle stays zero: the sensor does not turn.
 
     Raises:
-        Error: If there are no channels, the range is not positive, or the
+        Error: If the consumed description or resolution is invalid, or the
             scene cannot be tested.
     """
-    if description.channels < 1:
-        raise Error("A LiDAR needs at least one channel")
-    if not (description.range.value > 0.0):
-        raise Error("A LiDAR needs a positive range")
+    description.validate(False)
     var per_laser = hss_points_per_laser(description, resolution)
     if per_laser == 0:
         return None
