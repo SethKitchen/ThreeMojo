@@ -36,7 +36,12 @@ through `render.splatrule`.
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId
 from math.ray_query import RayQuery
-from math.ray import _distance_sq_to_point, _line_approach
+from math.ray import (
+    _distance_sq_ratio,
+    _line_approach,
+    _radius_relation,
+    _RayProducts,
+)
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -150,6 +155,7 @@ struct GaussianSplat(Copyable, Movable):
         )
         return SPLAT_KERNEL_CUTOFF * sqrt(largest)
 
+    @always_inline
     def _sphere_extent(self, index: Int) -> Float64:
         """Return a conservative radius for a positive covariance matrix.
 
@@ -235,9 +241,10 @@ struct GaussianSplat(Copyable, Movable):
         ray.apply_matrix4(inverse)
         if not ray.intersects_box(self.bounding_box.value()):
             return hits^
+        var products = ray._query_products()
         for index in range(self.count()):  # pragma: no branch
             var local_point = self._ray_intersection(
-                ray.origin, ray.direction, index
+                ray.origin, ray.direction, index, products
             )
             if not local_point:
                 continue
@@ -251,7 +258,11 @@ struct GaussianSplat(Copyable, Movable):
         return hits^
 
     def _ray_intersection(
-        self, origin: Vector3, direction: Vector3, index: Int
+        self,
+        origin: Vector3,
+        direction: Vector3,
+        index: Int,
+        products: _RayProducts,
     ) -> Optional[Vector3]:
         """Return where a local ray meets one splat's ellipsoid.
 
@@ -259,6 +270,7 @@ struct GaussianSplat(Copyable, Movable):
             origin: The ray's origin, in the object's space.
             direction: Its unit direction, in the object's space.
             index: Which splat.
+            products: Ray-only products prepared after its local transform.
 
         Returns:
             The near surface point, or the far one when the origin is
@@ -280,7 +292,10 @@ struct GaussianSplat(Copyable, Movable):
             return None
         var center = self._center(index)
         var bound = self._sphere_extent(index)
-        if _distance_sq_to_point(origin, direction, center) > bound * bound:
+        var ratio = _distance_sq_ratio[True](
+            origin, direction, center, products
+        )
+        if _radius_relation(ratio, bound * bound)[1]:
             return None
         var floor_variance = largest * COVARIANCE_FLATNESS
         var a00 = c00 + floor_variance
@@ -310,7 +325,7 @@ struct GaussianSplat(Copyable, Movable):
         # First find the Euclidean closest point with the shared cross-product
         # calculation. Forming origin + parameter * direction can lose even
         # a whole splat at a distant origin with a rounded unit direction.
-        var approach = _line_approach(origin, direction, center)
+        var approach = _line_approach[True](origin, direction, center, products)
         var ox = -approach.offset_x
         var oy = -approach.offset_y
         var oz = -approach.offset_z
