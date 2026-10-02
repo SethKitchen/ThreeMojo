@@ -18,10 +18,12 @@ from core.raycaster import Raycaster
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.gaussian_splat import GaussianSplat
+from std.math import sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_true,
 )
 
 
@@ -60,7 +62,9 @@ def test_rotated_long_axes_survive_sphere_rejection() raises:
             assert_equal(len(shape.raycast(Matrix4(), ray)), 1)
         shape.compute_bounding_sphere()
         assert_almost_equal(
-            shape.bounding_sphere.value().radius, Float32(4), atol=Float64(1e-5)
+            shape.bounding_sphere.value().radius,
+            Float32(2 * sqrt(Float64(4.00025))),
+            atol=Float64(1e-5),
         )
 
 
@@ -71,10 +75,17 @@ def test_the_exact_ellipsoid_still_rejects_points_outside_it() raises:
     assert_equal(len(shape.raycast(Matrix4(), ray)), 0)
 
 
-def test_diagonal_covariance_keeps_its_exact_radius() raises:
+def test_diagonal_covariance_encloses_its_regularized_radius() raises:
     var shape = splat([4, 0, 0, 1, 0, 0.25])
     shape.compute_bounding_sphere()
-    assert_equal(shape.bounding_sphere.value().radius, 4)
+    var expected = 2 * sqrt(Float64(4.0004))
+    assert_true(Float64(shape.bounding_sphere.value().radius) >= expected)
+    assert_almost_equal(
+        Float64(shape.bounding_sphere.value().radius),
+        expected,
+        atol=1e-6,
+        rtol=0,
+    )
 
 
 def test_a_positive_determinant_alone_does_not_make_a_covariance_positive() raises:

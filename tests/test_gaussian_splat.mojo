@@ -6,10 +6,10 @@
 """Tests for Gaussian splats: `core.gaussian_splat_utils`,
 `objects.gaussian_splat`, `render.splatrule` and `render.splat_raster`.
 
-The box, the raycast and the sort order of `assets/gaussian_splat/four.splat`
+The raycast and the sort order of `assets/gaussian_splat/four.splat`
 are held to what three.js r186's `GaussianSplat` computed for the same
-object and camera, in `expected.json`. The sphere and depth range use
-a conservative covariance row-sum bound. The projection is held to the
+object and camera, in `expected.json`. The box and sphere use independent regularized-covariance bounds.
+The depth range uses the same conservative sphere. The projection is held to the
 closed form of a round splat straight ahead of the camera, and the
 fragment to the Gaussian it draws.
 """
@@ -392,34 +392,64 @@ def test_an_object_needs_a_node() raises:
     assert_equal(splat.order[1], 1)
 
 
-def test_the_box_matches_three_js_and_the_sphere_is_conservative() raises:
+def test_regularized_bounds_enclose_independent_covariance_references() raises:
     var scene = Scene()
     var splat = four(place_four(scene))
     splat.compute_bounding_sphere()
     var box = splat.bounding_box.value()
-    var want: List[Float64] = [
-        -2.1079097640560986,
-        -1.1079097640560984,
-        -2.8489665789681564,
-        1.8489665789681564,
-        1.3489665789681564,
-        3.5773494776956563,
-    ]
-    assert_almost_equal(Float64(box.min.x), want[0], atol=1e-5)
-    assert_almost_equal(Float64(box.min.y), want[1], atol=1e-5)
-    assert_almost_equal(Float64(box.min.z), want[2], atol=1e-5)
-    assert_almost_equal(Float64(box.max.x), want[3], atol=1e-5)
-    assert_almost_equal(Float64(box.max.y), want[4], atol=1e-5)
-    assert_almost_equal(Float64(box.max.z), want[5], atol=1e-5)
+    var low = List[Float64](length=3, fill=1e100)
+    var high = List[Float64](length=3, fill=-1e100)
+    ref c = splat.splat_geometry.covariances
+    ref centers = splat.splat_geometry.centers
+    for i in range(splat.count()):
+        var largest = max(
+            Float64(c[6 * i]), max(Float64(c[6 * i + 3]), Float64(c[6 * i + 5]))
+        )
+        # Independent exact picking contract: C + max(diag(C))*1e-4 I.
+        var reach = 2 * sqrt(largest * 1.0001)
+        for axis in range(3):
+            var center = Float64(centers[3 * i + axis])
+            low[axis] = min(low[axis], center - reach)
+            high[axis] = max(high[axis], center + reach)
+    var stored_low = [box.min.x, box.min.y, box.min.z]
+    var stored_high = [box.max.x, box.max.y, box.max.z]
+    for axis in range(3):
+        assert_true(Float64(stored_low[axis]) <= low[axis])
+        assert_true(Float64(stored_high[axis]) >= high[axis])
+        assert_almost_equal(
+            Float64(stored_low[axis]), low[axis], atol=1e-6, rtol=0
+        )
+        assert_almost_equal(
+            Float64(stored_high[axis]), high[axis], atol=1e-6, rtol=0
+        )
     var sphere = splat.bounding_sphere.value()
-    assert_almost_equal(
-        Float64(sphere.center.x), -0.12947159254397111, atol=1e-5
-    )
-    assert_almost_equal(Float64(sphere.center.y), 0.120528407456029, atol=1e-5)
-    assert_almost_equal(Float64(sphere.center.z), 0.3641914493637499, atol=1e-5)
-    # Independent covariance row-sum bound from the fixture's stored
-    # scales and quaternion. The diagonal-only three.js sphere is too small.
-    assert_almost_equal(Float64(sphere.radius), 3.7398475609564126, atol=1e-5)
+    var expected = Float64(0)
+    for i in range(splat.count()):
+        var diagonal = max(
+            Float64(c[6 * i]), max(Float64(c[6 * i + 3]), Float64(c[6 * i + 5]))
+        )
+        var floor_variance = diagonal * 1e-4
+        var rows = [
+            abs(Float64(c[6 * i]) + floor_variance)
+            + abs(Float64(c[6 * i + 1]))
+            + abs(Float64(c[6 * i + 2])),
+            abs(Float64(c[6 * i + 3]) + floor_variance)
+            + abs(Float64(c[6 * i + 1]))
+            + abs(Float64(c[6 * i + 4])),
+            abs(Float64(c[6 * i + 5]) + floor_variance)
+            + abs(Float64(c[6 * i + 2]))
+            + abs(Float64(c[6 * i + 4])),
+        ]
+        var x = Float64(centers[3 * i]) - Float64(sphere.center.x)
+        var y = Float64(centers[3 * i + 1]) - Float64(sphere.center.y)
+        var z = Float64(centers[3 * i + 2]) - Float64(sphere.center.z)
+        expected = max(
+            expected,
+            sqrt(x * x + y * y + z * z)
+            + 2 * sqrt(max(rows[0], max(rows[1], rows[2]))),
+        )
+    assert_true(Float64(sphere.radius) >= expected)
+    assert_almost_equal(Float64(sphere.radius), expected, atol=1e-6, rtol=0)
 
 
 def test_no_splats_have_an_empty_box() raises:
