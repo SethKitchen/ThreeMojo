@@ -128,11 +128,13 @@ struct _Scope(ImplicitlyCopyable):
 
     var indent: Int
     var is_def: Bool
-    # A `trait` block, or a `def` inside one. The bodies in a trait are
-    # declarations of what an implementation must provide -- a docstring and
-    # `...` -- and never run, so probing them produces code that names a
-    # function the trait cannot call.
+    # A `trait` block, or a `def` inside one. The scanner currently excludes
+    # all trait bodies. Default implementations need separate recognition;
+    # issue #540 tracks that inherited gap. Buffer tracking follows the same
+    # exclusion until that scanner work is complete.
     var is_trait: Bool
+    var number: Int
+    var started: Bool
 
 
 struct Scanner(Movable):
@@ -146,6 +148,9 @@ struct Scanner(Movable):
     # end of the function containing it, which a single indent value cannot
     # express.
     var _scopes: List[_Scope]
+    var _next_scope: Int
+    var entry_indent: Int
+    var entry_number: Int
 
     def __init__(out self):
         """Start a scan at the top of a file."""
@@ -153,6 +158,9 @@ struct Scanner(Movable):
         self._open_brackets = 0
         self._literal = String("")
         self._scopes = List[_Scope]()
+        self._next_scope = 0
+        self.entry_indent = -1
+        self.entry_number = -1
 
     def _close_scopes_at_or_above(mut self, indent: Int):
         """Drop every open block whose header is indented at least `indent`."""
@@ -186,11 +194,29 @@ struct Scanner(Movable):
                 return True
         return False
 
+    def function_number(self) -> Int:
+        """Return the current function's local-buffer suffix, or -1.
+
+        Args:
+            None.
+
+        Returns:
+            The current function's number, or -1 outside a function.
+
+        Raises:
+            Never.
+        """
+        if not self._inside_function_body():
+            return -1
+        return self._scopes[len(self._scopes) - 1].number
+
     def is_executable(mut self, line: String) -> Bool:
         """Return True if a probe belongs immediately before `line`.
 
         Must be called for every line of the file, in order.
         """
+        self.entry_indent = -1
+        self.entry_number = -1
         var stripped = String(line.strip())
 
         # A continuation of a multi-line statement is never probed on its own.
@@ -217,6 +243,13 @@ struct Scanner(Movable):
         # Dedenting to a header's own column or further left closes it.
         self._close_scopes_at_or_above(indent)
 
+        if self._inside_function_body() and not self._inside_trait():
+            var slot = len(self._scopes) - 1
+            if not self._scopes[slot].started:
+                self._scopes[slot].started = True
+                self.entry_indent = indent
+                self.entry_number = self._scopes[slot].number
+
         # Bracket depth must be tracked for *every* statement line, not only
         # the ones that get a probe. A skipped line can still open a bracket
         # that runs onto the next line — `comptime assert (` reflowed by the
@@ -230,14 +263,13 @@ struct Scanner(Movable):
 
         if stripped.startswith("struct "):
             # Struct scope holds field declarations, not statements.
-            self._scopes.append(_Scope(indent, False, False))
+            self._scopes.append(_Scope(indent, False, False, -1, False))
             return False
 
         if stripped.startswith("trait "):
-            # A trait declares what implementations must provide. Its method
-            # bodies are `...` and are never executed, so nothing inside one
-            # is a runtime step -- see `_inside_trait`.
-            self._scopes.append(_Scope(indent, False, True))
+            # Preserve the current trait-body exclusion. This also excludes
+            # default implementations, the separate gap tracked in #540.
+            self._scopes.append(_Scope(indent, False, True, -1, False))
             return False
 
         if stripped.startswith("def ") or stripped.startswith("async def "):
@@ -245,7 +277,12 @@ struct Scanner(Movable):
             # method is a declaration however much it looks like a function.
             # An `async def` is a function body like any other; the renderer
             # has one per rasterizer band.
-            self._scopes.append(_Scope(indent, True, self._inside_trait()))
+            self._scopes.append(
+                _Scope(
+                    indent, True, self._inside_trait(), self._next_scope, False
+                )
+            )
+            self._next_scope += 1
             return False
 
         if stripped.startswith("from ") or stripped.startswith("import "):

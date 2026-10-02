@@ -166,8 +166,8 @@ def run(command, **kwargs):
 
 def records(text, decision):
     return [line for line in text.splitlines()
-            if line.startswith(f'COVBRANCH:fixture:{decision}:')
-            or line.startswith(f'COVBRANCH:fixture:{decision}.')]
+            if line.startswith(f'COVLINE:fixture:{decision}:')
+            or line.startswith(f'COVLINE:fixture:{decision}.')]
 
 
 def main():
@@ -205,7 +205,7 @@ def main():
                  str(folder / 'fixture.mojo'), '-o', str(binary)], cwd=folder)
             binaries.append(binary)
         for fail in range(-1, 6):
-            expected_rows, expected_records = [], defaultdict(list)
+            expected_rows, expected_records, expected_vectors = [], defaultdict(list), defaultdict(list)
             for mask in range(64):
                 for number, (_, tree) in enumerate(CASES):
                     order, probes = [], []
@@ -215,15 +215,19 @@ def main():
                         outcome = 'E'
                     suffix = ' fixture exception' if outcome == 'E' else ''
                     expected_rows.append(f'RESULT {number} {mask} {fail} {outcome} {"".join(order)}{suffix}')
-                    # #385 covers abandoned evaluations. Only complete,
-                    # non-recursive normal runs are reduced and compared.
-                    if fail == -1:
-                        line = decisions[number]
+                    line = decisions[number]
+                    if leaves(tree) > 1:
+                        for slot, value in probes:
+                            expected_records[number].append(
+                                f'COVLINE:fixture:{line}.{slot}:{"T" if value else "F"}')
+                    if outcome != 'E':
+                        expected_records[number].append(f'COVLINE:fixture:{line}:{outcome}')
                         if leaves(tree) > 1:
-                            for slot, value in probes:
-                                expected_records[number].append(
-                                    f'COVBRANCH:fixture:{line}.{slot}:{"T" if value else "F"}')
-                        expected_records[number].append(f'COVBRANCH:fixture:{line}:{outcome}')
+                            states = dict(probes)
+                            vector = ''.join(
+                                '-' if i not in states else ('T' if states[i] else 'F')
+                                for i in range(leaves(tree)))
+                            expected_vectors[number].append(f'COVEVAL2:fixture:{line}:{outcome}:{vector};')
             outputs = []
             for binary in binaries:
                 with isolated_environment() as environment:
@@ -231,17 +235,24 @@ def main():
                     result = run([str(binary)], env=environment, timeout=10)
                 assert not result_errors(result.stdout), result.stdout
                 assert not slow_tests(result.stdout, 5), result.stdout
+                program_output = result.stdout.partition('\nRunning ')[0].strip()
+                assert program_output == '\n'.join(expected_rows), result.stdout
                 rows = [line for line in result.stdout.splitlines() if line.startswith('RESULT ')]
                 assert rows == expected_rows, (binary, fail, rows[:3], expected_rows[:3])
                 outputs.append(result)
+            raw = outputs[1].stderr
+            for number, line in enumerate(decisions):
+                assert records(raw, line) == expected_records[number], (number, fail)
+                actual_vectors = [record for record in raw.splitlines()
+                                  if record.startswith(f'COVEVAL2:fixture:{line}:')]
+                assert actual_vectors == expected_vectors[number], (number, fail, actual_vectors[:3], expected_vectors[number][:3])
+            reduced = []
+            reducer = Reducer(reduced.append)
+            for record in raw.encode().splitlines(keepends=True):
+                reducer.feed(record)
+            (work / f'raw-{fail}.txt').write_text(raw)
+            (work / f'reduced-{fail}.txt').write_bytes(b''.join(reduced))
             if fail == -1:
-                raw = outputs[1].stderr
-                for number, line in enumerate(decisions):
-                    assert records(raw, line) == expected_records[number], number
-                reduced = []
-                reducer = Reducer(reduced.append)
-                for line in raw.encode().splitlines(keepends=True):
-                    reducer.feed(line)
                 (work / 'raw.txt').write_text(raw)
                 (work / 'reduced.txt').write_bytes(b''.join(reduced))
         # The real Mojo parser/report must agree on raw and reduced vectors.
@@ -261,15 +272,18 @@ def main() raises:
         (native / 'analyze.mojo').write_text(analyzer)
         run([mojo, 'build', '-Werror', '-I', str(native), str(native / 'analyze.mojo'),
              '-o', str(work / 'analyze')])
-        reports = [run([str(work / 'analyze'), str(work / f'{kind}.txt')]).stdout
-                   for kind in ('raw', 'reduced')]
-        assert reports[0] == reports[1], 'raw/reduced Mojo traces differ'
-        (work / 'vectors.txt').write_text(reports[0])
+        for fail in range(-1, 6):
+            reports = [run([str(work / 'analyze'), str(work / f'{kind}-{fail}.txt')]).stdout
+                       for kind in ('raw', 'reduced')]
+            assert reports[0] == reports[1], f'raw/reduced Mojo traces differ at throwing leaf {fail}'
+            (work / f'vectors-{fail}.txt').write_text(reports[0])
         # Two evaluations cover the decision, but leave two leaves incomplete.
         line = decisions[8]
-        negative = ('COVBRANCH:fixture:{0}.0:F\nCOVBRANCH:fixture:{0}.1:F\n'
-                    'COVBRANCH:fixture:{0}.2:F\nCOVBRANCH:fixture:{0}:F\n'
-                    'COVBRANCH:fixture:{0}.0:T\nCOVBRANCH:fixture:{0}:T\n').format(line)
+        negative = ('COVLINE:fixture:{0}.0:F\nCOVLINE:fixture:{0}.1:F\n'
+                    'COVLINE:fixture:{0}.2:F\nCOVLINE:fixture:{0}:F\n'
+                    'COVEVAL2:fixture:{0}:F:FFF;\n'
+                    'COVLINE:fixture:{0}.0:T\nCOVLINE:fixture:{0}:T\n'
+                    'COVEVAL2:fixture:{0}:T:T--;\n').format(line)
         (work / 'negative.txt').write_text(negative)
         (work / 'negative-manifest.txt').write_text('\n'.join(
             [f'B fixture {line}'] + [f'{kind} fixture {line} {i}'

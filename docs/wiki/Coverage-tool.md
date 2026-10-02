@@ -7,7 +7,7 @@ This is original work with no three.js lineage.
 ## How it works
 
 1. `build_cli.mojo` rewrites every covered module into `coverage/build/`, with a probe before each statement and around each decision. It writes a manifest of everything the probes can report.
-2. The coverage tool and the suites are copied into `coverage/build/` as well, and the suites run from there. Each probe writes one record to `stderr`. `stdout` is unchanged.
+2. The coverage tool and the suites are copied into `coverage/build/` as well, and the suites run from there. Each probe writes a hit or complete evaluation record to `stderr`. `stdout` is unchanged.
 3. `report_cli.mojo` groups the records, matches them to the manifest, and prints the table. It exits with an error when anything is uncovered.
 
 `make coverage` runs all three. See [How to measure coverage](How-to-measure-coverage).
@@ -27,7 +27,7 @@ The repository coverage run copies the tool without instrumentation. Separate di
 | `scanner.mojo` | Find statements, decisions and loop headers in a source file. |
 | `instrument.mojo` | Emit probes around Boolean leaves and decisions. |
 | `runtime.mojo` | The probe functions the instrumented code calls. |
-| `mcdc.mojo` | Reconstruct decision vectors from the ordered record stream. |
+| `mcdc.mojo` | Read complete decision vectors from version 2 records. |
 | `report.mojo` | Build the report and decide whether it is complete. |
 | `build_cli.mojo`, `report_cli.mojo` | The two commands the Makefile runs. |
 
@@ -54,7 +54,7 @@ The baseline audit at `b0222cbcb0c111bfe78cf330d79b757864b40e9f` covered 759 CPU
 
 Quote-aware scanning also reveals code after multiline shader strings. The line count rises from 122629 to 122792. The decision count rises from 22221 to 22236. No old manifest entry is removed. These are manifest counts, not passing coverage results. The new obligations need fresh captures from the complete suite set.
 
-`make test-coverage-tool` compares native and rewritten Mojo fixtures. It checks leaf manifests, short-circuit order, call counts, exceptions, and raw and reduced traces. It also verifies that both decision outcomes can pass while leaf coverage fails. This check does not resolve the recursive-state limit below.
+`make test-coverage-tool` compares native and rewritten Mojo fixtures. It checks leaf manifests, short-circuit order, call counts, exceptions, and raw and reduced traces. It also verifies that both decision outcomes can pass while leaf coverage fails. It also checks recursion, abandoned evaluations, nested callbacks, repeated loop and `elif` decisions, and concurrent tasks.
 
 ## Rules
 
@@ -67,9 +67,33 @@ Quote-aware scanning also reveals code after multiline shader strings. The line 
 
 Coverage must reach 100% under the measured rules. A badge states this requirement. It does not prove that a revision passed its checks.
 
-The current trace protocol can lose an outer operand when a recursive call reports the same decision. Two threads that report the same decision can also interleave their records. A single-worker test avoids that thread conflict, but does not fix recursion. [Issue #385](https://github.com/SethKitchen/ThreeMojo/issues/385) tracks the protocol work and its tests.
+The scanner still excludes all trait bodies, including default method bodies. [Issue #540](https://github.com/SethKitchen/ThreeMojo/issues/540) tracks this separate measurement gap. The protocol change does not add those obligations.
 
-Until that work is complete and validated, a reported percentage is not a general proof of MC/DC correctness. Check the source, test scope and trace limits with each result. It is not an engineering validation certificate.
+Version 2 fixes the ambiguous evaluation boundaries tracked in [issue #385](https://github.com/SethKitchen/ThreeMojo/issues/385). Its supported limits are below. These targeted checks do not establish full repository coverage. The leaf obligations added by issue #535 still require a new complete repository capture. Check the source, test scope and trace limits with each result. A percentage is not an engineering validation certificate.
+
+### Evaluation protocol
+
+Each function invocation that has a compound decision owns one private operand buffer. Other functions have no buffer. The new buffer and helper names use a prefix absent from the source. The buffer factory also avoids unqualified caller-scope `List` and `Int` names.
+
+A begin operation clears the buffer before each reached `if`, `elif` or `while` evaluation. It does not change the original operand order or short-circuit behavior. Each completed leaf writes its condition hit. All hit records use `COVLINE`, including payloads with a condition index and a `T` or `F` outcome.
+
+A completed decision writes its outcome hit and one `COVEVAL2:<decision>:<T|F>:<vector>;` record. Each vector character is `T`, `F` or `-` for an unevaluated leaf. The record ends with a newline.
+
+Recursive calls and concurrent calls have separate local buffers. An exception before completion writes no evaluation record. The observed condition hits remain available. A later begin clears any abandoned operands.
+
+A nested call that catches an exception cannot overwrite its caller's buffer. Normal function lifetime releases the buffer. The parser and reducer do not reconstruct vectors from pending condition records.
+
+Each record uses one POSIX `write` call. The complete UTF-8 record, including its terminator and newline, must fit in 512 bytes. [POSIX write](https://pubs.opengroup.org/onlinepubs/9690949599/functions/write.html) guarantees atomic pipe records through `PIPE_BUF`. The [portable minimum](https://man7.org/linux/man-pages/man7/pipe.7.html) is 512 bytes. Concurrent probe writers cannot split a record.
+
+Module IDs must fit in 480 UTF-8 bytes. This reserves enough bytes for line numbers and outcome suffixes. The instrumenter refuses an oversized module ID or decision vector. It does not remove the obligation.
+
+The runtime terminates on an oversized, failed or short write. The parser rejects incomplete vector records. These checks prevent a partial capture from passing as a shorter complete vector.
+
+The runtime uses the C library already used by the project. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
+
+The older `_cov_hit`, `_cov_branch` and `_cov_loop_<line>` names remain reserved. Source code that declares those names can collide with inherited probes. [Issue #541](https://github.com/SethKitchen/ThreeMojo/issues/541) tracks that gap. Version 2 only gives its new evaluation names a collision-free prefix. Do not interpret the new-name regression as a general hygiene guarantee.
+
+Old `COVBRANCH` condition records cannot distinguish recursion from an abandoned evaluation. The parser and reducer reject these ambiguous compound records and require a new capture. Old decision-only records remain readable, without condition evidence. `COVLINE` condition hits remain readable, but do not certify MC/DC on their own.
 
 ### The capture grows with every statement run
 
@@ -89,7 +113,9 @@ A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrume
 
 ## Capture storage
 
-The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct evaluation once, rebuilt from its pending conditions when its decision closes. The report receives the retained payloads and reconstructed evaluations in the order they first close. Reduction does not repair the trace limits above.
+The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
+
+The report receives evaluations in first-completion order. The reducer has no pending evaluation state. Its storage depends on distinct hits and vectors, not the number of repeated or abandoned evaluations.
 
 `test_rasterizer` writes 9.9 million records. The reduced capture holds 3,477 lines, and the report reads it in 0.02 s instead of 8 s, with an identical result. The reduction runs on the capture runners, in parallel, and the report reads the captures on one core.
 

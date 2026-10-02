@@ -97,9 +97,9 @@ def test_branch_outcomes_are_tracked_separately() raises:
 
 
 comptime CAPTURE = (
-    "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\nCOVLINE:m:1\n"
+    "COVLINE:m:4.0:T\nCOVLINE:m:4.1:F\nCOVLINE:m:4:F\nCOVEVAL2:m:4:F:TF;\nCOVLINE:m:1\n"
     "Failed to initialize Crashpad, a line longer than any piece\n"
-    "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4:F\nCOVLINE:m:1\nCOVLINE:m:2"
+    "COVLINE:m:4.0:F\nCOVLINE:m:4:F\nCOVEVAL2:m:4:F:F-;\nCOVLINE:m:1\nCOVLINE:m:2"
 )
 
 
@@ -253,13 +253,13 @@ def test_each_condition_counts_as_two_items() raises:
 
 
 def test_uncovered_condition_is_named_with_its_index() raises:
-    var text = report_for(String("C m 2 1\n"), String("COVBRANCH:m:2.1:T\n"))
+    var text = report_for(String("C m 2 1\n"), String("COVLINE:m:2.1:T\n"))
     assert_true("line 2 condition 1: never evaluated False" in text)
 
 
 def test_a_covered_condition_is_not_flagged() raises:
     var text = report_for(
-        String("C m 2 0\n"), String("COVBRANCH:m:2.0:T\nCOVBRANCH:m:2.0:F\n")
+        String("C m 2 0\n"), String("COVLINE:m:2.0:T\nCOVLINE:m:2.0:F\n")
     )
     assert_true("never evaluated" not in text)
 
@@ -269,8 +269,8 @@ def test_decision_and_its_conditions_are_tracked_independently() raises:
     var manifest = String("B m 2\nC m 2 0\nC m 2 1\n")
     var stderr = String(
         "COVBRANCH:m:2:T\nCOVBRANCH:m:2:F\n"
-        "COVBRANCH:m:2.0:T\nCOVBRANCH:m:2.0:F\n"
-        "COVBRANCH:m:2.1:T\n"
+        "COVLINE:m:2.0:T\nCOVLINE:m:2.0:F\n"
+        "COVLINE:m:2.1:T\n"
     )
     var report = build_report(
         parse_manifest(manifest), parse_hits(stderr), parse_traces(stderr)
@@ -288,6 +288,19 @@ def test_empty_manifest_is_vacuously_complete() raises:
         parse_traces(String("")),
     )
     assert_true(report.is_complete())
+
+
+def test_unterminated_vector_capture_is_rejected() raises:
+    var path = temporary_path("threemojo-test-report-truncated.txt")
+    Path(path).write_text("COVEVAL2:m:4:F:TF;")
+    var hits = Hits()
+    var parser = TraceParser()
+    var raised = False
+    try:
+        absorb_capture(path, hits, parser, 3)
+    except error:
+        raised = True
+    assert_true(raised)
 
 
 def main() raises:
