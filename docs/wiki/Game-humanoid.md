@@ -37,6 +37,14 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 `skin_weights` binds a skin to the bones. It measures distance over the skin, not through the air. So a part is turned only by the bones it joins through the skin.
 
+Positions must be finite. Welding multiplies each coordinate by `1e5` in
+Float32 and truncates toward zero. The product must be at least `Int.MIN`
+and less than `-Int.MIN` (from `-2^63` inclusive to `2^63` exclusive).
+`skin_weights` raises an error before it changes any skin attribute if a
+position is outside this domain. Hash products wrap modulo `2^64`; hash
+collisions do not join distinct grid positions. Ordinary anatomical
+positions keep the same welds and triangle neighbors.
+
 1. Each bone takes the vertices beside its middle that lie nearest it, in the bone's own thicknesses. A chest is thicker than an upper arm, so it keeps the ribs' side.
 2. A bone keeps only its largest patch of these. A patch apart from it lies on another part, as the thigh beside a hanging hand.
 3. From each patch, the nearness spreads along the triangles' edges.
