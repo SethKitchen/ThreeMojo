@@ -296,6 +296,14 @@ def test_an_archive_contributes_its_members() raises:
     assert_equal(unpinned.entries[0].files[0].sha256, "")
 
 
+def test_tile_sizes_are_positive_and_finite_after_float32_conversion() raises:
+    for value in ["1e100", "3.5e38", "1e-100", "0", "-1"]:
+        _refused(_manifest(_texture_set("scan", value)), "positive and finite")
+    for value in ["1", "0.25", "1e-40", "3.4028234663852886e38"]:
+        var manifest = parse_manifest(_manifest(_texture_set("scan", value)))
+        assert_true(manifest.entries[0].tile.to(METER) > 0)
+
+
 def test_a_manifest_without_bindings_binds_nothing() raises:
     var manifest = parse_manifest(
         '{"format": 1, "entries": [' + _texture_set() + "]}"

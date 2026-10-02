@@ -429,6 +429,8 @@ Each record also holds the `mode`, the `axis` and `dragging` after the event. St
 
 `check()` refuses an invalid mode, space or axis, and an axis that the mode has no handle for. It also refuses a size or a snap that is not positive. `handle` and `gizmo` call it first. `reset(scene)` puts the node back where the drag started.
 
+The control uses `Matrix4.decompose` to read transforms. Finite tiny and large scales keep their proportions. Zero axes, nonfinite entries, and scales too large for Float32 raise.
+
 ### Picking and dragging
 
 The handles are picked with three.js's invisible picker shapes. These are cones, flat boxes, an octahedron, a box, tori and a sphere. Each handle is at the node's world position and turned to the node's axes in `LOCAL_SPACE`. Its size keeps it the same size on the screen. The picked handle is the one that the ray meets nearest.

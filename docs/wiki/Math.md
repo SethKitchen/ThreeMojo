@@ -116,6 +116,20 @@ It has the `Vector3` members that make sense in four dimensions, with the same a
 
 The two axis-angle setters are three.js's `setAxisAngleFromQuaternion` and `setAxisAngleFromRotationMatrix`. Their thresholds and their fallback axes are three.js's, and the tests compare them with three.js 0.180. A half turn whose largest diagonal element is below a hundredth gets one of three.js's three fixed axes, such as `(0, 0.707106781, 0.707106781)`.
 
+## Matrix inverses
+
+Matrix inverses retain the direct Float32 cofactor arithmetic for ordinary
+inputs. Extreme component ranges and strong determinant cancellation use a
+shared Float64 elimination fallback with partial pivoting. This preserves
+representable inverses when Float32 intermediate products overflow or underflow.
+The singular contracts stay the same: `Matrix2.inverse` raises, and `Matrix3`
+and `Matrix4` invert to zeros. An inverse entry outside the Float32 range
+becomes signed infinity. It does not make the matrix singular.
+
+The two normal-matrix methods share one checked inverse-transpose path. They
+refuse a singular or nonfinite linear block and an inverse that cannot fit
+in `Float32`.
+
 ## Matrix3
 
 `Matrix3` is column-major, as `Matrix4` is. Element `(row, col)` is at `col * 3 + row`. `set` takes nine arguments in row-major order.

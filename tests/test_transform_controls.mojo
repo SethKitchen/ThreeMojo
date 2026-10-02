@@ -649,7 +649,7 @@ def test_decompose_a_mirror_and_refuse_a_flat_transform() raises:
     var mirrored = decompose(scaling(-2, 3, 4))
     _assert_vector(mirrored.scale, -2, 3, 4)
     _assert_turn(mirrored.quaternion, 0, 0, 0, 1)
-    with assert_raises(contains="flattens an axis"):
+    with assert_raises(contains="axis"):
         _ = decompose(scaling(1, 0, 1))
 
 
