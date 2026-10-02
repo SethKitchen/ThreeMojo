@@ -339,9 +339,11 @@ The renderer builds its frustum with `from_camera`. A far plane read back off a 
 
 ## Ray
 
-`math/ray.mojo`. A `Ray` is an origin and a unit direction: a half-line. The constructor makes the direction unit length and refuses a zero one. Every answer below assumes it.
+`math/ray.mojo`. A `Ray` is an origin and a unit direction: a half-line. The constructor makes the direction unit length and refuses a zero one. Segment queries require that unit direction. Sphere, box, and point-distance queries support a finite nonzero stored direction.
 
 A hit is an `Optional`. A miss is `None`. Every hit is forward of the origin. A ray inside a sphere or a box hits where it leaves.
+
+Sphere queries use the actual stored direction, including a finite nonunit direction. For finite inputs and a nonzero direction, a roundoff bound filters clear hits and misses. Ambiguous cases use exact polynomial signs from the stored Float32 values. An exact tangent counts as a hit. An origin on the sphere returns that origin, not the opposite surface. Returned coordinates remain rounded Float32 values.
 
 | Member | Meaning |
 |---|---|

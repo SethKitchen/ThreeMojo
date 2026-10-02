@@ -370,6 +370,16 @@ def test_invalid_snapshot_keeps_legacy_result_after_a_finite_pair_misses() raise
 
 
 def test_public_sphere_nonfinite_controls_match_divided_distance() raises:
+    # Frozen pre-557 extended point results in loop order: miss, all NaN,
+    # positive-infinite x with NaN y/z, zero, or unit-x. NaN payloads are
+    # deliberately not a geometric contract.
+    var snapshot = String(
+        "ZUINMMINNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+        + "MMINMMINNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+        + "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+        + "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+    )
+    var snapshot_index = 0
     var infinity = inf[DType.float32]()
     var invalid = nan[DType.float32]()
     for origin in [
@@ -403,6 +413,479 @@ def test_public_sphere_nonfinite_controls_match_divided_distance() raises:
                         radius
                     )
                     assert_equal(ray.intersects_sphere(sphere), want)
+                    var hit = ray.intersect_sphere(sphere)
+                    var code = snapshot.as_bytes()[snapshot_index]
+                    snapshot_index += 1
+                    assert_equal(Bool(hit), code != 77)
+                    if hit:
+                        var point = hit.value()
+                        if code == 78:
+                            assert_true(
+                                isnan(point.x)
+                                and isnan(point.y)
+                                and isnan(point.z)
+                            )
+                        elif code == 73:
+                            assert_equal(point.x, infinity)
+                            assert_true(isnan(point.y) and isnan(point.z))
+                        else:
+                            assert_equal(
+                                point.x, Float32(1 if code == 85 else 0)
+                            )
+                            assert_equal(point.y, 0)
+                            assert_equal(point.z, 0)
+
+
+def test_exact_stored_sphere_boundary_decisions() raises:
+    """Retain every distinct Fraction-oracle failure from issue 557.
+
+    These are stored Float32 bits, not decimal or renormalized inputs.
+    Exact rational polynomials determine each expected decision.
+    """
+    var rows = [
+        [
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(242443152),
+            UInt32(1058931123),
+            UInt32(3189637555),
+            UInt32(1061519903),
+            UInt32(2376221280),
+            UInt32(237126240),
+            UInt32(2376221280),
+            UInt32(250831760),
+            UInt32(1),
+        ],
+        [
+            UInt32(245514848),
+            UInt32(0),
+            UInt32(2392998496),
+            UInt32(3211065646),
+            UInt32(0),
+            UInt32(1055193390),
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(0),
+            UInt32(242443152),
+            UInt32(1),
+        ],
+        [
+            UInt32(2376221280),
+            UInt32(256561912),
+            UInt32(228737632),
+            UInt32(1058446848),
+            UInt32(1044959915),
+            UInt32(1061737131),
+            UInt32(2376221280),
+            UInt32(228737632),
+            UInt32(228737632),
+            UInt32(255232684),
+            UInt32(1),
+        ],
+        [
+            UInt32(245514848),
+            UInt32(2402716332),
+            UInt32(2392998496),
+            UInt32(3196638839),
+            UInt32(3209511346),
+            UInt32(1057543799),
+            UInt32(0),
+            UInt32(2376221280),
+            UInt32(2389926800),
+            UInt32(255232684),
+            UInt32(1),
+        ],
+        [
+            UInt32(248173304),
+            UInt32(2401387104),
+            UInt32(2389926800),
+            UInt32(0),
+            UInt32(3205365973),
+            UInt32(1062535488),
+            UInt32(228737632),
+            UInt32(0),
+            UInt32(2384609888),
+            UInt32(255232684),
+            UInt32(1),
+        ],
+        [
+            UInt32(250831760),
+            UInt32(256561912),
+            UInt32(237126240),
+            UInt32(3210704002),
+            UInt32(1054831746),
+            UInt32(1046443138),
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(237126240),
+            UInt32(260298222),
+            UInt32(1),
+        ],
+        [
+            UInt32(2392998496),
+            UInt32(2400057876),
+            UInt32(2376221280),
+            UInt32(1065027414),
+            UInt32(0),
+            UInt32(1044959915),
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(0),
+            UInt32(248173304),
+            UInt32(0),
+        ],
+        [
+            UInt32(242443152),
+            UInt32(2376221280),
+            UInt32(2392998496),
+            UInt32(1062027698),
+            UInt32(3205027447),
+            UInt32(1049155191),
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(2384609888),
+            UInt32(242443152),
+            UInt32(1),
+        ],
+        [
+            UInt32(2389926800),
+            UInt32(242443152),
+            UInt32(228737632),
+            UInt32(0),
+            UInt32(1062535488),
+            UInt32(1057882325),
+            UInt32(228737632),
+            UInt32(2376221280),
+            UInt32(242443152),
+            UInt32(250831760),
+            UInt32(1),
+        ],
+        [
+            UInt32(248173304),
+            UInt32(2398315408),
+            UInt32(250831760),
+            UInt32(3206125978),
+            UInt32(0),
+            UInt32(1061997773),
+            UInt32(2376221280),
+            UInt32(228737632),
+            UInt32(0),
+            UInt32(257891140),
+            UInt32(1),
+        ],
+        [
+            UInt32(250831760),
+            UInt32(0),
+            UInt32(250831760),
+            UInt32(1062755335),
+            UInt32(1057083601),
+            UInt32(1043142252),
+            UInt32(0),
+            UInt32(2384609888),
+            UInt32(242443152),
+            UInt32(252574228),
+            UInt32(1),
+        ],
+        [
+            UInt32(250831760),
+            UInt32(248173304),
+            UInt32(248173304),
+            UInt32(1051372203),
+            UInt32(3207244459),
+            UInt32(1059760811),
+            UInt32(0),
+            UInt32(2376221280),
+            UInt32(2384609888),
+            UInt32(257891140),
+            UInt32(1),
+        ],
+        [
+            UInt32(2400057876),
+            UInt32(2376221280),
+            UInt32(2376221280),
+            UInt32(3203022049),
+            UInt32(3203022049),
+            UInt32(1061368508),
+            UInt32(2376221280),
+            UInt32(237126240),
+            UInt32(2389926800),
+            UInt32(252574228),
+            UInt32(1),
+        ],
+        [
+            UInt32(248173304),
+            UInt32(257891140),
+            UInt32(2384609888),
+            UInt32(3205745978),
+            UInt32(1058262330),
+            UInt32(1058262330),
+            UInt32(2376221280),
+            UInt32(2376221280),
+            UInt32(237126240),
+            UInt32(260962836),
+            UInt32(1),
+        ],
+        [
+            UInt32(2392998496),
+            UInt32(256561912),
+            UInt32(250831760),
+            UInt32(3212335939),
+            UInt32(0),
+            UInt32(1048075075),
+            UInt32(0),
+            UInt32(2384609888),
+            UInt32(0),
+            UInt32(260962836),
+            UInt32(1),
+        ],
+        [
+            UInt32(2389926800),
+            UInt32(228737632),
+            UInt32(2389926800),
+            UInt32(0),
+            UInt32(1064492264),
+            UInt32(1050798235),
+            UInt32(2376221280),
+            UInt32(2384609888),
+            UInt32(242443152),
+            UInt32(252574228),
+            UInt32(1),
+        ],
+        [
+            UInt32(245514848),
+            UInt32(253903456),
+            UInt32(245514848),
+            UInt32(3207568724),
+            UInt32(1057207807),
+            UInt32(1057207807),
+            UInt32(0),
+            UInt32(0),
+            UInt32(242443152),
+            UInt32(255232684),
+            UInt32(1),
+        ],
+        [
+            UInt32(3212836864),
+            UInt32(3240099840),
+            UInt32(1084227584),
+            UInt32(3204691455),
+            UInt32(0),
+            UInt32(1062962345),
+            UInt32(3212836864),
+            UInt32(1073741824),
+            UInt32(0),
+            UInt32(1095761920),
+            UInt32(1),
+        ],
+        [
+            UInt32(3238002688),
+            UInt32(3225419776),
+            UInt32(3221225472),
+            UInt32(1052649195),
+            UInt32(3205406001),
+            UInt32(1061037803),
+            UInt32(0),
+            UInt32(1065353216),
+            UInt32(3225419776),
+            UInt32(1091567616),
+            UInt32(1),
+        ],
+        [
+            UInt32(3229614080),
+            UInt32(3235905536),
+            UInt32(3212836864),
+            UInt32(1065027414),
+            UInt32(0),
+            UInt32(1044959915),
+            UInt32(1065353216),
+            UInt32(3221225472),
+            UInt32(0),
+            UInt32(1084227584),
+            UInt32(0),
+        ],
+        [
+            UInt32(1088421888),
+            UInt32(1086324736),
+            UInt32(1086324736),
+            UInt32(1057543799),
+            UInt32(3196638839),
+            UInt32(1062027698),
+            UInt32(1065353216),
+            UInt32(0),
+            UInt32(3212836864),
+            UInt32(1093664768),
+            UInt32(1),
+        ],
+        [
+            UInt32(3225419776),
+            UInt32(1065353216),
+            UInt32(3225419776),
+            UInt32(0),
+            UInt32(1064492264),
+            UInt32(1050798235),
+            UInt32(3212836864),
+            UInt32(3221225472),
+            UInt32(1077936128),
+            UInt32(1088421888),
+            UInt32(1),
+        ],
+        [
+            UInt32(71362),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353211),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(71362),
+            UInt32(1),
+        ],
+        [
+            UInt32(1621981420),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353209),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1621981420),
+            UInt32(1),
+        ],
+        [
+            UInt32(0),
+            UInt32(71362),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353211),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(71362),
+            UInt32(1),
+        ],
+        [
+            UInt32(0),
+            UInt32(1621981420),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353209),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1621981420),
+            UInt32(1),
+        ],
+        [
+            UInt32(0),
+            UInt32(0),
+            UInt32(71362),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353211),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(71362),
+            UInt32(1),
+        ],
+        [
+            UInt32(0),
+            UInt32(0),
+            UInt32(1621981420),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1065353209),
+            UInt32(0),
+            UInt32(0),
+            UInt32(0),
+            UInt32(1621981420),
+            UInt32(1),
+        ],
+        [
+            UInt32(252574228),
+            UInt32(0),
+            UInt32(2384609888),
+            UInt32(1063751562),
+            UInt32(1050304434),
+            UInt32(1050304434),
+            UInt32(228737632),
+            UInt32(2384609888),
+            UInt32(228737632),
+            UInt32(252574228),
+            UInt32(1),
+        ],
+    ]
+    for row in rows:
+        var origin = Vector3(
+            bitcast[DType.float32](row[0]),
+            bitcast[DType.float32](row[1]),
+            bitcast[DType.float32](row[2]),
+        )
+        var direction = Vector3(
+            bitcast[DType.float32](row[3]),
+            bitcast[DType.float32](row[4]),
+            bitcast[DType.float32](row[5]),
+        )
+        var center = Vector3(
+            bitcast[DType.float32](row[6]),
+            bitcast[DType.float32](row[7]),
+            bitcast[DType.float32](row[8]),
+        )
+        for axis in range(3):
+            var ray = Ray(permute(origin, axis), Vector3(1, 0, 0))
+            ray.direction = permute(direction, axis)
+            var sphere = Sphere(
+                permute(center, axis), bitcast[DType.float32](row[9])
+            )
+            assert_equal(ray.intersects_sphere(sphere), row[10] != 0)
+            assert_equal(Bool(ray.intersect_sphere(sphere)), row[10] != 0)
+
+
+def test_exact_surface_origin_is_the_first_forward_sphere_point() raises:
+    """An exact zero root must never select the opposite surface."""
+    for pair in [
+        [UInt32(0x1E3CE508), UInt32(0x3F7FFFFE)],
+        [UInt32(0x60AD78EC), UInt32(0x3F800005)],
+    ]:
+        var radius = bitcast[DType.float32](pair[0])
+        var component = bitcast[DType.float32](pair[1])
+        for axis in range(3):
+            for sign in [Float32(-1), Float32(1)]:
+                var origin = permute(Vector3(-radius, 0, 0), axis)
+                var ray = Ray(origin, Vector3(1, 0, 0))
+                ray.direction = permute(Vector3(sign * component, 0, 0), axis)
+                var sphere = Sphere(Vector3(0, 0, 0), radius)
+                assert_true(ray.intersects_sphere(sphere))
+                var point = ray.intersect_sphere(sphere).value()
+                assert_equal(point.x, origin.x)
+                assert_equal(point.y, origin.y)
+                assert_equal(point.z, origin.z)
+
+
+def test_near_surface_inside_tangent_direction_uses_exit() raises:
+    """The origin-side sign chooses exit even with an ambiguous discriminant."""
+    var x = bitcast[DType.float32](UInt32(0x3F7FFFFF))
+    var ray = Ray(Vector3(x, 0, 0), Vector3(0, 1, 0))
+    var sphere = Sphere(Vector3(0, 0, 0), 1)
+    var point = ray.intersect_sphere(sphere).value()
+    assert_equal(point.x, x)
+    assert_equal(point.y, Float32(sqrt(1 - Float64(x) * Float64(x))))
+    assert_equal(point.z, 0)
+    assert_true(ray.intersects_sphere(sphere))
+
+
+def test_infinite_center_with_finite_nonzero_components_stays_a_miss() raises:
+    """An infinite perpendicular gap retains the extended-input rejection."""
+    var ray = Ray(Vector3(0, 0, 0), Vector3(1, 1, 1))
+    var sphere = Sphere(Vector3(inf[DType.float32](), 0, 0), 1)
+    assert_false(ray.intersects_sphere(sphere))
+    assert_false(Bool(ray.intersect_sphere(sphere)))
 
 
 def main() raises:
