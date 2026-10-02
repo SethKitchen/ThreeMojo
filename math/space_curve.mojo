@@ -39,6 +39,7 @@ reads the points of the `Curve3` and takes the tangent by the base rule,
 as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 """
 
+from math.curve_checks import check_curve_parameter, curve_sample_count
 from math.curve3 import Curve3, FrenetFrames
 from math.vector3 import Vector3
 from std.math import acos, cos, sin, sqrt
@@ -192,8 +193,10 @@ def chord_tangent[C: SpaceCurve](curve: C, t: Float64) raises -> Point3:
         The direction, of unit length, or zero where the two points meet.
 
     Raises:
-        Error: If the curve refuses a point.
+        Error: If t is not finite or outside zero to one, or the curve
+            refuses a point.
     """
+    check_curve_parameter(t)
     var t1 = t - TANGENT_DELTA
     var t2 = t + TANGENT_DELTA
     if t1 < 0:
@@ -201,18 +204,6 @@ def chord_tangent[C: SpaceCurve](curve: C, t: Float64) raises -> Point3:
     if t2 > 1:
         t2 = 1
     return normalized3(curve.point3(t2) - curve.point3(t1))
-
-
-def _check_divisions(divisions: Int) raises:
-    """Raise unless a curve is cut into one run or more."""
-    if divisions < 1:
-        raise Error("A curve needs one division or more")
-
-
-def _check_u(u: Float64) raises:
-    """Raise unless `u` is a share of a curve's length."""
-    if not (u >= 0 and u <= 1):
-        raise Error("A curve's u must lie from zero through one")
 
 
 def lengths_of[
@@ -233,15 +224,15 @@ def lengths_of[
         length.
 
     Raises:
-        Error: If `divisions` is less than one, or the curve refuses a
-            point.
+        Error: If `divisions` is less than one, its sample count cannot
+            fit in Int, or the curve refuses a point.
     """
-    _check_divisions(divisions)
-    var out = List[Float64](capacity=divisions + 1)
+    var sample_count = curve_sample_count(divisions)
+    var out = List[Float64](capacity=sample_count)
     var last = curve.point3(0)
     var total = 0.0
     out.append(0)
-    for step in range(1, divisions + 1):  # pragma: no branch
+    for step in range(1, sample_count):  # pragma: no branch
         # One division at least, so this runs.
         var current = curve.point3(Float64(step) / Float64(divisions))
         total += length3(current - last)
@@ -266,14 +257,14 @@ def length_of[
         The length across the runs, an approximation from below.
 
     Raises:
-        Error: If `divisions` is less than one, or the curve refuses a
-            point.
+        Error: If `divisions` is less than one, its sample count cannot
+            fit in Int, or the curve refuses a point.
     """
     var table = lengths_of(curve, divisions)
     return Length(Float32(table[len(table) - 1]), METER)
 
 
-def u_to_t(lengths: List[Float64], u: Float64) -> Float64:
+def u_to_t(lengths: List[Float64], u: Float64) raises -> Float64:
     """Return the `t` at which a curve has run `u` of its length,
     three.js's `getUtoTmapping`, binary search and all.
 
@@ -283,7 +274,14 @@ def u_to_t(lengths: List[Float64], u: Float64) -> Float64:
 
     Returns:
         The parameter at that distance.
+
+    Raises:
+        Error: If u is not finite or outside zero to one, or the table has
+            fewer than two entries.
     """
+    check_curve_parameter(u)
+    if len(lengths) < 2:
+        raise Error("A curve length table needs at least two entries")
     var count = len(lengths)
     var target = u * lengths[count - 1]
     var low = 0
@@ -324,12 +322,12 @@ def points_of[
         The points, first to last.
 
     Raises:
-        Error: If `divisions` is less than one, or the curve refuses a
-            point.
+        Error: If `divisions` is less than one, its sample count cannot
+            fit in Int, or the curve refuses a point.
     """
-    _check_divisions(divisions)
-    var out = List[Vector3](capacity=divisions + 1)
-    for step in range(divisions + 1):  # pragma: no branch
+    var sample_count = curve_sample_count(divisions)
+    var out = List[Vector3](capacity=sample_count)
+    for step in range(sample_count):  # pragma: no branch
         # One division at least, so this runs.
         out.append(to_vector3(curve.point3(Float64(step) / Float64(divisions))))
     return out^
@@ -356,10 +354,11 @@ def point_at[
         The point.
 
     Raises:
-        Error: If `u` falls outside zero through one, `arc_divisions` is
-            less than one, or the curve refuses a point.
+        Error: If u is not finite or outside zero to one, arc_divisions is
+            less than one, a sample count overflows, or the curve refuses
+            a point.
     """
-    _check_u(u)
+    check_curve_parameter(u)
     var table = lengths_of(curve, arc_divisions)
     return to_vector3(curve.point3(u_to_t(table, u)))
 
@@ -384,10 +383,11 @@ def tangent_at[
         The direction.
 
     Raises:
-        Error: If `u` falls outside zero through one, `arc_divisions` is
-            less than one, or the curve refuses a point.
+        Error: If u is not finite or outside zero to one, arc_divisions is
+            less than one, a sample count overflows, or the curve refuses
+            a point.
     """
-    _check_u(u)
+    check_curve_parameter(u)
     var table = lengths_of(curve, arc_divisions)
     return to_vector3(curve.tangent3(u_to_t(table, u)))
 
@@ -412,13 +412,13 @@ def spaced_points3[
         The points, first to last.
 
     Raises:
-        Error: If either count is less than one, or the curve refuses a
-            point.
+        Error: If either count is less than one, a sample count cannot
+            fit in Int, or the curve refuses a point.
     """
-    _check_divisions(divisions)
+    var sample_count = curve_sample_count(divisions)
     var table = lengths_of(curve, arc_divisions)
-    var out = List[Point3](capacity=divisions + 1)
-    for step in range(divisions + 1):  # pragma: no branch
+    var out = List[Point3](capacity=sample_count)
+    for step in range(sample_count):  # pragma: no branch
         # One division at least, so this runs.
         var u = Float64(step) / Float64(divisions)
         out.append(curve.point3(u_to_t(table, u)))
@@ -446,8 +446,8 @@ def spaced_points_of[
         The points, first to last.
 
     Raises:
-        Error: If either count is less than one, or the curve refuses a
-            point.
+        Error: If either count is less than one, a sample count cannot
+            fit in Int, or the curve refuses a point.
     """
     var spaced = spaced_points3(curve, divisions, arc_divisions)
     var out = List[Vector3](capacity=len(spaced))
@@ -551,13 +551,13 @@ def frames3_of[
         The frames.
 
     Raises:
-        Error: If `segments` or `arc_divisions` is less than one, or the
-            curve refuses a point.
+        Error: If `segments` or `arc_divisions` is less than one, a sample
+            count cannot fit in Int, or the curve refuses a point.
     """
-    _check_divisions(segments)
+    var sample_count = curve_sample_count(segments)
     var table = lengths_of(curve, arc_divisions)
     var frames = Frames3()
-    for step in range(segments + 1):  # pragma: no branch
+    for step in range(sample_count):  # pragma: no branch
         # One segment at least, so this runs.
         var u = Float64(step) / Float64(segments)
         frames.tangents.append(curve.tangent3(u_to_t(table, u)))
@@ -577,7 +577,7 @@ def frames3_of[
     var across = normalized3(cross3(first, normal))
     frames.normals.append(cross3(first, across))
     frames.binormals.append(cross3(first, frames.normals[0]))
-    for step in range(1, segments + 1):  # pragma: no branch
+    for step in range(1, sample_count):  # pragma: no branch
         # One segment at least, so this runs.
         var next_normal = frames.normals[step - 1]
         var turn = cross3(frames.tangents[step - 1], frames.tangents[step])
@@ -599,7 +599,7 @@ def frames3_of[
         var twist = cross3(frames.normals[0], frames.normals[segments])
         if dot3(frames.tangents[0], twist) > 0:
             theta = -theta
-        for step in range(1, segments + 1):  # pragma: no branch
+        for step in range(1, sample_count):  # pragma: no branch
             # One segment at least, so this runs.
             frames.normals[step] = _rotated(
                 frames.normals[step],
@@ -637,8 +637,8 @@ def frames_of[
         The frames, rounded to floats.
 
     Raises:
-        Error: If `segments` or `arc_divisions` is less than one, or the
-            curve refuses a point.
+        Error: If `segments` or `arc_divisions` is less than one, a sample
+            count cannot fit in Int, or the curve refuses a point.
     """
     return frames3_of(curve, segments, closed, arc_divisions).to_frenet_frames()
 
@@ -667,8 +667,10 @@ struct SpaceCurve3(SpaceCurve):
             The point, from the curve's floats.
 
         Raises:
-            Error: If `t` falls outside zero through one.
+            Error: If `t` is not finite or falls outside zero through one,
+                or the wrapped curve is not valid.
         """
+        check_curve_parameter(t)
         var p = self.curve.point(Float32(t))
         return point3(Float64(p.x), Float64(p.y), Float64(p.z))
 
@@ -682,6 +684,6 @@ struct SpaceCurve3(SpaceCurve):
             The direction.
 
         Raises:
-            Error: If `t` falls far outside zero through one.
+            Error: If `t` is not finite or falls outside zero through one.
         """
         return chord_tangent(self, t)
