@@ -405,5 +405,64 @@ def test_the_composer_runs_an_ssr_node_pass() raises:
     assert_equal(image.width, SIZE)
 
 
+def test_each_ssr_number_must_be_finite() raises:
+    for field in range(6):
+        var bad = SsrNodeSettings()
+        var infinity = Float32.MAX * 2
+        if field == 0:
+            bad.max_distance = Length(infinity, METER)
+        elif field == 1:
+            bad.thickness = Length(infinity, METER)
+        elif field == 2:
+            bad.intensity = infinity
+        elif field == 3:
+            bad.max_luminance = infinity
+        elif field == 4:
+            bad.quality = infinity
+        else:
+            bad.resolution_scale = infinity
+        with assert_raises(contains="finite"):
+            check_ssr_node(bad)
+
+
+def test_normals_without_metalness_are_refused() raises:
+    var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_NORMAL]
+    var frame = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET, outputs)
+    with assert_raises(contains="attachments"):
+        ssr_node_light(frame, view_of(frame), world_of(), SsrNodeSettings())
+
+
+def test_a_ray_with_only_vertical_projection_overflow_reflects_nothing() raises:
+    from std.memory import bitcast
+
+    var colors = List[FloatColor](length=4, fill=FloatColor(1, 1, 1, 1))
+    var normals = List[FloatColor](
+        length=4, fill=FloatColor(0, 0.70710677, 0.70710677, 0)
+    )
+    var metal = List[FloatColor](length=4, fill=FloatColor(1, 0, 0, 0))
+    var depth = List[Float32](length=4, fill=0)
+    var view = DepthView(
+        depth, 2, 2, Matrix4(), Length(0.1, METER), Length(10, METER)
+    )
+    var projection = Matrix4()
+    projection.elements[5] = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    var frame = SsrNodeFrame(
+        LightView(colors, 2, 2),
+        LightView(normals, 2, 2),
+        LightView(metal, 2, 2),
+        2,
+        2,
+        Matrix4(),
+        projection,
+        0.1,
+        10,
+    )
+    var seen = ssr_node_pixel(frame, view, 0, 0, SsrNodeSettings())
+    _ = colors^
+    _ = normals^
+    _ = metal^
+    assert_equal(seen.a, Float32(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

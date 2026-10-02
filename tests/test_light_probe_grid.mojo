@@ -741,5 +741,22 @@ def test_the_helper_refuses_what_it_cannot_show() raises:
         helper.update(LightProbeGrid.none(), assets)
 
 
+def test_replacement_ignores_non_sun_lights_and_inactive_cascades() raises:
+    from lights.light import ambient_light
+    from lights.shadow import CSM_BLEND
+
+    var assets = Assets()
+    var scene = Scene()
+    scene.add_light(ambient_light(Color(255, 255, 255)))
+    var sun = SunLight(scene)
+    scene.lights[sun.lights[0]].cascade.blend = CSM_BLEND
+    scene.lights[sun.lights[1]].cascade.span = Length(0, METER)
+    var saved = replace_sun_lights(scene, assets)
+    assert_equal(scene.lights[0].intensity, 1)
+    assert_equal(scene.lights[sun.lights[0]].intensity, 1)
+    assert_equal(scene.lights[sun.lights[1]].intensity, 1)
+    restore_sun_lights(scene, saved)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

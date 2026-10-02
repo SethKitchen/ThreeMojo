@@ -151,5 +151,24 @@ def test_the_ssr_pass_leaves_the_ground_to_its_mirror() raises:
     assert_equal(frame.width, SIZE)
 
 
+def test_optional_fading_can_be_disabled() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var mirror = ReflectorForSSR(
+        assets,
+        square(assets, 6),
+        node,
+        distance_attenuation=False,
+        fresnel=False,
+        resolution=Vector2(SIZE, SIZE),
+    )
+    mirror.max_distance = meters(Float32.MAX * 2)
+    var renderer = Renderer(SIZE, SIZE)
+    var camera = high_camera()
+    with assert_raises(contains="distance and opacity are finite"):
+        _ = mirror.update(renderer, scene, assets, camera)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

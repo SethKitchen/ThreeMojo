@@ -107,5 +107,108 @@ def test_odd_lists_are_refused() raises:
         _ = triangulate_shape([0])
 
 
+def _bridge_for_tied_candidates(
+    points: List[Float64], hx: Float64, hy: Float64
+) -> Int:
+    from geometries.earcut import _EarNode, _find_hole_bridge, _linked_list
+
+    var nodes = List[_EarNode]()
+    var outer = _linked_list(nodes, points, 0, len(points), True)
+    var hole = len(nodes)
+    nodes.append(_EarNode(hole, hx, hy))
+    return _find_hole_bridge(nodes, hole, outer)
+
+
+def test_tied_hole_bridge_nosector() raises:
+    # Repeated and crossing outlines exercise earcut's deterministic tie break.
+    # The production ring builder gives these outlines its required orientation.
+    var points: List[Float64] = [
+        -1,
+        -5,
+        -3,
+        3,
+        1,
+        1,
+        -4,
+        -2,
+        -1,
+        -3,
+        -3,
+        5,
+        -2,
+        -2,
+        -1,
+        -5,
+        2,
+        3,
+        -1,
+        0,
+    ]
+    assert_equal(_bridge_for_tied_candidates(points, 0, -2), 0)
+
+
+def test_tied_hole_bridge_gt() raises:
+    # Repeated and crossing outlines exercise earcut's deterministic tie break.
+    # The production ring builder gives these outlines its required orientation.
+    var points: List[Float64] = [-1, 2, -3, 4, 2, -5, -2, -2, 3, -1]
+    assert_equal(_bridge_for_tied_candidates(points, 1, 0), 0)
+
+
+def test_tied_hole_bridge_sector() raises:
+    # Repeated and crossing outlines exercise earcut's deterministic tie break.
+    # The production ring builder gives these outlines its required orientation.
+    var points: List[Float64] = [
+        1,
+        -4,
+        5,
+        4,
+        2,
+        2,
+        0,
+        -2,
+        -1,
+        -3,
+        5,
+        -1,
+        -5,
+        -5,
+        -1,
+        -3,
+        2,
+        2,
+    ]
+    assert_equal(_bridge_for_tied_candidates(points, 3, 2), 8)
+
+
+def test_tied_hole_bridge_neq() raises:
+    # Repeated and crossing outlines exercise earcut's deterministic tie break.
+    # The production ring builder gives these outlines its required orientation.
+    var points: List[Float64] = [
+        1,
+        1,
+        -1,
+        -5,
+        -2,
+        5,
+        -5,
+        -4,
+        0,
+        2,
+        4,
+        4,
+        -3,
+        3,
+        -4,
+        -2,
+        3,
+        -2,
+        -1,
+        -5,
+        2,
+        0,
+    ]
+    assert_equal(_bridge_for_tied_candidates(points, 1, 3), 4)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

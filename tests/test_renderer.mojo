@@ -6409,6 +6409,19 @@ def test_a_bad_camera_is_refused_before_the_workers_start() raises:
         )
 
 
+def test_environment_id_past_the_store_is_refused() raises:
+    from render.cube_texture_store import CubeTextureId
+    from renderers.renderer import _resolved_env
+
+    var scene = Scene()
+    var assets = Assets()
+    var material = Material(Color(255, 255, 255))
+    for value in [-3, 0]:
+        material.env_map = CubeTextureId(value)
+        with assert_raises(contains="cube texture that is not there"):
+            _ = _resolved_env(scene, assets, material, SHADE_TEXTURE)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 
