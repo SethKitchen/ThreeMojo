@@ -114,6 +114,7 @@ from extensions.carla.recorder_packets import (
     PACKET_SCENE_LIGHT,
     write_packet,
 )
+from extensions.carla.road_info import SignalId
 from extensions.carla.traffic_sign import TriggerBox
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
@@ -249,6 +250,52 @@ def _has(packets: List[_Packet], frame: Int, id: Int) -> Bool:
 
 
 # --- recording ----------------------------------------------------------------------
+
+
+def test_record_and_replay_world_with_utf8_signal_ids() raises:
+    var world = _world()
+    var light_id = String("a") * 31 + "é"
+    var sign_id = String("b") * 29 + "😀"
+    world.traffic_lights.lights[0].sign_id = SignalId(light_id)
+    world.signs[0].sign_id = SignalId(sign_id)
+    var recorder = Recorder()
+    _ = recorder.start(world, "", "Town", False, 0)
+    for frame in range(1, 4):
+        assert_equal(recorder.tick(world), frame)
+        var snapshot = world.get_snapshot()
+        assert_equal(
+            snapshot.find(ActorId(2)).value().traffic_light.value().sign_id,
+            String("a") * 31,
+        )
+        assert_equal(
+            snapshot.find(ActorId(3)).value().sign_id, String("b") * 29
+        )
+    recorder.stop()
+    var bytes = recorder.bytes()
+    var packets = _packets(bytes)
+    # The recorder stores actor ids and light states, not snapshot sign
+    # strings. Its tick must still finish, and the packets must be readable.
+    for frame in range(1, 4):
+        var state = _reader_at(bytes, _find(packets, frame, PACKET_STATE.value))
+        assert_equal(state.u16(), 1)
+        var light = RecordedTrafficLight.read(state)
+        assert_equal(light.database_id.value, 2)
+        assert_true(light.state == world.get_traffic_light_state_of(ActorId(2)))
+        assert_false(state.failed)
+    var replay_world = _world()
+    replay_world.traffic_lights.lights[0].sign_id = SignalId(light_id)
+    replay_world.signs[0].sign_id = SignalId(sign_id)
+    var replay = Replayer()
+    _ = replay.replay_bytes(replay_world, bytes.copy(), "mem")
+    assert_equal(replay.mapped(ActorId(2)).value, 2)
+    assert_equal(replay.mapped(ActorId(3)).value, 3)
+    _ = replay.step(replay_world)
+    assert_equal(replay_world.get_opendrive_id(ActorId(2)).value, light_id)
+    assert_equal(replay_world.get_opendrive_id(ActorId(3)).value, sign_id)
+    assert_equal(
+        replay_world.get_snapshot().find(ActorId(3)).value().sign_id,
+        String("b") * 29,
+    )
 
 
 def test_the_first_frame_holds_the_worlds_actors() raises:
