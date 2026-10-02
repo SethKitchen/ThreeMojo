@@ -705,6 +705,30 @@ def test_the_longest_idle_vehicle_goes_first() raises:
     assert_false(world.is_alive(second))
 
 
+def test_physics_toggle_stops_and_restores_effective_mass() raises:
+    var world = _world(straight_town())
+    var car = _spawn(world, 20, 1.75)
+    var id = world.actor(car).body.value
+    var mass = world.physics.world.bodies[id].mass
+    var tensor = world.physics.world.bodies[id].inverse_inertia
+    world.set_target_velocity(car, Vector3(3, 0, 0))
+    set_simulate_physics(world, car, False)
+    assert_equal(world.get_velocity(car).length_sq(), 0)
+    assert_equal(world.physics.world.bodies[id].inverse_mass, 0)
+    world.add_impulse(car, Vector3(mass, 0, 0))
+    assert_equal(world.get_velocity(car).length_sq(), 0)
+    set_simulate_physics(world, car, False)
+    set_simulate_physics(world, car, True)
+    assert_equal(world.physics.world.bodies[id].mass, mass)
+    for i in range(9):
+        assert_equal(
+            world.physics.world.bodies[id].inverse_inertia.elements[i],
+            tensor.elements[i],
+        )
+    world.add_impulse(car, Vector3(mass, 0, 0))
+    assert_almost_equal(world.get_velocity(car).x, 1, atol=1e-6)
+
+
 def test_unregister_a_large_vehicle() raises:
     var world = _world(straight_town())
     var tm = _manager(world)

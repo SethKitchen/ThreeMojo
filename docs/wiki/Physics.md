@@ -34,6 +34,16 @@ Create the collision shape separately. Set the body's mass, center of mass and i
 
 `tests/test_shared_physics.mojo` checks this handoff with an authored segment tensor. It does not claim a whole-body physical rig. The current anatomy code supplies no joint solver or muscle-force controller.
 
+## Change a body's motion mode
+
+Use `RigidBody.set_kind` to switch motion mode. Disabling a dynamic body sets its effective mass and inverse inertia to zero. It retains the exact configured dynamic mass and local inverse tensor for later restoration. This includes off-diagonal entries and locked axes. A chain through kinematic and static modes does not replace that saved state.
+
+Dynamic-to-kinematic changes keep velocity. Entering static stops linear, angular and split-impulse velocity. Pending force and torque keep their normal step-consumption lifetime. CARLA's `set_simulate_physics(False)` also stops kinematic velocity, as its adapter did before.
+
+World position and orientation can change while physics is disabled. Restored world inertia uses the new orientation and the retained local tensor. Mass, inertia, mass-center and shape-offset setters reject edits to a disabled dynamic configuration. Restore dynamic mode before making those edits. A body created static or kinematic has no saved dynamic mass; create it dynamic first when later restoration is needed.
+
+Do not assign `kind`, mass-property fields or the shape directly to bypass this contract. Public fields remain for source compatibility and custom locked-axis setup while dynamic. The transition checks finite, reciprocal mass state and finite inverse-tensor entries. It does not validate a physical model or repair an invalid inertia tensor. Conditioned mass properties and tensor validation remain [#430](https://github.com/SethKitchen/ThreeMojo/issues/430).
+
 ## Apply forces
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.
