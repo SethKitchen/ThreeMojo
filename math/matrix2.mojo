@@ -13,6 +13,11 @@ the first point expanded into it becomes both.
 """
 
 from math.vector2 import Vector2
+from math.matrix_inverse import (
+    _inverse_needs_wide,
+    _determinant_needs_wide,
+    _inverse_wide,
+)
 from std.math import cos, inf, sin, sqrt
 from units.si import Angle, RADIAN
 
@@ -125,14 +130,27 @@ struct Matrix2(Equatable, ImplicitlyCopyable):
         """Return the inverse.
 
         Returns:
-            The matrix that undoes this one.
+            The matrix that undoes this one. An inverse entry outside
+            Float32 range becomes signed infinity.
 
         Raises:
             Error: If the determinant is zero. three.js returns zeros.
         """
+        var entries: Array[Float32, 4] = [
+            self.m00,
+            self.m10,
+            self.m01,
+            self.m11,
+        ]
         var det = self.determinant()
-        if det == 0:
-            raise Error("A singular Matrix2 has no inverse")
+        var terms = abs(self.m00 * self.m11) + abs(self.m01 * self.m10)
+        if _inverse_needs_wide[2](entries) or _determinant_needs_wide(
+            det, terms
+        ):
+            var wide = _inverse_wide[2](entries)
+            if not wide[0]:
+                raise Error("A singular Matrix2 has no inverse")
+            return Matrix2(wide[1][0], wide[1][2], wide[1][1], wide[1][3])
         var inv = 1 / det
         return Matrix2(
             self.m11 * inv, -self.m01 * inv, -self.m10 * inv, self.m00 * inv

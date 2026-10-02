@@ -15069,3 +15069,76 @@ def test_shared_norms_preserve_tiny_and_large_directions() raises:
     var f64: List[Float64] = [0, 1e-200, 1, 1e200]
     check_norm_parity(f32, 1e-6)
     check_norm_parity(f64, 1e-13)
+
+
+def matrix_inverse_sample(value: Float32) -> Array[Float32, 3]:
+    """Scale the inverses back to unit entries for CPU/GPU comparison."""
+    from math.matrix_inverse import _inverse_wide
+    from math.matrix3 import Matrix3
+    from math.matrix4 import scaling
+
+    var entries: Array[Float32, 4] = [0, value, value, 0]
+    var inverse2 = _inverse_wide[2](entries)
+    var inverse3 = Matrix3()
+    inverse3.set(0, value, 0, value, 0, 0, 0, 0, value)
+    inverse3.invert()
+    var inverse4 = scaling(-value, value, value)
+    inverse4.invert()
+    var result: Array[Float32, 3] = [
+        inverse2[1][1] * value,
+        inverse3.elements[1] * value,
+        inverse4.elements[0] * value,
+    ]
+    return result^
+
+
+def matrix_inverse_kernel(
+    output: MutPointer[Float32, MutAnyOrigin],
+    inputs: MutPointer[Float32, MutAnyOrigin],
+    count: Int32,
+):
+    """Evaluate shared matrix inverse paths on device inputs."""
+    from max.gpu import global_idx
+
+    var at = Int(global_idx.x)
+    if at >= Int(count):
+        return
+    var values = matrix_inverse_sample(inputs[unsafe_offset=at])
+    for component in range(3):
+        output[unsafe_offset=3 * at + component] = values[component]
+
+
+def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
+    from max.gpu.host import DeviceContext
+    from std.math import isfinite
+
+    if skipped_for_lack_of_a_gpu("shared matrix inverses across scales"):
+        return
+    var inputs: List[Float32] = [0, 1e-30, 1, 1e30]
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[matrix_inverse_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            var expected = matrix_inverse_sample(inputs[at])
+            for component in range(3):
+                var actual = host[3 * at + component]
+                var unit = Float32(0) if inputs[at] == 0 else (
+                    Float32(-1) if component == 2 else Float32(1)
+                )
+                assert_true(isfinite(actual) and isfinite(expected[component]))
+                assert_almost_equal(actual, unit, atol=1e-6)
+                assert_almost_equal(actual, expected[component], atol=1e-6)
