@@ -81,11 +81,13 @@ The window never reads `struct termios`, whose layout differs by platform. It as
 - A size that is not positive.
 - An input that is not a terminal.
 - A frame of another size.
-- A negative timeout.
+- A negative or nonfinite timeout, or one too large for native poll milliseconds.
 - A `present` or a `poll` after `close`.
 - A terminal that cannot be written, or that hung up.
 
 The terminal is put back before a failure is raised.
+
+Both window types check the timeout before integer conversion. A fractional millisecond rounds down; a negative fraction raises. The whole-millisecond value must fit the native signed integer.
 
 ## X11Window
 

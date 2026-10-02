@@ -45,7 +45,8 @@ from controls.input import (
 from render.framebuffer import Framebuffer
 from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os.path import exists
-from units.si import Duration, MILLISECOND
+from units.si import Duration
+from window.poll_timeout import poll_milliseconds
 
 # Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
@@ -487,13 +488,12 @@ struct X11Window(Movable):
             The events, oldest first, with positions in pixels.
 
         Raises:
-            Error: If the window is closed or the timeout is negative.
+            Error: If the window is closed, or the timeout is negative,
+                nonfinite, or too large for native poll milliseconds.
         """
         if not self.is_open:
             raise Error("The window is closed")
-        var milliseconds = Int(timeout.to(MILLISECOND))
-        if milliseconds < 0:
-            raise Error("A timeout must not be negative")
+        var milliseconds = poll_milliseconds(timeout)
         var events = List[InputEvent]()
         if self._lib.call["XPending", c_int](self._display) == 0:
             var request = List[Int32](length=2, fill=0)
@@ -502,7 +502,7 @@ struct X11Window(Movable):
             )
             request[1] = Int32(POLLIN)
             _ = external_call["poll", c_int](
-                request.unsafe_ptr(), c_int(1), c_int(milliseconds)
+                request.unsafe_ptr(), c_int(1), milliseconds
             )
         while self._lib.call["XPending", c_int](self._display) > 0:
             _ = self._lib.call["XNextEvent", c_int](

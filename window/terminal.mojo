@@ -32,7 +32,8 @@ fill it and to make it raw, in a buffer larger than any platform's.
 from controls.input import InputDecoder, InputEvent
 from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
-from units.si import Duration, MILLISECOND
+from units.si import Duration
+from window.poll_timeout import poll_milliseconds
 
 comptime STANDARD_INPUT = 0
 comptime STANDARD_OUTPUT = 1
@@ -354,14 +355,13 @@ struct TerminalWindow(Movable):
             The events, oldest first. Empty if nothing arrived in time.
 
         Raises:
-            Error: If the window is closed, the timeout is negative, or the
-                terminal cannot be read.
+            Error: If the window is closed, the timeout is invalid, or
+                the terminal cannot be read. A timeout must be nonnegative,
+                finite, and fit native poll milliseconds.
         """
         if not self.is_open:
             raise Error("The window is closed")
-        var milliseconds = Int(timeout.to(MILLISECOND))
-        if milliseconds < 0:
-            raise Error("A timeout must not be negative")
+        var milliseconds = poll_milliseconds(timeout)
         # `struct pollfd` is an int and two shorts: the descriptor, then
         # the events asked for in the low half of the next int, and the
         # events that happened in the high half.
@@ -369,7 +369,7 @@ struct TerminalWindow(Movable):
         request[0] = Int32(self.input_fd)
         request[1] = Int32(POLLIN)
         var ready = external_call["poll", c_int](
-            request.unsafe_ptr(), c_int(1), c_int(milliseconds)
+            request.unsafe_ptr(), c_int(1), milliseconds
         )
         if ready <= 0:
             return List[InputEvent]()

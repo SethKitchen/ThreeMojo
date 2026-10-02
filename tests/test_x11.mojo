@@ -31,6 +31,7 @@ from controls.input import (
 )
 from render.framebuffer import Color, Framebuffer
 from std.ffi import OwnedDLHandle, c_int, external_call
+from std.math import inf, nan
 from std.subprocess import run
 from test_scratch import temporary_path
 from std.testing import (
@@ -387,6 +388,17 @@ def test_a_window_reads_keys_buttons_resizes_and_a_close() raises:
     assert_equal(len(window.poll(Duration(0.0, SECOND))), 0)
     with assert_raises(contains="negative"):
         _ = window.poll(Duration(-1.0, SECOND))
+    with assert_raises(contains="negative"):
+        _ = window.poll(Duration(-0.5, MILLISECOND))
+    for seconds in [
+        inf[DType.float32](),
+        nan[DType.float32](),
+        Float32(2147483.75),
+        Float32(3e6),
+    ]:
+        with assert_raises(contains="finite"):
+            _ = window.poll(Duration(seconds, SECOND))
+    assert_equal(len(window.poll(Duration(0.5, MILLISECOND))), 0)
     with assert_raises(contains="must be positive"):
         window.resize(0, 4)
     with assert_raises(contains="must be positive"):
