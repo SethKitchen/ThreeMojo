@@ -29,6 +29,8 @@ from std.testing import (
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from exporters.draco import (
+    _Encoder,
+    _Geometry,
     DRACO_EXPORT_MESH,
     DRACO_EXPORT_POINTS,
     DRACO_MESH_EDGEBREAKER_ENCODING,
@@ -41,6 +43,7 @@ from exporters.draco import (
     write_draco,
     write_sequential_index,
 )
+from exporters.draco_connectivity import build_corner_table
 from exporters.draco_log2 import musl_log2
 from exporters.draco_predict import _abs_sum, _int_sqrt, wasm_i32
 from exporters.draco_writer import (
@@ -60,7 +63,12 @@ from loaders.draco import (
     read_draco,
     read_sequential_index,
 )
-from loaders.draco_attributes import DracoAttributeType
+from loaders.draco_attributes import (
+    DracoAttributeType,
+    DRACO_TEX_COORD,
+    DRACO_TEX_COORDS_PORTABLE,
+    DRACO_PARALLELOGRAM,
+)
 from loaders.draco_buffer import DracoBuffer, decode_symbols
 from loaders.json import JsonDocument, parse_json
 from std.math import inf, isnan, nan, sqrt
@@ -727,6 +735,25 @@ def test_integer_edges() raises:
     var big = 0x7FFFFFFFFFFFFFFF
     assert_equal(_abs_sum([big, 1, 0]), big)
     assert_equal(_abs_sum([-big - 1, 0, 0]), big)
+
+
+def test_texture_prediction_avoids_a_64_bit_overflow() raises:
+    var source = BufferGeometry()
+    source.set_attribute(UV, BufferAttribute([0.0, 0.0], 2))
+    var geometry = _Geometry(1)
+    geometry.add(source, UV, DRACO_TEX_COORD, 2)
+    var options = DracoExportOptions(
+        encode_speed=0, decode_speed=0, quantization=[21, 8, 8, 22, 8]
+    )
+    var encoder = _Encoder(geometry^, options^)
+    assert_equal(encoder.prediction(0, True), DRACO_PARALLELOGRAM)
+    encoder.options.quantization[3] = 21
+    assert_equal(encoder.prediction(0, True), DRACO_TEX_COORDS_PORTABLE)
+
+
+def test_degenerate_triangle_tip_can_equal_its_sink() raises:
+    var table = build_corner_table([0, 1, 0])
+    assert_equal(table.degenerated, 1)
 
 
 def main() raises:

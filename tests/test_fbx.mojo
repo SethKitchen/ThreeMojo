@@ -40,6 +40,7 @@ from loaders.fbx import (
     sanitize_node_name,
 )
 from loaders.fbx_tree import (
+    _TextReader,
     FBX_ASCII,
     FBX_BINARY,
     FBX_BYTES,
@@ -1850,6 +1851,15 @@ def test_ear_clipping() raises:
             0,
         ],
     )
+
+
+def test_bare_tokens_stop_before_each_delimiter() raises:
+    for ending in [String(""), ",", "{", "}", ";", " ", "\t", "\n", "\r"]:
+        var reader = _TextReader(
+            List[UInt8](String("value" + ending).as_bytes())
+        )
+        assert_equal(reader.bare(), "value")
+        assert_equal(reader.at, 5)
 
 
 def main() raises:

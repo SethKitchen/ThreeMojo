@@ -156,6 +156,12 @@ def test_a_bad_file_is_refused() raises:
     var empty = List[UInt8]()
     var wrong = _file("wrong", zeros, empty)
     var bytes = Path(wrong).read_bytes()
+    for index in range(1, 4):
+        var invalid = bytes.copy()
+        invalid[index] = 88
+        Path(wrong).write_bytes(invalid)
+        with assert_raises(contains="Not a face model"):
+            _ = FaceModel(wrong)
     bytes[0] = 88
     Path(wrong).write_bytes(bytes)
     with assert_raises(contains="Not a face model"):

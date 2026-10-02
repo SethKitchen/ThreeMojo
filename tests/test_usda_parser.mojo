@@ -26,6 +26,8 @@ from loaders.usd_specs import (
 )
 from loaders.usda_parser import (
     UsdaTree,
+    _quoted_tail,
+    _is_frame,
     attribute_match,
     def_match,
     find_assignment,
@@ -109,6 +111,11 @@ def test_trims_unicode_space() raises:
 
 
 def test_def_match() raises:
+    assert_false(Bool(_quoted_tail("", 0)))
+    assert_true(_is_frame("."))
+    assert_true(_is_frame("0"))
+    assert_false(_is_frame("/"))
+    assert_false(_is_frame(":"))
     var found = def_match('def Xform "Root"')
     assert_equal(found.value()[0], "Xform")
     assert_equal(found.value()[1], "Root")

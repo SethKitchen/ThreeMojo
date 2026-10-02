@@ -79,6 +79,7 @@ from extensions.humanoid.skeleton.head.skin.geometry import (
     head_skin_from_dimensions,
 )
 from extensions.humanoid.skeleton.head.skin.tint import (
+    _Brows,
     tint_head_skin,
     untinted,
 )
@@ -483,6 +484,14 @@ def test_add_head_draws_the_eyes() raises:
         workers=2,
     )
     assert_equal(len(scene.meshes), 2 + 2 + 1 + 1)
+
+
+def test_brow_box_rejects_each_side() raises:
+    var dims = head_muscle_dimensions(_person())
+    var brows = _Brows(dims, HeadSkinField(dims))
+    var middle = (brows.low + brows.high) * 0.5
+    assert_equal(brows.weight(Vector3(brows.low.x - 1, middle.y, middle.z)), 0)
+    assert_equal(brows.weight(Vector3(brows.high.x + 1, middle.y, middle.z)), 0)
 
 
 def main() raises:

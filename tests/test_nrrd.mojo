@@ -233,6 +233,13 @@ def test_the_header_s_edges_are_read_as_three_js_reads_them() raises:
 
 
 def test_words_are_read_as_parseint_and_parsefloat_read_them() raises:
+    var alias = parse_nrrd(
+        _file(
+            "NRRD1\nsizes: 2\nencoding: txt\ntype: uint8\nx: y\n\n",
+            List[UInt8](String("7 11").as_bytes()),
+        )
+    )
+    _same(alias.data, [7, 11])
     # The data is Latin-1: 0xA0 is a no-break space, which `parseInt` and
     # `parseFloat` skip.
     var header = "NRRD1\nsizes: 5\nencoding: hex\ntype: uint8\nx: y\n\n"

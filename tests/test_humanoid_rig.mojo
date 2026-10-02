@@ -403,6 +403,10 @@ def test_colors_are_carried_to_a_decimated_skin() raises:
 def test_weld_hash_collisions_do_not_join_distinct_positions() raises:
     var p = Vector3(0.00001001, 0.00001001, 0.00108001)
     var graph = _welded_edges([Vector3(0, 0, 0), p, p], List[Int]())
+    var y_collision = _welded_edges(
+        [Vector3(0, 0, 0), Vector3(0, 0.00001001, 9.999831)], List[Int]()
+    )
+    assert_equal(y_collision[0][1], 1)
     var first = graph[0][0]
     var second = graph[0][1]
     var third = graph[0][2]

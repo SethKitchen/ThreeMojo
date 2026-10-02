@@ -843,5 +843,31 @@ def test_bad_draco_primitives_are_refused() raises:
         )
 
 
+def test_octahedron_canonicalization_matches_corner_truth_table() raises:
+    var o = Octahedron(4)
+    var m = o.max_value
+    var c = o.center
+    for s in range(m + 1):
+        for t in range(m + 1):
+            var expected = (s, t)
+            if (
+                (s == 0 and t == 0)
+                or (s == 0 and t == m)
+                or (s == m and t == 0)
+            ):
+                expected = (m, m)
+            elif s == 0 and t > c:
+                expected = (s, c - (t - c))
+            elif s == m and t < c:
+                expected = (s, c + (c - t))
+            elif t == m and s < c:
+                expected = (c + (c - s), t)
+            elif t == 0 and s > c:
+                expected = (c - (s - c), t)
+            var actual = o.canonicalize_coords(s, t)
+            assert_equal(actual[0], expected[0])
+            assert_equal(actual[1], expected[1])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
