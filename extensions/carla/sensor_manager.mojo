@@ -464,6 +464,9 @@ struct SensorManager(Movable):
     ) raises -> ActorId:
         """Spawn a sensor and listen to it.
 
+        A failure leaves the world's actors and the listened sensors
+        unchanged.
+
         Args:
             world: The world.
             blueprint: A `sensor.*` blueprint of the world's library, with
@@ -477,8 +480,20 @@ struct SensorManager(Movable):
         Raises:
             Error: If the spawn fails, or `listen` refuses the sensor.
         """
+        # Only sensors can enter this transaction: their world spawn adds
+        # one actor record and no physics body or kind-specific record.
+        if not Bool(sensor_kind_of(blueprint.id)):
+            raise Error("This actor is not a sensor: " + blueprint.id)
         var id = world.spawn_actor(blueprint, transform, parent)
-        self.listen(world, id)
+        try:
+            self.listen(world, id)
+        except error:
+            # listen only reads the world and publishes its slot last. The
+            # sensor is needed during setup (an unparented V2X owns itself),
+            # but has not escaped this call. Remove it instead of destroying
+            # it so that a failed spawn does not consume an actor id.
+            _ = world.actors.pop()
+            raise error^
         return id
 
     def _find(self, id: ActorId) -> Int:
