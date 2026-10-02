@@ -56,7 +56,7 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.bounds import Box3, Sphere
 from math.capsule import Capsule
-from math.ray import Ray
+from math.ray import Ray, _RayProducts
 from math.triangle import Triangle, _segment_closest_points
 from math.vector3 import Vector3
 from std.math import inf, max, min, sqrt
@@ -614,23 +614,31 @@ struct Octree(Movable):
                 found.append(index)
 
     def _ray_gather(
-        self, node: Int, ray: Ray, mut found: List[Int], mut seen: List[Bool]
+        self,
+        node: Int,
+        ray: Ray,
+        products: _RayProducts,
+        mut found: List[Int],
+        mut seen: List[Bool],
     ):
         """Collect the triangles below a box that a ray can meet.
 
         Args:
             node: The box to search below.
             ray: The ray.
+            products: Its immutable products, prepared once for this traversal.
             found: The triangles, as indices, in the order found.
             seen: Which triangles are in `found` already.
         """
         for sub in self._nodes[node].sub_trees:
-            if not ray.intersects_box(self._nodes[sub].box):
+            if not ray._box_decision[True, False](
+                self._nodes[sub].box, products
+            )[0]:
                 continue
             if len(self._nodes[sub].triangles) > 0:
                 self._collect(sub, found, seen)
             else:
-                self._ray_gather(sub, ray, found, seen)
+                self._ray_gather(sub, ray, products, found, seen)
 
     def _sphere_gather(
         self,
@@ -689,7 +697,7 @@ struct Octree(Movable):
         """
         var found = List[Int]()
         var seen = List[Bool](length=len(self.triangles), fill=False)
-        self._ray_gather(0, ray, found, seen)
+        self._ray_gather(0, ray, ray._query_products(), found, seen)
         return found^
 
     def sphere_triangles(self, sphere: Sphere) -> List[Int]:

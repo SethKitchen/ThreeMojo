@@ -124,7 +124,7 @@ A sprite is met on its two triangles, laid flat to the kept camera with its cent
 
 ## Rules
 
-A mesh is tested in three steps. First its bounding sphere, in world space. Then its bounding box, in its own space. Then every triangle. A mesh the ray misses at the first step costs six multiplies.
+A mesh is tested in three steps. First its bounding sphere, in world space. Then its bounding box, in its own space. Then every triangle. A miss at either bound skips the triangle tests.
 
 The material's `side` decides which faces count. A `FRONT_SIDE` mesh is not picked through its back. A `BACK_SIDE` mesh is picked only on its back. A `DOUBLE_SIDE` mesh is picked on both. What the renderer draws, the raycaster hits. See [Materials](Materials#side).
 
@@ -161,3 +161,43 @@ for hit in caster.intersect_scene(scene, assets):
 Hits are sorted by distance. Equal distances keep their discovery order. A result with more than 32 hits uses the shared radix sorter. This keeps sorting work linear for dense point clouds and overlapping meshes. Smaller results use insertion sort without a second buffer.
 
 See [Math](Math#ray) for the `Ray` the raycaster carries.
+
+## Bounds query precision and cost
+
+Ray bounds queries use wide determinant comparisons. A Boolean box query
+uses the same rejection tests as the point query, without constructing a
+point. An Octree prepares the ray-only products once per traversal. Each
+new traversal reads the current ray, so later ray edits cannot use an old
+snapshot.
+
+Finite boxes keep inclusive surface and tangent tests. Extended boxes can
+use infinite limits. `intersects_box` tests their volume. `intersect_box`
+returns a finite entry or exit point when one exists. It returns `None`
+when there is no finite exit.
+
+An empty box or a box with a NaN coordinate is not hit. This replaces some undefined nonfinite points from the older
+slab calculation.
+
+The ordinary path does not divide a squared point distance for a sphere
+predicate. Near the rounding boundary it retains the divided comparison.
+This does not make every exact sphere tangency correct. [Issue #557](https://github.com/SethKitchen/ThreeMojo/issues/557)
+tracks retained predicate and hit-point differences from exact stored-input oracles.
+[Issue #550](https://github.com/SethKitchen/ThreeMojo/issues/550) records the
+throughput work and its measured limits.
+
+## Sphere hit-point filter
+
+Sphere hit-point queries first use a wide quadratic filter. It uses the
+stored direction's actual squared norm. It admits only separated roots
+and origin-side decisions. Other cases keep the center-relative fallback.
+
+For admitted finite-input hits, the wide coordinate error is less than
+`2^-28 * radius + 2^-53 * abs(exact_coordinate)`. This bound is before
+Float32 conversion. It assumes IEEE rounding with optional FMA
+contraction and no unrestricted reassociation. It does not certify the
+fallback, correctly rounded Float32 bits, or overflow in that conversion.
+
+The filter's nonzero intermediate values stay in the normal Float64
+range for finite stored Float32 inputs. The public point still uses
+Float32 coordinates. The retained boundary limitations in issue #557
+remain open.

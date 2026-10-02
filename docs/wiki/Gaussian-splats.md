@@ -52,6 +52,10 @@ per-splat sphere test shares the ray distance calculation. The calculation
 uses the stored direction's actual norm. It does not assume that a stored
 32-bit unit direction has an exact norm of one.
 
+Ray-only products are prepared once after the ray enters local space.
+Every splat in that query shares the snapshot. A later query prepares a
+new snapshot, so edits to the ray or world transform remain visible.
+
 The ellipsoid equation is solved about its nearest point to the ray. This
 avoids subtraction of large squared terms at a distant origin. Surface
 points are formed relative to the splat center before conversion to 32-bit
