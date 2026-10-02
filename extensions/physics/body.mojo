@@ -90,7 +90,12 @@ def _transposed(m: Matrix3) -> Matrix3:
 struct RigidBody(Copyable, Movable):
     """One body: its pose, its motion, its shape and its mass."""
 
+    # Change modes through set_kind so effective mass stays consistent.
     var kind: BodyKind
+    var _has_dynamic_state: Bool
+    var _dynamic_mass: Float32
+    var _dynamic_inverse_mass: Float32
+    var _dynamic_inverse_inertia: Matrix3
     var shape: Shape
     # Where the shape sits in the body's frame.
     var shape_position: Vector3
@@ -152,6 +157,12 @@ struct RigidBody(Copyable, Movable):
         if shape.kind == MESH and kind != STATIC:
             raise Error("A mesh body must be static")
         self.kind = kind
+        self._has_dynamic_state = False
+        self._dynamic_mass = 0
+        self._dynamic_inverse_mass = 0
+        self._dynamic_inverse_inertia = Matrix3()
+        for i in range(9):  # pragma: no branch
+            self._dynamic_inverse_inertia.elements[i] = 0
         self.shape = shape^
         self.shape_position = Vector3(0, 0, 0)
         self.shape_rotation = Quaternion.identity()
@@ -179,6 +190,75 @@ struct RigidBody(Copyable, Movable):
         if kind == DYNAMIC:
             self.set_mass(mass)
 
+    def set_kind(mut self, kind: BodyKind) raises:
+        """Change how the body moves without losing its dynamic mass.
+
+        Dynamic-to-kinematic changes keep velocity. Entering static stops
+        velocity and split-impulse velocity. Force and torque stay pending
+        until the next world step consumes them. A disabled body's local
+        mass tensor is retained; its world pose can change before it
+        becomes dynamic again.
+
+        Args:
+            kind: The new mode. A mesh must stay static.
+
+        Raises:
+            Error: If the kind is invalid, a mesh would move, or no valid
+                dynamic state can be restored. Construct a dynamic body
+                before disabling it when later restoration is needed.
+        """
+        if not kind.is_valid():
+            raise Error("Body kind is not valid")
+        if self.shape.kind == MESH and kind != STATIC:
+            raise Error("A mesh body must be static")
+        if kind == self.kind:
+            return
+        if kind == DYNAMIC:
+            if not self._has_dynamic_state:
+                raise Error("The body has no retained dynamic mass")
+            self._check_dynamic_state(
+                self._dynamic_mass,
+                self._dynamic_inverse_mass,
+                self._dynamic_inverse_inertia,
+            )
+            self.mass = self._dynamic_mass
+            self.inverse_mass = self._dynamic_inverse_mass
+            self.inverse_inertia = self._dynamic_inverse_inertia
+        else:
+            if self.kind == DYNAMIC:
+                self._check_dynamic_state(
+                    self.mass, self.inverse_mass, self.inverse_inertia
+                )
+                self._dynamic_mass = self.mass
+                self._dynamic_inverse_mass = self.inverse_mass
+                self._dynamic_inverse_inertia = self.inverse_inertia
+                self._has_dynamic_state = True
+            self.mass = 0
+            self.inverse_mass = 0
+            for i in range(9):  # pragma: no branch
+                self.inverse_inertia.elements[i] = 0
+            if kind == STATIC:
+                self.linear_velocity = Vector3(0, 0, 0)
+                self.angular_velocity = Vector3(0, 0, 0)
+                self.push_velocity = Vector3(0, 0, 0)
+                self.push_angular = Vector3(0, 0, 0)
+        self.kind = kind
+
+    def _check_dynamic_state(
+        self, mass: Float32, inverse_mass: Float32, inertia: Matrix3
+    ) raises:
+        if not (
+            isfinite(mass)
+            and mass > 0
+            and isfinite(inverse_mass)
+            and inverse_mass > 0
+            and inverse_mass == 1 / mass
+        ):
+            raise Error("The retained dynamic mass is invalid")
+        for i in range(9):  # pragma: no branch
+            if not isfinite(inertia.elements[i]):
+                raise Error("The retained inverse inertia is not finite")
+
     def set_mass(mut self, mass: Mass) raises:
         """Give a dynamic body a mass, and the inertia of its solid shape.
 
@@ -200,13 +280,18 @@ struct RigidBody(Copyable, Movable):
         self.center_of_mass = turn.transform(props.center) + self.shape_position
         self.set_inertia(turn * props.inertia * _transposed(turn))
 
-    def set_inertia(mut self, inertia: Matrix3):
+    def set_inertia(mut self, inertia: Matrix3) raises:
         """Set the inertia tensor about the center of mass.
 
         Args:
             inertia: The tensor, in kg m^2, in the body's frame. It must be
                 symmetric and positive definite.
+
+        Raises:
+            Error: If the body is not dynamic.
         """
+        if self.kind != DYNAMIC:
+            raise Error("Only a dynamic body can set its inertia")
         self.inverse_inertia = inertia
         self.inverse_inertia.invert()
 
@@ -220,19 +305,27 @@ struct RigidBody(Copyable, Movable):
             rotation: How the shape is turned.
 
         Raises:
-            Error: If `set_mass` refuses the body's mass.
+            Error: If a disabled dynamic body retains its mass, or
+                `set_mass` refuses the body's mass.
         """
+        if self.kind != DYNAMIC and self._has_dynamic_state:
+            raise Error("Restore dynamic mode before changing the shape pose")
         self.shape_position = position
         self.shape_rotation = rotation
         if self.kind == DYNAMIC:
             self.set_mass(Mass(self.mass, KILOGRAM))
 
-    def set_center_of_mass(mut self, center: Vector3):
+    def set_center_of_mass(mut self, center: Vector3) raises:
         """Move the center of mass, keeping the inertia tensor.
 
         Args:
             center: The new center, in the body's frame, in meters.
+
+        Raises:
+            Error: If a disabled dynamic body retains its mass.
         """
+        if self.kind != DYNAMIC and self._has_dynamic_state:
+            raise Error("Restore dynamic mode before changing its mass center")
         self.center_of_mass = center
 
     def is_dynamic(self) -> Bool:

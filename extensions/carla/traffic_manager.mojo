@@ -224,16 +224,17 @@ def set_simulate_physics(
         enabled: True for on.
 
     Raises:
-        Error: If the id names no living actor.
+        Error: If the id names no living actor, or the body cannot enter
+            the requested mode.
     """
     var body = world.actor(actor).body
     if body.value < 0:
         return
     ref b = world.physics.world.bodies[body.value]
     if enabled:
-        b.kind = DYNAMIC
+        b.set_kind(DYNAMIC)
     else:
-        b.kind = KINEMATIC
+        b.set_kind(KINEMATIC)
         b.linear_velocity = Vector3(0, 0, 0)
         b.angular_velocity = Vector3(0, 0, 0)
 
