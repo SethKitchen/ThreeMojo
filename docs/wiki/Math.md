@@ -225,6 +225,23 @@ corners equal.
 
 A contraction larger than a finite box extent leaves an empty box. This also holds when rounded corners would be equal. Exact half-extent contraction still leaves a nonempty point or face.
 
+`Box2.center` and `Box3.center` add finite coordinates in `Float64` before
+they divide by two. They then round once to `Float32`. This keeps a finite
+midpoint when a `Float32` sum would overflow.
+
+`Box3.bounding_sphere` measures corner distances from that stored center.
+It includes a proved arithmetic error bound and rounds the radius outward. Thus
+rounding cannot put a finite corner outside the sphere. The radius can be
+one `Float32` step larger than the smallest enclosing radius. For subnormal
+radii, that step can be a large share of the radius.
+
+A full `size()` component can overflow while the radius remains finite. A radius that
+cannot fit in `Float32` is infinity. Empty and nonfinite bounds keep their
+prior behavior.
+
+If outward arithmetic overflows, an exact corner test checks the largest
+finite radius first. This preserves bounds just inside the type limit.
+
 Expanding an empty bound by a point gives the bound of that one point. A union with one changes nothing. An overlap test with one is false. A transform leaves one empty.
 
 A question that needs a point of an empty bound raises: `clamp_point`, `distance_to_point` and `distance_to_sphere`.
@@ -240,7 +257,7 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `contains_point(p)`, `clamp_point(p)`, `distance_to_point(p)` | The faces count as inside. |
 | `intersects_box(other)`, `intersects_sphere(s)` | Touching counts. |
 | `apply_matrix4(m)` | Transform the eight corners and bound them again, in place. |
-| `bounding_sphere() -> Sphere` | The sphere through the corners. |
+| `bounding_sphere() -> Sphere` | A sphere enclosing the corners, with an outward-rounded radius. |
 | `Box3.from_center_and_size(c, s)` | The box of size `s` centered on `c`. |
 | `expand_by_vector(v)`, `expand_by_scalar(f)`, `translate(v)` | Move each face out, or move the box. |
 | `intersect(other)` | Keep what both boxes hold. Boxes that do not overlap give the empty box. |

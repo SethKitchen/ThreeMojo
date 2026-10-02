@@ -37,12 +37,19 @@ plane built from three points has no reason to have one. A zero normal is
 refused: it is not a plane.
 """
 
-from math.box_extent import _shrink_exceeds_extent
+from math.box_extent import (
+    _extent_about_center,
+    _max_radius_encloses_box,
+    _midpoint,
+    _radius_up,
+    _shrink_exceeds_extent,
+)
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.triangle import Line3, Triangle
 from math.vector3 import Vector3
-from std.math import inf, sqrt
+from std.math import inf, isfinite, sqrt
+from std.memory import bitcast
 
 
 @fieldwise_init
@@ -146,7 +153,11 @@ struct Box3(Equatable, ImplicitlyCopyable):
         """Return the middle of this box, or the origin for an empty one."""
         if self.is_empty():
             return Vector3(0, 0, 0)
-        return (self.min + self.max) * 0.5
+        return Vector3(
+            _midpoint(self.min.x, self.max.x),
+            _midpoint(self.min.y, self.max.y),
+            _midpoint(self.min.z, self.max.z),
+        )
 
     def size(self) -> Vector3:
         """Return this box's extent along each axis, or zero for an empty
@@ -289,15 +300,40 @@ struct Box3(Equatable, ImplicitlyCopyable):
         self = Box3.from_points(corners)
 
     def bounding_sphere(self) -> Sphere:
-        """Return the sphere around this box: its center, and half its
-        diagonal as the radius. Empty for an empty box.
+        """Return a sphere around this box, empty for an empty box.
+
+        Finite bounds use the stored rounded center and an outward-rounded
+        corner radius. Intermediate full extents need not fit in Float32.
+        A radius too large for Float32 is infinity. Nonfinite bounds retain
+        their existing IEEE arithmetic.
 
         Returns:
             The sphere.
         """
         if self.is_empty():
             return Sphere.empty()
-        return Sphere(self.center(), self.size().length() * 0.5)
+        var middle = self.center()
+        if not (
+            isfinite(self.min.x)
+            and isfinite(self.min.y)
+            and isfinite(self.min.z)
+            and isfinite(self.max.x)
+            and isfinite(self.max.y)
+            and isfinite(self.max.z)
+        ):
+            return Sphere(middle, self.size().length() * 0.5)
+        var radius = _radius_up(
+            _extent_about_center(self.min.x, self.max.x, middle.x),
+            _extent_about_center(self.min.y, self.max.y, middle.y),
+            _extent_about_center(self.min.z, self.max.z, middle.z),
+        )
+        if radius == inf[DType.float32]() and _max_radius_encloses_box(
+            [self.min.x, self.min.y, self.min.z],
+            [self.max.x, self.max.y, self.max.z],
+            [middle.x, middle.y, middle.z],
+        ):
+            radius = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+        return Sphere(middle, radius)
 
     @staticmethod
     def from_center_and_size(center: Vector3, size: Vector3) -> Box3:

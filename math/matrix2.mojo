@@ -12,7 +12,7 @@ column vector on its right, as `Matrix3` and `Matrix4` do. `Box2` is
 the first point expanded into it becomes both.
 """
 
-from math.box_extent import _shrink_exceeds_extent
+from math.box_extent import _midpoint, _shrink_exceeds_extent
 from math.vector2 import Vector2
 from math.matrix_inverse import (
     _inverse_needs_wide,
@@ -261,7 +261,10 @@ struct Box2(Equatable, ImplicitlyCopyable):
         """
         if self.is_empty():
             return Vector2(0, 0)
-        return (self.min + self.max) * 0.5
+        return Vector2(
+            _midpoint(self.min.x, self.max.x),
+            _midpoint(self.min.y, self.max.y),
+        )
 
     def size(self) -> Vector2:
         """Return the width and height.

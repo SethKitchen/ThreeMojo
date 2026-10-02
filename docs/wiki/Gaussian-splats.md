@@ -63,10 +63,11 @@ coordinates. The world distance still controls the near and far filters.
 
 Tests cover large and small covariances, rotated axes, exact misses, and
 scaled and sheared world transforms. These tests do not establish correct
-results for every finite input. Bound construction can still overflow at
-extreme finite centers; [issue #549](https://github.com/SethKitchen/ThreeMojo/issues/549)
-tracks that separate limit. See [issue #498](https://github.com/SethKitchen/ThreeMojo/issues/498)
-for the squared-distance audit.
+results for every finite input. Box midpoints use wide sums, so a large
+finite center does not overflow during bound construction. Tests include
+an end-to-end ray hit at a center of `3e38`. See
+[issue #498](https://github.com/SethKitchen/ThreeMojo/issues/498) for the
+squared-distance audit.
 
 ## The draw
 
