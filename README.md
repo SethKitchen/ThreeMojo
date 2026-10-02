@@ -349,6 +349,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 <details>
 <summary>Ported: 14</summary>
 
+- [x] [Exact singular matrix inversion](https://github.com/SethKitchen/ThreeMojo/wiki/Math#matrix-inverses): Matrix2, Matrix3 and Matrix4 inversion preserve exact singularity and valid small determinants for finite Float32 inputs. [#522](https://github.com/SethKitchen/ThreeMojo/issues/522)
 - [x] [Object3D.up, Timer, Vector4 and small math and color members](https://github.com/SethKitchen/ThreeMojo/wiki/Math#vector4): up, property lookups, Timer, Vector4, HSV, texture and half-float utilities [#188](https://github.com/SethKitchen/ThreeMojo/issues/188)
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
 - [x] [The three.js math API](https://github.com/SethKitchen/ThreeMojo/wiki/Math#the-threejs-math-api): the missing vector, quaternion, matrix, box, plane and frustum members, object bounds and CSS colors. [#166](https://github.com/SethKitchen/ThreeMojo/issues/166)

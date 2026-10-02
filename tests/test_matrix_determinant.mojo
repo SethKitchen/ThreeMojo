@@ -82,5 +82,40 @@ def test_nonzero_determinants_across_float32_range() raises:
         assert_true(_determinant3_f32(matrix.elements) < 0)
 
 
+def test_cancellation_keeps_all_significant_expansion_components() raises:
+    # A cofactor of a dense invertible Matrix4. The final expansion
+    # component is 7995392; the whole exact determinant is 8000003.
+    var matrix = Matrix3()
+    matrix.set(
+        8000003,
+        8000001,
+        8000004,
+        8000002,
+        8000001,
+        8000003,
+        8000001,
+        7999999,
+        8000003,
+    )
+    assert_equal(_determinant3_f32(matrix.elements), Float64(8000003))
+
+
+def test_symmetric_positive_definite_determinant_keeps_magnitude() raises:
+    # 8000000*J + I has eigenvalues 24000001, 1, 1.
+    var matrix = Matrix3()
+    matrix.set(
+        8000001,
+        8000000,
+        8000000,
+        8000000,
+        8000001,
+        8000000,
+        8000000,
+        8000000,
+        8000001,
+    )
+    assert_equal(_determinant3_f32(matrix.elements), Float64(24000001))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -458,7 +458,13 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var t13 = n23 * n12 - n22 * n13
 
         var det = n11 * t11 + n21 * t12 + n31 * t13
-        var terms = abs(n11 * t11) + abs(n21 * t12) + abs(n31 * t13)
+        # Bound cancellation with every unsigned determinant product. Using
+        # the rounded cofactors here can hide cancellation inside each one.
+        var terms = (
+            abs(n11) * (abs(n33 * n22) + abs(n32 * n23))
+            + abs(n21) * (abs(n32 * n13) + abs(n33 * n12))
+            + abs(n31) * (abs(n23 * n12) + abs(n22 * n13))
+        )
         if _determinant_needs_wide(det, terms):
             var wide = _inverse_wide[3](self.elements)
             self.elements = wide[1].copy()
