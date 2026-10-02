@@ -109,10 +109,17 @@ Front-face, edge or vertex tangency gives a contact with zero depth. A sphere ta
 
 A collinear triangle uses its nonzero edges. An edge of zero length is ignored. A triangle made of one repeated point meets nothing. Zero separation from a collinear edge has no unique normal, so it gives a zero direction.
 
+The port corrects proven upstream defects, as stated in the
+[contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness).
+It does not reproduce every collision output of three.js 0.180.0. A port of
+three.js's first-person game can therefore move a player differently near
+an edge or tangent contact. There is no legacy contact mode.
+
 The port differs from three.js in these places:
 
 - Sphere edge tests compare the full squared distance with the full squared radius. They select the nearest edge. This corrects missed coplanar and behind-plane contacts.
 - Segment tests recompute the other parameter after an endpoint limits the minimum. The solver is shared with `Line3`. Octree keeps every nonzero segment; `Line3` keeps its documented short-segment threshold.
+- Edge and vertex tangency counts as a zero-depth contact instead of being rejected by the inherited strict edge test. Capsule face tangency avoids zero-over-zero interpolation.
 - Thin-triangle containment uses the stable barycentric kernel from `Triangle`.
 - `triangles_per_leaf` and `max_level` hold at every level. three.js reads them only on the root.
 - `from_graph_node` reads the plain meshes, `Scene.meshes`. three.js also reads a skinned mesh in its bind pose, and an instanced mesh once.
