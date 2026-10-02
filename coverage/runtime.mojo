@@ -66,14 +66,10 @@ def _emit_hit(id: StaticString, suffix: StaticString):
 def hit(id: StaticString):
     """Record that the statement identified by `id` executed.
 
+    Oversized records and failed writes terminate the process.
+
     Args:
         id: Static source ID. The full UTF-8 record must fit in 512 bytes.
-
-    Returns:
-        Nothing.
-
-    Raises:
-        Never. Oversized records and failed writes terminate the process.
     """
     _emit_hit(id, "\n")
 
@@ -84,6 +80,7 @@ def branch(id: StaticString, value: Bool) -> Bool:
 
     COVLINE carries all hit payloads, including condition and decision outcomes.
     Only complete COVEVAL2 records supply compound MC-DC evidence.
+    Oversized records and failed writes terminate the process.
 
     Args:
         id: Static source ID. The full UTF-8 record must fit in 512 bytes.
@@ -91,9 +88,6 @@ def branch(id: StaticString, value: Bool) -> Bool:
 
     Returns:
         The original value.
-
-    Raises:
-        Never. Oversized records and failed writes terminate the process.
     """
     _emit_hit(id, StaticString(":T\n") if value else StaticString(":F\n"))
     return value
@@ -102,14 +96,8 @@ def branch(id: StaticString, value: Bool) -> Bool:
 def buffer() -> List[Int]:
     """Construct a private empty buffer without using caller-scope type names.
 
-    Args:
-        None.
-
     Returns:
         An empty operand buffer. Storage is allocated only when it is used.
-
-    Raises:
-        Never.
     """
     return List[Int]()
 
@@ -124,9 +112,6 @@ def begin(mut values: List[Int], width: Int) -> Bool:
 
     Returns:
         True, so the original condition is evaluated by short-circuit `and`.
-
-    Raises:
-        Never.
     """
     values.clear()
     for _ in range(width):
@@ -148,9 +133,6 @@ def leaf(
 
     Returns:
         The original value.
-
-    Raises:
-        Never.
     """
     values[index] = Int(value)
     return branch(id, value)
@@ -160,6 +142,8 @@ def leaf(
 def finish(value: Bool, values: List[Int], id: StaticString) -> Bool:
     """Emit a complete evaluation after every executed operand has returned.
 
+    Oversized records and failed writes terminate the process.
+
     Args:
         value: The original decision's outcome.
         values: Only this invocation's current evaluated and masked operands.
@@ -167,9 +151,6 @@ def finish(value: Bool, values: List[Int], id: StaticString) -> Bool:
 
     Returns:
         The original outcome.
-
-    Raises:
-        Never.
     """
     _ = branch(id, value)
     var record = (

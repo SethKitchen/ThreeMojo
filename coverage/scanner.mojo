@@ -197,14 +197,8 @@ struct Scanner(Movable):
     def function_number(self) -> Int:
         """Return the current function's local-buffer suffix, or -1.
 
-        Args:
-            None.
-
         Returns:
             The current function's number, or -1 outside a function.
-
-        Raises:
-            Never.
         """
         if not self._inside_function_body():
             return -1
