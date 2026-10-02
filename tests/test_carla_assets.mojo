@@ -296,6 +296,14 @@ def test_an_archive_contributes_its_members() raises:
     assert_equal(unpinned.entries[0].files[0].sha256, "")
 
 
+def test_tile_sizes_are_positive_and_finite_after_float32_conversion() raises:
+    for value in ["1e100", "3.5e38", "1e-100", "0", "-1"]:
+        _refused(_manifest(_texture_set("scan", value)), "positive and finite")
+    for value in ["1", "0.25", "1e-40", "3.4028234663852886e38"]:
+        var manifest = parse_manifest(_manifest(_texture_set("scan", value)))
+        assert_true(manifest.entries[0].tile.to(METER) > 0)
+
+
 def test_a_manifest_without_bindings_binds_nothing() raises:
     var manifest = parse_manifest(
         '{"format": 1, "entries": [' + _texture_set() + "]}"
@@ -1141,6 +1149,29 @@ def test_models_and_towns_with_no_material_or_with_instances() raises:
     # An empty list of lamps is no lamp.
     var lampless = registry.place_town(4, scene, assets, parent, near)
     assert_equal(len(lampless.lamps), 0)
+
+
+def test_town_lamp_tag_requires_the_exact_string() raises:
+    var folder = temporary_path("threemojo_carla_lamp_tags/")
+    makedirs(folder, exist_ok=True)
+    for tag in ["7", '"glass"']:
+        Path(folder + "town.gltf").write_text(
+            String(TOWN_GLTF).replace('"carla":"lamp"', '"carla":' + tag)
+        )
+        var registry = AssetRegistry(
+            parse_manifest(
+                _manifest(_entry("town", "town", _file("model", "town.gltf")))
+            ),
+            folder,
+        )
+        var scene = Scene()
+        var assets = Assets()
+        var parent = scene.add(Object3D())
+        var placed = registry.place_town(
+            0, scene, assets, parent, Length(10, METER)
+        )
+        assert_equal(placed.mesh_count, 8)
+        assert_equal(len(placed.lamp_materials), 0)
 
 
 def main() raises:

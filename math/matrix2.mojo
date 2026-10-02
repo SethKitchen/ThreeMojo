@@ -12,7 +12,13 @@ column vector on its right, as `Matrix3` and `Matrix4` do. `Box2` is
 the first point expanded into it becomes both.
 """
 
+from math.box_extent import _shrink_exceeds_extent
 from math.vector2 import Vector2
+from math.matrix_inverse import (
+    _inverse_needs_wide,
+    _determinant_needs_wide,
+    _inverse_wide,
+)
 from std.math import cos, inf, sin, sqrt
 from units.si import Angle, RADIAN
 
@@ -125,14 +131,27 @@ struct Matrix2(Equatable, ImplicitlyCopyable):
         """Return the inverse.
 
         Returns:
-            The matrix that undoes this one.
+            The matrix that undoes this one. An inverse entry outside
+            Float32 range becomes signed infinity.
 
         Raises:
             Error: If the determinant is zero. three.js returns zeros.
         """
+        var entries: Array[Float32, 4] = [
+            self.m00,
+            self.m10,
+            self.m01,
+            self.m11,
+        ]
         var det = self.determinant()
-        if det == 0:
-            raise Error("A singular Matrix2 has no inverse")
+        var terms = abs(self.m00 * self.m11) + abs(self.m01 * self.m10)
+        if _inverse_needs_wide[2](entries) or _determinant_needs_wide(
+            det, terms
+        ):
+            var wide = _inverse_wide[2](entries)
+            if not wide[0]:
+                raise Error("A singular Matrix2 has no inverse")
+            return Matrix2(wide[1][0], wide[1][2], wide[1][1], wide[1][3])
         var inv = 1 / det
         return Matrix2(
             self.m11 * inv, -self.m01 * inv, -self.m10 * inv, self.m00 * inv
@@ -279,6 +298,8 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Returns:
             Whether they share a point.
         """
+        if self.is_empty() or other.is_empty():
+            return False
         return not (
             other.max.x < self.min.x
             or other.min.x > self.max.x
@@ -333,7 +354,12 @@ struct Box2(Equatable, ImplicitlyCopyable):
             The box.
         """
         var half = size * 0.5
-        return Box2(center - half, center + half)
+        var box = Box2(center - half, center + half)
+        # Rounding at a large center, or halving a negative subnormal,
+        # can erase the inside-out corners that encode a negative extent.
+        if (size.x < 0 or size.y < 0) and not box.is_empty():
+            return Box2.empty()
+        return box
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if both corners are exactly equal, three.js's
@@ -366,8 +392,17 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Args:
             amount: How far to move each edge out, per axis.
         """
+        if self.is_empty():
+            return
+        var over_shrunk = _shrink_exceeds_extent(
+            self.min.x, self.max.x, amount.x
+        ) or _shrink_exceeds_extent(self.min.y, self.max.y, amount.y)
         self.min = self.min - amount
         self.max = self.max + amount
+        # Keep ordinary corner arithmetic, but do not let rounding turn an
+        # over-shrunk finite interval into a nonempty point.
+        if over_shrunk and not self.is_empty():
+            self = Box2.empty()
 
     def expand_by_scalar(mut self, amount: Float32):
         """Grow the box by `amount` on every side, three.js's
@@ -389,6 +424,10 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Returns:
             Whether this box holds all of it.
         """
+        if other.is_empty():
+            return True
+        if self.is_empty():
+            return False
         return (
             self.min.x <= other.min.x
             and other.max.x <= self.max.x
@@ -424,5 +463,7 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Args:
             offset: How far.
         """
+        if self.is_empty():
+            return
         self.min = self.min + offset
         self.max = self.max + offset

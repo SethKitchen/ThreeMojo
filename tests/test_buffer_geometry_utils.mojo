@@ -33,6 +33,7 @@ from geometries.attribute_utils import (
     to_triangles_draw_mode,
 )
 from math.matrix4 import Matrix4, rotation_z, translation
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -47,7 +48,7 @@ def check(actual: List[Float32], expected: List[Float64]) raises:
     """Check a list of numbers, each to a float's precision."""
     assert_equal(len(actual), len(expected))
     for index in range(len(expected)):
-        if abs(Float64(actual[index]) - expected[index]) > 1e-6:
+        if not (abs(Float64(actual[index]) - expected[index]) <= 1e-6):
             raise Error(
                 "entry "
                 + String(index)
@@ -56,6 +57,30 @@ def check(actual: List[Float32], expected: List[Float64]) raises:
                 + " but got "
                 + String(actual[index])
             )
+
+
+def test_check_rejects_nonfinite_components() raises:
+    var expected: List[Float64] = [0, 1, -2, 3, -4, 5]
+    var matching: List[Float32] = [0, 1, -2, 3, -4, 5]
+    check(matching, expected)
+    var nonfinite: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for index in range(len(matching)):
+        for bad in nonfinite:
+            var actual = matching.copy()
+            actual[index] = bad
+            with assert_raises(contains="entry " + String(index)):
+                check(actual, expected)
+
+
+def test_check_keeps_its_finite_tolerance() raises:
+    check([0, 0], [1e-6, -1e-6])
+    for outside in [Float64(1.1e-6), Float64(-1.1e-6)]:
+        with assert_raises():
+            check([0], [outside])
 
 
 def check_ints(actual: List[Int], expected: List[Int]) raises:

@@ -42,7 +42,7 @@ trait ParametricSurface:
     geometry's own space.
     """
 
-    def point(self, u: Float32, v: Float32) -> Vector3:
+    def point(self, u: Float32, v: Float32) raises -> Vector3:
         """Return the point of the surface at `(u, v)`.
 
         Args:
@@ -51,6 +51,9 @@ trait ParametricSurface:
 
         Returns:
             The point, in meters.
+
+        Raises:
+            Error: If the surface refuses the parameters or its projection.
         """
         ...
 

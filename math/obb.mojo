@@ -25,8 +25,8 @@ test reads its columns as the three unit axes of the box.
   `dot(normal, center) + constant`. three.js subtracts the constant, so it
   tests the plane mirrored through the origin.
 - `apply_matrix4` moves the center by the whole matrix and turns the old
-  rotation by the new one. three.js adds only the translation to the
-  center, multiplies the rotations in the other order, and gives a negative
+  axes through the new matrix, including reflections. three.js adds only
+  the translation to the center, multiplies the rotations in the other order, and gives a negative
   half size under a mirror. The two agree for a box at the origin with no
   rotation, which is how three.js's example uses it.
 - `from_box3` refuses an empty box, and `intersects_box3` says an empty box
@@ -38,7 +38,8 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.ray import Ray
 from math.vector3 import Vector3
-from std.math import isfinite, max, min
+from std.math import isfinite, max, min, sqrt
+from std.memory import bitcast
 
 # three.js's default `epsilon` for `intersectsOBB`: JavaScript's
 # `Number.EPSILON`, the gap between one and the next `Float64`.
@@ -78,6 +79,39 @@ def _check_half_size(half_size: Vector3) raises:
     )
     if not good:
         raise Error("An OBB's half size must be finite and not negative")
+
+
+def _dot_roundoff(
+    coefficients: Array[Float64, 3],
+    magnitudes: Array[Float64, 3],
+    offset: Float64,
+) -> Float64:
+    """Bound Float32 rounding in offset plus three scalar products.
+
+    Each operation has error at most u times its exact magnitude plus half
+    the smallest subnormal, where u = 2**-24. Propagate each error through
+    later additions. Products by zero or signed one, and additions of zero,
+    are exact. Fused multiply-add has no greater error than separate steps.
+    """
+    comptime u = Float64(5.960464477539063e-8)
+    comptime tiny = Float64(7.006492321624085e-46)
+    var total = abs(offset)
+    var products_error = Float64(0)
+    var nonzero = Int(offset != 0)
+    for row in range(3):  # pragma: no branch
+        var factor = abs(coefficients[row])
+        var term = factor * magnitudes[row]
+        if factor != 1 and term > 0:
+            products_error += u * term + tiny
+        if term > 0:
+            nonzero += 1
+        total += term
+    # Any ordering of n additions has gamma_n = n*u/(1-n*u). This
+    # also covers compiler reassociation and contraction into FMA.
+    var additions = Float64(max(0, nonzero - 1))
+    return (products_error + additions * (u * total + tiny)) / (
+        1 - additions * u
+    )
 
 
 struct OBB(ImplicitlyCopyable):
@@ -477,44 +511,224 @@ struct OBB(ImplicitlyCopyable):
     def apply_matrix4(mut self, matrix: Matrix4) raises:
         """Carry the box through a transform. three.js: `applyMatrix4`.
 
-        The scale of each column of the matrix scales the half size along
-        the same axis, and the rotation left turns the box's axes. The
-        answer is exact for a box with no rotation, or a matrix whose three
-        scales are equal. Otherwise the transform shears the box, and no
-        oriented box is exact.
+        Transform the box's own axes, then normalize them. Reverse the
+        first axis when needed to keep a proper rotation. Half sizes stay
+        nonnegative. Nonuniform scale is supported only when the transformed
+        axes stay perpendicular. A shear that changes their right angles
+        is refused, rather than approximated by a box. Normalized axis dot
+        products can differ from zero by at most 1e-6 before correction.
+
+        Each half size bounds the geometric image plus Float32 roundoff in
+        point formation, transformation, center subtraction and projection.
+        The bound uses absolute products, unit roundoff 2**-24 and half the
+        smallest subnormal, then rounds outward. Cancellation can require a
+        larger allowance for a thin box beside large coordinates. Exact
+        signed permutations of axis-aligned boxes at the origin keep exact
+        extents.
 
         Args:
-            matrix: An affine transform.
+            matrix: A finite affine transform with nonzero box axes.
 
         Raises:
-            Error: If the matrix projects, or flattens an axis to nothing.
+            Error: If an input is nonfinite, the matrix projects, an axis
+                collapses, the transformed axes are not perpendicular within
+                1e-6, a positive half size underflows, or a center, half size or
+                conservative bound overflows Float32. The box stays unchanged.
         """
         if not matrix.is_affine():
             raise Error("An OBB can only be carried through an affine matrix")
-        ref e = matrix.elements
-        var sx = Vector3(e[0], e[1], e[2]).length()
-        var sy = Vector3(e[4], e[5], e[6]).length()
-        var sz = Vector3(e[8], e[9], e[10]).length()
-        if sx == 0 or sy == 0 or sz == 0:
-            raise Error("A transform that flattens an axis leaves no OBB")
-        var mirror = sx
-        if matrix.determinant() < 0:
-            mirror = -sx
-        var turn = Matrix3.from_matrix4(matrix)
-        var inv_x = 1 / mirror
-        var inv_y = 1 / sy
-        var inv_z = 1 / sz
-        turn.elements[0] *= inv_x
-        turn.elements[1] *= inv_x
-        turn.elements[2] *= inv_x
-        turn.elements[3] *= inv_y
-        turn.elements[4] *= inv_y
-        turn.elements[5] *= inv_y
-        turn.elements[6] *= inv_z
-        turn.elements[7] *= inv_z
-        turn.elements[8] *= inv_z
-        self.rotation.premultiply(turn)
-        self.half_size = Vector3(
-            self.half_size.x * sx, self.half_size.y * sy, self.half_size.z * sz
+        if not matrix.is_finite():
+            raise Error("An OBB transform must be finite")
+        _check_half_size(self.half_size)
+        var center: Array[Float32, 3] = [
+            self.center.x,
+            self.center.y,
+            self.center.z,
+        ]
+        # Three center components and nine rotation entries are always present.
+        for row in range(3):  # pragma: no branch
+            if not isfinite(center[row]):
+                raise Error("An OBB center must be finite")
+        for index in range(9):  # pragma: no branch
+            if not isfinite(self.rotation.elements[index]):
+                raise Error("An OBB rotation must be finite")
+        # Widen before multiplication: even the largest finite Float32 axes
+        # and their squared lengths fit in Float64. Tiny scales stay nonzero.
+        var axes = Array[Float64, 9](fill=0)
+        var lengths = Array[Float64, 3](fill=0)
+        var transformed = Array[Float64, 9](fill=0)
+        for column in range(3):  # pragma: no branch
+            for row in range(3):  # pragma: no branch
+                for lane in range(3):  # pragma: no branch
+                    axes[column * 3 + row] += Float64(
+                        matrix.elements[lane * 4 + row]
+                    ) * Float64(self.rotation.elements[column * 3 + lane])
+            var at = column * 3
+            lengths[column] = sqrt(
+                axes[at] * axes[at]
+                + axes[at + 1] * axes[at + 1]
+                + axes[at + 2] * axes[at + 2]
+            )
+            if lengths[column] == 0:
+                raise Error("A transform that flattens an axis leaves no OBB")
+            for row in range(3):  # pragma: no branch
+                transformed[at + row] = axes[at + row]
+                axes[at + row] /= lengths[column]
+        # Test the image of the box, not the matrix columns: nonuniform
+        # world scale can shear an already rotated box.
+        for first in range(2):  # pragma: no branch
+            for second in range(first + 1, 3):  # pragma: no branch
+                var dot = Float64(0)
+                for row in range(3):  # pragma: no branch
+                    dot += axes[first * 3 + row] * axes[second * 3 + row]
+                if abs(dot) > 1e-6:
+                    raise Error("An OBB transform cannot shear its axes")
+        # Remove accepted Float32 orthogonality drift before storing a proper
+        # frame. The support bound below accounts for this rounding correction.
+        var xy = axes[0] * axes[3] + axes[1] * axes[4] + axes[2] * axes[5]
+        for row in range(3):  # pragma: no branch
+            axes[3 + row] -= xy * axes[row]
+        var y_length = sqrt(
+            axes[3] * axes[3] + axes[4] * axes[4] + axes[5] * axes[5]
         )
-        self.center = matrix.transform_point(self.center)
+        for row in range(3):  # pragma: no branch
+            axes[3 + row] /= y_length
+        var cross: Array[Float64, 3] = [
+            axes[1] * axes[5] - axes[2] * axes[4],
+            axes[2] * axes[3] - axes[0] * axes[5],
+            axes[0] * axes[4] - axes[1] * axes[3],
+        ]
+        var handedness = (
+            cross[0] * axes[6] + cross[1] * axes[7] + cross[2] * axes[8]
+        )
+        # The signs of individual axes do not change a centered box. Flip
+        # only after applying the matrix to the old axes, never before it.
+        if handedness < 0:
+            for row in range(3):  # pragma: no branch
+                axes[row] = -axes[row]
+                cross[row] = -cross[row]
+        var turn = Matrix3()
+        for row in range(3):  # pragma: no branch
+            turn.elements[row] = Float32(axes[row])
+            turn.elements[3 + row] = Float32(axes[3 + row])
+            turn.elements[6 + row] = Float32(cross[row])
+        var half_size = Vector3(
+            Float32(Float64(self.half_size.x) * lengths[0]),
+            Float32(Float64(self.half_size.y) * lengths[1]),
+            Float32(Float64(self.half_size.z) * lengths[2]),
+        )
+        _check_half_size(half_size)
+        for column in range(3):  # pragma: no branch
+            if (
+                self.half_size.get_component(column) > 0
+                and half_size.get_component(column) == 0
+            ):
+                raise Error("An OBB transformed half size underflows Float32")
+        var moved = Array[Float32, 3](fill=0)
+        var exact_center = Array[Float64, 3](fill=0)
+        for row in range(3):  # pragma: no branch
+            var value = Float64(matrix.elements[12 + row])
+            for lane in range(3):  # pragma: no branch
+                value += Float64(matrix.elements[lane * 4 + row]) * Float64(
+                    center[lane]
+                )
+            exact_center[row] = value
+            moved[row] = Float32(value)
+            if not isfinite(moved[row]):
+                raise Error("An OBB transformed center must fit in Float32")
+        # Keep geometry and rounding separate. A world point made from the
+        # old center and local coordinates has a bounded formation error.
+        # Carry it through the matrix, then bound center subtraction and the
+        # contains_point dot. Absolute-product sums cover cancellation even
+        # when the box is extremely thin along one of its axes.
+        comptime u = Float64(5.960464477539063e-8)
+        comptime tiny = Float64(7.006492321624085e-46)
+        comptime largest = Float64(3.4028234663852886e38)
+        var old_extents: Array[Float64, 3] = [
+            Float64(self.half_size.x),
+            Float64(self.half_size.y),
+            Float64(self.half_size.z),
+        ]
+        var source_bound = Array[Float64, 3](fill=0)
+        var source_error = Array[Float64, 3](fill=0)
+        for row in range(3):  # pragma: no branch
+            var coefficients = Array[Float64, 3](fill=0)
+            source_bound[row] = abs(Float64(center[row]))
+            for column in range(3):  # pragma: no branch
+                coefficients[column] = Float64(
+                    self.rotation.elements[column * 3 + row]
+                )
+                source_bound[row] += (
+                    abs(coefficients[column]) * old_extents[column]
+                )
+            source_error[row] = _dot_roundoff(
+                coefficients, old_extents, Float64(center[row])
+            )
+            source_bound[row] += source_error[row]
+            if source_bound[row] > largest:
+                raise Error("An OBB source corner bound must fit in Float32")
+        var offset_bound = Array[Float64, 3](fill=0)
+        var offset_error = Array[Float64, 3](fill=0)
+        for row in range(3):  # pragma: no branch
+            var coefficients = Array[Float64, 3](fill=0)
+            var point_bound = abs(Float64(matrix.elements[12 + row]))
+            for lane in range(3):  # pragma: no branch
+                coefficients[lane] = Float64(matrix.elements[lane * 4 + row])
+                point_bound += abs(coefficients[lane]) * source_bound[lane]
+                offset_error[row] += (
+                    abs(coefficients[lane]) * source_error[lane]
+                )
+                offset_bound[row] += (
+                    abs(transformed[lane * 3 + row]) * old_extents[lane]
+                )
+            var point_error = _dot_roundoff(
+                coefficients, source_bound, Float64(matrix.elements[12 + row])
+            )
+            if point_bound + point_error > largest:
+                raise Error(
+                    "An OBB transformed corner bound must fit in Float32"
+                )
+            offset_error[row] += point_error + abs(
+                Float64(moved[row]) - exact_center[row]
+            )
+            if moved[row] != 0:
+                offset_error[row] += (
+                    u * (point_bound + point_error + abs(Float64(moved[row])))
+                    + tiny
+                )
+            offset_bound[row] += offset_error[row]
+        var extents = Array[Float32, 3](fill=0)
+        for column in range(3):  # pragma: no branch
+            var coefficients = Array[Float64, 3](fill=0)
+            var bound = Float64(0)
+            var projection_magnitude = Float64(0)
+            for row in range(3):  # pragma: no branch
+                coefficients[row] = Float64(turn.elements[column * 3 + row])
+                bound += abs(coefficients[row]) * offset_error[row]
+                projection_magnitude += (
+                    abs(coefficients[row]) * offset_bound[row]
+                )
+            # Exact geometric support in the stored (rounded) frame. This
+            # also accounts for the accepted orthogonality correction.
+            for other in range(3):  # pragma: no branch
+                var dot = Float64(0)
+                for row in range(3):  # pragma: no branch
+                    dot += coefficients[row] * transformed[other * 3 + row]
+                bound += abs(dot) * old_extents[other]
+            var roundoff = _dot_roundoff(coefficients, offset_bound, 0)
+            bound += roundoff
+            # The error model requires finite intermediate dot products too.
+            # A large cancelling sum cannot borrow safety from a small result.
+            if max(bound, projection_magnitude + roundoff) > largest:
+                raise Error("An OBB projection bound must fit in Float32")
+            extents[column] = Float32(bound)
+            # Round only an inexact downward conversion outward. The checked
+            # bound cannot require a step past the largest finite Float32.
+            if Float64(extents[column]) < bound:
+                var bits = bitcast[DType.uint32](extents[column])
+                extents[column] = bitcast[DType.float32](bits + 1)
+        var moved_center = Vector3(moved[0], moved[1], moved[2])
+        # Commit only after every candidate value has passed its checks.
+        self.rotation = turn
+        self.half_size = Vector3(extents[0], extents[1], extents[2])
+        self.center = moved_center

@@ -1314,5 +1314,11 @@ def test_manager_corners() raises:
     )
 
 
+def test_path_from_outside_mesh_is_absent() raises:
+    var nav = Navigation(_street())
+    assert_true(nav.ready)
+    assert_false(Bool(nav.get_path(Vector3(10000, 10000, 0), Vector3(1, 1, 0))))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

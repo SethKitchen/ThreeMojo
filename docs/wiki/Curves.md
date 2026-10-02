@@ -57,6 +57,16 @@ Use `point` and `sample` to draw a curve. Use `point_at` and `spaced_points` to 
 
 three.js uses 200 for every curve. A Bezier has one arc and 200 runs follow it closely. A spline has one arc per segment. 200 runs across a spline with 400 segments do not sample it sparsely. They land at the same place in every other segment, and measure a curve that is not there. So the count is `ARC_DIVISIONS` or `SEGMENT_SAMPLES` per segment, whichever is larger, and `arc_divisions()` reports it.
 
+### Parameter and count boundaries
+
+Bounded `t` and `u` parameters must be finite and in the closed interval from zero to one. NaN, infinity and values outside that interval raise an error. `SpaceCurve3` checks its double parameter before conversion to a float. Tangent helpers check the parameter before they clamp the two chord samples.
+
+Evaluation checks mutable curve kinds, Catmull-Rom types and control-point counts before dispatch or indexing. These checks take constant time. They do not scan all control points for each sample.
+
+Sample counts must fit in `Int`. The APIs check additions and per-segment products before iteration or allocation. This includes arc tables, path resolutions, spaced points and Frenet frames. There is no fixed resolution limit. A path made only of lines still uses one run per line.
+
+`ExtraCurve.point3` keeps its unbounded parameter policy. Its mutable kind must be valid. Its tangent and distance helpers use bounded parameters.
+
 ### Tangents are exact
 
 three.js measures a tangent across two samples a short step apart. Here every kind has an exact derivative, and `tangent` evaluates it. A Bezier or a spline is a polynomial, and an ellipse is a sine and a cosine.

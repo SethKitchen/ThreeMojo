@@ -104,6 +104,7 @@ from extensions.carla.replayer_helper import (
     find_traffic_sign_at,
     interpolated_transform,
     lerp_angle,
+    process_door_vehicle,
     process_event_add,
     process_event_parent,
     process_position,
@@ -114,6 +115,7 @@ from extensions.carla.recorder_packets import (
     PACKET_SCENE_LIGHT,
     write_packet,
 )
+from extensions.carla.road_info import SignalId
 from extensions.carla.traffic_sign import TriggerBox
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
@@ -249,6 +251,52 @@ def _has(packets: List[_Packet], frame: Int, id: Int) -> Bool:
 
 
 # --- recording ----------------------------------------------------------------------
+
+
+def test_record_and_replay_world_with_utf8_signal_ids() raises:
+    var world = _world()
+    var light_id = String("a") * 31 + "é"
+    var sign_id = String("b") * 29 + "😀"
+    world.traffic_lights.lights[0].sign_id = SignalId(light_id)
+    world.signs[0].sign_id = SignalId(sign_id)
+    var recorder = Recorder()
+    _ = recorder.start(world, "", "Town", False, 0)
+    for frame in range(1, 4):
+        assert_equal(recorder.tick(world), frame)
+        var snapshot = world.get_snapshot()
+        assert_equal(
+            snapshot.find(ActorId(2)).value().traffic_light.value().sign_id,
+            String("a") * 31,
+        )
+        assert_equal(
+            snapshot.find(ActorId(3)).value().sign_id, String("b") * 29
+        )
+    recorder.stop()
+    var bytes = recorder.bytes()
+    var packets = _packets(bytes)
+    # The recorder stores actor ids and light states, not snapshot sign
+    # strings. Its tick must still finish, and the packets must be readable.
+    for frame in range(1, 4):
+        var state = _reader_at(bytes, _find(packets, frame, PACKET_STATE.value))
+        assert_equal(state.u16(), 1)
+        var light = RecordedTrafficLight.read(state)
+        assert_equal(light.database_id.value, 2)
+        assert_true(light.state == world.get_traffic_light_state_of(ActorId(2)))
+        assert_false(state.failed)
+    var replay_world = _world()
+    replay_world.traffic_lights.lights[0].sign_id = SignalId(light_id)
+    replay_world.signs[0].sign_id = SignalId(sign_id)
+    var replay = Replayer()
+    _ = replay.replay_bytes(replay_world, bytes.copy(), "mem")
+    assert_equal(replay.mapped(ActorId(2)).value, 2)
+    assert_equal(replay.mapped(ActorId(3)).value, 3)
+    _ = replay.step(replay_world)
+    assert_equal(replay_world.get_opendrive_id(ActorId(2)).value, light_id)
+    assert_equal(replay_world.get_opendrive_id(ActorId(3)).value, sign_id)
+    assert_equal(
+        replay_world.get_snapshot().find(ActorId(3)).value().sign_id,
+        String("b") * 29,
+    )
 
 
 def test_the_first_frame_holds_the_worlds_actors() raises:
@@ -1099,6 +1147,16 @@ def test_helper_edges() raises:
     var nudged = LogVector(at.x + 0.25, at.y, at.z)
     assert_true(find_traffic_sign_at(world, nudged) == ActorId(3))
     assert_true(find_traffic_sign_at(world, LogVector(1, 2, 3)) == NO_ACTOR)
+    assert_true(
+        find_traffic_sign_at(world, LogVector(at.x, at.y + 10000, at.z))
+        == NO_ACTOR
+    )
+    assert_true(
+        find_traffic_sign_at(world, LogVector(at.x, at.y, at.z + 10000))
+        == NO_ACTOR
+    )
+    process_door_vehicle(world, RecordedDoorVehicle(car, VehicleDoor(99), True))
+    assert_false(world.is_door_open(car, DOOR_FRONT_LEFT))
     # Parents: a dead child or parent, or a vehicle child, is refused.
     assert_false(process_event_parent(world, ActorId(99), car))
     assert_false(process_event_parent(world, prop, ActorId(99)))
@@ -1336,6 +1394,24 @@ def test_helper_spawn_and_light_edges() raises:
         )
     )
     assert_false(world.traffic_lights.groups[0].frozen)
+
+
+def test_camera_follow_refuses_an_invalid_spectator_registry() raises:
+    var world = _world()
+    var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
+    var spectator = world.get_spectator()
+    var before = world.get_transform(spectator)
+    assert_false(world.destroy_actor(spectator))
+    # This is an invalid-registry boundary, not a normal World lifecycle:
+    # the public mutable field no longer names the protected spectator.
+    world.spectator = NO_ACTOR
+    assert_false(set_camera_position(world, car, _pose(0, 0, 0, 0)))
+    assert_true(world.get_transform(spectator).location == before.location)
+    world.spectator = spectator
+    assert_true(set_camera_position(world, car, _pose(0, 0, 0, 0)))
+    assert_true(
+        world.get_transform(spectator).location == world.get_location(car)
+    )
 
 
 def main() raises:

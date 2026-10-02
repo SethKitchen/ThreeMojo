@@ -465,7 +465,7 @@ def test_a_loop_stops_the_path() raises:
     _put(shared, 1, 10, 1.75, 0, 0)
     _vehicles(shared, [1])
     _localize(stage, shared)
-    _same(_indices(shared, 1), [0, 1, 0])
+    _same(_indices(shared, 1), [0, 1])
 
 
 def Waypoint_at(road: Int, lane: Int, s: Float64) -> Waypoint:
@@ -527,6 +527,9 @@ def test_large_vehicle_measures_its_turn() raises:
     var large = shared.large_vehicles[1]
     assert_true(large.turn_right)
     _near(large.junction_length.value, 17.955367, 1e-3)
+    # Repeated entrance updates retain the existing measurement.
+    _localize(stage, shared)
+    _near(shared.large_vehicles[1].junction_length.value, 17.955367, 1e-3)
     # In the junction, then out of it: the length goes back to zero.
     _put(shared, 1, 103.9, 2.9, 30, 0)
     _localize(stage, shared)
@@ -1302,7 +1305,7 @@ def test_collision_edge_cases() raises:
 
 
 def test_collision_lock_on_a_clear_path() raises:
-    # A cached comparison, read swapped for the ego: 3 m from its body to
+    # A cached comparison, with the smaller actor as reference: 3 m from its body to
     # the lead's path, 2 m from the lead's body to its own path, the
     # paths touching and the boxes 1 m apart. Both paths are clear of the
     # other's body; the ego's body is the farther, so it yields. The
@@ -1311,7 +1314,7 @@ def test_collision_lock_on_a_clear_path() raises:
     var shared = _setup_follow(map, 50, 60, 5)
     var stage = CollisionStage()
     stage.collision_locks[1] = CollisionLock(9.0, 9.0, ActorId(2))
-    stage.geometry_cache[(1 << 32) | 2] = GeometryComparison(2.0, 3.0, 0.0, 1.0)
+    stage.geometry_cache[(1 << 32) | 2] = GeometryComparison(3.0, 2.0, 0.0, 1.0)
     var result = stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)
     assert_true(result[0])
     _near(result[1], 1.0)
@@ -1341,6 +1344,112 @@ def test_large_vehicle_with_open_nodes_before_the_turn() raises:
     assert_true(large.turn_right)
     assert_true(large.junction_length.value > 0.0)
     assert_true(large.junction_length.value < 17.9)
+
+
+def test_collision_entrance_light_metadata_and_cross_range() raises:
+    var map = load_opendrive(straight_town())
+    # A red state without an associated light, and an associated green
+    # light, both permit negotiation at the junction entrance.
+    for associated in [False, True]:
+        var shared = _setup_follow(map, 50, 60, 5)
+        var buffer = shared.buffer(ActorId(1))
+        shared.local_map.waypoints[buffer[0].value].is_junction = False
+        shared.local_map.waypoints[buffer[1].value].is_junction = True
+        shared.simulation_state.update_traffic_light_state(
+            ActorId(1),
+            TrafficLightInfo(GREEN if associated else RED, associated),
+        )
+        var stage = CollisionStage()
+        var result = stage.negotiate_collision(
+            ActorId(1), ActorId(2), 1, shared
+        )
+        assert_true(result[0])
+    # Inside the junction, a vehicle well outside both extended boxes
+    # needs no geometry negotiation and must not create a collision lock.
+    var distant = _setup_follow(map, 50, 200, 5)
+    var buffer = distant.buffer(ActorId(1))
+    distant.local_map.waypoints[buffer[0].value].is_junction = True
+    var stage = CollisionStage()
+    stage.collision_locks[1] = CollisionLock(1.0, 1.0, ActorId(2))
+    assert_false(
+        stage.negotiate_collision(ActorId(1), ActorId(2), 0, distant)[0]
+    )
+    assert_false(1 in stage.collision_locks)
+
+
+def test_large_vehicle_repeated_junction_entry_is_not_duplicated() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _line(map, [(10.0, True), (20.0, True), (30.0, False)])
+    shared.large_vehicles[1] = LargeVehicle(Length(0), False)
+    var buffer: List[SimpleWaypointIndex] = [
+        SimpleWaypointIndex(0),
+        SimpleWaypointIndex(1),
+        SimpleWaypointIndex(2),
+    ]
+    var stage = LocalizationStage()
+    stage._handle_large_vehicle_junction(ActorId(1), True, shared, buffer)
+    assert_equal(len(stage.large_vehicles_at_junction_entrance), 1)
+    stage._handle_large_vehicle_junction(ActorId(1), True, shared, buffer)
+    assert_equal(len(stage.large_vehicles_at_junction_entrance), 0)
+    assert_equal(len(stage.large_vehicles_at_junction), 1)
+    stage._handle_large_vehicle_junction(ActorId(1), True, shared, buffer)
+    assert_equal(len(stage.large_vehicles_at_junction), 1)
+    assert_equal(shared.large_vehicles[1].junction_length.value, 0)
+
+
+def test_collision_range_policy_matches_all_boolean_inputs() raises:
+    # Exhaustive original grouped expression, including physically
+    # inconsistent ranges, is the independent refactor oracle.
+    for bits in range(128):
+        var at = bits & 1 != 0
+        var light = bits & 2 != 0
+        var stopped = bits & 4 != 0
+        var inside = bits & 8 != 0
+        var cross = bits & 16 != 0
+        var front = bits & 32 != 0
+        var ego = bits & 64 != 0
+        var expected = not (at and light and stopped) and (
+            (inside and cross) or (not inside and front and ego)
+        )
+        var actual = False
+        if not (at and light and stopped):
+            if inside:
+                if cross:
+                    actual = True
+            else:
+                if front and ego:
+                    actual = True
+        assert_equal(actual, expected)
+
+
+def test_collision_ignores_far_target_outside_a_junction() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _setup_follow(map, 50, 200, 5)
+    var stage = CollisionStage()
+    assert_false(
+        stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)[0]
+    )
+
+
+def test_parallel_lane_negotiation_releases_stale_collision_lock() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _shared(map)
+    _put(shared, 1, 50, 1.75, 0, 5)
+    _put(shared, 2, 60, 5.25, 0, 0)
+    _vehicles(shared, [1, 2])
+    var localize = LocalizationStage()
+    _localize(localize, shared)
+    _localize(localize, shared)
+    var stage = CollisionStage()
+    stage.collision_locks[1] = CollisionLock(9.0, 9.0, ActorId(2))
+    var geometry = stage.get_geometry_between_actors(
+        ActorId(1), ActorId(2), shared
+    )
+    assert_true(geometry.inter_geodesic_distance > 0.1)
+    assert_false(
+        stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)[0]
+    )
+    assert_false(1 in stage.collision_locks)
 
 
 def main() raises:

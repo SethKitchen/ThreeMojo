@@ -752,5 +752,18 @@ def test_fxaa_and_smaa_run_in_the_composer_after_the_output() raises:
     assert_equal(len(composer.accumulations), 3)
 
 
+def test_a_horizontal_edge_can_end_without_a_crossing_edge() raises:
+    var edges = EdgeMap(7, 3)
+    edges.top[7 + 2] = True
+    edges.top[7 + 3] = True
+    edges.top[7 + 4] = True
+    var weights = smaa_weights(edges)
+    # A straight edge with no crossing on either end has no blend area.
+    for x in range(7):
+        var weight = weights.at(x, 1)
+        assert_equal(weight[0], Float32(0))
+        assert_equal(weight[2], Float32(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

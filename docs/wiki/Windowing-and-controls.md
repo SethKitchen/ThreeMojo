@@ -81,11 +81,13 @@ The window never reads `struct termios`, whose layout differs by platform. It as
 - A size that is not positive.
 - An input that is not a terminal.
 - A frame of another size.
-- A negative timeout.
+- A negative or nonfinite timeout, or one too large for native poll milliseconds.
 - A `present` or a `poll` after `close`.
 - A terminal that cannot be written, or that hung up.
 
 The terminal is put back before a failure is raised.
+
+Both window types check the timeout before integer conversion. A fractional millisecond rounds down; a negative fraction raises. The whole-millisecond value must fit the native signed integer.
 
 ## X11Window
 
@@ -428,6 +430,8 @@ Each record also holds the `mode`, the `axis` and `dragging` after the event. St
 | `x_color`, `y_color`, `z_color`, `active_color` | red, green, blue, yellow | The colors of the handles. `set_colors(x, y, z, active)` sets all four. |
 
 `check()` refuses an invalid mode, space or axis, and an axis that the mode has no handle for. It also refuses a size or a snap that is not positive. `handle` and `gizmo` call it first. `reset(scene)` puts the node back where the drag started.
+
+The control uses `Matrix4.decompose` to read transforms. Finite tiny and large scales keep their proportions. Zero axes, nonfinite entries, and scales too large for Float32 raise.
 
 ### Picking and dragging
 

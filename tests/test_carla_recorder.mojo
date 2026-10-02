@@ -2092,5 +2092,35 @@ def _blocked_none() -> String:
     return s^
 
 
+def test_wheel_kind_fields_reject_independently() raises:
+    # Each discriminator is checked before the first byte is written.
+    for field in range(4):
+        var wheel = _carla_wheel()
+        if field == 0:
+            wheel.axle_type = AxleType(255)
+        elif field == 1:
+            wheel.external_torque_combine_method = TorqueCombineMethod(255)
+        elif field == 2:
+            wheel.sweep_shape = SweepShape(255)
+        else:
+            wheel.sweep_type = SweepType(255)
+        var writer = ByteWriter()
+        with assert_raises(contains="wheel's kind is not valid"):
+            wheel.write(writer)
+        assert_equal(len(_bytes_of(writer^)), 0)
+    # ABI byte offsets are independent of the implementation's reader:
+    # axle at 0, combine at 64, sweep shape/type at 152/153 in 208 bytes.
+    var offsets: List[Int] = [0, 64, 152, 153]
+    for offset in offsets:
+        var writer = ByteWriter()
+        _carla_wheel().write(writer)
+        var data = _bytes_of(writer^)
+        assert_equal(len(data), 208)
+        data[offset] = 255
+        var reader = LogReader(data^)
+        with assert_raises(contains="wheel's kind is not valid"):
+            _ = RecordedWheelPhysics.read(reader)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

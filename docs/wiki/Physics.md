@@ -34,6 +34,35 @@ Create the collision shape separately. Set the body's mass, center of mass and i
 
 `tests/test_shared_physics.mojo` checks this handoff with an authored segment tensor. It does not claim a whole-body physical rig. The current anatomy code supplies no joint solver or muscle-force controller.
 
+## Change a body's motion mode
+
+Use `RigidBody.set_kind` to switch motion mode. Disabling a dynamic body sets its effective mass and inverse inertia to zero. It retains the exact configured dynamic mass and local inverse tensor for later restoration. This includes off-diagonal entries and locked axes. A chain through kinematic and static modes does not replace that saved state.
+
+Dynamic-to-kinematic changes keep velocity. Entering static stops linear, angular and split-impulse velocity. Pending force and torque keep their normal step-consumption lifetime. CARLA's `set_simulate_physics(False)` also stops kinematic velocity, as its adapter did before.
+
+World position and orientation can change while physics is disabled. Restored world inertia uses the new orientation and the retained local tensor. Mass, inertia, mass-center and shape-offset setters reject edits to a disabled dynamic configuration. Restore dynamic mode before making those edits. A body created static or kinematic has no saved dynamic mass; create it dynamic first when later restoration is needed.
+
+Do not assign `kind`, mass-property fields or the shape directly to bypass this contract. Public fields remain for source compatibility and custom locked-axis setup while dynamic. The transition checks finite, reciprocal mass state and finite inverse-tensor entries. It does not repair a custom inverse tensor or validate a physical model. These checks preserve the existing locked-axis contract; `set_inertia` has the stricter solid-tensor contract below.
+
+
+## Mass-property numerical range
+
+`Shape.mass_properties` requires a finite positive mass and a solid shape. It returns the center and the inertia about that center for uniform density. Spheres and capsules use analytic formulas. Capsules compute the cylinder and cap mass fractions without forming their volumes.
+
+Polyhedra use two integration passes in Float64. The first finds the center; the second integrates about that center. This avoids subtracting large translated moments. Face construction and ordering also widen coordinate arithmetic.
+
+The stored center and tensor use Float32. Every tensor entry must be finite, and the stored tensor must be symmetric and positive definite. A zero-volume solid or an inertia that overflows, underflows to a singular tensor, or loses positive definiteness is refused. Small entries round to Float32 precision.
+
+No fixed size limit or determinant tolerance replaces these checks. An error-free determinant expansion tests the sign for the stored tensor, including exact singularity.
+
+Input coordinates already rounded to Float32 cannot recover lost geometric detail.
+
+`RigidBody.set_mass` also requires representable inverse mass and inverse inertia. It computes and validates all candidate properties before it changes the body. `set_inertia` requires exact symmetry, finite entries and positive definiteness. Its inverse must remain finite and positive definite after conversion to Float32. Failed mass, inertia, shape-pose and center updates leave the old properties unchanged. Shape-pose updates normalize finite quaternions, as body construction does.
+
+The public inverse-inertia field still permits an intentional zero inverse along a locked axis. Set up such custom constraints while the body is dynamic. Mode changes retain that finite inverse exactly. Do not pass a singular inertia to `set_inertia` to request a locked axis: a zero inertia and a zero inverse inertia have different meanings.
+
+Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent solid formulas over several scales. They check translated hulls, transformed centers, tensor rotation, mass scaling, symmetry, positive definiteness and failed-update atomicity. These checks establish a numerical contract. They do not establish physical calibration or add torque-free gyroscopic dynamics.
+
 ## Apply forces
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.

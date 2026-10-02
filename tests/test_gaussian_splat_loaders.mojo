@@ -21,6 +21,7 @@ from loaders.gaussian_splat_ply import (
     read_gaussian_splat_ply,
 )
 from loaders.gltf_gaussian_splat import (
+    _apply_sparse_splat,
     GltfGaussianSplatMesh,
     load_gltf_gaussian_splats,
     read_gltf_gaussian_splats,
@@ -315,6 +316,15 @@ def test_a_ksplat_section_that_is_wrong_is_refused() raises:
 
 
 def test_a_splat_past_every_bucket_is_refused() raises:
+    var inconsistent = ksplat(1, 1, 1)
+    section(inconsistent, 0, 1, 1)
+    put_u32(inconsistent, 4096 + 8, 1)
+    put_u32(inconsistent, 4096 + 12, 1)
+    put_u16(inconsistent, 4096 + 20, 12)
+    # A non-full bucket requires one partial count, not zero.
+    inconsistent.extend(zeros(12 + 24))
+    with assert_raises(contains="invalid KSPLAT bucket data"):
+        _ = parse_ksplat(inconsistent)
     # Two partly filled buckets of no splats each.
     var empty = ksplat(1, 1, 1)
     section(empty, 0, 1, 1)
@@ -1031,6 +1041,24 @@ def test_a_data_uri_must_be_base64() raises:
     var head = '{"asset":{"version":"2.0"},"buffers":[{"byteLength":1,"uri":"'
     refused(head + 'data:text/plain,abc"}]}', "not base64")
     refused(head + 'data:abc"}]}', "not base64")
+
+
+def test_sparse_splat_requires_both_storage_descriptors() raises:
+    for sparse in [String('{"count":1}'), '{"count":1,"indices":{}}']:
+        var document = parse_json('{"sparse":' + sparse + "}")
+        var values: List[Float64] = [9]
+        with assert_raises(contains="needs count, indices and values"):
+            _apply_sparse_splat(
+                document,
+                List[List[UInt8]](),
+                document.root(),
+                1,
+                1,
+                5126,
+                False,
+                values,
+            )
+        assert_equal(values[0], 9)
 
 
 def main() raises:

@@ -44,6 +44,8 @@ Each animation is a range of targets played at `fps` frames a second. At each `u
 
 A new blend mesh has one animation, `__default`, of every target. `auto_create_animations` adds one animation for each word that starts the targets' names. So `run1` to `run6` make the animation `run`. Call `update_morph_targets` on the mesh first, because the names come from its `morph_target_dictionary`.
 
+Each animation uses the dictionary values as target indices. Changing the insertion order does not change those indices. This differs from three.js r186, which counts dictionary entries instead. An index outside the mesh's morph weights raises before any animation is added.
+
 | Member | three.js |
 |---|---|
 | `create_animation(name, start, end, fps)` | `createAnimation` |

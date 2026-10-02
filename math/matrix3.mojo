@@ -32,7 +32,12 @@ so degrees cannot be passed where radians are meant.
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import cos, sin
+from math.matrix_inverse import (
+    _inverse_needs_wide,
+    _determinant_needs_wide,
+    _inverse_wide,
+)
+from std.math import cos, sin, isfinite
 from units.si import Angle
 
 
@@ -123,19 +128,33 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
             The inverse transpose of its rotation and scale part.
 
         Raises:
-            Error: If the 3x3 is singular -- a zero scale on some axis, say
-                -- which leaves the surface with no direction to be
-                perpendicular to and no inverse to build the answer from.
+            Error: If the linear block is nonfinite or its inverse cannot
+                fit in Float32. Also if the 3x3 is singular, such as a zero
+                scale on one axis, which leaves the surface with no
+                perpendicular direction and no inverse.
                 `invert` would answer with zeros, as three.js does; a normal
                 matrix of zeros would light every surface black without a
                 word, so it is refused instead.
         """
         var out = Matrix3.from_matrix4(matrix)
-        if out.determinant() == 0:
+        # A Matrix3 always has nine entries.
+        for index in range(9):  # pragma: no branch
+            if not isfinite(out.elements[index]):
+                raise Error(
+                    "A normal matrix requires a finite linear transform"
+                )
+        out.invert()
+        var nonzero = False
+        # A Matrix3 always has nine entries.
+        for index in range(9):  # pragma: no branch
+            var value = out.elements[index]
+            if not isfinite(value):
+                raise Error("A normal matrix inverse must fit in Float32")
+            nonzero = nonzero or value != 0
+        if not nonzero:
             raise Error(
                 "A transform that collapses a dimension has no normal matrix"
             )
-        out.invert()
         out.transpose()
         return out^
 
@@ -416,8 +435,13 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
 
         A singular matrix is set to all zeros, which is what three.js does
         and what `Matrix4.invert` does: a deliberately conspicuous result,
-        rather than one that quietly comes back unchanged.
+        rather than one that quietly comes back unchanged. An inverse
+        entry outside Float32 range becomes signed infinity.
         """
+        if _inverse_needs_wide[3](self.elements):
+            var wide = _inverse_wide[3](self.elements)
+            self.elements = wide[1].copy()
+            return
         ref e = self.elements
         var n11 = e[0]
         var n21 = e[1]
@@ -434,8 +458,16 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var t13 = n23 * n12 - n22 * n13
 
         var det = n11 * t11 + n21 * t12 + n31 * t13
-        if det == 0:
-            self.elements = Array[Float32, 9](fill=0.0)
+        # Bound cancellation with every unsigned determinant product. Using
+        # the rounded cofactors here can hide cancellation inside each one.
+        var terms = (
+            abs(n11) * (abs(n33 * n22) + abs(n32 * n23))
+            + abs(n21) * (abs(n32 * n13) + abs(n33 * n12))
+            + abs(n31) * (abs(n23 * n12) + abs(n22 * n13))
+        )
+        if _determinant_needs_wide(det, terms):
+            var wide = _inverse_wide[3](self.elements)
+            self.elements = wide[1].copy()
             return
 
         var inv = Float32(1) / det

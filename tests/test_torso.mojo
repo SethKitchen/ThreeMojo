@@ -325,6 +325,26 @@ def test_torso_refuses_bad_input() raises:
     with assert_raises():
         _ = torso_dimensions(Length(0.5, METER), MALE)
     var dims = torso_dimensions(Length(6.0, FOOT), MALE)
+    var short_widths = dims.copy()
+    _ = short_widths.widths.pop()
+    with assert_raises(contains="seventeen"):
+        short_widths.validate()
+    var short_depths = dims.copy()
+    _ = short_depths.depths.pop()
+    with assert_raises(contains="seventeen"):
+        short_depths.validate()
+    var short_heights = dims.copy()
+    _ = short_heights.heights.pop()
+    with assert_raises(contains="seventeen"):
+        short_heights.validate()
+    var flat_widths = dims.copy()
+    flat_widths.widths[3] = 0
+    with assert_raises(contains="positive"):
+        flat_widths.validate()
+    var flat_depths = dims.copy()
+    flat_depths.depths[3] = 0
+    with assert_raises(contains="positive"):
+        flat_depths.validate()
     var short = dims.copy()
     _ = short.centers.pop()
     with assert_raises(contains="seventeen"):

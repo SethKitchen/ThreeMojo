@@ -545,7 +545,10 @@ struct Octahedron(Copyable, Movable):
         """
         var m = self.max_value
         var c = self.center
-        if (s == 0 and t == 0) or (s == 0 and t == m) or (s == m and t == 0):
+        if s == 0:
+            if t == 0 or t == m:
+                return (m, m)
+        elif s == m and t == 0:
             return (m, m)
         if s == 0 and t > c:
             return (s, c - (t - c))

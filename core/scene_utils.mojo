@@ -46,6 +46,7 @@ from core.geometry_store import GeometryId
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from render.framebuffer import Color
 
 
 def create_meshes_from_instanced_mesh(
@@ -215,6 +216,8 @@ def sort_instanced_mesh(
     matrices, the colors, the morph weights and every attribute that advances
     per instance move with their instance. As in three.js, only the first
     four numbers of such an attribute's item move.
+    Instances appended after colors were set keep their default white.
+    A mesh without colors keeps its empty color list.
 
     Args:
         scene: The scene that holds the instanced mesh.
@@ -237,15 +240,17 @@ def sort_instanced_mesh(
         raise Error("An instanced mesh must name a stored geometry")
     var order = _sorted_order(keys)
     var matrices = mesh.matrices.copy()
-    var colors = mesh.colors.copy()
+    var colors = List[Color]()
+    if len(mesh.colors) > 0:
+        for original in order:
+            colors.append(mesh.color_at(original))
     var morphs = List[MorphInfluences]()
     if len(mesh.morphs) > 0:
         for original in order:
             morphs.append(mesh.morph_at(original))
     for i in range(len(order)):
         mesh.matrices[i] = matrices[order[i]]
-        if len(colors) > 0:
-            mesh.colors[i] = colors[order[i]]
+    mesh.colors = colors^
     mesh.morphs = morphs^
     ref geometry = assets.geometries.geometries[id]
     for slot in range(len(geometry.values)):

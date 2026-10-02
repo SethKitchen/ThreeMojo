@@ -37,6 +37,7 @@ plane built from three points has no reason to have one. A zero normal is
 refused: it is not a plane.
 """
 
+from math.box_extent import _shrink_exceeds_extent
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.triangle import Line3, Triangle
@@ -312,7 +313,12 @@ struct Box3(Equatable, ImplicitlyCopyable):
             The box.
         """
         var half = size * 0.5
-        return Box3(center - half, center + half)
+        var box = Box3(center - half, center + half)
+        # Rounding at a large center, or halving a negative subnormal,
+        # can erase the inside-out corners that encode a negative extent.
+        if (size.x < 0 or size.y < 0 or size.z < 0) and not box.is_empty():
+            return Box3.empty()
+        return box
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if both corners are exactly equal, three.js's
@@ -340,13 +346,24 @@ struct Box3(Equatable, ImplicitlyCopyable):
     def expand_by_vector(mut self, amount: Vector3):
         """Grow this box by `amount` on every side, three.js's
         `expandByVector`. A negative amount shrinks it. The empty box stays
-        empty, because its corners are infinite.
+        empty, including when its inside-out corners are finite.
 
         Args:
             amount: How far to move each face out, per axis.
         """
+        if self.is_empty():
+            return
+        var over_shrunk = (
+            _shrink_exceeds_extent(self.min.x, self.max.x, amount.x)
+            or _shrink_exceeds_extent(self.min.y, self.max.y, amount.y)
+            or _shrink_exceeds_extent(self.min.z, self.max.z, amount.z)
+        )
         self.min = self.min - amount
         self.max = self.max + amount
+        # Keep ordinary corner arithmetic, but do not let rounding turn an
+        # over-shrunk finite interval into a nonempty point.
+        if over_shrunk and not self.is_empty():
+            self = Box3.empty()
 
     def expand_by_scalar(mut self, amount: Float32):
         """Grow this box by `amount` on every side, three.js's
@@ -363,6 +380,8 @@ struct Box3(Equatable, ImplicitlyCopyable):
         Args:
             offset: How far.
         """
+        if self.is_empty():
+            return
         self.min = self.min + offset
         self.max = self.max + offset
 
@@ -389,6 +408,10 @@ struct Box3(Equatable, ImplicitlyCopyable):
         Returns:
             Whether this box holds all of it.
         """
+        if other.is_empty():
+            return True
+        if self.is_empty():
+            return False
         return (
             self.min.x <= other.min.x
             and other.max.x <= self.max.x

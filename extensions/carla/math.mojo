@@ -37,14 +37,18 @@ CARLA passes bare floats: an arc length is a `Length`, a heading an
 number, which reads as the opposite.
 """
 
-from extensions.carla.transform import CarlaRotation, CarlaTransform
+from extensions.carla.transform import (
+    CarlaRotation,
+    CarlaTransform,
+    _wrap_degrees,
+)
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.ffi import external_call
-from std.math import asin, atan2, cos, floor, pi, sin, sqrt
+from std.math import asin, atan2, cos, pi, sin, sqrt
 from units.si import (
     DEGREE,
     DEGREE_PER_SECOND,
@@ -356,24 +360,29 @@ struct Vector3DInt(Equatable, ImplicitlyCopyable, Writable):
     var y: Int32
     var z: Int32
 
-    def squared_length(self) -> Int64:
+    def squared_length(self) -> UInt64:
         """Return x squared plus y squared plus z squared.
 
-        CARLA squares in 32 bits, which can overflow. This squares in 64.
+        CARLA squares in 32 bits, which can overflow. Each square fits in
+        Int64, but their sum needs UInt64: at most 3 * 2**62.
 
         Returns:
-            The squared length.
+            The exact squared length as UInt64, for every Int32 input.
         """
         var x = Int64(self.x)
         var y = Int64(self.y)
         var z = Int64(self.z)
-        return x * x + y * y + z * z
+        return UInt64(x * x) + UInt64(y * y) + UInt64(z * z)
 
     def length(self) -> Float64:
         """Return the length.
 
+        The exact UInt64 sum converts to Float64 before the square root.
+        The result is finite for every Int32 input. Conversion and square
+        root rounding give a relative error below 2**-51.
+
         Returns:
-            The square root of `squared_length`.
+            The nonnegative Float64 square root of `squared_length`.
         """
         return sqrt(Float64(self.squared_length()))
 
@@ -815,14 +824,15 @@ def rotations_equal(a: CarlaRotation, b: CarlaRotation) -> Bool:
     by whole turns, so a yaw of 370 degrees equals a yaw of 10 degrees,
     and 180 equals -180. That is the usual angle-wrapping comparison:
     each angle is wrapped into [-180, 180) degrees, and the wrapped
-    angles must be equal.
+    angles must be equal. Signed zeros compare equal. A nonfinite angle
+    becomes NaN, so a rotation with one is unequal even to itself.
 
     Args:
         a: The first rotation.
         b: The second rotation.
 
     Returns:
-        Whether the wrapped angles are equal.
+        Whether all finite wrapped angles are equal.
     """
     return (
         _wrapped_degrees(a.pitch) == _wrapped_degrees(b.pitch)
@@ -832,8 +842,8 @@ def rotations_equal(a: CarlaRotation, b: CarlaRotation) -> Bool:
 
 
 def _wrapped_degrees(angle: Float32) -> Float32:
-    """Wrap an angle in degrees into [-180, 180)."""
-    return angle - 360 * floor((angle + 180) / 360)
+    """Use the normalization policy from `CarlaRotation.normalized`."""
+    return _wrap_degrees(angle)
 
 
 def transforms_equal(a: CarlaTransform, b: CarlaTransform) -> Bool:

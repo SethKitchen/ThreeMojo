@@ -121,6 +121,7 @@ from extensions.carla.sensor import CameraIntrinsics
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_nonnegative,
     attribute_int,
     attribute_string,
 )
@@ -464,6 +465,9 @@ struct SensorManager(Movable):
     ) raises -> ActorId:
         """Spawn a sensor and listen to it.
 
+        A failure leaves the world's actors and the listened sensors
+        unchanged.
+
         Args:
             world: The world.
             blueprint: A `sensor.*` blueprint of the world's library, with
@@ -477,8 +481,20 @@ struct SensorManager(Movable):
         Raises:
             Error: If the spawn fails, or `listen` refuses the sensor.
         """
+        # Only sensors can enter this transaction: their world spawn adds
+        # one actor record and no physics body or kind-specific record.
+        if not Bool(sensor_kind_of(blueprint.id)):
+            raise Error("This actor is not a sensor: " + blueprint.id)
         var id = world.spawn_actor(blueprint, transform, parent)
-        self.listen(world, id)
+        try:
+            self.listen(world, id)
+        except error:
+            # listen only reads the world and publishes its slot last. The
+            # sensor is needed during setup (an unparented V2X owns itself),
+            # but has not escaped this call. Remove it instead of destroying
+            # it so that a failed spawn does not consume an actor id.
+            _ = world.actors.pop()
+            raise error^
         return id
 
     def _find(self, id: ActorId) -> Int:
@@ -529,7 +545,9 @@ struct SensorManager(Movable):
         var k = kind.value()
         ref a = record.attributes
         var slot = _Slot(id, k, world.get_transform(id))
-        slot.sensor_tick = Float64(attribute_float(a, "sensor_tick", 0))
+        var sensor_tick = attribute_float(a, "sensor_tick", 0)
+        validate_sensor_nonnegative(sensor_tick, "sensor_tick")
+        slot.sensor_tick = Float64(sensor_tick)
         slot.rng = SensorRandom(attribute_int(a, "noise_seed", 0))
         if _is_camera(k):
             var fov = attribute_float(a, "fov", 90)
@@ -555,9 +573,8 @@ struct SensorManager(Movable):
                 )
         elif k == RAY_CAST_LIDAR_SENSOR or k == SEMANTIC_LIDAR_SENSOR:
             slot.lidar = lidar_description_from(a)
-            slot.lidar.validate()
         elif k == HSS_LIDAR_SENSOR:
-            slot.lidar = lidar_description_from(a)
+            slot.lidar = lidar_description_from(a, False)
             slot.hss_resolution = hss_resolution_from(a)
         elif k == RADAR:
             slot.radar = Radar(

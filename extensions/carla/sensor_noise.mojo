@@ -110,7 +110,13 @@ struct SensorRandom(Copyable, Movable):
             x = Float32(2.0 * Float64(self.uniform()) - 1.0)
             y = Float32(2.0 * Float64(self.uniform()) - 1.0)
             r2 = x * x + y * y
-            if not (Float64(r2) > 1.0 or r2 == 0.0):
+            # This fixed minstd_rand cannot yield two consecutive 0.5 draws.
+            # Float32's half interval is states 1073741793..1073741889;
+            # no next state under *48271 mod 2147483647 stays in it.
+            # Nonzero centered draws have squares >= 2^-48, not underflow.
+            # Recheck this invariant if the engine or rounding changes.
+            # The sensor suite checks all 97 states and both endpoints.
+            if not (Float64(r2) > 1.0):
                 break
         var mult = sqrt(Float32(-2.0) * _logf(r2) / r2)
         return y * mult * stddev + mean

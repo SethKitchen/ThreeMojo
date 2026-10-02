@@ -881,9 +881,14 @@ def share_budget(
             )
             # An excess means the lower bounds must be reserved first.
             # A shortfall means upper bounds release unused triangles.
-            if (fix_minimum and wanted[index] <= Float64(minimum)) or (
-                not fix_minimum and wanted[index] >= Float64(counts[index])
-            ):
+            var at_bound = False
+            if fix_minimum:
+                if wanted[index] <= Float64(minimum):
+                    at_bound = True
+            else:
+                if wanted[index] >= Float64(counts[index]):
+                    at_bound = True
+            if at_bound:
                 settled[index] = True
                 left -= shares[index]
                 changed = True

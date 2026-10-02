@@ -1340,5 +1340,61 @@ def test_junction_edges() raises:
         generate_single_junction(three, MeshFactory(), JuncId(50), out)
 
 
+def test_tree_outer_lane_uses_sorted_builder_order() raises:
+    var builder = MapBuilder()
+    var right = _road(
+        builder,
+        1,
+        0,
+        10,
+        -1,
+        True,
+        0,
+        0,
+        [
+            (-1, LANE_DRIVING, 3.5),
+            (-3, LANE_SIDEWALK, 2.0),
+            (1, LANE_DRIVING, 3.5),
+            (-2, LANE_DRIVING, 3.5),
+            (0, LANE_NONE, 0.0),
+        ],
+    )
+    # Re-inserting an existing lane changes no ordering or count.
+    _ = builder.add_road_section_lane(
+        right, 0, LaneId(-2), LANE_DRIVING, False, LaneId(0), LaneId(0)
+    )
+    assert_equal(len(builder.roads[right].sections[0].lanes), 5)
+    var expected: List[Int] = [-3, -2, -1, 0, 1]
+    for index in range(5):
+        assert_equal(
+            builder.roads[right].sections[0].lanes[index].id.value,
+            expected[index],
+        )
+    _ = _road(
+        builder,
+        2,
+        20,
+        10,
+        -1,
+        True,
+        0,
+        0,
+        [
+            (2, LANE_DRIVING, 3.5),
+            (3, LANE_SIDEWALK, 2.0),
+            (0, LANE_NONE, 0.0),
+            (1, LANE_DRIVING, 3.5),
+        ],
+    )
+    var map = builder.build()
+    var trees = trees_transform(
+        map, Vector3(-100, 100, 0), Vector3(100, -100, 0), _m(20), _m(1)
+    )
+    assert_equal(len(trees), 2)
+    _near(trees[0].transform.location, 0, 8, 0)
+    # OpenDRIVE y=20 becomes CARLA y=-20; the left border is 8m farther.
+    _near(trees[1].transform.location, 0, -28, 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

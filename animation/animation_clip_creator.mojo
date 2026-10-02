@@ -48,6 +48,7 @@ from materials.material import MaterialId
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
+from std.math import ceil, isfinite
 from units.si import Duration, SECOND
 
 # How many keys a second the shake and the pulse take, three.js's `* 10`.
@@ -119,14 +120,21 @@ def create_scale_axis_animation(
     )
 
 
-def _key_count(duration: Duration) -> Int:
-    """Return how many keys three.js's `for ( i = 0; i < duration * 10;
-    i ++ )` makes."""
-    var limit = duration.to(SECOND) * KEYS_A_SECOND
-    var count = 0
-    while Float32(count) < limit:
-        count += 1
-    return count
+def _key_count(duration: Duration) raises -> Int:
+    """Return the random track's key count without a preliminary loop.
+
+    Keep the Float32 product used by the existing tracks. Refuse invalid
+    counts before generating keys or advancing the random generator.
+    """
+    var seconds = duration.to(SECOND)
+    if not isfinite(seconds):
+        raise Error("An animation needs a finite, representable key count")
+    if seconds <= 0:
+        return 0
+    var limit = seconds * KEYS_A_SECOND
+    if not isfinite(limit) or Float64(limit) >= Float64(Int.MAX // 3):
+        raise Error("An animation needs a finite, representable key count")
+    return Int(ceil(limit))
 
 
 def create_shake_animation(
@@ -148,7 +156,8 @@ def create_shake_animation(
         A clip whose one track sets the position.
 
     Raises:
-        Error: If the duration is not above zero.
+        Error: If the duration is not positive and finite, or its key
+            count cannot fit in the track arrays.
     """
     var times = List[Duration]()
     var values = List[Float32]()
@@ -184,7 +193,8 @@ def create_pulsation_animation(
         A clip whose one track sets the scale.
 
     Raises:
-        Error: If the duration is not above zero.
+        Error: If the duration is not positive and finite, or its key
+            count cannot fit in the track arrays.
     """
     var times = List[Duration]()
     var values = List[Float32]()

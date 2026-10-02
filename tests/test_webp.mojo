@@ -567,5 +567,13 @@ def test_each_byte_of_the_start_code_is_checked() raises:
     _container_refused(_frame(flat^), "frame with no size")
 
 
+def test_canvas_height_must_match_when_width_matches() raises:
+    var lossy = _payload("lossy_q75.webp")
+    _container_refused(
+        _riff(_vp8x(67, 46) + _chunk("VP8 ", lossy)),
+        "canvas is not the image's size",
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -977,6 +977,7 @@ def _maps() -> String:
         + _shader(
             "P2",
             '            uniform token info:id = "UsdTransform2d"\n'
+            + "            float[] inputs:translation = [3]\n"
             + "            float[] inputs:scale = [3]\n"
             + '            string inputs:rotation = "x"\n',
         )

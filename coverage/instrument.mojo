@@ -11,11 +11,7 @@ line number embedded in the probe id, so the instrumented copy is disposable
 and only ever lives under `coverage/build/`.
 """
 
-from coverage.scanner import Scanner, indent_of
-
-comptime PROBE_IMPORT = (
-    "from coverage.runtime import hit as _cov_hit, branch as _cov_branch"
-)
+from coverage.scanner import Scanner, indent_of, _characters, _quoted_end
 
 # Decisions whose condition is wrapped so both outcomes become observable.
 comptime BRANCH_KEYWORDS = ["if ", "elif ", "while "]
@@ -99,24 +95,23 @@ def _statement_colon(line: String) -> Int:
     Colons inside brackets (type annotations, dict literals), inside string
     literals, or after a `#` comment do not end the header.
     """
+    var chars = _characters(line)
     var depth = 0
-    var quote = String("")
-    var escaped = False
     var index = 0
     var found = -1
-    for cp in line.codepoint_slices():
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif cp == "\\":
-                escaped = True
-            elif cp == quote:
-                quote = String("")
-        elif cp == '"' or cp == "'":
-            quote = String(cp)
-        elif cp == "#":
-            break
-        elif cp == "(" or cp == "[" or cp == "{":
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                break
+            index = end
+            continue
+        if cp == "#":
+            while index < len(chars) and chars[index] != "\n":
+                index += 1
+            continue
+        if cp == "(" or cp == "[" or cp == "{":
             depth += 1
         elif cp == ")" or cp == "]" or cp == "}":
             depth -= 1
@@ -132,22 +127,25 @@ def _strip_comment(line: String) -> String:
     Joining the physical lines of a multi-line header would otherwise push the
     code after a comment onto the same line, commenting it out.
     """
+    var chars = _characters(line)
     var out = String("")
-    var quote = String("")
-    var escaped = False
-    for cp in line.codepoint_slices():
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif cp == "\\":
-                escaped = True
-            elif cp == quote:
-                quote = String("")
-        elif cp == '"' or cp == "'":
-            quote = String(cp)
-        elif cp == "#":
-            break
-        out += String(cp)
+    var index = 0
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                # Trailing whitespace still belongs to an unfinished literal.
+                return out + _substring(line, index, len(chars))
+            out += _substring(line, index, end)
+            index = end
+            continue
+        if cp == "#":
+            while index < len(chars) and chars[index] != "\n":
+                index += 1
+            continue
+        out += cp
+        index += 1
     return String(out.rstrip())
 
 
@@ -170,16 +168,24 @@ def _word_at(chars: List[String], start: Int, word: String) raises -> Bool:
     return True
 
 
-def _separator_at(chars: List[String], index: Int) raises -> String:
-    """Return the boolean operator starting at `index`, or an empty string.
+def _token_boundary(ch: String) -> Bool:
+    """Return True for whitespace or a delimiter next to a logical keyword."""
+    return ch in " \t\r\n()[]{}"
 
-    Matches ` and ` / ` or ` with their surrounding spaces so that identifiers
-    such as `android` or `original` are never split.
+
+def _separator_at(chars: List[String], index: Int) raises -> String:
+    """Return a top-level expression keyword with surrounding spaces.
+
+    Token boundaries accept tabs and adjacent parentheses, but not identifiers
+    such as `android` or `original`. The caller keeps quoted text opaque.
     """
-    if _word_at(chars, index, String(" and ")):
-        return String(" and ")
-    if _word_at(chars, index, String(" or ")):
-        return String(" or ")
+    if index > 0 and not _token_boundary(chars[index - 1]):
+        return String("")
+    for word in [String("and"), String("or"), String("if")]:
+        var end = index + _codepoint_count(word)
+        if _word_at(chars, index, word):
+            if end == len(chars) or _token_boundary(chars[end]):
+                return " " + word + " "
     return String("")
 
 
@@ -187,8 +193,9 @@ def split_conditions(condition: String) raises -> List[String]:
     """Split `condition` into operands and the operators between them.
 
     Returns alternating entries: operand, operator, operand, ... Only
-    top-level operators split, so brackets and string literals stay intact and
-    `not (a and b)` remains a single condition.
+    top-level `and`, `or` and `if` keywords split. Calls, indexing
+    and string literals stay intact.
+    The wrapper visits complete parenthesized groups separately.
 
     Args:
         condition: The decision's condition text.
@@ -199,33 +206,20 @@ def split_conditions(condition: String) raises -> List[String]:
     Raises:
         Error: Never; present to match the helpers it calls.
     """
-    var chars = List[String]()
-    for cp in condition.codepoint_slices():
-        chars.append(String(cp))
-
+    var chars = _characters(condition)
     var parts = List[String]()
     var current = String("")
     var depth = 0
-    var quote = String("")
-    var escaped = False
     var index = 0
 
     while index < len(chars):
         var ch = chars[index]
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == quote:
-                quote = String("")
-            current += ch
-            index += 1
-            continue
         if ch == '"' or ch == "'":
-            quote = ch
-            current += ch
-            index += 1
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                end = len(chars)
+            current += _substring(condition, index, end)
+            index = end
             continue
         if ch == "(" or ch == "[" or ch == "{":
             depth += 1
@@ -240,13 +234,100 @@ def split_conditions(condition: String) raises -> List[String]:
                 var consumed = 0
                 for _ in separator.codepoint_slices():
                     consumed += 1
-                index += consumed
+                index += consumed - 2
                 continue
         current += ch
         index += 1
 
     parts.append(String(current.strip()))
     return parts^
+
+
+def _is_group(condition: String) raises -> Bool:
+    """Return True when one parenthesis pair encloses the entire expression.
+
+    `(a or b) == c` is one comparison, not a Boolean group. Parentheses in
+    calls, subscripts and quoted strings must not change that classification.
+    """
+    if not condition.startswith("("):
+        return False
+    var chars = _characters(condition)
+    var depth = 0
+    var index = 0
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                return False
+            index = end
+            continue
+        if cp == "(" or cp == "[" or cp == "{":
+            depth += 1
+        elif cp == ")" or cp == "]" or cp == "}":
+            depth -= 1
+            if depth == 0:
+                return cp == ")" and index == len(chars) - 1
+        index += 1
+    return False
+
+
+def _wrap_leaf(
+    condition: String, id: String, mut count: Int, frame: String, stem: String
+) -> String:
+    """Wrap one opaque expression without changing its evaluation."""
+    var result = (
+        stem
+        + "leaf("
+        + condition
+        + ", "
+        + frame
+        + ', "'
+        + id
+        + "."
+        + String(count)
+        + '", '
+        + String(count)
+        + ")"
+    )
+    count += 1
+    return result^
+
+
+def _wrap_leaves(
+    condition: String, id: String, mut count: Int, frame: String, stem: String
+) raises -> String:
+    """Wrap Boolean leaves, retaining every logical operator and group.
+
+    Only the decision's Boolean grammar is traversed. An atomic call, index,
+    comparison or arithmetic expression stays intact, even if it contains a
+    Boolean expression used as an argument or value. No leaf is duplicated.
+    """
+    var parts = split_conditions(condition)
+    # Conditional expressions bind less tightly than Boolean operators.
+    # Keep them opaque, including any leading `not`, rather than change which
+    # arm runs or move a logical operator across the conditional expression.
+    for index in range(1, len(parts), 2):
+        if parts[index] == " if ":
+            return _wrap_leaf(String(condition.strip()), id, count, frame, stem)
+    if len(parts) > 1:
+        var out = String("")
+        for index in range(len(parts)):
+            if index % 2 == 1:
+                out += parts[index]
+            else:
+                out += _wrap_leaves(parts[index], id, count, frame, stem)
+        return out^
+    var text = parts[0].copy()
+    if _is_group(text):
+        var inner = _substring(text, 1, _codepoint_count(text) - 1)
+        return "(" + _wrap_leaves(inner, id, count, frame, stem) + ")"
+    var chars = _characters(text)
+    if len(chars) > 3 and _word_at(chars, 0, String("not")):
+        if _token_boundary(chars[3]):
+            var inner = _substring(text, 3, len(chars))
+            return "not " + _wrap_leaves(inner, id, count, frame, stem)
+    return _wrap_leaf(text, id, count, frame, stem)
 
 
 struct Wrapped(Movable):
@@ -262,7 +343,12 @@ struct Wrapped(Movable):
 
 
 def _wrap_condition(
-    line: String, keyword: String, id: String
+    line: String,
+    keyword: String,
+    id: String,
+    frame: String = "_cov_eval_state0",
+    stem: String = "_cov_eval_",
+    branch: String = "_cov_branch",
 ) raises -> Wrapped:
     """Return `line` with its decision and each condition wrapped for probing.
 
@@ -275,12 +361,15 @@ def _wrap_condition(
         line: The physical or joined logical header line.
         keyword: The decision keyword the line begins with.
         id: Probe id for the decision; conditions get `id.0`, `id.1`, ...
+        frame: The private operand buffer in this function invocation.
+        stem: An evaluation-helper prefix absent from the source.
+        branch: A branch-helper alias absent from the source.
 
     Returns:
         The rewritten line, unchanged if it holds no usable condition.
 
     Raises:
-        Error: Never; present to match the helpers it calls.
+        Error: If the complete UTF-8 evaluation record would exceed 512 bytes.
     """
     var colon = _statement_colon(line)
     if colon < 0:
@@ -288,7 +377,9 @@ def _wrap_condition(
 
     var indent = indent_of(line)
     var condition_start = indent + _codepoint_count(keyword)
-    var condition = String(_substring(line, condition_start, colon).strip())
+    var condition = String(
+        _strip_comment(_substring(line, condition_start, colon)).strip()
+    )
     if condition == "":
         return Wrapped(String(line), 0)
     # `while True:` is a loop, not a decision: a literal condition has exactly
@@ -296,41 +387,53 @@ def _wrap_condition(
     if condition == "True" or condition == "False":
         return Wrapped(String(line), 0)
 
-    var parts = split_conditions(condition)
-    var rebuilt = String("")
     var conditions = 0
-    # A single operand needs no inner probe; the decision's own probe says
-    # everything there is to say about it.
-    var split = len(parts) > 1
-    var index = 0
-    while index < len(parts):
-        if index % 2 == 1:
-            rebuilt += parts[index]
-        elif split:
-            rebuilt += (
-                '_cov_branch("'
-                + id
-                + "."
-                + String(conditions)
-                + '", '
-                + parts[index]
-                + ")"
-            )
-            conditions += 1
-        else:
-            rebuilt += parts[index]
-        index += 1
+    var rebuilt = _wrap_leaves(condition, id, conditions, frame, stem)
+    # The decision already measures a single leaf, including a negated leaf.
+    # Keep its original spelling, including redundant grouping and whitespace.
+    if conditions == 1:
+        rebuilt = condition.copy()
+        conditions = 0
 
     # Everything from the colon onward is kept so trailing comments survive.
     var tail = _substring(line, colon, _codepoint_count(line))
+    if conditions == 0:
+        return Wrapped(
+            " " * indent
+            + keyword
+            + branch
+            + '("'
+            + id
+            + '", '
+            + rebuilt
+            + ")"
+            + tail,
+            0,
+        )
+    # A pipe guarantees indivisible writes only through POSIX PIPE_BUF's
+    # portable minimum. Refuse unsupported widths instead of losing probes.
+    if id.byte_length() + conditions + 14 > 512:
+        raise Error(
+            "Coverage evaluation exceeds the 512-byte atomic record limit: "
+            + id
+        )
     return Wrapped(
         " " * indent
         + keyword
-        + '_cov_branch("'
-        + id
-        + '", '
+        + stem
+        + "begin("
+        + frame
+        + ", "
+        + String(conditions)
+        + ") and "
+        + stem
+        + "finish("
         + rebuilt
-        + ")"
+        + ", "
+        + frame
+        + ', "'
+        + id
+        + '")'
         + tail,
         conditions,
     )
@@ -345,12 +448,13 @@ def _opens_top_level_block(line: String) -> Bool:
         stripped.startswith("def ")
         or stripped.startswith("async def ")
         or stripped.startswith("struct ")
+        or stripped.startswith("trait ")
         or stripped.startswith("@")
     )
 
 
 def _close_loops(
-    mut out: String, mut closers: List[_LoopCloser], indent: Int
+    mut out: String, mut closers: List[_LoopCloser], indent: Int, branch: String
 ) raises:
     """Emit the trailing probe for every loop whose body has just ended.
 
@@ -364,7 +468,9 @@ def _close_loops(
         _ = closers.pop()
         out += (
             " " * last.indent
-            + '_ = _cov_branch("'
+            + "_ = "
+            + branch
+            + '("'
             + last.id
             + '", '
             + last.flag
@@ -380,6 +486,8 @@ def _emit_loop(
     header: String,
     number: Int,
     module: String,
+    branch: String,
+    loop_stem: String,
 ):
     """Emit a `for` loop's counter, its header, and the probe on entry.
 
@@ -396,8 +504,10 @@ def _emit_loop(
             was joined from several physical lines.
         number: The source line the header started on.
         module: Probe id prefix.
+        branch: A branch-helper alias absent from the source.
+        loop_stem: A loop-counter prefix absent from the source.
     """
-    var flag = "_cov_loop_" + String(number)
+    var flag = loop_stem + String(number)
     var id = module + ":" + String(number)
     branches.append(number)
     conditions.append(0)
@@ -408,8 +518,19 @@ def _emit_loop(
     # non-empty.
     var body_indent = " " * (indent + 4)
     out += body_indent + flag + " += 1\n"
-    out += body_indent + '_ = _cov_branch("' + id + '", True)\n'
+    out += body_indent + "_ = " + branch + '("' + id + '", True)\n'
     closers.append(_LoopCloser(indent, id, flag))
+
+
+def _fresh_name(var name: String, source: String) -> String:
+    """Return a generated name or prefix absent from the entire source.
+
+    Checking the full text also protects nested scopes, parameters, imported
+    names, generic callbacks, and longer identifiers sharing the prefix.
+    """
+    while name in source:
+        name += "_"
+    return name^
 
 
 def instrument(source: String, module: String) raises -> Instrumented:
@@ -417,16 +538,27 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
     Args:
         source: The original file's full text.
-        module: Short name embedded in probe ids, e.g. "render/rasterizer".
+        module: Name embedded in probe IDs, at most 480 UTF-8 bytes.
 
     Returns:
         The instrumented text, the executable line numbers, and the lines
         holding decisions whose outcomes are tracked.
 
     Raises:
-        Error: Never; present to match the scanner's raising signature.
+        Error: If the module ID exceeds 480 UTF-8 bytes, or a complete
+            evaluation record would exceed 512 bytes including its newline.
     """
+    if module.byte_length() + 32 > 512:
+        raise Error(
+            "Coverage module ID exceeds the 512-byte atomic record limit"
+        )
     var scanner = Scanner()
+    var stem = _fresh_name(String("_cov_eval_"), source)
+    var hit = _fresh_name(String("_cov_hit"), source)
+    var branch = _fresh_name(String("_cov_branch"), source)
+    var loop_stem = _fresh_name(String("_cov_loop_"), source)
+    var declarations = List[String]()
+    var used_frames = List[Int]()
     var out = String("")
     var lines = List[Int]()
     var branches = List[Int]()
@@ -447,6 +579,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
     # middle of a `range(` argument list.
     var pending_is_loop = False
     var pending_excluded = False
+    var pending_frame = -1
     var closers = List[_LoopCloser]()
 
     for raw in source.splitlines():
@@ -461,15 +594,55 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
         # The import cannot precede a module docstring, which must stay the
         # file's first expression, so it goes just above the first definition.
-        if not import_emitted and not was_prose:
+        if not import_emitted and not was_prose and not was_continuation:
             if _opens_top_level_block(line):
-                out += PROBE_IMPORT + "\n"
+                out += (
+                    "from coverage.runtime import hit as "
+                    + hit
+                    + ", branch as "
+                    + branch
+                    + ", begin as "
+                    + stem
+                    + "begin, leaf as "
+                    + stem
+                    + "leaf, finish as "
+                    + stem
+                    + "finish, buffer as "
+                    + stem
+                    + "buffer\n"
+                )
                 import_emitted = True
+
+        if scanner.entry_indent >= 0:
+            var declaration = (
+                " " * scanner.entry_indent
+                + "var "
+                + stem
+                + "state"
+                + String(scanner.entry_number)
+                + " = "
+                + stem
+                + "buffer()\n"
+            )
+            while len(declarations) <= scanner.entry_number:
+                declarations.append(String(""))
+            declarations[scanner.entry_number] = declaration.copy()
+            out += declaration
 
         # Still accumulating a header split over several physical lines.
         if pending != "":
             pending_excluded = pending_excluded or PRAGMA_NO_BRANCH in line
-            pending += " " + _strip_comment(String(line.strip()))
+            # A triple-quoted literal can contain newlines, comments and
+            # indentation. Keep those bytes until the whole header is parsed.
+            if (
+                '"""' in pending
+                or "'''" in pending
+                or '"""' in line
+                or "'''" in line
+            ):
+                pending += "\n" + line
+            else:
+                pending += " " + _strip_comment(String(line.strip()))
             if _statement_colon(pending) >= 0:
                 if pending_excluded:
                     out += pending + "\n"
@@ -482,13 +655,24 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         pending,
                         pending_line,
                         module,
+                        branch,
+                        loop_stem,
                     )
                 else:
                     var id = module + ":" + String(pending_line)
-                    var joined = _wrap_condition(pending, pending_keyword, id)
+                    var joined = _wrap_condition(
+                        pending,
+                        pending_keyword,
+                        id,
+                        stem + "state" + String(pending_frame),
+                        stem,
+                        branch,
+                    )
                     if joined.text != pending:
                         branches.append(pending_line)
                         conditions.append(joined.conditions)
+                        if joined.conditions > 0:
+                            used_frames.append(pending_frame)
                     out += joined.text + "\n"
                 pending = String("")
             continue
@@ -501,12 +685,12 @@ def instrument(source: String, module: String) raises -> Instrumented:
             and not String(line.strip()).startswith("#")
         )
         if significant:
-            _close_loops(out, closers, indent_of(line))
+            _close_loops(out, closers, indent_of(line), branch)
 
         if executable:
             lines.append(number)
             out += " " * indent_of(line)
-            out += '_cov_hit("' + module + ":" + String(number) + '")\n'
+            out += hit + '("' + module + ":" + String(number) + '")\n'
 
         var excluded = PRAGMA_NO_BRANCH in line
 
@@ -521,7 +705,15 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 continue
             if not excluded:
                 _emit_loop(
-                    out, branches, conditions, closers, line, number, module
+                    out,
+                    branches,
+                    conditions,
+                    closers,
+                    line,
+                    number,
+                    module,
+                    branch,
+                    loop_stem,
                 )
                 continue
 
@@ -536,14 +728,24 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     pending = _strip_comment(line)
                     pending_line = number
                     pending_keyword = keyword^
+                    pending_frame = scanner.function_number()
                     pending_is_loop = False
                     pending_excluded = False
                     continue
                 var id = module + ":" + String(number)
-                var wrapped = _wrap_condition(line, keyword, id)
+                var wrapped = _wrap_condition(
+                    line,
+                    keyword,
+                    id,
+                    stem + "state" + String(scanner.function_number()),
+                    stem,
+                    branch,
+                )
                 if wrapped.text != line:
                     branches.append(number)
                     conditions.append(wrapped.conditions)
+                    if wrapped.conditions > 0:
+                        used_frames.append(scanner.function_number())
                     emitted = wrapped.text.copy()
 
         out += emitted + "\n"
@@ -553,6 +755,14 @@ def instrument(source: String, module: String) raises -> Instrumented:
         out += pending + "\n"
 
     # Loops running to the end of the file still need their trailing probe.
-    _close_loops(out, closers, 0)
+    _close_loops(out, closers, 0, branch)
 
+    # Only compound decisions need a buffer. Unused declarations disappear.
+    for frame in range(len(declarations)):
+        var used = False
+        for candidate in used_frames:
+            if frame == candidate:
+                used = True
+        if not used and declarations[frame] != "":
+            out = out.replace(declarations[frame], "")
     return Instrumented(out^, lines^, branches^, conditions^)

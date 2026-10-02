@@ -25,9 +25,11 @@ here is three.js's shape number for number.
 
 ## What is refused
 
-A hole outside the outline, or inside another hole: neither describes a
-surface. A contour of fewer than three corners, or one with no area, such
-as a line drawn out and back. three.js fills each of these with something,
+A hole must lie strictly inside the outline. Its sampled boundary must
+not cross or touch the outline or another hole, even at one point. A hole
+inside another hole is also refused. A contour needs three corners and
+nonzero area; a line drawn out and back has no inside. three.js fills
+each of these with something,
 or with nothing, and says nothing. This says so instead. The checks read
 the contours and change none of them, so a shape that passes is built
 exactly as three.js builds it.
@@ -47,9 +49,12 @@ from core.buffer_geometry import (
 )
 from core.user_data import UserData
 from geometries.earcut import triangulate_shape
+from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
+from math.sort_utils import stable_sort
 from math.vector2 import Vector2
+from std.math import isfinite
 
 
 def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
@@ -174,25 +179,165 @@ def _clean(points: List[Vector2]) raises -> List[Vector2]:
     return corners^
 
 
+def _side(a: Vector2, b: Vector2, c: Vector2) -> Int:
+    """Return the exact orientation sign of three finite stored points.
+
+    The homogeneous determinant uses the shared Float32 expansion. Only
+    its sign is read. No Float32 subtraction or product can overflow, and
+    cancellation at a large translation cannot turn a side into contact.
+    """
+    var matrix: Array[Float32, 9] = [a.x, a.y, 1, b.x, b.y, 1, c.x, c.y, 1]
+    var determinant = _determinant3_f32(matrix)
+    return Int(determinant > 0) - Int(determinant < 0)
+
+
 def _contains(
     points: List[Vector2], start: Int, count: Int, probe: Vector2
 ) -> Bool:
-    """Return True if `probe` lies inside the contour at `start`.
+    """Return the even-odd inside of a contour, away from its boundary.
 
-    By ray casting: count the edges directly to the right of the probe,
-    and the probe is inside when that count is odd. An edge counts when the
-    probe's height falls between its two ends, with one end counted and the
-    other not, so a ray through a corner counts it once.
+    Half-open ray crossings count a corner once. The exact orientation
+    replaces division and a rounded ray/edge intersection. Callers first
+    refuse boundary contacts, so a probe cannot lie on an edge.
     """
     var inside = False
     for index in range(count):  # pragma: no branch
         var here = points[start + index]
         var next = points[start + (index + 1) % count]
         if (here.y > probe.y) != (next.y > probe.y):
-            var along = (probe.y - here.y) / (next.y - here.y)
-            if probe.x < here.x + along * (next.x - here.x):
+            if (_side(here, next, probe) > 0) == (next.y > here.y):
                 inside = not inside
     return inside
+
+
+struct _BoundaryEdge(ImplicitlyCopyable):
+    """A sampled segment with a box in the selected sweep axes."""
+
+    var a: Vector2
+    var b: Vector2
+    var contour: Int
+    var low_x: Float32
+    var high_x: Float32
+    var low_y: Float32
+    var high_y: Float32
+
+    def __init__(out self, a: Vector2, b: Vector2, contour: Int):
+        self.a = a
+        self.b = b
+        self.contour = contour
+        self.low_x = min(a.x, b.x)
+        self.high_x = max(a.x, b.x)
+        self.low_y = min(a.y, b.y)
+        self.high_y = max(a.y, b.y)
+
+
+def _edge_before(a: _BoundaryEdge, b: _BoundaryEdge) -> Bool:
+    """Order segments by the start of their closed x interval."""
+    return a.low_x < b.low_x
+
+
+def _edges_meet(a: _BoundaryEdge, b: _BoundaryEdge) -> Bool:
+    """Return whether segments with overlapping boxes cross or touch."""
+    var ac = _side(a.a, a.b, b.a)
+    var ad = _side(a.a, a.b, b.b)
+    if ac != 0 and ac == ad:
+        return False
+    var ba = _side(b.a, b.b, a.a)
+    var bb = _side(b.a, b.b, a.b)
+    return ba == 0 or bb == 0 or ba != bb
+
+
+def _append_edges(
+    mut edges: List[_BoundaryEdge], points: List[Vector2], contour: Int
+):
+    """Keep every sampled run, including a run dropped by `_clean`."""
+    for at in range(len(points) - 1):
+        edges.append(_BoundaryEdge(points[at], points[at + 1], contour))
+
+
+def _sweep_on_y(edges: List[_BoundaryEdge]) -> Bool:
+    """Choose the axis with less total interval span per unit of extent.
+
+    Use doubles before subtracting finite stored coordinates. Cross
+    multiplication avoids division for point or axis-aligned boxes.
+    """
+    if len(edges) == 0:
+        return False
+    var low_x = edges[0].low_x
+    var high_x = edges[0].high_x
+    var low_y = edges[0].low_y
+    var high_y = edges[0].high_y
+    var width = Float64(high_x) - Float64(low_x)
+    var height = Float64(high_y) - Float64(low_y)
+    for at in range(1, len(edges)):
+        var edge = edges[at]
+        low_x = min(low_x, edge.low_x)
+        high_x = max(high_x, edge.high_x)
+        low_y = min(low_y, edge.low_y)
+        high_y = max(high_y, edge.high_y)
+        width += Float64(edge.high_x) - Float64(edge.low_x)
+        height += Float64(edge.high_y) - Float64(edge.low_y)
+    return height * (Float64(high_x) - Float64(low_x)) < width * (
+        Float64(high_y) - Float64(low_y)
+    )
+
+
+def _check_boundaries(
+    outline: List[Vector2], holes: List[List[Vector2]]
+) raises:
+    """Refuse all contact between distinct contours without changing them.
+
+    The sweep chooses the axis with shorter relative interval spans and
+    rejects separated boxes before exact tests. Active runs are grouped
+    by contour, so a dense contour never compares its own edges. In
+    particular, earcut's self-crossing outline behavior is unchanged.
+    Storage is linear. Cost is O(n log n + h*n + k), where h is the hole
+    count and k counts overlapping sweep intervals of distinct contours.
+    """
+    # Each input has passed `_corners`: at least three corners remain.
+    if len(holes) == 0:
+        return
+    var edges = List[_BoundaryEdge]()
+    _append_edges(edges, outline, 0)
+    # The zero-hole case returned above.
+    for hole in range(len(holes)):  # pragma: no branch
+        _append_edges(edges, holes[hole], hole + 1)
+    if _sweep_on_y(edges):
+        # The outline and at least one hole contribute three runs each.
+        for at in range(len(edges)):  # pragma: no branch
+            # Exchange only the box axes. Endpoints and exact predicates
+            # always read the original stored coordinates.
+            swap(edges[at].low_x, edges[at].low_y)
+            swap(edges[at].high_x, edges[at].high_y)
+    stable_sort[_edge_before](edges)
+    var active = List[List[Int]]()
+    # One active list per contour, including the outline: at least two.
+    for _ in range(len(holes) + 1):  # pragma: no branch
+        active.append(List[Int]())
+    # Sorting preserves the at least six validated runs.
+    for at in range(len(edges)):  # pragma: no branch
+        var edge = edges[at]
+        # The complete, nonempty contour table was built above.
+        for contour in range(len(active)):  # pragma: no branch
+            if contour == edge.contour:
+                continue
+            ref candidates = active[contour]
+            var slot = 0
+            while slot < len(candidates):
+                var other = edges[candidates[slot]]
+                if other.high_x < edge.low_x:
+                    var last = candidates.pop()
+                    if slot < len(candidates):
+                        candidates[slot] = last
+                    continue
+                slot += 1
+                if edge.high_y < other.low_y or other.high_y < edge.low_y:
+                    continue
+                if _edges_meet(edge, other):
+                    raise Error(
+                        "A shape's hole boundaries must not cross or touch"
+                    )
+        active[edge.contour].append(at)
 
 
 def _corners(points: List[Vector2]) raises -> List[Vector2]:
@@ -206,9 +351,15 @@ def _corners(points: List[Vector2]) raises -> List[Vector2]:
         The corners `_clean` keeps.
 
     Raises:
-        Error: If fewer than three corners are left, or they enclose no
-            area.
+        Error: If a coordinate is not finite, fewer than three corners are
+            left, or they enclose no area.
     """
+    if len(points) < 4:
+        raise Error("A shape's closed contour needs three corners")
+    # The short-contour refusal above proves this list is nonempty.
+    for point in points:  # pragma: no branch
+        if not isfinite(point.x) or not isfinite(point.y):
+            raise Error("A shape boundary needs finite coordinates")
     var corners = _clean(points)
     var doubled = signed_area64(corners) * 2
     var span = extent(corners, 0, len(corners))
@@ -250,30 +401,33 @@ def extract_points(shape: Shape, curve_segments: Int) raises -> ShapePoints:
         The outline's points and each hole's, as `Path.sample` gives them.
 
     Raises:
-        Error: If `curve_segments` is less than one, if a contour has fewer
-            than three distinct corners or no area, or if a hole lies
-            outside the outline or inside another hole.
+        Error: If `curve_segments` is less than one, if a contour has a
+            nonfinite coordinate, fewer than three distinct corners or no
+            area, or if a hole lies outside the outline or inside another
+            hole, or two contours touch or cross.
     """
     var outline = shape.outline_points(curve_segments)
-    var corners = _corners(outline)
+    _ = _corners(outline)
     var holes = List[List[Vector2]]()
-    var hole_corners = List[List[Vector2]]()
     for hole in range(shape.hole_count()):
         var points = shape.hole_points(hole, curve_segments)
-        hole_corners.append(_corners(points))
+        _ = _corners(points)
         holes.append(points^)
 
-    # A hole outside the outline, or inside another hole, describes no
-    # surface.
-    for hole in range(len(hole_corners)):
-        var probe = hole_corners[hole][0]
-        if not _contains(corners, 0, len(corners), probe):
+    _check_boundaries(outline, holes)
+    # Once whole boundaries are disjoint, one point classifies each
+    # connected contour. In particular, a run cannot leave a concave
+    # outline and return between two inside corners without meeting it.
+    for hole in range(len(holes)):
+        var probe = holes[hole][0]
+        if not _contains(outline, 0, len(outline) - 1, probe):
             raise Error("A shape's hole must lie inside its outline")
-        for other in range(len(hole_corners)):  # pragma: no branch
-            if other == hole:
-                continue
-            ref around = hole_corners[other]
-            if _contains(around, 0, len(around), probe):
+        for other in range(hole):
+            ref around = holes[other]
+            if _contains(around, 0, len(around) - 1, probe):
+                raise Error("A shape's hole cannot lie inside another hole")
+            ref current = holes[hole]
+            if _contains(current, 0, len(current) - 1, around[0]):
                 raise Error("A shape's hole cannot lie inside another hole")
     return ShapePoints(outline^, holes^)
 
@@ -384,9 +538,10 @@ def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
         wound counter-clockwise, in earcut's order.
 
     Raises:
-        Error: If `curve_segments` is less than one, if a contour has fewer
-            than three distinct corners or no area, or if a hole lies
-            outside the outline or inside another hole.
+        Error: If `curve_segments` is less than one, if a contour has a
+            nonfinite coordinate, fewer than three distinct corners or no
+            area, or if a hole lies outside the outline or inside another
+            hole, or two contours touch or cross.
     """
     var sampled = extract_points(shape, curve_segments)
     var outline = sampled.outline.copy()

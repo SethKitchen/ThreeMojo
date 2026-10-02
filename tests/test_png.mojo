@@ -248,5 +248,22 @@ def test_single_pixel_image_encodes() raises:
     assert_equal(Int(raw[4]), 4)
 
 
+def test_rgb_transparency_key_requires_all_three_channels() raises:
+    from render.png import decode, push_chunk
+
+    var bytes: List[UInt8] = [137, 80, 78, 71, 13, 10, 26, 10]
+    var header: List[UInt8] = [0, 0, 0, 3, 0, 0, 0, 1, 8, 2, 0, 0, 0]
+    push_chunk(bytes, "IHDR", header)
+    push_chunk(bytes, "tRNS", [UInt8(0), 10, 0, 20, 0, 30])
+    # Key match, same red with different green, same red/green with different blue.
+    var row: List[UInt8] = [0, 10, 20, 30, 10, 21, 30, 10, 20, 31]
+    push_chunk(bytes, "IDAT", zlib_stream(row))
+    push_chunk(bytes, "IEND", List[UInt8]())
+    var image = decode(bytes)
+    assert_equal(image.pixels[3], UInt8(0))
+    assert_equal(image.pixels[7], UInt8(255))
+    assert_equal(image.pixels[11], UInt8(255))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

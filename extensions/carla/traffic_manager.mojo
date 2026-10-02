@@ -224,16 +224,17 @@ def set_simulate_physics(
         enabled: True for on.
 
     Raises:
-        Error: If the id names no living actor.
+        Error: If the id names no living actor, or the body cannot enter
+            the requested mode.
     """
     var body = world.actor(actor).body
     if body.value < 0:
         return
     ref b = world.physics.world.bodies[body.value]
     if enabled:
-        b.kind = DYNAMIC
+        b.set_kind(DYNAMIC)
     else:
-        b.kind = KINEMATIC
+        b.set_kind(KINEMATIC)
         b.linear_velocity = Vector3(0, 0, 0)
         b.angular_velocity = Vector3(0, 0, 0)
 
@@ -411,11 +412,13 @@ struct ALSM(Movable):
                 self.unregistered_actors.append(actor.value)
         var max_idle = (NO_ACTOR, self.current_time)
         self._update_registered(world, registered, shared, hybrid, max_idle)
-        if (
-            self.is_vehicle_stuck(max_idle[0], shared)
-            and self.current_time - self.elapsed_last_actor_destruction
-            > Float64(DELTA_TIME_BETWEEN_DESTRUCTIONS.value)
-            and max_idle[0].value not in self.hero_actors
+        # This fresh candidate is chosen only by _update_idle_time inside
+        # _update_registered's nonhero branch. Hero membership is unchanged
+        # until this decision, so the candidate cannot be a hero.
+        if self.is_vehicle_stuck(
+            max_idle[0], shared
+        ) and self.current_time - self.elapsed_last_actor_destruction > Float64(
+            DELTA_TIME_BETWEEN_DESTRUCTIONS.value
         ):
             registered.destroy(max_idle[0], world)
             self.remove_actor(

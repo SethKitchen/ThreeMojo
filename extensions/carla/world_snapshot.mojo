@@ -102,7 +102,7 @@ struct Timestamp(Equatable, ImplicitlyCopyable, Writable):
 struct TrafficLightData(ImplicitlyCopyable, Movable):
     """A traffic light's part of a snapshot, CARLA's `TrafficLightData`."""
 
-    # The OpenDRIVE signal id, cut to CARLA's 32 bytes.
+    # The OpenDRIVE signal id: at most 32 UTF-8 bytes, no partial codepoint.
     var sign_id: String
     var green_time: Duration
     var yellow_time: Duration
@@ -128,7 +128,7 @@ struct ActorSnapshot(Copyable, Movable):
     var vehicle: Optional[VehicleData]
     var walker_control: Optional[WalkerControl]
     var traffic_light: Optional[TrafficLightData]
-    # A traffic sign's signal id, cut to 32 bytes, or empty.
+    # A sign's id: at most 32 UTF-8 bytes, no partial codepoint, or empty.
     var sign_id: String
 
     def __init__(

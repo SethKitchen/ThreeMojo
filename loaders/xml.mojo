@@ -11,7 +11,7 @@ leans on the browser's `DOMParser`, so this is a small reader of the part
 of XML 1.0 a model file uses: elements, attributes, character data, the
 five named entities and numeric character references, CDATA sections,
 comments, processing instructions, and a document type declaration, which
-is skipped. A file that is not well formed is refused with the byte it
+is skipped. Common malformed input is refused with the byte it
 went wrong at, as `DOMParser` refuses it with a `parsererror`: a tag that
 is not closed, a closing tag that names another element, an attribute
 given twice, an entity that is not known, text after the root element.
@@ -28,8 +28,10 @@ Comments and processing instructions are dropped.
 
 **What is not read.** A document type declaration is stepped over whole,
 so an entity it declares is not known and is refused where it is used.
-Namespaces are not resolved: `a:b` is an element named `a:b`. The text is
-taken to be UTF-8 and is not checked.
+Namespaces are not resolved: `a:b` is an element named `a:b`. Input is
+a UTF-8 String. XML 1.0 names, processing instructions, declaration syntax,
+and prolog order are checked. DTD contents and namespace constraints are
+not validated. Encoding declarations do not change the input encoding.
 """
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -277,12 +279,27 @@ def parse_xml(text: String) raises -> XmlDocument:
             nested deeper than `MAX_XML_DEPTH`.
     """
     var bytes = List[UInt8]()
-    for byte in text.as_bytes():
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        var byte = raw[index]
+        var control = byte < 32 and not _is_space(Int(byte))
+        var noncharacter = (
+            byte == 0xEF
+            and index + 2 < len(raw)
+            and raw[index + 1] == 0xBF
+            and (raw[index + 2] == 0xBE or raw[index + 2] == 0xBF)
+        )
+        if control or noncharacter:
+            raise Error(
+                "XML at byte " + String(index) + ": a forbidden character"
+            )
         bytes.append(byte)
     var parser = _Parser(bytes^)
     var document = XmlDocument()
     if parser.starts_with("\ufeff"):
         parser.at += 3
+    if parser.starts_with("<?"):
+        parser.processing_instruction(True)
     parser.misc(True)
     if parser.peek() != 60:
         raise Error(parser.where() + "no root element")
@@ -293,26 +310,60 @@ def parse_xml(text: String) raises -> XmlDocument:
     return document^
 
 
-def _is_name_start(byte: Int) -> Bool:
-    """Return True if a byte can begin a name: a letter, `_`, `:`, or any
-    byte of a multibyte character."""
+def _is_name_start(point: Int) -> Bool:
+    """Check XML 1.0 fifth edition NameStartChar, production [4]."""
     return (
-        (byte >= 65 and byte <= 90)
-        or (byte >= 97 and byte <= 122)
-        or byte == 95
-        or byte == 58
-        or byte >= 128
+        point == 58
+        or (point >= 65 and point <= 90)
+        or point == 95
+        or (point >= 97 and point <= 122)
+        or (point >= 0xC0 and point <= 0xD6)
+        or (point >= 0xD8 and point <= 0xF6)
+        or (point >= 0xF8 and point <= 0x2FF)
+        or (point >= 0x370 and point <= 0x37D)
+        or (point >= 0x37F and point <= 0x1FFF)
+        or (point >= 0x200C and point <= 0x200D)
+        or (point >= 0x2070 and point <= 0x218F)
+        or (point >= 0x2C00 and point <= 0x2FEF)
+        or (point >= 0x3001 and point <= 0xD7FF)
+        or (point >= 0xF900 and point <= 0xFDCF)
+        or (point >= 0xFDF0 and point <= 0xFFFD)
+        or (point >= 0x10000 and point <= 0xEFFFF)
     )
 
 
-def _is_name_byte(byte: Int) -> Bool:
-    """Return True if a byte can continue a name: what can begin one, a
-    digit, `-` or `.`."""
+def _is_name_char(point: Int) -> Bool:
+    """Check XML 1.0 fifth edition NameChar, production [4a]."""
     return (
-        _is_name_start(byte)
-        or (byte >= 48 and byte <= 57)
-        or byte == 45
-        or byte == 46
+        _is_name_start(point)
+        or point == 45
+        or point == 46
+        or (point >= 48 and point <= 57)
+        or point == 0xB7
+        or (point >= 0x300 and point <= 0x36F)
+        or (point >= 0x203F and point <= 0x2040)
+    )
+
+
+def _is_letter(byte: Int) -> Bool:
+    """Return True for an ASCII letter in an encoding name."""
+    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+
+
+def _is_digit(byte: Int) -> Bool:
+    """Return True for an ASCII digit."""
+    return byte >= 48 and byte <= 57
+
+
+def _is_pubid_char(byte: Int) -> Bool:
+    """Check the ASCII character set of a public identifier."""
+    return (
+        byte == 32
+        or byte == 13
+        or byte == 10
+        or _is_letter(byte)
+        or _is_digit(byte)
+        or chr(byte) in String("-'()+,./:=?;!*#@$_%")
     )
 
 
@@ -341,9 +392,14 @@ def _append_utf8(mut out: List[UInt8], point: Int):
 
 def _is_character(point: Int) -> Bool:
     """Return True if a character reference names a character XML allows:
-    not zero, not a surrogate half, and not past Unicode."""
+    a permitted whitespace, BMP character or supplementary character."""
     return (
-        point > 0 and point <= 0x10FFFF and (point < 0xD800 or point > 0xDFFF)
+        point == 9
+        or point == 10
+        or point == 13
+        or (point >= 0x20 and point <= 0xD7FF)
+        or (point >= 0xE000 and point <= 0xFFFD)
+        or (point >= 0x10000 and point <= 0x10FFFF)
     )
 
 
@@ -418,62 +474,214 @@ struct _Parser(Movable):
             raise Error(self.where() + "expected " + what)
         self.at += 1
 
+    def name_point(self) -> Tuple[Int, Int]:
+        """Read a code point and its byte width from the UTF-8 String input."""
+        var first = self.peek()
+        if first < 0x80:
+            return (first, 1)
+        var width = 2
+        var point = first & 0x1F
+        if first >= 0xF0:
+            width = 4
+            point = first & 0x07
+        elif first >= 0xE0:
+            width = 3
+            point = first & 0x0F
+        var offset = 1
+        while offset < width:
+            point = (point << 6) | (Int(self.bytes[self.at + offset]) & 0x3F)
+            offset += 1
+        return (point, width)
+
     def name(mut self) raises -> String:
-        """Read a name at the cursor."""
-        if not _is_name_start(self.peek()):
+        """Read a name by code point, keeping its original UTF-8 bytes."""
+        var point_and_width = self.name_point()
+        if not _is_name_start(point_and_width[0]):
             raise Error(self.where() + "expected a name")
         var out = List[UInt8]()
-        while _is_name_byte(self.peek()):
-            out.append(self.bytes[self.at])
-            self.at += 1
+        while _is_name_char(point_and_width[0]):
+            var offset = 0
+            while offset < point_and_width[1]:
+                out.append(self.bytes[self.at + offset])
+                offset += 1
+            self.at += point_and_width[1]
+            point_and_width = self.name_point()
         return String(unsafe_from_utf8=out)
 
+    def require_space(mut self) raises:
+        """Read the required XML whitespace between grammar tokens."""
+        if not self.skip_space():
+            raise Error(self.where() + "expected white space")
+
+    def literal(mut self) raises -> String:
+        """Read a quoted literal without normalization or entity expansion."""
+        var quote = self.peek()
+        if quote != 34 and quote != 39:
+            raise Error(self.where() + "expected a quoted literal")
+        self.at += 1
+        var out = List[UInt8]()
+        while self.peek() != quote:
+            if self.done():
+                raise Error(self.where() + "a quoted literal is not closed")
+            out.append(self.bytes[self.at])
+            self.at += 1
+        self.at += 1
+        return String(unsafe_from_utf8=out)
+
+    def declaration_value(mut self, key: String) raises -> String:
+        """Read a named XML declaration field with its unexpanded value."""
+        self.require_space()
+        if self.name() != key:
+            raise Error(self.where() + "expected declaration field " + key)
+        _ = self.skip_space()
+        self.expect(61, "'=' after a declaration field")
+        _ = self.skip_space()
+        return self.literal()
+
+    def xml_declaration(mut self) raises:
+        """Check version, encoding and standalone fields in their XML order."""
+        var version = self.declaration_value("version")
+        if not version.startswith("1.") or version.byte_length() < 3:
+            raise Error(self.where() + "invalid XML version")
+        var digits = version.as_bytes()
+        var index = 2
+        while index < len(digits):
+            if not _is_digit(Int(digits[index])):
+                raise Error(self.where() + "invalid XML version")
+            index += 1
+        var field_start = self.at
+        _ = self.skip_space()
+        if self.starts_with("encoding"):
+            self.at = field_start
+            var encoding = self.declaration_value("encoding")
+            var bytes = encoding.as_bytes()
+            if len(bytes) == 0:
+                raise Error(self.where() + "empty encoding name")
+            if not _is_letter(Int(bytes[0])):
+                raise Error(self.where() + "invalid encoding name")
+            var index = 0
+            while index < len(bytes):
+                var byte = bytes[index]
+                if not (
+                    _is_letter(Int(byte))
+                    or _is_digit(Int(byte))
+                    or byte == 46
+                    or byte == 95
+                    or byte == 45
+                ):
+                    raise Error(self.where() + "invalid encoding name")
+                index += 1
+            field_start = self.at
+            _ = self.skip_space()
+        if self.starts_with("standalone"):
+            self.at = field_start
+            var standalone = self.declaration_value("standalone")
+            if standalone != "yes" and standalone != "no":
+                raise Error(self.where() + "invalid standalone value")
+            _ = self.skip_space()
+        self.expect(63, "'?' to close an XML declaration")
+        self.expect(62, "'>' to close an XML declaration")
+
+    def processing_instruction(
+        mut self, allow_declaration: Bool = False
+    ) raises:
+        """Check a PI target and separator, then skip its unexpanded data."""
+        self.at += 2
+        var target = self.name()
+        if target == "xml" and allow_declaration:
+            self.xml_declaration()
+            return
+        if target.lower() == "xml":
+            raise Error(self.where() + "reserved processing instruction target")
+        if not self.starts_with("?>"):
+            self.require_space()
+        self.skip_past("?>", "a processing instruction")
+
     def misc(mut self, prolog: Bool) raises:
-        """Step over white space, comments and processing instructions
-        outside the root element, and before it a document type
-        declaration.
-
-        Args:
-            prolog: True before the root element, where a document type
-                declaration can stand.
-
-        Raises:
-            Error: If one of them is not closed, or a document type
-                declaration comes after the root element.
-        """
+        """Read outside-root whitespace, comments, PIs and one prolog DTD."""
+        var seen_doctype = False
         while True:
             _ = self.skip_space()
             if self.starts_with("<?"):
-                self.skip_past("?>", "a processing instruction")
+                self.processing_instruction()
             elif self.starts_with("<!--"):
-                self.skip_past("-->", "a comment")
+                self.comment()
             elif self.starts_with("<!DOCTYPE"):
-                if not prolog:
+                if not prolog or seen_doctype:
                     raise Error(
-                        self.where()
-                        + "a document type declaration after the root"
+                        self.where() + "misplaced document type declaration"
                     )
                 self.doctype()
+                seen_doctype = True
             else:
                 return
 
+    def comment(mut self) raises:
+        """Read a comment, rejecting an internal double hyphen."""
+        self.at += 4
+        while not self.starts_with("-->"):
+            if self.done():
+                raise Error(self.where() + "a comment is not closed")
+            if self.starts_with("--"):
+                raise Error(self.where() + "a comment contains a double hyphen")
+            self.at += 1
+        self.at += 3
+
     def doctype(mut self) raises:
-        """Step over a document type declaration, internal subset and
-        all."""
-        var depth = 0
-        while True:
+        """Check the DTD envelope without reading or expanding declarations."""
+        self.at += 9
+        self.require_space()
+        _ = self.name()
+        var spaced = self.skip_space()
+        if spaced and (
+            self.starts_with("SYSTEM") or self.starts_with("PUBLIC")
+        ):
+            var public = self.starts_with("PUBLIC")
+            self.at += 6
+            self.require_space()
+            var identifier = self.literal()
+            if public:
+                for byte in identifier.as_bytes():
+                    if not _is_pubid_char(Int(byte)):
+                        raise Error(self.where() + "invalid public identifier")
+                self.require_space()
+                _ = self.literal()
+            _ = self.skip_space()
+        if self.peek() == 91:
+            self.doctype_subset()
+            _ = self.skip_space()
+        self.expect(62, "'>' to close a document type declaration")
+
+    def doctype_subset(mut self) raises:
+        """Skip a bracketed DTD subset, respecting literals, comments and PIs.
+        """
+        self.at += 1
+        var depth = 1
+        var quote = 0
+        while depth > 0:
             var byte = self.peek()
             if byte < 0:
                 raise Error(
                     self.where() + "a document type declaration is not closed"
                 )
+            if quote != 0:
+                if byte == quote:
+                    quote = 0
+                self.at += 1
+                continue
+            if self.starts_with("<!--"):
+                self.comment()
+                continue
+            if self.starts_with("<?"):
+                self.processing_instruction()
+                continue
             self.at += 1
-            if byte == 91:
+            if byte == 34 or byte == 39:
+                quote = byte
+            elif byte == 91:
                 depth += 1
             elif byte == 93:
                 depth -= 1
-            elif byte == 62 and depth <= 0:
-                return
 
     def reference(mut self, mut out: List[UInt8]) raises:
         """Read an entity or a character reference at the cursor and
@@ -482,7 +690,7 @@ struct _Parser(Movable):
         self.at += 1
         var body = List[UInt8]()
         while self.peek() != 59:
-            if self.peek() < 0 or len(body) > 10:
+            if self.peek() < 0:
                 self.at = start
                 raise Error(self.where() + "a reference is not closed by ';'")
             body.append(self.bytes[self.at])
@@ -519,13 +727,32 @@ struct _Parser(Movable):
         Raises:
             Error: If the digits are not digits, or name no character.
         """
-        var point: Int
-        try:
-            if word.startswith("#x"):
-                point = atol(String(word[byte=2:]), base=16)
-            else:
-                point = atol(String(word[byte=1:]))
-        except:
+        var radix = 10
+        var first = 1
+        if word.startswith("#x"):
+            radix = 16
+            first = 2
+        var digits = word.as_bytes()
+        var point = 0
+        for index in range(first, len(digits)):
+            var byte = Int(digits[index])
+            var digit = -1
+            if byte >= 48 and byte <= 57:
+                digit = byte - 48
+            elif radix == 16 and byte >= 65 and byte <= 70:
+                digit = byte - 65 + 10
+            elif radix == 16 and byte >= 97 and byte <= 102:
+                digit = byte - 97 + 10
+            if digit < 0:
+                self.at = start
+                raise Error(self.where() + "a character reference is malformed")
+            if point > (0x10FFFF - digit) // radix:
+                self.at = start
+                raise Error(
+                    self.where() + "a character reference names nothing"
+                )
+            point = point * radix + digit
+        if first == len(digits):
             self.at = start
             raise Error(self.where() + "a character reference is malformed")
         if not _is_character(point):
@@ -555,6 +782,8 @@ struct _Parser(Movable):
             elif _is_space(byte):
                 out.append(32)
                 self.at += 1
+                if byte == 13 and self.peek() == 10:
+                    self.at += 1
             else:
                 out.append(UInt8(byte))
                 self.at += 1
@@ -669,13 +898,15 @@ struct _Parser(Movable):
                 self.at += 1
                 if self.peek() == 10:
                     self.at += 1
+            elif self.starts_with("]]>"):
+                raise Error(self.where() + "a CDATA close outside CDATA")
             elif byte != 60:
                 text.append(UInt8(byte))
                 self.at += 1
             elif self.starts_with("</"):
                 self.end_tag(document, open, texts)
             elif self.starts_with("<!--"):
-                self.skip_past("-->", "a comment")
+                self.comment()
             elif self.starts_with("<![CDATA["):
                 self.at += 9
                 while not self.starts_with("]]>"):
@@ -683,10 +914,16 @@ struct _Parser(Movable):
                         raise Error(
                             self.where() + "a CDATA section is not closed"
                         )
-                    text.append(self.bytes[self.at])
-                    self.at += 1
+                    if self.peek() == 13:
+                        text.append(10)
+                        self.at += 1
+                        if self.peek() == 10:
+                            self.at += 1
+                    else:
+                        text.append(self.bytes[self.at])
+                        self.at += 1
                 self.at += 3
             elif self.starts_with("<?"):
-                self.skip_past("?>", "a processing instruction")
+                self.processing_instruction()
             else:
                 self.start_tag(document, open, texts)

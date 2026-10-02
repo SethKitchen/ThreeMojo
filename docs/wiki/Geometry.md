@@ -364,7 +364,11 @@ Area and winding use a shared calculation with coordinates relative to one conto
 
 ### What is refused
 
-A hole outside the outline, or inside another hole, is refused. A contour with fewer than three corners, or with no area, is refused too. three.js builds something from each of these and gives no error. The checks change no point, so a shape that passes is built as three.js builds it. An outline that crosses itself is filled in by earcut, as in three.js.
+A hole must lie strictly inside the outline. Its sampled boundary must not cross or touch the outline or another hole. A shared point or a shared edge is refused. A hole inside another hole is refused in either input order. These checks run before triangulation and extrusion.
+
+The checks read every sampled segment, including segments whose corners the area check removes. Inside corners alone do not prove that an edge stays inside a concave outline. Boundary coordinates must be finite. The contact test uses the exact orientation sign of the stored Float32 coordinates, without a distance tolerance. A positive representable gap stays a gap. Curves are checked at the requested sample resolution.
+
+A contour with fewer than three corners, or with no area, is refused too. three.js builds something from each of these and gives no error. The checks change no point, vertex order, index or group. An outline that crosses itself is filled in by earcut, as in three.js.
 
 ## Extrude
 
@@ -522,7 +526,15 @@ var inside = hull.contains_point(Vector3(0, 0, 0))
 | `contains_point(point) -> Bool` | Whether no face can see the point. |
 | `tolerance` | How far outside a face a point must be before the face can see it. |
 
-The hull does its arithmetic in `Float64`, as JavaScript does. The tolerance is three.js's: three times the `Float64` epsilon, times the size of the point set. Coplanar faces are not merged, as in three.js.
+The hull does its arithmetic in `Float64`, as JavaScript does. Both the constructor and `contains_point` accept a `List[SIMD[DType.float64, 4]]` and a `SIMD[DType.float64, 4]`, respectively. These forms use the first three components and ignore the fourth. They do not narrow coordinates to `Float32`. The `Vector3` forms are also available. A query with a nonfinite spatial component returns False.
+
+The tolerance is three.js's: three times the `Float64` epsilon, times the sum of the greatest absolute coordinate on each axis. It uses the original coordinate units. You can change `tolerance` for later containment queries. At subnormal scales, the stored tolerance can round to zero. Zero stays the comparison threshold; the hull does not replace it with a hidden positive threshold.
+
+Extreme coordinates are scaled by an exact power of two before construction. Original point indices stay unchanged. Ordinary coordinates keep the three.js operation order for resolved, normal-range calculations. A nonzero normal whose squared length is subnormal is normalized after scaling.
+
+A range error means that scaling would lose input detail, or that a geometric direction cannot be resolved in `Float64`. A conditioned face must place its own vertices on its plane within the stored tolerance. A zero tolerance can therefore cause a range error for slanted faces. An unresolved plane at zero tolerance also gives a range error. This is different from the error for points on a plane within a positive tolerance.
+
+These checks do not implement exact geometric predicates for every Float64 input. Coplanar faces are not merged, as in three.js.
 
 three.js returns an empty hull for fewer than four points. It returns a flat or broken hull for points on one line or one plane. This port raises in all three cases. `setFromObject` and `intersectRay` are not ported.
 
@@ -883,7 +895,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - Either every morph target carries normals or none does.
 - A morph influence must be a number, and there are eight of them.
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
-- A shape's hole must lie inside its outline, and not inside another hole.
+- A shape's hole must lie strictly inside its outline and outside every other hole. Sampled boundaries must not cross or touch.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
 - An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
 - A text needs the same options as an extrusion and a positive size. Every character needs a glyph, or the font needs a `?` glyph.

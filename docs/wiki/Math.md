@@ -116,6 +116,27 @@ It has the `Vector3` members that make sense in four dimensions, with the same a
 
 The two axis-angle setters are three.js's `setAxisAngleFromQuaternion` and `setAxisAngleFromRotationMatrix`. Their thresholds and their fallback axes are three.js's, and the tests compare them with three.js 0.180. A half turn whose largest diagonal element is below a hundredth gets one of three.js's three fixed axes, such as `(0, 0.707106781, 0.707106781)`.
 
+## Matrix inverses
+
+Matrix inverses retain the direct Float32 cofactor arithmetic for ordinary
+inputs. Extreme component ranges and strong determinant cancellation use a
+shared Float64 cofactor fallback. For finite inputs, error-free expansions
+retain the exact determinant sign and zero. The fallback sums all expansion
+components before division. It does not reject a small nonzero determinant.
+
+This preserves representable inverses when Float32 intermediate products
+overflow, underflow or cancel. The ordinary-range screen bounds all determinant
+products, including cancellation inside cofactors. Nonfinite inputs retain
+the previous propagation behavior.
+
+The singular contracts stay the same: `Matrix2.inverse` raises, and `Matrix3`
+and `Matrix4` invert to zeros. An inverse entry outside the Float32 range
+becomes signed infinity. It does not make the matrix singular.
+
+The two normal-matrix methods share one checked inverse-transpose path. They
+refuse a singular or nonfinite linear block and an inverse that cannot fit
+in `Float32`.
+
 ## Matrix3
 
 `Matrix3` is column-major, as `Matrix4` is. Element `(row, col)` is at `col * 3 + row`. `set` takes nine arguments in row-major order.
@@ -195,6 +216,14 @@ m.multiply(translation(-10, 0, 0))     # a rotation about (10, 0, 0)
 `math/bounds.mojo`. The volumes a renderer tests against, and the plane a frustum is made of. All three hold bare `Float32` meters, as `Vector3` does.
 
 An empty box or sphere holds no points. It is a value, not an error. A box is empty when a corner is inside out on any axis. A sphere is empty when its radius is negative. Every operation treats an empty bound as the set it is.
+
+Empty boxes keep the same set behavior whether their inside-out corners
+are finite or infinite. Every box contains an empty box, and an empty box
+intersects no box. Expanding or translating an empty box keeps it empty.
+A negative size creates an empty box even when rounding would make its two
+corners equal.
+
+A contraction larger than a finite box extent leaves an empty box. This also holds when rounded corners would be equal. Exact half-extent contraction still leaves a nonempty point or face.
 
 Expanding an empty bound by a point gives the bound of that one point. A union with one changes nothing. An overlap test with one is false. A transform leaves one empty.
 
@@ -347,6 +376,8 @@ Normalized device space is unitless. World space is meters and screen space is p
 | `interpolate(point, at_a, at_b, at_c) -> Vector3` | Three corner values mixed by the barycentric weights. |
 | `is_front_facing(direction) -> Bool` | True if a ray along the direction meets the front. |
 | `closest_point_to_point(point) -> Vector3` | The nearest point on the face, an edge or a corner. |
+
+Barycentric queries use widened signed-area products. Thin triangles keep their nonzero area instead of losing it to a difference of dot products. Off-plane queries use the orthogonal projection onto the plane. Octree containment uses the same calculation.
 
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 

@@ -107,8 +107,8 @@ struct LtcTables(Copyable, Movable):
         self.second = second^
 
     def is_loaded(self) -> Bool:
-        """Return True if the tables were loaded."""
-        return len(self.first) == LTC_FLOATS
+        """Return True if both tables hold their complete texel data."""
+        return len(self.first) == LTC_FLOATS and len(self.second) == LTC_FLOATS
 
 
 def load_ltc_tables(path: String = LTC_PATH) raises -> LtcTables:

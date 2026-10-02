@@ -396,5 +396,16 @@ def test_city_parameters_are_checked() raises:
         _ = city_layout(p)
 
 
+def test_street_and_sidewalk_cannot_be_negative() raises:
+    var p = CityParameters()
+    p.street = Length(-1, METER)
+    with assert_raises(contains="lot must be positive"):
+        _ = city_layout(p)
+    p = CityParameters()
+    p.sidewalk_width = Length(-1, METER)
+    with assert_raises(contains="lot must be positive"):
+        _ = city_layout(p)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

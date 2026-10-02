@@ -17,6 +17,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.scene import Scene
 from loaders.ldraw import (
+    _from_code,
     LDrawModel,
     LDrawNode,
     TO_THE_END,
@@ -27,7 +28,13 @@ from loaders.ldraw import (
 from math.vector3 import Vector3
 from renderers.renderer import Renderer
 from units.si import DEGREE, METER, Angle, Length
-from loaders.ldraw_parse import LDrawLoader, LDrawMaterial, _style, js_parse_int
+from loaders.ldraw_parse import (
+    LDrawInfo,
+    LDrawLoader,
+    LDrawMaterial,
+    _style,
+    js_parse_int,
+)
 from std.math import isnan
 from std.pathlib import Path
 from std.testing import (
@@ -388,6 +395,7 @@ def test_a_file_three_js_cannot_read_is_refused() raises:
 
 def test_parse_int_and_color_styles_are_javascript_s() raises:
     assert_equal(js_parse_int(" 	+0x1F"), 31)
+    assert_equal(js_parse_int("\n\r-12abc"), -12)
     assert_equal(js_parse_int("-12abc"), -12)
     assert_equal(js_parse_int("0Xaf"), 175)
     assert_true(isnan(js_parse_int("x")))
@@ -416,6 +424,19 @@ def test_a_missing_conditional_material_is_not_drawn() raises:
     var kitchen = read_ldraw("assets/ldraw/kitchen.mpd", LDrawLoader(LIBRARY))
     load_ldraw(kitchen, scene, assets)
     assert_true(len(scene.lines) > 0)
+
+
+def test_parent_color_substitution_truth_table() raises:
+    var info = LDrawInfo()
+    info.material_codes = ["16", "24", "4", "2"]
+    info.material_ids = [16, 24, 4, 2]
+    for edge in [False, True]:
+        for code in [String("16"), "24", "4", "2"]:
+            var inherited = (not edge and code == "16") or (
+                edge and code == "24"
+            )
+            var expected = info.local("2" if inherited else code)
+            assert_equal(_from_code(code, "2", info, edge), expected)
 
 
 def main() raises:

@@ -29,7 +29,12 @@ The detections keep the order of the rays.
 """
 
 from extensions.carla.blueprint import ActorAttributeValue
-from extensions.carla.sensor_attributes import attribute_float, attribute_int
+from extensions.carla.sensor_attributes import (
+    attribute_float,
+    attribute_int,
+    validate_sensor_nonnegative,
+    validate_sensor_positive,
+)
 from extensions.carla.sensor_noise import SensorRandom
 from extensions.carla.sensor_rays import RayScene
 from extensions.carla.transform import CarlaTransform
@@ -59,6 +64,26 @@ struct RadarDescription(ImplicitlyCopyable):
         self.points_per_second = 1500
         self.noise_seed = 0
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(
+            self.horizontal_fov.value, "horizontal_fov.value"
+        )
+        validate_sensor_nonnegative(
+            self.vertical_fov.value, "vertical_fov.value"
+        )
+        validate_sensor_positive(self.range.value, "range.value")
+        if self.horizontal_fov.to(DEGREE) >= 180:
+            raise Error("A radar horizontal fov must be less than 180 degrees")
+        if self.vertical_fov.to(DEGREE) >= 180:
+            raise Error("A radar vertical fov must be less than 180 degrees")
+        if self.points_per_second < 0:
+            raise Error("A radar point rate cannot be negative")
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -72,8 +97,7 @@ struct RadarDescription(ImplicitlyCopyable):
             The settings. A missing attribute keeps its default.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var d = RadarDescription()
         d.horizontal_fov = Angle(
@@ -87,6 +111,7 @@ struct RadarDescription(ImplicitlyCopyable):
             attributes, "points_per_second", 1500
         )
         d.noise_seed = attribute_int(attributes, "noise_seed", 0)
+        d.validate()
         return d
 
     def points_in(self, tick: Duration) -> Int:
@@ -153,13 +178,19 @@ struct Radar(Copyable, Movable):
     var rng: SensorRandom
     var previous_location: Vector3
 
-    def __init__(out self, description: RadarDescription, location: Vector3):
+    def __init__(
+        out self, description: RadarDescription, location: Vector3
+    ) raises:
         """Create a radar where it spawns, `BeginPlay`.
 
         Args:
             description: Its settings. Its seed seeds the engine.
             location: Where it is when it starts.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
         """
+        description.validate()
         self.description = description
         self.rng = SensorRandom(description.noise_seed)
         self.previous_location = location

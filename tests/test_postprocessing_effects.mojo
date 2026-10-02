@@ -1241,5 +1241,32 @@ def test_the_effects_run_in_the_composer() raises:
     assert_true(changed > 0, "The halftone changed nothing")
 
 
+def test_halftone_dimensions_must_each_be_finite() raises:
+    var bad = HalftoneSettings()
+    bad.width = inf[DType.float32]()
+    with assert_raises(contains="finite"):
+        check_halftone(bad)
+    bad = HalftoneSettings()
+    bad.height = inf[DType.float32]()
+    with assert_raises(contains="finite"):
+        check_halftone(bad)
+
+
+def test_mipmap_blur_must_be_finite() raises:
+    from postprocessing.effects import DofMipMapSettings, check_dof_mipmap
+
+    var bad = DofMipMapSettings()
+    bad.max_blur = inf[DType.float32]()
+    with assert_raises(contains="finite"):
+        check_dof_mipmap(bad)
+
+
+def test_bokeh_near_plane_must_be_positive() raises:
+    var bad = Bokeh2Settings()
+    bad.znear = 0
+    with assert_raises(contains="near plane"):
+        check_bokeh2(bad)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

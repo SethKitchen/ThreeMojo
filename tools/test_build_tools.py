@@ -14,6 +14,12 @@ import shard
 
 
 class DependencyTests(unittest.TestCase):
+    def test_coverage_parser_and_scanner_each_select_all_suites(self):
+        for path in ('coverage/instrument.mojo', 'coverage/scanner.mojo'):
+            reasons = []
+            self.assertEqual(affected.affected_set({path: False}, reasons), affected.ALL)
+            self.assertTrue(any(path in reason for reason in reasons))
+
     def test_multiline_comments_and_aliases(self):
         self.assertEqual(affected.imported_names('''from math import (
             vector2, # first
@@ -65,6 +71,20 @@ class CacheTests(unittest.TestCase):
                 path.write_bytes(b'first')
             (root / 'assets/fixture.bin').rename(root / 'assets/renamed.bin')
             self.assertNotEqual(original, cache_key.cache_key(root, ['-I .']))
+
+    def test_coverage_instrumenter_changes_invalidate_coverage_stamp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / 'coverage/instrument.mojo'
+            tool.parent.mkdir()
+            tool.write_text('top-level-only parser')
+            before = cache_key.cache_key(root, ['covered:module.mojo'])
+            tool.write_text('grouped leaf parser')
+            after = cache_key.cache_key(root, ['covered:module.mojo'])
+            self.assertNotEqual(before, after)
+            scanner = root / 'coverage/scanner.mojo'
+            scanner.write_text('quote-aware scanner')
+            self.assertNotEqual(after, cache_key.cache_key(root, ['covered:module.mojo']))
 
     def test_generated_outputs_are_not_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -197,9 +217,9 @@ class CoverageIoTests(unittest.TestCase):
         import coverage_io
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            stream = b'COVLINE:m:1\nCOVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n' * 10000
+            stream = b'COVLINE:m:1\nCOVLINE:m:2.0:T\nCOVLINE:m:2:T\nCOVEVAL2:m:2:T:T-;\n' * 10000
             reduced = (b'COVLINE:m:1\nCOVLINE:m:2.0:T\nCOVLINE:m:2:T\n'
-                       b'COVBRANCH:m:2.0:T\nCOVBRANCH:m:2:T\n')
+                       b'COVEVAL2:m:2:T:T-;\n')
             captures = []
             for index in range(2):
                 source = root / f'{index}.input'
@@ -219,33 +239,80 @@ class CoverageIoTests(unittest.TestCase):
             self.assertEqual(coverage_io.report(command, captures), 0)
             self.assertEqual(result.read_bytes(), reduced + b'0' + reduced + b'1')
 
-    def test_the_reducer_keeps_every_payload_and_distinct_evaluation(self):
+    def test_reducer_keeps_recursive_vectors_abandoned_hits_and_order(self):
         import coverage_io
         written = []
         reducer = coverage_io.Reducer(written.append)
-        for line in [
-            # Two decisions interleaved; the first evaluated twice alike.
-            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:a:1:T\n',
-            b'COVBRANCH:b:2:F\n', b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
-            # A condition overwritten before its decision closes: both
-            # payloads reach the hit set, the last state the evaluation.
-            b'COVBRANCH:a:1.1:T\n', b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
-            # A condition left open, carried into the next evaluation.
-            b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3:F\n',
-            # Output and malformed records pass as they are.
-            b'  COVLINE:a:9  \n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
-        ]:
+        stream = [
+            b'COVLINE:a:1.0:T\n', b'COVLINE:a:1.0:F\n',
+            b'COVEVAL2:a:1:F:F-;\n', b'COVLINE:b:2.0:T\n',
+            b'COVLINE:a:1.1:F\n', b'COVEVAL2:a:1:F:TF;\n',
+            # A partial evaluation contributes a hit but no completed vector.
+            b'COVLINE:b:2.1:T\n', b'COVLINE:b:2.0:F\n',
+            b'COVEVAL2:b:2:F:F--;\n',
+            b'hello\n', b'COVBRANCH:simple:3:T\n',
+        ]
+        for line in stream + stream[:8]:
             reducer.feed(line)
-        self.assertEqual(b''.join(written), b''.join([
-            b'COVLINE:a:1.0:T\n', b'COVLINE:b:2.0:F\n', b'COVLINE:a:1:T\n',
-            b'COVBRANCH:a:1.0:T\n', b'COVBRANCH:a:1:T\n',
-            b'COVLINE:b:2:F\n', b'COVBRANCH:b:2.0:F\n', b'COVBRANCH:b:2:F\n',
-            b'COVLINE:a:1.1:T\n', b'COVLINE:a:1.1:F\n', b'COVLINE:a:1:F\n',
-            b'COVBRANCH:a:1.1:F\n', b'COVBRANCH:a:1:F\n',
-            b'COVLINE:c:3.1:T\n', b'COVLINE:c:3.0:F\n', b'COVLINE:c:3:F\n',
-            b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3:F\n',
-            b'COVLINE:a:9\n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
-        ]))
+        self.assertEqual(written, stream[:-1] + [b'COVLINE:simple:3:T\n', stream[-1]])
+        self.assertEqual(len(reducer.evaluations), 4)
+        self.assertFalse(hasattr(reducer, 'pending'))
+
+    def test_legacy_compound_records_require_recapture(self):
+        import coverage_io
+        written = []
+        reducer = coverage_io.Reducer(written.append)
+        with self.assertRaisesRegex(ValueError, 'recapture'):
+            reducer.feed(b'COVBRANCH:m:4.0:T\n')
+        self.assertEqual(written, [])
+        self.assertEqual(reducer.evaluations, set())
+
+    def test_malformed_version_two_records_are_rejected(self):
+        import coverage_io
+        for record in (
+            b'COVEVAL2:m:4:T:TT', b'COVEVAL2:m:4:T:T;',
+            b'COVEVAL2:m:4:T:--;', b'COVEVAL2:m:4:T:TX;',
+            b'COVEVAL2:m:4:garbage:TT;', b'COVEVAL2:m:4.0:T:TT;',
+            b'COVEVAL2:m:0:T:TT;', b'COVEVAL2::4:T:TT;',
+            b'COVEVAL2:m:4:T:' + b'T' * 512 + b';',
+        ):
+            written = []
+            reducer = coverage_io.Reducer(written.append)
+            with self.assertRaisesRegex(ValueError, 'Malformed'):
+                reducer.feed(record + b'\n')
+            self.assertEqual(written, [])
+            self.assertEqual(reducer.evaluations, set())
+
+    def test_repeated_abandoned_and_complete_records_use_bounded_state(self):
+        import coverage_io
+        written = []
+        reducer = coverage_io.Reducer(written.append)
+        for _ in range(10000):
+            reducer.feed(b'COVLINE:m:4.1:T\n')
+            reducer.feed(b'COVEVAL2:m:4:F:F-;\n')
+            reducer.feed(b'COVEVAL2:m:4:F:TF;\n')
+        self.assertEqual(len(written), 3)
+        self.assertEqual(len(reducer.evaluations), 2)
+        self.assertEqual(len(reducer.payloads), 1)
+
+    def test_utf8_record_sizes_and_missing_newline_fail_closed(self):
+        import coverage_io
+        prefix = 'COVEVAL2:é:1:T:'.encode()
+        for size in (511, 512, 513):
+            record = prefix + b'T' * (size - len(prefix) - 2) + b';\n'
+            self.assertEqual(len(record), size)
+            written = []
+            reducer = coverage_io.Reducer(written.append)
+            if size <= 512:
+                reducer.feed(record)
+                self.assertEqual(written, [record])
+            else:
+                with self.assertRaises(ValueError):
+                    reducer.feed(record)
+                self.assertEqual(written, [])
+        for record in (b'COVEVAL2:m:4:T:TT', b'COVEVAL2:m:4:T:TT;'):
+            with self.assertRaises(ValueError):
+                coverage_io.Reducer(lambda value: None).feed(record)
 
     def test_invalid_outcome_is_rejected_before_it_adds_a_hit(self):
         import coverage_io
@@ -257,7 +324,7 @@ class CoverageIoTests(unittest.TestCase):
                     reducer.feed(b'COVBRANCH:' + probe + b':' + state + b'\n')
                 self.assertEqual(written, [])
                 self.assertEqual(reducer.payloads, set())
-                self.assertEqual(reducer.pending, {})
+                self.assertEqual(reducer.evaluations, set())
 
     def test_capture_cannot_fabricate_false_from_invalid_outcome(self):
         import gzip

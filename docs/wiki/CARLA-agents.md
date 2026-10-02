@@ -54,7 +54,19 @@ An agent keeps the id of its vehicle. Each call takes the world, so the agent re
 3. A piece that leads to a lane with no piece gets an extra edge to a loose end. A loose end has a negative id.
 4. Where a lane mark lets a vehicle cross to a driving lane of the same road, an edge of weight zero joins the two pieces.
 
-`trace_route` runs A* between the pieces under the two points. The heuristic is the straight distance between the nodes. The search takes the lowest cost first and, of equal costs, the lowest node id, as CARLA's C++ search does.
+`trace_route` finds a minimum-cost route between the pieces under the two points. The cost is the sum of the graph's sample counts. Lane changes cost zero. This objective does not measure meters, travel time, or the number of lane changes. Changing the sampling resolution can change the preferred route.
+
+The search uses Dijkstra's algorithm, which is A* with a zero heuristic. CARLA's Euclidean heuristic is in meters. It can exceed the remaining sample-count cost, especially across zero-cost lane changes. It can therefore select a more costly route. This port deliberately removes that heuristic, while it keeps the graph costs.
+
+The search takes the lowest accumulated cost first. Equal costs use the lowest node id. An equal-cost alternative keeps the first predecessor. This retains deterministic ties, but some routes can differ from CARLA's heuristic search. Zero-cost cycles do not change predecessors or cause an infinite search.
+
+Scenario replay and route comparisons against a CARLA server must allow for this difference. The current planner has no mode that restores CARLA's heuristic. The project keeps proven correctness fixes even when upstream results differ; see the [contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness).
+
+All edge costs must be nonnegative. Graph construction checks this once. Private graph edits must preserve this invariant before a search.
+
+The search keeps exact integer costs through the signed 64-bit range. Larger sums share an overflow marker that sorts after every supported cost. A reachable target raises an error only when its minimum cost exceeds that range. Overflow on other paths does not block a valid route or turn an unreachable target into an error.
+
+The destination piece is appended after the search, as before. Its fixed cost is the same for every alternative.
 
 Each step of the route gets a `RoadOption`. A step into a junction compares the heading before the junction with the heading at the end of the junction. Within 35 degrees the step is `OPTION_STRAIGHT`. Otherwise it is `OPTION_LEFT` or `OPTION_RIGHT`, against the other ways out of the junction.
 
@@ -143,6 +155,7 @@ A walker that moves less than 0.5 m in 4 s gets a new random route, as in CARLA.
 
 ## Differences from CARLA
 
+- The global route planner minimizes the graph's sample-count cost with a zero heuristic. It does not use CARLA's Euclidean heuristic. See [The route planner](#the-route-planner).
 - A local planner that reaches a dead end keeps returning full brake on later steps, even with automatic waypoint generation enabled. It does not read an empty queue.
 - The agents take the world at each call. CARLA's agents keep a reference to the world.
 - The random choices use a seeded minimal-standard generator, not Python's `random` module.
@@ -160,21 +173,25 @@ A walker that moves less than 0.5 m in 4 s gets a new random route, as in CARLA.
 
 ## Tests
 
-Four suites check the agents and the navigation against numbers from outside the port:
+The suites check the agents and the navigation against numbers from outside the port:
 
 - `tests/test_carla_agents.mojo`: the helpers by hand, and the PID controllers, the local planner and the route planner against CARLA's own Python agents. The Python runs on a mock `carla` module with the lanes of the test town worked out by hand.
+- `tests/test_carla_route_search.mojo`: hand-worked search counterexamples, integer cost boundaries, and an independent Floyd-Warshall all-pairs oracle. Public map queries also use that oracle. These checks establish graph-cost optimality without copying the production search.
+- `tests/test_carla_route_boundaries.mojo`: public query checks, loose ends at road and lane boundaries, and short-section and junction traces from analytic OpenDRIVE inputs.
 - `tests/test_carla_agents_drive.mojo`: a basic agent that reaches its destination, stops for a red light and stops behind a car. It also checks the three behavior types, car following, tailgating and the constant velocity agent.
 - `tests/test_carla_navigation.mojo`: the mesh, the paths, the crowd and the walker manager on a hand-made street.
 - `tests/test_carla_navigation_world.mojo`: the town's mesh, a walker that crosses only at the crosswalk, and a walker that waits for green.
 
 ## Search queues
 
-The route planner and the pedestrian navigation mesh use one private binary min-heap. A lower search score comes first. Equal scores use the lower node id, as before. Route searches skip entries for closed nodes. Pedestrian searches also skip an old score when a better route has replaced it, and can reopen a closed polygon. Partial paths still end at the closest reached polygon.
+The route planner and the pedestrian navigation mesh use one private binary min-heap. Route scores are unsigned 64-bit integers with a marker above the supported signed range. Pedestrian scores remain floating point. A lower search score comes first. Equal scores use the lower node id, as before. Route searches skip entries for closed nodes.
+
+Pedestrian searches also skip an old score when a better route has replaced it, and can reopen a closed polygon. Partial paths still end at the closest reached polygon.
 
 Area costs must be finite and at least 1. Both the setter and the read boundary check this, including direct changes to the public cost array. A NaN search score raises an error. Use an excluded area flag to block travel, as CARLA's filters do. This finite-cost check is a port safety rule; upstream Detour does not enforce it in its setter.
 
-Each queue push and pop costs O(log n) for n pending entries. This change does not speed up graph construction or spatial queries. It does not fix the separate topology and lane-boundary issues.
+Each queue push and pop costs O(log n) for n pending entries. This change does not speed up graph construction or spatial queries. [Lane endpoint corrections](CARLA-maps#lane-endpoints) retain dead-end topology and keep backward traversal on its starting road.
 
-Run `mojo run -I . bench/carla_search_queue_bench.mojo` to compare queue operations at 100, 1,000 and 10,000 entries. This benchmark excludes map lookup and geometry work. The tests compare complete generated route and navigation paths with the previous linear-selection search.
+Run `mojo run -I . bench/carla_search_queue_bench.mojo` to compare queue operations at 100, 1,000 and 10,000 entries. This benchmark excludes map lookup and geometry work. The tests compare complete generated paths with linear-selection references. The route reference uses the same zero-heuristic policy. A separate all-pairs oracle checks that route costs are minimum.
 
 Run `mojo run -I . bench/carla_route_search_bench.mojo` to compare complete searches on generated sparse and wide-frontier graphs with 100, 1,000 and 10,000 nodes. Graph construction is outside the timed region. Both searches must return the same path.

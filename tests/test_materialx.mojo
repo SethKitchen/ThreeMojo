@@ -1125,5 +1125,22 @@ def test_values_and_components_that_are_not_read_are_refused() raises:
         )
 
 
+def test_nodegraph_without_output_preserves_named_node_fallback() raises:
+    var assets = Assets()
+    with assert_raises(contains="nothing is named missing"):
+        _ = read_materialx(
+            (
+                '<materialx><standard_surface name="S"'
+                ' type="surfaceshader"><input name="base_color" type="color3"'
+                ' nodegraph="G" nodename="missing"'
+                ' /></standard_surface><surfacematerial name="M"'
+                ' type="material"><input name="surfaceshader"'
+                ' type="surfaceshader" nodename="S"'
+                " /></surfacematerial></materialx>"
+            ),
+            assets,
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

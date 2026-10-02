@@ -41,6 +41,7 @@ triangle shades and maps as though it were never cut.
 from math.bounds import Plane
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
+from std.math import isfinite
 
 
 struct ClipVertex(ImplicitlyCopyable):
@@ -145,17 +146,49 @@ def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
     return a + (b - a) * t
 
 
-def _inside(z: Float32, plane_z: Float32, keep_nearer: Bool) -> Bool:
+@fieldwise_init
+struct _DepthClipSide(ImplicitlyCopyable):
+    """The kept side of a camera-space depth plane, selected at compile time."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this names the farther or nearer side.
+
+        Returns:
+            True for either accepted side.
+        """
+        return self.value == 0 or self.value == 1
+
+
+# Camera depth grows along -z. Both sides include the plane itself.
+comptime _KEEP_FARTHER = _DepthClipSide(0)
+comptime _KEEP_NEARER = _DepthClipSide(1)
+
+
+def _inside[side: _DepthClipSide](z: Float32, plane_z: Float32) -> Bool:
     """Return True if `z` is on the kept side of the plane at `plane_z`.
 
     The camera looks down -z, so depth grows more negative with distance. The
     near plane keeps what is further away than it; the far plane keeps what is
     nearer. That is the only difference between the two, which is why one
     routine clips both.
+
+    Parameters:
+        side: The named side to keep. Invalid sides fail at compile time.
+
+    Args:
+        z: The camera-space z coordinate.
+        plane_z: The depth plane's camera-space z coordinate.
+
+    Returns:
+        Whether the coordinate is on the kept side, including the plane.
     """
-    if keep_nearer:
+    comptime assert side.is_valid(), "Invalid depth clipping side"
+    comptime if side.value == _KEEP_FARTHER.value:
         return z <= plane_z
-    return z >= plane_z
+    else:
+        return z >= plane_z
 
 
 def within_depth(z: Float32, near: Float32, far: Float32) -> Bool:
@@ -176,7 +209,7 @@ def within_depth(z: Float32, near: Float32, far: Float32) -> Bool:
         True if the corner is at or beyond the near plane and at or before
         the far one.
     """
-    return _inside(z, -near, True) and _inside(z, -far, False)
+    return _inside[_KEEP_FARTHER](z, -near) and _inside[_KEEP_NEARER](z, -far)
 
 
 def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
@@ -275,26 +308,48 @@ def _cross_side(a: ClipVertex, b: ClipVertex, plane: Plane) -> ClipVertex:
     return _mix_vertex(a, b, t)
 
 
-def _clip_side(polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+def _clip_side(
+    var polygon: List[ClipVertex], plane: Plane, keep_boundary: Bool = True
+) -> List[ClipVertex]:
     """Return `polygon` cut down to the side of `plane` it faces.
 
     `_clip_plane` for a plane that is not one of the camera's depth
     planes: the same walk, with the side of each corner read as a signed
-    distance rather than a z. A corner on the plane is kept.
+    distance rather than a z. By default, a corner on the plane is kept.
 
     Args:
-        polygon: The corners, in order.
+        polygon: The corners, in order, transferred to this pass.
         plane: The plane, facing the kept side.
+        keep_boundary: Whether corners on the plane are kept. Later union
+            pieces exclude boundaries assigned to an earlier piece.
 
     Returns:
         The surviving corners, in order.
     """
-    var kept = List[ClipVertex]()
+    # Most planes keep the polygon whole or discard it whole. Move its
+    # existing storage through the first case; the second needs no output
+    # storage. Only a crossing needs interpolation and a new polygon.
+    var inside = 0
     for position in range(len(polygon)):
+        var distance = plane.distance_to_point(polygon[position].position)
+        inside += Int(distance >= 0 if keep_boundary else distance > 0)
+    if inside == 0:
+        return List[ClipVertex]()
+    if inside == len(polygon):
+        return polygon^
+    var kept = List[ClipVertex](capacity=len(polygon) + 1)
+    # The whole-polygon cases returned; kept and rejected corners exist.
+    for position in range(len(polygon)):  # pragma: no branch
         var current = polygon[position]
         var following = polygon[(position + 1) % len(polygon)]
-        var current_in = plane.distance_to_point(current.position) >= 0
-        var following_in = plane.distance_to_point(following.position) >= 0
+        var current_distance = plane.distance_to_point(current.position)
+        var following_distance = plane.distance_to_point(following.position)
+        var current_in = (
+            current_distance >= 0 if keep_boundary else current_distance > 0
+        )
+        var following_in = (
+            following_distance >= 0 if keep_boundary else following_distance > 0
+        )
         if current_in:
             kept.append(current)
         if current_in != following_in:
@@ -321,9 +376,9 @@ def within_sides(position: Vector3, sides: List[Plane]) -> Bool:
     return True
 
 
-def _clip_plane(
-    polygon: List[ClipVertex], plane_z: Float32, keep_nearer: Bool
-) -> List[ClipVertex]:
+def _clip_plane[
+    side: _DepthClipSide
+](var polygon: List[ClipVertex], plane_z: Float32) -> List[ClipVertex]:
     """Return `polygon` cut down to the kept side of one plane.
 
     Sutherland-Hodgman: walk the edges, keeping every corner on the kept side
@@ -331,21 +386,35 @@ def _clip_plane(
     in gives an empty polygon out, which is what lets the two planes be
     applied one after the other without a special case between them.
 
+    Parameters:
+        side: `_KEEP_FARTHER` for the near-plane cut, or `_KEEP_NEARER`
+            for the far-plane cut. Invalid sides fail at compile time.
+
     Args:
-        polygon: The corners, in order.
+        polygon: The corners, in order, transferred to this pass.
         plane_z: Where the plane sits on the camera's z axis.
-        keep_nearer: True to keep what is nearer the camera than the plane
-            (the far plane), False to keep what is further (the near plane).
 
     Returns:
         The surviving corners, in order.
     """
-    var kept = List[ClipVertex]()
+    comptime assert side.is_valid(), "Invalid depth clipping side"
+    # Most planes keep the polygon whole or discard it whole. Move its
+    # existing storage through the first case; the second needs no output
+    # storage. Only a crossing needs interpolation and a new polygon.
+    var inside = 0
     for position in range(len(polygon)):
+        inside += Int(_inside[side](polygon[position].position.z, plane_z))
+    if inside == 0:
+        return List[ClipVertex]()
+    if inside == len(polygon):
+        return polygon^
+    var kept = List[ClipVertex](capacity=len(polygon) + 1)
+    # The whole-polygon cases returned; kept and rejected corners exist.
+    for position in range(len(polygon)):  # pragma: no branch
         var current = polygon[position]
         var following = polygon[(position + 1) % len(polygon)]
-        var current_in = _inside(current.position.z, plane_z, keep_nearer)
-        var following_in = _inside(following.position.z, plane_z, keep_nearer)
+        var current_in = _inside[side](current.position.z, plane_z)
+        var following_in = _inside[side](following.position.z, plane_z)
         if current_in:
             kept.append(current)
         if current_in != following_in:
@@ -383,14 +452,16 @@ def clip_depth(
             none to cut against the depth planes alone, and any clipping
             planes that each cut on their own.
         any_of: Clipping planes of which a kept point needs to be in front
-            of only one. None, the default, keeps everything.
+            of only one. None, the default, keeps everything. A plane
+            boundary belongs to its first piece alone.
 
     Returns:
         Corners three at a time: empty if nothing survives, otherwise three
         per triangle of the fan the clipped polygon was cut into.
 
     Raises:
-        Error: If `far` does not lie beyond `near`, which would leave the
+        Error: If either depth plane is not finite, or `far` does not lie
+            beyond `near`, which would leave the
             frustum inside out.
 
             A `near` of zero or less is fine here. This clipper's job is to
@@ -402,8 +473,8 @@ def clip_depth(
             prohibition lives in `math.projection.perspective` and
             `PerspectiveCamera`, which both still refuse it.
     """
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    if not isfinite(near) or not isfinite(far) or far <= near:
+        raise Error("The depth planes must be finite, with far beyond near")
     return clip_ordered(a, b, c, near, far, sides, any_of)
 
 
@@ -434,27 +505,29 @@ def clip_ordered(
     Returns:
         Corners three at a time, as `clip_depth` returns them.
     """
-    var corners = List[ClipVertex]()
-    corners.append(a)
-    corners.append(b)
-    corners.append(c)
+    var corners: List[ClipVertex] = [a, b, c]
 
     # Near first, so the far pass usually gets an empty or already-small
     # polygon. Order does not change the result, only the work.
-    var in_front = _clip_plane(corners, -near, True)
-    var within = _clip_plane(in_front, -far, False)
+    var in_front = _clip_plane[_KEEP_FARTHER](corners^, -near)
+    var within = _clip_plane[_KEEP_NEARER](in_front^, -far)
     for side in range(len(sides)):
-        within = _clip_side(within, sides[side])
+        within = _clip_side(within^, sides[side])
 
     var triangles = List[ClipVertex]()
     if len(any_of) == 0:
+        # One triangle already has the fan's order. Keep its buffer.
+        if len(within) == 3:
+            return within^
         _fan(within, triangles)
         return triangles^
     # Not empty: the return above took that case.
     for index in range(len(any_of)):  # pragma: no branch
-        var piece = _clip_side(within, any_of[index])
+        var piece = _clip_side(within.copy(), any_of[index])
         for earlier in range(index):
-            piece = _clip_side(piece, flipped(any_of[earlier]))
+            piece = _clip_side(
+                piece^, flipped(any_of[earlier]), keep_boundary=False
+            )
         _fan(piece, triangles)
     return triangles^
 
@@ -546,24 +619,24 @@ def clip_segment(
         pair per plane of `any_of`.
 
     Raises:
-        Error: If `far` does not lie beyond `near`, which would leave the
+        Error: If either depth plane is not finite, or `far` does not lie
+            beyond `near`, which would leave the
             frustum inside out; see `clip_depth` on a near plane behind
             the camera.
     """
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    if not isfinite(near) or not isfinite(far) or far <= near:
+        raise Error("The depth planes must be finite, with far beyond near")
 
     var first = a
     var second = b
     # Near, then far, as `clip_depth` does them. Each pass either leaves
     # the segment alone, moves one end onto the plane, or throws it away.
     var planes: List[Float32] = [-near, -far]
-    var keep_nearer: List[Bool] = [True, False]
-    for pass_index in range(2):  # pragma: no branch
+    comptime for pass_index in range(2):
+        comptime side = _KEEP_FARTHER if pass_index == 0 else _KEEP_NEARER
         var plane_z = planes[pass_index]
-        var nearer = keep_nearer[pass_index]
-        var first_in = _inside(first.position.z, plane_z, nearer)
-        var second_in = _inside(second.position.z, plane_z, nearer)
+        var first_in = _inside[side](first.position.z, plane_z)
+        var second_in = _inside[side](second.position.z, plane_z)
         if not first_in and not second_in:
             return List[ClipVertex]()
         if not first_in:
@@ -583,17 +656,22 @@ def clip_segment(
     for index in range(len(any_of)):  # pragma: no branch
         var piece = _cut_segment(kept, any_of[index])
         for earlier in range(index):
-            piece = _cut_segment(piece, flipped(any_of[earlier]))
+            piece = _cut_segment(
+                piece, flipped(any_of[earlier]), keep_boundary=False
+            )
         pieces.extend(Span(piece))
     return pieces^
 
 
-def _cut_segment(segment: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+def _cut_segment(
+    segment: List[ClipVertex], plane: Plane, keep_boundary: Bool = True
+) -> List[ClipVertex]:
     """Return a segment cut down to the side of a plane it faces.
 
     Args:
         segment: Two ends, or none.
         plane: The plane, facing the kept side.
+        keep_boundary: Whether corners on the plane are kept.
 
     Returns:
         The two ends of what survives, or none.
@@ -602,8 +680,12 @@ def _cut_segment(segment: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
         return List[ClipVertex]()
     var first = segment[0]
     var second = segment[1]
-    var first_in = plane.distance_to_point(first.position) >= 0
-    var second_in = plane.distance_to_point(second.position) >= 0
+    var first_distance = plane.distance_to_point(first.position)
+    var second_distance = plane.distance_to_point(second.position)
+    var first_in = first_distance >= 0 if keep_boundary else first_distance > 0
+    var second_in = (
+        second_distance >= 0 if keep_boundary else second_distance > 0
+    )
     if not first_in and not second_in:
         return List[ClipVertex]()
     if not first_in:

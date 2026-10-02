@@ -408,5 +408,16 @@ def test_a_custom_sort_orders_the_batch() raises:
         _ = renderer.prepare(a_scene_with(group^), assets, a_camera())
 
 
+def test_resizing_without_deleted_instances_keeps_live_instances() raises:
+    var group = batch()
+    _ = group.add_instance(GeometryId(0))
+    group.set_instance_count(2)
+    assert_equal(group.count(), 1)
+    assert_equal(group.max_instance_count, 2)
+    group.delete_instance(0)
+    group.set_instance_count(0)
+    assert_equal(group.count(), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

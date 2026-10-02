@@ -606,5 +606,19 @@ def test_a_crisp_path_an_empty_scene_and_a_near_corner() raises:
     assert_true('shape-rendering="crispEdges"' in image.text())
 
 
+def test_each_lit_surface_kind_produces_a_filled_face() raises:
+    from materials.material import PHONG, STANDARD, PHYSICAL
+
+    for kind in [PHONG, STANDARD, PHYSICAL]:
+        var scene = Scene()
+        var assets = Assets()
+        scene.add_light(ambient_light(Color(255, 255, 255)))
+        _small(scene, assets, Material(Color(255, 0, 0), kind=kind))
+        var renderer = SVGRenderer(10, 10)
+        var image = renderer.render(scene, assets, _near_camera())
+        assert_equal(len(image.paths), 1)
+        assert_true(image.paths[0].style.startswith("fill:rgb(255,0,0)"))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

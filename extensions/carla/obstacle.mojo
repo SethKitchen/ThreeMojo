@@ -51,6 +51,7 @@ from extensions.carla.sensor import SemanticTag
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_nonnegative,
 )
 from extensions.carla.sensor_rays import surface_tag_of_body
 
@@ -100,8 +101,7 @@ struct ObstacleDescription(ImplicitlyCopyable):
             The settings. A missing attribute keeps its default.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var d = ObstacleDescription()
         d.distance = Length(attribute_float(attributes, "distance", 5), METER)
@@ -110,6 +110,8 @@ struct ObstacleDescription(ImplicitlyCopyable):
         )
         d.only_dynamics = attribute_bool(attributes, "only_dynamics", False)
         d.debug_linetrace = attribute_bool(attributes, "debug_linetrace", False)
+        validate_sensor_nonnegative(d.distance.value, "distance")
+        validate_sensor_nonnegative(d.hit_radius.value, "hit_radius")
         return d
 
 

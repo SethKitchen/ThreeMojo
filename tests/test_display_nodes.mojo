@@ -244,5 +244,12 @@ def test_each_display_pass_runs_in_the_composer() raises:
         assert_equal(image.width, W)
 
 
+def test_down_sample_ratio_must_be_positive() raises:
+    var bad = DisplaySettings()
+    bad.down_sample_ratio = 0
+    with assert_raises(contains="positive"):
+        check_display(bad)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

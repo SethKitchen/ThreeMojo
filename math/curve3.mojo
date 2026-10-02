@@ -54,6 +54,11 @@ turns back. Frames where two steps point straight opposite ways, which
 leave no axis to turn about.
 """
 
+from math.curve_checks import (
+    check_curve_parameter,
+    curve_sample_count,
+    curve_count_product,
+)
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, u_to_t
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -343,6 +348,21 @@ struct Curve3(Copyable, Movable):
         )
         return _hermite(p1, p2, t1 * dt1, t2 * dt1, weight)
 
+    def _validate(self) raises:
+        """Check mutable dispatch and storage in constant time."""
+        if not self.kind.is_valid():
+            raise Error("A curve needs a kind that exists")
+        if not self.curve_type.is_valid():
+            raise Error("A Catmull-Rom curve needs a type that exists")
+        var wanted = self.kind.control_count()
+        if wanted == 0:
+            if len(self.points) < 2:
+                raise Error("A spline needs at least two points")
+        elif len(self.points) != wanted:
+            raise Error("A curve's points must match its kind")
+        if self.closed and self.kind != CATMULL_ROM3:
+            raise Error("Only a Catmull-Rom curve can close")
+
     def point(self, t: Float32) raises -> Vector3:
         """Return the point at `t` along this curve's own parameter.
 
@@ -354,10 +374,11 @@ struct Curve3(Copyable, Movable):
             The point, in meters.
 
         Raises:
-            Error: If `t` falls outside zero through one.
+            Error: If `t` is not finite or falls outside zero through one,
+                or the mutable curve is not valid.
         """
-        if t < 0 or t > 1:
-            raise Error("A curve's t must lie from zero through one")
+        check_curve_parameter(Float64(t))
+        self._validate()
         if self.kind == LINE3:
             # three.js's `LineCurve3.getPoint` returns the end itself at
             # one, rather than the start plus the whole run.
@@ -409,11 +430,12 @@ struct Curve3(Copyable, Movable):
             The direction, of unit length.
 
         Raises:
-            Error: If `t` falls outside zero through one, or if the curve
+            Error: If `t` is not finite or outside zero through one, the
+                mutable curve is not valid, or the curve
                 stops at `t` and has no direction there.
         """
-        if t < 0 or t > 1:
-            raise Error("A curve's t must lie from zero through one")
+        check_curve_parameter(Float64(t))
+        self._validate()
         var slope = self._slope(t)
         if slope.length() == 0:
             raise Error("A curve has no direction where it turns back")
@@ -431,12 +453,12 @@ struct Curve3(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
-        if divisions < 1:
-            raise Error("A curve needs at least one division")
+        var sample_count = curve_sample_count(divisions)
         var out = List[Vector3]()
-        for index in range(divisions + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             # At least one division, so this runs.
             out.append(self.point(Float32(index) / Float32(divisions)))
         return out^
@@ -453,7 +475,8 @@ struct Curve3(Copyable, Movable):
             last the curve's whole length.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
         var samples = self.sample(divisions)
         var out = List[Float32]()
@@ -464,16 +487,20 @@ struct Curve3(Copyable, Movable):
             out.append(out[index - 1] + step)
         return out^
 
-    def arc_divisions(self) -> Int:
+    def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its
         length is measured: `ARC_DIVISIONS`, or `SEGMENT_SAMPLES` for each
         segment of a Catmull-Rom spline if that is more.
 
         Returns:
             The number of runs, never fewer than `ARC_DIVISIONS`.
+
+        Raises:
+            Error: If the mutable curve is not valid or its count overflows.
         """
+        self._validate()
         if self.kind == CATMULL_ROM3:
-            var wanted = self.segments() * SEGMENT_SAMPLES
+            var wanted = curve_count_product(self.segments(), SEGMENT_SAMPLES)
             if wanted > ARC_DIVISIONS:
                 return wanted
         return ARC_DIVISIONS
@@ -486,8 +513,8 @@ struct Curve3(Copyable, Movable):
             The distances, in meters, from zero to the whole length.
 
         Raises:
-            Error: If a sample falls outside the curve, which cannot
-                happen for a curve that was constructed.
+            Error: If the mutable curve is not valid or a sample count
+                cannot fit in Int.
         """
         return self.lengths(self.arc_divisions())
 
@@ -499,8 +526,8 @@ struct Curve3(Copyable, Movable):
             an approximation from below.
 
         Raises:
-            Error: If a sample falls outside the curve, which cannot
-                happen for a curve that was constructed.
+            Error: If the mutable curve is not valid or a sample count
+                cannot fit in Int.
         """
         var table = self.arc_table()
         return Length(table[len(table) - 1], METER)
@@ -516,10 +543,10 @@ struct Curve3(Copyable, Movable):
             The point, in meters.
 
         Raises:
-            Error: If `u` falls outside zero through one.
+            Error: If `u` is not finite or falls outside zero through one,
+                or the mutable curve is not valid.
         """
-        if u < 0 or u > 1:
-            raise Error("A curve's u must lie from zero through one")
+        check_curve_parameter(Float64(u))
         return self.point(u_to_t(self.arc_table(), u))
 
     def tangent_at(self, u: Float32) raises -> Vector3:
@@ -533,11 +560,11 @@ struct Curve3(Copyable, Movable):
             The direction, of unit length.
 
         Raises:
-            Error: If `u` falls outside zero through one, or the curve
+            Error: If `u` is not finite or outside zero through one, the
+                mutable curve is not valid, or the curve
                 stops there.
         """
-        if u < 0 or u > 1:
-            raise Error("A curve's u must lie from zero through one")
+        check_curve_parameter(Float64(u))
         return self.tangent(u_to_t(self.arc_table(), u))
 
     def spaced_points(self, divisions: Int) raises -> List[Vector3]:
@@ -552,13 +579,13 @@ struct Curve3(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
-        if divisions < 1:
-            raise Error("A curve needs at least one division")
+        var sample_count = curve_sample_count(divisions)
         var table = self.arc_table()
         var out = List[Vector3]()
-        for index in range(divisions + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             # At least one division, so this runs.
             var u = Float32(index) / Float32(divisions)
             out.append(self.point(u_to_t(table, u)))
@@ -578,14 +605,14 @@ struct Curve3(Copyable, Movable):
             The tangents, normals and binormals, `segments + 1` of each.
 
         Raises:
-            Error: If `segments` is less than one, the curve stops at one
-                of the steps, or two steps point straight opposite ways.
+            Error: If `segments` is less than one, its sample count cannot
+                fit in Int, the curve is not valid or stops at a step, or
+                two steps point straight opposite ways.
         """
-        if segments < 1:
-            raise Error("A curve needs at least one segment for frames")
+        var sample_count = curve_sample_count(segments)
         var table = self.arc_table()
         var tangents = List[Vector3]()
-        for index in range(segments + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             # At least one segment, so this runs.
             var u = Float32(index) / Float32(segments)
             tangents.append(self.tangent(u_to_t(table, u)))
@@ -916,11 +943,10 @@ struct CurvePath3(Copyable, Movable):
         three.js's `CurvePath.getPoint` before its last line.
 
         Raises:
-            Error: If the path has no curves, or `t` falls outside zero
-                through one.
+            Error: If the path has no curves, a curve is not valid, or t is
+                not finite or outside zero through one.
         """
-        if t < 0 or t > 1:
-            raise Error("A curve path's t must lie from zero through one")
+        check_curve_parameter(Float64(t))
         var lengths = self.curve_lengths()
         var last = len(lengths) - 1
         var target = t * lengths[last]
@@ -946,8 +972,8 @@ struct CurvePath3(Copyable, Movable):
             The point, in meters.
 
         Raises:
-            Error: If the path has no curves, or `t` falls outside zero
-                through one.
+            Error: If the path has no curves, a curve is not valid, or t is
+                not finite or outside zero through one.
         """
         var place = self._locate(t)
         return self.curves[place.curve].point_at(place.u)
@@ -963,8 +989,8 @@ struct CurvePath3(Copyable, Movable):
             The direction, of unit length.
 
         Raises:
-            Error: If the path has no curves, `t` falls outside zero
-                through one, or the curve stops there.
+            Error: If the path has no curves, t is not finite or outside zero
+                through one, or a curve is not valid or stops there.
         """
         var place = self._locate(t)
         return self.curves[place.curve].tangent_at(place.u)
@@ -984,12 +1010,17 @@ struct CurvePath3(Copyable, Movable):
             The points, in meters.
 
         Raises:
-            Error: If the path has no curves, or `divisions` is less than
-                one.
+            Error: If the path has no curves, a curve is not valid, divisions
+                is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
         if divisions < 1:
             raise Error("A curve path needs at least one division")
+        # Check every per-curve count before the first curve is sampled.
+        for index in range(len(self.curves)):  # pragma: no branch
+            self.curves[index]._validate()
+            if self.curves[index].kind != LINE3:
+                _ = curve_sample_count(divisions)
         var out = List[Vector3]()
         for index in range(len(self.curves)):  # pragma: no branch
             # At least one curve, so this runs.
@@ -1017,14 +1048,13 @@ struct CurvePath3(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If the path has no curves, or `divisions` is less than
-                one.
+            Error: If the path has no curves, a curve is not valid, divisions
+                is less than one, or a sample count cannot fit in Int.
         """
         self._need_curves()
-        if divisions < 1:
-            raise Error("A curve path needs at least one division")
+        var sample_count = curve_sample_count(divisions)
         var out = List[Vector3]()
-        for index in range(divisions + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             # At least one division, so this runs.
             out.append(self.point(Float32(index) / Float32(divisions)))
         return out^
@@ -1043,14 +1073,13 @@ struct CurvePath3(Copyable, Movable):
             The tangents, normals and binormals, `segments + 1` of each.
 
         Raises:
-            Error: If the path has no curves, `segments` is less than one,
-                a curve stops at one of the steps, or two steps point
-                straight opposite ways.
+            Error: If the path has no curves, segments is less than one, a
+                sample count cannot fit in Int, a curve is not valid or
+                stops at a step, or two steps point straight opposite ways.
         """
-        if segments < 1:
-            raise Error("A curve path needs at least one segment for frames")
+        var sample_count = curve_sample_count(segments)
         var tangents = List[Vector3]()
-        for index in range(segments + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             # At least one segment, so this runs.
             tangents.append(self.tangent(Float32(index) / Float32(segments)))
         return transport_frames(tangents, closed)

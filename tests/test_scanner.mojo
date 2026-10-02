@@ -197,11 +197,8 @@ def test_multi_line_import_is_skipped_entirely() raises:
 # --- traits -----------------------------------------------------------------
 
 
-def test_a_trait_method_body_is_not_executable() raises:
-    # A trait declares what an implementation must provide; its bodies are a
-    # docstring and `...`, and never run. Probing them emitted a call to the
-    # probe function from inside a trait, where it is not in scope, and every
-    # file importing that trait stopped compiling.
+def test_an_abstract_trait_method_is_not_executable() raises:
+    # An abstract declaration is a docstring and ellipsis, not runtime code.
     var scanner = Scanner()
     assert_false(scanner.is_executable("trait Camera(Copyable, Movable):"))
     assert_false(scanner.is_executable('    """What a renderer needs."""'))
@@ -269,6 +266,86 @@ def test_escaped_quotes_and_backslashes_do_not_hide_the_next_line() raises:
         ),
         [2, 3],
     )
+
+
+def test_triple_quotes_keep_brackets_and_comments_inside_literals() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'def f():\n    if (a or text == """hello" and )#[word"""):\n'
+                "        return 1\n    return 0\n"
+            )
+        ),
+        [2, 3, 4],
+    )
+
+
+def test_multiline_literals_resume_at_the_next_statement() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'def f():\n    if text == """hello"\n# ) and or\nworld""":\n'
+                "        return 1\n    return 0\n"
+            )
+        ),
+        [2, 5, 6],
+    )
+    assert_equal(
+        executable_lines(
+            String(
+                "def f():\n    var text = '''hello'\n# ] and or\nworld'''\n"
+                "    return 1\n"
+            )
+        ),
+        [2, 5],
+    )
+
+
+def test_multiline_shader_constant_does_not_hide_following_functions() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'comptime SHADER = """void main() {\n# } [\n}\n"""\n'
+                "def real():\n    if value:\n        return 1\n"
+            )
+        ),
+        [6, 7],
+    )
+
+
+def test_default_and_abstract_methods_keep_separate_scopes() raises:
+    var source = String(
+        'trait Defaults:\n    """The trait."""\n'
+        '    def abstract(self):\n        """Required."""\n'
+        "        ...  # no implementation\n"
+        '    def concrete(self):\n        """Default.\n'
+        '        if prose:\n        """\n'
+        "        if ready and valid:\n            return 1\n"
+        "        return 0\n"
+        "    comptime field: Int\n"
+        "    def second(self):\n        ...\n"
+        "def after():\n    return 2\n"
+    )
+    assert_equal(executable_lines(source), [10, 11, 12, 17])
+
+
+def test_default_entry_skips_docs_and_tracks_nested_definitions() raises:
+    var scanner = Scanner()
+    _ = scanner.is_executable("trait Defaults:")
+    _ = scanner.is_executable("    def missing(self):")
+    _ = scanner.is_executable("        ... # abstract")
+    assert_equal(scanner.entry_number, -1)
+    _ = scanner.is_executable("    def default(self):")
+    _ = scanner.is_executable('        """Kept first."""')
+    assert_equal(scanner.entry_number, -1)
+    _ = scanner.is_executable("        def inner():")
+    assert_equal(scanner.entry_number, 1)
+    assert_equal(scanner.entry_indent, 8)
+    assert_equal(scanner.function_number(), 2)
+    assert_true(scanner.is_executable("            return True"))
+    assert_equal(scanner.entry_number, 2)
+    assert_true(scanner.is_executable("        return inner()"))
+    assert_equal(scanner.function_number(), 1)
 
 
 def main() raises:

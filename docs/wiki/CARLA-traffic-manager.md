@@ -85,6 +85,8 @@ The localization stage keeps a path for each vehicle: a list of map nodes, neare
 
 The collision stage finds the actor that each vehicle must yield to. The candidates share a geodesic grid with the vehicle's path and are within 20 m plus 2.65 s of its speed. Each candidate is compared by the distances between the two boxes and the two geodesic boundaries. A geodesic boundary is the box plus a strip of the path ahead, as wide as the vehicle.
 
+The pair cache stores the smaller actor id as the reference. Each read returns the distances in the requested actor order. Repeated reads do not change the result. The strip includes the final buffered waypoint when the requested length reaches the end of the path. Clearing the cycle cache or resetting the collision stage drops both cached distances and boundaries.
+
 ### Traffic lights and signs
 
 A vehicle at a red or a yellow light stops. At a junction without a light, a vehicle that the world tells to stop joins a queue for the junction. It stops fully, waits 2 s, and goes when it is first in the queue.
@@ -156,6 +158,15 @@ Each node has a road option: straight, left or right through a junction, lane fo
 
 ## Differences from CARLA
 
+These corrections can change hazard decisions, vehicle controls and paths
+compared with a CARLA server. The same seed does not guarantee identical
+scenario replay. There is no legacy-bug compatibility mode. The
+[contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness)
+explain why proven corrections take priority over upstream defects.
+
+- Collision cache reads preserve the requested actor order. The geodesic boundary includes the final buffered waypoint. These correct two defects in the pinned CARLA source.
+
+- Graph walks stop at repeated waypoints. A vehicle's path does not add a place already in its buffer, including on later updates. Unreachable imported path points and route options stay pending. A walk trapped in a cycle has no safe point. Later updates retry incomplete junction walks. Fork selection skips branches without an exit and keeps the first branch if none has an exit.
 - Stopping or resetting clears actor tracking and transient junction, hero and physics caches. A new map cannot inherit cached waypoint indices from the old one. Parameter settings remain configured.
 - The remote traffic manager, its server and its client are not ported. They are a network transport.
 - Asynchronous mode has no worker thread. The caller calls `step`.

@@ -656,5 +656,16 @@ def test_uvs_debug_writes_a_label_at_the_edge_twice() raises:
         _ = uvs_debug(BufferGeometry(), 32)
 
 
+def test_a_piece_moved_only_in_y_or_z_uses_its_new_position() raises:
+    var breaker = ConvexObjectBreaker()
+    for axis in range(2):
+        var piece = _block(2, Vector3(0, 0, 0), Quaternion(0, 0, 0, 1), 1)
+        var normal = Vector3(0, 1, 0) if axis == 0 else Vector3(0, 0, 1)
+        piece.position = normal * 5
+        var halves = breaker.cut_by_plane(piece, Plane(normal, -5))
+        assert_true(Bool(halves[0]))
+        assert_true(Bool(halves[1]))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

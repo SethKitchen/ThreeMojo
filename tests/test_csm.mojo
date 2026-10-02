@@ -474,5 +474,17 @@ def test_a_csm_lights_a_surface_once_at_every_depth() raises:
         )
 
 
+def test_csm_requires_positive_count_and_matching_targets() raises:
+    var scene = Scene()
+    var camera = eye()
+    var csm = CSM(scene, camera)
+    scene.lights[csm.lights[0]].target = csm.nodes[0]
+    with assert_raises(contains="not in this scene"):
+        csm.update(scene, camera)
+    csm.cascades = 0
+    with assert_raises(contains="complete mapping"):
+        csm.update(scene, camera)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

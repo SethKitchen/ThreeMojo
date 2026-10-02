@@ -20,7 +20,7 @@ from coverage.mcdc import (
     find_trace,
     is_mcdc_covered,
 )
-from coverage.runtime import BRANCH_PREFIX, LINE_PREFIX
+from coverage.runtime import BRANCH_PREFIX, EVALUATION_PREFIX, LINE_PREFIX
 from std.collections import Set
 
 
@@ -245,6 +245,8 @@ def absorb_capture(
             carried = List[UInt8](Span(carried)[end:])
     if len(carried) > 0:
         var line = String(unsafe_from_utf8=carried)
+        if line.strip().startswith(EVALUATION_PREFIX):
+            raise Error("Unterminated evaluation record")
         record_hit(hits, line)
         parser.feed(line)
 

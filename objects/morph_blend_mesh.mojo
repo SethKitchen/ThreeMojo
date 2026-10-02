@@ -196,14 +196,16 @@ struct MorphBlendMesh(Movable):
 
         A target whose name has a word and a number, `run1` or `run_1`,
         joins the animation of that word. Each animation runs from the
-        first target of its word to the last.
+        first target of its word to the last. Dictionary values select
+        the target indices; dictionary insertion order does not.
 
         Args:
             scene: The scene the mesh is in.
             fps: Frames a second, for every animation made.
 
         Raises:
-            Error: If the scene has no such mesh.
+            Error: If the scene has no such mesh, or a named target index
+                is outside its morph weights.
         """
         _check(self.mesh, scene)
         ref dictionary = scene.meshes[self.mesh.value].morph_target_dictionary
@@ -211,10 +213,16 @@ struct MorphBlendMesh(Movable):
         var starts = List[Int]()
         var ends = List[Int]()
         var first = String()
-        var index = 0
         for entry in dictionary.items():
+            var index = entry.value
             var word = _animation_word(entry.key)
             if Bool(word):
+                if index < 0 or index >= len(
+                    scene.meshes[self.mesh.value].morph_influences
+                ):
+                    raise Error(
+                        "An animation target index must name a morph weight"
+                    )
                 var found = -1
                 for at in range(len(words)):
                     if words[at] == word.value():
@@ -228,7 +236,6 @@ struct MorphBlendMesh(Movable):
                 ends[found] = max(ends[found], index)
                 if first == "":
                     first = word.value()
-            index += 1
         for at in range(len(words)):
             self.create_animation(words[at], starts[at], ends[at], fps)
         self.first_animation = first

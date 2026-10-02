@@ -180,8 +180,12 @@ def test_following_a_slower_vehicle() raises:
     tm.register_vehicles(world, [car, front])
     tm.set_desired_speed(front, Velocity(3.0))
     tm.set_auto_lane_change(car, False)
+    var initial_gap = (
+        world.get_location(front).x - world.get_location(car).x - 4.8
+    )
     var least = Float32(100)
     var halfway = Float32(0)
+    var front_halfway = Float32(0)
     for k in range(400):
         _ = tm.tick(world)
         least = min(
@@ -189,12 +193,20 @@ def test_following_a_slower_vehicle() raises:
         )
         if k == 199:
             halfway = world.get_location(car).x
+            front_halfway = world.get_location(front).x
     # Never closer than the 2 m gap, less the 0.2 m braking margin and a
-    # little braking. It closes in at 12 km/h and brakes, so its speed
-    # swings; over the last 10 s it keeps the front car's 3 m/s.
+    # little braking. Both controllers change speed during the run. Compare
+    # progress over the same last 10 s using the world's positions, rather
+    # than assuming the front car travels at its exact commanded speed.
     assert_true(least > 1.0)
+    var final_gap = (
+        world.get_location(front).x - world.get_location(car).x - 4.8
+    )
+    assert_true(final_gap < initial_gap)
+    var front_average = (world.get_location(front).x - front_halfway) / 10
+    assert_almost_equal(front_average, 3.0, atol=0.25)
     assert_almost_equal(
-        (world.get_location(car).x - halfway) / 10, 3.0, atol=0.25
+        (world.get_location(car).x - halfway) / 10, front_average, atol=0.25
     )
 
 
@@ -705,6 +717,30 @@ def test_the_longest_idle_vehicle_goes_first() raises:
     assert_false(world.is_alive(second))
 
 
+def test_physics_toggle_stops_and_restores_effective_mass() raises:
+    var world = _world(straight_town())
+    var car = _spawn(world, 20, 1.75)
+    var id = world.actor(car).body.value
+    var mass = world.physics.world.bodies[id].mass
+    var tensor = world.physics.world.bodies[id].inverse_inertia
+    world.set_target_velocity(car, Vector3(3, 0, 0))
+    set_simulate_physics(world, car, False)
+    assert_equal(world.get_velocity(car).length_sq(), 0)
+    assert_equal(world.physics.world.bodies[id].inverse_mass, 0)
+    world.add_impulse(car, Vector3(mass, 0, 0))
+    assert_equal(world.get_velocity(car).length_sq(), 0)
+    set_simulate_physics(world, car, False)
+    set_simulate_physics(world, car, True)
+    assert_equal(world.physics.world.bodies[id].mass, mass)
+    for i in range(9):
+        assert_equal(
+            world.physics.world.bodies[id].inverse_inertia.elements[i],
+            tensor.elements[i],
+        )
+    world.add_impulse(car, Vector3(mass, 0, 0))
+    assert_almost_equal(world.get_velocity(car).x, 1, atol=1e-6)
+
+
 def test_unregister_a_large_vehicle() raises:
     var world = _world(straight_town())
     var tm = _manager(world)
@@ -713,6 +749,33 @@ def test_unregister_a_large_vehicle() raises:
     assert_true(bus.value in tm.shared.large_vehicles)
     tm.unregister_vehicles([bus])
     assert_false(bus.value in tm.shared.large_vehicles)
+
+
+def test_stuck_selection_never_chooses_a_registered_hero() raises:
+    var world = _world(straight_town())
+    var tm = _manager(world)
+    var hero = _spawn(world, 20, 1.75, "hero")
+    tm.register_vehicles(world, [hero])
+    tm.set_desired_speed(hero, Velocity(0))
+    _run(tm, world, 40)
+    var now = tm.alsm.current_time
+    # An old idle entry can survive a role change. With heroes alone,
+    # there is no eligible candidate even if that entry looks stuck.
+    tm.alsm.idle_time[hero.value] = now - 300
+    tm.alsm.elapsed_last_actor_destruction = now - 20
+    _run(tm, world, 1)
+    assert_true(world.is_alive(hero))
+    var ordinary = _spawn(world, 60, 1.75)
+    tm.register_vehicles(world, [ordinary])
+    tm.set_desired_speed(ordinary, Velocity(0))
+    _run(tm, world, 40)
+    now = tm.alsm.current_time
+    tm.alsm.idle_time[hero.value] = now - 300
+    tm.alsm.idle_time[ordinary.value] = now - 150
+    tm.alsm.elapsed_last_actor_destruction = now - 20
+    _run(tm, world, 1)
+    assert_true(world.is_alive(hero))
+    assert_false(world.is_alive(ordinary))
 
 
 def main() raises:

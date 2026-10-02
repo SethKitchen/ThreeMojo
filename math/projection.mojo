@@ -112,13 +112,11 @@ def perspective(
     # The -1 in the bottom row is what copies z into w, and dividing by w is
     # what makes distant things small. Everything else is scale and offset.
     matrix.set(x, 0, a, 0, 0, y, b, 0, 0, 0, c, d, 0, 0, -1, 0)
+    # With finite 0 < near < far, far - near cannot overflow. Only the
+    # horizontal and vertical extents need a finite-difference check.
     if (
         not matrix.is_finite()
-        or not (
-            isfinite(right - left)
-            and isfinite(top - bottom)
-            and isfinite(far - near)
-        )
+        or not (isfinite(right - left) and isfinite(top - bottom))
         or x == 0
         or y == 0
         or d == 0
@@ -238,12 +236,13 @@ def orthographic(
             0,
             1,
         )
-    if (
-        not matrix.is_finite()
-        or matrix.elements[0] == 0
-        or matrix.elements[5] == 0
-        or matrix.elements[10] == 0
-    ):
+    # Every finite ordered extent is at most 2 * Float64(FLT_MAX).
+    # Therefore the wide diagonal has magnitude at least 1 / FLT_MAX,
+    # a nonzero Float32 subnormal under IEEE gradual underflow. The direct
+    # path likewise has 1 / finite_extent >= 1 / FLT_MAX; overflowing
+    # extents take the wide path above. Only overflow, not a zero diagonal,
+    # can make the resulting orthographic projection unrepresentable.
+    if not matrix.is_finite():
         raise Error("The projection is not representable in Float32")
     return matrix^
 

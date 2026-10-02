@@ -52,11 +52,16 @@ from math.curve import (
     quadratic_bezier,
     spline,
 )
+from math.curve_checks import (
+    curve_count_product,
+    curve_count_sum,
+    curve_sample_count,
+)
 from math.vector2 import Vector2
 from units.si import Angle, Length, METER, RADIAN
 
 
-def resolution_of(curve: Curve, divisions: Int) -> Int:
+def resolution_of(curve: Curve, divisions: Int) raises -> Int:
     """Return how many runs `Path.sample` cuts one curve into.
 
     three.js's rule in `CurvePath.getPoints`, curve kind by curve kind:
@@ -69,13 +74,20 @@ def resolution_of(curve: Curve, divisions: Int) -> Int:
 
     Returns:
         The runs, at least one.
+
+    Raises:
+        Error: If divisions is less than one, the curve is not valid, or
+            the per-curve resolution cannot fit in Int.
     """
+    curve._validate()
+    if divisions < 1:
+        raise Error("A path needs at least one division")
     if curve.kind == LINE:
         return 1
     if curve.kind == SPLINE:
-        return divisions * len(curve.points)
+        return curve_count_product(divisions, len(curve.points))
     if curve.kind == ELLIPSE:
-        return divisions * 2
+        return curve_count_product(divisions, 2)
     return divisions
 
 
@@ -402,13 +414,19 @@ struct Path(Copyable, Movable):
             the end of the last.
 
         Raises:
-            Error: If the path has no curves, or `divisions` is less than
-                one.
+            Error: If the path has no curves, a curve is not valid, divisions
+                is less than one, or a sample count cannot fit in Int.
         """
         if len(self.curves) == 0:
             raise Error("A path with no curves has no points")
         if divisions < 1:
             raise Error("A path needs at least one division")
+        # Preflight the whole output before sampling any large first piece.
+        var count = 1
+        for index in range(len(self.curves)):  # pragma: no branch
+            var runs = resolution_of(self.curves[index], divisions)
+            _ = curve_sample_count(runs)
+            count = curve_count_sum(count, runs)
         var out = List[Vector2]()
         for index in range(len(self.curves)):  # pragma: no branch
             var piece = self.curves[index].sample(

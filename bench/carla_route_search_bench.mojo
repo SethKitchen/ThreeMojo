@@ -5,10 +5,10 @@
 
 """Compare complete searches on sparse and wide-frontier route graphs.
 
-The test suite supplies the independent linear-selection oracle. Graph
+The test suite supplies the linear-selection parity reference. Graph
 construction is outside the timed region; no map or geometry lookup runs
-inside either search. Node positions are close enough that the geometric
-heuristic stays below the positive edge costs.
+inside either search. Both searches use accumulated sample-count costs;
+node positions do not affect search priority.
 """
 
 from tests.test_carla_agents import _graph, _linear_route, _link

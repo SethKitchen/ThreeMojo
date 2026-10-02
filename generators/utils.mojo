@@ -26,6 +26,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
 from math.matrix4 import Matrix4
+from math.norm import length3, normalized3, _ordinary_squared
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.math import cos, isfinite, sin, sqrt
@@ -82,8 +83,9 @@ struct Vec3d(ImplicitlyCopyable):
     """A point or direction in `Float64`, for arithmetic that three.js does
     in `Float64`.
 
-    The methods return a new vector. Each one computes as three.js's
-    `Vector3` method of the same name does.
+    The methods return a new vector. Ordinary arithmetic follows three.js's
+    `Vector3` method of the same name. Length and normalization also support
+    extreme finite magnitudes with scale-safe norms.
     """
 
     var x: Float64
@@ -150,12 +152,12 @@ struct Vec3d(ImplicitlyCopyable):
         )
 
     def length(self) -> Float64:
-        """Return the length.
+        """Return the scale-safe length.
 
         Returns:
-            The length.
+            The length, or infinity if it exceeds the Float64 range.
         """
-        return sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+        return length3(self.x, self.y, self.z)
 
     def distance_to(self, other: Self) -> Float64:
         """Return the distance to another point.
@@ -171,13 +173,18 @@ struct Vec3d(ImplicitlyCopyable):
     def normalized(self) -> Self:
         """Return the vector made unit length, three.js's `normalize`.
 
-        A zero vector stays zero, as three.js divides by one then.
+        A zero vector stays zero. Finite nonzero vectors use a scale-safe
+        norm, even when their length cannot fit in Float64.
 
         Returns:
             The unit vector, or the zero vector.
         """
-        var length = self.length()
-        return self * (1.0 / (length if length != 0 else 1.0))
+        var squared = self.x * self.x + self.y * self.y + self.z * self.z
+        # Keep three.js's reciprocal multiply for ordinary seeded fixtures.
+        if _ordinary_squared(squared):
+            return self * (1.0 / sqrt(squared))
+        var components = normalized3(self.x, self.y, self.z)
+        return Vec3d(components[0], components[1], components[2])
 
     def lerp(self, other: Self, alpha: Float64) -> Self:
         """Return the point a fraction of the way to another, three.js's

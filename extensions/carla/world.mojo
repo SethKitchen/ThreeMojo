@@ -372,11 +372,20 @@ def cut_sign_id(id: String) -> String:
         id: The OpenDRIVE signal id.
 
     Returns:
-        Its first 32 bytes, CARLA's fixed field.
+        The longest UTF-8 prefix that fits CARLA's 32-byte field. This
+        limits bytes, not characters, and never keeps a partial codepoint.
+
+        An id that fits is unchanged. The world keeps the full id outside
+        this snapshot field.
     """
     if id.byte_length() <= 32:
         return id
-    return String(id[byte=0:32])
+    var end = 32
+    # Byte 32 exists. Back up over continuation bytes to a codepoint start.
+    # A valid UTF-8 String needs at most three steps; ASCII keeps 32 bytes.
+    while (id.as_bytes()[end] & 0xC0) == 0x80:
+        end -= 1
+    return String(id[byte=0:end])
 
 
 def _origin() -> CarlaTransform:
@@ -759,7 +768,7 @@ struct World(Movable):
         a `sensor.*` one a sensor, and `static.*`, `util.*` and
         `controller.*` ones a plain actor. A sensor or a plain actor can
         be attached to a parent; its transform is then in the parent's
-        frame.
+        frame. A failed spawn leaves the actors and physics unchanged.
 
         Args:
             blueprint: The blueprint, from this world's library.
@@ -774,7 +783,8 @@ struct World(Movable):
             Error: If the blueprint is not in the library, its kind cannot
                 be spawned, the parent is not alive, the attachment is not
                 valid, a vehicle or walker is given a parent, or a vehicle's
-                or walker's box meets another's.
+                or walker's box meets another's, or a required vehicle
+                attribute is missing or has an invalid value.
         """
         if not Bool(self.blueprints.find(blueprint.id)):
             raise Error("The blueprint is not in the library: " + blueprint.id)
@@ -796,13 +806,12 @@ struct World(Movable):
                 raise Error(
                     "Spawn failed because of collision at spawn position"
                 )
-            var v = self.physics.add_vehicle(
-                transform,
-                box.location,
-                box.extent,
-                vehicle_physics_control(box),
-            )
-            _ = self._register(
+            # Finish fallible blueprint reads and actor validation before
+            # adding anything to the physics or actor registries.
+            var doors = blueprint.attribute("has_dynamic_doors").as_bool()
+            var sticky = blueprint.attribute("sticky_control").as_bool()
+            var actor = Actor(
+                id,
                 blueprint.id,
                 VEHICLE_ACTOR,
                 attributes^,
@@ -810,36 +819,44 @@ struct World(Movable):
                 box,
                 [vehicle_semantic_tag(base)],
             )
-            var doors = blueprint.attribute("has_dynamic_doors").as_bool()
-            var sticky = blueprint.attribute("sticky_control").as_bool()
-            self.actors[id.value - 1].handle = len(self.vehicles)
-            self.actors[id.value - 1].body = self.physics.vehicle_body(v)
+            var v = self.physics.add_vehicle(
+                transform,
+                box.location,
+                box.extent,
+                vehicle_physics_control(box),
+            )
+            # The returned index names the vehicle just added. Publish only
+            # complete records; no fallible attribute reads remain.
+            actor.handle = len(self.vehicles)
+            actor.body = self.physics.vehicles[v.value].body
             self.vehicles.append(VehicleRecord(v, doors, sticky))
+            self.actors.append(actor^)
             return id
         if blueprint.id.startswith("walker."):
             if self._collides(transform, self._walker_box):
                 raise Error(
                     "Spawn failed because of collision at spawn position"
                 )
-            var w = self.physics.add_walker(
-                transform.location, WalkerParameters()
-            )
-            var walker_box = self._walker_box
-            _ = self._register(
+            var actor = Actor(
+                id,
                 blueprint.id,
                 WALKER_ACTOR,
                 attributes^,
                 transform,
-                walker_box,
+                self._walker_box,
                 [PEDESTRIAN],
             )
-            var body = self.physics.walker_body(w)
+            var w = self.physics.add_walker(
+                transform.location, WalkerParameters()
+            )
+            var body = self.physics.walkers[w.value].body
             self.physics.world.bodies[body.value].rotation = _quaternion(
                 transform
             )
-            self.actors[id.value - 1].handle = len(self.walkers)
-            self.actors[id.value - 1].body = body
+            actor.handle = len(self.walkers)
+            actor.body = body
             self.walkers.append(WalkerRecord(w))
+            self.actors.append(actor^)
             return id
         var kind = OTHER_ACTOR
         var tags = List[SemanticTag]()
@@ -852,7 +869,8 @@ struct World(Movable):
             or blueprint.id.startswith("controller.")
         ):
             raise Error("This kind of actor cannot be spawned: " + blueprint.id)
-        _ = self._register(
+        var actor = Actor(
+            id,
             blueprint.id,
             kind,
             attributes^,
@@ -860,8 +878,9 @@ struct World(Movable):
             BoundingBox(Vector3(0, 0, 0)),
             tags^,
         )
-        self.actors[id.value - 1].parent = parent
-        self.actors[id.value - 1].attachment = attachment
+        actor.parent = parent
+        actor.attachment = attachment
+        self.actors.append(actor^)
         return id
 
     def try_spawn_actor(
@@ -881,6 +900,7 @@ struct World(Movable):
 
         Returns:
             The new actor's id, or None where `spawn_actor` would raise.
+            A failure leaves the actors and physics unchanged.
         """
         try:
             return self.spawn_actor(blueprint, transform, parent, attachment)

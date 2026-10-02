@@ -35,6 +35,7 @@ from extensions.carla.actor import (
     SENSOR_ACTOR,
     SPRING_ARM,
     SPRING_ARM_GHOST,
+    TRAFFIC_SIGN_ACTOR,
     VEHICLE_ACTOR,
     WALKER_ACTOR,
     compose,
@@ -54,6 +55,7 @@ from extensions.carla.physics.vehicle_control import (
     VehicleControl,
 )
 from extensions.carla.physics.walker import WalkerControl
+from extensions.carla.road_info import SignalId
 from extensions.carla.sensor import SemanticTag
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
@@ -98,6 +100,7 @@ from extensions.carla.world_snapshot import (
     WorldSnapshot,
 )
 from math.vector3 import Vector3
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -268,7 +271,9 @@ def test_world_on_a_map() raises:
         if d.length() < 1e-3:
             found = True
     assert_true(found)
-    assert_equal(len(world.get_spawn_points()), 13)
+    # One spawn per topology pair: the old 13 plus retained dead ends
+    # on road/lane 2/-1, 3/-1, 5/-1, 6/+1 (LHT), and 7/-1.
+    assert_equal(len(world.get_spawn_points()), 18)
     var empty = World(load_opendrive("<OpenDRIVE></OpenDRIVE>"))
     assert_equal(len(empty.get_actors()), 1)
     assert_equal(len(empty.get_spawn_points()), 0)
@@ -723,6 +728,104 @@ def test_tick_and_snapshot() raises:
         cut_sign_id("1234567890123456789012345678901234"),
         "12345678901234567890123456789012",
     )
+
+
+def _check_cut_sign_id(id: String, expected: String) raises:
+    var cut = cut_sign_id(id)
+    assert_equal(cut, expected)
+    assert_true(cut.byte_length() <= 32)
+    assert_equal(cut_sign_id(cut), cut)
+
+
+def test_cut_sign_id_preserves_short_and_exact_utf8() raises:
+    _check_cut_sign_id("", "")
+    _check_cut_sign_id("short", "short")
+    _check_cut_sign_id("é中😀", "é中😀")
+    var codepoints: List[String] = ["x", "é", "中", "😀"]
+    for codepoint in codepoints:
+        var width = codepoint.byte_length()
+        for size in range(28, 33):
+            var id = String("a") * (size - width) + codepoint
+            _check_cut_sign_id(id, id)
+        var exact = codepoint * (32 // width)
+        _check_cut_sign_id(exact, exact)
+
+
+def test_cut_sign_id_truncates_only_at_utf8_boundaries() raises:
+    # A one-, two-, three- or four-byte codepoint starts on either side
+    # of byte 32, including every possible partial-codepoint boundary.
+    var codepoints: List[String] = ["x", "é", "中", "😀"]
+    for codepoint in codepoints:
+        var width = codepoint.byte_length()
+        for start in range(28, 34):
+            var prefix = String("a") * start
+            var id = prefix + codepoint + String("z") * 40
+            var expected = String("a") * min(start, 32)
+            if start + width <= 32:
+                expected += codepoint + String("z") * (32 - start - width)
+            _check_cut_sign_id(id, expected)
+        # The kept prefix itself can contain multibyte codepoints.
+        var repeated = codepoint * 40
+        _check_cut_sign_id(repeated, codepoint * (32 // width))
+    _check_cut_sign_id(String("a") * 31 + "é", String("a") * 31)
+    _check_cut_sign_id(String("a") * 30 + "中", String("a") * 30)
+    _check_cut_sign_id(String("a") * 29 + "😀", String("a") * 29)
+
+
+def test_initial_snapshot_accepts_utf8_light_id() raises:
+    var full = String("a") * 31 + "é"
+    var xml = Path("assets/carla/town.xodr").read_text()
+    xml = xml.replace('"1001"', '"' + full + '"')
+    var world = World(load_opendrive(xml))
+    var light = world.get_snapshot().find(ActorId(2)).value().copy()
+    assert_equal(light.traffic_light.value().sign_id, String("a") * 31)
+    assert_equal(world.get_opendrive_id(ActorId(2)).value, full)
+    assert_equal(
+        world.get_traffic_light_from_opendrive(SignalId(full)).value().value,
+        2,
+    )
+
+
+def test_initial_snapshot_accepts_utf8_sign_id() raises:
+    var full = String("a") * 29 + "😀"
+    var xml = Path("assets/carla/town.xodr").read_text()
+    xml = xml.replace('"1002"', '"' + full + '"')
+    var world = World(load_opendrive(xml))
+    # Signals are ordered by id; replacing an id can change actor numbers.
+    var found = False
+    for actor in world.actors:
+        if actor.kind == TRAFFIC_SIGN_ACTOR:
+            if world.get_opendrive_id(actor.id).value == full:
+                assert_equal(
+                    world.get_snapshot().find(actor.id).value().sign_id,
+                    String("a") * 29,
+                )
+                found = True
+    assert_true(found)
+
+
+def test_tick_snapshot_keeps_utf8_prefix_for_lights_and_signs() raises:
+    var world = _world()
+    var codepoints: List[String] = ["x", "é", "中", "😀"]
+    for codepoint in codepoints:
+        var width = codepoint.byte_length()
+        for start in range(28, 34):
+            var full = String("a") * start + codepoint + "tail"
+            var expected = String("a") * min(start, 32)
+            if start + width <= 32:
+                expected += (
+                    codepoint + String("tail")[byte = 0 : 32 - start - width]
+                )
+            world.traffic_lights.lights[0].sign_id = SignalId(full)
+            world.signs[0].sign_id = SignalId(full)
+            _ = world.tick()
+            var snapshot = world.get_snapshot()
+            var light = snapshot.find(ActorId(2)).value().copy()
+            var sign = snapshot.find(ActorId(3)).value().copy()
+            assert_equal(light.traffic_light.value().sign_id, expected)
+            assert_equal(sign.sign_id, expected)
+            assert_equal(world.get_opendrive_id(ActorId(2)).value, full)
+            assert_equal(world.get_opendrive_id(ActorId(3)).value, full)
 
 
 # --- the records on their own -----------------------------------------------------

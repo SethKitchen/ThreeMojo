@@ -18,10 +18,12 @@ from math.curve3 import CurvePath3, Curve3, cubic_bezier3, line3
 from math.path import Path, Shape
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -87,11 +89,55 @@ def same_triangle(
             var at = mine * 15 + ((corner + turn) % 3) * CORNER
             var there = other * 15 + corner * CORNER
             for number in range(CORNER):
-                if abs(ours[at + number] - theirs[there + number]) > TOLERANCE:
+                if not (
+                    abs(ours[at + number] - theirs[there + number]) <= TOLERANCE
+                ):
                     all_close = False
         if all_close:
             return True
     return False
+
+
+def test_same_triangle_rejects_nonfinite_components_in_every_turn() raises:
+    # Use distinct corners and nonzero triangle offsets to exercise every turn.
+    var theirs = List[Float32](length=45, fill=-100)
+    for number in range(15):
+        theirs[30 + number] = Float32(number)
+    var nonfinite: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for turn in range(3):
+        var matching = List[Float32](length=30, fill=-200)
+        for corner in range(3):
+            for number in range(CORNER):
+                matching[15 + ((corner + turn) % 3) * CORNER + number] = theirs[
+                    30 + corner * CORNER + number
+                ]
+        assert_true(same_triangle(matching, 1, theirs, 2))
+        for component in range(15):
+            for bad in nonfinite:
+                var actual = matching.copy()
+                actual[15 + component] = bad
+                assert_false(same_triangle(actual, 1, theirs, 2))
+
+
+def test_same_triangle_keeps_tolerance_and_winding() raises:
+    var theirs = List[Float32]()
+    for number in range(15):
+        theirs.append(Float32(number))
+    for sign in [Float32(-1), Float32(1)]:
+        var actual = theirs.copy()
+        actual[0] = sign * TOLERANCE
+        assert_true(same_triangle(actual, 0, theirs, 0))
+        actual[0] = sign * TOLERANCE * 2
+        assert_false(same_triangle(actual, 0, theirs, 0))
+    var reversed = theirs.copy()
+    for number in range(CORNER):
+        reversed[CORNER + number] = theirs[2 * CORNER + number]
+        reversed[2 * CORNER + number] = theirs[CORNER + number]
+    assert_false(same_triangle(reversed, 0, theirs, 0))
 
 
 def assert_same_faces(geometry: BufferGeometry, theirs: List[Float32]) raises:

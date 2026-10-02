@@ -83,7 +83,7 @@ from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.hashlib import Hasher
-from std.math import ceil, floor, sin, sqrt
+from std.math import ceil, floor, isfinite, sin, sqrt
 from units.si import DEGREE, Angle, Length, METER
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
@@ -1020,17 +1020,19 @@ struct Map(Movable):
         # `GetDistanceAtStartOfLane`.
         ref r = self.roads[road]
         var s = r.sections[section].s
+        var inset = min(10.0 * EPSILON, r.section_length(section) / 4.0)
         if r.is_positive_direction(r.sections[section].lanes[lane].id):
-            return s + 10.0 * EPSILON
-        return s + r.section_length(section) - 10.0 * EPSILON
+            return s + inset
+        return s + r.section_length(section) - inset
 
     def _end_of_lane(self, road: Int, section: Int, lane: Int) -> Float64:
         # `GetDistanceAtEndOfLane`.
         ref r = self.roads[road]
         var s = r.sections[section].s
+        var inset = min(10.0 * EPSILON, r.section_length(section) / 4.0)
         if not r.is_positive_direction(r.sections[section].lanes[lane].id):
-            return s + 10.0 * EPSILON
-        return s + r.section_length(section) - 10.0 * EPSILON
+            return s + inset
+        return s + r.section_length(section) - inset
 
     def compute_transform(self, waypoint: Waypoint) raises -> CarlaTransform:
         """Return where a waypoint is, `Map::ComputeTransform`.
@@ -1606,9 +1608,9 @@ struct Map(Movable):
         """Return each driving lane's start and each lane it leads to.
 
         This is `Map::GenerateTopology`. A lane with no successor pairs
-        its start with its own end, found as CARLA finds it: with s
-        rounded to a `float`, which drops the pair when the lane ends at
-        the road's end.
+        its start with its own section's end. The endpoint keeps its
+        double precision and section identity; CARLA's float lookup can
+        drop the pair or select a different section.
 
         Returns:
             The pairs, road by road and section by section.
@@ -1635,12 +1637,13 @@ struct Map(Movable):
                     )
                     var nexts = self.successors(w)
                     if len(nexts) == 0:
-                        var end = Float32(self._end_of_lane(r, sec, ln))
-                        var last = self.waypoint_xodr(
-                            road.id, lane.id, Length(end, METER)
+                        var last = Waypoint(
+                            road.id,
+                            section.id,
+                            lane.id,
+                            self._end_of_lane(r, sec, ln),
                         )
-                        if Bool(last):
-                            out.append((w, last.value()))
+                        out.append((w, last))
                     for n in nexts:
                         out.append((w, n))
         return out^
@@ -1954,18 +1957,21 @@ struct Map(Movable):
         """Return waypoints every `distance` to the lane's end.
 
         This is the client's `Waypoint::GetNextUntilLaneEnd`: steps while
-        exactly one waypoint lies ahead on the same road, then one last
-        step to the road's end.
+        exactly one lane lies ahead on the same road, then appends the
+        reachable lane endpoint. It never samples a different road.
 
         Args:
             waypoint: The start.
             distance: The spacing, in meters.
 
         Returns:
-            The waypoints, the last at the end of the road.
+            The waypoints, ending at the reachable lane endpoint. Empty
+            if the start is already at or beyond that inward endpoint.
 
         Raises:
-            Error: If the lane is not in the map or a step fails.
+            Error: If the lane is not in the map, s is not finite or is
+                outside its section, the spacing is not finite and above
+                EPSILON, or a step cannot advance.
         """
         return self._until_end(waypoint, distance, True)
 
@@ -1974,46 +1980,82 @@ struct Map(Movable):
     ) raises -> List[Waypoint]:
         """Return waypoints every `distance` back to the lane's start.
 
-        This is the client's `Waypoint::GetPreviousUntilLaneStart`. Like
-        CARLA's, the last step measures what is left toward the lane's
-        end, not its start.
+        This corrects the client's `Waypoint::GetPreviousUntilLaneStart`:
+        the last step measures what is left in the requested backward
+        direction and stays on the starting road.
 
         Args:
             waypoint: The start.
             distance: The spacing, in meters.
 
         Returns:
-            The waypoints.
+            The waypoints, ending at the reachable lane start. Empty
+            if the start is already at or beyond that inward endpoint.
 
         Raises:
-            Error: If the lane is not in the map or a step fails.
+            Error: If the lane is not in the map, s is not finite or is
+                outside its section, the spacing is not finite and above
+                EPSILON, or a step cannot advance.
         """
         return self._until_end(waypoint, distance, False)
 
     def _until_end(
         self, waypoint: Waypoint, distance: Float64, ahead: Bool
     ) raises -> List[Waypoint]:
+        if not isfinite(distance) or distance <= EPSILON:
+            raise Error("Lane traversal needs a finite spacing above EPSILON")
+        var initial = self._locate(waypoint)
+        ref road = self.roads[initial[0]]
+        var section_start = road.sections[initial[1]].s
+        var section_end = section_start + road.section_length(initial[1])
+        var s = waypoint.s
+        if not isfinite(s) or s < section_start or s > section_end:
+            raise Error("Waypoint is outside its lane section")
+        var forward = road.is_positive_direction(waypoint.lane_id) == ahead
+        # Locate the reachable end before sampling. Never walk through a
+        # different road just to discover that a large interval overshoots.
+        var end = waypoint
+        var links = self.successors(end) if ahead else self.predecessors(end)
+        while len(links) == 1 and links[0].road_id == waypoint.road_id:
+            var candidate = links[0]
+            # At larger s, the inward epsilon can round to the exact
+            # shared boundary. Section order still proves progress.
+            var current_section = self._locate(end)[1]
+            var next_section = self._locate(candidate)[1]
+            var advance = (
+                next_section
+                - current_section if forward else current_section
+                - next_section
+            )
+            if advance <= 0:
+                break
+            end = candidate
+            links = self.successors(end) if ahead else self.predecessors(end)
+        var at = self._locate(end)
+        end.s = self._end_of_lane(
+            at[0], at[1], at[2]
+        ) if ahead else self._start_of_lane(at[0], at[1], at[2])
         var out = List[Waypoint]()
-        var step = self._step(waypoint, distance, ahead)
-        while len(step) == 1 and step[0].road_id == waypoint.road_id:
+        var current = waypoint
+        var remaining = end.s - current.s if forward else current.s - end.s
+        while remaining > 0.0:
+            if distance >= remaining or remaining <= 10.0 * EPSILON:
+                out.append(end)
+                break
+            var step = self._step(current, distance, ahead)
+            if len(step) != 1:
+                raise Error("Lane traversal left its unique path")
             var reached = step[0]
+            var advance = (
+                reached.s - current.s if forward else current.s - reached.s
+            )
+            if advance <= 0.0:
+                raise Error(
+                    "Lane traversal spacing cannot advance the waypoint"
+                )
             out.append(reached)
-            step = self._step(reached, distance, ahead)
-        var current = waypoint.s
-        if len(out) > 0:
-            current = out[len(out) - 1].s
-        var road_length = self.road(waypoint.road_id).length
-        var remaining = current
-        if self.is_positive_direction(waypoint):
-            remaining = road_length - current
-        remaining -= DOUBLE_EPSILON
-        var last = waypoint
-        if len(out) > 0:
-            last = out[len(out) - 1]
-        var tail = self._step(last, remaining, ahead)
-        if len(tail) == 0:
-            raise Error("No waypoint lies at the lane's end")
-        out.append(tail[0])
+            current = reached
+            remaining = end.s - current.s if forward else current.s - end.s
         return out^
 
     def right_lane_marking(

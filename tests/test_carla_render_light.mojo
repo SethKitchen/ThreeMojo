@@ -109,6 +109,8 @@ def test_the_passes_refuse_what_they_cannot_read() raises:
         apply_ambient_occlusion(frame, four, one, 0.5)
     with assert_raises(contains="strength"):
         apply_ambient_occlusion(frame, four, four, 2)
+    with assert_raises(contains="strength"):
+        apply_ambient_occlusion(frame, four, four, -0.1)
     with assert_raises(contains="one share per pixel"):
         apply_cloud_shadows(
             frame, rays, one, ImprovedNoise(), Vector3(0, 1, 0), 0.5

@@ -36,6 +36,12 @@ through `render.splatrule`.
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId
 from math.ray_query import RayQuery
+from math.ray import (
+    _distance_sq_ratio,
+    _line_approach,
+    _radius_relation,
+    _RayProducts,
+)
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -149,6 +155,7 @@ struct GaussianSplat(Copyable, Movable):
         )
         return SPLAT_KERNEL_CUTOFF * sqrt(largest)
 
+    @always_inline
     def _sphere_extent(self, index: Int) -> Float64:
         """Return a conservative radius for a positive covariance matrix.
 
@@ -234,11 +241,14 @@ struct GaussianSplat(Copyable, Movable):
         ray.apply_matrix4(inverse)
         if not ray.intersects_box(self.bounding_box.value()):
             return hits^
+        var products = ray._query_products()
         for index in range(self.count()):  # pragma: no branch
-            var t = self._ray_parameter(ray.origin, ray.direction, index)
-            if t < 0:
+            var local_point = self._ray_intersection(
+                ray.origin, ray.direction, index, products
+            )
+            if not local_point:
                 continue
-            var point = world.transform_point(ray.at(Float32(t)))
+            var point = world.transform_point(local_point.value())
             var distance = raycaster.query_ray().origin.distance_to(point)
             if distance < raycaster.query_near().value:
                 continue
@@ -247,24 +257,29 @@ struct GaussianSplat(Copyable, Movable):
             hits.append(SplatHit(Length(distance, METER), point, index))
         return hits^
 
-    def _ray_parameter(
-        self, origin: Vector3, direction: Vector3, index: Int
-    ) -> Float64:
-        """Return how far along a local ray it meets one splat's ellipsoid.
+    def _ray_intersection(
+        self,
+        origin: Vector3,
+        direction: Vector3,
+        index: Int,
+        products: _RayProducts,
+    ) -> Optional[Vector3]:
+        """Return where a local ray meets one splat's ellipsoid.
 
         Args:
             origin: The ray's origin, in the object's space.
             direction: Its unit direction, in the object's space.
             index: Which splat.
+            products: Ray-only products prepared after its local transform.
 
         Returns:
-            The distance to the near surface, or to the far one when the
-            origin is inside, and minus one when the ray misses, the splat
-            is too faint, or its covariance is not positive.
+            The near surface point, or the far one when the origin is
+            inside. None when the ray misses, the splat is too faint, or
+            its covariance is not positive.
         """
         var opacity = Float64(self.splat_geometry.colors[index * 4 + 3]) / 255
         if opacity < MIN_RAYCAST_OPACITY:
-            return -1
+            return None
         ref c = self.splat_geometry.covariances
         var c00 = Float64(c[index * 6])
         var c01 = Float64(c[index * 6 + 1])
@@ -274,11 +289,14 @@ struct GaussianSplat(Copyable, Movable):
         var c22 = Float64(c[index * 6 + 5])
         var largest = max(c00, max(c11, c22))
         if not largest > 0:
-            return -1
+            return None
         var center = self._center(index)
         var bound = self._sphere_extent(index)
-        if Float64(_distance_sq(origin, direction, center)) > bound * bound:
-            return -1
+        var ratio = _distance_sq_ratio[True](
+            origin, direction, center, products
+        )
+        if _radius_relation(ratio, bound * bound)[1]:
+            return None
         var floor_variance = largest * COVARIANCE_FLATNESS
         var a00 = c00 + floor_variance
         var a11 = c11 + floor_variance
@@ -289,7 +307,7 @@ struct GaussianSplat(Copyable, Movable):
         var t13 = c12 * c01 - a11 * c02
         var determinant = a00 * t11 + c01 * t12 + c02 * t13
         if not (a00 > 0 and a00 * a11 - c01 * c01 > 0 and determinant > 0):
-            return -1
+            return None
         var inv = 1 / determinant
         var i00 = t11 * inv
         var i01 = (c02 * c12 - a22 * c01) * inv
@@ -304,27 +322,42 @@ struct GaussianSplat(Copyable, Movable):
         var my = i01 * dx + i11 * dy + i12 * dz
         var mz = i02 * dx + i12 * dy + i22 * dz
         var a = dx * mx + dy * my + dz * mz
-        var ox = Float64(origin.x) - Float64(center.x)
-        var oy = Float64(origin.y) - Float64(center.y)
-        var oz = Float64(origin.z) - Float64(center.z)
-        var nx = i00 * ox + i01 * oy + i02 * oz
-        var ny = i01 * ox + i11 * oy + i12 * oz
-        var nz = i02 * ox + i12 * oy + i22 * oz
-        var b = 2 * (ox * mx + oy * my + oz * mz)
-        var cc = (
-            ox * nx
-            + oy * ny
-            + oz * nz
-            - SPLAT_KERNEL_CUTOFF * SPLAT_KERNEL_CUTOFF
+        # First find the Euclidean closest point with the shared cross-product
+        # calculation. Forming origin + parameter * direction can lose even
+        # a whole splat at a distant origin with a rounded unit direction.
+        var approach = _line_approach[True](origin, direction, center, products)
+        var ox = -approach.offset_x
+        var oy = -approach.offset_y
+        var oz = -approach.offset_z
+        # Shift from there to the closest point in the covariance metric.
+        # This also avoids b*b - 4*a*c cancellation at a distant origin.
+        var shift = -(ox * mx + oy * my + oz * mz) / a
+        var foot = approach.parameter + shift
+        var fx = ox + shift * dx
+        var fy = oy + shift * dy
+        var fz = oz + shift * dz
+        var nx = i00 * fx + i01 * fy + i02 * fz
+        var ny = i01 * fx + i11 * fy + i12 * fz
+        var nz = i02 * fx + i12 * fy + i22 * fz
+        var half_sq = (
+            SPLAT_KERNEL_CUTOFF * SPLAT_KERNEL_CUTOFF
+            - (fx * nx + fy * ny + fz * nz)
+        ) / a
+        if half_sq < 0:
+            return None
+        var half = sqrt(half_sq)
+        var offset = -half
+        if foot - half < 0:
+            offset = half
+        if foot + offset < 0:
+            return None
+        # Preserve the surface offset even when the distance from the ray
+        # origin is too large for that offset to survive in its parameter.
+        return Vector3(
+            Float32(Float64(center.x) + fx + offset * dx),
+            Float32(Float64(center.y) + fy + offset * dy),
+            Float32(Float64(center.z) + fz + offset * dz),
         )
-        var discriminant = b * b - 4 * a * cc
-        if discriminant < 0:
-            return -1
-        var root = sqrt(discriminant)
-        var t = (-b - root) / (2 * a)
-        if t < 0:
-            t = (-b + root) / (2 * a)
-        return t
 
     def sort_direction(self, model_view: Matrix4) -> Vector3:
         """Return the object's axis toward the camera in view space, what
@@ -512,27 +545,6 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     var fy = Float64(y)
     var fz = Float64(z)
     return sqrt(fx * fx + fy * fy + fz * fz)
-
-
-def _distance_sq(
-    origin: Vector3, direction: Vector3, point: Vector3
-) -> Float32:
-    """Return the squared distance from a ray to a point, three.js's
-    `Ray.distanceSqToPoint`: to the origin when the point is behind it.
-
-    Args:
-        origin: The ray's origin.
-        direction: Its unit direction.
-        point: The point.
-
-    Returns:
-        The squared distance.
-    """
-    var along = (point - origin).dot(direction)
-    if along < 0:
-        return (point - origin).length_sq()
-    var nearest = origin + direction * along
-    return (point - nearest).length_sq()
 
 
 def _weights(degree: Int, d: Vector3) -> List[Float32]:

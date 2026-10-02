@@ -128,6 +128,7 @@ from extensions.carla.render_sky import (
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_positive,
     attribute_int,
     attribute_string,
 )
@@ -380,7 +381,8 @@ def rgb_camera_settings(
         Error: If the image is not at least one pixel, the field of view
             is not more than 0 and less than 180 degrees (360 for a
             fisheye), or the exposure mode is neither "histogram" nor
-            "manual".
+            "manual". Consumed floats must be finite. Gamma, shutter speed,
+            ISO, f-stop, and calibration must be positive.
     """
     var s = RgbCameraSettings()
     s.image_width = attribute_int(attributes, "image_size_x", 800)
@@ -475,6 +477,11 @@ def rgb_camera_settings(
         attribute_float(attributes, "lens_circle_falloff", 5),
         attribute_float(attributes, "lens_circle_multiplier", 0),
     )
+    validate_sensor_positive(s.gamma, "gamma")
+    validate_sensor_positive(s.shutter_speed, "shutter_speed")
+    validate_sensor_positive(s.iso, "iso")
+    validate_sensor_positive(s.fstop, "fstop")
+    validate_sensor_positive(s.calibration_constant, "calibration_constant")
     if fisheye:
         s.wide_angle = WideAngleLens.from_attributes(attributes)
     return s^

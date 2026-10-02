@@ -16,7 +16,12 @@ latitude and the longitude, and in meters for the altitude.
 
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.geo import GeoLocation, GeoProjection
-from extensions.carla.sensor_attributes import attribute_float, attribute_int
+from extensions.carla.sensor_attributes import (
+    attribute_float,
+    attribute_int,
+    validate_sensor_float,
+    validate_sensor_nonnegative,
+)
 from extensions.carla.sensor_noise import SensorRandom
 from math.vector3 import Vector3
 
@@ -44,6 +49,19 @@ struct GnssDescription(ImplicitlyCopyable):
         self.altitude_stddev = 0
         self.altitude_bias = 0
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(self.latitude_stddev, "latitude_stddev")
+        validate_sensor_float(self.latitude_bias, "latitude_bias")
+        validate_sensor_nonnegative(self.longitude_stddev, "longitude_stddev")
+        validate_sensor_float(self.longitude_bias, "longitude_bias")
+        validate_sensor_nonnegative(self.altitude_stddev, "altitude_stddev")
+        validate_sensor_float(self.altitude_bias, "altitude_bias")
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -57,8 +75,7 @@ struct GnssDescription(ImplicitlyCopyable):
             The settings.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var d = GnssDescription()
         d.noise_seed = attribute_int(attributes, "noise_seed", 0)
@@ -68,6 +85,7 @@ struct GnssDescription(ImplicitlyCopyable):
         d.latitude_bias = attribute_float(attributes, "noise_lat_bias", 0)
         d.longitude_bias = attribute_float(attributes, "noise_lon_bias", 0)
         d.altitude_bias = attribute_float(attributes, "noise_alt_bias", 0)
+        d.validate()
         return d
 
 
@@ -77,12 +95,16 @@ struct Gnss(Copyable, Movable):
     var description: GnssDescription
     var rng: SensorRandom
 
-    def __init__(out self, description: GnssDescription):
+    def __init__(out self, description: GnssDescription) raises:
         """Create a receiver.
 
         Args:
             description: Its settings. Its seed seeds the engine.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
         """
+        description.validate()
         self.description = description
         self.rng = SensorRandom(description.noise_seed)
 
