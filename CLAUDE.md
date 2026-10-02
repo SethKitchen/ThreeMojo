@@ -31,9 +31,14 @@ way by habit:
   the project reaches past a leading underscore. 1.0 has no `_asyncrt`; 1.1
   has no `asyncrt`. Production modules import the adapter in
   `render/tasks.mojo`, which holds the private import.
-- Coverage writes use the pinned `std.sys._libc_errno` adapter for
-  thread-local `errno` on Linux and macOS. Retry only `-1` with `EINTR`.
-  Short writes and other errors must still abort the capture.
+- Coverage writes are the second narrow exception for a private import.
+  `coverage/runtime.mojo` is the adapter boundary for `std.sys._libc_errno`.
+  Keep this import inside that file in production code. It uses the pinned
+  Mojo `1.1.0` accessor for thread-local `errno` on Linux and macOS.
+  Retry only `-1` with `EINTR`. Short writes and other errors must still abort
+  the capture. `tools/check_coverage_protocol.py` tests the accessor without
+  an interposer, then tests repeated `EINTR`, real pipe interruptions, and
+  failed, short, and zero writes on both platforms.
 - `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved
   into the `max` package, and the compiler says so when it cannot find it.
 - A module beside the file being compiled now beats any `-I` path. That is
