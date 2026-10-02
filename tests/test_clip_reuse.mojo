@@ -105,14 +105,18 @@ def _old_depth(
     return kept^
 
 
-def _old_side(polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+def _old_side(
+    polygon: List[ClipVertex], plane: Plane, keep_boundary: Bool = True
+) -> List[ClipVertex]:
     """The original side-plane walk, preserving its interpolation order."""
     var kept = List[ClipVertex]()
     for index in range(len(polygon)):
         var a = polygon[index]
         var b = polygon[(index + 1) % len(polygon)]
-        var a_in = plane.distance_to_point(a.position) >= 0
-        var b_in = plane.distance_to_point(b.position) >= 0
+        var a_distance = plane.distance_to_point(a.position)
+        var b_distance = plane.distance_to_point(b.position)
+        var a_in = a_distance >= 0 if keep_boundary else a_distance > 0
+        var b_in = b_distance >= 0 if keep_boundary else b_distance > 0
         if a_in:
             kept.append(a)
         if a_in != b_in:
@@ -134,7 +138,7 @@ def _old_clip(
     sides: List[Plane],
     any_of: List[Plane],
 ) -> List[ClipVertex]:
-    """The original ordered passes, including disjoint union pieces."""
+    """Allocating ordered passes with first-piece union boundary ownership."""
     var polygon: List[ClipVertex] = [a, b, c]
     polygon = _old_depth(polygon, -1, True)
     polygon = _old_depth(polygon, -3, False)
@@ -147,7 +151,11 @@ def _old_clip(
         for index in range(len(any_of)):
             var piece = _old_side(polygon, any_of[index])
             for earlier in range(index):
-                piece = _old_side(piece, flipped(any_of[earlier]))
+                # The allocating reference uses the corrected ownership rule:
+                # a boundary belongs only to its first union piece.
+                piece = _old_side(
+                    piece, flipped(any_of[earlier]), keep_boundary=False
+                )
             _fan(piece, triangles)
     return triangles^
 
@@ -179,7 +187,7 @@ def test_clipping_reuses_whole_polygon_storage() raises:
     assert_equal(len(held), 0)
 
 
-def test_reused_clipping_matches_original_vertices_bit_for_bit() raises:
+def test_reused_clipping_matches_reference_vertices_bit_for_bit() raises:
     var values: List[Float32] = [-4, -3, -1, -0.0, 0.25, 1, 3, 4]
     var box: List[Plane] = [
         Plane(Vector3(1, 0, 0), 1),
