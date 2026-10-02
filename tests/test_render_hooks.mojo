@@ -761,7 +761,7 @@ def lit_floor(
     return Busy(scene^, assets^, lift_node, caster_paint)
 
 
-def shadowed(made: Busy, mut hooks: Recorder) raises -> Bool:
+def shadowed[H: RenderHooks](made: Busy, mut hooks: H) raises -> Bool:
     """Return True if the floor straight under the caster is darker than
     the floor at the edge of the view, seen from above."""
     var camera = PerspectiveCamera(
@@ -792,6 +792,14 @@ def test_a_shadow_draws_the_faces_its_shadow_side_names() raises:
     var shown_both = Material(Color(200, 60, 60), side=DOUBLE_SIDE)
     shown_both.shadow_side = FRONT_SIDE
     assert_false(shadowed(lit_floor("sun", shown_both), hooks))
+
+
+def test_default_shadow_hooks_preserve_sun_and_point_shadows() raises:
+    var both = Material(Color(200, 60, 60))
+    both.shadow_side = DOUBLE_SIDE
+    for light in ["sun", "bulb"]:
+        var hooks = NoHooks()
+        assert_true(shadowed(lit_floor(light, both), hooks))
 
 
 def test_the_shadow_hook_sees_each_caster_of_each_light() raises:

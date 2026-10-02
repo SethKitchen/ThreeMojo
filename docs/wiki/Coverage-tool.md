@@ -67,7 +67,7 @@ Quote-aware scanning also reveals code after multiline shader strings. The line 
 
 Coverage must reach 100% under the measured rules. A badge states this requirement. It does not prove that a revision passed its checks.
 
-The scanner still excludes all trait bodies, including default method bodies. [Issue #540](https://github.com/SethKitchen/ThreeMojo/issues/540) tracks this separate measurement gap. The protocol change does not add those obligations.
+Executable trait defaults are measured. Abstract `...` declarations and docstrings are not runtime steps. See [trait defaults and generated names](#trait-defaults-and-generated-names).
 
 Version 2 fixes the ambiguous evaluation boundaries tracked in [issue #385](https://github.com/SethKitchen/ThreeMojo/issues/385). Its supported limits are below. These targeted checks do not establish full repository coverage. The leaf obligations added by issue #535 still require a new complete repository capture. Check the source, test scope and trace limits with each result. A percentage is not an engineering validation certificate.
 
@@ -91,9 +91,25 @@ The runtime terminates on an oversized, failed or short write. The parser reject
 
 The runtime uses the C library already used by the project. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
 
-The older `_cov_hit`, `_cov_branch` and `_cov_loop_<line>` names remain reserved. Source code that declares those names can collide with inherited probes. [Issue #541](https://github.com/SethKitchen/ThreeMojo/issues/541) tracks that gap. Version 2 only gives its new evaluation names a collision-free prefix. Do not interpret the new-name regression as a general hygiene guarantee.
+All generated helper aliases and local names now avoid source identifiers. See [trait defaults and generated names](#trait-defaults-and-generated-names).
 
 Old `COVBRANCH` condition records cannot distinguish recursion from an abandoned evaluation. The parser and reducer reject these ambiguous compound records and require a new capture. Old decision-only records remain readable, without condition evidence. `COVLINE` condition hits remain readable, but do not certify MC/DC on their own.
+
+### Trait defaults and generated names
+
+Trait scopes can contain abstract declarations and executable default methods. The scanner skips an abstract `...` body, including a trailing comment. It measures statements in a default method and preserves its docstring. Each invocation with compound decisions receives its own buffer. Nested functions have separate buffers, as they do outside traits.
+
+The complete 759-module CPU manifest comparison against `e488e4ffc23cf85d006d5a5d111968de64f6cacb` adds 16 line obligations. Eleven are `NodeSource` default returns in `materials/nodes.mojo`. Five are `RenderHooks` default `pass` statements in `renderers/renderer.mojo`. No previous entry is removed.
+
+No branch, condition or MC/DC obligation changes in these production sources. The line total is now 122808. These manifest counts do not certify full repository coverage.
+
+The instrumenter checks the full source text before it chooses any injected name. Hit and branch aliases, evaluation helper and buffer names, and loop-counter prefixes must be absent from that text. A collision adds underscores until the name is unused. This includes names in nested functions, parameters and generic callbacks. A loop counter also includes its original source line number.
+
+These names do not change probe IDs or manifest entries. The imported buffer factory avoids caller-scope `List` and `Int` names.
+
+`make test-coverage-tool` checks exact inherited-default line, branch, condition and MC/DC entries. It also checks native versus instrumented output, full default-method probe streams, recursive defaults, exceptions, nested callbacks and collisions with loop line numbers. `tests/test_trait_defaults.mojo` calls all eleven defaults through `ProgramSource` and checks inherited values through the node interpreter. The render-hook suite checks sun and point-light shadows with inherited `NoHooks` defaults.
+
+The loop rewrite still requires a body indented four spaces beyond its `for` header. A two-space loop body can compile before instrumentation and fail after it. [Issue #544](https://github.com/SethKitchen/ThreeMojo/issues/544) tracks this existing parser limit. Ordinary four-space-formatted repository modules do not have this failure. The source checks do not certify other syntax outside the supported rewrite.
 
 ### The capture grows with every statement run
 

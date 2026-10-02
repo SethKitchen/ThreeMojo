@@ -8,8 +8,8 @@
 This is the whole difficulty of the coverage tool. A probe can only be inserted
 before a line that is a statement inside a function body, so everything else
 must be recognized and skipped: blank lines, comments, docstrings, decorators,
-imports, struct field declarations, `def`/`struct`/`trait` headers, trait
-method bodies, block-continuation
+imports, struct field declarations, `def`/`struct`/`trait` headers, abstract
+trait method declarations, block-continuation
 keywords like `else:`, and any line that is the tail of a multi-line statement.
 
 Scanning is stateful and line-ordered: feed every line of the file to
@@ -128,10 +128,7 @@ struct _Scope(ImplicitlyCopyable):
 
     var indent: Int
     var is_def: Bool
-    # A `trait` block, or a `def` inside one. The scanner currently excludes
-    # all trait bodies. Default implementations need separate recognition;
-    # issue #540 tracks that inherited gap. Buffer tracking follows the same
-    # exclusion until that scanner work is complete.
+    # Retain trait scope while its default methods run like other functions.
     var is_trait: Bool
     var number: Int
     var started: Bool
@@ -237,7 +234,11 @@ struct Scanner(Movable):
         # Dedenting to a header's own column or further left closes it.
         self._close_scopes_at_or_above(indent)
 
-        if self._inside_function_body() and not self._inside_trait():
+        var abstract = (
+            self._inside_trait()
+            and String(stripped.split("#")[0].strip()) == "..."
+        )
+        if self._inside_function_body() and not abstract:
             var slot = len(self._scopes) - 1
             if not self._scopes[slot].started:
                 self._scopes[slot].started = True
@@ -261,14 +262,13 @@ struct Scanner(Movable):
             return False
 
         if stripped.startswith("trait "):
-            # Preserve the current trait-body exclusion. This also excludes
-            # default implementations, the separate gap tracked in #540.
+            # A trait contains declarations and executable default methods.
             self._scopes.append(_Scope(indent, False, True, -1, False))
             return False
 
         if stripped.startswith("def ") or stripped.startswith("async def "):
-            # A `def` inherits its enclosing trait-ness: the body of a trait
-            # method is a declaration however much it looks like a function.
+            # Default trait methods have ordinary function scope. Only an
+            # abstract ellipsis is a declaration, not an executable step.
             # An `async def` is a function body like any other; the renderer
             # has one per rasterizer band.
             self._scopes.append(
@@ -295,8 +295,8 @@ struct Scanner(Movable):
         ):
             return False
 
-        # Anything left outside a function body is a declaration, not a step,
-        # and so is everything inside a trait.
-        if self._inside_trait():
+        # Abstract method bodies contain an ellipsis, optionally commented.
+        if abstract:
             return False
+        # Trait and struct declarations outside methods are not runtime steps.
         return self._inside_function_body()
