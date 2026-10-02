@@ -126,6 +126,8 @@ A three.js group holds its children. Here a group is a scene node, and a mesh na
 
 `reduce_vertices` needs a current scene. Call `scene.update()` first.
 
+`sort_instanced_mesh` keeps each instance's matrix, color, and morph weights together. Instances appended after colors were set keep their default white. A mesh without colors keeps its empty color list.
+
 ## NURBS
 
 `NURBSCurve(degree, knots, control_points, start_knot, end_knot)` is a NURBS curve. Each control point is a `Vector4` with its weight in `w`. The functions of `NURBSUtils` are there too, in doubles: `find_span`, `basis_functions`, `bspline_point`, `nurbs_derivatives` and more.

@@ -294,6 +294,89 @@ def test_sorting_needs_a_key_for_each_instance_and_its_geometry() raises:
     assert_equal(len(plain.instanced_meshes[0].colors), 0)
 
 
+def test_sorting_appended_instances_keeps_white_and_stable_ownership() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var node = scene.add(Object3D())
+    var mesh = InstancedMesh(geometry, MaterialId(0), node, 3)
+    var colors: List[PixelColor] = [
+        PixelColor(12, 34, 56, 78),
+        PixelColor(90, 123, 145, 167),
+        PixelColor(189, 210, 231, 252),
+    ]
+    for original in range(3):
+        mesh.set_matrix_at(original, translation(Float32(original), 0, 0))
+        mesh.set_color_at(original, colors[original])
+        var weights = MorphInfluences()
+        weights.set(0, Float32(original + 1) * 0.25)
+        mesh.set_morph_at(original, weights)
+    mesh.matrices.append(translation(3, 0, 0))
+    mesh.matrices.append(translation(4, 0, 0))
+    assert_equal(len(mesh.colors), 3)
+    assert_equal(mesh.color_at(3).hex(), 0xFFFFFF)
+    scene.add_instanced_mesh(mesh^)
+
+    # The first appended instance moves first. Equal keys keep the two
+    # existing colored instances and the other appended one in order.
+    sort_instanced_mesh(scene, assets, 0, [2, 1, 1, 0, 1])
+    var expected: List[Int] = [3, 1, 2, 4, 0]
+    ref sorted = scene.instanced_meshes[0]
+    assert_equal(sorted.count(), 5)
+    assert_equal(len(sorted.colors), 5)
+    assert_equal(len(sorted.morphs), 5)
+    for i in range(5):
+        var original = expected[i]
+        assert_equal(sorted.matrix_at(i).elements[12], Float32(original))
+        var color = sorted.color_at(i)
+        if original < 3:
+            assert_equal(color.hex(), colors[original].hex())
+            assert_equal(color.a, colors[original].a)
+            assert_equal(sorted.morph_at(i)[0], Float32(original + 1) * 0.25)
+        else:
+            assert_equal(color.hex(), 0xFFFFFF)
+            assert_equal(color.a, 255)
+            assert_equal(len(sorted.morph_at(i)), 0)
+
+
+def test_sorting_uncolored_appended_instances_keeps_colors_empty() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var node = scene.add(Object3D())
+    var mesh = InstancedMesh(geometry, MaterialId(0), node, 1)
+    mesh.matrices.append(translation(1, 0, 0))
+    scene.add_instanced_mesh(mesh^)
+    sort_instanced_mesh(scene, assets, 0, [1, 0])
+    ref sorted = scene.instanced_meshes[0]
+    assert_equal(sorted.count(), 2)
+    assert_equal(sorted.matrix_at(0).elements[12], 1)
+    assert_equal(sorted.matrix_at(1).elements[12], 0)
+    assert_equal(len(sorted.colors), 0)
+    assert_equal(len(sorted.morphs), 0)
+    for i in range(2):
+        assert_equal(sorted.color_at(i).hex(), 0xFFFFFF)
+        assert_equal(sorted.color_at(i).a, 255)
+
+
+def test_sorting_one_colored_instance_keeps_its_color() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var node = scene.add(Object3D())
+    var mesh = InstancedMesh(geometry, MaterialId(0), node, 1)
+    mesh.set_matrix_at(0, translation(7, 8, 9))
+    mesh.set_color_at(0, PixelColor(12, 34, 56, 78))
+    scene.add_instanced_mesh(mesh^)
+    sort_instanced_mesh(scene, assets, 0, [0])
+    ref sorted = scene.instanced_meshes[0]
+    assert_equal(sorted.count(), 1)
+    assert_equal(sorted.matrix_at(0).elements[12], 7)
+    assert_equal(len(sorted.colors), 1)
+    assert_equal(sorted.color_at(0).hex(), 0x0C2238)
+    assert_equal(sorted.color_at(0).a, 78)
+
+
 def test_a_multi_material_object_draws_one_geometry_in_each() raises:
     var scene = Scene()
     var group = create_multi_material_object(
@@ -486,7 +569,7 @@ def test_a_mesh_s_morphed_attributes_use_its_weights() raises:
     near(worn.morphed_position.component(1, 2), 0.5)
 
 
-def test_sorting_a_cleared_mesh_discards_stale_morph_rows() raises:
+def test_sorting_a_cleared_mesh_discards_stale_colors_and_morphs() raises:
     var scene = Scene()
     var assets = Assets()
     var geometry = assets.geometries.add(BufferGeometry())
@@ -495,12 +578,14 @@ def test_sorting_a_cleared_mesh_discards_stale_morph_rows() raises:
     var weights = MorphInfluences()
     weights.set(0, 0.5)
     mesh.set_morph_at(0, weights)
+    mesh.set_color_at(0, PixelColor(12, 34, 56))
     # Instance matrices are public and define the current instance count.
-    # Old morph rows must not survive sorting after every instance is gone.
+    # Old rows must not survive sorting after every instance is gone.
     mesh.matrices.clear()
     scene.add_instanced_mesh(mesh^)
     sort_instanced_mesh(scene, assets, 0, [])
     assert_equal(scene.instanced_meshes[0].count(), 0)
+    assert_equal(len(scene.instanced_meshes[0].colors), 0)
     assert_equal(len(scene.instanced_meshes[0].morphs), 0)
 
 
