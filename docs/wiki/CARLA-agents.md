@@ -60,6 +60,8 @@ The search uses Dijkstra's algorithm, which is A* with a zero heuristic. CARLA's
 
 The search takes the lowest accumulated cost first. Equal costs use the lowest node id. An equal-cost alternative keeps the first predecessor. This retains deterministic ties, but some routes can differ from CARLA's heuristic search. Zero-cost cycles do not change predecessors or cause an infinite search.
 
+Scenario replay and route comparisons against a CARLA server must allow for this difference. The current planner has no mode that restores CARLA's heuristic. The project keeps proven correctness fixes even when upstream results differ; see the [contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness).
+
 All edge costs must be nonnegative. Graph construction checks this once. Private graph edits must preserve this invariant before a search.
 
 The search keeps exact integer costs through the signed 64-bit range. Larger sums share an overflow marker that sorts after every supported cost. A reachable target raises an error only when its minimum cost exceeds that range. Overflow on other paths does not block a valid route or turn an unreachable target into an error.

@@ -20,7 +20,9 @@ a cut goes into every box it touches, and a query gives it once.
 are nodes in one list, and each holds the indices of its triangles in
 `triangles`, which keeps every triangle added, in order. Node 0 is the
 root. Searches and pushes keep three.js's order. Contact distances use
-corrected geometric minima.
+corrected geometric minima. Collision outputs can differ from three.js
+0.180.0, including in a port of its first-person game. There is no legacy
+contact mode.
 
 Like `Box3`, an octree holds bare `Float32` meters.
 
@@ -37,7 +39,9 @@ Like `Box3`, an octree holds bare `Float32` meters.
 - Sphere edge contacts use the full squared radius and the nearest edge.
   Segment contacts recompute the minimum when an endpoint constrains it.
   These correct the inherited missed contacts and independent clamps.
-- Front-face, edge and vertex tangency gives zero contact depth.
+- Front-face, edge and vertex tangency gives zero contact depth. The
+  inherited strict edge test rejects tangency. Capsule face tangency
+  avoids the inherited zero-over-zero interpolation.
 
 Sphere queries accept either side of a face. A face contact pushes toward
 its front, including when the center is behind it. Edge contacts push

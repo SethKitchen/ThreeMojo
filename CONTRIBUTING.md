@@ -22,6 +22,32 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 - Documentation must follow the [writing rules](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation). `make docs-check` enforces the ones a tool can check.
 - Everything is written in American English: `color`, `meter`, `center`, `gray`. That includes identifiers, docstrings and comments.
 
+## Upstream behavior and correctness
+
+Keep the upstream API and behavior where they meet the documented contract.
+A proven upstream defect can be corrected even when the result differs from
+three.js or CARLA. Correctness takes priority over reproducing that defect.
+A visual preference or a speed gain alone does not prove an upstream defect.
+
+For each correction:
+
+1. Name the pinned upstream version and give a reproducible counterexample.
+2. Check the corrected result with an independent geometric, mathematical,
+   or format reference. Keep the original test tolerances and workloads.
+3. List the changed behavior in the module's differences section and its
+   wiki page. State how it affects existing callers or scenario replay.
+4. Keep tests for the corrected case and for ordinary upstream behavior.
+
+Do not claim exact upstream output when a documented correction changes it.
+A compatibility mode is a separate feature. It needs an explicit contract
+and tests for both modes; do not add one merely to retain a known defect.
+
+The Octree contact corrections and CARLA route and traffic-manager corrections
+follow this rule. Their current APIs have no legacy-bug compatibility mode.
+See [Octree](docs/wiki/Math-addons.md#octree),
+[CARLA agents](docs/wiki/CARLA-agents.md#the-route-planner), and
+[CARLA traffic manager](docs/wiki/CARLA-traffic-manager.md#differences-from-carla).
+
 ## Add a feature
 
 1. Open an issue, or take an open one from the checklist.

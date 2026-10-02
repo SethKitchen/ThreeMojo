@@ -158,6 +158,12 @@ Each node has a road option: straight, left or right through a junction, lane fo
 
 ## Differences from CARLA
 
+These corrections can change hazard decisions, vehicle controls and paths
+compared with a CARLA server. The same seed does not guarantee identical
+scenario replay. There is no legacy-bug compatibility mode. The
+[contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness)
+explain why proven corrections take priority over upstream defects.
+
 - Collision cache reads preserve the requested actor order. The geodesic boundary includes the final buffered waypoint. These correct two defects in the pinned CARLA source.
 
 - Graph walks stop at repeated waypoints. A vehicle's path does not add a place already in its buffer, including on later updates. Unreachable imported path points and route options stay pending. A walk trapped in a cycle has no safe point. Later updates retry incomplete junction walks. Fork selection skips branches without an exit and keeps the first branch if none has an exit.
