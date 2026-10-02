@@ -80,5 +80,22 @@ def test_queue_rejects_nan_without_changing_pending_entries() raises:
     assert_equal(queue.pop()[1], 7)
 
 
+def test_queue_preserves_integer_scores_above_float64_precision() raises:
+    var queue = _MinCostQueue[DType.uint64]()
+    queue.push(9007199254740993, -1)
+    queue.push(9007199254740992, 7)
+    queue.push(9223372036854775807, 0)
+    queue.push(9223372036854775808, 0)
+    queue.push(9007199254740992, -2)
+    assert_equal(queue.pop()[1], -2)
+    assert_equal(queue.pop()[1], 7)
+    var next = queue.pop()
+    assert_equal(next[0], 9007199254740993)
+    assert_equal(next[1], -1)
+    assert_equal(queue.pop()[0], 9223372036854775807)
+    assert_equal(queue.pop()[0], 9223372036854775808)
+    assert_equal(len(queue), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

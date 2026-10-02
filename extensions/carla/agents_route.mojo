@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""CARLA's global route planner: a lane graph and an A* search on it.
+"""CARLA's global route planner with exact sample-count route search.
 
 `GlobalRoutePlanner` turns the map's topology into a directed graph and
 finds routes on it.
@@ -23,8 +23,10 @@ finds routes on it.
    most on each side.
 
 `trace_route` finds the nodes of the origin's and the destination's
-lane pieces, runs A* between them, and walks the edges. The heuristic is
-the straight distance between node locations. It adds the samples of
+lane pieces, finds a minimum-cost path between them, and walks the
+edges. Uniform-cost search uses the sum of edge sample counts. Lane
+changes cost zero. Node locations do not affect search priority.
+It adds the samples of
 each lane-follow edge. A lane-change edge adds the current waypoint and a
 waypoint five samples along the new lane.
 
@@ -36,13 +38,19 @@ Otherwise it is left or right, judged against the other ways out of the
 same node. The edges inside the junction keep the decision.
 
 The source is CARLA's `PythonAPI/carla/agents/navigation/
-global_route_planner.py`. The search and the cases where the Python
-fails follow CARLA's C++ port, `LibCarla/source/carla/agents/navigation/
-GlobalRoutePlanner.cpp`:
+global_route_planner.py`. The search deliberately differs from CARLA's
+Euclidean A* heuristic. Meters do not bound sample counts, and lane
+changes can cover a distance at zero cost. A zero heuristic makes the
+search exact for the nonnegative graph costs. It does not change the
+cost units to meters or seconds. Costs stay exact through the signed
+64-bit range. A larger target cost raises an error.
 
-- The A* search pops the lowest cost first and, of equal costs, the
-  lowest node id. With no route, the search gives no nodes and the trace
-  is empty.
+The cases where the Python fails follow CARLA's C++ port,
+`LibCarla/source/carla/agents/navigation/GlobalRoutePlanner.cpp`:
+
+- The search pops the lowest accumulated cost first and, of equal costs,
+  the lowest node id. Equal-cost alternatives keep the first predecessor.
+  With no route, the search gives no nodes and the trace is empty.
 - A piece whose first sample fails keeps an empty path.
 - An undecided turn is `OPTION_VOID`.
 - The side edges of a turn with no chord vector are left out.
@@ -74,6 +82,8 @@ from units.si import DEGREE, METER, RADIAN, Angle, Length
 comptime _THRESHOLD = 35.0 * 3.14159265358979323846 / 180.0
 comptime _INT32_MIN = -2147483648
 comptime _INT32_MAX = 2147483647
+comptime _MAX_ROUTE_COST = 9223372036854775807
+comptime _ROUTE_OVERFLOW = 9223372036854775808
 
 
 @fieldwise_init
@@ -295,6 +305,7 @@ struct GlobalRoutePlanner(Movable):
         self._build_graph(map)
         self._find_loose_ends(map)
         self._lane_change_link(map)
+        self._validate_costs()
 
     # --- building ---------------------------------------------------------------
 
@@ -596,17 +607,10 @@ struct GlobalRoutePlanner(Movable):
             return None
         return self._road_id_to_edge.get(_lane_key(w.value()))
 
-    def _heuristic(self, a: Int, b: Int) raises -> Float64:
-        var d = (
-            self._nodes[self._node_index[a]].vertex
-            - self._nodes[self._node_index[b]].vertex
-        )
-        return sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
-
     def path_search(
         self, map: Map, origin: Vector3, destination: Vector3
     ) raises -> List[RouteNodeId]:
-        """Find the nodes of a route, `_path_search`.
+        """Find a minimum sample-count route, `_path_search`.
 
         Args:
             map: The map.
@@ -616,10 +620,12 @@ struct GlobalRoutePlanner(Movable):
         Returns:
             The nodes from the origin's piece to the destination's, then
             the end node of the destination's piece. Empty if a point has
-            no piece or no route joins them.
+            no piece or no route joins them. The final piece is appended
+            after the search; its cost is the same for all alternatives.
 
         Raises:
-            Error: If a map query fails.
+            Error: If a map query fails, or the minimum cost to the
+                destination piece's entry exceeds the signed 64-bit range.
         """
         var start = self._localize(map, origin)
         var end = self._localize(map, destination)
@@ -631,21 +637,31 @@ struct GlobalRoutePlanner(Movable):
             out.append(RouteNodeId(end.value()[1]))
         return out^
 
+    def _validate_costs(self) raises:
+        # Construction owns edge costs. Check them once, not on each
+        # short route query. Private graph edits must repeat this check.
+        for edge in self._edges:
+            if edge.length < 0:
+                raise Error("A route edge cost must be nonnegative")
+
     def _search(self, source: Int, target: Int) raises -> List[RouteNodeId]:
-        # A* with the straight-line heuristic. The open list holds
-        # (cost, node) entries; the lowest cost comes out first, and of
-        # equal costs the lowest node id. A node comes out once; a later
-        # entry for it is skipped.
+        # Dijkstra's algorithm is A* with a zero heuristic. The graph must
+        # have validated nonnegative sample counts, not geometric lengths.
+        # The heap orders exact integer costs, then node ids. A strict
+        # improvement changes the predecessor; equal costs leave it alone.
+        # With nonnegative costs, each node is final on its first pop.
         var out = List[RouteNodeId]()
-        var open = _MinCostQueue()
-        var g = Dict[Int, Float64]()
+        var open = _MinCostQueue[DType.uint64]()
+        var g = Dict[Int, UInt64]()
         var came_from = Dict[Int, Int]()
         var closed = Dict[Int, Bool]()
-        g[source] = 0.0
-        open.push(self._heuristic(source, target), source)
+        g[source] = 0
+        open.push(0, source)
         while len(open) > 0:
             var current = open.pop()[1]
             if current == target:
+                if g[current] == _ROUTE_OVERFLOW:
+                    raise Error("A route cost exceeds the signed 64-bit range")
                 var nodes = List[Int]()
                 nodes.append(current)
                 var n = current
@@ -662,15 +678,18 @@ struct GlobalRoutePlanner(Movable):
             var g_current = g[current]
             for e in self._nodes[self._node_index[current]].out_edges:
                 var neighbor = self._edges[e].target.value
-                var tentative = g_current + Float64(self._edges[e].length)
+                var cost = UInt64(self._edges[e].length)
+                # Saturation preserves reachability beyond the supported
+                # range. Every representable path sorts before this marker,
+                # so irrelevant overflow cannot hide a valid target route.
+                var tentative = UInt64(_ROUTE_OVERFLOW)
+                if g_current <= UInt64(_MAX_ROUTE_COST) - cost:
+                    tentative = g_current + cost
                 var known = g.get(neighbor)
                 if not Bool(known) or tentative < known.value():
                     g[neighbor] = tentative
                     came_from[neighbor] = current
-                    open.push(
-                        tentative + self._heuristic(neighbor, target),
-                        neighbor,
-                    )
+                    open.push(tentative, neighbor)
         return out^
 
     def _successive_last_intersection_edge(
@@ -761,15 +780,19 @@ struct GlobalRoutePlanner(Movable):
                 self._intersection_end_node = tail[0]
                 # The first step of the tail is `next_edge` itself.
                 next_edge = tail[1]
-                var cv_opt = self._edges[current_edge].exit_vector
+                # A current lane-follow edge with a next edge is a
+                # topology edge: loose ends have no outgoing edge, and
+                # lane changes fail the guard above. _build_graph gives
+                # every topology edge an exit vector.
+                var cv = self._edges[current_edge].exit_vector.value()
                 var nv_opt = self._edges[next_edge].exit_vector
-                if not (Bool(cv_opt) and Bool(nv_opt)):
+                if not Bool(nv_opt):
                     self._previous_decision = self._edges[next_edge].type
                     return self._edges[next_edge].type
                 decision = self._compare(
                     current,
                     next,
-                    cv_opt.value(),
+                    cv,
                     nv_opt.value(),
                     threshold_degrees,
                 )

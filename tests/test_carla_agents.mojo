@@ -908,9 +908,9 @@ def test_route_on_an_empty_map() raises:
 # --- lane changes --------------------------------------------------------------------
 
 
-comptime _CHANGE_RIGHT = "1,-1,6,4;1,-1,8,4;1,-1,10,4;1,-1,12,4;1,-1,14,4;1,-1,16,4;1,-1,18,4;1,-1,20,4;1,-1,22,4;1,-1,24,4;1,-1,26,4;1,-1,28,4;1,-1,30,4;1,-1,32,4;1,-1,34,4;1,-1,36,4;1,-1,38,4;1,-1,40,4;1,-1,42,4;1,-1,44,4;1,-1,46,4;2,-1,0,4;2,-1,0,6;2,-2,12,6;2,-2,12,4;2,-2,14,4;2,-2,16,4;2,-2,18,4;2,-2,20,4;2,-2,22,4;2,-2,24,4;2,-2,26,4;2,-2,28,4"
+comptime _CHANGE_RIGHT = "1,-1,5.3,6;1,-2,16,6;1,-2,16,4;1,-2,18,4;1,-2,20,4;1,-2,22,4;1,-2,24,4;1,-2,26,4;1,-2,28,4;1,-2,30,4;1,-2,32,4;1,-2,34,4;1,-2,36,4;1,-2,38,4;1,-2,40,4;1,-2,42,4;1,-2,44,4;1,-2,46,4;2,-2,0,4;2,-2,0,4;2,-2,2,4;2,-2,4,4;2,-2,6,4;2,-2,8,4;2,-2,10,4;2,-2,12,4;2,-2,14,4;2,-2,16,4;2,-2,18,4;2,-2,20,4;2,-2,22,4;2,-2,24,4;2,-2,26,4;2,-2,28,4"
 
-comptime _CHANGE_LEFT = "1,-2,6,4;1,-2,8,4;1,-2,10,4;1,-2,12,4;1,-2,14,4;1,-2,16,4;1,-2,18,4;1,-2,20,4;1,-2,22,4;1,-2,24,4;1,-2,26,4;1,-2,28,4;1,-2,30,4;1,-2,32,4;1,-2,34,4;1,-2,36,4;1,-2,38,4;1,-2,40,4;1,-2,42,4;1,-2,44,4;1,-2,46,4;2,-2,0,4;2,-2,0,5;2,-1,12,5;2,-1,12,4;2,-1,14,4;2,-1,16,4;2,-1,18,4;2,-1,20,4;2,-1,22,4;2,-1,24,4;2,-1,26,4;2,-1,28,4"
+comptime _CHANGE_LEFT = "1,-2,5.3,5;1,-1,16,5;1,-1,16,4;1,-1,18,4;1,-1,20,4;1,-1,22,4;1,-1,24,4;1,-1,26,4;1,-1,28,4;1,-1,30,4;1,-1,32,4;1,-1,34,4;1,-1,36,4;1,-1,38,4;1,-1,40,4;1,-1,42,4;1,-1,44,4;1,-1,46,4;2,-1,0,4;2,-1,0,4;2,-1,2,4;2,-1,4,4;2,-1,6,4;2,-1,8,4;2,-1,10,4;2,-1,12,4;2,-1,14,4;2,-1,16,4;2,-1,18,4;2,-1,20,4;2,-1,22,4;2,-1,24,4;2,-1,26,4;2,-1,28,4"
 
 
 def test_lane_change_edges() raises:
@@ -935,8 +935,10 @@ def test_lane_change_edges() raises:
     assert_equal(grp.edge(a2, b2).type.value, OPTION_CHANGE_LANE_RIGHT.value)
     assert_equal(grp.edge(b2, a2).type.value, OPTION_CHANGE_LANE_LEFT.value)
     # Twenty-three samples at s=2,4,...,46 give each forward edge
-    # weight 24. Changing now scores 0+50; advancing scores 24+3=27,
-    # then changing on road 2 scores 24+0. The graph search must advance.
+    # weight 24. An early change costs 0+24; a late change costs 24+0.
+    # Both are minimum routes. The zero-cost neighbor is expanded first
+    # and reaches the destination entry before the equal-cost alternative.
+    # Strict relaxation retains that first predecessor.
     assert_equal(grp.edge(a, a2).length, 24)
     assert_equal(grp.edge(b, b2).length, 24)
     var right_nodes = grp.path_search(
@@ -944,20 +946,20 @@ def test_lane_change_edges() raises:
     )
     assert_equal(len(right_nodes), 4)
     assert_equal(right_nodes[0], a)
-    assert_equal(right_nodes[1], a2)
+    assert_equal(right_nodes[1], b)
     assert_equal(right_nodes[2], b2)
     var left_nodes = grp.path_search(
         map, Vector3(5.3, 5.25, 0), Vector3(80.3, 1.75, 0)
     )
     assert_equal(len(left_nodes), 4)
     assert_equal(left_nodes[0], b)
-    assert_equal(left_nodes[1], b2)
+    assert_equal(left_nodes[1], a)
     assert_equal(left_nodes[2], a2)
-    # Both lane changes are legal. The restored road-2 change gives a
-    # route that follows road 1 first. Its next node is already near the
-    # goal, so the existing cost-plus-distance queue selects that path.
-    # The destination-lane hop skips five 2 m samples after its nearest
-    # sample: s=2 + 5*2 =12. Then lane following continues to s=28.
+    # This deliberately differs from CARLA's Euclidean search, which
+    # deferred the equally costly lane change. Projected origin s=5.3
+    # has nearest sample s=6; the five-sample hop ends at s=16 on road 1.
+    # The trace follows road 1 to its exit, then road 2 from s=0 to s=28.
+    # The piece boundary appears twice, once as exit and once as entry.
     var to_right = grp.trace_route(
         map, Vector3(5.3, 1.75, 0), Vector3(80.3, 5.25, 0)
     )
@@ -1097,18 +1099,16 @@ def _link(mut grp: GlobalRoutePlanner, a: Int, b: Int, length: Int) raises:
 def _linear_route(
     grp: GlobalRoutePlanner, source: Int, target: Int
 ) raises -> List[RouteNodeId]:
-    """The previous linear-selection route search, used only as an oracle."""
-    # A* with the straight-line heuristic. The open list holds
-    # (cost, node) entries; the lowest cost comes out first, and of
-    # equal costs the lowest node id. A node comes out once; a later
-    # entry for it is skipped.
+    """A linear-selection uniform-cost search for heap parity checks."""
+    # This oracle checks heap ordering, not shortest-path correctness.
+    # The independent all-pairs oracle lives in test_carla_route_search.
     var out = List[RouteNodeId]()
-    var open = List[Tuple[Float64, Int]]()
-    var g = Dict[Int, Float64]()
+    var open = List[Tuple[Int64, Int]]()
+    var g = Dict[Int, Int64]()
     var came_from = Dict[Int, Int]()
     var closed = Dict[Int, Bool]()
-    g[source] = 0.0
-    open.append((grp._heuristic(source, target), source))
+    g[source] = 0
+    open.append((Int64(0), source))
     while len(open) > 0:
         var best = 0
         for i in range(1, len(open)):
@@ -1134,17 +1134,12 @@ def _linear_route(
         var g_current = g[current]
         for e in grp._nodes[grp._node_index[current]].out_edges:
             var neighbor = grp._edges[e].target.value
-            var tentative = g_current + Float64(grp._edges[e].length)
+            var tentative = g_current + Int64(grp._edges[e].length)
             var known = g.get(neighbor)
             if not Bool(known) or tentative < known.value():
                 g[neighbor] = tentative
                 came_from[neighbor] = current
-                open.append(
-                    (
-                        tentative + grp._heuristic(neighbor, target),
-                        neighbor,
-                    )
-                )
+                open.append((tentative, neighbor))
     return out^
 
 
@@ -1168,8 +1163,8 @@ def test_heap_routes_match_linear_search_on_generated_graphs() raises:
 
 
 def test_search_ties_and_stale_entries() raises:
-    # Ties: nodes 1 and 2 are both 1 away and 6.40 from the goal: the
-    # lower id, 1, comes out first, though it was pushed second.
+    # Ties: nodes 1 and 2 both cost 1 from the source. The lower id, 1,
+    # comes out first, though it was pushed second.
     var grp = _graph()
     var s = _node(grp, 0, 0)
     var b = _node(grp, 3, 4)
