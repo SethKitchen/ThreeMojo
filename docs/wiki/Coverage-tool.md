@@ -18,14 +18,14 @@ Mojo 1.1 resolves a module beside the file being compiled before it looks at any
 
 The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 that arrangement measured nothing at all and reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
 
-The copies of the tool itself are never instrumented. Measuring the tool with the tool is still not attempted.
+The repository coverage run copies the tool without instrumentation. Separate diagnostic runs can instrument the tool, but those results cannot independently validate the instrumenter.
 
 ## Modules
 
 | Module | Job |
 |---|---|
 | `scanner.mojo` | Find statements, decisions and loop headers in a source file. |
-| `instrument.mojo` | Emit the probes. Split `and` and `or` conditions. |
+| `instrument.mojo` | Emit probes around Boolean leaves and decisions. |
 | `runtime.mojo` | The probe functions the instrumented code calls. |
 | `mcdc.mojo` | Reconstruct decision vectors from the ordered record stream. |
 | `report.mojo` | Build the report and decide whether it is complete. |
@@ -37,10 +37,24 @@ The copies of the tool itself are never instrumented. Measuring the tool with th
 |---|---|
 | Line | Did this statement run? |
 | Branch | Did this decision go both ways? A `for` loop counts, including running zero times. |
-| Condition | Did each `and` or `or` operand take both values? |
+| Condition | Did each Boolean leaf of a compound decision take both values? |
 | MC/DC | Did each operand change the outcome on its own? |
 
 MC/DC is the masking variant. Short-circuit evaluation makes unique-cause MC/DC unreachable for most compound decisions.
+
+### Grouped conditions
+
+The instrumenter preserves `and`, `or`, `not` and their parentheses. It wraps each Boolean leaf of a compound decision once. The leaf indexes follow source order. A skipped leaf emits no record. A `not` operator stays outside its leaf probe, so the probe records the value before negation.
+
+Redundant parentheses and multiline headers do not remove leaf obligations. Calls, indexing, comparisons and conditional expressions remain atomic leaves. The tool does not split logical expressions inside call arguments, indexes or comparison operands. Those expressions supply values to a leaf. A decision with one leaf uses its decision probe without duplicate condition probes.
+
+Before [issue #535](https://github.com/SethKitchen/ThreeMojo/issues/535), the instrumenter split only top-level `and` and `or` operators. An outer group could therefore report both decision outcomes with no leaf-condition or MC/DC records. Historical 100% reports described the old manifest. They did not establish coverage of these hidden leaves.
+
+The baseline audit at `b0222cbcb0c111bfe78cf330d79b757864b40e9f` covered 759 CPU modules. Group recognition increases the condition count from 5760 to 7438. It adds 1678 MC/DC obligations across 609 decisions in 207 modules.
+
+Quote-aware scanning also reveals code after multiline shader strings. The line count rises from 122629 to 122792. The decision count rises from 22221 to 22236. No old manifest entry is removed. These are manifest counts, not passing coverage results. The new obligations need fresh captures from the complete suite set.
+
+`make test-coverage-tool` compares native and rewritten Mojo fixtures. It checks leaf manifests, short-circuit order, call counts, exceptions, and raw and reduced traces. It also verifies that both decision outcomes can pass while leaf coverage fails. This check does not resolve the recursive-state limit below.
 
 ## Rules
 

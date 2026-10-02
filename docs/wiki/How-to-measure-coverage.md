@@ -6,7 +6,7 @@
 make coverage
 ```
 
-The run takes about five seconds on a fast machine.
+The run time depends on the selected suites and the amount of probe output.
 
 ## Read the report
 
@@ -49,14 +49,21 @@ The budget exists to catch a construct that sends the compiler superlinear. See 
 
 `render/gpu.mojo` is excluded. Its probes would write to `stderr`, and a GPU kernel has none. The parity tests in `tests/test_gpu.mojo` cover it instead. The layout tests in `tests/test_gpu_layout.mojo` check its host side. They need MAX but no GPU, so CI runs them in a job of their own.
 
-The coverage tool does not measure itself.
+The repository coverage run does not measure the coverage tool itself.
+
+Grouped and multiline decisions have leaf-condition and MC/DC obligations. A decision that takes both outcomes can still miss a leaf or its independence pair. Historical reports made before grouped-leaf instrumentation did not measure those hidden obligations. See [Coverage tool](Coverage-tool#grouped-conditions).
+
+After an instrumenter change, regenerate the manifest and every capture. The content-based coverage cache includes the instrumenter source. An affected run selects all suites for a coverage-tool change. Do not combine old captures with a new manifest.
+
+Run the native instrumentation regressions with `make test-coverage-tool`.
 
 ## Run a suite under instrumentation by hand
 
 When a suite fails only under instrumentation, run it against the instrumented copies:
 
 ```bash
-.venv/bin/mojo run -I coverage/build -I . tests/test_renderer.mojo
+cd coverage/build
+../../.venv/bin/mojo run -I . tests/test_renderer.mojo
 ```
 
 See [Coverage tool](Coverage-tool) for how the instrumentation works.

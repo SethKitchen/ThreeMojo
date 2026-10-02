@@ -55,6 +55,10 @@ A ticked item has a port, tests and documentation on the linked wiki page. Each 
 Every three.js feature in scope is ported: 215 features, and none is open. Each wiki page lists what its port leaves out, under "What is not ported". [Out of scope](#out-of-scope) lists what the port leaves out on purpose, and why. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
+### Project tools
+
+- [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
+
 ### Scene
 
 <details>

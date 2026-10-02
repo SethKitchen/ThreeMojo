@@ -14,6 +14,12 @@ import shard
 
 
 class DependencyTests(unittest.TestCase):
+    def test_coverage_parser_and_scanner_each_select_all_suites(self):
+        for path in ('coverage/instrument.mojo', 'coverage/scanner.mojo'):
+            reasons = []
+            self.assertEqual(affected.affected_set({path: False}, reasons), affected.ALL)
+            self.assertTrue(any(path in reason for reason in reasons))
+
     def test_multiline_comments_and_aliases(self):
         self.assertEqual(affected.imported_names('''from math import (
             vector2, # first
@@ -65,6 +71,20 @@ class CacheTests(unittest.TestCase):
                 path.write_bytes(b'first')
             (root / 'assets/fixture.bin').rename(root / 'assets/renamed.bin')
             self.assertNotEqual(original, cache_key.cache_key(root, ['-I .']))
+
+    def test_coverage_instrumenter_changes_invalidate_coverage_stamp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / 'coverage/instrument.mojo'
+            tool.parent.mkdir()
+            tool.write_text('top-level-only parser')
+            before = cache_key.cache_key(root, ['covered:module.mojo'])
+            tool.write_text('grouped leaf parser')
+            after = cache_key.cache_key(root, ['covered:module.mojo'])
+            self.assertNotEqual(before, after)
+            scanner = root / 'coverage/scanner.mojo'
+            scanner.write_text('quote-aware scanner')
+            self.assertNotEqual(after, cache_key.cache_key(root, ['covered:module.mojo']))
 
     def test_generated_outputs_are_not_inputs(self):
         with tempfile.TemporaryDirectory() as directory:

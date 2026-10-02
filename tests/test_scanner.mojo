@@ -271,5 +271,50 @@ def test_escaped_quotes_and_backslashes_do_not_hide_the_next_line() raises:
     )
 
 
+def test_triple_quotes_keep_brackets_and_comments_inside_literals() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'def f():\n    if (a or text == """hello" and )#[word"""):\n'
+                "        return 1\n    return 0\n"
+            )
+        ),
+        [2, 3, 4],
+    )
+
+
+def test_multiline_literals_resume_at_the_next_statement() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'def f():\n    if text == """hello"\n# ) and or\nworld""":\n'
+                "        return 1\n    return 0\n"
+            )
+        ),
+        [2, 5, 6],
+    )
+    assert_equal(
+        executable_lines(
+            String(
+                "def f():\n    var text = '''hello'\n# ] and or\nworld'''\n"
+                "    return 1\n"
+            )
+        ),
+        [2, 5],
+    )
+
+
+def test_multiline_shader_constant_does_not_hide_following_functions() raises:
+    assert_equal(
+        executable_lines(
+            String(
+                'comptime SHADER = """void main() {\n# } [\n}\n"""\n'
+                "def real():\n    if value:\n        return 1\n"
+            )
+        ),
+        [6, 7],
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
