@@ -30,9 +30,6 @@ def atan_float32(x: Float32) -> Float32:
 
     Returns:
         The angle, in radians, from minus a half pi to a half pi.
-
-    Raises:
-        None.
     """
     if x == 0:
         return x
@@ -71,9 +68,6 @@ def atan2_float32(y: Float32, x: Float32) -> Float32:
         The angle from the positive x axis, in radians, from minus pi to
         pi. Signed zeros and infinities follow the IEEE quadrant rules.
         NaN when either coordinate is NaN.
-
-    Raises:
-        None.
     """
     if x != x or y != y:
         return x + y

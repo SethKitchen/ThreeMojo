@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Static checks for draft, ready, main and manual CI policy.
+"""Static checks for CI event policy and hardware-free GPU compilation.
 
 The workflow needs no new Python dependency. These checks recognize its
 small, explicit job guard rather than executing arbitrary expressions.
@@ -92,6 +92,23 @@ class CiPolicyTests(unittest.TestCase):
         self.assertRegex(self.text, r'(?m)^  push:\n    branches: \[main\]$')
         self.assertRegex(self.text, r'(?m)^  workflow_dispatch:\s*$')
         self.assertRegex(self.text, r'(?m)^permissions:\n  contents: read$')
+
+    def test_gpu_job_compiles_before_running_only_host_suites(self):
+        job = self.jobs['gpu-host']
+        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
+            'make -B test-gpu-host',
+        ])
+        self.assertNotIn('continue-on-error:', job)
+        self.assertNotRegex(job, r'(?m)^      -?\s*if:')
+
+    def test_gpu_job_keeps_pinned_toolchain_and_timeout(self):
+        job = self.jobs['gpu-host']
+        self.assertIn('uv pip install "mojo==1.1.0" "max==26.6.0"', job)
+        self.assertRegex(job, r'(?m)^    name: test-gpu-host \(MAX, no GPU\)$')
+        self.assertRegex(job, r'(?m)^    runs-on: ubuntu-latest$')
+        self.assertRegex(job, r'(?m)^    timeout-minutes: 30$')
 
     def test_wiki_remains_main_push_only(self):
         self.assertEqual(guard_of(self.jobs['wiki']), WIKI_GUARD)

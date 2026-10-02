@@ -34,7 +34,8 @@ zero.
 two frames, whose three.js tracks
 have two keys at one time. Where three.js logs and returns nothing or
 reads `undefined`, this refuses: a file that is not `IDP2` version 8, or
-whose size is not the header's end; a file that ends inside a part; a
+whose size is not the header's end; invalid counts, offsets or frame size;
+a file that ends inside a declared section; a
 model with no frames or nonpositive skin dimensions; and an index past
 its vertices, its texture coordinates or the normal table.
 """
@@ -52,6 +53,25 @@ from loaders.three_mf import js_key_order
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import SECOND, Duration
+
+# Signed 32-bit MD2 header fields, in the on-disk order.
+comptime _HEADER_FIELD_COUNT = 17
+comptime _HEADER_BYTES = _HEADER_FIELD_COUNT * 4
+comptime _SKIN_WIDTH = 2
+comptime _SKIN_HEIGHT = 3
+comptime _FRAME_SIZE = 4
+comptime _NUM_SKINS = 5
+comptime _NUM_VERTICES = 6
+comptime _NUM_TEXCOORDS = 7
+comptime _NUM_TRIANGLES = 8
+comptime _NUM_COMMANDS = 9
+comptime _NUM_FRAMES = 10
+comptime _OFFSET_SKINS = 11
+comptime _OFFSET_TEXCOORDS = 12
+comptime _OFFSET_TRIANGLES = 13
+comptime _OFFSET_FRAMES = 14
+comptime _OFFSET_COMMANDS = 15
+comptime _OFFSET_END = 16
 
 # three.js's `_normalData`: the 162 normals a vertex can name, z up.
 comptime NORMAL_TABLE: List[Float32] = [
@@ -692,26 +712,52 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     """
     var r = _Reader(bytes.copy())
     var header = List[Int]()
-    for i in range(17):  # pragma: no branch
+    for i in range(_HEADER_FIELD_COUNT):  # pragma: no branch
         header.append(r.signed(i * 4, 4))
     var ok = header[0] == 844121161 and header[1] == 8
     if not ok:
         raise Error("MD2: not a valid MD2 file")
-    if header[16] != len(bytes):
+    if header[_OFFSET_END] != len(bytes):
         raise Error("MD2: the file's size is not its header's end")
-    if header[2] <= 0 or header[3] <= 0:
+    if header[_SKIN_WIDTH] <= 0 or header[_SKIN_HEIGHT] <= 0:
         raise Error("MD2: skin dimensions must be positive")
-    var skin_width = Float64(header[2])
-    var skin_height = Float64(header[3])
-    var num_vertices = header[6]
-    var num_st = header[7]
-    var num_tris = header[8]
-    var num_frames = header[10]
+    var skin_width = Float64(header[_SKIN_WIDTH])
+    var skin_height = Float64(header[_SKIN_HEIGHT])
+    var num_vertices = header[_NUM_VERTICES]
+    var num_st = header[_NUM_TEXCOORDS]
+    var num_tris = header[_NUM_TRIANGLES]
+    var num_frames = header[_NUM_FRAMES]
     if num_frames < 1:
         raise Error("MD2: a model with no frames")
+    # Header fields 5 through 9: the five count fields before frames.
+    for field in range(_NUM_SKINS, _NUM_FRAMES):  # pragma: no branch
+        if header[field] < 0:
+            raise Error("MD2: a header count must not be negative")
+    var frame_size = header[_FRAME_SIZE]
+    if frame_size < 40 + num_vertices * 4:
+        raise Error("MD2: frame size is too short for the vertex count")
+    # Header counts and offsets are signed 32-bit. Bound each section
+    # with division before considering its complete byte span.
+    var counts: List[Int] = [
+        header[_NUM_SKINS],
+        num_st,
+        num_tris,
+        num_frames,
+        header[_NUM_COMMANDS],
+    ]
+    var widths: List[Int] = [64, 4, 12, frame_size, 4]
+    # The five declared sections are always checked, even when empty.
+    for section in range(5):  # pragma: no branch
+        var offset = header[_OFFSET_SKINS + section]
+        if offset < 0 or offset > len(bytes):
+            raise Error("MD2: a section offset is outside the file data")
+        if counts[section] > 0 and offset < _HEADER_BYTES:
+            raise Error("MD2: a section offset is outside the file data")
+        if counts[section] > (len(bytes) - offset) // widths[section]:
+            raise Error("MD2: the file ends inside a declared section")
 
     var uvs = List[Float64]()
-    var offset = header[12]
+    var offset = header[_OFFSET_TEXCOORDS]
     for _ in range(num_st):
         var u = Float64(r.signed(offset, 2))
         var v = Float64(r.signed(offset + 2, 2))
@@ -719,7 +765,7 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
         uvs.append(1 - v / skin_height)
         offset += 4
 
-    offset = header[13]
+    offset = header[_OFFSET_TRIANGLES]
     var vertex_indices = List[Int]()
     var uv_indices = List[Int]()
     for _ in range(num_tris):
@@ -739,10 +785,10 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
         offset += 12
 
     var frames = List[Md2Frame]()
-    offset = header[14]
     var table = materialize[NORMAL_TABLE]()
     # At least one frame, checked above: the loop always runs.
-    for _ in range(num_frames):  # pragma: no branch
+    for frame_index in range(num_frames):  # pragma: no branch
+        offset = header[_OFFSET_FRAMES] + frame_index * frame_size
         var scale = SIMD[DType.float64, 4](0)
         var move = SIMD[DType.float64, 4](0)
         for k in range(3):  # pragma: no branch

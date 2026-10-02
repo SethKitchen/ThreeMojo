@@ -12,7 +12,9 @@
 | `world` | Contact solving, integration and ray casts |
 | `quantities` | Torque, energy, momentum, stiffness and unit constants |
 
-The `extensions/carla/physics/` paths for these five modules remain valid. They import the shared definitions. They do not copy the solver or wrap its types. A body made through either path can enter the same world.
+The `extensions/carla/physics/` paths for these five modules remain supported compatibility imports. They re-export the shared definitions, with no separate solver or wrapper types. A body made through either path can enter the same world.
+
+Use `extensions.physics` for new consumers of the shared mechanics. The CARLA compatibility imports have no planned removal.
 
 Vehicle setup, wheel forces, CARLA controls, the walker controller and `CarlaPhysics` stay in `extensions/carla/physics/`. They are domain models and tick orchestration. The [CARLA physics](CARLA-physics) page describes them.
 
@@ -43,6 +45,14 @@ Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extr
 Set `RigidBody.collides` to `False` to leave the primitive contact sweep. For a primitive body, the next step skips its contact-shape transforms and sweep candidate pairs. Set it back to `True` to restore contacts on the next step. The body id stays valid. Forces and motion still integrate.
 
 A disabled body still occupies its body slot. CARLA parks destroyed actors with collisions disabled. This avoids quadratic pair scans between parked bodies, but it does not reclaim their memory. Resource reclamation is tracked in [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
+
+## Numerical contact boundaries
+
+Convex edge contacts compare differences between support projections. A maximum support vertex stays selected after a large world translation. Contact coordinates still have Float32 resolution. Tests move crossed edges by positive and negative 10 km offsets along each contact axis. Their 3 mm point and depth tolerance allows about three Float32 coordinate steps at 10 km.
+
+These tests do not prove contact accuracy at arbitrary world coordinates. Body positions and contact points still use Float32. A precision-preserving public quantity contract is tracked in [#333](https://github.com/SethKitchen/ThreeMojo/issues/333); a world-origin policy remains a separate design choice.
+
+Material mixing widens the friction product before its square root. This keeps a representable geometric mean finite across the accepted Float32 coefficient range. It does not establish a calibrated material model.
 
 ## Verification boundary
 

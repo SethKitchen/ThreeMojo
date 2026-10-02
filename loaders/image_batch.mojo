@@ -21,9 +21,6 @@ def decode_batch_size(remaining: Int, workers: Int) -> Int:
 
     Returns:
         No more than `max(0, remaining)` and `max(1, workers)` images.
-
-    Raises:
-        None.
     """
     return min(max(0, remaining), max(1, workers))
 
@@ -40,12 +37,6 @@ struct TextureDecodeBatch(Movable):
         Args:
             remaining: The number of images still to decode.
             workers: The requested limit; one or less uses one image.
-
-        Returns:
-            None.
-
-        Raises:
-            None.
         """
         var count = decode_batch_size(remaining, workers)
         self.textures = List[Texture](capacity=count)
@@ -56,11 +47,7 @@ struct TextureDecodeBatch(Movable):
     def check(self) raises:
         """Refuse the first failed slot after all tasks have joined.
 
-        Args:
-            self: The completed batch, in source order.
-
-        Returns:
-            None.
+        Check the completed batch in source order.
 
         Raises:
             Error: If any task stored an error.

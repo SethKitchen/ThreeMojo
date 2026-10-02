@@ -220,5 +220,22 @@ def test_tube_painter_rejects_nonfinite_positions_atomically() raises:
     assert_true(painter.count() > before)
 
 
+def test_vertical_projection_scale_underflow_is_rejected_independently() raises:
+    var tiny = bitcast[DType.float32](UInt32(1))
+    # The horizontal scale and depth translation remain nonzero. Only
+    # the vertical scale is too small to represent after wide arithmetic.
+    with assert_raises(contains="representable"):
+        _ = perspective(-tiny, tiny, 3e38, -3e38, tiny, 1)
+
+
+def test_smallest_near_plane_keeps_nonzero_depth_translation() raises:
+    var tiny = bitcast[DType.float32](UInt32(1))
+    var projection = perspective(-tiny, tiny, tiny, -tiny, tiny, 2 * tiny)
+    assert_true(projection.is_finite())
+    assert_equal(projection.elements[0], Float32(1))
+    assert_equal(projection.elements[5], Float32(1))
+    assert_equal(projection.elements[14], -4 * tiny)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

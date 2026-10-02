@@ -41,7 +41,7 @@ class ExampleInputsTests(unittest.TestCase):
         self.assertIn('core/mesh.mojo', result['person'])
         self.assertIn('Makefile', result['cube'])
 
-    def test_make_does_not_rebuild_for_unrelated_extension(self):
+    def check_make_dependency_fixture(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             files = {p: '' for p in example_inputs.TOOLS}
@@ -65,10 +65,27 @@ class ExampleInputsTests(unittest.TestCase):
                 (root / name).write_text('')
                 os.utime(root / name, (2000, 2000))
             os.utime(root / 'extension.mojo', (3000, 3000))
+            # CI invokes the parent with -B. This fixture tests timestamps,
+            # so parent forcing, overrides and injected includes cannot apply.
+            environment = {key: value for key, value in os.environ.items()
+                           if key not in {'MAKEFLAGS', 'MFLAGS', 'MAKEOVERRIDES',
+                                          'MAKELEVEL', 'MAKEFILES', 'GNUMAKEFLAGS'}}
             self.assertEqual(subprocess.run(
-                ['make', '-q', 'cube.png'], cwd=root).returncode, 0)
+                ['make', '-q', 'cube.png'], cwd=root, env=environment).returncode, 0)
             self.assertEqual(subprocess.run(
-                ['make', '-q', 'person.png'], cwd=root).returncode, 1)
+                ['make', '-q', 'person.png'], cwd=root, env=environment).returncode, 1)
+
+    def test_make_does_not_rebuild_for_unrelated_extension(self):
+        self.check_make_dependency_fixture()
+
+    def test_outer_make_flags_cannot_force_the_dependency_fixture(self):
+        with patch.dict(os.environ, {
+            'MAKEFLAGS': 'B -- EXAMPLE_INPUTS_cube=extension.mojo',
+            'MAKEOVERRIDES': 'EXAMPLE_INPUTS_cube=extension.mojo',
+            'MFLAGS': '-B', 'GNUMAKEFLAGS': '-B',
+            'MAKEFILES': 'nonexistent-outer-include', 'MAKELEVEL': '7',
+        }):
+            self.check_make_dependency_fixture()
 
     def test_repository_recipes_cover_every_example_and_compress(self):
         root = Path(__file__).resolve().parent.parent

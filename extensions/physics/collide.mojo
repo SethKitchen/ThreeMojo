@@ -403,7 +403,9 @@ def _supporting(poly: Polyhedron, axis: Vector3) -> List[Int]:
     var top = poly.support(axis)
     var out = List[Int]()
     for i in range(len(poly.vertices)):  # pragma: no branch
-        if poly.vertices[i].dot(axis) > top - 1e-4:
+        # Subtract projections, not the tolerance from a large world
+        # coordinate. A maximizing corner must always remain selected.
+        if top - poly.vertices[i].dot(axis) < 1e-4:
             out.append(i)
     return out^
 

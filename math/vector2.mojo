@@ -8,6 +8,7 @@
 from math.matrix3 import Matrix3
 from math.utils import SeededRandom
 from math.vector3 import _js_round
+from math.norm import length2, normalized2, _ordinary_squared
 from std.math import acos, atan2, ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -40,7 +41,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
 
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""
-        return sqrt(self.dot(self))
+        return length2(self.x, self.y)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""
@@ -54,10 +55,9 @@ struct Vector2(Equatable, ImplicitlyCopyable):
 
     def normalize(mut self):
         """Scale `self` to unit length, leaving a zero vector unchanged."""
-        var magnitude = self.length()
-        if magnitude > 0:
-            self.x /= magnitude
-            self.y /= magnitude
+        var components = normalized2(self.x, self.y)
+        self.x = components[0]
+        self.y = components[1]
 
     def __add__(self, other: Self) -> Self:
         """Return the component-wise sum."""
@@ -222,10 +222,26 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js.
         """
-        var denominator = sqrt(self.length_sq() * other.length_sq())
-        if denominator == 0:
-            return Angle(Float32(pi / 2), RADIAN)
-        var theta = self.dot(other) / denominator
+        var first_squared = self.length_sq()
+        var second_squared = other.length_sq()
+        var product = first_squared * second_squared
+        var theta: Float32
+        if (
+            _ordinary_squared(first_squared)
+            and _ordinary_squared(second_squared)
+            and _ordinary_squared(product)
+        ):
+            theta = self.dot(other) / sqrt(product)
+        else:
+            var first = self
+            var second = other
+            first.normalize()
+            second.normalize()
+            if (first.x == 0 and first.y == 0) or (
+                second.x == 0 and second.y == 0
+            ):
+                return Angle(Float32(pi / 2), RADIAN)
+            theta = first.dot(second)
         return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
 
     def distance_to(self, other: Self) -> Float32:
@@ -237,7 +253,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Returns:
             The Euclidean distance.
         """
-        return sqrt(self.distance_to_squared(other))
+        return (self - other).length()
 
     def distance_to_squared(self, other: Self) -> Float32:
         """Return the squared distance between two points, three.js's
@@ -343,8 +359,11 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             high: The longest.
         """
         var length = self.length()
-        var divisor = length if length != 0 else Float32(1)
-        self = self / divisor * max(low, min(high, length))
+        if _ordinary_squared(self.length_sq()):
+            self = self / length * max(low, min(high, length))
+        else:
+            self.normalize()
+            self = self * max(low, min(high, length))
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.

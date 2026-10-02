@@ -616,9 +616,10 @@ def gaussian_splat_geometry_of(
         raise Error("Gaussian splat: covariance must have six components")
     if color.item_size != 4:
         raise Error("Gaussian splat: color must have four components")
-    var colors = List[UInt8](capacity=len(color.data))
-    for at in range(len(color.data)):
-        colors.append(clamped_byte(Float64(color.data[at]) * 255))
+    var channels = color.packed()
+    var colors = List[UInt8](capacity=len(channels))
+    for at in range(len(channels)):
+        colors.append(clamped_byte(Float64(channels[at]) * 255))
     var bands = List[List[UInt8]]()
     for band in range(1, MAX_SH_DEGREE + 1):  # pragma: no branch
         var bytes = List[UInt8]()

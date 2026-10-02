@@ -27,7 +27,8 @@ from geometries.torus import torus, torus_knot
 from geometries.tube import tube
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import asin, cos, pi, sin, sqrt
+from std.math import asin, cos, isfinite, nan, pi, sin, sqrt
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -2250,6 +2251,76 @@ def test_a_lathe_needs_a_profile_a_segment_and_a_sweep() raises:
     _ = lathe(profile([1, 0, 1, 1]), 1)
 
 
+def test_flat_cone_normals_keep_their_direction_at_extreme_heights() raises:
+    """The limiting normal points up or down, even for subnormal height."""
+    for height in [
+        Float32(1e-20),
+        Float32(1e-30),
+        bitcast[DType.float32](UInt32(1)),
+    ]:
+        for inverted in [False, True]:
+            var top = Float32(1) if inverted else Float32(0)
+            var bottom = Float32(0) if inverted else Float32(1)
+            var geometry = cylinder(
+                Length(top, METER),
+                Length(bottom, METER),
+                Length(height, METER),
+                3,
+                1,
+                open_ended=True,
+            )
+            ref normals = geometry.attribute_view(String(NORMAL))
+            for vertex in range(geometry.vertex_count()):
+                var n = normals.vector3(vertex)
+                assert_true(isfinite(n.x) and isfinite(n.y) and isfinite(n.z))
+                assert_unit(n)
+                assert_equal(n.y, Float32(-1) if inverted else Float32(1))
+                assert_true(abs(n.x) <= height * 2)
+                assert_true(abs(n.z) <= height * 2)
+
+
+def test_lathe_unit_normals_handle_tiny_and_large_profile_segments() raises:
+    """Only the final normal retains the segment's unnormalized length."""
+    for height in [Float32(1e-30), Float32(1e30)]:
+        var geometry = lathe(profile([1, 0, 1, height]), 3)
+        ref normals = geometry.attribute_view(String(NORMAL))
+        for column in range(4):
+            var first = normals.vector3(column * 2)
+            var last = normals.vector3(column * 2 + 1)
+            assert_true(
+                isfinite(first.x) and isfinite(first.y) and isfinite(first.z)
+            )
+            assert_unit(first)
+            assert_almost_equal(last.x / height, first.x, atol=1e-6)
+            assert_almost_equal(last.z / height, first.z, atol=1e-6)
+        assert_xyz(normals.vector3(0), 0, 0, 1)
+
+
+def test_lathe_corner_normals_use_finite_outer_endpoint_differences() raises:
+    """Overflowed segments and rounded cancellation preserve corner direction.
+    """
+    var wide = lathe(profile([1, -3e38, 1, 3e38, 1, 1e38]), 3)
+    ref normal = wide.attribute_view(String(NORMAL))
+    assert_xyz(normal.vector3(0), 0, 0, 1)
+    assert_xyz(normal.vector3(1), 0, 0, 1)
+    assert_true(isfinite(normal.vector3(2).z))
+    assert_almost_equal(
+        normal.vector3(2).z / Float32(2e38), Float32(-1), atol=1e-6
+    )
+    var folded = lathe(profile([1, 0, 1, 1e20, 1, 1]), 3)
+    assert_xyz(folded.attribute_view(String(NORMAL)).vector3(1), 0, 0, 1)
+    with assert_raises(contains="turn straight back"):
+        _ = lathe(profile([1, 0, 1, 1e20, 1, 0]), 3)
+
+
+def test_a_lathe_refuses_an_unrepresentable_final_normal() raises:
+    """The final raw segment normal must fit in its Float32 attribute."""
+    with assert_raises(contains="final profile normal"):
+        _ = lathe(profile([1, -3e38, 1, 3e38]), 3)
+    with assert_raises(contains="finite"):
+        _ = lathe(profile([1, 0, 1, nan[DType.float32]()]), 3)
+
+
 # --- tube -------------------------------------------------------------------
 
 
@@ -2497,6 +2568,42 @@ def test_a_torus_knot_needs_radii_segments_and_windings() raises:
         _ = torus_knot(two, tenth, 48, 8, 0, 3)
     with assert_raises():
         _ = torus_knot(two, tenth, 48, 8, 2, 0)
+
+
+def test_lathe_radial_cancellation_keeps_a_horizontal_corner_normal() raises:
+    # Rounded adjacent radial differences cancel, but the outer radii
+    # differ by one. Equal outer heights make the corner face down.
+    var geometry = lathe(profile([0, 0, 1e20, 1, 1, 0]), 3)
+    var normal = geometry.attribute_view(String(NORMAL)).vector3(1)
+    assert_true(
+        isfinite(normal.x) and isfinite(normal.y) and isfinite(normal.z)
+    )
+    assert_equal(normal.x, Float32(0))
+    assert_equal(normal.y, Float32(-1))
+    assert_equal(normal.z, Float32(0))
+
+
+def test_lathe_refuses_a_nonfinite_radius_independently() raises:
+    with assert_raises(contains="finite"):
+        _ = lathe(profile([nan[DType.float32](), 0, 1, 1]), 3)
+
+
+def test_lathe_largest_radius_difference_keeps_finite_normals() raises:
+    var maximum = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    for sign in [Float32(-1), Float32(1)]:
+        var points = profile([0, 0, maximum, 0])
+        if sign > 0:
+            points = profile([maximum, 0, 0, 0])
+        var geometry = lathe(points, 1)
+        ref normals = geometry.attribute_view(String(NORMAL))
+        var first = normals.vector3(0)
+        var last = normals.vector3(1)
+        assert_true(
+            isfinite(first.x) and isfinite(first.y) and isfinite(first.z)
+        )
+        assert_true(isfinite(last.x) and isfinite(last.y) and isfinite(last.z))
+        assert_equal(first.y, sign)
+        assert_equal(last.y, sign * maximum)
 
 
 def main() raises:

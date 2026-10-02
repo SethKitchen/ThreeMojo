@@ -6,9 +6,10 @@
 """Tests for Gaussian splats: `core.gaussian_splat_utils`,
 `objects.gaussian_splat`, `render.splatrule` and `render.splat_raster`.
 
-The bounds, the raycast and the sort of `assets/gaussian_splat/four.splat`
+The box, the raycast and the sort order of `assets/gaussian_splat/four.splat`
 are held to what three.js r186's `GaussianSplat` computed for the same
-object and camera, in `expected.json`. The projection is held to the
+object and camera, in `expected.json`. The sphere and depth range use
+a conservative covariance row-sum bound. The projection is held to the
 closed form of a round splat straight ahead of the camera, and the
 fragment to the Gaussian it draws.
 """
@@ -391,7 +392,7 @@ def test_an_object_needs_a_node() raises:
     assert_equal(splat.order[1], 1)
 
 
-def test_the_bounds_are_three_js_bounds() raises:
+def test_the_box_matches_three_js_and_the_sphere_is_conservative() raises:
     var scene = Scene()
     var splat = four(place_four(scene))
     splat.compute_bounding_sphere()
@@ -416,7 +417,9 @@ def test_the_bounds_are_three_js_bounds() raises:
     )
     assert_almost_equal(Float64(sphere.center.y), 0.120528407456029, atol=1e-5)
     assert_almost_equal(Float64(sphere.center.z), 0.3641914493637499, atol=1e-5)
-    assert_almost_equal(Float64(sphere.radius), 3.4964381986755972, atol=1e-5)
+    # Independent covariance row-sum bound from the fixture's stored
+    # scales and quaternion. The diagonal-only three.js sphere is too small.
+    assert_almost_equal(Float64(sphere.radius), 3.7398475609564126, atol=1e-5)
 
 
 def test_no_splats_have_an_empty_box() raises:
@@ -543,7 +546,7 @@ def three_js_camera() raises -> PerspectiveCamera:
     return camera^
 
 
-def test_the_sort_is_three_js_sort() raises:
+def test_the_sort_order_matches_three_js_with_conservative_depth_range() raises:
     var scene = Scene()
     var node = place_four(scene)
     var splat = four(node)
@@ -551,8 +554,8 @@ def test_the_sort_is_three_js_sort() raises:
     var world = scene.world_matrix(node)
     var view = camera.view_matrix_in(scene)
     assert_true(splat.update_sort(world, view, Length(0.5, METER)))
-    assert_almost_equal(splat.sort_near, 3.3268375805734385, atol=1e-4)
-    assert_almost_equal(splat.sort_far, 13.81615217660023, atol=1e-4)
+    assert_almost_equal(splat.sort_near, 2.9617235371522153, atol=1e-4)
+    assert_almost_equal(splat.sort_far, 14.181266220021453, atol=1e-4)
     var want: List[Int] = [1, 0, 2, 3]
     for at in range(4):
         assert_equal(splat.order[at], want[at])

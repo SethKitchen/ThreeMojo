@@ -859,7 +859,8 @@ def share_budget(
         # source first could spend the minimum of a small-area mesh.
         var wanted = List[Float64](length=count, fill=0)
         var total = Float64(0)
-        for index in range(count):
+        # Positive remaining area requires at least one mesh, so count > 0.
+        for index in range(count):  # pragma: no branch
             if settled[index]:
                 continue
             wanted[index] = Float64(left) * areas[index] / area
@@ -870,7 +871,8 @@ def share_budget(
             )
         var fix_minimum = total > Float64(left)
         var changed = False
-        for index in range(count):
+        # Positive remaining area requires at least one mesh, so count > 0.
+        for index in range(count):  # pragma: no branch
             if settled[index]:
                 continue
             var minimum = min(MIN_PART_TRIANGLES, counts[index])

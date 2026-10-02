@@ -217,7 +217,8 @@ struct MuscleDimensions(ImplicitlyCopyable):
             raise Error("A muscle blend radius must be positive")
         if not isfinite(self.epsilon) or self.epsilon <= 0:
             raise Error("A muscle gradient step must be positive")
-        for slot in range(BELLY_SLOTS):
+        # The packed SIMD has exactly BELLY_SLOTS (512) entries.
+        for slot in range(BELLY_SLOTS):  # pragma: no branch
             if not isfinite(self.bellies[slot]):
                 raise Error("A packed muscle station must be finite")
             if slot % 4 >= 2 and self.bellies[slot] <= -1:

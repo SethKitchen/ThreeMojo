@@ -645,8 +645,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
     ) raises -> List[Hit]:
         """Return every place this ray meets one instanced mesh, nearest
         first, three.js's `InstancedMesh.raycast`: each instance is tested
-        at the node's transform times its own, and a hit's `instance` says
-        which was struck.
+        with its own morph weights at the node's transform times its own.
+        A hit's `instance` says which was struck.
 
         Args:
             scene: The scene the instanced mesh is in, updated.
@@ -667,6 +667,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var world = scene.world_matrix(group.node)
         var hits = List[Hit]()
         for instance in range(group.count()):
+            mesh.morph_influences = group.morph_at(instance)
             var placed = Matrix4(copy=world)
             placed.multiply(group.matrix_at(instance))
             hits.extend(
@@ -1397,8 +1398,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var size = material.line_width.size
         var bound = geometry.bounding_sphere()
         bound.apply_matrix4(world)
-        if bound.is_empty():
-            return hits^
+        # A drawn segment has two positions, so its sphere is nonempty.
+        # An affine transform preserves its nonnegative radius.
         var view = camera.view_matrix_in(scene)
         var projection = camera.projection_matrix()
         # How much to grow the bound: half the width, in the world, or

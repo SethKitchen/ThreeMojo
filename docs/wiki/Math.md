@@ -29,6 +29,32 @@ These three.js members are not ported:
 - `Vector3.setFromColor` and `Color.setFromVector3` join two packages that do not import each other.
 - `Triangle.getInterpolatedAttribute` reads an attribute.
 
+## Scalar lengths and directions
+
+`math.norm` provides `length2`, `length3`, and `length4` for scalar components.
+The matching `normalized2`, `normalized3`, and `normalized4` functions return
+component tuples. Each function keeps the input precision, either `Float32`
+or `Float64`.
+
+Finite nonzero directions normalize to unit length even when a direct squared
+norm overflows or underflows. Zero directions stay zero. A length can return
+infinity when the true length cannot fit in the input type. Ordinary inputs
+keep the direct sum-of-squares arithmetic. Vector and quaternion normalization
+use these shared functions. A zero quaternion still becomes the identity.
+
+Matrix axis lengths, rotation extraction, and decomposition use the same
+scale-safe directions. Decomposition refuses nonfinite entries, zero axes,
+and axis lengths that cannot fit in `Float32`. It leaves output arguments
+unchanged on these errors. A mirrored transform keeps its negative x scale
+even when the direct determinant underflows or overflows.
+
+Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
+axis or tolerance and a negative tolerance. Extreme finite uniform scales
+still qualify as scaled rotations.
+
+Squared lengths and dot products return their direct arithmetic result. They
+can overflow or underflow even when a length or unit direction is representable.
+
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.

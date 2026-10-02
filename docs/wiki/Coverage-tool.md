@@ -80,3 +80,23 @@ The Makefile reduces each suite's stderr as it arrives, and compresses what is l
 `test_rasterizer` writes 9.9 million records. The reduced capture holds 3,477 lines, and the report reads it in 0.02 s instead of 8 s, with an identical result. The reduction runs on the capture runners, in parallel, and the report reads the captures on one core.
 
 The reporter reads the captures through named pipes, one suite at a time. Other output from a suite passes through unchanged, for the summary of a failed suite.
+
+## Capture scheduling and progress
+
+CPU test groups use imported source size. Coverage groups use `tools/coverage_shard.py` and `tools/coverage_costs.json`. Probe output can take much longer than compilation. The scheduler puts the longest estimated capture in the group with the lowest total cost. Each group starts its longest captures first.
+
+Ties use the suite path and group number. Every affected suite stays in exactly one group. The six CI groups and the 6000-second budget are unchanged.
+
+The first profile uses [CI run 36903778725](https://github.com/SethKitchen/ThreeMojo/actions/runs/36903778725), from October 1, 2026. Its source commit is `a8f0651a165ffcc64d1b541f35304fda5dfb2e39`. It used Mojo `1.1.0` (`8189361e`) and four capture workers per runner. These costs are estimates, not direct timers.
+
+The artifact ZIP files record completion times with two-second precision. The original groups ran in path order. The first four suites started together. Each completion started the next suite. This reconstructs compile-and-run time. The initial start estimate uses the last affected-selection log, so those first four costs also include Make setup.
+
+A new suite gets a source-size estimate. The scheduler uses the median measured seconds per imported byte among the selected known suites. If none are known, it uses one second per 10000 bytes. The estimate is at least one second.
+
+Missing profile entries never remove a suite. Invalid costs fail the scheduling command. Timing data changes only placement and order, never coverage requirements or test validation.
+
+Each capture prints its start, first probe, elapsed time and exit status. A running capture prints progress once per minute. Before the first probe, compilation or startup can still be in progress. Once probes arrive, the log identifies runtime work and gives the record count.
+
+Output is flushed at each update. Failed CI captures upload separate diagnostic artifacts. The report job does not use those artifacts as completed captures.
+
+Refresh the profile when completed capture logs show material changes. Use the per-suite completion times from those logs. Keep the source run, commit, compiler and worker count with the profile. A simulation from the initial estimates gives a longest group of 4554 seconds with longest-first scheduling. This is an estimate, not a guarantee for another runner.

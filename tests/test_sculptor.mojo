@@ -88,7 +88,7 @@ from math.ray import Ray
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import inf, isnan, nan
+from std.math import inf, isfinite, isnan, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -97,7 +97,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 # A ray stroke rounds as three.js's does; the sums of 81 or more
 # coordinates add rounding of their own.
@@ -1441,6 +1441,101 @@ def test_a_moved_and_scaled_mesh_sculpts_in_its_own_space() raises:
     )
 
 
+def test_rotated_meshes_sculpt_the_same_surface_in_local_space() raises:
+    """A transformed ray and radius produce the same local brush stroke."""
+    var reference_assets = Assets()
+    var reference_scene = _scene(_bumpy(), reference_assets, Object3D())
+    var reference = Sculptor(reference_scene, reference_assets, 0)
+    reference.set_tool(SCULPT_INFLATE)
+    reference.set_detail(0)
+    assert_true(
+        reference.stroke_from_ray(
+            reference_scene, reference_assets, _down(), Length(0.625, METER)
+        )
+    )
+    for variant in range(4):
+        var node = Object3D()
+        node.rotate_y(Angle(Float32(0.3 if variant == 0 else 1.0), RADIAN))
+        var scale = Float32(1)
+        if variant >= 2:
+            node.rotate_x(Angle(-0.7, RADIAN))
+            node.rotate_z(Angle(0.2, RADIAN))
+            node.set_position(3, -2, 5)
+            node.set_scale(2, 2, 2)
+            scale = 2
+        var assets = Assets()
+        var scene = _scene(_bumpy(), assets, node^)
+        if variant == 3:
+            var parent = Object3D()
+            parent.rotate_x(Angle(0.4, RADIAN))
+            parent.rotate_z(Angle(-0.8, RADIAN))
+            parent.set_position(-1, 4, 2)
+            parent.set_scale(0.5, 0.5, 0.5)
+            var parent_id = scene.add(parent^)
+            var child_id = scene.meshes[0].node
+            scene.add(child_id, parent=parent_id)
+            scale *= 0.5
+        scene.update()
+        var world = scene.world_matrix(scene.meshes[0].node)
+        var ray = _down()
+        ray.apply_matrix4(world)
+        var sculptor = Sculptor(scene, assets, 0)
+        sculptor.set_tool(SCULPT_INFLATE)
+        sculptor.set_detail(0)
+        assert_true(
+            sculptor.stroke_from_ray(
+                scene, assets, ray, Length(0.625 * scale, METER)
+            )
+        )
+        ref got = sculptor.sculpt_mesh()
+        ref expected = reference.sculpt_mesh()
+        assert_equal(got.nb_vertices, expected.nb_vertices)
+        assert_equal(got.nb_faces, expected.nb_faces)
+        for at in range(got.nb_vertices * 3):
+            assert_true(isfinite(got.vertices[at]))
+            assert_almost_equal(
+                Float64(got.vertices[at]),
+                Float64(expected.vertices[at]),
+                atol=1e-6,
+            )
+        var hit = sculptor.get_hit_point()
+        var expected_hit = reference.get_hit_point()
+        assert_almost_equal(hit.x, expected_hit.x, atol=1e-6)
+        assert_almost_equal(hit.y, expected_hit.y, atol=1e-6)
+        assert_almost_equal(hit.z, expected_hit.z, atol=1e-6)
+        assert_almost_equal(
+            sculptor.get_world_radius().to(METER), 0.625 * scale, atol=1e-6
+        )
+
+
+def test_a_pointer_picks_a_rotated_and_scaled_mesh() raises:
+    """A camera facing a rotated plane picks its known local center."""
+    var assets = Assets()
+    var node = Object3D()
+    node.rotate_y(Angle(0.3, RADIAN))
+    node.rotate_x(Angle(-0.7, RADIAN))
+    node.set_position(3, -2, 5)
+    node.set_scale(2, 2, 2)
+    var scene = _scene(
+        plane(Length(2, METER), Length(2, METER), 2, 2), assets, node^
+    )
+    var world = scene.world_matrix(scene.meshes[0].node)
+    var camera = _camera()
+    camera.place(
+        world.transform_point(Vector3(0, 0, 3)),
+        world.transform_point(Vector3(0, 0, 0)),
+    )
+    camera.up = world.transform_direction(Vector3(0, 1, 0))
+    var sculptor = Sculptor(scene, assets, 0)
+    sculptor.connect(0, 0, 200, 200)
+    assert_true(sculptor.pick_from_pointer(camera, scene, 100, 100))
+    var hit = sculptor.get_hit_point()
+    assert_almost_equal(hit.x, Float32(0), atol=POINTER)
+    assert_almost_equal(hit.y, Float32(0), atol=POINTER)
+    assert_almost_equal(hit.z, Float32(0), atol=POINTER)
+    assert_almost_equal(sculptor.get_hit_normal().z, Float32(1), atol=1e-6)
+
+
 def _pick(ray: Ray) raises -> Sculptor:
     """Return a sculptor of the bumpy plane that has picked with a ray.
 
@@ -1997,6 +2092,35 @@ def test_a_mesh_must_scale_uniformly_without_shear() raises:
     _refuses_the_matrix(
         _matrix_node(Vector3(1, 1, 0), Vector3(1, -1, 0), Vector3(1, -1, 0))
     )
+
+
+def test_float32_rounding_allowance_still_refuses_distortion() raises:
+    """Distortion larger than Float32 rounding is still an error."""
+    for scale in [Float32(1e-4), Float32(1), Float32(1e4)]:
+        var stretched = Object3D()
+        stretched.set_scale(scale, scale * 1.0001, scale)
+        _refuses_the_matrix(stretched^)
+        _refuses_the_matrix(
+            _matrix_node(
+                Vector3(scale, 0, 0),
+                Vector3(scale * 0.0001, scale, 0),
+                Vector3(0, 0, scale),
+            )
+        )
+
+
+def test_a_sculptor_refuses_nonfinite_world_matrices() raises:
+    """A bad linear column or translation cannot pass the scale tests."""
+    for bad in [nan[DType.float32](), inf[DType.float32]()]:
+        for at in [0, 12]:
+            var node = Object3D()
+            node.matrix_auto_update = False
+            node.matrix.elements[at] = bad
+            var assets = Assets()
+            var scene = _scene(_bumpy(), assets, node^)
+            var sculptor = Sculptor(scene, assets, 0)
+            with assert_raises(contains="finite"):
+                _ = sculptor.pick_from_ray(scene, _down(), Length(0.5, METER))
 
 
 def test_a_sculptor_needs_one_mesh_of_one_material() raises:

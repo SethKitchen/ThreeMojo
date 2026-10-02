@@ -111,9 +111,6 @@ struct OrthographicCamera(Camera):
     def validate(self) raises:
         """Check the finite, ordered view volume and the zoom.
 
-        Returns:
-            Nothing.
-
         Raises:
             Error: If an edge or plane is not finite, edges or planes are
                 not ordered, or the zoom is not positive and finite.
