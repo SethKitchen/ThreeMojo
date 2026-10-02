@@ -49,6 +49,12 @@ The world is an entity registry. Each actor has an `ActorId`, from 1 up. The spe
 5. The world finds the road boxes that each vehicle is in. It tells the lights and signs about each vehicle that came or went.
 6. The world takes its snapshot.
 
+### Signal ids in snapshots
+
+A snapshot holds at most 32 UTF-8 bytes of each traffic light or sign id. This is a byte limit, not a character count. If the 32-byte limit would split a codepoint, the snapshot ends before that codepoint. The result stays valid UTF-8. An ASCII id keeps its first 32 characters.
+
+The world keeps the full OpenDRIVE id. `get_opendrive_id` and `get_traffic_light_from_opendrive` use that full id. Only the snapshot field is shortened. Recording and replay can tick a world with these ids; their actor records use actor ids and positions rather than snapshot sign strings.
+
 ## Spawn and control actors
 
 `spawn_actor` takes a blueprint from the world's library and a transform. A `vehicle.*` blueprint makes a vehicle and a `walker.*` blueprint makes a walker. A `sensor.*`, `static.*`, `util.*` or `controller.*` blueprint makes an actor with no body.

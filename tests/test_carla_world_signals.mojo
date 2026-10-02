@@ -832,6 +832,17 @@ def test_landmark_queries() raises:
     assert_false(Bool(world.get_traffic_light_from_opendrive(SignalId("9999"))))
 
 
+def test_landmark_query_skips_a_destroyed_actor() raises:
+    var world = _world()
+    var car = _car(world, _pose(20, 1.75, 0.05, 0))
+    assert_true(world.destroy_actor(car))
+    assert_false(world.is_alive(car))
+    # A painted marking has no traffic actor. Lookup must reach the end
+    # of the registry, including the dead vehicle, without reading its signal id.
+    var paint = world.map.landmarks_from_id(SignalId("3004"))[0].copy()
+    assert_false(Bool(world.get_traffic_sign(paint)))
+
+
 # --- vehicles in the boxes -----------------------------------------------------
 
 
@@ -855,6 +866,39 @@ def test_vehicle_at_a_light() raises:
     assert_false(Bool(world.get_traffic_light(car)))
     assert_equal(world.get_traffic_light_state(car).value, GREEN.value)
     assert_equal(len(world.traffic_lights.lights[0].vehicles), 0)
+
+
+def test_leaving_one_light_keeps_another_lights_association() raises:
+    var world = _world()
+    world.freeze_all_traffic_lights(True)
+    world.set_traffic_light_state(L2001, RED)
+    world.set_traffic_light_state(L2003, YELLOW)
+    # The public transform moves 2003's driving-lane box to x=40.
+    # Light 2001's box stays at x=42; its other box is farther east.
+    world.set_transform(L2003, _pose(43.25, 5, 3, 90))
+    var car = _car(world, _pose(41, 1.75, 0.05, 0))
+    _ = world.tick()
+    assert_equal(len(world.traffic_lights.lights[0].vehicles), 1)
+    assert_equal(len(world.traffic_lights.lights[7].vehicles), 1)
+    # The later light owns the association after entry into both boxes.
+    assert_equal(world.get_traffic_light(car).value(), L2003)
+    assert_equal(world.get_traffic_light_state(car).value, YELLOW.value)
+    world.set_transform(car, _pose(37, 1.75, 0.05, 0))
+    _ = world.tick()
+    assert_equal(len(world.traffic_lights.lights[0].vehicles), 0)
+    assert_equal(len(world.traffic_lights.lights[7].vehicles), 1)
+    assert_equal(world.get_traffic_light(car).value(), L2003)
+    assert_equal(world.get_traffic_light_state(car).value, YELLOW.value)
+    var data = world.get_snapshot().find(car).value().vehicle.value()
+    assert_true(data.has_traffic_light)
+    assert_equal(data.traffic_light_id, L2003)
+    # A departed light cannot overwrite the remaining light's state.
+    world.set_traffic_light_state(L2001, OFF)
+    assert_equal(world.get_traffic_light_state(car).value, YELLOW.value)
+    world.set_transform(car, _pose(30, 1.75, 0.05, 0))
+    _ = world.tick()
+    assert_false(world.is_at_traffic_light(car))
+    assert_equal(world.get_traffic_light_state(car).value, GREEN.value)
 
 
 def test_destroyed_vehicle_leaves_its_boxes() raises:

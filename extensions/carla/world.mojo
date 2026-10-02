@@ -372,11 +372,20 @@ def cut_sign_id(id: String) -> String:
         id: The OpenDRIVE signal id.
 
     Returns:
-        Its first 32 bytes, CARLA's fixed field.
+        The longest UTF-8 prefix that fits CARLA's 32-byte field. This
+        limits bytes, not characters, and never keeps a partial codepoint.
+
+        An id that fits is unchanged. The world keeps the full id outside
+        this snapshot field.
     """
     if id.byte_length() <= 32:
         return id
-    return String(id[byte=0:32])
+    var end = 32
+    # Byte 32 exists. Back up over continuation bytes to a codepoint start.
+    # A valid UTF-8 String needs at most three steps; ASCII keeps 32 bytes.
+    while (id.as_bytes()[end] & 0xC0) == 0x80:
+        end -= 1
+    return String(id[byte=0:end])
 
 
 def _origin() -> CarlaTransform:
