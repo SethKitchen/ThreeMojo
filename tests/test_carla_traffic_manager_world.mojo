@@ -180,8 +180,12 @@ def test_following_a_slower_vehicle() raises:
     tm.register_vehicles(world, [car, front])
     tm.set_desired_speed(front, Velocity(3.0))
     tm.set_auto_lane_change(car, False)
+    var initial_gap = (
+        world.get_location(front).x - world.get_location(car).x - 4.8
+    )
     var least = Float32(100)
     var halfway = Float32(0)
+    var front_halfway = Float32(0)
     for k in range(400):
         _ = tm.tick(world)
         least = min(
@@ -189,12 +193,20 @@ def test_following_a_slower_vehicle() raises:
         )
         if k == 199:
             halfway = world.get_location(car).x
+            front_halfway = world.get_location(front).x
     # Never closer than the 2 m gap, less the 0.2 m braking margin and a
-    # little braking. It closes in at 12 km/h and brakes, so its speed
-    # swings; over the last 10 s it keeps the front car's 3 m/s.
+    # little braking. Both controllers change speed during the run. Compare
+    # progress over the same last 10 s using the world's positions, rather
+    # than assuming the front car travels at its exact commanded speed.
     assert_true(least > 1.0)
+    var final_gap = (
+        world.get_location(front).x - world.get_location(car).x - 4.8
+    )
+    assert_true(final_gap < initial_gap)
+    var front_average = (world.get_location(front).x - front_halfway) / 10
+    assert_almost_equal(front_average, 3.0, atol=0.25)
     assert_almost_equal(
-        (world.get_location(car).x - halfway) / 10, 3.0, atol=0.25
+        (world.get_location(car).x - halfway) / 10, front_average, atol=0.25
     )
 
 
