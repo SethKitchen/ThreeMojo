@@ -186,9 +186,11 @@ The material is drawn from its back faces, blended, with no depth test and no de
 
 1. The ray runs from the camera to the fragment when the camera is more than twice the mesh's bounding radius from it. Otherwise the ray runs from the fragment to the camera. The radius is the geometry's bounding sphere in world space, three.js's `modelRadius`.
 2. The ray takes `steps` equal steps. The first step is `OFFSET_NODE` of a step from the start, or at the start.
-3. At each step, each point light and each spot light adds its color, times its falloff, its cone and its map. Its shadow multiplies it twice, as three.js multiplies it. A directional light adds nothing, because it has no distance.
+3. At each step, each point light and each spot light adds its color, times its falloff, its beam and its map. Its shadow multiplies it twice, as three.js multiplies it. A directional light adds nothing, because it has no distance.
 4. `SCATTERING_NODE` multiplies that density. In this output, `position_world()` is the position of the step. three.js hands the same position to `scatteringNode` as `positionRay`.
 5. What the ray lets through is multiplied by `exp(-density * 0.01 * step)` at each step, which is Beer's law.
+
+An IES profile or projector frame shapes the beam at each ray step, as it does on a surface. An IES light with no profile uses its cone. See [Lighting addons](Lighting-addons#ies-spot-light).
 
 The surface's color is one minus what the ray lets through, plus `EMISSIVE_NODE`. Its alpha is the material's. A volume refuses an emissive color and an emissive map, because three.js's material has neither. The functions are in `materials.volume_node_material`.
 

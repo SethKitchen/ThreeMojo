@@ -51,7 +51,6 @@ from math.euler import XYZ, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite
 from units.si import METER, Angle, Length
 
 
@@ -154,56 +153,17 @@ def facing(
         The rotation.
 
     Raises:
-        Error: If `up` is zero or not finite: it names no direction, and
-            three.js builds a basis that is not a rotation from it. A
-            target at the eye leaves the rotation the identity, and a line
-            of sight along `up` is nudged off it by a ten-thousandth,
-            exactly as three.js's `Matrix4.lookAt` settles both; see
-            `math.projection.look_at`.
+        Error: If either position is not finite, or `up` is zero or not
+            finite. A target at the eye uses a +z basis direction. A line
+            of sight along `up` is nudged off it by a ten-thousandth. The
+            shared `Matrix4.look_at` basis handles these cases and keeps
+            the result independent of the size of `up`.
     """
-    var reach = up.length()
-    if not isfinite(reach) or reach == 0:
-        raise Error("An up direction must be finite and not zero")
-    var z = target - eye
-    if camera:
-        z = -z
-    # three.js substitutes +z for the basis's third column whichever way
-    # round the eye and target went in, so both cases give the identity.
-    if z.length() == 0:
-        z = Vector3(0, 0, 1)
-    z.normalize()
-    var x = up
-    x.cross(z)
-    if x.length() == 0:
-        if abs(up.z) == 1:
-            z.x += 0.0001
-        else:
-            z.z += 0.0001
-        z.normalize()
-        x = up
-        x.cross(z)
-    x.normalize()
-    var y = z
-    y.cross(x)
     var basis = Matrix4()
-    basis.set(
-        x.x,
-        y.x,
-        z.x,
-        0,
-        x.y,
-        y.y,
-        z.y,
-        0,
-        x.z,
-        y.z,
-        z.z,
-        0,
-        0,
-        0,
-        0,
-        1,
-    )
+    if camera:
+        basis.look_at(eye, target, up)
+    else:
+        basis.look_at(target, eye, up)
     return Quaternion.from_matrix(basis)
 
 
@@ -499,10 +459,10 @@ struct Object3D(ImplicitlyCopyable):
                 does.
 
         Raises:
-            Error: If `up` is zero or not finite; the node is left as it
-                was. A target at the node's own position gives the
-                identity, and a target straight along `up` is nudged off
-                it by a ten-thousandth, as three.js does; see `facing`.
+            Error: If either position is not finite, or `up` is zero or
+                not finite. The node is left as it was. A target at the
+                node's own position uses a +z basis direction. A target
+                straight along `up` is nudged off it; see `facing`.
         """
         self.quaternion = facing(self.position, target, self.up, camera)
 

@@ -155,7 +155,7 @@ from render.cube_texture_store import SCENE_ENVIRONMENT
 from render.framebuffer import Color
 from render.srgb import linear_to_srgb
 from render.texture import Texture
-from render.texture_store import TextureId
+from render.texture_store import NO_TEXTURE, TextureId
 from std.math import atan2, cos, pow, sin, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 from units.temperature import KELVIN, Temperature
@@ -1032,6 +1032,7 @@ struct Town(Movable):
     # maps' ids.
     var asphalt_roughness: Texture
     var asphalt_roughness_id: TextureId
+    var puddle_roughness_id: TextureId
     # The road, the paint and the ground's nodes.
     var road_node: NodeId
     # Each lamp's spot light, as its index in `Scene.lights`.
@@ -1093,6 +1094,7 @@ struct Town(Movable):
         self.materials = TownMaterials()
         self.lamp_lights = List[Int]()
         self.wet = WetSurface(0, 0)
+        self.puddle_roughness_id = NO_TEXTURE
         self.tags = List[SemanticTag]()
         self.package = None
         self.wet_materials = List[MaterialId]()
@@ -1792,7 +1794,11 @@ struct Town(Movable):
             var id = self.materials.surface(kind)
             var material = assets.materials.get(id)
             material.color = wet_color(surface_color(kind), wet)
-            material.roughness = wet.roughness(surface_roughness(kind))
+            material.roughness = Float32(
+                1
+            ) if kind == ROAD_SURFACE else wet.roughness(
+                surface_roughness(kind)
+            )
             if kind != ROAD_SURFACE and kind.value <= WALL_SURFACE.value:
                 # The concrete's map is about 0.82 rough.
                 material.roughness = wet.roughness(Float32(0.82)) / Float32(
@@ -1815,7 +1821,13 @@ struct Town(Movable):
                     self.settings.seed + 13,
                 )
                 puddles.repeat = self.asphalt_roughness.repeat
-                road.roughness_map = assets.textures.add(puddles^)
+                if self.puddle_roughness_id == NO_TEXTURE:
+                    self.puddle_roughness_id = assets.textures.add(puddles^)
+                else:
+                    assets.textures.textures[self.puddle_roughness_id.value] = (
+                        puddles^
+                    )
+                road.roughness_map = self.puddle_roughness_id
             else:
                 road.roughness_map = self.asphalt_roughness_id
             road.color = wet_color(Color(255, 255, 255), wet)

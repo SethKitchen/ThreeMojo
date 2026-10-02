@@ -617,11 +617,11 @@ def test_lane_transforms() raises:
     assert_almost_equal(t.rotation.yaw, 28.64788975654116, atol=1e-4)
     t = map.compute_transform(_w(5, 0, -1, 10.0))
     _near(t.location, 10.140229715463569, -99.17595478399882, 1.2, 1e-3)
-    assert_almost_equal(t.rotation.pitch, 1.1459155902616465, atol=1e-4)
+    assert_almost_equal(t.rotation.pitch, -1.1457628381751033, atol=1e-4)
     assert_almost_equal(t.rotation.yaw, -7.16197243913529, atol=1e-3)
     t = map.compute_transform(_w(5, 0, 1, 40.0))
     _near(t.location, 37.0165078846415, -116.97860369629684, 1.7, 1e-3)
-    assert_almost_equal(t.rotation.pitch, 358.85408440973833, atol=1e-4)
+    assert_almost_equal(t.rotation.pitch, 361.1457628381751, atol=1e-4)
     assert_almost_equal(t.rotation.yaw, 133.52474222667973, atol=1e-3)
     t = map.compute_transform(_w(5, 0, -2, 50.0))
     _near(t.location, 50.69409544732411, -117.7093508614975, 2.0, 1e-3)
@@ -635,6 +635,41 @@ def test_lane_transforms() raises:
     # Lane 0 sits on the lane offset's line.
     t = map.compute_transform(_w(5, 0, 0, 0.0))
     _near(t.location, 0.0, -100.5, 1.0, 1e-3)
+
+
+def test_lane_pitch_follows_grade_and_traffic_direction() raises:
+    # A geometric invariant, independent of CARLA's old pitch scalar.
+    for grade in [-0.2, 0.0, 0.2]:
+        for rht in [True, False]:
+            var builder = MapBuilder()
+            var r = _flat_road(
+                builder,
+                1,
+                0,
+                0,
+                0,
+                100,
+                -1,
+                0,
+                0,
+                rht,
+                [(-1, LANE_DRIVING, 0, 0), (1, LANE_DRIVING, 0, 0)],
+            )
+            builder.roads[r].info.elevations[0] = RoadInfoElevation(
+                0.0, CubicPolynomial(0, grade, 0, 0, 0)
+            )
+            var map = builder.build()
+            for lane in [-1, 1]:
+                var here = _w(1, 0, lane, 40.0)
+                var next = map.next(here, 1.0)[0]
+                var pose = map.compute_transform(here)
+                var along = map.compute_transform(next).location - pose.location
+                along.normalize()
+                assert_almost_equal(
+                    Float64(pose.rotation.forward_vector().dot(along)),
+                    1.0,
+                    atol=1e-5,
+                )
 
 
 def test_lane_corners() raises:

@@ -200,7 +200,8 @@ def merge_vertices(
     are carried along and do not count, as in three.js.
 
     The result is indexed, and holds each kept vertex once, in the order
-    the vertices are first met. The groups are kept as they are.
+    the vertices are first met. The groups, draw range, name, user data,
+    type, parameters and stored shapes are kept as they are.
 
     Args:
         geometry: The geometry to weld, which must carry positions.
@@ -254,6 +255,16 @@ def merge_vertices(
         )
     geometry.gather_morphs_into(welded, kept)
     welded.groups = geometry.groups.copy()
+    # Welding preserves the triangle stream's slots. Keep its draw range
+    # and metadata, as three.js's geometry.clone() does, without copying
+    # the source vertex arrays before replacing them with gathered ones.
+    welded.instance_count = geometry.instance_count
+    welded.name = geometry.name
+    welded.user_data = geometry.user_data.copy()
+    welded.draw_range = geometry.draw_range
+    welded.kind = geometry.kind
+    welded.parameters = geometry.parameters.copy()
+    welded.shapes = geometry.shapes.copy()
     welded.set_index(index^)
     return welded^
 

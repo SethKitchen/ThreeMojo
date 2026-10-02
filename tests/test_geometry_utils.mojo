@@ -29,6 +29,8 @@ from geometries.utils import (
     to_creased_normals,
     truncated,
 )
+from math.path import Path, Shape
+from math.vector2 import Vector2
 from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -586,6 +588,68 @@ def test_every_attribute_decides_what_welds() raises:
     var bare = points(box.clone_attribute(String(POSITION)).data.copy())
     bare.set_index(box.index.copy())
     assert_equal(merge_vertices(bare).vertex_count(), 8)
+
+
+def test_welding_keeps_the_drawn_triangle_stream() raises:
+    """Welding changes vertex numbers but keeps restricted and empty runs."""
+    for indexed in [False, True]:
+        var geometry = quad()
+        if not indexed:
+            geometry = geometry.to_non_indexed()
+        for count in [0, 3]:
+            geometry.set_draw_range(3, count)
+            var welded = merge_vertices(geometry)
+            assert_equal(welded.draw_range, geometry.draw_range)
+            var run = welded.drawn_run(0, -1)
+            assert_equal(run[1], count // 3)
+            if count != 0:
+                for corner in range(3):
+                    var before = geometry.vertex_at(3 + corner)
+                    var after = welded.vertex_at(3 + corner)
+                    for axis in range(3):
+                        assert_equal(
+                            welded.attribute_view(POSITION).component(
+                                after, axis
+                            ),
+                            geometry.attribute_view(POSITION).component(
+                                before, axis
+                            ),
+                        )
+
+
+def test_welding_keeps_independent_geometry_metadata() raises:
+    """A welded builder geometry keeps its identity and independent maps."""
+    var geometry = cube(Length(2, METER))
+    geometry.name = "section"
+    geometry.user_data.set_string("label", "source")
+    var welded = merge_vertices(geometry)
+    assert_equal(welded.name, "section")
+    assert_equal(welded.user_data.string("label"), "source")
+    assert_true(welded.kind == geometry.kind)
+    assert_equal(welded.parameters.number("width"), 2)
+    welded.name = "welded"
+    welded.user_data.set_string("label", "changed")
+    welded.parameters.set_number("width", 7)
+    welded.groups[0].count = 0
+    assert_equal(geometry.name, "section")
+    assert_equal(geometry.user_data.string("label"), "source")
+    assert_equal(geometry.parameters.number("width"), 2)
+    assert_equal(geometry.groups[0].count, 6)
+
+
+def test_welding_copies_stored_shape_paths() raises:
+    """The stored source shapes remain independent after welding."""
+    var outline = Path(Vector2(0, 0))
+    outline.line_to(Vector2(1, 0))
+    outline.line_to(Vector2(0, 1))
+    outline.close_path()
+    var geometry = quad()
+    geometry.shapes.append(Shape(outline.copy()))
+    var welded = merge_vertices(geometry)
+    assert_equal(len(welded.shapes), 1)
+    welded.shapes[0].add_hole(outline.copy())
+    assert_equal(welded.shapes[0].hole_count(), 1)
+    assert_equal(geometry.shapes[0].hole_count(), 0)
 
 
 def test_the_tolerance_decides_how_near_is_one_vertex() raises:

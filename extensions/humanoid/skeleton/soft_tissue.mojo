@@ -370,6 +370,21 @@ def venous_tissue() -> SoftTissue:
     )
 
 
+def vessel_tissue(arterial: Bool) -> SoftTissue:
+    """Return the tissue selected by a validated vessel classification.
+
+    Args:
+        arterial: True for an artery, False for a vein. The caller must
+            validate its region-specific vessel before classifying it.
+
+    Returns:
+        The arterial or venous template.
+    """
+    if arterial:
+        return arterial_tissue()
+    return venous_tissue()
+
+
 def lymph_tissue() -> SoftTissue:
     """Return adult lymph and node cortex.
 

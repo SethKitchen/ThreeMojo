@@ -262,6 +262,31 @@ class FetchTests(unittest.TestCase):
         with self.assertRaises(tool.FetchError):
             tool.fetch(manifest, self.fixture.cache)
 
+    def test_corrupt_extracted_member_is_reported_and_never_overwritten(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as bundle:
+            bundle.writestr('color.jpg', b'original pixels')
+        data = buffer.getvalue()
+        url = self.fixture.file('checked.zip', data)
+        entry = texture_entry(url, None)
+        entry['files'] = [{
+            'role': 'archive', 'url': url, 'sha256': _sum(data), 'path': 'checked.zip',
+            'extract': [{'role': 'albedo', 'member': 'color.jpg', 'path': 'scan/color.jpg'}],
+        }]
+        manifest = manifest_of(entry)
+        tool.fetch(manifest, self.fixture.cache)
+        extracted = self.fixture.cache / 'scan/color.jpg'
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'ok'))
+        extracted.write_bytes(b'corrupted pixels')
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'mismatch'))
+        with self.assertRaisesRegex(tool.FetchError, 'extracted member differs'):
+            tool.fetch(manifest, self.fixture.cache)
+        self.assertEqual(extracted.read_bytes(), b'corrupted pixels')
+        extracted.unlink()
+        self.assertEqual(tool.verify(manifest, self.fixture.cache)[1], ('scan/color.jpg', 'missing'))
+        tool.fetch(manifest, self.fixture.cache)
+        self.assertEqual(extracted.read_bytes(), b'original pixels')
+
     def test_command_line_pins_into_the_manifest(self):
         path = self.fixture.root / 'manifest.json'
         path.write_text(json.dumps(manifest_of(texture_entry(self.url, None))))
@@ -283,6 +308,21 @@ class FetchTests(unittest.TestCase):
 
 
 class CreditTests(unittest.TestCase):
+    def test_committed_attribution_matches_every_manifest_entry(self):
+        manifest = tool.load_manifest()
+        expected = tool.credits(manifest, everything=True)
+        path = tool.MANIFEST.parent / 'ATTRIBUTION.md'
+        self.assertEqual(path.read_text(encoding='utf-8'), expected)
+        required = [e for e in manifest['entries'] if e['license'] == 'CC-BY-4.0']
+        self.assertEqual(len(required), 47)
+        for entry in required:
+            self.assertIn(entry['title'], expected)
+            self.assertIn(entry['author'], expected)
+            self.assertIn(entry['source'], expected)
+            self.assertIn(entry['changes'], expected)
+        self.assertIn('https://creativecommons.org/licenses/by/4.0/', expected)
+
+
     def test_cc_by_entries_are_credited(self):
         free = texture_entry('https://example.org/a.jpg', None)
         scanned = texture_entry('https://example.org/b.jpg', None, 'bricks', 'bricks/color.jpg')

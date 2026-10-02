@@ -257,5 +257,29 @@ def test_strands_in_a_scene() raises:
     assert_equal(again.attribute_view(String(COLOR)).count(), count)
 
 
+def test_azimuth_is_independent_of_the_projection_length() raises:
+    # The two directions have identical azimuth despite their elevation.
+    var look = HairLook(Vector3(1, 1, 1))
+    look.specular = 0
+    look.weight_tt = 0
+    look.weight_trt = 1
+    look.shift = 0
+    var result = marschner(
+        look, Vector3(0, 0.8, 0.6), Vector3(0, -0.8, 0.6), Vector3(0, 1, 0)
+    )
+    # cos(phi)=1, cos(theta_d)=0.6. The TRT Gaussian is at its peak.
+    var f0 = Float32(0.55 * 0.55 / (2.55 * 2.55))
+    var fresnel = f0 + (1 - f0) * Float32(0.7**5)
+    var expected = (
+        Float32(1.2460767305873794)
+        * (1 - fresnel)
+        * (1 - fresnel)
+        * fresnel
+        / Float32(0.18 * 2.5066282746)
+    )
+    assert_true(abs(result.x - expected) < 1e-4)
+    assert_true(abs(result.y - expected) < 1e-4)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

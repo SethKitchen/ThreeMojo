@@ -99,7 +99,7 @@ node.look_at(Vector3(4, 6, 3))
 
 three.js lets a program change `Object3D.DEFAULT_UP` for every object made after the change. A Mojo module has no mutable global, so `DEFAULT_UP` is fixed. Set `up` on each node instead.
 
-Both `look_at` methods accept every target, as three.js does. A target at the node's own position gives the identity rotation. A target straight along `up` moves the line of sight off `up` by 0.0001 first.
+Both `look_at` methods require finite positions. They use the shared `Matrix4.look_at` basis, so a finite nonzero `up` works at any size. A target at the node's own position uses a +z basis direction. With the default `up`, this gives the identity rotation. A target straight along `up` moves the line of sight off `up` by 0.0001 first.
 
 ## Example
 

@@ -39,6 +39,9 @@ from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
 from std.math import exp, log, max, min, pi, sqrt
 
+# Lower bound for a product of projected direction magnitudes.
+comptime AZIMUTH_EPSILON = Float32(1e-4)
+
 # Human hair's index of refraction, and the Fresnel reflectance at
 # normal incidence it gives.
 comptime HAIR_IOR = Float32(1.55)
@@ -156,8 +159,13 @@ def marschner(
     var cos_d = _cos_half(cos_i * cos_r + sin_i * sin_r)
     var light_perp = to_light - tangent * sin_i
     var camera_perp = to_camera - tangent * sin_r
-    var cos_phi = light_perp.dot(camera_perp) / sqrt(
-        light_perp.length() * camera_perp.length() + Float32(1e-4)
+    var cos_phi = min(
+        Float32(1),
+        max(
+            Float32(-1),
+            light_perp.dot(camera_perp)
+            / max(light_perp.length() * camera_perp.length(), AZIMUTH_EPSILON),
+        ),
     )
     var cos_half_phi = _cos_half(cos_phi)
     var beta2 = look.roughness * look.roughness

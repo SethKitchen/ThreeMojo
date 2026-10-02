@@ -30,7 +30,9 @@ var camera = PerspectiveCamera(
 camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
 ```
 
-The field of view is an `Angle`. A bare number does not compile. The near plane must be positive, and the far plane beyond it.
+The field of view is an `Angle`. A bare number does not compile. It must be greater than zero and less than 180 degrees. The aspect ratio and near plane must be positive. The far plane must be beyond the near plane.
+
+These settings must be finite. The constructor checks them. `projection_matrix()` checks them again after edits.
 
 `zoom` magnifies the view, three.js's `zoom`. The height of the view at the near plane is divided by it. It is one by default and must be above zero. An animation can drive it; see [Animation](Animation#materials-need-the-assets-and-cameras-need-the-cameras).
 
@@ -68,7 +70,7 @@ var size = camera.get_view_size(Length(10.0, METER))
 | `get_effective_fov()` | `getEffectiveFOV` | | The vertical field of view after the zoom, as an `Angle`. |
 | `get_view_bounds(distance)` | `getViewBounds` | | The lower-left and upper-right corners of the view at a distance, in a `ViewBounds`. |
 | `get_view_size(distance)` | `getViewSize` | | The width and height of the view at a distance, as a `Vector2`. |
-| `validate()` | | | Refuses a zoom, film, focus or view that is not one. |
+| `validate()` | | | Checks the frustum, zoom, film, focus and view settings. |
 
 The film is a `Length`, where three.js takes a bare number in millimeters. Only the ratio of the offset to the gauge reaches the projection. `view_shift` is added to the side edges last, after the film offset.
 
@@ -85,7 +87,7 @@ camera.set_view_offset(5760, 1080, 1920, 0, 1920, 1080)
 
 The numbers are pixels of the full image, and need not be whole. The tile starts `x` across and `y` down. The camera keeps the tile in `view`, a `ViewOffset`. A perspective camera also sets its aspect to `full_width / full_height`, as three.js does. An orthographic camera keeps its edges and cuts the tile from the zoomed box.
 
-`clear_view_offset()` draws the whole image again. It keeps the tile and sets its `enabled` to false, as three.js does, so the scene's JSON still carries it. Every number must be finite, and every width and height positive. `set_view_offset` refuses a bad tile and leaves the camera as it was. `projection_matrix()` refuses a bad tile that was written into `view` afterward.
+`clear_view_offset()` draws the whole image again. It keeps the tile and sets its `enabled` to false, as three.js does, so the scene's JSON still carries it. Every number must be finite, and every width and height positive. `set_view_offset` refuses a bad tile and leaves the camera as it was. A perspective tile must also give a positive finite aspect ratio. `projection_matrix()` refuses a bad tile that was written into `view` afterward.
 
 ## OrthographicCamera
 
@@ -95,7 +97,9 @@ var flat = centered(
 )
 ```
 
-`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero or negative, as in three.js: a top-down view often puts it behind the camera. The edges must be ordered: right beyond left, top above bottom.
+`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero or negative, as in three.js: a top-down view often puts it behind the camera.
+
+The edges and clipping planes must be finite. The edges must be ordered: right beyond left, top above bottom. The far plane must be beyond the near plane. The constructor and `projection_matrix()` check these settings.
 
 An orthographic projection leaves `w` at one. The perspective correction then divides by one, so no code path is special.
 
@@ -163,6 +167,8 @@ The three settings are open fields. `validate()` refuses a negative or non-finit
 An eye is a placed camera with a `Float32` position. A million meters from the origin a `Float32` steps in sixteenths of a meter. A sixty-four millimeter baseline is then lost, while the skew still assumes it. Keep a stereo scene within a few thousand meters of the origin, or rebase the scene on the camera. There the baseline holds to a part in a hundred. The test suite pins the baseline at a thousand meters.
 
 `examples/stereo.mojo` draws a stereo pair of a box and a ring, side by side, from a circling camera.
+
+`StereoCamera.update` checks each eye's projection before it replaces either eye. An invalid zoom, aspect ratio or projection shift raises an error and leaves both eyes unchanged.
 
 ## CubeCamera
 

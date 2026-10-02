@@ -510,23 +510,43 @@ def _check_convex(points: List[Vector3], line: Int) raises:
             way.
     """
     var count = len(points)
-    var normal = Vector3(0, 0, 0)
+    # Widen before subtracting or multiplying. Any product of four finite
+    # Float32 coordinates fits in Float64, including subnormal-scale faces.
+    # Translate first so the normal sum does not depend on world position.
+    var origin = points[0]
+    var wide = List[SIMD[DType.float64, 4]]()
+    for point in points:  # pragma: no branch
+        wide.append(
+            SIMD[DType.float64, 4](
+                Float64(point.x) - Float64(origin.x),
+                Float64(point.y) - Float64(origin.y),
+                Float64(point.z) - Float64(origin.z),
+                0,
+            )
+        )
+    var normal = SIMD[DType.float64, 4](0)
     for index in range(count):  # pragma: no branch
-        var a = points[index]
-        var b = points[(index + 1) % count]
-        normal.x += (a.y - b.y) * (a.z + b.z)
-        normal.y += (a.z - b.z) * (a.x + b.x)
-        normal.z += (a.x - b.x) * (a.y + b.y)
-    var area = normal.length()
-    if area == 0:
+        var a = wide[index]
+        var b = wide[(index + 1) % count]
+        normal[0] += (a[1] - b[1]) * (a[2] + b[2])
+        normal[1] += (a[2] - b[2]) * (a[0] + b[0])
+        normal[2] += (a[0] - b[0]) * (a[1] + b[1])
+    var area_squared = (normal * normal).reduce_add()
+    if area_squared == 0:
         raise Error(_where(line) + "a face has no area")
     for index in range(count):  # pragma: no branch
-        var a = points[index]
-        var b = points[(index + 1) % count]
-        var c = points[(index + 2) % count]
-        var turn = b - a
-        turn.cross(c - b)
-        if turn.dot(normal) < -1e-6 * area * area:
+        var a = wide[index]
+        var b = wide[(index + 1) % count]
+        var c = wide[(index + 2) % count]
+        var first = b - a
+        var second = c - b
+        var turn = SIMD[DType.float64, 4](
+            first[1] * second[2] - first[2] * second[1],
+            first[2] * second[0] - first[0] * second[2],
+            first[0] * second[1] - first[1] * second[0],
+            0,
+        )
+        if (turn * normal).reduce_add() < -1e-6 * area_squared:
             raise Error(
                 _where(line)
                 + "a face is not convex, and only a convex face cuts into a"

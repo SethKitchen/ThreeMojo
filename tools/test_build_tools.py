@@ -185,6 +185,13 @@ class CoverageStagingTests(unittest.TestCase):
 
 class CoverageIoTests(unittest.TestCase):
     def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
+        self.check_capture_and_replay()
+
+    def test_capture_and_replay_close_files_under_resource_warnings(self):
+        with patch.dict('os.environ', {'PYTHONWARNINGS': 'error::ResourceWarning'}):
+            self.check_capture_and_replay()
+
+    def check_capture_and_replay(self):
         import gzip
         import sys
         import coverage_io
@@ -199,14 +206,16 @@ class CoverageIoTests(unittest.TestCase):
                 source.write_bytes(stream + str(index).encode())
                 capture = root / f'{index}.txt.gz'
                 self.assertEqual(coverage_io.capture([
-                    sys.executable, '-c', 'import sys;sys.stderr.buffer.write(open(sys.argv[1], "rb").read());print("passed")', str(source)
+                    sys.executable, '-c', 'import sys,pathlib;sys.stderr.buffer.write(pathlib.Path(sys.argv[1]).read_bytes());print("passed")', str(source)
                 ], root / f'{index}.out', capture), 0)
                 # Other output passes through, after the records.
                 self.assertEqual(gzip.decompress(capture.read_bytes()), reduced + str(index).encode())
                 captures.append(capture)
             result = root / 'replayed'
             command = [sys.executable, '-c',
-                       'import sys; out=open(sys.argv[1], "wb"); [out.write(open(p,"rb").read()) for p in sys.argv[2:]]', str(result)]
+                       'import sys,shutil\nwith open(sys.argv[1], "wb") as out:\n'
+                       ' for path in sys.argv[2:]:\n'
+                       '  with open(path, "rb") as source: shutil.copyfileobj(source, out)', str(result)]
             self.assertEqual(coverage_io.report(command, captures), 0)
             self.assertEqual(result.read_bytes(), reduced + b'0' + reduced + b'1')
 
@@ -237,6 +246,30 @@ class CoverageIoTests(unittest.TestCase):
             b'COVBRANCH:c:3.0:F\n', b'COVBRANCH:c:3.1:T\n', b'COVBRANCH:c:3:F\n',
             b'COVLINE:a:9\n', b'hello\n', b'COVBRANCH:d:4.x:T\n', b'COVBRANCH:nocolon\n',
         ]))
+
+    def test_invalid_outcome_is_rejected_before_it_adds_a_hit(self):
+        import coverage_io
+        for state in (b'', b'garbage', b't', b'False', b'T:extra'):
+            for probe in (b'm:4', b'm:4.0'):
+                written = []
+                reducer = coverage_io.Reducer(written.append)
+                with self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+                    reducer.feed(b'COVBRANCH:' + probe + b':' + state + b'\n')
+                self.assertEqual(written, [])
+                self.assertEqual(reducer.payloads, set())
+                self.assertEqual(reducer.pending, {})
+
+    def test_capture_cannot_fabricate_false_from_invalid_outcome(self):
+        import gzip
+        import sys
+        import coverage_io
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+                coverage_io.capture([sys.executable, '-c',
+                    'import sys;sys.stderr.write("COVLINE:m:4\\nCOVBRANCH:m:4:T\\nCOVBRANCH:m:4:garbage\\n")'],
+                    root / 'out', root / 'err.gz')
+            self.assertNotIn(b'COVBRANCH:m:4:F', gzip.decompress((root / 'err.gz').read_bytes()))
 
     def test_failed_suite_retains_diagnostics_and_exit_status(self):
         import contextlib

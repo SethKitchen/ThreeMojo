@@ -10,6 +10,7 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.utils import SeededRandom
+from math.norm import length3, normalized3, _ordinary_squared
 from std.math import acos, ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -50,7 +51,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
 
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""
-        return sqrt(self.dot(self))
+        return length3(self.x, self.y, self.z)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""
@@ -77,11 +78,10 @@ struct Vector3(Equatable, ImplicitlyCopyable):
 
     def normalize(mut self):
         """Scale `self` to unit length, leaving a zero vector unchanged."""
-        var magnitude = self.length()
-        if magnitude > 0:
-            self.x /= magnitude
-            self.y /= magnitude
-            self.z /= magnitude
+        var components = normalized3(self.x, self.y, self.z)
+        self.x = components[0]
+        self.y = components[1]
+        self.z = components[2]
 
     def __add__(self, other: Self) -> Self:
         """Return the component-wise sum."""
@@ -241,7 +241,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Returns:
             The Euclidean distance.
         """
-        return sqrt(self.distance_to_squared(other))
+        return (self - other).length()
 
     def distance_to_squared(self, other: Self) -> Float32:
         """Return the squared distance between two points, three.js's
@@ -277,10 +277,26 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js: a zero vector has no direction.
         """
-        var denominator = sqrt(self.length_sq() * other.length_sq())
-        if denominator == 0:
-            return Angle(Float32(pi / 2), RADIAN)
-        var theta = self.dot(other) / denominator
+        var first_squared = self.length_sq()
+        var second_squared = other.length_sq()
+        var product = first_squared * second_squared
+        var theta: Float32
+        if (
+            _ordinary_squared(first_squared)
+            and _ordinary_squared(second_squared)
+            and _ordinary_squared(product)
+        ):
+            theta = self.dot(other) / sqrt(product)
+        else:
+            var first = self
+            var second = other
+            first.normalize()
+            second.normalize()
+            if (first.x == 0 and first.y == 0 and first.z == 0) or (
+                second.x == 0 and second.y == 0 and second.z == 0
+            ):
+                return Angle(Float32(pi / 2), RADIAN)
+            theta = first.dot(second)
         return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
 
     def lerp(mut self, other: Self, alpha: Float32):
@@ -477,8 +493,11 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             high: The longest.
         """
         var length = self.length()
-        var divisor = length if length != 0 else Float32(1)
-        self = self / divisor * max(low, min(high, length))
+        if _ordinary_squared(self.length_sq()):
+            self = self / length * max(low, min(high, length))
+        else:
+            self.normalize()
+            self = self * max(low, min(high, length))
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
@@ -617,7 +636,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
 
     @staticmethod
     def random(mut generator: SeededRandom) -> Vector3:
-        """Return a vector with each component from zero up to one,
+        """Return a vector with each component in `[0, 1)`,
         three.js's `random`, drawn in x, y, z order.
 
         Args:
@@ -626,9 +645,9 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Returns:
             The vector.
         """
-        var x = Float32(generator.next())
-        var y = Float32(generator.next())
-        var z = Float32(generator.next())
+        var x = generator.float_in(0, 1)
+        var y = generator.float_in(0, 1)
+        var z = generator.float_in(0, 1)
         return Vector3(x, y, z)
 
     @staticmethod

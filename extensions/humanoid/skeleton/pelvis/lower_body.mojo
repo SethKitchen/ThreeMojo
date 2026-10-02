@@ -20,6 +20,7 @@ is anterior.
 """
 
 from core.assets import Assets
+from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
 from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -55,7 +56,7 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
-from materials.material import Material, MaterialId
+from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from std.math import max, min
@@ -372,24 +373,3 @@ def _grow(mut low: Vector3, mut high: Vector3, point: Vector3):
     high = Vector3(
         max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
     )
-
-
-def _resolved_paint(
-    mut assets: Assets, paint: MaterialId, var material: Material
-) raises -> MaterialId:
-    """Return `paint`, or store `material` when `paint` is unset.
-
-    Args:
-        assets: Material store for a new default look.
-        paint: Caller paint, or `UNSET_PAINT`.
-        material: Default Phong for this layer.
-
-    Returns:
-        A stored material id.
-
-    Raises:
-        Error: If the store refuses the material.
-    """
-    if paint.value >= 0:
-        return paint
-    return assets.materials.add(material^)

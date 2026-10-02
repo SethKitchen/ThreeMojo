@@ -42,7 +42,7 @@ Untoned muscle is calibrated toward typical adult muscle volumes measured by MRI
 | Muscle | Volume (cm³) |
 |---|---|
 | Gluteus maximus | 815 |
-| Gluteus medius | 289 |
+| Gluteus medius | 272 |
 | Tensor fasciae latae | 79 |
 | Sartorius | 180 |
 | Rectus femoris | 321 |

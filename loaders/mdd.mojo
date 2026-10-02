@@ -98,10 +98,24 @@ def parse_mdd(bytes: List[UInt8]) raises -> MddModel:
         Each frame's time and positions.
 
     Raises:
-        Error: If the file ends inside a value.
+        Error: If the declared times or positions do not fit in the file.
     """
     var frames = Int(_word(bytes, 0))
     var points = Int(_word(bytes, 4))
+    # Bound every count by the available payload before a point buffer can
+    # reserve memory. Divide rather than multiply untrusted UInt32 counts.
+    var available = len(bytes) - 8
+    if frames > available // 4:
+        raise Error(
+            "MDD: the file ends inside a value, at byte "
+            + String((len(bytes) // 4) * 4)
+        )
+    var positions_available = available - frames * 4
+    if frames > 0 and points > (positions_available // 12) // frames:
+        raise Error(
+            "MDD: the file ends inside a value, at byte "
+            + String((len(bytes) // 4) * 4)
+        )
     var offset = 8
     var times = List[Float32]()
     for _ in range(frames):

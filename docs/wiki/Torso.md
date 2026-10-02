@@ -57,6 +57,8 @@ The column stands on the pelvis's sacral promontory, so it meets the sacrum for 
 
 A vertebra is a body, two pedicles and laminae around the canal, a spinous process and two transverse processes. The bodies grow wider and deeper down the column. The column climbs in a lumbar lordosis and a thoracic kyphosis. The thoracic spines slope down steeply in the mid-thorax.
 
+Vertebral bodies use flat endplates at the authored lower and upper y coordinates. Their full body height is the listed height; no rounded sweep cap extends into the disc space. Discs use horizontal elliptical sections between those endplates, including the C7–T1 junction. These template planes enforce a dimensional contract, not measured endplate anatomy. The dens, arches, processes and their smooth joins remain separate features. This change does not certify that all tissues are disjoint or suitable for contact or finite-element analysis.
+
 A rib is a spline through its head, its tubercle, its angle and the side of the chest to its costal cartilage. The ribs fall from back to front. The first rib is short and broad. The eleventh and twelfth ribs float: they end at the side.
 
 The clavicle runs from the manubrium out, up and back to the acromion. Its medial two-thirds bow forward and its lateral third bows back. The scapula lies on the back of the chest from the second rib to the seventh, just lateral of the erector spinae. Its glenoid faces out and a little forward, under the acromion. `shoulder_girdle` returns the girdle's landmarks. `upper_arm_point` places a point on the hanging arm.

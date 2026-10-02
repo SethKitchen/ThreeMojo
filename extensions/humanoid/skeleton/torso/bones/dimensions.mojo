@@ -987,7 +987,7 @@ def _vertebra(mut sweeps: List[Sweep], dimensions: TorsoDimensions, index: Int):
     var d = dimensions.depths[index]
     var h = dimensions.heights[index]
     var lumbar = index >= L1.value
-    var body = Sweep(Vector3(1, 0, 0))
+    var body = Sweep(Vector3(1, 0, 0), flat_y=True)
     body.add(c - Vector3(0, 0.5 * h, 0), w, d)
     body.add(c + Vector3(0, 0.5 * h, 0), w, d)
     sweeps.append(body^)

@@ -42,6 +42,7 @@ surface is the same.
 """
 
 from math.path import Path, Shape
+from math.polygon_area import signed_area64
 from math.vector2 import Vector2
 
 # JavaScript's `Number.EPSILON`: how far an edge must climb before
@@ -64,13 +65,7 @@ def signed_area(contour: List[Vector2]) -> Float32:
         The area in square meters, positive when the contour runs
         counterclockwise.
     """
-    var total = Float32(0)
-    var count = len(contour)
-    for index in range(count):
-        var before = contour[(index + count - 1) % count]
-        var here = contour[index]
-        total += before.x * here.y - here.x * before.y
-    return total * 0.5
+    return Float32(signed_area64(contour))
 
 
 def is_clockwise(contour: List[Vector2]) -> Bool:
@@ -83,7 +78,7 @@ def is_clockwise(contour: List[Vector2]) -> Bool:
     Returns:
         True when the signed area is negative.
     """
-    return signed_area(contour) < 0
+    return signed_area64(contour) < 0
 
 
 def _between(first: Float32, second: Float32, probe: Float32) -> Bool:

@@ -17,6 +17,7 @@ frame. This module stores the origin of that frame in the leg frame.
 """
 
 from core.assets import Assets
+from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
 from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -101,7 +102,7 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
-from materials.material import Material, MaterialId
+from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 
@@ -411,27 +412,6 @@ def add_leg(
             )
             h_index += 1
     return root_id
-
-
-def _resolved_paint(
-    mut assets: Assets, paint: MaterialId, var material: Material
-) raises -> MaterialId:
-    """Return `paint`, or store `material` when `paint` is unset.
-
-    Args:
-        assets: Material store for a new default look.
-        paint: Caller paint, or `UNSET_PAINT`.
-        material: Default Phong for this layer.
-
-    Returns:
-        A stored material id.
-
-    Raises:
-        Error: If the store refuses the material.
-    """
-    if paint.value >= 0:
-        return paint
-    return assets.materials.add(material^)
 
 
 def _place(

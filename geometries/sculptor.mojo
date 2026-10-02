@@ -82,8 +82,10 @@ comptime STAMP_SPACING_RATIO = 0.15
 # The ratio of the split length to the collapse length, squared: above
 # two, so a split edge is not collapsed again.
 comptime TOPOLOGY_HYSTERESIS2 = 2.05 * 2.05
-# How far from uniform a mesh's scale may be, as a share of the largest.
-comptime UNIFORM_SCALE_TOLERANCE = 1e-10
+# The world matrix is stored in Float32, even though the tests below use
+# doubles. Allow eight Float32 epsilons for its rounded axis lengths and
+# dot products, including composition through a parent.
+comptime UNIFORM_SCALE_TOLERANCE = 8 * 1.1920928955078125e-7
 # How far above the plane the clay tool builds, as a share of the radius.
 comptime CLAY_OFFSET_RATIO = 0.1
 # JavaScript's `Number.EPSILON`.
@@ -547,12 +549,15 @@ struct Sculptor(Movable):
             The mean squared scale of the three axes.
 
         Raises:
-            Error: If the scale is not uniform, is zero, or shears.
+            Error: If the matrix is not finite, or the scale is not uniform,
+                is zero, or shears.
         """
         scene.update()
         var world = scene.world_matrix(scene.meshes[self.mesh].node)
         var e = List[Float64](capacity=16)
         for i in range(16):  # pragma: no branch
+            if not isfinite(world.elements[i]):
+                raise Error("Sculptor: The mesh world matrix must be finite")
             e.append(Float64(world.elements[i]))
         var sx2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2]
         var sy2 = e[4] * e[4] + e[5] * e[5] + e[6] * e[6]

@@ -149,7 +149,7 @@ def _discs(mut sweeps: List[Sweep], h: HeadDimensions):
             below = t + Vector3(0, 0.5 * h.torso.heights[0], 0)
             bw = h.torso.widths[0]
             bd = h.torso.depths[0]
-        var disc = Sweep(Vector3(1, 0, 0))
+        var disc = Sweep(Vector3(1, 0, 0), flat_y=True)
         disc.add(top, 0.5 * (w + bw), 0.5 * (d + bd))
         disc.add(below, 0.5 * (w + bw), 0.5 * (d + bd))
         sweeps.append(disc^)

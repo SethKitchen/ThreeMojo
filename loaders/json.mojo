@@ -304,9 +304,12 @@ struct JsonDocument(Movable):
                 fraction or is too large for an `Int`.
         """
         var value = self.number(node)
-        if value != Float64(Int(value)) or value > 9.0e15 or value < -9.0e15:
+        if not isfinite(value) or value > 9.0e15 or value < -9.0e15:
             raise Error("JSON: expected a whole number")
-        return Int(value)
+        var whole = Int(value)
+        if value != Float64(whole):
+            raise Error("JSON: expected a whole number")
+        return whole
 
     def string(self, node: Int) raises -> String:
         """Return a string.

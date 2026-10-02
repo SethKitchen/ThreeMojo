@@ -1150,6 +1150,42 @@ def test_v2x_through_the_manager() raises:
     assert_equal(_count(manager.tick(world), CUSTOM_V2X), 0)
 
 
+def test_v2x_mixed_rates_deliver_each_transmission_once() raises:
+    var world = _world()
+    var a = _car(world, 10, 1.75, 0.5)
+    var b = _car(world, 30, 1.75, 0.5)
+    var manager = SensorManager()
+    var bp = world.blueprints.at("sensor.other.v2x_custom")
+    bp.set_attribute("sensor_tick", "0.1")
+    var sender = manager.spawn_sensor(world, bp, _pose(0, 0, 2), a)
+    var listener = manager.spawn_sensor(
+        world,
+        world.blueprints.at("sensor.other.v2x_custom"),
+        _pose(0, 0, 2),
+        b,
+    )
+    var cam = world.blueprints.at("sensor.other.v2x")
+    cam.set_attribute("sensor_tick", "0.1")
+    _ = manager.spawn_sensor(world, cam, _pose(0, 0, 2), a)
+    var cam_listener = manager.spawn_sensor(
+        world, world.blueprints.at("sensor.other.v2x"), _pose(0, 0, 2), b
+    )
+    manager.send(world, sender, [1, 2, 3])
+    for frame in range(1, 5):
+        var messages = 0
+        var cams = 0
+        for m in manager.tick(world):
+            if m.kind == CUSTOM_V2X and m.sensor == listener:
+                messages += len(m.custom)
+            if m.kind == V2X and m.sensor == cam_listener:
+                cams += len(m.cams)
+        assert_equal(messages, 1 if frame == 2 else 0, String(frame))
+        if frame == 2:
+            assert_equal(cams, 1)
+        if frame == 1 or frame == 3:
+            assert_equal(cams, 0)
+
+
 def test_manager_edges() raises:
     var world = _world()
     var manager = SensorManager()

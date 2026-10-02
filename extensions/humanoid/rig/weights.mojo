@@ -193,24 +193,36 @@ struct _Heap(Movable):
 
 def _welded_edges(
     points: List[Vector3], triangles: List[Int]
-) -> Tuple[List[Int], List[List[Int]]]:
+) raises -> Tuple[List[Int], List[List[Int]]]:
     """Return each vertex's welded vertex, the first at the same place,
     and each welded vertex's neighbors along the triangles' edges."""
     var count = len(points)
-    var first = Dict[Int, Int]()
+    var first = Dict[Int, List[Int]]()
     var weld = List[Int](capacity=count)
     for v in range(count):  # pragma: no branch
         var p = points[v]
-        var key = (
-            (Int(p.x * 1e5) * 1000003) ^ (Int(p.y * 1e5) * 999983)
-        ) ^ Int(p.z * 1e5)
-        # Points the same to ten micrometers are one.
-        var same = first.get(key, -1)
-        if same >= 0:
-            weld.append(same)
-        else:
-            first[key] = v
-            weld.append(v)
+        var px = Int(p.x * 1e5)
+        var py = Int(p.y * 1e5)
+        var pz = Int(p.z * 1e5)
+        var key = ((px * 1000003) ^ (py * 999983)) ^ pz
+        # The hash selects a bucket, not a position: distinct coordinates
+        # can have the same XOR. Only equal quantized coordinates weld.
+        if key not in first:
+            first[key] = List[Int]()
+        var same = -1
+        for candidate in first[key]:
+            var q = points[candidate]
+            if (
+                px == Int(q.x * 1e5)
+                and py == Int(q.y * 1e5)
+                and pz == Int(q.z * 1e5)
+            ):
+                same = candidate
+                break
+        if same < 0:
+            same = v
+            first[key].append(v)
+        weld.append(same)
     var near = List[List[Int]](length=count, fill=List[Int]())
     for t in range(0, len(triangles) - 2, 3):  # pragma: no branch
         for c in range(3):  # pragma: no branch

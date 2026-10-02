@@ -54,7 +54,7 @@ The recorder finds the events by comparing the world with the last frame. CARLA'
 
 The file starts with a header: the version 1, the text `CARLA_RECORDER`, the date and the map's name. A frame follows for each tick. Every number is little-endian.
 
-A packet is an id byte, the size of the rest as a `uint32` and the rest. Most packets hold a `uint16` count and that many records. A string is a `uint16` length and its UTF-8 bytes.
+A packet is an id byte, the size of the rest as a `uint32` and the rest. Most packets hold a `uint16` count and that many records. A string is a `uint16` length and its UTF-8 bytes. `LogReader.string` checks UTF-8 before it constructs text. An incomplete or invalid string returns empty text and sets `failed`. A later read stays failed until `seek` clears the flag.
 
 | Id | Packet | Record |
 |---|---|---|

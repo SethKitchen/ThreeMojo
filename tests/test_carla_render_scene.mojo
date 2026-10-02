@@ -189,6 +189,7 @@ from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
 from std.math import atan, log2, pi, pow, sqrt
 from std.os import makedirs
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -823,8 +824,14 @@ def test_actor_visuals_follow_the_world() raises:
     assert_equal(len(visuals.walkers), 2)
     # The two sedans share one model; the van has its own.
     assert_equal(len(visuals.models), 2)
+    var meshes = len(scene.meshes)
+    var lights = len(scene.lights)
     world.set_light_state(cars[0], LIGHT_LOW_BEAM | LIGHT_BRAKE)
     visuals.sync(world, scene, assets)
+    assert_equal(len(visuals.vehicles), 3)
+    assert_equal(len(visuals.walkers), 2)
+    assert_equal(len(scene.meshes), meshes)
+    assert_equal(len(scene.lights), lights)
     var v = visuals.vehicles[0].copy()
     assert_equal(
         assets.materials.get(v.heads).emissive_intensity, LOW_BEAM_GLOW
@@ -1109,7 +1116,7 @@ def _scanned_registry() raises -> AssetRegistry:
     """A cache in /tmp of the repository's fixtures: a checker for every
     surface, a Radiance panorama for every sky, a box for the tree and the
     walkers, and the tagged car for every vehicle."""
-    var folder = "/tmp/threemojo_carla_scanned/"
+    var folder = temporary_path("threemojo_carla_scanned/")
     makedirs(folder, exist_ok=True)
     for name in ["gltf/checker.png", "gltf/box.gltf", "gltf/box.bin"]:
         Path(folder + name.split("/")[1]).write_bytes(

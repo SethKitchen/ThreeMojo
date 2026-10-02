@@ -21,6 +21,7 @@ from loaders.gltf import (
     is_supported_extension,
     load_gltf,
 )
+from loaders.image_batch import decode_batch_size
 from materials.material import BASIC, NO_TEXTURE, PHYSICAL, STANDARD
 from objects.line import LOOP, SEGMENTS, STRIP
 from render.framebuffer import Color
@@ -483,6 +484,75 @@ comptime CORE_MAPS = (
 )
 
 
+def test_decode_batches_never_exceed_the_worker_limit() raises:
+    assert_equal(decode_batch_size(0, 2), 0)
+    assert_equal(decode_batch_size(3, 0), 1)
+    assert_equal(decode_batch_size(3, 1), 1)
+    for workers in range(2, 9):
+        for total in range(1, 18):
+            var remaining = total
+            var batches = 0
+            while remaining > 0:
+                var batch = decode_batch_size(remaining, workers)
+                assert_true(batch > 0)
+                assert_true(batch <= workers)
+                assert_true(batch <= remaining)
+                remaining -= batch
+                batches += 1
+            assert_equal(batches, (total + workers - 1) // workers)
+
+
+def test_workers_keep_texture_order_across_multiple_batches() raises:
+    # Five distinct one-pixel images use alternating color spaces.
+    # Two workers cross two batch boundaries and leave one final image.
+    # Their RGBA colors are (10,30,70,255), (20,80,150,255),
+    # (230,20,40,255), (40,200,60,255) and (50,100,220,255).
+    var text = doc(
+        ',"images":['
+        '{"uri":"data:image/png;base64,'
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPgknP7DwACEgFuYigxcAAAAABJRU5ErkJggg=="
+        '"},'
+        '{"uri":"data:image/png;base64,'
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQCZj2HwADcAH6gpIUEAAAAABJRU5ErkJggg=="
+        '"},'
+        '{"uri":"data:image/png;base64,'
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGN4JqLxHwAFKAIiKKFFLAAAAABJRU5ErkJggg=="
+        '"},'
+        '{"uri":"data:image/png;base64,'
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPQOGHzHwAEdAIsrzhaoQAAAABJRU5ErkJggg=="
+        '"},'
+        '{"uri":"data:image/png;base64,'
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwSrnzHwAEsAJyiQKTRQAAAABJRU5ErkJggg=="
+        '"}'
+        '],"textures":[{"source":0},{"source":1},{"source":2},'
+        '{"source":3},{"source":4}]'
+        ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}}},'
+        '{"normalTexture":{"index":1}},'
+        '{"pbrMetallicRoughness":{"baseColorTexture":{"index":2}}},'
+        '{"normalTexture":{"index":3}},'
+        '{"pbrMetallicRoughness":{"baseColorTexture":{"index":4}}}]'
+    )
+    var one_scene = Scene()
+    var one_assets = Assets()
+    var one = load_gltf(text, List[UInt8](), "", one_scene, one_assets)
+    var many_scene = Scene()
+    var many_assets = Assets()
+    var many = load_gltf(text, List[UInt8](), "", many_scene, many_assets, 2)
+    assert_equal(many_assets.textures.count(), 5)
+    for index in range(5):
+        var a = one.color_textures[index]
+        var b = many.color_textures[index]
+        if index % 2 == 1:
+            a = one.data_textures[index]
+            b = many.data_textures[index]
+        assert_equal(a, b)
+        ref x = one_assets.textures.get(a)
+        ref y = many_assets.textures.get(b)
+        assert_equal(x.pixels, y.pixels)
+        assert_equal(x.levels, y.levels)
+        assert_true(x.color_space == y.color_space)
+
+
 def test_workers_decode_the_core_maps_as_one_worker_does() raises:
     var text = maps_doc(
         "["
@@ -518,6 +588,24 @@ def test_workers_decode_the_core_maps_as_one_worker_does() raises:
         for at in range(len(x.pixels)):
             assert_equal(x.pixels[at], y.pixels[at])
     assert_true(many_assets.textures.get(b.emissive_map).color_space == SRGB)
+
+
+def test_workers_finish_a_batch_before_reading_the_next_images() raises:
+    # The first batch contains malformed images. The third image has an
+    # invalid URI which must not be read until the first batch succeeds.
+    # Eagerly reading every input instead reports the unrelated URI error.
+    var text = doc(
+        ',"images":[{"uri":"data:image/png;base64,AAAA"},'
+        '{"uri":"data:image/png;base64,AAAA"},'
+        '{"uri":"data:invalid-third-batch-uri"}]'
+        ',"textures":[{"source":0},{"source":1},{"source":2}]'
+        ',"materials":[{"normalTexture":{"index":0}},'
+        '{"normalTexture":{"index":1}},{"normalTexture":{"index":2}}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    with assert_raises(contains="neither PNG nor JPEG"):
+        _ = load_gltf(text, List[UInt8](), "", scene, assets, 2)
 
 
 def test_workers_refuse_what_one_worker_refuses() raises:

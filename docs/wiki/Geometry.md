@@ -102,6 +102,8 @@ three.js recomputes a bounding box or sphere that it has cached. Here the bounds
 
 ## Draw range
 
+Range readers clamp the start and count before adding them. Large nonnegative counts stay inside the triangle or vertex stream.
+
 ```mojo
 geometry.set_draw_range(6, 12)     # index entries 6 to 17: triangles 2 to 5
 geometry.set_draw_range(0)         # every slot again: three.js's Infinity
@@ -313,7 +315,9 @@ A profile revolved around the y axis. Each point has `x` out from the axis and `
 
 The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first point faces the way its segment does.
 
-The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that.
+The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that. The builder refuses a final segment normal whose components cannot fit in `Float32`.
+
+Cylinder and lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
 
 A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 
@@ -355,6 +359,8 @@ By earcut, as three.js cuts it. `shape_geometry` builds the same arrays as three
 4. earcut cuts them into triangles, and the index keeps earcut's order.
 
 `triangulate(shape, curve_segments)` returns the points, the triangles and where each contour starts. `extract_points` returns the sampled contours after the checks below.
+
+Area and winding use a shared calculation with coordinates relative to one contour point and sums in doubles. Moving a small shape far from the origin does not change its winding or make its area disappear.
 
 ### What is refused
 
@@ -555,7 +561,7 @@ var soft = rounded_box(Length(2, METER), Length(1, METER), Length(1, METER))   #
 var pill = rounded_box(Length(1, METER), Length(1, METER), Length(1, METER), 4, Length(0.5, METER))
 ```
 
-A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half.
+A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half. The extents and radius must be finite.
 
 The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat.
 
@@ -668,6 +674,8 @@ The tolerance is a plain number and not a `Length`. It applies to every attribut
 A key is clamped to `KEY_LIMIT`, nine times ten to the eighteenth. JavaScript's `~~` wraps at two to the thirty-first instead. The two differ only for a tolerance far below any real one.
 
 The result is indexed. Its index must hold whole triangles, so a geometry of loose points that is not a multiple of three raises.
+
+Welding keeps the draw range and groups because each triangle keeps its place in the stream. It also keeps the name, user data, type, parameters and stored shapes. Mutable data is copied, so changes to the result leave the source alone.
 
 ### Creased normals
 
@@ -870,7 +878,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
-- A sweep must be positive and at most one turn.
+- A sweep must be finite, positive and at most one turn.
 - A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
 - Either every morph target carries normals or none does.
 - A morph influence must be a number, and there are eight of them.

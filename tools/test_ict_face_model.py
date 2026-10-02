@@ -51,6 +51,82 @@ def _grid(n):
 
 
 class ConverterTests(unittest.TestCase):
+    def test_obj_indices_comments_and_forward_references(self):
+        vertices = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\n'
+        expected = None
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'face.obj')
+            for text in (vertices + 'f 1/1 2/2 3/3 # comment\n',
+                         vertices + 'f -3/-3 -2/-2 -1/-1\n',
+                         'f 1/1 2/2 3/3\n' + vertices):
+                with open(path, 'w') as source:
+                    source.write(text)
+                parsed = ict_face_model.read_obj(path)
+                if expected is None:
+                    expected = parsed
+                self.assertEqual(parsed, expected)
+        self.assertEqual(expected[2], [[(0, 0), (1, 1), (2, 2)]])
+
+    def test_obj_boundary_rejects_malformed_coordinates_and_indices(self):
+        prefix = 'v 0 0 0\nvt 0 0\n'
+        cases = ['v 0 0\n', 'vt 0\n', 'v nan 0 0\n', 'v 0 inf 0\n',
+                 'v 0 0 -inf\n', 'vt nan 0\n', 'vt 0 inf\n',
+                 prefix + 'f 1/1 1/1\n', prefix + 'f 1 1 1\n',
+                 prefix + 'f 1//1 1/1 1/1\n']
+        for corner in ('0/1', '1/0', '2/1', '1/2', '-2/1', '1/-2', '1/1/1/1'):
+            cases.append(prefix + f'f {corner} 1/1 1/1\n')
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'face.obj')
+            for text in cases:
+                with self.subTest(text=text):
+                    with open(path, 'w') as source:
+                        source.write(text)
+                    with self.assertRaises(ValueError):
+                        ict_face_model.read_obj(path)
+
+    def test_nonfinite_expression_cannot_replace_existing_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for name, text in {
+                'generic_neutral_mesh.obj': NEUTRAL,
+                'jawOpen.obj': NEUTRAL.replace('v 100 0 0', 'v nan 0 0'),
+            }.items():
+                with open(os.path.join(folder, name), 'w') as source:
+                    source.write(text)
+            target = os.path.join(folder, 'face.bin')
+            with open(target, 'wb') as output:
+                output.write(b'preserve')
+            with self.assertRaisesRegex(ValueError, 'non-finite OBJ coordinate'):
+                ict_face_model.convert(folder, target, identities=0, skin_end=5, coarse_target=2)
+            with open(target, 'rb') as output:
+                self.assertEqual(output.read(), b'preserve')
+
+    def test_closest_handles_degenerate_triangles(self):
+        self.assertEqual(
+            ict_face_model._closest((1, .5, 0), (0, 0, 0), (0, 0, 0), (0, 1, 0)),
+            (1.0, 0.0, 0.5),
+        )
+        self.assertEqual(
+            ict_face_model._closest((1, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)),
+            (1.0, 0.0, 0.0),
+        )
+
+    def test_follow_searches_past_the_first_populated_ring(self):
+        from ict_face_model import follow
+
+        points = [
+            (.01485, .01485, .01485),
+            (-.01485, -.01485, -.01485),
+            (-.01484, -.01485, -.01485),
+            (-.01485, -.01484, -.01485),
+            (.03015, .01485, .01485),
+            (.03015, .01486, .01485),
+            (.03015, .01485, .01486),
+        ]
+        used, _, followers = follow(points, [(1, 2, 3), (4, 5, 6)], 1)
+        self.assertEqual(tuple(used[i] for i in followers[0][:3]), (4, 5, 6))
+        with self.assertRaisesRegex(ValueError, "coarse triangles"):
+            follow(points, [], 1)
+
     def test_converts_a_small_model(self):
         with tempfile.TemporaryDirectory() as folder:
             files = {

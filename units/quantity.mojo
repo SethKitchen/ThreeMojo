@@ -87,9 +87,7 @@ struct Quantity[length: Int, mass: Int, time: Int, angle: Int](
 
     def __abs__(self) -> Self:
         """Return this quantity's magnitude, discarding its sign."""
-        if self.value < 0:
-            return Self(-self.value)
-        return Self(self.value)
+        return Self(abs(self.value))
 
     def scaled(self, factor: Float32) -> Self:
         """Return this quantity multiplied by a plain number.

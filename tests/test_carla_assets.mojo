@@ -58,9 +58,11 @@ from math.bounds import Box3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.cube_texture_store import SCENE_ENVIRONMENT
-from render.framebuffer import Color
+from render.framebuffer import Color, Framebuffer
+from render.png import encode as encode_png
 from render.texture_store import NO_TEXTURE
 from std.os import makedirs
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -654,7 +656,7 @@ def test_a_model_the_town_cannot_use_is_refused() raises:
     with assert_raises(contains="only plain meshes"):
         _ = registry.place_model(5, scene, assets, parent, Vector3(1, 1, 1))
     # A glTF with a node and no mesh.
-    var folder = "/tmp/threemojo_carla_assets/"
+    var folder = temporary_path("threemojo_carla_assets/")
     makedirs(folder, exist_ok=True)
     Path(folder + "bare.gltf").write_text(
         '{"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes":'
@@ -699,7 +701,7 @@ comptime TAGGED_GLTF = (
 
 
 def test_a_model_reports_its_tagged_materials() raises:
-    var folder = "/tmp/threemojo_carla_assets/"
+    var folder = temporary_path("threemojo_carla_assets/")
     makedirs(folder, exist_ok=True)
     Path(folder + "tagged.gltf").write_text(TAGGED_GLTF)
     var registry = AssetRegistry(
@@ -769,7 +771,7 @@ def _preload_manifest(albedo: String) -> String:
 
 
 def test_preload_decodes_each_map_once() raises:
-    for workers in [1, 4]:
+    for workers in [-1, 0, 1, 2, 4]:
         var registry = AssetRegistry(
             parse_manifest(_preload_manifest("gltf/checker.png")), CACHE
         )
@@ -787,12 +789,75 @@ def test_preload_decodes_each_map_once() raises:
 
 
 def test_preload_refuses_a_file_that_is_not_an_image() raises:
-    for workers in [1, 4]:
+    for workers in [-1, 0, 1, 2, 4]:
         var registry = AssetRegistry(
             parse_manifest(_preload_manifest("gltf/box.gltf")), CACHE
         )
         with assert_raises():
             registry.preload(workers)
+
+
+def _batch_registry(folder: String, count: Int) raises -> AssetRegistry:
+    var entries = String("")
+    var bindings = String("{")
+    for index in range(count):
+        var name = "map" + String(index)
+        if index > 0:
+            entries += ","
+            bindings += ","
+        entries += _entry(
+            name,
+            "texture_set",
+            _file("albedo", name + ".png"),
+            ', "tile_meters": 1',
+        )
+        bindings += '"surface.' + name + '":"' + name + '"'
+    bindings += "}"
+    return AssetRegistry(parse_manifest(_manifest(entries, bindings)), folder)
+
+
+def _write_batch_image(folder: String, index: Int) raises:
+    var image = Framebuffer(2, 2, Color(UInt8(20 + index), 40, 60))
+    Path(folder + "map" + String(index) + ".png").write_bytes(encode_png(image))
+
+
+def test_preload_preserves_order_across_multiple_batches() raises:
+    var folder = temporary_path("threemojo_carla_preload_batches/")
+    makedirs(folder, exist_ok=True)
+    for index in range(5):
+        _write_batch_image(folder, index)
+    for workers in [1, 2, 3, 8]:
+        var registry = _batch_registry(folder, 5)
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 5)
+        for index in range(5):
+            assert_equal(
+                registry.decoded_keys[index],
+                folder + "map" + String(index) + ".png|srgb",
+            )
+            assert_equal(registry.decoded[index].pixels[0], UInt8(20 + index))
+            assert_equal(registry.decoded[index].levels, 2)
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 5)
+
+
+def test_preload_failure_does_not_publish_a_partial_batch_or_cache() raises:
+    var folder = temporary_path("threemojo_carla_preload_failure/")
+    makedirs(folder, exist_ok=True)
+    for index in range(5):
+        _write_batch_image(folder, index)
+    for workers in [1, 2, 3]:
+        # The last image fails after at least one complete batch.
+        Path(folder + "map4.png").write_text("invalid image")
+        var registry = _batch_registry(folder, 5)
+        with assert_raises():
+            registry.preload(workers)
+        assert_equal(len(registry.decoded), 0)
+        assert_equal(len(registry.decoded_keys), 0)
+        _write_batch_image(folder, 4)
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 5)
+        assert_equal(registry.decoded[4].pixels[0], UInt8(24))
 
 
 # A town package of one triangle drawn seven times, as `build_towns.py`
@@ -841,7 +906,7 @@ def town_registry() raises -> AssetRegistry:
     """A registry whose cache holds the town package, as `town.Town02`,
     the rigged model as a town that cannot be used, and the package with
     no lamps and no lamp glass, as `town.Town03`."""
-    var folder = "/tmp/threemojo_carla_town/"
+    var folder = temporary_path("threemojo_carla_town/")
     makedirs(folder, exist_ok=True)
     Path(folder + "town.gltf").write_text(TOWN_GLTF)
     Path(folder + "plain.gltf").write_text(
@@ -939,7 +1004,7 @@ def test_a_town_the_renderer_cannot_use_is_refused() raises:
         _ = registry.place_town(1, scene, assets, parent, near)
     with assert_raises(contains="is not a town"):
         _ = _registry().place_town(0, scene, assets, parent, near)
-    var folder = "/tmp/threemojo_carla_town/"
+    var folder = temporary_path("threemojo_carla_town/")
     Path(folder + "bare.gltf").write_text(
         '{"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes":'
         ' [0]}], "nodes": [{"name": "marker"}]}'
@@ -1020,7 +1085,7 @@ def test_the_edges_of_a_manifest_and_a_cache() raises:
 
 
 def test_models_and_towns_with_no_material_or_with_instances() raises:
-    var folder = "/tmp/threemojo_carla_bare/"
+    var folder = temporary_path("threemojo_carla_bare/")
     makedirs(folder, exist_ok=True)
     Path(folder + "model.gltf").write_text(_bare_triangle("part", False))
     Path(folder + "town.gltf").write_text(

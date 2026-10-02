@@ -47,6 +47,8 @@ three.js draws both cascades into one atlas, each tile inset by `ceil( radius ) 
 
 `CascadeBlend` is a type, so a bare integer does not compile. `CSM_BLEND` is the blend of a `CSM`, and `SUN_BLEND` is the blend of a sun.
 
+A rejected `SunLight.update` leaves the scene's cascade lights and node transforms unchanged. The update validates both candidate lights and their node mappings before it writes to the scene. `fit_sun` checks its shadow settings before it fits the cameras.
+
 ## IES spot light
 
 An IES spot light is a spot light whose beam comes from a measured profile, not from a cone. `loaders/ies.mojo` reads the profile, and `ies_texture` stores it as a texture.
@@ -99,7 +101,7 @@ var lighting = Lighting(
 )
 ```
 
-`Lighting.spot_attenuation` gives the beam of one spot light. Every lit kind reads it where it read the cone. That is the diffuse term, the highlight, the toon ramp, the scattered light, the physical lobe and the Gouraud vertex.
+`Lighting.spot_attenuation` gives the beam of one spot light. Every lit kind reads it where it read the cone. That is the diffuse term, the highlight, the toon ramp, the scattered light, the physical lobe, the Gouraud vertex and each volume ray step.
 
 ## Light probe grid
 
@@ -121,6 +123,8 @@ three.js: `new LightProbeGrid( width, height, depth, widthProbes, heightProbes, 
 | `intensity` | `intensity` | What the irradiance is multiplied by. |
 | `falloff` | `falloff` | How far outside the box the grid fades out. Zero applies the grid everywhere. |
 
+`validate()` requires one stored probe per grid point and finite coefficients before and after intensity scaling. Call it after edits to the counts or probe array. The renderer and `Lighting` check a nonempty grid before they adopt it. Counts must fit the shared host and device indices; invalid counts fail before allocation.
+
 ### The bake
 
 `bake_light_probe_grid` is three.js's `LightProbeGrid.bake`. For each probe it draws the scene into a cube with `scene_cube`. Then `project_sh` reads the cube in `sample_count` directions on an equal-area Fibonacci sphere. Each sample is multiplied by the basis, and the sum by `4 pi / sample_count`.
@@ -134,6 +138,8 @@ three.js: `new LightProbeGrid( width, height, depth, widthProbes, heightProbes, 
 | `start`, `count` | `0`, `ALL_PROBES` | Which probes to bake. |
 
 The bake does not use the renderer's grid. A sun's shadow is fit to one view camera, and a cube has six. So `replace_sun_lights` draws each sun that casts as one directional light, as three.js's `LightProbeGridUtils` does. Its shadow camera is fit to the sphere around every mesh that casts. `restore_sun_lights` puts the sun back after the bake, also when the bake raises.
+
+Replacement reads all suns before it changes the scene. A failed replacement leaves all suns unchanged.
 
 ### The lookup
 

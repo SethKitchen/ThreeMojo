@@ -673,11 +673,12 @@ struct _Collapser(Movable):
                 return True
         return False
 
-    def collapse(mut self, entry: _Entry) -> Bool:
+    def collapse(mut self, entry: _Entry, minimum: Int = 0) -> Bool:
         """Merge `entry.v` into `entry.u` at the entry's point, if allowed.
 
         Args:
             entry: A candidate from the heap.
+            minimum: The fewest faces a collapse may leave.
 
         Returns:
             True if the edge was collapsed.
@@ -692,6 +693,8 @@ struct _Collapser(Movable):
         # No face: the edge is gone. More than two: it is not a surface
         # edge, and merging it would tear the surface.
         if shared == 0 or shared > 2:
+            return False
+        if self.alive - shared < minimum:
             return False
         # The link condition: the ends may share no neighbor but the far
         # corners of their shared faces, or the collapse pinches.
@@ -731,15 +734,16 @@ struct _Collapser(Movable):
             self._offer(u, near[index])
         return True
 
-    def run(mut self, target: Int):
+    def run(mut self, target: Int, minimum: Int = 0):
         """Collapse the cheapest edges until `target` faces are left, or
         no edge can go.
 
         Args:
             target: How many faces to keep.
+            minimum: The fewest faces a collapse may leave.
         """
         while self.alive > target and len(self.heap.entries) > 0:
-            _ = self.collapse(self.heap.pop())
+            _ = self.collapse(self.heap.pop(), minimum)
 
     def result(self) -> WeldedMesh:
         """Return the live faces over the vertices they use.
@@ -767,29 +771,32 @@ struct _Collapser(Movable):
         return WeldedMesh(positions^, uvs^, faces^)
 
 
-def simplify_welded(mesh: WeldedMesh, target: Int) -> WeldedMesh:
+def simplify_welded(
+    mesh: WeldedMesh, target: Int, minimum: Int = 0
+) -> WeldedMesh:
     """Decimate a welded mesh to at most `target` faces, where it can.
 
     Args:
         mesh: A welded mesh.
         target: How many faces to keep.
+        minimum: The fewest faces a collapse may leave.
 
     Returns:
         The mesh with its cheapest edges collapsed. It keeps more than
         `target` faces if every edge left would turn a face over or
-        pinch the surface.
+        pinch the surface, or would leave fewer than `minimum` faces.
     """
     if mesh.triangle_count() <= target:
         return WeldedMesh(
             mesh.positions.copy(), mesh.uvs.copy(), mesh.faces.copy()
         )
     var collapser = _Collapser(mesh)
-    collapser.run(target)
+    collapser.run(target, minimum)
     return collapser.result()
 
 
 def simplify(geometry: BufferGeometry, target: Int) raises -> BufferGeometry:
-    """Weld a geometry and decimate it to at most `target` triangles.
+    """Weld a geometry and decimate it toward `target` triangles.
 
     Args:
         geometry: An indexed or unindexed triangle geometry.
@@ -797,7 +804,7 @@ def simplify(geometry: BufferGeometry, target: Int) raises -> BufferGeometry:
 
     Returns:
         An indexed geometry with `position`, `normal` and, if the source
-        had them, `uv`.
+        had them, `uv`. It can exceed `target` if no safe collapse remains.
 
     Raises:
         Error: If `target` is less than one, or the geometry has no
@@ -816,7 +823,9 @@ def share_budget(
 
     A mesh's share is the budget times its fraction of the area, and at
     least `MIN_PART_TRIANGLES`. A mesh never gets more than it holds; what
-    it cannot use is shared again between the others.
+    it cannot use is shared again between the others. Minimum shares are
+    reserved before larger shares are assigned. If the budget cannot
+    cover the minimum shares, they take priority over the budget.
 
     Args:
         areas: Each mesh's surface area.
@@ -824,10 +833,19 @@ def share_budget(
         budget: The triangles all the meshes may hold together.
 
     Returns:
-        Each mesh's share, in the same order.
+        Each mesh's share, in the same order, rounded down. Their sum is
+        at most the budget or the sum of the minimum shares, whichever
+        is larger. A zero-area mesh receives only its minimum share.
     """
     var count = len(areas)
-    var shares = List[Int](length=count, fill=0)
+    var shares = List[Int](capacity=count)
+    var least = 0
+    for index in range(count):
+        var minimum = min(MIN_PART_TRIANGLES, counts[index])
+        shares.append(minimum)
+        least += minimum
+    if budget <= least:
+        return shares^
     var settled = List[Bool](length=count, fill=False)
     var left = budget
     while True:
@@ -835,23 +853,40 @@ def share_budget(
         for index in range(count):
             if not settled[index]:
                 area += areas[index]
-        var changed = False
-        for index in range(count):
+        if area <= 0:
+            return shares^
+        # Test both bounds before fixing either one. Fixing a small
+        # source first could spend the minimum of a small-area mesh.
+        var wanted = List[Float64](length=count, fill=0)
+        var total = Float64(0)
+        # Positive remaining area requires at least one mesh, so count > 0.
+        for index in range(count):  # pragma: no branch
             if settled[index]:
                 continue
-            var share = MIN_PART_TRIANGLES
-            if area > 0:
-                share = max(
-                    MIN_PART_TRIANGLES,
-                    Int(Float64(max(left, 0)) * areas[index] / area),
-                )
-            if share >= counts[index]:
-                shares[index] = counts[index]
-                settled[index] = True
-                left -= counts[index]
-                changed = True
+            wanted[index] = Float64(left) * areas[index] / area
+            var minimum = min(MIN_PART_TRIANGLES, counts[index])
+            total += min(
+                Float64(counts[index]),
+                max(Float64(minimum), wanted[index]),
+            )
+        var fix_minimum = total > Float64(left)
+        var changed = False
+        # Positive remaining area requires at least one mesh, so count > 0.
+        for index in range(count):  # pragma: no branch
+            if settled[index]:
                 continue
-            shares[index] = share
+            var minimum = min(MIN_PART_TRIANGLES, counts[index])
+            shares[index] = max(
+                minimum, Int(min(Float64(counts[index]), wanted[index]))
+            )
+            # An excess means the lower bounds must be reserved first.
+            # A shortfall means upper bounds release unused triangles.
+            if (fix_minimum and wanted[index] <= Float64(minimum)) or (
+                not fix_minimum and wanted[index] >= Float64(counts[index])
+            ):
+                settled[index] = True
+                left -= shares[index]
+                changed = True
         if not changed:
             return shares^
 
@@ -901,7 +936,9 @@ async def _simplify_task(
     var index = task
     while index < count:
         var decimated = simplify_welded(
-            meshes[unsafe_offset=index], targets[unsafe_offset=index]
+            meshes[unsafe_offset=index],
+            targets[unsafe_offset=index],
+            MIN_PART_TRIANGLES,
         )
         meshes[unsafe_offset=index] = decimated^
         index += tasks
@@ -914,18 +951,22 @@ def fit_triangle_budget(
     budget: Int,
     workers: Int = 1,
 ) raises:
-    """Decimate the meshes from `first_mesh` on to `budget` triangles in all.
+    """Decimate the meshes from `first_mesh` on toward one triangle budget.
 
     Each geometry the meshes name is welded, then decimated to its share
     of the budget; see `share_budget`. A geometry two meshes name is
-    decimated once. The geometries are replaced in `assets`.
+    decimated once. The geometries are replaced in `assets`. Each keeps
+    at least 32 triangles, or its count after welding if that is smaller.
+    The result can exceed the budget when these minimums or the safe
+    collapse rules prevent more reduction.
 
     Args:
         scene: The scene whose meshes to read.
         assets: The store that holds their geometries, changed in place.
         first_mesh: The first mesh to decimate, such as the scene's mesh
             count before a body was added.
-        budget: The triangles the meshes may hold together, at least one.
+        budget: The target triangle count across unique geometries,
+            at least one. This is not a hard maximum.
         workers: How many threads may weld and decimate.
 
     Raises:

@@ -48,7 +48,7 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import sqrt
+from std.math import atan, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -807,9 +807,10 @@ struct Road(Copyable, Movable):
     ) raises -> CarlaTransform:
         """Return a lane's center at s in CARLA's frame, facing along it.
 
-        This is `Lane::ComputeTransform`. The pitch is the elevation's
-        slope read as radians. A lane that runs against s turns its yaw by
-        180 degrees and its pitch to 360 minus the pitch.
+        This follows `Lane::ComputeTransform`, except that the pitch is
+        the negative arctangent of the elevation grade. That matches the
+        corrected rotation convention and makes rising roads face uphill.
+        A lane against s turns its yaw by 180 degrees and reverses pitch.
 
         Args:
             section: The section's index.
@@ -840,7 +841,9 @@ struct Road(Copyable, Movable):
         var point = self.directed_point(s)
         point.apply_lateral_offset(Length(t_offset, METER))
         point.tangent -= Float64(lane_tangent)
-        var pitch = Float32(point.pitch) * _TO_DEGREES
+        # Rotation's positive pitch points down. The elevation derivative is
+        # a grade, not an angle; use its arctangent before reversing traffic.
+        var pitch = -Float32(atan(point.pitch)) * _TO_DEGREES
         var yaw = Float32(-point.tangent) * _TO_DEGREES
         if not self.is_positive_direction(lane_id):
             yaw += 180.0

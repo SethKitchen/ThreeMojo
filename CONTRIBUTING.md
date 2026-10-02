@@ -63,3 +63,36 @@ Write the first line as a statement of what the commit does, in fewer than 72 ch
 ## License
 
 Your contribution is licensed on the same terms as the project, including the commercial licensing in [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+## Rendered gallery files
+
+Run `make out/NAME.png` to render one example. Its prerequisites include its
+imports and quoted assets. An unrelated extension does not rebuild the image.
+Use `make -B out/NAME.png` after changing an external asset cache.
+
+Each gallery target compresses its PNG or APNG after rendering. Compression
+keeps the samples, frame timing and metadata. `make optimize-images` compresses
+all tracked gallery PNG files without rendering them again.
+
+New files in `out/` are ignored. To add a documentation image, review it,
+compress it with `python3 tools/optimize_png.py out/NAME.png`, then use
+`git add -f out/NAME.png`. Existing tracked images still update normally.
+Compression does not remove old files from Git history.
+
+## Temporary test files
+
+Use `temporary_path` from `tests/test_scratch.mojo` for temporary fixtures.
+The CPU test runner and coverage capture give each process a private directory.
+They honor `TMPDIR` and remove that directory when the child exits.
+The CPU runner also cleans up after a test timeout.
+The helper rejects names that escape that directory.
+
+A suite that writes temporary files must run through the test runner.
+For a directly built suite, use:
+
+```sh
+python3 tools/run_suite.py --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
+```
+
+Do not set `THREEMOJO_TEST_TMPDIR` yourself. The runner owns that directory's
+lifetime. X11 socket paths remain system protocol paths, not test fixtures.

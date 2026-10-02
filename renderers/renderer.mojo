@@ -182,7 +182,7 @@ from objects.line import (
     segment_count,
     segment_ends,
 )
-from objects.line_segments2 import cap_steps, dash_spans
+from objects.line_segments2 import cap_steps, dash_spans, drawn_segments
 from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skinned_mesh import (
@@ -839,9 +839,6 @@ def _coordinates(
 # roundings of the same view; a millionth of the range they measure over
 # is several times the rounding and no distance an image can show.
 comptime CULL_SLACK = Float32(1e-6)
-# A wide line this many output pixels wide or thinner is drawn without
-# round caps: they are a fraction of a pixel. See `_emit_wide_line`.
-comptime THIN_LINE = Float32(0.75)
 
 
 def _in_view(
@@ -3682,15 +3679,6 @@ def _emit_cap(
         last = next
 
 
-def _screen_length(
-    to_screen: Matrix4, start: ClipVertex, end: ClipVertex
-) -> Float32:
-    """Return how long a segment is on the image, in raster pixels."""
-    var a = to_screen.transform_point(start.position)
-    var b = to_screen.transform_point(end.position)
-    return Vector2(b.x - a.x, b.y - a.y).length()
-
-
 def _emit_wide_line(
     mut corners: _Slim,
     assets: Assets,
@@ -3708,11 +3696,9 @@ def _emit_wide_line(
     three.js's `LineSegments2` drawn with `LineMaterial`: each segment is
     a quad, and each end of it a round cap, unless the line is dashed.
     A dashed segment is cut into a quad per dash, with no caps, as
-    three.js throws the caps of a dashed line away. A line at most one
-    and a half pixels wide keeps no caps either, save on a segment
-    shorter than it is wide: the caps would each cover a fraction of a
-    pixel, and they would triple the corners a strand of hair needs. The segment is first
-    cut to the near and the far planes, as three.js trims it to the near
+    three.js throws the caps of a dashed line away. Solid segments keep
+    both round caps at every width, including subpixel widths. The segment
+    is first cut to the near and the far planes, as three.js trims it to the near
     plane, so that no corner is placed from a point behind the camera. The
     triangles then go where every triangle goes: through the clipper and
     `_Paint.emit`, two-sided. See `objects.line_segments2`.
@@ -3773,7 +3759,9 @@ def _emit_wide_line(
         )
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
-    var segments = segment_count(SEGMENTS, count)
+    var visible = drawn_segments(geometry)
+    var first_vertex = visible[0]
+    var segments = visible[1]
     var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
     var colors = _vertex_colors(geometry, material.vertex_colors, base, count)
     var dashed = material.is_dashed()
@@ -3824,19 +3812,14 @@ def _emit_wide_line(
         0,
     )
     var no_planes = List[Plane]()
-    # A line no wider than `THIN_LINE` output pixels keeps no caps: they
-    # would be a fraction of a pixel, and they would triple its corners.
-    var thin = not width.world_units and half <= THIN_LINE * Float32(
-        render_scale
-    )
     var each = 6
-    if not thin and not dashed:
+    if not dashed:
         each += 6 * cap_steps(half)
     corners.reserve(len(corners) + segments * each)
     for segment in range(segments):
         var ends = List[ClipVertex]()
         for side in range(2):  # pragma: no branch
-            var vertex = segment * 2 + side
+            var vertex = first_vertex + segment * 2 + side
             var placed = world.transform_point(positions.vector3(vertex))
             ends.append(
                 ClipVertex(
@@ -3879,9 +3862,6 @@ def _emit_wide_line(
             _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
             _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
         if dashed:
-            continue
-        # A thin segment's caps are left off, but a dot keeps its own.
-        if thin and _screen_length(to_screen, start, end) > half:
             continue
         _emit_cap(ribbon, paint, corners, start, -1, near, far, sides, any_of)
         _emit_cap(ribbon, paint, corners, end, 1, near, far, sides, any_of)
@@ -4355,6 +4335,10 @@ def _paint_backdrop(
 # draw is cut into pieces this size, so that one skin of a hundred
 # thousand triangles is shared between the workers as well.
 comptime PIECE_TRIANGLES = 2048
+# Bound the vertex arrays held by deferred draws. One larger draw can
+# exceed this limit, but no other draw is held beside it. A serial
+# renderer releases each draw before it prepares the next one.
+comptime PENDING_VERTICES = 65536
 
 
 struct _TriangleJob(Movable):
@@ -5360,6 +5344,10 @@ struct Renderer(Movable):
         big.info_auto_reset = self.info_auto_reset
         big._opaque_sort = self._opaque_sort
         big._transparent_sort = self._transparent_sort
+        big.draw_filter = self.draw_filter
+        big.oit_draw = self.oit_draw
+        big.snap_vertices = self.snap_vertices
+        big.uv_space_meshes = self.uv_space_meshes.copy()
         # Counted into this renderer's info, not a copy of it.
         big._state = self._state
         big.ltc = self.ltc.copy()
@@ -5405,8 +5393,19 @@ struct Renderer(Movable):
         sized.custom_tone_mapping = self.custom_tone_mapping
         sized._opaque_sort = self._opaque_sort
         sized._transparent_sort = self._transparent_sort
+        sized.draw_filter = self.draw_filter
+        sized.oit_draw = self.oit_draw
+        sized.snap_vertices = self.snap_vertices
+        sized.uv_space_meshes = self.uv_space_meshes.copy()
+        sized.auto_clear = self.auto_clear
+        sized.auto_clear_color = self.auto_clear_color
+        sized.auto_clear_depth = self.auto_clear_depth
+        sized.auto_clear_stencil = self.auto_clear_stencil
+        sized.info_auto_reset = self.info_auto_reset
+        sized.antialias = self.antialias
         sized._state = self._state
         sized.ltc = self.ltc.copy()
+        sized.probe_grid = self.probe_grid.copy()
         sized.render_scale = self.render_scale
         return sized^
 
@@ -5906,6 +5905,7 @@ struct Renderer(Movable):
         # their triangles on the workers. Emitted before anything else
         # is appended, so the corners stay in draw order.
         var jobs = List[_TriangleJob]()
+        var pending_vertices = 0
         for slot in range(len(draws)):
             # Each draw shares one surface per facing.
             corners.new_surface()
@@ -5919,6 +5919,7 @@ struct Renderer(Movable):
                 _emit_jobs(
                     jobs, corners, spans, self.workers, gouraud_lights, assets
                 )
+                pending_vertices = 0
                 var wide_begin = len(corners)
                 var wide_cut = List[Plane]()
                 var wide_any = List[Plane]()
@@ -5973,6 +5974,7 @@ struct Renderer(Movable):
                 _emit_jobs(
                     jobs, corners, spans, self.workers, gouraud_lights, assets
                 )
+                pending_vertices = 0
                 var begin = len(corners)
                 var sprite_cut = List[Plane]()
                 var sprite_any = List[Plane]()
@@ -6259,6 +6261,11 @@ struct Renderer(Movable):
             # the point of the two accessors.
             ref positions = geometry.attribute_view(String(POSITION))
             var vertex_count = positions.count()
+            if pending_vertices + vertex_count > PENDING_VERTICES:
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
+                pending_vertices = 0
             world_points.reserve(vertex_count)
             view_points.reserve(vertex_count)
             # How many of the geometry's morph targets this draw actually
@@ -6477,6 +6484,7 @@ struct Renderer(Movable):
                 _emit_jobs(
                     jobs, corners, spans, self.workers, gouraud_lights, assets
                 )
+                pending_vertices = 0
                 var begin = len(corners)
                 var ends = triangle_edges(geometry, run_start, triangles * 3)
                 for edge in range(len(ends[0])):
@@ -6569,12 +6577,19 @@ struct Renderer(Movable):
                 _emit_jobs(
                     jobs, corners, spans, self.workers, gouraud_lights, assets
                 )
+                pending_vertices = 0
                 var begin = len(corners)
                 job.emit(0, triangles, corners, gouraud_lights, assets)
                 _march_volume(corners, begin, material.steps, geometry, world)
                 job.note(spans, begin, len(corners))
                 continue
             jobs.append(job^)
+            pending_vertices += vertex_count
+            if self.workers == 1 or pending_vertices >= PENDING_VERTICES:
+                _emit_jobs(
+                    jobs, corners, spans, self.workers, gouraud_lights, assets
+                )
+                pending_vertices = 0
 
         _emit_jobs(jobs, corners, spans, self.workers, gouraud_lights, assets)
         # A light's view of the casters keeps the standard depth, which
@@ -7996,12 +8011,11 @@ struct Renderer(Movable):
         camera: C,
         shadows: List[ShadowMap],
     ) raises:
-        """Draw the scene into `target` as `render_into` does, with shadow
-        maps the caller drew rather than drawing them.
+        """Draw with an independent copy of the caller's shadow maps.
 
-        A light's shadow map depends on the light and the casters, not on
-        the camera, so views of one scene at one moment share their maps:
-        the six faces of a cube camera draw them once.
+        Views can share maps when their lights, casters and visible layers
+        are the same. Use `render_into_reusing_shadows` to transfer the maps
+        between views without copying their texels.
 
         Args:
             target: The target to draw into. It must be the renderer's size.
@@ -8013,9 +8027,44 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `_draw_into` raises.
         """
+        _ = self.render_into_reusing_shadows(
+            target, scene, assets, camera, shadows.copy()
+        )
+
+    def render_into_reusing_shadows[
+        C: Camera
+    ](
+        self,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        var shadows: List[ShadowMap],
+    ) raises -> List[ShadowMap]:
+        """Draw the scene into `target` as `render_into` does, with shadow
+        maps the caller drew rather than drawing them.
+
+        Views of one scene with the same visible layers can share their
+        maps. Transfer `shadows` with `^` and keep the return value to
+        reuse their storage without copying it between views. A caller
+        that must keep its maps can use `render_into_with_shadows`.
+
+        Args:
+            target: The target to draw into. It must be the renderer's size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+            shadows: The maps, from `shadow_maps` for the camera's layers.
+
+        Returns:
+            The maps used by this frame, moved without copying their texels.
+
+        Raises:
+            Error: Everything `_draw_into` raises.
+        """
         var hooks = NoHooks()
-        _ = self._draw_into(
-            hooks, target, scene, assets, camera, True, shadows.copy()
+        return self._draw_into(
+            hooks, target, scene, assets, camera, True, shadows^
         )
 
     def render_into_with[
@@ -8271,7 +8320,9 @@ struct Renderer(Movable):
         for index in range(len(frame.items)):
             hooks.on_after_render(scene, frame.items[index])
         hooks.on_after_scene(scene)
-        return lighting.shadows.copy()
+        var maps = lighting.shadows^
+        lighting.shadows = List[ShadowMap]()
+        return maps^
 
     def _lightings[
         C: Camera
@@ -8601,8 +8652,8 @@ struct Renderer(Movable):
         Args:
             scene: The transform hierarchy, updated, with its lights.
             assets: The geometry and materials the casters name.
-            visible: The camera's layers; a light on none of them draws
-                nothing, as `Lighting` leaves it out.
+            visible: The camera's layers. A light or caster on none of
+                them is left out, as in three.js's shadow pass.
             kept: Maps drawn before, each naming its light. Only a frozen
                 light's is used; the rest are dropped.
 
@@ -8634,7 +8685,9 @@ struct Renderer(Movable):
                 maps.append(kept.pop(reused))
                 continue
             if light.kind == POINT:
-                maps.append(self._cube_shadow(scene, assets, light, index))
+                maps.append(
+                    self._cube_shadow(scene, assets, light, index, visible)
+                )
                 continue
             var at = scene.world_position(light.node)
             var aimed = _light_aim(scene, light)
@@ -8650,6 +8703,7 @@ struct Renderer(Movable):
                     shadow.far,
                 )
                 camera.place(at, aimed)
+                camera.layers = visible
                 target = self._casters(
                     scene,
                     assets,
@@ -8664,6 +8718,7 @@ struct Renderer(Movable):
                 var camera = _spot_camera(
                     light, at, aimed, projector_aspect(light, assets.textures)
                 )
+                camera.layers = visible
                 target = self._casters(
                     scene,
                     assets,
@@ -8707,6 +8762,7 @@ struct Renderer(Movable):
         assets: Assets,
         light: Light,
         index: Int,
+        visible: Layers,
     ) raises -> ShadowMap:
         """Draw a point light's six faces and return them as its cube."""
         ref shadow = light.shadow
@@ -8722,6 +8778,7 @@ struct Renderer(Movable):
             )
             camera.up = cube_up(face)
             camera.place(at, at + cube_direction(face))
+            camera.layers = visible
             var target = self._casters(
                 scene,
                 assets,
@@ -9229,6 +9286,30 @@ struct Renderer(Movable):
         _raise_band_errors(errors)
         return image^
 
+    def _cube_renderer(
+        self, size: Int, copy_probe_grid: Bool = True
+    ) raises -> Renderer:
+        """Return a fresh cube-face renderer with this scene's light and clip settings.
+
+        The face owns its viewport and history, uses unit exposure with no
+        tone mapping, and writes the usual sRGB image when resolved.
+        Probe baking supplies its own grid and skips copying this one's.
+        """
+        var side = Renderer(size, size, self.workers)
+        side.background = self.background
+        side.shading = self.shading
+        side.depth_mode = self.depth_mode
+        side.clipping_planes = self.clipping_planes.copy()
+        side.local_clipping_enabled = self.local_clipping_enabled
+        side.shadow_map_type = self.shadow_map_type
+        side.shadow_map_transmitted = self.shadow_map_transmitted
+        side.ltc = self.ltc.copy()
+        if copy_probe_grid:
+            side.probe_grid = self.probe_grid.copy()
+        side.time = self.time
+        side.override_material = self.override_material
+        return side^
+
     def render_cube(
         self, scene: Scene, assets: Assets, camera: CubeCamera
     ) raises -> CubeTexture:
@@ -9237,8 +9318,9 @@ struct Renderer(Movable):
         `CubeCamera.update(renderer, scene)`.
 
         Each face is drawn by a renderer of the face's size with this
-        one's background, shading and workers, through `render`, so the
-        scene's own background and every material are in the faces.
+        one's background, shading, workers, lighting resources and clipping,
+        through `render`, so the scene's background and materials reach the
+        faces. Shadow settings, material override and node time carry over.
         The tone mapping is left off, as three.js turns it off around its
         update: the faces are light the main frame will map once, when a
         surface reflects them or the sky shows them.
@@ -9255,11 +9337,8 @@ struct Renderer(Movable):
             Error: Everything `render` raises for one of the six faces, or
                 `CubeCamera.face_camera` for the camera's node.
         """
-        var side = Renderer(camera.size, camera.size, self.workers)
-        side.background = self.background
-        side.shading = self.shading
+        var side = self._cube_renderer(camera.size)
         side.antialias = self.antialias
-        side.depth_mode = self.depth_mode
         var faces = List[Framebuffer]()
         for face in range(FACE_COUNT):  # pragma: no branch
             faces.append(
@@ -9315,8 +9394,8 @@ struct Renderer(Movable):
         scene)` with a `WebGLCubeRenderTarget`.
 
         Each face is drawn by a renderer of the face's size with this
-        one's background, shading, workers and depth mode, as
-        `render_cube` draws them, into `target.image(face, 0)`. The faces
+        one's scene settings, as `render_cube` draws them, into
+        `target.image(face, 0)`. The faces
         keep the light as the target's type stores it. Call
         `target.generate_mipmaps` to fill the levels below.
 
@@ -9334,10 +9413,7 @@ struct Renderer(Movable):
         target.validate()
         if target.kind != TARGET_CUBE:
             raise Error("A cube camera draws into a cube target")
-        var side = Renderer(target.width, target.width, self.workers)
-        side.background = self.background
-        side.shading = self.shading
-        side.depth_mode = self.depth_mode
+        var side = self._cube_renderer(target.width)
         for face in range(FACE_COUNT):  # pragma: no branch
             side.render_into(
                 target.image(face, 0),

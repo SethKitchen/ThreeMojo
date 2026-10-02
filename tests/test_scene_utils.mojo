@@ -16,6 +16,7 @@ from core.buffer_geometry import (
     POSITION,
 )
 from core.geometry_store import GeometryId
+from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.scene_utils import (
@@ -483,6 +484,24 @@ def test_a_mesh_s_morphed_attributes_use_its_weights() raises:
     mesh.set_morph_influence(0, 0.25)
     var worn = compute_mesh_morphed_attributes(assets, mesh)
     near(worn.morphed_position.component(1, 2), 0.5)
+
+
+def test_sorting_a_cleared_mesh_discards_stale_morph_rows() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var node = scene.add(Object3D())
+    var mesh = InstancedMesh(geometry, MaterialId(0), node, 1)
+    var weights = MorphInfluences()
+    weights.set(0, 0.5)
+    mesh.set_morph_at(0, weights)
+    # Instance matrices are public and define the current instance count.
+    # Old morph rows must not survive sorting after every instance is gone.
+    mesh.matrices.clear()
+    scene.add_instanced_mesh(mesh^)
+    sort_instanced_mesh(scene, assets, 0, [])
+    assert_equal(scene.instanced_meshes[0].count(), 0)
+    assert_equal(len(scene.instanced_meshes[0].morphs), 0)
 
 
 def main() raises:

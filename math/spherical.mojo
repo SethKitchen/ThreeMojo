@@ -14,6 +14,7 @@ components are.
 """
 
 from math.vector3 import Vector3
+from math.norm import length2, _ordinary_squared
 from std.math import acos, atan2, cos, pi, sin, sqrt
 from units.si import Angle, RADIAN
 
@@ -43,7 +44,12 @@ struct Spherical(ImplicitlyCopyable):
         var radius = vector.length()
         if radius == 0:
             return Spherical(0, Angle(0.0, RADIAN), Angle(0.0, RADIAN))
-        var ratio = max(Float32(-1), min(Float32(1), vector.y / radius))
+        var ratio = vector.y / radius
+        if not _ordinary_squared(vector.dot(vector)):
+            var direction = vector
+            direction.normalize()
+            ratio = direction.y
+        ratio = max(Float32(-1), min(Float32(1), ratio))
         return Spherical(
             radius,
             Angle(acos(ratio), RADIAN),
@@ -92,7 +98,7 @@ struct Cylindrical(ImplicitlyCopyable):
             Its radius, azimuth and height.
         """
         return Cylindrical(
-            sqrt(vector.x * vector.x + vector.z * vector.z),
+            length2(vector.x, vector.z),
             Angle(atan2(vector.x, vector.z), RADIAN),
             vector.y,
         )

@@ -10,6 +10,19 @@ three.js: `OBJLoader`, `MTLLoader`, `STLLoader`, `PLYLoader`, `GLTFLoader`, `Col
 
 To write these files, see [Exporters](Exporters). To read a scene in three.js JSON, see [Scene JSON](Scene-JSON).
 
+## Text encoding
+
+The glTF and FBX byte readers require valid UTF-8 text. This includes the
+JSON chunk in a GLB file and binary FBX names and string properties.
+Malformed text raises an error before it becomes a string. Valid Unicode
+names are preserved. Binary payloads keep their own format rules.
+
+The Gaussian splat glTF readers and PLY header reader use the same checked
+UTF-8 conversion. Draco metadata names, VTK detection headers and UltraHDR
+XMP also reject malformed encoding. `UsdzFiles.text` refuses bytes that are
+not valid UTF-8. This does not change a format that explicitly uses lossy
+decoding elsewhere.
+
 ## Read a file
 
 ```mojo
@@ -23,6 +36,8 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 |---|---|
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
+
+OBJ polygon convexity is checked in translated, widened coordinates so small or large finite model scales do not change whether a face is accepted.
 
 ## ObjModel and ObjObject
 
@@ -213,7 +228,9 @@ var shape = assets.geometries.add(model.take_geometry())
 | `parse_stl_text(text) -> StlModel` | Read the text of an ASCII file. |
 | `is_binary_stl(bytes) -> Bool` | Tell the two encodings apart, as three.js does. |
 
-A file exactly as long as its face count says is binary. Otherwise, a file with `solid` in its first ten bytes is ASCII. Any other file is binary.
+ASCII input can begin with one UTF-8 byte-order mark. Both byte and text parsers ignore that leading marker; embedded markers remain data.
+
+A file exactly as long as its face count says is binary. Otherwise, a file with `solid` starting at byte offset zero through four is ASCII. Any other file is binary.
 
 ### StlModel
 

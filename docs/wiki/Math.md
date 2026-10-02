@@ -29,6 +29,32 @@ These three.js members are not ported:
 - `Vector3.setFromColor` and `Color.setFromVector3` join two packages that do not import each other.
 - `Triangle.getInterpolatedAttribute` reads an attribute.
 
+## Scalar lengths and directions
+
+`math.norm` provides `length2`, `length3`, and `length4` for scalar components.
+The matching `normalized2`, `normalized3`, and `normalized4` functions return
+component tuples. Each function keeps the input precision, either `Float32`
+or `Float64`.
+
+Finite nonzero directions normalize to unit length even when a direct squared
+norm overflows or underflows. Zero directions stay zero. A length can return
+infinity when the true length cannot fit in the input type. Ordinary inputs
+keep the direct sum-of-squares arithmetic. Vector and quaternion normalization
+use these shared functions. A zero quaternion still becomes the identity.
+
+Matrix axis lengths, rotation extraction, and decomposition use the same
+scale-safe directions. Decomposition refuses nonfinite entries, zero axes,
+and axis lengths that cannot fit in `Float32`. It leaves output arguments
+unchanged on these errors. A mirrored transform keeps its negative x scale
+even when the direct determinant underflows or overflows.
+
+Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
+axis or tolerance and a negative tolerance. Extreme finite uniform scales
+still qualify as scaled rotations.
+
+Squared lengths and dot products return their direct arithmetic result. They
+can overflow or underflow even when a length or unit direction is representable.
+
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
@@ -298,7 +324,11 @@ An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only w
 | `look_at(eye, target, up)` | The view matrix of a camera at `eye`. |
 | `viewport(width, height)` | Normalized device space to pixels. Rows count down. |
 
-Each raises for a degenerate volume. `look_at` never raises. A camera at its own target looks down its own -z. An up vector along the view direction is nudged off it, as three.js does.
+Projection bounds must be finite and ordered. An infinite far plane is refused. The builders raise if the volume is degenerate or a required coefficient cannot fit in `Float32`. Intermediate overflow uses a wider calculation when the final coefficients can fit.
+
+Both `Matrix4.look_at` and the view builder use the same basis. Positions must be finite. Up must be finite and nonzero. A camera at its own target uses +z as its backward axis. Parallel up is nudged off the view direction. The basis accepts very small and large finite directions.
+
+`Matrix4.look_at` keeps translation and the bottom row, and leaves the matrix unchanged on failure. The view builder also refuses an offset that cannot fit in `Float32`. Frustum builders refuse nonfinite matrices and depth distances.
 
 Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.
 
@@ -346,7 +376,9 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 
 `damp(x, y, rate, delta)` takes the frame time as a `Duration`. `smooth_step(x, low, high)` has three.js's argument order. The shaders read `smoothstep(edge0, edge1, x)` from `math/smoothstep.mojo`, in GLSL's order.
 
-A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. They call libm, and a GPU has no libm. On a card before sm_80, `atan2` does not link. Use `atan_float32` and `atan2_float32` from `math/arc_tangent.mojo`. They are Cephes's `atanf` in plain arithmetic, and the CPU calls them too.
+A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. They call libm, and a GPU has no libm. On a card before sm_80, `atan2` does not link. Use `atan_float32` and `atan2_float32` from `math/arc_tangent.mojo`. They are Cephes's `atanf` in plain arithmetic, and the CPU calls them too. Signed zeros and infinite coordinates follow the IEEE quadrant rules.
+
+`sin_float32` uses the same arithmetic on the CPU and GPU. It accepts every finite `Float32` angle. Ordinary angles keep the existing Cody-Waite reduction. Large angles use an integer range reduction before the same polynomial. Infinite angles and NaN return NaN.
 
 `degToRad` and `radToDeg` are not here. An `Angle` converts itself.
 
@@ -356,4 +388,10 @@ A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. The
 
 `normalize(value, component)` and `denormalize(value, component)` convert between a number and a stored integer. `component` is a `ComponentType`, such as `UINT8_COMPONENT`. three.js reads it from the typed array.
 
-`SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform.
+`ceil_power_of_two` and `floor_power_of_two` require a positive integer.
+The ceiling raises an error if its result cannot fit in `Int`.
+The floor accepts every positive `Int`, including `Int.MAX`.
+
+`SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.
+
+For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.

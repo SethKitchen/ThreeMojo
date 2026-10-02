@@ -48,6 +48,7 @@ milliseconds.
 """
 
 import glob
+import math
 import os
 import struct
 import sys
@@ -66,28 +67,56 @@ TO_METERS = 0.01
 STILL = 1e-7
 
 
-def read_obj(path):
-    """Return an OBJ file's vertices, texture coordinates and faces.
+def _obj_index(text, count):
+    """Resolve a nonzero OBJ index, using the current count for negatives."""
+    value = int(text)
+    if value == 0:
+        raise ValueError("An OBJ index must not be zero")
+    if value < 0:
+        value += count
+        if value < 0:
+            raise ValueError("An OBJ relative index is out of range")
+        return value
+    return value - 1
 
-    Each face is a list of (vertex, texture coordinate) index pairs,
-    counted from zero.
+
+def read_obj(path):
+    """Return finite OBJ positions, texture coordinates and indexed faces.
+
+    Each face needs at least three position/texture-coordinate pairs.
+    Indices are returned from zero. Negative indices are relative to the
+    declarations before that face; positive references can point forward.
+    Invalid coordinates, corner fields or references raise ValueError.
     """
     points, uvs, faces = [], [], []
     with open(path, encoding="ascii") as source:
-        for line in source:
-            words = line.split()
+        for line_number, line in enumerate(source, 1):
+            words = line.split("#", 1)[0].split()
             if not words:
                 continue
-            if words[0] == "v":
-                points.append(tuple(float(x) for x in words[1:4]))
-            elif words[0] == "vt":
-                uvs.append(tuple(float(x) for x in words[1:3]))
+            if words[0] in ("v", "vt"):
+                width = 3 if words[0] == "v" else 2
+                if len(words) < width + 1:
+                    raise ValueError(f"{path}:{line_number}: short OBJ coordinate row")
+                values = tuple(float(x) for x in words[1:width + 1])
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError(f"{path}:{line_number}: non-finite OBJ coordinate")
+                (points if words[0] == "v" else uvs).append(values)
             elif words[0] == "f":
+                if len(words) < 4:
+                    raise ValueError(f"{path}:{line_number}: an OBJ face needs three corners")
                 corners = []
                 for corner in words[1:]:
                     parts = corner.split("/")
-                    corners.append((int(parts[0]) - 1, int(parts[1]) - 1))
+                    if len(parts) not in (2, 3) or not parts[0] or not parts[1]:
+                        raise ValueError(f"{path}:{line_number}: an OBJ corner needs position/texture indices")
+                    corners.append((_obj_index(parts[0], len(points)),
+                                    _obj_index(parts[1], len(uvs))))
                 faces.append(corners)
+    for face in faces:
+        for position, texture in face:
+            if not (0 <= position < len(points) and 0 <= texture < len(uvs)):
+                raise ValueError(f"{path}: an OBJ face index is out of range")
     return points, uvs, faces
 
 
@@ -324,6 +353,30 @@ def _closest(p, a, b, c):
         return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
 
     ab, ac, ap = sub(b, a), sub(c, a), sub(p, a)
+    normal = _normal(a, b, c)
+    if dot(normal, normal) == 0:
+        # A flat triangle is the segment between its farthest corners.
+        edges = (
+            (a, b, (0.0, 0.0), (1.0, 0.0)),
+            (a, c, (0.0, 0.0), (0.0, 1.0)),
+            (b, c, (1.0, 0.0), (0.0, 1.0)),
+        )
+        start, end, w0, w1 = max(
+            edges, key=lambda e: dot(sub(e[1], e[0]), sub(e[1], e[0]))
+        )
+        direction = sub(end, start)
+        length2 = dot(direction, direction)
+        t = (
+            max(0.0, min(1.0, dot(sub(p, start), direction) / length2))
+            if length2 else 0.0
+        )
+        q = tuple(start[k] + direction[k] * t for k in range(3))
+        gap = sub(q, p)
+        return (
+            dot(gap, gap),
+            w0[0] + (w1[0] - w0[0]) * t,
+            w0[1] + (w1[1] - w0[1]) * t,
+        )
     d1, d2 = dot(ab, ap), dot(ac, ap)
     if d1 <= 0 and d2 <= 0:
         v, w = 0.0, 0.0
@@ -363,6 +416,8 @@ def follow(points, coarse, skin_end, cell=0.015):
     weights on the second and the third. A vertex of the coarse copy
     follows itself.
     """
+    if skin_end > 0 and not coarse:
+        raise ValueError("Skin followers need coarse triangles")
     used = sorted({v for t in coarse for v in t})
     local = {v: i for i, v in enumerate(used)}
     edges = sorted(
@@ -393,10 +448,14 @@ def follow(points, coarse, skin_end, cell=0.015):
         home = key(points[v])
         best = None
         reach = 1
-        while best is None:
+        while True:
             for i in range(home[0] - reach, home[0] + reach + 1):
                 for j in range(home[1] - reach, home[1] + reach + 1):
                     for m in range(home[2] - reach, home[2] + reach + 1):
+                        if reach > 1 and max(
+                            abs(i - home[0]), abs(j - home[1]), abs(m - home[2])
+                        ) < reach:
+                            continue
                         for index in cells.get((i, j, m), []):
                             t = coarse[index]
                             d, wb, wc = _closest(
@@ -404,6 +463,10 @@ def follow(points, coarse, skin_end, cell=0.015):
                             )
                             if best is None or d < best[0]:
                                 best = (d, t, wb, wc)
+            # Every unvisited cell lies at least reach * cell away.
+            # A populated ring alone does not prove its closest is best.
+            if best is not None and best[0] <= (reach * cell) ** 2:
+                break
             reach += 1
         _, t, wb, wc = best
         followers.append((local[t[0]], local[t[1]], local[t[2]], wb, wc))

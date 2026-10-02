@@ -117,5 +117,48 @@ def test_what_three_js_would_throw_on_is_refused() raises:
     assert_equal(mdd_clip(one, MeshIndex(0)).length, 0.5)
 
 
+def _header(frames: UInt32, points: UInt32, time_count: Int = 0) -> List[UInt8]:
+    """Build only a header and times, without allocating declared points."""
+    var bytes = List[UInt8]()
+    for word in [frames, points]:
+        for k in range(4):
+            bytes.append(UInt8((word >> UInt32(24 - 8 * k)) & 255))
+    for _ in range(time_count * 4):
+        bytes.append(0)
+    return bytes^
+
+
+def test_declared_payload_is_checked_before_allocating_points() raises:
+    # These files are tiny. Never construct their declared position arrays.
+    for frames in [UInt32(1), UInt32.MAX]:
+        for points in [UInt32(1), UInt32.MAX]:
+            with assert_raises(contains="MDD: the file ends inside a value"):
+                _ = parse_mdd(_header(frames, points, 1))
+    with assert_raises(contains="at byte 8"):
+        _ = parse_mdd(_header(UInt32.MAX, 0))
+    var empty = parse_mdd(_header(0, UInt32.MAX))
+    assert_equal(len(empty.times), 0)
+    assert_equal(len(empty.morph_targets), 0)
+
+
+def test_payload_bounds_preserve_exact_and_trailing_data() raises:
+    for frames in range(4):
+        for points in range(4):
+            var times = List[Float32](length=frames, fill=1)
+            var bytes = _file(frames, points, times)
+            var model = parse_mdd(bytes)
+            assert_equal(len(model.times), frames)
+            assert_equal(len(model.morph_targets), frames)
+            for target in model.morph_targets:
+                assert_equal(len(target.data), points * 3)
+            bytes.extend([UInt8(0xFF), UInt8(0xFE), UInt8(0xFD)])
+            assert_equal(len(parse_mdd(bytes).times), frames)
+            if frames > 0:
+                var short = _file(frames, points, times)
+                _ = short.pop()
+                with assert_raises(contains="ends inside a value"):
+                    _ = parse_mdd(short)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

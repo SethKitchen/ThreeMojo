@@ -6,13 +6,11 @@
 # Runs checks on main pushes, manual runs and pull requests ready for review.
 # Draft pull-request events start no runner jobs until the PR is marked ready.
 #
-# GitHub's hosted runners have no accelerator, so `make check-gpu` is
-# deliberately absent: it would skip every hardware test and report success,
-# which is the exact thing the skip messages and the uncached `test-gpu` target
-# exist to prevent. The GPU half is checked on a machine that has one. The
-# exception is its host side, the suites that open no device: the gpu-host
-# job installs MAX and runs them, since on a runner with no GPU they still
-# test everything they were written to test.
+# GitHub's hosted runners have no accelerator. The gpu-host job installs MAX,
+# compiles every GPU entry point for sm_80, and runs the host-only suites.
+# Compilation catches device-suite type errors without opening a device.
+# Device execution and CPU/GPU parity still need a machine with a GPU;
+# `make check-gpu` is absent here because it would skip that hardware work.
 #
 # Every make runs with `-B`, which forces each recipe regardless of the build
 # cache. A cache hit from a previous commit is precisely what CI must not
@@ -24,6 +22,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    # Native stacks match this filter on their ultimate base. Each job
+    # also checks the direct PR base, so intermediate layers stay idle.
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
@@ -45,7 +46,7 @@ jobs:
   # suite runs whole, in the lint job. The splits are sized so that no group
   # outlasts the lint job by much.
   lint:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: lint (standard library only)
     runs-on: ubuntu-latest
     # A hang detector, not a speed target: lint alone once ran an hour.
@@ -73,7 +74,7 @@ jobs:
         run: make -B fmt-check lint-cpu compile-fail docs-check test-tools AFFECTED="$AFFECTED"
 
   cpu:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: test-cpu ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -114,7 +115,7 @@ jobs:
   # these jobs must not move to one. A free account runs five macOS jobs at
   # once, so the Mac takes three: lint, and the suites in two groups.
   cpu-macos:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: check-cpu (macOS, Apple Silicon) ${{ matrix.part }}
     runs-on: macos-latest
     timeout-minutes: 150
@@ -167,7 +168,7 @@ jobs:
   # than its share: six groups, not four, keep the slowest one well
   # inside the budget.
   coverage-capture:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: coverage capture ${{ matrix.shard }}/6
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -209,8 +210,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+      # Failed captures retain their partial streams and stdout for diagnosis.
+      # These are not successful coverage inputs for the report job.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: coverage-diagnostics-${{ matrix.shard }}
+          path: coverage/build/hits/
+          if-no-files-found: ignore
+          retention-days: 1
+
   coverage:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: coverage
     needs: coverage-capture
     runs-on: ubuntu-latest
@@ -244,13 +255,12 @@ jobs:
       - name: report
         run: make -B coverage-report AFFECTED="$AFFECTED"
 
-  # The GPU backend's host side: the suites that import render/gpu.mojo but
-  # open no device. They lay out the vertex lanes, the state tables, the
-  # texture table and the light buffer, and a lane added without its test
-  # fails here. They need MAX, so this job installs it; they need no GPU,
-  # so nothing in them skips.
+  # Compile the GPU entry points, including the device suite and benchmark,
+  # with an explicit target so no physical accelerator is needed. Then run
+  # the host-only layout suites. This does not check device execution or
+  # CPU/GPU parity. Both steps need the pinned MAX package.
   gpu-host:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: test-gpu-host (MAX, no GPU)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -266,6 +276,9 @@ jobs:
           uv venv --prompt ThreeMojo
           uv pip install "mojo==1.1.0" "max==26.6.0"
           .venv/bin/mojo --version
+
+      - name: compile-gpu (sm_80, no execution)
+        run: make -B compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"
 
       - name: test-gpu-host
         run: make -B test-gpu-host

@@ -930,12 +930,30 @@ struct DVSCamera(Copyable, Movable):
 
 
 def _by_time(var events: List[DVSEvent]) -> List[DVSEvent]:
-    # An insertion sort keeps equal times in their order.
-    for i in range(1, len(events)):
-        var e = events[i]
-        var j = i - 1
-        while j >= 0 and events[j].t > e.t:
-            events[j + 1] = events[j]
-            j -= 1
-        events[j + 1] = e
+    # Pixel-major runs interleave in time. Merge them stably in O(n log n).
+    var count = len(events)
+    var scratch = events.copy()
+    var width = 1
+    while width < count:
+        var start = 0
+        while start < count:
+            var middle = min(start + width, count)
+            var end = min(start + 2 * width, count)
+            var left = start
+            var right = middle
+            # start < count and width >= 1 imply end > start.
+            for dest in range(start, end):  # pragma: no branch
+                if left < middle and (
+                    right >= end or events[left].t <= events[right].t
+                ):
+                    scratch[dest] = events[left]
+                    left += 1
+                else:
+                    scratch[dest] = events[right]
+                    right += 1
+            start = end
+        var previous = events^
+        events = scratch^
+        scratch = previous^
+        width *= 2
     return events^

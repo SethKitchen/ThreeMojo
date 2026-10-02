@@ -64,12 +64,18 @@ def parse_lut_image(data: List[UInt8], size: Int) raises -> LutImage:
     """
     if size < 1:
         raise Error("LUT image: a size below one")
-    if len(data) != size * size * size * 4:
+    if size > Int.MAX // size:
+        raise Error("LUT image: the table size cannot fit in Int")
+    var square = size * size
+    if square > (Int.MAX // size) // 4:
+        raise Error("LUT image: the table size cannot fit in Int")
+    var texels = square * size
+    if len(data) != texels * 4:
         raise Error(
             "LUT image: a table of size "
             + String(size)
             + " needs "
-            + String(size * size * size)
+            + String(texels)
             + " texels"
         )
     var image = VolumeImage.of_bytes(size, size, size, data, 4)
@@ -93,6 +99,12 @@ def lut_image_from(image: DecodedImage) raises -> LutImage:
     """
     var width = image.width
     var height = image.height
+    if width < 1 or height < 1:
+        raise Error("LUT image: a size below one")
+    if width > (Int.MAX // height) // 4:
+        raise Error("LUT image: the image size cannot fit in Int")
+    if len(image.pixels) != width * height * 4:
+        raise Error("LUT image: pixel length does not match image dimensions")
     if width < height:
         if height != width * width:
             raise Error("LUT image: a column must be as many squares as wide")
@@ -101,7 +113,8 @@ def lut_image_from(image: DecodedImage) raises -> LutImage:
     if width != size * size:
         raise Error("LUT image: a row must be as many squares as tall")
     var column = List[UInt8](length=size * width * 4, fill=0)
-    for i in range(size):
+    # `size` is `height`, which the positive-dimensions check accepted.
+    for i in range(size):  # pragma: no branch
         # Inside the loop over `size`, so `size` is one or more here.
         for y in range(size):  # pragma: no branch
             for x in range(size):  # pragma: no branch

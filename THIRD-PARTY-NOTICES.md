@@ -793,3 +793,60 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## CARLA content assets
+
+The optional cache uses 47 converted CARLA content entries: 41 vehicles and
+six towns. These are separate from CARLA's MIT-licensed source code.
+`assets/carla/manifest.json` records each asset's author, source, CC BY 4.0
+license, conversion changes and pinned archive checksum.
+
+Credit the CARLA Team (Computer Vision Center), link the source and
+[CC BY 4.0 license](https://creativecommons.org/licenses/by/4.0/), and keep
+the conversion notices when sharing these assets or renders that use them.
+The generated [asset attribution catalog](assets/carla/ATTRIBUTION.md)
+contains the per-entry credits, including changes. It also credits the
+11 CC0 assets as a courtesy. The catalog does not assert that every asset
+appears in a particular image.
+
+The CARLA gallery targets write a `.credits.md` file beside each gallery.
+Keep that file with the gallery and its component images. Direct example
+runs must generate credits as described in [CARLA assets](docs/wiki/CARLA-assets.md).
+ThreeMojo's code license does not replace or restrict these asset licenses.
+
+Upstream separates the code and content licenses in the
+[CARLA 0.9.16 README](https://github.com/carla-simulator/carla/blob/0.9.16/README.md#licenses).
+
+## Fast Quadric Mesh Simplification
+
+`extensions/carla/simplification.mojo` ports the simplifier in CARLA
+0.9.16's `LibCarla/source/third-party/simplify/Simplify.h`. That source
+credits Sven Forstmann (2014), under the MIT License. The upstream project
+also publishes the notice below. These notices apply to the ported
+simplifier independently of CARLA's CVC notice.
+
+Sources:
+- https://github.com/carla-simulator/carla/blob/0.9.16/LibCarla/source/third-party/simplify/Simplify.h
+- https://github.com/sp4cerat/Fast-Quadric-Mesh-Simplification/blob/master/LICENSE.md
+
+Copyright (C) 2014 Sven Forstmann
+
+Copyright © 2015-2019 Spacerat and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

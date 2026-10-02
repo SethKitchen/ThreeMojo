@@ -25,6 +25,7 @@ from extensions.water.optics import (
     hash12,
     max,
     refract,
+    refracted_sun,
     sky_radiance,
     smith_visibility,
     smoothstep,
@@ -58,6 +59,9 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from std.math import cos, exp, pow, sin, sqrt, tan
 from units.si import DEGREE, SECOND, Angle, Duration, Length
+
+# Clearwater biases the caustic lookup one mip level to smooth concentrated light.
+comptime CAUSTIC_LOD_BIAS = Float32(1.0)
 
 
 @fieldwise_init
@@ -387,7 +391,7 @@ def _underwater(
         dpy_x * span,
         dpy_z * span,
     )
-    var sun_ray = refract(0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0 / water_ior())
+    var sun_ray = refracted_sun(sun)
     var ts = 1.0 - fresnel(sun.y, water_ior())
     var column = height - (-floor_depth(bed_x, bed_z))
     if column < 0.0:
@@ -404,7 +408,11 @@ def _underwater(
         dpy_x * span / caustics.patch,
         dpy_z * span / caustics.patch,
     )
-    var entered = sample_ripple(ripples, bed_x, bed_z)
+    var entered = sample_ripple(
+        ripples,
+        bed_x - sun_ray.x * column / -sun_ray.y,
+        bed_z - sun_ray.z * column / -sun_ray.y,
+    )
     var focus = 1.0 / (1.0 + 0.12 * column * entered.laplacian)
     if focus < 0.45:
         focus = 0.45
@@ -414,7 +422,7 @@ def _underwater(
     var sig_a = Vector3(0.40, 0.074, 0.088)
     var sig_s = Vector3(0.028, 0.052, 0.068)
     var sig_t = sig_a + sig_s
-    # A vertical sun ray refracts straight down, so its y component is -1.
+    # The refracted sun determines the path length through the water.
     var sun_t_y = sun_ray.y
     var absorb = _exp3(sig_t * (column / -sun_t_y))
     var ao = 0.55 + 0.45 * smoothstep(0.08, 0.42, bed.height)
@@ -543,7 +551,7 @@ def _caustic_grad(
         Float32(field.n),
         Float32(field.n),
         8.0,
-        1.0,
+        CAUSTIC_LOD_BIAS,
         Float32(len(field.mip_n)),
     )
     var acc = Vector3(0.0, 0.0, 0.0)
@@ -580,8 +588,8 @@ def _caustic_level(
         n = field.mip_n[level - 1]
     var fu = u - _floor_wrap(u)
     var fv = v - _floor_wrap(v)
-    var px = fu * Float32(n)
-    var py = fv * Float32(n)
+    var px = fu * Float32(n) - 0.5
+    var py = fv * Float32(n) - 0.5
     var x0 = Int(floor_f(px)) % n
     var y0 = Int(floor_f(py)) % n
     var x1 = (x0 + 1) % n
@@ -611,8 +619,8 @@ def _caustic_at(field: CausticField, u: Float32, v: Float32) -> Vector3:
     var fu = u - _floor_wrap(u)
     var fv = v - _floor_wrap(v)
     var n = field.n
-    var px = fu * Float32(n)
-    var py = fv * Float32(n)
+    var px = fu * Float32(n) - 0.5
+    var py = fv * Float32(n) - 0.5
     var x0 = Int(floor_f(px)) % n
     var y0 = Int(floor_f(py)) % n
     var x1 = (x0 + 1) % n

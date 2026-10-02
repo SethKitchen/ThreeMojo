@@ -145,6 +145,7 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from std.memory import bitcast
 from std.os import makedirs
+from test_scratch import temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -771,7 +772,7 @@ def test_a_file_that_is_not_a_recording() raises:
 
 
 def test_the_file_forms_of_the_queries() raises:
-    var dir = "/tmp/threemojo_recorder_queries/"
+    var dir = temporary_path("threemojo_recorder_queries/")
     makedirs(dir, exist_ok=True)
     Path(dir + "full.log").write_bytes(_full_log())
     Path(dir + "collisions.log").write_bytes(_collisions_log())
@@ -896,6 +897,44 @@ def test_light_names_in_carlas_order() raises:
 
 
 # --- reading back ------------------------------------------------------------------
+
+
+def test_reader_validates_utf8_and_keeps_failure_sticky() raises:
+    var good = "A\0é中🙂"
+    var writer = ByteWriter()
+    write_string(writer, good)
+    var reader = LogReader(writer^.finish())
+    assert_equal(reader.string(), good)
+    assert_false(reader.failed)
+    # Lone continuation, overlong ASCII, surrogate, out-of-range scalar,
+    # missing continuation, and a forbidden leading byte.
+    var invalid: List[List[UInt8]] = [
+        [0x80],
+        [0xC0, 0xAF],
+        [0xED, 0xA0, 0x80],
+        [0xF4, 0x90, 0x80, 0x80],
+        [0xE2, 0x82],
+        [0xFF],
+    ]
+    for bytes in invalid:
+        var out = ByteWriter()
+        out.u16(len(bytes))
+        for b in bytes:
+            out.u8(b)
+        var next = 2 + len(bytes)
+        write_string(out, "ok")
+        var r = LogReader(out^.finish())
+        assert_equal(r.string(), "")
+        assert_true(r.failed)
+        assert_equal(r.pos, next)
+        assert_equal(r.string(), "")
+        assert_true(r.failed)
+        r.seek(next)
+        assert_equal(r.string(), "ok")
+        assert_false(r.failed)
+    var short = LogReader([2, 0, 65])
+    assert_equal(short.string(), "")
+    assert_true(short.failed)
 
 
 def test_every_record_reads_back() raises:

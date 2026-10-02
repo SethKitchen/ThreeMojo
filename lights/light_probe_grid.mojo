@@ -42,6 +42,10 @@ from units.si import Length, METER
 # Where a grid's size says to take its probe count from: three.js's
 # `widthProbes` and the other two left out.
 comptime AUTO_PROBES = 0
+# Axis counts are stored as Float32 in the device header. Every integer
+# through 2**24 is exact. Probe indices use Int32 on both backends.
+comptime MAX_GRID_AXIS = 1 << 24
+comptime MAX_GRID_PROBES = Int(Int32.MAX)
 
 
 @fieldwise_init
@@ -170,10 +174,29 @@ def grid_falloff(
     return 1 - smoothstep(0, falloff, sqrt(dx * dx + dy * dy + dz * dz))
 
 
-def _default_probes(size: Length) -> Int:
-    """Return three.js's default probe count for one side: one probe a
-    meter and one more, at least two."""
-    return max(2, Int(floor(size.to(METER) + 0.5)) + 1)
+def _default_probes(size: Length) raises -> Int:
+    """Return three.js's default count, after checking the conversion."""
+    var meters = size.to(METER)
+    if not (isfinite(meters) and meters > 0):
+        raise Error("A light probe grid's size must be positive lengths")
+    var rounded = floor(Float64(meters) + 0.5)
+    if rounded >= Float64(MAX_GRID_AXIS):
+        raise Error("A light probe grid axis exceeds the exact device count")
+    return max(2, Int(rounded) + 1)
+
+
+def _probe_count(x: Int, y: Int, z: Int) raises -> Int:
+    """Return a count that fits the shared host/device lookup indices."""
+    if x < 1 or y < 1 or z < 1:
+        raise Error("A light probe grid needs one probe or more a side")
+    if x > MAX_GRID_AXIS or y > MAX_GRID_AXIS or z > MAX_GRID_AXIS:
+        raise Error("A light probe grid axis exceeds the exact device count")
+    if x > MAX_GRID_PROBES // y:
+        raise Error("A light probe grid has too many probes")
+    var xy = x * y
+    if xy > MAX_GRID_PROBES // z:
+        raise Error("A light probe grid has too many probes")
+    return xy * z
 
 
 struct LightProbeGrid(Copyable, Movable):
@@ -245,8 +268,8 @@ struct LightProbeGrid(Copyable, Movable):
         self.intensity = 1
         self.falloff = Length(0.0, METER)
         self.probes = List[SphericalHarmonics3]()
-        self.validate()
-        for _ in range(self.count()):  # pragma: no branch
+        var amount = self._validate_settings()
+        for _ in range(amount):  # pragma: no branch
             self.probes.append(SphericalHarmonics3())
 
     @staticmethod
@@ -294,20 +317,35 @@ struct LightProbeGrid(Copyable, Movable):
         self.probes = List[SphericalHarmonics3]()
 
     def validate(self) raises:
-        """Refuse a grid that cannot be looked up.
+        """Refuse a grid that cannot be looked up safely.
 
         Raises:
-            Error: If a probe count is below one; a size is not a positive
-                finite length; the position is not finite; the intensity
-                is negative or not finite; the falloff is negative or not
-                finite; or a probe's coefficients are not finite.
+            Error: If a setting is invalid, the probe counts cannot be
+                represented on both backends, the storage does not match
+                the counts, or a probe's coefficients are not finite
+                before or after intensity scaling.
         """
-        if (
-            self.resolution_x < 1
-            or self.resolution_y < 1
-            or (self.resolution_z < 1)
-        ):
-            raise Error("A light probe grid needs one probe or more a side")
+        var amount = self._validate_settings()
+        if len(self.probes) != amount:
+            raise Error(
+                "A light probe grid needs one stored probe per grid point"
+            )
+        # `_probe_count` requires positive axes; storage matches above.
+        for index in range(len(self.probes)):  # pragma: no branch
+            if not self.probes[index].is_finite():
+                raise Error("A light probe grid's coefficients must be finite")
+            var scaled = self.probes[index]
+            scaled.scale(self.intensity)
+            if not scaled.is_finite():
+                raise Error(
+                    "A light probe grid's scaled coefficients must be finite"
+                )
+
+    def _validate_settings(self) raises -> Int:
+        """Check settings before allocation or before adopting stored probes."""
+        var amount = _probe_count(
+            self.resolution_x, self.resolution_y, self.resolution_z
+        )
         var width = self.width.to(METER)
         var height = self.height.to(METER)
         var depth = self.depth.to(METER)
@@ -335,9 +373,7 @@ struct LightProbeGrid(Copyable, Movable):
             raise Error(
                 "A light probe grid's falloff must be finite and not negative"
             )
-        for index in range(len(self.probes)):
-            if not self.probes[index].is_finite():
-                raise Error("A light probe grid's coefficients must be finite")
+        return amount
 
     def count(self) -> Int:
         """Return how many probes the grid holds.

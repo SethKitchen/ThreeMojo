@@ -68,6 +68,9 @@ from extensions.carla.navigation_mesh import (
     NavPolygonId,
     NavQueryFilter,
     _intersect,
+    _SearchNode,
+    _distance,
+    _lerp,
     flags_of,
     sidewalk_filter,
     walker_filter,
@@ -327,6 +330,135 @@ def test_nearest_polygon() raises:
 
 
 # --- paths ------------------------------------------------------------------------------
+
+
+def _linear_path(
+    mesh: NavMesh,
+    s: Int,
+    e: Int,
+    start_point: Vector3,
+    end_point: Vector3,
+    filter: NavQueryFilter,
+    max_polygons: Int,
+) raises -> List[NavPolygonId]:
+    """The former linear-selection search, retained only as an oracle."""
+    var nodes = List[_SearchNode]()
+    # The mesh has the start polygon, checked above.
+    for _ in range(len(mesh.polygons)):  # pragma: no branch
+        nodes.append(_SearchNode())
+    nodes[s].position = start_point
+    nodes[s].heuristic = _distance(start_point, end_point)
+    nodes[s].total = nodes[s].heuristic
+    nodes[s].open = True
+    var best = s
+    var open_count = 1
+    while open_count > 0:
+        var current = -1
+        # One node for each polygon, and one polygon at least.
+        for i in range(len(nodes)):  # pragma: no branch
+            if nodes[i].open and (
+                current < 0 or nodes[i].total < nodes[current].total
+            ):
+                current = i
+        nodes[current].open = False
+        nodes[current].closed = True
+        open_count -= 1
+        if current == e:
+            best = e
+            break
+        var here = nodes[current].position
+        var cost_here = filter.area_cost(mesh.polygons[current].area)
+        for portal in mesh.polygons[current].portals:
+            var n = portal.neighbor
+            if not filter.passes(mesh.polygons[n].flags):
+                continue
+            var mid = _lerp(portal.a, portal.b, 0.5)
+            var cost = nodes[current].cost + _distance(here, mid) * cost_here
+            var heuristic = _distance(mid, end_point)
+            if n == e:
+                cost += heuristic * filter.area_cost(mesh.polygons[n].area)
+                heuristic = 0.0
+            if (nodes[n].open or nodes[n].closed) and cost >= nodes[n].cost:
+                continue
+            if not nodes[n].open:
+                open_count += 1
+            nodes[n].cost = cost
+            nodes[n].heuristic = heuristic
+            nodes[n].total = cost + heuristic
+            nodes[n].parent = current
+            nodes[n].position = mid
+            nodes[n].open = True
+            nodes[n].closed = False
+            if heuristic < nodes[best].heuristic:
+                best = n
+    var reversed = List[Int]()
+    var at = best
+    while at >= 0:
+        reversed.append(at)
+        at = nodes[at].parent
+    var out = List[NavPolygonId]()
+    # The path holds the start at least.
+    for i in range(len(reversed) - 1, -1, -1):  # pragma: no branch
+        if len(out) == max_polygons:
+            break
+        out.append(NavPolygonId(reversed[i]))
+    return out^
+
+
+def test_heap_paths_match_linear_search_on_weighted_grids() raises:
+    var mesh = NavMesh()
+    for y in range(6):
+        for x in range(6):
+            var area = AREA_ROAD if (x + 2 * y) % 3 == 0 else AREA_SIDEWALK
+            _ = mesh.add_polygon(
+                _rect(Float32(x), Float32(y), Float32(x + 1), Float32(y + 1)),
+                area,
+            )
+    mesh.connect()
+    for seed in range(24):
+        var s = (seed * 13) % 36
+        var e = (seed * 7 + 17) % 36
+        var start = Vector3(Float32(s % 6) + 0.5, Float32(s // 6) + 0.5, 0)
+        var goal = Vector3(Float32(e % 6) + 0.5, Float32(e // 6) + 0.5, 0)
+        var filter = sidewalk_filter() if seed % 3 == 0 else walker_filter(True)
+        filter.set_area_cost(AREA_ROAD, Float64(seed % 7 + 1))
+        var limit = 3 if seed % 4 == 0 else 256
+        var want = _linear_path(mesh, s, e, start, goal, filter, limit)
+        var got = mesh.find_path(
+            NavPolygonId(s), NavPolygonId(e), start, goal, filter, limit
+        )
+        assert_equal(_ids(got), _ids(want))
+
+
+def test_area_costs_reject_nonfinite_values_and_mutated_fields() raises:
+    var filter = NavQueryFilter()
+    var invalid: List[Float64] = [
+        Float64("nan"),
+        Float64("inf"),
+        Float64("-inf"),
+        0.5,
+    ]
+    for cost in invalid:
+        with assert_raises(contains="at least 1 and finite"):
+            filter.set_area_cost(AREA_SIDEWALK, cost)
+        assert_equal(filter.area_cost(AREA_SIDEWALK), 1)
+        filter.costs[AREA_SIDEWALK.value] = cost
+        with assert_raises(contains="at least 1 and finite"):
+            _ = filter.area_cost(AREA_SIDEWALK)
+        filter.costs[AREA_SIDEWALK.value] = 1
+    # Exclusion is a flag operation, as in CARLA's filters.
+    var mesh = NavMesh()
+    _ = mesh.add_polygon(_rect(0, 0, 1, 1), AREA_SIDEWALK)
+    _ = mesh.add_polygon(_rect(1, 0, 2, 1), AREA_ROAD)
+    mesh.connect()
+    var path = mesh.find_path(
+        NavPolygonId(0),
+        NavPolygonId(1),
+        Vector3(1, 0.5, 0),
+        Vector3(1.5, 0.5, 0),
+        sidewalk_filter(),
+    )
+    assert_equal(_ids(path), "0 ")
 
 
 def test_path_uses_the_crosswalk() raises:

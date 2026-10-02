@@ -114,7 +114,7 @@ A stage changes on the first tick that takes the elapsed time past the stage's t
 
 Each lane that a light holds gets a box 3 m before the light, against the lane's traffic. The box is 3 m long, half a lane wide and 2 m high. On a junction lane with one predecessor outside the junction, the box moves to that predecessor.
 
-A vehicle that enters a box takes the light's state, and each change of the light reaches it at once. A vehicle that leaves the box is told green again.
+A vehicle that enters a box takes the light's state, and each change of the light reaches it at once. A vehicle is told green again after leaving the last occupied box of that light. The light's internal vehicle list has one entry per occupied box, so duplicate vehicle ids there are intentional.
 
 ## Traffic signs
 

@@ -3,6 +3,7 @@
 """Tests for the time limit on each test of a suite."""
 
 import os
+from pathlib import Path
 import sys
 import tempfile
 import unittest
@@ -19,7 +20,26 @@ OUTPUT = (
 )
 
 
+def successful_output(name='test_a', milliseconds=1):
+    return (f'Running 1 tests for suite.mojo\n'
+            f'    PASS [ {milliseconds}.0 ] {name}\n'
+            'Summary [ 1.0 ] 1 tests run: 1 passed , 0 failed , 0 skipped')
+
+
 class RunSuiteTests(unittest.TestCase):
+    def test_results_only_retains_output_and_child_failure_checks(self):
+        for output, child_status, expected in (
+            ('', 0, 1),
+            ('FAIL [ 1.0 ] test_bad', 0, 1),
+            ('SKIP (no accelerator): test_a\n' + successful_output(), 0, 0),
+            (successful_output(milliseconds=6000), 0, 0),
+            (successful_output(), 7, 7),
+        ):
+            self.assertEqual(run_suite.main([
+                '--results-only', '--suite', 'unused.mojo', '--',
+                sys.executable, '-c', f'print({output!r});raise SystemExit({child_status})',
+            ]), expected)
+
     def test_counts_only_test_functions(self):
         text = "def test_a() raises:\n    pass\n\ndef helper():\n    pass\n" \
                "def test_b():\n    pass\n    def test_nested():\n        pass\n"
@@ -44,13 +64,67 @@ class RunSuiteTests(unittest.TestCase):
             ])
 
     def test_passes_a_fast_suite(self):
-        self.assertEqual(self._run(5, "print('    PASS [ 1.0 ] test_a')"), 0)
+        self.assertEqual(self._run(5, f"print({successful_output()!r})"), 0)
 
     def test_fails_a_slow_test(self):
-        self.assertEqual(self._run(5, "print('    PASS [ 5001.0 ] test_a')"), 1)
+        self.assertEqual(self._run(5, f"print({successful_output(milliseconds=5001)!r})"), 1)
 
     def test_keeps_the_suite_exit_code(self):
         self.assertEqual(self._run(5, "import sys; sys.exit(3)"), 3)
+
+    def test_real_child_temp_files_are_cleaned_on_every_outcome(self):
+        with tempfile.TemporaryDirectory() as parent:
+            marker = Path(parent) / 'root.txt'
+            setup = (
+                "import os,pathlib,time; "
+                "root=os.environ['THREEMOJO_TEST_TMPDIR']; "
+                "assert root == os.environ['TMPDIR']; "
+                f"pathlib.Path({str(marker)!r}).write_text(root); "
+                "pathlib.Path(root, 'fixture.bin').write_bytes(b'fixture'); ")
+            for ending, seconds, expected in (
+                    (f"print({successful_output()!r}); raise SystemExit(0)", 5, 0),
+                    ("raise SystemExit(3)", 5, 3),
+                    ("time.sleep(5)", 0.1, run_suite.TIMED_OUT)):
+                self.assertEqual(self._run(seconds, setup + ending), expected)
+                self.assertFalse(Path(marker.read_text()).exists())
+
+    def test_empty_or_failed_zero_exit_process_cannot_pass(self):
+        for program in ('pass', "print('    FAIL [ 1.0 ] test_a')"):
+            self.assertEqual(self._run(5, program), 1)
+
+    def test_complete_colored_results_are_required(self):
+        self.assertEqual(run_suite.result_errors(successful_output()), [])
+        self.assertEqual(run_suite.result_errors(
+            successful_output().replace('PASS', '\x1b[92mPASS\x1b[0m')), [])
+        self.assertTrue(run_suite.result_errors(OUTPUT))
+        for broken in (
+                '', 'Running 1 tests for suite.mojo',
+                successful_output().split('Summary')[0],
+                successful_output().replace('Running 1', 'Running 2'),
+                '\n'.join(reversed(successful_output().splitlines())),
+                successful_output().replace('1 passed', '0 passed'),
+                successful_output().replace('1 tests run', '2 tests run'),
+                successful_output().replace('    PASS [ 1.0 ] test_a\n', ''),
+                successful_output() + '\n' + successful_output(),
+                'Running 0 tests for suite.mojo\n'
+                'Summary [ 0.0 ] 0 tests run: 0 passed , 0 failed , 0 skipped',
+                successful_output().replace('PASS [ 1.0 ]', 'PASS [ nan ]')):
+            with self.subTest(broken=broken):
+                self.assertTrue(run_suite.result_errors(broken))
+
+    def test_runtime_counts_can_include_imported_tests(self):
+        output = ('Running 2 tests for suite.mojo\n'
+                  'PASS [ 1.0 ] test_a\nPASS [ 2.0 ] test_imported\n'
+                  'Summary [ 3.0 ] 2 tests run: 2 passed , 0 failed , 0 skipped')
+        # _run's source defines one test; runtime evidence contains two.
+        self.assertEqual(self._run(5, f'print({output!r})'), 0)
+
+    def test_skips_and_device_notices_keep_their_separate_policy(self):
+        skipped = ('Running 1 tests for suite.mojo\nSKIP [ 0.0 ] test_device\n'
+                   'Summary [ 0.0 ] 1 tests run: 0 passed , 0 failed , 1 skipped')
+        self.assertEqual(run_suite.result_errors(skipped), [])
+        notice = 'SKIP (no accelerator): device test\n' + successful_output()
+        self.assertEqual(run_suite.result_errors(notice), [])
 
     def test_stops_a_hung_suite(self):
         self.assertEqual(

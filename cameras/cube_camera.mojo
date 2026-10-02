@@ -43,6 +43,7 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, face_forward, face_up
+from std.math import isfinite
 from units.si import Angle, DEGREE, Length
 
 # Each face sees a quarter turn across, so six faces see everything.
@@ -75,13 +76,14 @@ struct CubeCamera(ImplicitlyCopyable):
 
         Raises:
             Error: If the size is not positive, the near plane is not in
-                front of the camera, or the far plane is not beyond it.
+                front of the camera, the far plane is not beyond it, or
+                either plane is not finite.
         """
         if size <= 0:
             raise Error("A cube camera's faces need a positive size")
-        if near.value <= 0:
+        if not (near.value > 0 and isfinite(near.value)):
             raise Error("The near plane must be in front of the camera")
-        if far.value <= near.value:
+        if not (isfinite(far.value) and far.value > near.value):
             raise Error("The far plane must be beyond the near plane")
         self.near = near
         self.far = far

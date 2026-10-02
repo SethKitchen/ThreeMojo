@@ -213,6 +213,8 @@ struct TraceParser(Movable):
         var halves = split_last(payload, String(":"))
         if len(halves) != 2:
             raise Error("Malformed branch record: " + line)
+        if halves[1] != "T" and halves[1] != "F":
+            raise Error("Malformed branch outcome: " + line)
         var state = TRUE if halves[1] == "T" else FALSE
         var parts = split_last(halves[0], String("."))
         var base = parts[0].copy()

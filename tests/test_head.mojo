@@ -218,7 +218,7 @@ from extensions.humanoid.skeleton.tissue import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from std.math import nan
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -814,6 +814,18 @@ def test_add_head_places_every_layer() raises:
             paint,
             HeadContents(0),
         )
+
+
+def test_head_muscle_scale_must_be_finite() raises:
+    for invalid in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        var dims = head_muscle_dimensions(_person())
+        dims.scale = invalid
+        with assert_raises(contains="scale"):
+            dims.validate()
 
 
 def main() raises:

@@ -294,6 +294,8 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         self.crest_b = Vector3(self.s3.x, self.s3.y, self.s3.z + 0.85 * ap_mid)
         self.crest_r = 0.28 * r_mid
         self.torsion = dimensions.torsion.value
+        if dimensions.side == LEFT:
+            self.torsion = -self.torsion
         self.k = 0.010 * L
         self.k_notch = 0.006 * L
         self.epsilon = 0.0015 * L
@@ -306,7 +308,14 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         box.include_ellipsoid(self.plafond, self.plafond_r)
         box.include_ellipsoid(self.malleolus, self.malleolus_r)
         box.include_sphere(self.s0, max(self.ml0, self.ap0))
+        box.include_sphere(self.s1, max(self.ml1, self.ap1))
+        box.include_sphere(self.s2, max(self.ml2, self.ap2))
+        box.include_sphere(self.s3, max(self.ml3, self.ap3))
         box.include_sphere(self.s4, max(self.ml4, self.ap4))
+        box.include_sphere(self.crest_a, self.crest_r)
+        box.include_sphere(self.crest_b, self.crest_r)
+        box.include_sphere(self.s4, 0.38 * self.ap4)
+        box.include_sphere(self.tuberosity, 0.55 * self.tuberosity_r.x)
         var padded = box.padded(0.020 * L + Float32(0.004))
         self.low = padded.low
         self.high = padded.high

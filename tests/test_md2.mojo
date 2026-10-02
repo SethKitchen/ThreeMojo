@@ -21,6 +21,7 @@ from loaders.md2 import (
     parse_md2,
     read_md2,
 )
+from std.math import isfinite
 from std.memory import bitcast
 from std.pathlib import Path
 from std.testing import (
@@ -185,7 +186,7 @@ def test_refusals() raises:
     var short = header(
         [844121161, 8, 1, 1, 0, 0, 0, 0, 0, 0, 1, 68, 68, 68, 68, 68, 68]
     )
-    with assert_raises(contains="ends inside a value"):
+    with assert_raises(contains="frame size"):
         _ = parse_md2(short)
     # The triangles start at byte 88: a vertex index, then a texture
     # coordinate index. The first frame's first normal is at byte 167.
@@ -211,6 +212,90 @@ def test_refusals() raises:
     assert_equal(model.geometry.vertex_count(), 0)
     assert_equal(model.frames[0].name, "pose")
     assert_equal(len(model.animations), 0)
+
+
+def test_skin_dimensions_must_be_positive_before_uv_division() raises:
+    for field in [2, 3]:
+        for value in [0, -1, -(Int(1) << 31)]:
+            var bytes = Path("assets/md2/fixture.md2").read_bytes()
+            var encoded = i32(value)
+            for byte in range(4):
+                bytes[field * 4 + byte] = encoded[byte]
+            with assert_raises(contains="skin dimensions must be positive"):
+                _ = parse_md2(bytes)
+    # The smallest legal dimensions still load; UVs may validly exceed one.
+    var bytes = Path("assets/md2/fixture.md2").read_bytes()
+    for field in [2, 3]:
+        var encoded = i32(1)
+        for byte in range(4):
+            bytes[field * 4 + byte] = encoded[byte]
+    var model = parse_md2(bytes)
+    assert_true(model.geometry.vertex_count() > 0)
+    for value in model.geometry.clone_attribute(String(UV)).packed():
+        assert_true(isfinite(value))
+
+
+def patch_header_field(field: Int, value: Int) raises -> List[UInt8]:
+    """Return the valid fixture with one complete header field changed."""
+    var bytes = Path("assets/md2/fixture.md2").read_bytes()
+    var encoded = i32(value)
+    for byte in range(4):
+        bytes[field * 4 + byte] = encoded[byte]
+    return bytes^
+
+
+def test_md2_header_sections_are_bounded_before_reading() raises:
+    for field in range(5, 10):
+        with assert_raises(contains="count must not be negative"):
+            _ = parse_md2(patch_header_field(field, -1))
+    for size in [0, 39, 41, 55]:
+        with assert_raises(contains="frame size"):
+            _ = parse_md2(patch_header_field(4, size))
+    for field in range(11, 16):
+        for offset in [-1, 0, 67, 2147483647]:
+            var bytes = patch_header_field(field, offset)
+            # The otherwise unused skin/command sections now contain one
+            # item, so a header-overlapping offset must be refused too.
+            var count_field = 5 if field == 11 else 9 if field == 15 else -1
+            if count_field >= 0:
+                var encoded = i32(1)
+                for byte in range(4):
+                    bytes[count_field * 4 + byte] = encoded[byte]
+            with assert_raises(contains="section offset"):
+                _ = parse_md2(bytes)
+    for field in [4, 5, 7, 8, 9, 10]:
+        with assert_raises(contains="declared section"):
+            _ = parse_md2(patch_header_field(field, 2147483647))
+    for field in [11, 15]:
+        # A zero-length section may have a zero offset; it is never read.
+        var model = parse_md2(patch_header_field(field, 0))
+        assert_equal(len(model.frames), 8)
+    # No oversized allocation is made for an impossible vertex/frame size.
+    with assert_raises(contains="frame size"):
+        _ = parse_md2(patch_header_field(6, 2147483647))
+
+
+def test_padded_md2_frames_follow_the_declared_stride() raises:
+    var original = Path("assets/md2/fixture.md2").read_bytes()
+    var padded = List[UInt8](original[:124])
+    for frame in range(8):
+        var start = 124 + frame * 56
+        padded.extend(List[UInt8](original[start : start + 56]))
+        padded.extend(List[UInt8](length=8, fill=255))
+    for field in [4, 15, 16]:
+        var value = 64 if field == 4 else len(padded)
+        var encoded = i32(value)
+        for byte in range(4):
+            padded[field * 4 + byte] = encoded[byte]
+    var plain = parse_md2(original)
+    var model = parse_md2(padded)
+    assert_equal(len(model.frames), len(plain.frames))
+    for frame in range(len(plain.frames)):
+        assert_equal(model.frames[frame].name, plain.frames[frame].name)
+        assert_equal(
+            model.frames[frame].positions, plain.frames[frame].positions
+        )
+        assert_equal(model.frames[frame].normals, plain.frames[frame].normals)
 
 
 def main() raises:

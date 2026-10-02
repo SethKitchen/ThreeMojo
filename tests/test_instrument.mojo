@@ -5,7 +5,7 @@
 
 """Tests for `coverage.instrument`."""
 
-from coverage.instrument import instrument
+from coverage.instrument import instrument, split_conditions
 from std.testing import TestSuite, assert_equal, assert_true
 
 
@@ -453,6 +453,33 @@ def test_the_word_if_inside_a_docstring_is_not_a_branch() raises:
     )
     var result = instrument(source, String("m"))
     assert_equal(len(result.branches), 0)
+
+
+def test_escaped_literals_preserve_decisions_and_comments() raises:
+    var condition = String('value == "\\" and #:( or ["')
+    assert_equal(split_conditions(condition), [condition])
+    assert_equal(len(split_conditions(condition + " and flag")), 3)
+    var result = instrument(
+        String(
+            'def f(value: String) -> Int:\n    if value == "\\" and #:( or'
+            ' [":\n        return 1\n    return 0\n'
+        ),
+        "escaped",
+    )
+    assert_equal(result.lines, [2, 3, 4])
+    assert_equal(result.branches, [2])
+    assert_equal(result.conditions, [0])
+    assert_true(condition in result.text)
+    var multiline = instrument(
+        String(
+            'def f(value: String) -> Int:\n    if value == (\n        "\\"#:('
+            ' and or ["\n    ):\n        return 1\n    return 0\n'
+        ),
+        "multiline",
+    )
+    assert_equal(multiline.lines, [2, 5, 6])
+    assert_equal(multiline.branches, [2])
+    assert_true(String('"\\"#:( and or ["') in multiline.text)
 
 
 def main() raises:

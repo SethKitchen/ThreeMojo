@@ -19,6 +19,7 @@ face by a rounding error, as in three.js.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from std.math import isfinite
 from units.si import Length, METER
 
 
@@ -52,9 +53,15 @@ def box_line(
         each ring. The rings across x come first, then y, then z.
 
     Raises:
-        Error: If an extent is not positive, or a segment count is less
+        Error: If an extent is not finite and positive, or a segment count is less
             than one. three.js divides by zero for no segments.
     """
+    if (
+        not isfinite(width.value)
+        or not isfinite(height.value)
+        or not isfinite(depth.value)
+    ):
+        raise Error("A box of lines needs finite extents")
     if width.value <= 0 or height.value <= 0 or depth.value <= 0:
         raise Error("A box of lines needs positive extents")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:

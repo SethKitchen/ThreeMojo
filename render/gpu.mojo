@@ -3108,9 +3108,7 @@ def _volume_light(
         var distance = toward.length()
         if distance == 0:
             continue
-        var rim = smoothstep(
-            lights[unsafe_offset=at + 11],
-            lights[unsafe_offset=at + 12],
+        var angle_cos = (
             toward.dot(
                 Vector3(
                     lights[unsafe_offset=at + 3],
@@ -3118,8 +3116,13 @@ def _volume_light(
                     lights[unsafe_offset=at + 5],
                 )
             )
-            / distance,
+            / distance
         )
+        var rim = _spot_attenuation(
+            lights, texels, ramp, table, at, angle_cos, place
+        )
+        if rim <= 0:
+            continue
         var tint = _spot_tint(
             lights, texels, ramp, table, at + 14, place, normal
         )

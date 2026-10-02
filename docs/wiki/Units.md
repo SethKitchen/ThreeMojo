@@ -58,7 +58,7 @@ A `Unit` is a factor to the canonical unit and a symbol.
 | `Illuminance` | Light that falls on a surface | `LUX`, `KILOLUX`, `FOOT_CANDLE` |
 | `Luminance` | Light that a surface sends toward the eye | `NIT` (candela per square meter) |
 
-Each type adds, scales and compares with its own type only. The ratio of two of the same type is a `Float32`. `diffuse_luminance(e)` gives the luminance of a white diffuse surface under the illuminance `e`: `e / pi`.
+Each type adds, subtracts and compares with its own type only. A `Float32` scales either type from the left or the right. The ratio of two of the same type is a `Float32`. `diffuse_luminance(e)` gives the luminance of a white diffuse surface under the illuminance `e`: `e / pi`.
 
 ```mojo
 var noon = Illuminance(100, KILOLUX)
@@ -89,6 +89,8 @@ turn.value                                # radians
 | `a.scaled(f)`, `-a`, `abs(a)` | Same dimension. |
 | `==`, `<`, `<=`, `>`, `>=` | Same dimension only. |
 
+`abs(a)` clears the sign of the stored value, including negative zero and NaN. It keeps the dimension.
+
 ## Compile errors
 
 ```mojo
@@ -98,7 +100,17 @@ Volume(8.0).sqrt()                           # error: odd exponent
 rotation_z(90.0)                             # error: needs an Angle
 ```
 
-A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, and `make compile-fail` asserts that the compiler rejects every one.
+A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, and `make compile-fail` checks that the compiler rejects every one.
+
+The check first builds a valid control. Each negative case must then produce
+a source error in that case. A missing compiler, missing import, error in a
+dependency, crash or timeout fails the check. A failed build alone is not a
+valid rejection.
+
+Each case has expected error locations and messages in
+`tools/compile_fail_expectations.json`. An unexpected source error also fails.
+Review the case before you update an expectation. Do not accept new errors
+just to make the check pass.
 
 ## Clock
 

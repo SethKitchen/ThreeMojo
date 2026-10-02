@@ -375,9 +375,9 @@ The mixer mixes each type of value the way three.js's `PropertyMixer` does.
 |---|---|---|
 | Number, color | Weighted mean, one number at a time. | Along the line. |
 | Rotation | Weighted mean along the arc, by `slerp`. | Along the arc. |
-| Flag | The value takes the pile if its share is at least one half. | The original takes it back if the missing weight is at least one half. |
+| Flag, string | The value takes the pile if its share is at least one half. | The original takes it back if the missing weight is at least one half. |
 
-The flag rule is three.js's `_select`. With two actions, the heavier action wins. With three or more, the order of the actions can decide a near tie, as it does in three.js.
+The flag and string rule is three.js's `_select`. With two actions, the heavier action wins. With three or more, the order of the actions can decide a near tie, as it does in three.js.
 
 ### Materials need the assets, and cameras need the cameras
 

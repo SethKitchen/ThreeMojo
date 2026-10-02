@@ -46,6 +46,7 @@ This is not a three.js port. See Extensions.
     var strand = style.strand(dims.head, 0)
 """
 
+from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from math.vector3 import Vector3
 
@@ -179,7 +180,9 @@ def hair_style_path(style: HairStyle) raises -> String:
         raise Error("A hair style must be a named style")
     if not style.is_scanned():
         raise Error("A grown or designed hair style has no file")
-    return String("assets/hair/") + hair_style_label(style) + ".bin"
+    return humanoid_asset_path(
+        String("assets/hair/") + hair_style_label(style) + ".bin"
+    )
 
 
 def _u32(bytes: List[UInt8], at: Int) -> Int:

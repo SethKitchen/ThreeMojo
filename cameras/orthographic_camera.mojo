@@ -91,16 +91,8 @@ struct OrthographicCamera(Camera):
         Raises:
             Error: If the volume has no width or height or its edges are
                 reversed, or the clipping planes are unusable. `near` may be
-                zero, as in three.js — nothing divides by depth here — but
-                not negative.
+                zero or negative, because nothing divides by depth here.
         """
-        if right.value <= left.value:
-            raise Error("The view volume needs right beyond left")
-        if top.value <= bottom.value:
-            raise Error("The view volume needs top above bottom")
-        if far.value <= near.value:
-            raise Error("The far plane must be beyond the near plane")
-
         self.left = left
         self.right = right
         self.top = top
@@ -114,6 +106,34 @@ struct OrthographicCamera(Camera):
         self.layers = Layers()
         self.zoom = 1
         self.view = None
+        self.validate()
+
+    def validate(self) raises:
+        """Check the finite, ordered view volume and the zoom.
+
+        Raises:
+            Error: If an edge or plane is not finite, edges or planes are
+                not ordered, or the zoom is not positive and finite.
+        """
+        if not (
+            isfinite(self.left.value)
+            and isfinite(self.right.value)
+            and isfinite(self.top.value)
+            and isfinite(self.bottom.value)
+            and isfinite(self.near.value)
+            and isfinite(self.far.value)
+        ):
+            raise Error("An orthographic view volume must be finite")
+        if self.right.value <= self.left.value:
+            raise Error("The view volume needs right beyond left")
+        if self.top.value <= self.bottom.value:
+            raise Error("The view volume needs top above bottom")
+        if self.far.value <= self.near.value:
+            raise Error("The far plane must be beyond the near plane")
+        if not (self.zoom > 0 and isfinite(self.zoom)):
+            raise Error(
+                "An orthographic zoom must be positive, got ", self.zoom
+            )
 
     def set_view_offset(
         mut self,
@@ -185,10 +205,7 @@ struct OrthographicCamera(Camera):
                 not positive and finite, or an enabled view offset is
                 refused by `ViewOffset.validate`.
         """
-        if not (self.zoom > 0 and isfinite(self.zoom)):
-            raise Error(
-                "An orthographic zoom must be positive, got ", self.zoom
-            )
+        self.validate()
         # The edges as given at a zoom of one, not rebuilt from a center
         # and a half width, which can round a last bit away.
         var left = self.left.value
@@ -307,9 +324,9 @@ def centered(
         Error: If the height or aspect is not positive, or the clipping
             planes are unusable.
     """
-    if height.value <= 0:
+    if not (height.value > 0 and isfinite(height.value)):
         raise Error("The visible height must be positive")
-    if aspect <= 0:
+    if not (aspect > 0 and isfinite(aspect)):
         raise Error("The aspect ratio must be positive")
     var half = height.value / 2
     var wide = half * aspect

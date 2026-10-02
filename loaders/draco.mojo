@@ -931,7 +931,7 @@ def _skip_metadata_tree(mut buffer: DracoBuffer) raises:
 def _metadata_name(mut buffer: DracoBuffer) raises -> String:
     """A name of metadata: a length byte, then the bytes."""
     var bytes = buffer.bytes(buffer.u8())
-    return String(unsafe_from_utf8=bytes)
+    return String(from_utf8=Span(bytes))
 
 
 def decode_draco(bytes: List[UInt8]) raises -> DracoGeometry:
@@ -950,7 +950,7 @@ def decode_draco(bytes: List[UInt8]) raises -> DracoGeometry:
     var buffer = DracoBuffer(bytes.copy())
     var magic = buffer.bytes(min(5, len(bytes)))
     draco_require(
-        String(unsafe_from_utf8=magic) == "DRACO", "the file is not Draco"
+        String(from_utf8=Span(magic)) == "DRACO", "the file is not Draco"
     )
     var major = buffer.u8()
     var minor = buffer.u8()

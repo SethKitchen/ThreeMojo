@@ -24,13 +24,45 @@ The CARLA town can use real assets in place of its procedural ones: photoscanned
 
 To fetch one entry, give its id, for example `fetch carla.vehicle.audi.a2`. The tool writes a file only after its sum matches. It never writes over a file that is already verified.
 
+## Preload texture maps
+
+Call `registry.preload(workers)` before building a town to decode each
+bound, cached texture map once per color space. A worker count of one
+or less decodes maps in order. Higher counts limit each batch to that
+many maps. CARLA and glTF use the same bounded result storage.
+
+Completed maps move into the registry without a second copy of their
+pixels and mipmaps. A failed preload adds no partial cache entries.
+`texture_set` returns independent maps, so changing a set cannot change
+the registry's cached maps. This operation still copies texture data.
+
 ## Credit the assets
 
-CARLA's vehicles are CC BY 4.0, so each image or video that shows them must credit them. Print the credit list:
+The 41 vehicles and six towns are CC BY 4.0. Shared renders and asset
+packages must carry their applicable credits, source links, license link
+and conversion notices. The code license does not replace the asset license.
+
+The committed [attribution catalog](https://github.com/SethKitchen/ThreeMojo/blob/main/assets/carla/ATTRIBUTION.md)
+lists all 47 entries and credits the 11 CC0 entries as a courtesy.
+It is a complete catalog, not a list of assets proven present in one image.
+
+The three CARLA gallery targets write a `.credits.md` file beside the
+output. Keep it with the gallery and its component images when sharing them.
+For a direct example run, generate that file yourself:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py credits --output CREDITS.md
+python3 assets/carla/tools/carla_assets.py credits --all --output out/carla.credits.md
 ```
+
+After editing the manifest, update the committed catalog:
+
+```sh
+python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/ATTRIBUTION.md
+```
+
+`make test-tools` checks that the catalog still matches the manifest.
+Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
+The current share links are not a durable distribution guarantee.
 
 ## The CARLA vehicles
 
@@ -172,3 +204,12 @@ The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python 
 ## Why not Poly Haven
 
 Poly Haven has no CARLA vehicles or towns. CARLA's own models are in the CARLA release, in Unreal's format, under CC BY 4.0. The manifest still uses Poly Haven and ambientCG for the procedural town's textures and skies.
+
+## Verify extracted files
+
+Run `python3 assets/carla/tools/carla_assets.py verify` to check the cache.
+For each verified archive, the tool also compares its extracted files with
+its members. A changed extracted file is reported as a mismatch. `fetch`
+refuses to overwrite it. Remove that file explicitly, then run `fetch` to
+restore the verified member. Do this after a package update if an old
+extracted file remains in the cache.

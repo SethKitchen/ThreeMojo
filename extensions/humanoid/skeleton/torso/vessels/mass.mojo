@@ -18,9 +18,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
     SoftMass,
     SoftOccupancy,
     SoftTissue,
-    arterial_tissue,
     classify_soft,
-    venous_tissue,
+    vessel_tissue,
 )
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscleDimensions,
@@ -74,7 +73,9 @@ def torso_vessel_mass(spec: HumanoidSpec, part: TorsoVessel) raises -> SoftMass:
         Error: If `spec` or `part` is refused.
     """
     return torso_vessel_mass_from_dimensions(
-        torso_muscle_dimensions(spec), part, _vessel_tissue(part)
+        torso_muscle_dimensions(spec),
+        part,
+        vessel_tissue(is_torso_artery(part)),
     )
 
 
@@ -101,10 +102,3 @@ def torso_vessel_mass_from_dimensions(
         Volume(volume, CUBIC_METER),
         Mass(tissue.wet_density.value * volume, KILOGRAM),
     )
-
-
-def _vessel_tissue(part: TorsoVessel) raises -> SoftTissue:
-    """Return arterial tissue for an artery and venous tissue for a vein."""
-    if is_torso_artery(part):
-        return arterial_tissue()
-    return venous_tissue()

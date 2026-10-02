@@ -983,12 +983,12 @@ struct UsdzFiles(Movable):
             The text.
 
         Raises:
-            Error: If there is no such file.
+            Error: If there is no such file, or its bytes are not UTF-8.
         """
         # There is always `model.usda`. The loop always runs.
         for i in range(len(self.names)):  # pragma: no branch
             if self.names[i] == name:
-                return String(unsafe_from_utf8=self.data[i])
+                return String(from_utf8=Span(self.data[i]))
         raise Error("USDZ: no file named " + name)
 
 

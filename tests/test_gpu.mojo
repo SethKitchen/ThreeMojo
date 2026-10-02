@@ -29,6 +29,8 @@ The tests that open no device, and only lay data out on the host, are in
 `tests/test_gpu_layout.mojo`. CI runs that suite on a runner with no GPU.
 """
 
+from max.gpu.host import DeviceContext
+
 from render.color_spaces import (
     ColorSpaceId,
     DISPLAY_P3_COLOR_SPACE,
@@ -14500,7 +14502,11 @@ def _models_on_both(
         frame.whole_corners(),
         BACKGROUND,
         SHADE_TEXTURE,
-        Lighting(scene, eye=camera_position(scene, camera)),
+        Lighting(
+            scene,
+            eye=camera_position(scene, camera),
+            profiles=renderer.spot_profiles(scene, assets),
+        ),
         lines=frame.segments,
         draws=frame.draws,
         points=frame.points,
@@ -14611,6 +14617,30 @@ def test_both_backends_march_a_volume_node_material_alike() raises:
             "the volume drew nothing",
         )
         assert_equal(count_mismatches(both[0], both[1], tolerance=1), 0)
+
+
+def test_both_backends_shape_volume_rays_with_spot_profiles() raises:
+    # Each beam must change the image from an ordinary spot cone, and
+    # the host/device must still agree through the volume's full ray.
+    if skipped_for_lack_of_a_gpu("volume rays use spot profiles"):
+        return
+    from lights.light import CONE_SPOT
+    from tests.test_volume_profile_rendering import profiled_volume_scene
+
+    for style in range(2):
+        var assets = Assets()
+        var scene = profiled_volume_scene(assets, style == 1)
+        var eye = Vector3(0.4, 0.3, 4)
+        var shaped = _models_on_both(scene, assets, eye)
+        assert_equal(count_mismatches(shaped[0], shaped[1], tolerance=1), 0)
+        scene.lights[0].spot_shape = CONE_SPOT
+        scene.lights[0].ies_map = NO_TEXTURE
+        var plain = _models_on_both(scene, assets, eye)
+        assert_equal(count_mismatches(plain[0], plain[1], tolerance=1), 0)
+        assert_true(
+            count_mismatches(shaped[0], plain[0], tolerance=1) > 20,
+            "the volume ignored its spot beam profile",
+        )
 
 
 # --- compute nodes -----------------------------------------------------------
@@ -14783,3 +14813,259 @@ def test_scene_splats_mix_with_transparent_meshes_on_both_backends() raises:
         splats=frame.splats,
     )
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+def test_both_backends_draw_marschner_strand_colors() raises:
+    from extensions.humanoid.skeleton.head.hair.shading import (
+        HairLook,
+        marschner,
+    )
+
+    if skipped_for_lack_of_a_gpu("Marschner strand colors"):
+        return
+    var color = marschner(
+        HairLook(Vector3(0.3, 0.1, 0.05)),
+        Vector3(0, 0.8, 0.6),
+        Vector3(0, -0.8, 0.6),
+        Vector3(0, 1, 0),
+    )
+    var assets = Assets()
+    var tint = FloatColor(color.x, color.y, color.z)
+    var shape = assets.geometries.add(
+        line_segments_geometry(
+            [Vector3(0, -0.8, 0), Vector3(0, 0.8, 0)], [tint, tint]
+        )
+    )
+    var material = assets.materials.add(
+        line_material(line_width=LineWidth(pixels=3), vertex_colors=True)
+    )
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.add_wide_line(LineSegments2(shape, material, node))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32)
+    renderer.background = BACKGROUND
+    var host = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = render_triangles(
+        frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
+    )
+    assert_true(count_background(host, BACKGROUND) < 32 * 32)
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+def test_both_backends_keep_subpixel_wide_line_caps() raises:
+    if skipped_for_lack_of_a_gpu("subpixel wide-line caps"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    for index in range(3):
+        var y = Float32(index - 1) * 0.4
+        var shape = assets.geometries.add(
+            line_segments_geometry(
+                [Vector3(-0.8, y, 0), Vector3(0.8, y + 0.15, 0)]
+            )
+        )
+        var paint = assets.materials.add(
+            line_material(
+                Color(240, 160, 90),
+                LineWidth(pixels=Float32(index + 1) * 0.5),
+            )
+        )
+        scene.add_wide_line(LineSegments2(shape, paint, node))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(60, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32, workers=3)
+    renderer.background = BACKGROUND
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    # Each of the three solid segments needs more than its two triangles.
+    assert_true(len(frame.corners) > 3 * 6)
+    var host = renderer.render(scene, assets, camera)
+    var device = render_triangles(
+        frame.whole_corners(), 32, 32, BACKGROUND, draws=frame.draws
+    )
+    assert_true(count_background(host, BACKGROUND) < 32 * 32)
+    assert_equal(count_mismatches(host, device, tolerance=1), 0)
+
+
+struct _ScalarMathKernels:
+    """Keep device-only entries out of the host test discovery list."""
+
+    @staticmethod
+    def scalar_math_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate shared scalar trigonometry on device inputs."""
+        from max.gpu import global_idx
+        from math.arc_tangent import atan2_float32, atan_float32
+        from math.sine import sin_float32
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var x = inputs[unsafe_offset=at]
+        output[unsafe_offset=3 * at] = sin_float32(x)
+        output[unsafe_offset=3 * at + 1] = atan_float32(x)
+        output[unsafe_offset=3 * at + 2] = atan2_float32(
+            x, inputs[unsafe_offset=(at + 1) % Int(count)]
+        )
+
+    @staticmethod
+    def norm_kernel[
+        dtype: DType
+    ](
+        output: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+        inputs: MutPointer[SIMD[dtype, 1], MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate shared scalar norms on device inputs."""
+        from max.gpu import global_idx
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var values = norm_sample(inputs[unsafe_offset=at])
+        for component in range(12):
+            output[unsafe_offset=12 * at + component] = values[component]
+
+
+def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
+    from math.arc_tangent import atan2_float32, atan_float32
+    from math.sine import sin_float32
+    from std.math import isnan, nan
+
+    if skipped_for_lack_of_a_gpu("shared scalar finite range and IEEE edges"):
+        return
+    var inputs: List[Float32] = [
+        0,
+        -0.0,
+        1,
+        -1,
+        inf[DType.float32](),
+        -inf[DType.float32](),
+        inf[DType.float32](),
+        nan[DType.float32](),
+        8192,
+        8192.0009765625,
+        1e8,
+        -1e9,
+        1e10,
+        1e15,
+        -1e30,
+        3e38,
+    ]
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.scalar_math_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            var expected: Array[Float32, 3] = [
+                sin_float32(inputs[at]),
+                atan_float32(inputs[at]),
+                atan2_float32(inputs[at], inputs[(at + 1) % len(inputs)]),
+            ]
+            for component in range(3):
+                var actual = host[3 * at + component]
+                if isnan(expected[component]):
+                    assert_true(isnan(actual))
+                else:
+                    assert_equal(
+                        bitcast[DType.uint32](actual),
+                        bitcast[DType.uint32](expected[component]),
+                    )
+
+
+def norm_sample[
+    dtype: DType
+](value: SIMD[dtype, 1]) -> Array[SIMD[dtype, 1], 12]:
+    """Evaluate the shared norm helpers in either scalar precision."""
+    from math.norm import (
+        length2,
+        length3,
+        length4,
+        normalized2,
+        normalized3,
+        normalized4,
+    )
+
+    var n2 = normalized2(value, -value)
+    var n3 = normalized3(value, -value, value)
+    var n4 = normalized4(value, -value, value, -value)
+    var divisor = value if value != 0 else SIMD[dtype, 1](1)
+    var result: Array[SIMD[dtype, 1], 12] = [
+        n2[0],
+        n2[1],
+        n3[0],
+        n3[1],
+        n3[2],
+        n4[0],
+        n4[1],
+        n4[2],
+        n4[3],
+        length2(value, value) / divisor,
+        length3(value, value, value) / divisor,
+        length4(value, value, value, value) / divisor,
+    ]
+    return result^
+
+
+def check_norm_parity[
+    dtype: DType
+](inputs: List[SIMD[dtype, 1]], tolerance: Float64) raises:
+    """Compare CPU and GPU helpers over finite extreme scales."""
+
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[dtype](len(inputs))
+    var output = context.enqueue_create_buffer[dtype](12 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.norm_kernel[dtype]](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            var expected = norm_sample(inputs[at])
+            for component in range(12):
+                assert_almost_equal(
+                    host[12 * at + component],
+                    expected[component],
+                    atol=tolerance,
+                )
+
+
+def test_shared_norms_preserve_tiny_and_large_directions() raises:
+    if skipped_for_lack_of_a_gpu("shared norms across scalar ranges"):
+        return
+    var f32: List[Float32] = [0, 1e-30, 1, 1e30]
+    var f64: List[Float64] = [0, 1e-200, 1, 1e200]
+    check_norm_parity(f32, 1e-6)
+    check_norm_parity(f64, 1e-13)
