@@ -138,6 +138,18 @@ The knots must be finite and must not fall. Their count must be the number of co
 
 These checks apply to every axis of a surface or volume. Repeated knots are allowed when the active interval stays nonempty. three.js does not check these conditions.
 
+Object evaluation checks each parameter in its original precision. Parameters must be finite and in the closed interval from zero through one. Curve points and tangents, surface `point64` and `point`, and volume `point64` and `point` raise an error if the homogeneous denominator is zero or nonfinite. They also refuse a nonfinite projected result. Zero and negative control weights remain valid when the requested point is defined.
+
+The surface and volume evaluation methods now have raising signatures. `ParametricSurface.point` permits an error, so `parametric` propagates a NURBS error. Existing surfaces with nonraising methods still satisfy the trait. The Float32 methods refuse coordinates outside Float32 before conversion. The low-level NURBS utility functions remain unchecked.
+
+Mapping and basis functions divide scaled knot differences when a direct subtraction would overflow. The stored knots do not change. A curve point retains its selected or reversed knot mapping. Its tangent retains three.js's mapping over the whole knot vector. Finite knots such as `[-1e308, -1e308, 1e308, 1e308]` can therefore define an ordinary line.
+
+A tangent uses a scaled homogeneous control-polygon derivative. It does not form the derivative's magnitude in the original knot units. A finite unit direction therefore survives when that magnitude would underflow or overflow. A constant curve still gives a zero tangent.
+
+`k_over_i` uses a symmetric product recurrence. Near the Float64 limit, a bounded exact-integer fallback distinguishes true overflow from accumulated rounding error. It returns positive infinity only when the exact coefficient exceeds Float64, and stops at that point. Finite fallback results round once to nearest-even. It does not form factorials. A zero weight derivative contributes zero even if its unused binomial coefficient would overflow.
+
+Basis derivatives apply degree multipliers to each derivative value. They do not form an integer factorial or multiply zero by an overflowing Float64 factorial.
+
 Weighted derivatives above the polynomial degree are zero, including the weight component. This corrects three.js's padding weight of one. Constant NURBS curves have zero tangents. Rational curves can still have nonzero higher derivatives when their weights vary.
 
 ## Named curves
