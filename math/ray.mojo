@@ -42,8 +42,8 @@ from std.math import isnan, max, min, sqrt
 
 
 def _stretch(
-    low: Float32, high: Float32, origin: Float32, direction: Float32
-) -> Tuple[Float32, Float32]:
+    low: Float64, high: Float64, origin: Float64, direction: Float64
+) -> Tuple[Float64, Float64]:
     """Return where along a ray it lies between two parallel faces, as the
     distance it enters and the distance it leaves.
 
@@ -66,8 +66,78 @@ def _stretch(
     """
     var inverse = 1 / direction
     if inverse >= 0:
-        return ((low - origin) * inverse, (high - origin) * inverse)
-    return ((high - origin) * inverse, (low - origin) * inverse)
+        return (
+            (low - origin) * inverse,
+            (high - origin) * inverse,
+        )
+    return (
+        (high - origin) * inverse,
+        (low - origin) * inverse,
+    )
+
+
+@fieldwise_init
+struct _LineApproach(ImplicitlyCopyable):
+    """A point's projection onto a line, before Float32 narrowing."""
+
+    var parameter: Float64
+    var distance_sq: Float64
+    var norm_sq: Float64
+    # Perpendicular vector from the nearest line point to the query point.
+    var offset_x: Float64
+    var offset_y: Float64
+    var offset_z: Float64
+
+
+def _line_approach(
+    origin: Vector3, direction: Vector3, point: Vector3
+) -> _LineApproach:
+    """Return the projection, squared gap, direction norm and perpendicular gap.
+
+    Widen before subtraction and squaring. The stored Float32 unit direction
+    is not exactly unit in Float64, so divide by its actual squared norm.
+    The cross product avoids subtracting two large, nearly equal squares or
+    forming a rounded nearest point at a distant origin.
+    """
+    var x = Float64(point.x) - Float64(origin.x)
+    var y = Float64(point.y) - Float64(origin.y)
+    var z = Float64(point.z) - Float64(origin.z)
+    var dx = Float64(direction.x)
+    var dy = Float64(direction.y)
+    var dz = Float64(direction.z)
+    var norm_sq = dx * dx + dy * dy + dz * dz
+    # Cross the points separately. Subtracting a small center from a distant
+    # origin first can erase its perpendicular offset even in Float64.
+    var cross_x = (Float64(point.y) * dz - Float64(point.z) * dy) - (
+        Float64(origin.y) * dz - Float64(origin.z) * dy
+    )
+    var cross_y = (Float64(point.z) * dx - Float64(point.x) * dz) - (
+        Float64(origin.z) * dx - Float64(origin.x) * dz
+    )
+    var cross_z = (Float64(point.x) * dy - Float64(point.y) * dx) - (
+        Float64(origin.x) * dy - Float64(origin.y) * dx
+    )
+    return _LineApproach(
+        (x * dx + y * dy + z * dz) / norm_sq,
+        (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z) / norm_sq,
+        norm_sq,
+        (dy * cross_z - dz * cross_y) / norm_sq,
+        (dz * cross_x - dx * cross_z) / norm_sq,
+        (dx * cross_y - dy * cross_x) / norm_sq,
+    )
+
+
+def _distance_sq_to_point(
+    origin: Vector3, direction: Vector3, point: Vector3
+) -> Float64:
+    """Return a ray's squared point distance without narrowing the square."""
+    var approach = _line_approach(origin, direction, point)
+    if approach.parameter < 0:
+        var x = Float64(point.x) - Float64(origin.x)
+        var y = Float64(point.y) - Float64(origin.y)
+        var z = Float64(point.z) - Float64(origin.z)
+        return x * x + y * y + z * z
+    return approach.distance_sq
 
 
 @fieldwise_init
@@ -156,10 +226,14 @@ struct Ray(ImplicitlyCopyable):
         Returns:
             The nearest point on the ray.
         """
-        var along = (point - self.origin).dot(self.direction)
-        if along < 0:
+        var approach = _line_approach(self.origin, self.direction, point)
+        if approach.parameter < 0:
             return self.origin
-        return self.at(along)
+        return Vector3(
+            Float32(Float64(point.x) - approach.offset_x),
+            Float32(Float64(point.y) - approach.offset_y),
+            Float32(Float64(point.z) - approach.offset_z),
+        )
 
     def distance_sq_to_point(self, point: Vector3) -> Float32:
         """Return the squared distance from `point` to this ray, three.js's
@@ -169,10 +243,13 @@ struct Ray(ImplicitlyCopyable):
             point: The point to measure from.
 
         Returns:
-            The square of the distance to the nearest point of the ray.
+            The square of the distance to the nearest point of the ray,
+            narrowed to Float32. This return value can overflow or underflow;
+            sphere queries keep the wider square internally.
         """
-        var gap = self.closest_point_to_point(point) - point
-        return gap.dot(gap)
+        return Float32(
+            _distance_sq_to_point(self.origin, self.direction, point)
+        )
 
     def distance_sq_to_segment(
         self, start: Vector3, end: Vector3
@@ -253,7 +330,9 @@ struct Ray(ImplicitlyCopyable):
         Returns:
             The distance to the nearest point of the ray.
         """
-        return sqrt(self.distance_sq_to_point(point))
+        return Float32(
+            sqrt(_distance_sq_to_point(self.origin, self.direction, point))
+        )
 
     def intersect_sphere(self, sphere: Sphere) -> Optional[Vector3]:
         """Return where this ray first meets `sphere`, three.js's
@@ -275,27 +354,41 @@ struct Ray(ImplicitlyCopyable):
         """
         if sphere.is_empty():
             return None
-        var toward = sphere.center - self.origin
-        var foot = toward.dot(self.direction)
-        # The drop from the center to the line, as a vector and then
-        # squared, rather than as the difference of two squared lengths
-        # as three.js has it: for a sphere ten kilometers off, those two
-        # agree to every digit a Float32 has, and the two meters that
-        # decide the miss are rounded away. This is the drop
-        # `intersects_sphere` measures, so the two answers agree.
-        var drop = toward - self.direction * foot
-        var drop_sq = drop.dot(drop)
-        var radius_sq = sphere.radius * sphere.radius
+        var approach = _line_approach(
+            self.origin, self.direction, sphere.center
+        )
+        var foot = approach.parameter
+        var drop_sq = approach.distance_sq
+        var radius_sq = Float64(sphere.radius) * Float64(sphere.radius)
         if drop_sq > radius_sq:
             return None
-        var half = sqrt(radius_sq - drop_sq)
+        var half = sqrt((radius_sq - drop_sq) / approach.norm_sq)
         var entering = foot - half
         var leaving = foot + half
         if leaving < 0:
             return None
+        var offset = -half
         if entering < 0:
-            return self.at(leaving)
-        return self.at(entering)
+            offset = half
+        # Work from the center and the perpendicular gap. A distant origin
+        # can make even a Float64 parameter round away a small radius.
+        return Vector3(
+            Float32(
+                Float64(sphere.center.x)
+                - approach.offset_x
+                + Float64(self.direction.x) * offset
+            ),
+            Float32(
+                Float64(sphere.center.y)
+                - approach.offset_y
+                + Float64(self.direction.y) * offset
+            ),
+            Float32(
+                Float64(sphere.center.z)
+                - approach.offset_z
+                + Float64(self.direction.z) * offset
+            ),
+        )
 
     def intersects_sphere(self, sphere: Sphere) -> Bool:
         """Return True if this ray meets `sphere`, three.js's
@@ -309,10 +402,9 @@ struct Ray(ImplicitlyCopyable):
         """
         if sphere.is_empty():
             return False
-        return (
-            self.distance_sq_to_point(sphere.center)
-            <= sphere.radius * sphere.radius
-        )
+        return _distance_sq_to_point(
+            self.origin, self.direction, sphere.center
+        ) <= Float64(sphere.radius) * Float64(sphere.radius)
 
     def distance_to_plane(self, plane: Plane) -> Optional[Float32]:
         """Return how far along this ray `plane` is met, three.js's
@@ -372,6 +464,8 @@ struct Ray(ImplicitlyCopyable):
             return True
         return plane.normal.dot(self.direction) * height < 0
 
+    # Boolean callers can discard the hit coordinates after inlining.
+    @always_inline
     def intersect_box(self, box: Box3) -> Optional[Vector3]:
         """Return where this ray enters `box`, three.js's `intersectBox`,
         or None if it misses.
@@ -396,9 +490,28 @@ struct Ray(ImplicitlyCopyable):
         """
         if box.is_empty():
             return None
-        var x = _stretch(box.min.x, box.max.x, self.origin.x, self.direction.x)
-        var y = _stretch(box.min.y, box.max.y, self.origin.y, self.direction.y)
-        var z = _stretch(box.min.z, box.max.z, self.origin.z, self.direction.z)
+        # Use the closest point to a box corner as the parameter origin.
+        # Distant absolute slab parameters can round disjoint intervals
+        # together even in Float64. Corner-relative intervals keep their gap.
+        var approach = _line_approach(self.origin, self.direction, box.min)
+        var x = _stretch(
+            0,
+            Float64(box.max.x) - Float64(box.min.x),
+            -approach.offset_x,
+            Float64(self.direction.x),
+        )
+        var y = _stretch(
+            0,
+            Float64(box.max.y) - Float64(box.min.y),
+            -approach.offset_y,
+            Float64(self.direction.y),
+        )
+        var z = _stretch(
+            0,
+            Float64(box.max.z) - Float64(box.min.z),
+            -approach.offset_z,
+            Float64(self.direction.z),
+        )
         var near = x[0]
         var far = x[1]
         if near > y[1] or y[0] > far:
@@ -413,11 +526,28 @@ struct Ray(ImplicitlyCopyable):
             near = z[0]
         if z[1] < far or isnan(far):
             far = z[1]
-        if far < 0:
+        if far + approach.parameter < 0:
             return None
-        if near >= 0:
-            return self.at(near)
-        return self.at(far)
+        var parameter = far
+        if near + approach.parameter >= 0:
+            parameter = near
+        return Vector3(
+            Float32(
+                Float64(box.min.x)
+                - approach.offset_x
+                + Float64(self.direction.x) * parameter
+            ),
+            Float32(
+                Float64(box.min.y)
+                - approach.offset_y
+                + Float64(self.direction.y) * parameter
+            ),
+            Float32(
+                Float64(box.min.z)
+                - approach.offset_z
+                + Float64(self.direction.z) * parameter
+            ),
+        )
 
     def intersects_box(self, box: Box3) -> Bool:
         """Return True if this ray meets `box`, three.js's `intersectsBox`.
