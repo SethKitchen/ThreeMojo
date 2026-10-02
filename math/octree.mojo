@@ -19,8 +19,8 @@ a cut goes into every box it touches, and a query gives it once.
 **Storage.** three.js makes each box an `Octree` of its own. Here the boxes
 are nodes in one list, and each holds the indices of its triangles in
 `triangles`, which keeps every triangle added, in order. Node 0 is the
-root. The order of every search and of every push is three.js's, so a
-collision gives three.js's answer.
+root. Searches and pushes keep three.js's order. Contact distances use
+corrected geometric minima.
 
 Like `Box3`, an octree holds bare `Float32` meters.
 
@@ -32,8 +32,18 @@ Like `Box3`, an octree holds bare `Float32` meters.
 - `triangles_per_leaf` and `max_level` hold at every level. three.js reads
   them only on the root: each box below is a new `Octree` with the
   defaults.
-- A triangle edge of no length meets nothing. three.js calculates `NaN` for
-  it, which meets nothing too.
+- A triangle edge of no length meets nothing. A collinear triangle meets
+  spheres and capsules through its nonzero edges.
+- Sphere edge contacts use the full squared radius and the nearest edge.
+  Segment contacts recompute the minimum when an endpoint constrains it.
+  These correct the inherited missed contacts and independent clamps.
+- Front-face, edge and vertex tangency gives zero contact depth.
+
+Sphere queries accept either side of a face. A face contact pushes toward
+its front, including when the center is behind it. Edge contacts push
+away from the edge. Capsule queries reject a segment wholly behind the
+face and push face contacts toward the front. A zero separation from a
+collinear edge has no unique normal and gives a zero direction.
 """
 
 from core.assets import Assets
@@ -43,12 +53,9 @@ from core.scene import Scene
 from math.bounds import Box3, Sphere
 from math.capsule import Capsule
 from math.ray import Ray
-from math.triangle import Triangle
+from math.triangle import Triangle, _segment_closest_points
 from math.vector3 import Vector3
 from std.math import inf, max, min, sqrt
-
-# three.js's `EPS`: below this, two segments are parallel.
-comptime _PARALLEL = Float32(1e-10)
 
 
 def _sat_axis(
@@ -222,20 +229,11 @@ def _contains_point(triangle: Triangle, point: Vector3) -> Bool:
         Whether it is inside or on an edge. False for a degenerate
         triangle and for a point that is not a number.
     """
-    var v0 = triangle.c - triangle.a
-    var v1 = triangle.b - triangle.a
-    var v2 = point - triangle.a
-    var dot00 = v0.dot(v0)
-    var dot01 = v0.dot(v1)
-    var dot02 = v0.dot(v2)
-    var dot11 = v1.dot(v1)
-    var dot12 = v1.dot(v2)
-    var denom = dot00 * dot11 - dot01 * dot01
-    var inverse = 1 / denom
-    var u = (dot11 * dot02 - dot01 * dot12) * inverse
-    var v = (dot00 * dot12 - dot01 * dot02) * inverse
-    var x = 1 - u - v
-    return denom != 0 and x >= 0 and v >= 0 and x + v <= 1
+    var found = triangle._weights(point)
+    if not Bool(found):
+        return False
+    var weights = found.value()
+    return weights.x >= 0 and weights.y >= 0 and weights.z >= 0
 
 
 def _closest_on_segment(
@@ -266,6 +264,10 @@ def line_to_line_closest_points(
     """Return the nearest points of two segments. three.js's
     `lineToLineClosestPoints`.
 
+    The constrained minimum is shared with `Line3`. Unlike `Line3`, any
+    nonzero edge keeps its length here. A zero first segment is a point;
+    a zero second segment is an ignored triangle edge.
+
     Args:
         start1: The first segment's start.
         end1: The first segment's end.
@@ -276,34 +278,9 @@ def line_to_line_closest_points(
         The point of the first segment and the point of the second, or None
         if the second has no length.
     """
-    var r = end1 - start1
-    var s = end2 - start2
-    var w = start2 - start1
-    var a = r.dot(s)
-    var b = r.dot(r)
-    var c = s.dot(s)
-    var d = s.dot(w)
-    var e = r.dot(w)
-    if c == 0:
+    if start2 == end2:
         return None
-    var t1: Float32
-    var t2: Float32
-    var divisor = b * c - a * a
-    if abs(divisor) < _PARALLEL:
-        var d1 = -d / c
-        var d2 = (a - d) / c
-        if abs(d1 - 0.5) < abs(d2 - 0.5):
-            t1 = 0
-            t2 = d1
-        else:
-            t1 = 1
-            t2 = d2
-    else:
-        t1 = (d * a + e * c) / divisor
-        t2 = (t1 * a - d) / c
-    t2 = _unit(t2)
-    t1 = _unit(t1)
-    return (r * t1 + start1, s * t2 + start2)
+    return _segment_closest_points(start1, end1, start2, end2, 0)
 
 
 @fieldwise_init
@@ -350,7 +327,9 @@ def triangle_capsule_intersect(
 
     The segment is first met with the triangle's plane. If that point is in
     the triangle, the push is along the normal. If not, the nearest points
-    of the segment and each edge are compared with the radius.
+    of the segment and each edge are compared with the radius. A segment
+    wholly behind the face is ignored. Touching counts as zero depth.
+    Collinear triangles use their nonzero edges.
 
     Args:
         capsule: The capsule.
@@ -366,7 +345,9 @@ def triangle_capsule_intersect(
     var below = d1 < -capsule.radius and d2 < -capsule.radius
     if above or below:
         return None
-    var delta = abs(d1 / (abs(d1) + abs(d2)))
+    var span = abs(d1) + abs(d2)
+    # Both endpoints can touch the radius-offset plane. Use either endpoint.
+    var delta = abs(d1 / span) if span != 0 else Float32(0)
     var crossing = capsule.start + (capsule.end - capsule.start) * delta
     if _contains_point(triangle, crossing):
         return Contact(plane.normal, crossing, abs(min(d1, d2)))
@@ -383,7 +364,7 @@ def triangle_capsule_intersect(
             continue
         var point1 = points.value()[0]
         var point2 = points.value()[1]
-        if _gap_sq(point1, point2) < r2:
+        if _gap_sq(point1, point2) <= r2:
             return Contact(
                 _normalized(point1 - point2),
                 point2,
@@ -398,6 +379,11 @@ def triangle_sphere_intersect(
     """Return where a sphere meets a triangle, or None. three.js:
     `Octree.triangleSphereIntersect`.
 
+    Both sides can meet. A face contact pushes toward the front. An edge
+    or vertex contact uses the nearest nonzero edge and pushes away from
+    it. Front-face tangency gives zero depth. Collinear triangles use edges;
+    a triangle made of one repeated point meets nothing.
+
     Args:
         sphere: The sphere.
         triangle: The triangle.
@@ -410,11 +396,13 @@ def triangle_sphere_intersect(
     if not (reach <= sphere.radius):
         return None
     var depth = abs(plane.distance_to_point(sphere.center) - sphere.radius)
-    var r2 = sphere.radius * sphere.radius - depth * depth
+    var r2 = sphere.radius * sphere.radius
     var plain_point = plane.project_point(sphere.center)
     if _contains_point(triangle, sphere.center):
         return Contact(plane.normal, plain_point, depth)
     var corners: List[Vector3] = [triangle.a, triangle.b, triangle.c]
+    var closest: Optional[Vector3] = None
+    var distance_sq = inf[DType.float32]()
     for edge in range(3):  # pragma: no branch
         var nearest = _closest_on_segment(
             corners[edge], corners[(edge + 1) % 3], plain_point
@@ -422,12 +410,15 @@ def triangle_sphere_intersect(
         if not Bool(nearest):
             continue
         var d = _gap_sq(nearest.value(), sphere.center)
-        if d < r2:
-            return Contact(
-                _normalized(sphere.center - nearest.value()),
-                nearest.value(),
-                sphere.radius - sqrt(d),
-            )
+        if d < distance_sq:
+            distance_sq = d
+            closest = nearest
+    if Bool(closest) and distance_sq <= r2:
+        return Contact(
+            _normalized(sphere.center - closest.value()),
+            closest.value(),
+            sphere.radius - sqrt(distance_sq),
+        )
     return None
 
 
