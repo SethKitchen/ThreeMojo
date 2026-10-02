@@ -56,6 +56,15 @@ Quote-aware scanning also reveals code after multiline shader strings. The line 
 
 `make test-coverage-tool` compares native and rewritten Mojo fixtures. It checks leaf manifests, short-circuit order, call counts, exceptions, and raw and reduced traces. It also verifies that both decision outcomes can pass while leaf coverage fails. It also checks recursion, abandoned evaluations, nested callbacks, repeated loop and `elif` decisions, and concurrent tasks.
 
+## Report columns
+
+The text report separates each field with at least one space. Long module
+names and large counts cannot touch the next field. Short fields keep their
+padding. Percentages and measured totals do not change.
+
+Do not read the table by fixed character positions. Tools can use the manifest
+and probe formats described on this page when they need structured records.
+
 ## Rules
 
 - The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names the GPU modules, `render/gpu.mojo` and `render/gpu_vxgi.mojo`, because a kernel has no `stderr`.

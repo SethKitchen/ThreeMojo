@@ -8,6 +8,7 @@
 from coverage.mcdc import TraceParser, parse_traces
 from coverage.report import (
     Entry,
+    _pad,
     Hits,
     absorb_capture,
     build_report,
@@ -301,6 +302,53 @@ def test_unterminated_vector_capture_is_rejected() raises:
     except error:
         raised = True
     assert_true(raised)
+
+
+def test_report_field_padding_keeps_a_separator_at_every_width() raises:
+    assert_equal(_pad(String("abc"), 5), String("abc  "))
+    assert_equal(_pad(String("abcde"), 5), String("abcde "))
+    assert_equal(_pad(String("abcdef"), 5), String("abcdef "))
+    assert_equal(_pad(String("λ") * 5, 5), String("λ") * 5 + " ")
+    assert_equal(_pad(String("210/219"), 7) + "95%", String("210/219 95%"))
+    assert_equal(
+        _pad(String("190346/190769"), 10) + "99%",
+        String("190346/190769 99%"),
+    )
+    assert_equal(_pad(String("0/0"), 7) + "100%", String("0/0    100%"))
+    assert_equal(_pad(String("0/1"), 7) + "0%", String("0/1    0%"))
+
+
+def test_report_module_names_cannot_touch_the_first_metric() raises:
+    for width in [29, 30, 31, 80]:
+        var name = String("m") * width
+        var text = report_for("L " + name + " 1\n", "COVLINE:" + name + ":1\n")
+        assert_true((name + " lines ") in text)
+        assert_false((name + "lines") in text)
+        assert_true("lines 1/1" in text)
+
+
+def test_large_report_counts_stay_separate_and_keep_the_same_totals() raises:
+    var name = String(
+        "extensions/long_module_name_that_exceeds_the_report_column"
+    )
+    var entries = List[Entry]()
+    var hits = Hits()
+    for line in range(10000):
+        entries.append(Entry(name, line, False, -1, False))
+        hits.add(name + ":" + String(line))
+    for line in range(10000, 11000):
+        entries.append(Entry(name, line, True, -1, False))
+        hits.add(name + ":" + String(line) + ":T")
+        hits.add(name + ":" + String(line) + ":F")
+    var report = build_report(entries, hits, parse_traces(String("")))
+    assert_equal(report.covered, 12000)
+    assert_equal(report.total, 12000)
+    assert_true(report.is_complete())
+    assert_true((name + " lines ") in report.text)
+    assert_true("lines 10000/10000 100%" in report.text)
+    assert_true("branches 2000/2000 100%" in report.text)
+    assert_true("mcdc 0/0    100%" in report.text)
+    assert_true("12000/12000 100%" in report.text)
 
 
 def main() raises:
