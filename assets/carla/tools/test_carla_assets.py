@@ -10,6 +10,7 @@ import copy
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import tempfile
 import unittest
@@ -117,6 +118,27 @@ class ManifestTests(unittest.TestCase):
         for manifest in cases:
             with self.assertRaises(tool.ManifestError):
                 tool.check_manifest(manifest)
+
+    def test_tile_sizes_must_remain_positive_finite_float32(self):
+        for value in (math.nan, math.inf, -math.inf, 1e100, 1e-100, 0, -1, True, '2', 10**10000):
+            entry = texture_entry('https://example.org/a.jpg', None)
+            entry['tile_meters'] = value
+            with self.assertRaisesRegex(tool.ManifestError, 'Float32 tile_meters'):
+                tool.check_manifest(manifest_of(entry))
+        for value in (1, 0.25, 1e-40, 3.4028234663852886e38):
+            entry = texture_entry('https://example.org/a.jpg', None)
+            entry['tile_meters'] = value
+            tool.check_manifest(manifest_of(entry))
+
+    def test_manifest_format_is_numeric_not_boolean(self):
+        for value in (True, False):
+            manifest = manifest_of()
+            manifest['format'] = value
+            with self.assertRaises(tool.ManifestError):
+                tool.check_manifest(manifest)
+        manifest = manifest_of()
+        manifest['format'] = 1.0
+        tool.check_manifest(manifest)
 
     def test_a_town_passes(self):
         town = {

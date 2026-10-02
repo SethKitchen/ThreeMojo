@@ -39,10 +39,12 @@ Rules the fetch keeps:
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import struct
 import sys
 import tempfile
 import time
@@ -144,6 +146,17 @@ def binding_kind(key):
     return 'model'
 
 
+def _positive_float32(value):
+    """Return whether a number remains positive and finite in the runtime."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        stored = struct.unpack('<f', struct.pack('<f', value))[0]
+    except (OverflowError, struct.error):
+        return False
+    return math.isfinite(stored) and stored > 0
+
+
 def check_manifest(manifest):
     """Raise `ManifestError` unless the manifest keeps every rule.
 
@@ -155,7 +168,8 @@ def check_manifest(manifest):
     town with one model file; an HDRI with one HDRI file; and bindings that name null or an entry of
     the kind `binding_kind` gives the key.
     """
-    if not isinstance(manifest, dict) or manifest.get('format') != FORMAT:
+    if (not isinstance(manifest, dict) or isinstance(manifest.get('format'), bool)
+            or manifest.get('format') != FORMAT):
         raise ManifestError(f'the manifest must be an object with "format": {FORMAT}')
     entries = manifest.get('entries')
     if not isinstance(entries, list):
@@ -201,8 +215,8 @@ def check_manifest(manifest):
             if 'albedo' not in roles:
                 raise ManifestError(f'{entry_id}: a texture set needs an albedo map')
             tile = entry.get('tile_meters')
-            if not isinstance(tile, (int, float)) or isinstance(tile, bool) or tile <= 0:
-                raise ManifestError(f'{entry_id}: a texture set needs a positive tile_meters')
+            if not _positive_float32(tile):
+                raise ManifestError(f'{entry_id}: a texture set needs finite positive Float32 tile_meters')
         if kind == 'model':
             if roles.count('model') != 1:
                 raise ManifestError(f'{entry_id}: a model needs exactly one model file')
