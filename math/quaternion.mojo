@@ -23,6 +23,7 @@ as the matrices `a.to_matrix() * b.to_matrix()` would.
 
 from math.euler import Euler
 from math.matrix4 import Matrix4
+from math.norm import length4, normalized4
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.math import acos, atan2, cos, pi, sin, sqrt
@@ -236,7 +237,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
 
     def length(self) -> Float32:
         """Return the Euclidean length of the four components."""
-        return sqrt(self.dot(self))
+        return length4(self.x, self.y, self.z, self.w)
 
     def normalize(mut self):
         """Scale `self` to unit length; a zero quaternion becomes the identity.
@@ -245,14 +246,22 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         multiplies drifts. three.js makes the same choice for zero: there is
         no direction to keep, so the answer is "no rotation".
         """
-        var magnitude = self.length()
-        if magnitude == 0:
+        if self.x == 0 and self.y == 0 and self.z == 0 and self.w == 0:
             self = Quaternion.identity()
             return
-        self.x /= magnitude
-        self.y /= magnitude
-        self.z /= magnitude
-        self.w /= magnitude
+        # Preserve IEEE NaN propagation from the original quaternion path.
+        var squared = self.dot(self)
+        if squared != squared:
+            var magnitude = sqrt(squared)
+            self.x /= magnitude
+            self.y /= magnitude
+            self.z /= magnitude
+            self.w /= magnitude
+            return
+        var components = normalized4(self.x, self.y, self.z, self.w)
+        self = Quaternion(
+            components[0], components[1], components[2], components[3]
+        )
 
     def conjugate(self) -> Self:
         """Return the opposite rotation, which for a unit quaternion is the

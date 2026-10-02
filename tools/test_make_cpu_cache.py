@@ -3,10 +3,12 @@
 """Exercise the CPU xargs recipe without running the Mojo compiler."""
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,11 +46,29 @@ class CpuCacheRecipeTests(unittest.TestCase):
                 'JOBS := 1\nCACHE_DIR := cache\nBIN_DIR := cache/bin\n'
                 'SUITE_STAMPS := cache/suites\nMOJO := python3 compiler.py\n'
                 'TEST_TIMEOUT := 5\nall:\n' + recipe + '\n')
-            result = subprocess.run(['make', '-s'], cwd=root, text=True, capture_output=True)
+            # A parent `make MOJO=...` exports overrides to every child.
+            # This fixture owns its Makefile and must use its harmless stub.
+            environment = {key: value for key, value in os.environ.items()
+                           if key not in {'MAKEFLAGS', 'MFLAGS', 'MAKEOVERRIDES',
+                                          'MAKELEVEL', 'MAKEFILES', 'GNUMAKEFLAGS'}}
+            result = subprocess.run(['make', '-s'], cwd=root, text=True,
+                                    capture_output=True, env=environment)
             calls = (root / 'invocations').read_text().splitlines() if (root / 'invocations').exists() else []
             stamps = sorted(path.name for path in (root / 'cache/suites').iterdir())
             self.assertEqual(sentinel.read_text(), 'unchanged')
             return result, calls, stamps
+
+    def test_outer_make_overrides_cannot_replace_the_fixture_compiler(self):
+        with patch.dict(os.environ, {
+            'MAKEFLAGS': '-- MOJO=nonexistent-outer-compiler',
+            'MAKEOVERRIDES': 'MOJO=nonexistent-outer-compiler',
+            'MFLAGS': '-e', 'GNUMAKEFLAGS': '-e',
+            'MAKEFILES': 'nonexistent-outer-include', 'MAKELEVEL': '7',
+        }):
+            result, calls, stamps = self.run_recipe('tests/test_a.mojo aaa\n')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(calls, ['tests/test_a.mojo'])
+            self.assertEqual(stamps, ['test_a-aaa'])
 
     def test_empty_cache_hit_does_not_invoke_compiler_or_mutate_stamps(self):
         result, calls, stamps = self.run_recipe('')

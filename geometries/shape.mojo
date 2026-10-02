@@ -48,6 +48,7 @@ from core.buffer_geometry import (
 from core.user_data import UserData
 from geometries.earcut import triangulate_shape
 from math.path import Shape
+from math.polygon_area import signed_area64
 from math.vector2 import Vector2
 
 
@@ -173,17 +174,6 @@ def _clean(points: List[Vector2]) raises -> List[Vector2]:
     return corners^
 
 
-def _area(points: List[Vector2], start: Int, count: Int) -> Float32:
-    """Return twice the signed area of the contour at `start`. It is
-    positive when the contour runs counter-clockwise."""
-    var total = Float32(0)
-    for index in range(count):  # pragma: no branch
-        var here = points[start + index]
-        var next = points[start + (index + 1) % count]
-        total += here.cross(next)
-    return total
-
-
 def _contains(
     points: List[Vector2], start: Int, count: Int, probe: Vector2
 ) -> Bool:
@@ -220,9 +210,9 @@ def _corners(points: List[Vector2]) raises -> List[Vector2]:
             area.
     """
     var corners = _clean(points)
-    var doubled = _area(corners, 0, len(corners))
+    var doubled = signed_area64(corners) * 2
     var span = extent(corners, 0, len(corners))
-    if abs(doubled) <= NOISE * span * span:
+    if abs(doubled) <= Float64(NOISE) * Float64(span) * Float64(span):
         raise Error("A shape's contour must enclose an area")
     return corners^
 
@@ -298,14 +288,7 @@ def is_clockwise(points: List[Vector2]) -> Bool:
     Returns:
         True if the signed area is below zero.
     """
-    var total = Float64(0)
-    var n = len(points)
-    for q in range(n):  # pragma: no branch
-        var p = (q + n - 1) % n
-        total += Float64(points[p].x) * Float64(points[q].y) - Float64(
-            points[q].x
-        ) * Float64(points[p].y)
-    return total * 0.5 < 0
+    return signed_area64(points) < 0
 
 
 def flat_points(points: List[Vector2]) -> List[Float64]:

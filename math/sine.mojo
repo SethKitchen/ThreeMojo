@@ -42,6 +42,20 @@ def _reduction_word(words: Array[UInt32, 9], start: Int) -> UInt32:
     return word
 
 
+def _complement_fraction(upper: UInt32, lower: UInt32) -> Tuple[UInt32, UInt32]:
+    """Return the two's complement of a 64-bit fraction stored in two words.
+
+    Args:
+        upper: The most significant 32 bits.
+        lower: The least significant 32 bits.
+
+    Returns:
+        The high and low words of the negated unsigned value.
+    """
+    var complement = UInt64(0) - ((UInt64(upper) << 32) | UInt64(lower))
+    return (UInt32(complement >> 32), UInt32(complement & 0xFFFFFFFF))
+
+
 def _large_reduction(a: Float32) -> Tuple[Int, Float32]:
     """Reduce a finite positive angle above 8192 with integer arithmetic.
 
@@ -66,7 +80,8 @@ def _large_reduction(a: Float32) -> Tuple[Int, Float32]:
     ]
     var product = Array[UInt32, 9](fill=0)
     var carry = UInt64(0)
-    for i in range(8):
+    # The reduction constant always has eight limbs.
+    for i in range(8):  # pragma: no branch
         var term = UInt64(two_over_pi[i]) * mantissa + carry
         product[i] = UInt32(term & 0xFFFFFFFF)
         carry = term >> 32
@@ -84,10 +99,9 @@ def _large_reduction(a: Float32) -> Tuple[Int, Float32]:
     if negative:
         # Form the distance below the next integer without subtracting
         # nearly equal floats. The two's complement keeps all 64 bits.
-        upper = ~upper
-        if lower == 0:
-            upper += 1
-        lower = UInt32(0) - lower
+        var complement = _complement_fraction(upper, lower)
+        upper = complement[0]
+        lower = complement[1]
         quadrant = (quadrant + 1) & 3
     var fraction = fma(
         Float32(upper),
@@ -113,9 +127,6 @@ def sin_float32(x: Float32) -> Float32:
 
     Returns:
         The sine, from minus one to one. NaN for an infinite angle or NaN.
-
-    Raises:
-        None.
     """
     if x != x or x - x != 0:
         return x - x

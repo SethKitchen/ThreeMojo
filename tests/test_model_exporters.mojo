@@ -48,6 +48,8 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.srgb import srgb_to_linear
+from std.math import inf, nan, sqrt
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -294,10 +296,88 @@ def test_an_obj_name_that_would_not_read_back_is_refused() raises:
             _ = export_obj(built.scene, built.assets)
 
 
+def stl_file_normals(
+    bytes: List[UInt8], format: StlFormat
+) raises -> List[Float32]:
+    """Decode the stored facet values independently of the STL loader."""
+    var values = List[Float32]()
+    if format == STL_BINARY:
+        for face in range((len(bytes) - 84) // 50):
+            for axis in range(3):
+                var word = UInt32(0)
+                for byte in range(4):
+                    word |= UInt32(
+                        bytes[84 + face * 50 + axis * 4 + byte]
+                    ) << UInt32(byte * 8)
+                values.append(bitcast[DType.float32](word))
+    else:
+        var text = String(unsafe_from_utf8=bytes)
+        for line in text.split("\n"):
+            var words = String(line).split()
+            if len(words) == 5 and words[0] == "facet":
+                for axis in range(3):
+                    values.append(Float32(Float64(String(words[2 + axis]))))
+    return values^
+
+
+def assert_stl_face_normal(
+    got: Vector3, a: Vector3, b: Vector3, c: Vector3
+) raises:
+    """Check the geometric normal in higher precision than the exporter."""
+    # Promote before subtracting: do not repeat Vector3's Float32 arithmetic
+    # as the oracle. FMA contraction can round that arithmetic differently
+    # at separate call sites, even on the same machine.
+    var ux = Float64(c.x) - Float64(b.x)
+    var uy = Float64(c.y) - Float64(b.y)
+    var uz = Float64(c.z) - Float64(b.z)
+    var vx = Float64(a.x) - Float64(b.x)
+    var vy = Float64(a.y) - Float64(b.y)
+    var vz = Float64(a.z) - Float64(b.z)
+    var nx = uy * vz - uz * vy
+    var ny = uz * vx - ux * vz
+    var nz = ux * vy - uy * vx
+    var length = sqrt(nx * nx + ny * ny + nz * nz)
+    # For Built's well-conditioned facets, enumerating fused/unfused cross
+    # products and squared norms gives less than one Float32 epsilon of
+    # component error against this Float64 oracle. Four epsilons leave a
+    # small platform guard, not a general bound for near-degenerate faces.
+    # Keep relative tolerance zero, including for components close to zero.
+    comptime normal_tolerance = Float64(4 * 1.1920928955078125e-7)
+    assert_almost_equal(
+        Float64(got.x), nx / length, atol=normal_tolerance, rtol=0
+    )
+    assert_almost_equal(
+        Float64(got.y), ny / length, atol=normal_tolerance, rtol=0
+    )
+    assert_almost_equal(
+        Float64(got.z), nz / length, atol=normal_tolerance, rtol=0
+    )
+
+
+def test_stl_normal_oracle_checks_direction_length_and_finiteness() raises:
+    var a = Vector3(0, 0, 0)
+    var b = Vector3(1, 0, 0)
+    var c = Vector3(0, 1, 0)
+    assert_stl_face_normal(Vector3(0, 0, 1), a, b, c)
+    # Arithmetic roundoff is allowed, but geometric errors are not.
+    assert_stl_face_normal(Vector3(1.1920928955078125e-7, 0, 1), a, b, c)
+    for wrong in [
+        Vector3(0, 0, -1),
+        Vector3(0, 0, 0.5),
+        Vector3(1e-5, 0, 1),
+        Vector3(nan[DType.float32](), 0, 1),
+        Vector3(0, inf[DType.float32](), 1),
+    ]:
+        with assert_raises():
+            assert_stl_face_normal(wrong, a, b, c)
+
+
 def check_stl(format: StlFormat) raises:
     """Write the built scene as STL and read it back."""
     var built = Built()
     var bytes = export_stl(built.scene, built.assets, format)
+    var stored_normals = stl_file_normals(bytes, format)
+    assert_equal(len(stored_normals), 8 * 3)
     var model = parse_stl(bytes)
     var meshes = world_meshes(built.scene, built.assets)
     ref got = model.geometry
@@ -311,18 +391,22 @@ def check_stl(format: StlFormat) raises:
             var a = corner(mesh, face * 3)
             var b = corner(mesh, face * 3 + 1)
             var c = corner(mesh, face * 3 + 2)
-            var normal = c - b
-            normal.cross(a - b)
-            normal.normalize()
+            assert_stl_face_normal(normals.vector3(at), a, b, c)
             for point in [a, b, c]:
                 var read = positions.vector3(at)
                 assert_equal(read.x, point.x)
                 assert_equal(read.y, point.y)
                 assert_equal(read.z, point.z)
-                var turned = normals.vector3(at)
-                assert_equal(turned.x, normal.x)
-                assert_equal(turned.y, normal.y)
-                assert_equal(turned.z, normal.z)
+                # Serialization is lossless: each corner must preserve the
+                # exact stored Float32 bits, independently of the geometric
+                # normal's arithmetic tolerance above.
+                for axis in range(3):
+                    assert_equal(
+                        bitcast[DType.uint32](normals.component(at, axis)),
+                        bitcast[DType.uint32](
+                            stored_normals[(at // 3) * 3 + axis]
+                        ),
+                    )
                 at += 1
 
 

@@ -22,7 +22,9 @@ A lattice coordinate is reduced modulo 256 without a conversion to a 32-bit
 integer, which gives JavaScript's `& 255` for every finite input.
 
 **Differences from three.js.** A coordinate that is not finite is refused:
-three.js returns `NaN` for it. `SimplexNoise` takes a `SeededRandom`, three.js's
+three.js returns `NaN` for it. A finite input whose simplex lattice
+transform overflows is also refused before integer indexing.
+`SimplexNoise` takes a `SeededRandom`, three.js's
 `MathUtils.seededRandom` generator. three.js takes any object with a
 `random()` method and uses `Math.random` by default, which cannot be seeded.
 """
@@ -787,6 +789,12 @@ def _check_finite(value: Float64) raises:
         raise Error("A noise coordinate must be a finite number")
 
 
+def _check_lattice(value: Float64) raises:
+    """Refuse an overflowing skew or unskew before integer indexing."""
+    if not isfinite(value):
+        raise Error("A noise lattice transform must be finite")
+
+
 def _wrap(cell: Float64) -> Int:
     """Return a whole number modulo 256, JavaScript's `cell & 255`.
 
@@ -1071,7 +1079,7 @@ struct SimplexNoise(Copyable, Movable):
             The noise value, in the range from -1 to 1.
 
         Raises:
-            Error: If a coordinate is not finite.
+            Error: If a coordinate or its lattice transform is not finite.
         """
         _check_finite(xin)
         _check_finite(yin)
@@ -1081,6 +1089,9 @@ struct SimplexNoise(Copyable, Movable):
         var j = floor(yin + s)
         var g2 = (3.0 - sqrt(3.0)) / 6.0
         var t = _mul(i + j, g2)
+        # Any nonfinite cell also makes this sum nonfinite. Check before
+        # _wrap converts the cells to integer permutation indices.
+        _check_lattice(t)
         var x0 = xin - (i - t)
         var y0 = yin - (j - t)
         var i1 = 0
@@ -1117,7 +1128,7 @@ struct SimplexNoise(Copyable, Movable):
             The noise value, just inside the range from -1 to 1.
 
         Raises:
-            Error: If a coordinate is not finite.
+            Error: If a coordinate or its lattice transform is not finite.
         """
         _check_finite(xin)
         _check_finite(yin)
@@ -1129,6 +1140,7 @@ struct SimplexNoise(Copyable, Movable):
         var k = floor(zin + s)
         var g3 = 1.0 / 6.0
         var t = _mul(i + j + k, g3)
+        _check_lattice(t)
         var x0 = xin - (i - t)
         var y0 = yin - (j - t)
         var z0 = zin - (k - t)
@@ -1231,7 +1243,7 @@ struct SimplexNoise(Copyable, Movable):
             The noise value, in the range from -1 to 1.
 
         Raises:
-            Error: If a coordinate is not finite.
+            Error: If a coordinate or its lattice transform is not finite.
         """
         _check_finite(x)
         _check_finite(y)
@@ -1245,6 +1257,7 @@ struct SimplexNoise(Copyable, Movable):
         var k = floor(z + s)
         var l = floor(w + s)
         var t = _mul(i + j + k + l, g4)
+        _check_lattice(t)
         var x0 = x - (i - t)
         var y0 = y - (j - t)
         var z0 = z - (k - t)

@@ -157,9 +157,25 @@ def test_muscle_dimensions_reject_non_finite_scalars() raises:
         foot.scale = bad
         with assert_raises():
             foot.validate()
+        foot = foot_muscle_dimensions(person)
+        foot.k = bad
+        with assert_raises(contains="blend radius"):
+            foot.validate()
+        foot = foot_muscle_dimensions(person)
+        foot.epsilon = bad
+        with assert_raises(contains="gradient step"):
+            foot.validate()
         var pelvis = pelvis_muscle_dimensions(person)
         pelvis.scale = bad
         with assert_raises():
+            pelvis.validate()
+        pelvis = pelvis_muscle_dimensions(person)
+        pelvis.k = bad
+        with assert_raises(contains="blend radius"):
+            pelvis.validate()
+        pelvis = pelvis_muscle_dimensions(person)
+        pelvis.epsilon = bad
+        with assert_raises(contains="gradient step"):
             pelvis.validate()
         var torso = torso_muscle_dimensions(person)
         torso.scale = bad

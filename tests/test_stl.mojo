@@ -478,5 +478,26 @@ def test_a_read_model_renders() raises:
     assert_true(drawn > 10, "the tetrahedron did not draw")
 
 
+def test_ascii_utf8_bom_is_only_a_leading_encoding_marker() raises:
+    var text = chr(0xFEFF) + one_facet()
+    var from_text = parse_stl_text(text)
+    var bytes = ascii_bytes(text)
+    assert_false(is_binary_stl(bytes))
+    var from_bytes = parse_stl(bytes)
+    assert_equal(from_text.geometry.vertex_count(), 3)
+    assert_equal(from_bytes.geometry.vertex_count(), 3)
+    assert_equal(from_bytes.solids[0].name, "thing")
+    assert_equal(
+        from_bytes.geometry.clone_attribute(String(POSITION)).packed(),
+        from_text.geometry.clone_attribute(String(POSITION)).packed(),
+    )
+    # An embedded BOM remains data, rather than being removed globally.
+    with assert_raises(contains="word STL does not have"):
+        _ = parse_stl_text(one_facet() + chr(0xFEFF) + "solid x\nendsolid x\n")
+    var binary = one_face(chr(0xFEFF) + "solid binary")
+    assert_true(is_binary_stl(binary))
+    assert_equal(parse_stl(binary).geometry.vertex_count(), 3)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

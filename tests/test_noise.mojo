@@ -13,8 +13,8 @@ compared exactly: the port computes in `Float64` in three.js's order.
 
 from math.noise import ImprovedNoise, SimplexNoise
 from math.utils import SeededRandom
-from std.math import inf, nan
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.math import inf, isfinite, nan
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def simplex() -> SimplexNoise:
@@ -127,6 +127,44 @@ def test_simplex_refuses_what_is_not_a_number() raises:
         _ = s.noise4d(0, 0, bad, 0)
     with assert_raises(contains="finite"):
         _ = s.noise4d(0, 0, 0, bad)
+
+
+def test_simplex_refuses_overflowing_finite_lattice_transforms() raises:
+    var noise = simplex()
+    # The first cases overflow while skewing. The second cases have a
+    # finite initial sum but overflow the unskew sum of lattice cells.
+    for coordinate in [Float64(1e308), Float64(8e307)]:
+        with assert_raises(contains="lattice"):
+            _ = noise.noise(coordinate, coordinate)
+    with assert_raises(contains="lattice"):
+        _ = noise.noise3d(1e308, 1e308, 1e308)
+    with assert_raises(contains="lattice"):
+        _ = noise.noise3d(1e308, 0, 0)
+    for coordinate in [Float64(1e308), Float64(4e307)]:
+        with assert_raises(contains="lattice"):
+            _ = noise.noise4d(coordinate, coordinate, coordinate, coordinate)
+    with assert_raises(contains="lattice"):
+        _ = noise.noise(-1e308, -1e308)
+
+
+def test_large_representable_noise_cells_stay_finite() raises:
+    var noise = simplex()
+    for coordinate in [
+        Float64(1e20),
+        Float64(-1e20),
+        Float64(1e100),
+        Float64(-1e100),
+    ]:
+        assert_true(isfinite(noise.noise(coordinate, coordinate)))
+        assert_true(isfinite(noise.noise3d(coordinate, coordinate, coordinate)))
+        assert_true(
+            isfinite(
+                noise.noise4d(coordinate, coordinate, coordinate, coordinate)
+            )
+        )
+    # Perlin does not skew the coordinates, so its modulo remains safe
+    # across the full finite input range at integer lattice coordinates.
+    assert_equal(ImprovedNoise().noise(1e308, -1e308, 1e308), Float64(0))
 
 
 def main() raises:

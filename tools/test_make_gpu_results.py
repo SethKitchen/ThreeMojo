@@ -3,10 +3,12 @@
 """Run the actual GPU Make recipes with a harmless command stub."""
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,8 +40,26 @@ class GpuRecipeTests(unittest.TestCase):
                 'MOJOFLAGS :=\nGPU_HOST_TESTS := host.mojo\n'
                 'GPU_TESTS := device.mojo host.mojo\nTEST_GPU_HOST_STAMP := host\n'
                 'stamp = touch passed-stamp\n' + recipe + '\n')
-            result = subprocess.run(['make', '-s', target], cwd=root, text=True, capture_output=True)
+            # A parent `make MOJO=...` exports overrides to every child.
+            # This fixture owns its Makefile and must use its harmless stub.
+            environment = {key: value for key, value in os.environ.items()
+                           if key not in {'MAKEFLAGS', 'MFLAGS', 'MAKEOVERRIDES',
+                                          'MAKELEVEL', 'MAKEFILES', 'GNUMAKEFLAGS'}}
+            result = subprocess.run(['make', '-s', target], cwd=root, text=True,
+                                    capture_output=True, env=environment)
             return result, (root / 'passed-stamp').exists()
+
+    def test_outer_make_overrides_cannot_replace_the_fixture_compiler(self):
+        with patch.dict(os.environ, {
+            'MAKEFLAGS': '-- MOJO=nonexistent-outer-compiler',
+            'MAKEOVERRIDES': 'MOJO=nonexistent-outer-compiler',
+            'MFLAGS': '-e', 'GNUMAKEFLAGS': '-e',
+            'MAKEFILES': 'nonexistent-outer-include', 'MAKELEVEL': '7',
+        }):
+            for device in (False, True):
+                result, stamped = self.run_recipe(device, PASS, 0)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(stamped, not device)
 
     def test_empty_failed_and_malformed_output_cannot_pass(self):
         for device in (False, True):

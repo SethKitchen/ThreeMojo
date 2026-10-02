@@ -1049,6 +1049,79 @@ def _link(mut grp: GlobalRoutePlanner, a: Int, b: Int, length: Int) raises:
     grp._edges[e].length = length
 
 
+def _linear_route(
+    grp: GlobalRoutePlanner, source: Int, target: Int
+) raises -> List[RouteNodeId]:
+    """The previous linear-selection route search, used only as an oracle."""
+    # A* with the straight-line heuristic. The open list holds
+    # (cost, node) entries; the lowest cost comes out first, and of
+    # equal costs the lowest node id. A node comes out once; a later
+    # entry for it is skipped.
+    var out = List[RouteNodeId]()
+    var open = List[Tuple[Float64, Int]]()
+    var g = Dict[Int, Float64]()
+    var came_from = Dict[Int, Int]()
+    var closed = Dict[Int, Bool]()
+    g[source] = 0.0
+    open.append((grp._heuristic(source, target), source))
+    while len(open) > 0:
+        var best = 0
+        for i in range(1, len(open)):
+            if open[i][0] < open[best][0] or (
+                open[i][0] == open[best][0] and open[i][1] < open[best][1]
+            ):
+                best = i
+        var current = open.pop(best)[1]
+        if current == target:
+            var nodes = List[Int]()
+            nodes.append(current)
+            var n = current
+            while n != source:
+                n = came_from[n]
+                nodes.append(n)
+            # The list holds the target at least.
+            for i in range(len(nodes) - 1, -1, -1):  # pragma: no branch
+                out.append(RouteNodeId(nodes[i]))
+            return out^
+        if current in closed:
+            continue
+        closed[current] = True
+        var g_current = g[current]
+        for e in grp._nodes[grp._node_index[current]].out_edges:
+            var neighbor = grp._edges[e].target.value
+            var tentative = g_current + Float64(grp._edges[e].length)
+            var known = g.get(neighbor)
+            if not Bool(known) or tentative < known.value():
+                g[neighbor] = tentative
+                came_from[neighbor] = current
+                open.append(
+                    (
+                        tentative + grp._heuristic(neighbor, target),
+                        neighbor,
+                    )
+                )
+    return out^
+
+
+def test_heap_routes_match_linear_search_on_generated_graphs() raises:
+    for seed in range(8):
+        var grp = _graph()
+        for i in range(32):
+            _ = _node(grp, Float64(i) * 0.001, 0)
+        for a in range(32):
+            for b in range(32):
+                if a == b or (b == 31 and seed % 4 == 0):
+                    continue
+                if (a * 7 + b * 13 + seed) % 11 < 2:
+                    _link(grp, a, b, 1 + (a * 3 + b + seed) % 9)
+        for start in range(4):
+            var want = _linear_route(grp, start, 31)
+            var got = grp._search(start, 31)
+            assert_equal(len(got), len(want))
+            for i in range(len(want)):
+                assert_equal(got[i].value, want[i].value)
+
+
 def test_search_ties_and_stale_entries() raises:
     # Ties: nodes 1 and 2 are both 1 away and 6.40 from the goal: the
     # lower id, 1, comes out first, though it was pushed second.

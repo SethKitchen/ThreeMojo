@@ -380,5 +380,43 @@ def test_the_sun_casts_a_shadow_where_the_camera_looks() raises:
     assert_true(lit > shaded + 30, "the sun cast no shadow")
 
 
+def test_nonfinite_constructor_intensity_keeps_the_scene_empty() raises:
+    var bad: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for intensity in bad:
+        var scene = Scene()
+        with assert_raises(contains="intensity must be finite"):
+            _ = SunLight(scene, intensity=intensity)
+        assert_equal(scene.count(), 0)
+        assert_equal(len(scene.lights), 0)
+
+
+def test_overflowing_cascade_positions_do_not_change_the_scene() raises:
+    var scene = Scene()
+    var sun = SunLight(scene)
+    var camera = a_short_camera()
+    sun.update(scene, camera)
+    var first = scene.lights[sun.lights[0]]
+    var second = scene.lights[sun.lights[1]]
+    var before = scene.world_position(sun.nodes[0])
+    # This finite view placement overflows the Float32 sum of eight
+    # corners while fitting. Non-shadow-casting lights still need finite
+    # positions, and a failed fit must not partially update the scene.
+    camera.place(Vector3(1e38, 0, 5), Vector3(1e38, 0, 0))
+    with assert_raises(contains="cascade position must be finite"):
+        sun.update(scene, camera)
+    assert_equal(
+        scene.lights[sun.lights[0]].shadow.right.value, first.shadow.right.value
+    )
+    assert_equal(
+        scene.lights[sun.lights[1]].shadow.right.value,
+        second.shadow.right.value,
+    )
+    assert_at(scene.world_position(sun.nodes[0]), before.x, before.y, before.z)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

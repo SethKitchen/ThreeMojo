@@ -17,7 +17,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from geometries.surface_sampler import MeshSurfaceSampler, SurfaceSample
 from math.utils import SeededRandom
 from math.vector3 import Vector3
-from std.math import nan
+from std.math import inf, isfinite, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -368,6 +368,146 @@ def test_refusals() raises:
     none.build()
     with assert_raises(contains="weight"):
         _ = none.sample()
+
+
+def _triangle_at_scale(side: Float32, copies: Int = 1) raises -> BufferGeometry:
+    """A right triangle with a known area, repeated by index if needed."""
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        POSITION, BufferAttribute([0, 0, 0, side, 0, 0, 0, side, 0], 3)
+    )
+    var index = List[Int]()
+    for _ in range(copies):
+        index.extend([0, 1, 2])
+    geometry.set_index(index^)
+    return geometry^
+
+
+def test_each_used_vertex_weight_must_be_finite_and_nonnegative() raises:
+    """Positive neighbors cannot hide one invalid vertex's weight."""
+    for bad in [
+        Float32(-1),
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        for corner in range(3):
+            var geometry = _triangle_at_scale(1)
+            var weights: List[Float32] = [2, 2, 2]
+            weights[corner] = bad
+            geometry.set_attribute("weight", BufferAttribute(weights^, 1))
+            var sampler = MeshSurfaceSampler(geometry, SeededRandom(1))
+            sampler.set_weight_attribute(String("weight"))
+            with assert_raises(contains="vertex weight"):
+                sampler.build()
+    # An unused attribute entry has no effect on the sampled triangles.
+    var geometry = _triangle_at_scale(1)
+    geometry.set_attribute(
+        POSITION, BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 8, 8], 3)
+    )
+    geometry.set_attribute("weight", BufferAttribute([1, 1, 1, -1], 1))
+    var sampler = MeshSurfaceSampler(geometry, SeededRandom(1))
+    sampler.set_weight_attribute(String("weight"))
+    sampler.build()
+    assert_equal(sampler.distribution[0], Float32(1.5))
+
+
+def test_positive_face_weights_must_fit_float32_without_disappearing() raises:
+    """Finite area or weight cannot overflow or round to a zero share."""
+    for side in [Float32(1e20), Float32(1e-30)]:
+        var sampler = MeshSurfaceSampler(
+            _triangle_at_scale(side), SeededRandom(1)
+        )
+        with assert_raises(contains="Float32"):
+            sampler.build()
+        assert_equal(len(sampler.distribution), 0)
+    var geometry = _triangle_at_scale(2)
+    geometry.set_attribute("weight", BufferAttribute([1e38, 1e38, 1e38], 1))
+    var sampler = MeshSurfaceSampler(geometry, SeededRandom(1))
+    sampler.set_weight_attribute(String("weight"))
+    with assert_raises(contains="Float32"):
+        sampler.build()
+    # A representable subnormal share stays usable.
+    var tiny = MeshSurfaceSampler(_triangle_at_scale(1e-20), SeededRandom(1))
+    tiny.build()
+    assert_true(tiny.distribution[0] > 0)
+    assert_true(isfinite(tiny.distribution[0]))
+    var sample = tiny.sample()
+    assert_true(isfinite(sample.position.x) and isfinite(sample.position.y))
+    assert_almost_equal(sample.normal.z, Float32(1), atol=1e-6)
+
+
+def test_cumulative_weights_must_keep_distinct_finite_intervals() raises:
+    """Individually representable weights can still make an unusable CDF."""
+    var huge = MeshSurfaceSampler(_triangle_at_scale(1e19, 8), SeededRandom(1))
+    with assert_raises(contains="intervals"):
+        huge.build()
+    assert_equal(len(huge.distribution), 0)
+    var mixed = BufferGeometry()
+    mixed.set_attribute(
+        POSITION,
+        BufferAttribute(
+            [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1e-6, 0, 1, 0, 1e-6, 1],
+            3,
+        ),
+    )
+    var sampler = MeshSurfaceSampler(mixed, SeededRandom(1))
+    with assert_raises(contains="intervals"):
+        sampler.build()
+    assert_equal(len(sampler.distribution), 0)
+
+
+def test_zero_weight_faces_remain_excluded() raises:
+    var geometry = _triangle_at_scale(1)
+    geometry.set_index([0, 0, 0, 0, 1, 2, 1, 1, 1])
+    var sampler = MeshSurfaceSampler(geometry, SeededRandom(11))
+    sampler.build()
+    assert_equal(sampler.distribution[0], Float32(0))
+    assert_equal(sampler.distribution[1], Float32(0.5))
+    assert_equal(sampler.distribution[2], Float32(0.5))
+    for _ in range(32):
+        assert_equal(sampler.sample().face, 1)
+
+
+def test_failed_rebuild_clears_the_previous_distribution() raises:
+    var sampler = MeshSurfaceSampler(_triangle_at_scale(1), SeededRandom(1))
+    sampler.geometry.set_attribute("weight", BufferAttribute([1, 1, 1], 1))
+    sampler.set_weight_attribute(String("weight"))
+    sampler.build()
+    assert_equal(len(sampler.distribution), 1)
+    sampler.geometry.set_attribute("weight", BufferAttribute([-1, 2, 2], 1))
+    with assert_raises(contains="vertex weight"):
+        sampler.build()
+    assert_equal(len(sampler.distribution), 0)
+    with assert_raises(contains="Build"):
+        _ = sampler.sample()
+    sampler.geometry.set_attribute("weight", BufferAttribute([1, 1, 1], 1))
+    sampler.build()
+    assert_equal(sampler.sample().face, 0)
+
+
+def test_nonfinite_positions_refuse_rebuild_and_clear_distribution() raises:
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        for component in range(9):
+            var sampler = MeshSurfaceSampler(
+                _triangle_at_scale(1), SeededRandom(1)
+            )
+            sampler.build()
+            assert_equal(len(sampler.distribution), 1)
+            var positions: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0]
+            positions[component] = bad
+            sampler.geometry.set_attribute(
+                POSITION, BufferAttribute(positions^, 3)
+            )
+            with assert_raises(contains="triangle's weight"):
+                sampler.build()
+            assert_equal(len(sampler.distribution), 0)
+            with assert_raises():
+                _ = sampler.sample()
 
 
 def main() raises:

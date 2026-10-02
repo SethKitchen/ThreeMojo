@@ -107,9 +107,10 @@ OUT_DIR := out
 # and checks everything on a push to main.
 #
 # Coverage stays exact for each module it measures: every suite that can
-# reach a measured module runs. What it cannot see is a test change that
-# lowers the coverage of a module the change did not reach. The full run on
-# main sees that.
+# reach a measured module runs. A changed test or helper also measures the
+# library imported by its affected tests, so lost coverage is checked before
+# merge rather than deferred to the full run on main. Removed test imports
+# conservatively select the full check, including their former dependencies.
 AFFECTED :=
 COMPILE_FAIL_RUN := $(COMPILE_FAIL)
 ifneq ($(strip $(AFFECTED)),)
@@ -170,7 +171,7 @@ COVERAGE_TESTS := $(CPU_TESTS)
 
 # CI splits the suites over runners that work at once: `SHARD=i/n` keeps
 # group i of n, balanced by the source each suite imports, since a suite's
-# time is almost all compilation. See tools/shard.py. Only the suites split:
+# CPU time is mostly compilation. See tools/shard.py. Only the suites split:
 # formatting, lint, the docs and the compile-fail cases run whole, on one
 # runner. `coverage-report` reads the captures of every group, so it checks
 # that each suite of the whole list left one.
@@ -183,7 +184,19 @@ ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
 $(error tools/shard.py could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
 endif
 endif
-COVERAGE_SUITES := $(filter $(TEST_SUITES),$(COVERAGE_TESTS))
+# Instrumented runtime can outweigh compilation by minutes. Keep CPU
+# placement unchanged; coverage uses measured compile-and-run costs and
+# starts the longest captures first. Every affected suite is still present.
+COVERAGE_SUITES := $(COVERAGE_TESTS)
+ifneq ($(strip $(SHARD)),)
+ifneq ($(filter coverage coverage-capture,$(MAKECMDGOALS)),)
+COVERAGE_SUITES := $(shell python3 tools/coverage_shard.py $(SHARD) $(COVERAGE_TESTS) \
+                       || echo SHARD_ERROR)
+ifneq ($(filter SHARD_ERROR,$(COVERAGE_SUITES)),)
+$(error tools/coverage_shard.py could not split coverage suites for SHARD=$(SHARD))
+endif
+endif
+endif
 
 # At least a minute: a run of a few affected suites still pays a compile
 # that takes longer than a second.
@@ -217,11 +230,12 @@ endif
 # is no accelerator and the suite still exits successfully, so a cached run
 # without one would keep reporting success on a machine that has since grown a
 # GPU. Compilation is deterministic given the sources and the compiler, so
-# `lint-gpu` is still cached; only running against the device is not.
+# `compile-gpu` and `lint-gpu` stay cached; device execution does not.
 # test-gpu has no stamp on purpose -- see the target.
 TEST_CPU_STAMP := $(CACHE_DIR)/test-cpu-$(HASH)
 TEST_GPU_HOST_STAMP := $(CACHE_DIR)/test-gpu-host-$(HASH)
 LINT_CPU_STAMP := $(CACHE_DIR)/lint-cpu-$(HASH)
+COMPILE_GPU_STAMP := $(CACHE_DIR)/compile-gpu-$(HASH)
 LINT_GPU_STAMP := $(CACHE_DIR)/lint-gpu-$(HASH)
 FMT_STAMP  := $(CACHE_DIR)/fmt-$(HASH)
 COV_STAMP  := $(CACHE_DIR)/coverage-$(HASH)
@@ -237,7 +251,7 @@ endef
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
         docs-check wiki-publish test-tools \
         coverage-instrument coverage-capture coverage-report \
-        lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
+        lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
         clean clean-images optimize-images draco-export-check
 
@@ -248,6 +262,7 @@ help:
 	@echo "  make check-cpu  the standard-library-only half ($(words $(CPU_TESTS)) suites)"
 	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suites)"
 	@echo "  make test-gpu-host  the MAX backend's layout suites, no GPU needed"
+	@echo "  make compile-gpu  build GPU entry points without running them"
 	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
 	@echo "  make lint       compile with warnings promoted to errors, but the suites"
@@ -264,7 +279,7 @@ help:
 	@echo "  make viewer     orbit a scene in this terminal with the mouse"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
-	@echo "  make bench-examples  each example vs three.js, and vs Mojo 1.0"
+	@echo "  make bench-examples  cataloged examples vs three.js and Mojo 1.0"
 	@echo "  make draco-export-check  every Draco export against three.js (not in check)"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
@@ -279,9 +294,9 @@ check: check-cpu check-gpu
 # true.
 check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools
 
-# The half that needs MAX and, to be worth anything, a GPU. The status line
+# The complete GPU check needs MAX and an accelerator. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
-# for one that ran them.
+# for one that ran them. Use compile-gpu for a build-only check without a GPU.
 check-gpu: gpu-status test-gpu-host
 	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
@@ -407,14 +422,23 @@ $(LINT_CPU_STAMP):
 	@echo "No warnings (CPU)."
 	@$(call stamp,lint-cpu)
 
-lint-gpu: $(LINT_GPU_STAMP)
-$(LINT_GPU_STAMP):
+# Compile all maintained GPU entry points without opening a device. A
+# machine without a GPU must select an architecture, for example:
+# make compile-gpu MOJOFLAGS="-I . --target-accelerator=sm_80"
+# Keep that flag out of mojo doc: the pinned toolchain does not accept it.
+compile-gpu: $(COMPILE_GPU_STAMP)
+$(COMPILE_GPU_STAMP):
 	@printf '%s\n' $(GPU_ENTRY_POINTS) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
 	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
+	@echo "GPU entry points compiled (not run)."
+	@$(call stamp,compile-gpu)
+
+lint-gpu: $(LINT_GPU_STAMP)
+$(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 	@printf '%s\n' $(GPU_LIB_SOURCES) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$1" \

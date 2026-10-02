@@ -96,10 +96,28 @@ def test_sensor_overrides_refresh_alpha_and_preserve_coverage_settings() raises:
     assert_equal(flat.visible, False)
     assert_equal(view.assets.textures.get(flat.map).data[0], 1)
     assert_equal(view.assets.textures.get(flat.map).data[3], 0.5)
+    # Distinct source textures must keep distinct coverage maps, even
+    # when the lookup passes another cached source first.
+    var other_image = float_texture(1, 1, [Float32(0.6), 0.7, 0.8, 0.25])
+    var other_map = view.assets.textures.add(other_image^)
+    var other_id = view.assets.materials.add(
+        Material(Color(80, 90, 100), map=other_map, alpha_test=0.25)
+    )
+    var other_flat_id = view._sensor_material(other_id, ROAD)
+    var other_flat = view.assets.materials.get(other_flat_id)
+    assert_true(other_flat.map != flat.map)
+    assert_equal(view.assets.textures.get(other_flat.map).data[0], 1)
+    assert_equal(view.assets.textures.get(other_flat.map).data[3], 0.25)
+    var texture_count = view.assets.textures.count()
+    assert_equal(view._sensor_material(other_id, ROAD), other_flat_id)
+    assert_equal(view.assets.textures.count(), texture_count)
     view.assets.textures.textures[map.value].data[3] = 0.75
     view.coverage_read.clear()
     assert_equal(view._sensor_material(id, ROAD), first)
     assert_equal(view.assets.textures.get(flat.map).data[3], 0.75)
+    assert_equal(view._sensor_material(other_id, ROAD), other_flat_id)
+    assert_equal(view.assets.textures.get(other_flat.map).data[3], 0.25)
+    assert_equal(view.assets.textures.count(), texture_count)
     var hashed = Material(Color(255, 255, 255))
     hashed.alpha_hash = True
     var hash_id = view.assets.materials.add(hashed)

@@ -45,16 +45,27 @@ from core.buffer_geometry import (
 )
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
+from math.norm import normalized2
 from math.vector2 import Vector2
-from std.math import cos, sin, sqrt
+from std.math import cos, isfinite, sin
 from units.si import Angle, RADIAN
 
 
 def _unit(x: Float32, y: Float32) -> Vector2:
     """Return a direction in the profile's plane made unit length. The
     caller has checked the direction is not zero."""
-    var length = sqrt(x * x + y * y)
-    return Vector2(x / length, y / length)
+    var direction = normalized2(x, y)
+    return Vector2(direction[0], direction[1])
+
+
+def _wide_unit(before: Vector2, after: Vector2) raises -> Vector2:
+    """Normalize the endpoint difference before narrowing its components."""
+    var x = Float64(after.y) - Float64(before.y)
+    var y = Float64(before.x) - Float64(after.x)
+    if x == 0 and y == 0:
+        raise Error("A lathe's profile cannot turn straight back")
+    var direction = normalized2(x, y)
+    return Vector2(Float32(direction[0]), Float32(direction[1]))
 
 
 def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
@@ -72,24 +83,44 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
 
     Raises:
         Error: If a point's two segments face exactly opposite ways, which
-            leaves it no direction to face.
+            leaves it no direction to face, or the last unnormalized normal
+            cannot fit in Float32.
     """
     var normals = List[Vector2]()
     var previous = Vector2(0, 0)
     for index in range(len(points)):  # pragma: no branch
         if index == len(points) - 1:
+            # Checked radii are nonnegative Float32 values, so their
+            # difference (previous.y) fits in Float32.
+            if not isfinite(previous.x):
+                raise Error(
+                    "A lathe's final profile normal must fit in Float32"
+                )
             normals.append(previous)
             continue
         var dx = points[index + 1].x - points[index].x
         var dy = points[index + 1].y - points[index].y
         var ahead = Vector2(dy, -dx)
         if index == 0:
-            normals.append(_unit(ahead.x, ahead.y))
+            # Only the signed height difference can overflow: both radii
+            # lie between zero and the largest finite Float32.
+            if isfinite(ahead.x):
+                normals.append(_unit(ahead.x, ahead.y))
+            else:
+                normals.append(_wide_unit(points[0], points[1]))
         else:
             var summed = Vector2(ahead.x + previous.x, ahead.y + previous.y)
-            if summed.x == 0 and summed.y == 0:
-                raise Error("A lathe's profile cannot turn straight back")
-            normals.append(_unit(summed.x, summed.y))
+            if (
+                not isfinite(summed.x)
+                or not isfinite(summed.y)
+                or (summed.x == 0 and summed.y == 0)
+            ):
+                # The two raw segment directions telescope to the outer
+                # endpoint difference. This also distinguishes an exact
+                # return from cancellation in rounded segment differences.
+                normals.append(_wide_unit(points[index - 1], points[index + 1]))
+            else:
+                normals.append(_unit(summed.x, summed.y))
         previous = ahead
     return normals^
 
@@ -130,14 +161,17 @@ def lathe(
         `u` runs around and `v` up the profile, one point per equal step.
 
     Raises:
-        Error: If there are fewer than two points, a point has a negative
-            `x`, two consecutive points coincide, the profile turns
+        Error: If there are fewer than two points, a point is not finite
+            or has a negative `x`, two consecutive points coincide, the profile turns
             straight back to the point before, there are fewer than one
-            segment, or the sweep is not positive or is more than a turn.
+            segment, the final profile normal cannot fit in Float32, or the
+            sweep is not positive or is more than a turn.
     """
     if len(points) < 2:
         raise Error("A lathe needs a profile of at least two points")
     for index in range(len(points)):  # pragma: no branch
+        if not isfinite(points[index].x) or not isfinite(points[index].y):
+            raise Error("A lathe's profile points must be finite")
         if points[index].x < 0:
             raise Error("A lathe's profile lies on one side of the axis")
     for index in range(len(points) - 1):  # pragma: no branch

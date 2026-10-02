@@ -33,7 +33,7 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from std.math import acos, pi, sqrt
+from std.math import acos, isfinite, pi, sqrt
 from units.si import Length, METER
 
 
@@ -168,9 +168,17 @@ def rounded_box(
         left, top, bottom, front, back.
 
     Raises:
-        Error: If an extent is not positive, `segments` is less than one, or
-            the radius is negative.
+        Error: If an extent is not finite and positive, `segments` is less
+            than one, or the radius is not finite or is negative.
     """
+    if (
+        not isfinite(width.value)
+        or not isfinite(height.value)
+        or not isfinite(depth.value)
+    ):
+        raise Error("A rounded box needs finite extents")
+    if not isfinite(radius.value):
+        raise Error("A rounded box needs a finite radius")
     if width.value <= 0 or height.value <= 0 or depth.value <= 0:
         raise Error("A rounded box needs positive extents")
     if segments < 1:

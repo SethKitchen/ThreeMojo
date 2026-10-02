@@ -30,6 +30,10 @@ knots that fall anywhere, knots that are not finite, and a count of knots
 that does not match the control points and the degree. Those make
 three.js read past the end of its arrays.
 
+Weighted derivatives above the polynomial degree are zero in every component.
+three.js fills the extra rows with a weight of one. This port uses zero,
+so constant curves have zero tangents and higher derivatives stay correct.
+
 three.js's `NURBSCurve` maps `t` onto the knots from `startKnot` to
 `endKnot` for a point, and onto all of the knots for a tangent. So a
 curve given a start or an end knot has its tangents in the wrong place.
@@ -246,8 +250,8 @@ def bspline_derivatives(
         nd: The highest derivative wanted.
 
     Returns:
-        `nd + 2` weighted points. Those past the degree are `(0, 0, 0,
-        1)`, as three.js's `new Vector4( 0, 0, 0 )` makes them.
+        `nd + 2` weighted points. Those past the degree are zero in all
+        four components, including the homogeneous weight derivative.
     """
     var du = nd if nd < p else p
     var ck = List[Point4]()
@@ -270,7 +274,7 @@ def bspline_derivatives(
         ck.append(point)
     for _ in range(du + 1, nd + 2):  # pragma: no branch
         # `du` is at most `nd`, so this runs once at least.
-        ck.append(Point4(0, 0, 0, 1))
+        ck.append(Point4(0))
     return ck^
 
 
@@ -330,7 +334,8 @@ def nurbs_derivatives(
         nd: The highest derivative wanted.
 
     Returns:
-        The point, then its derivatives.
+        The point, then its derivatives. The list has `nd + 2` entries,
+        matching `bspline_derivatives`, including one extra derivative.
     """
     return rational_curve_derivatives(
         bspline_derivatives(p, knots, points, u, nd)
@@ -456,14 +461,18 @@ def _checked_knots(
         A copy of the knots.
 
     Raises:
-        Error: If the degree is negative, a knot is not finite, the knots
-            fall anywhere, or there are not `points + degree + 1` of them.
+        Error: If the degree is negative or not below the point count,
+            a knot is nonfinite, the knots fall, their count is incorrect,
+            or the active knot interval has zero width.
     """
     if degree < 0:
         raise Error("A NURBS degree cannot be negative")
     if points < 1:
         raise Error("A NURBS spline needs one control point at least")
-    if len(knots) != points + degree + 1:
+    if degree >= points:
+        raise Error("A NURBS degree must be below its control point count")
+    # Subtract from the existing length instead of adding caller counts.
+    if len(knots) <= points or len(knots) - points - 1 != degree:
         raise Error(
             "A NURBS spline needs as many knots as its control points and"
             " its degree and one more"
@@ -474,6 +483,8 @@ def _checked_knots(
             raise Error("A NURBS knot must be finite")
         if index > 0 and knots[index] < knots[index - 1]:
             raise Error("NURBS knots cannot fall")
+    if knots[degree] >= knots[points]:
+        raise Error("A NURBS active knot interval must have positive width")
     return knots.copy()
 
 
@@ -529,7 +540,7 @@ struct NURBSCurve(SpaceCurve):
             start_knot: The knot `t` of zero maps to. The first unless
                 said otherwise.
             end_knot: The knot `t` of one maps to. The last unless said
-                otherwise.
+                otherwise. This index can equal or precede `start_knot`.
 
         Raises:
             Error: If the knots do not fit the degree and the points, a

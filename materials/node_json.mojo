@@ -19,6 +19,7 @@ and leave this one alone.
 from exporters.json_writer import JsonWriter
 from loaders.json import JsonDocument
 from materials.nodes import PROGRAM_HEADER, NodeProgram, ValueType
+from materials.node_validation import validate_surface_program
 
 
 @fieldwise_init
@@ -183,6 +184,7 @@ def read_node_program(
             document.integer(document.get(entry, "width"))
         )
     program.reads_scene = document.boolean(document.get(item, "readsScene"))
+    validate_surface_program(program)
     # Every read names nothing until the loader says which texture it is.
     for index in range(len(program.texture_offsets)):
         program.code[program.texture_offsets[index]] = -1
