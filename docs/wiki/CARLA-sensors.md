@@ -1,6 +1,6 @@
 # CARLA sensors
 
-The CARLA extension gives every CARLA sensor. `SensorManager` attaches a sensor to a world's actor and gives its measurements on each `tick`. Each sensor reads its settings from its actor's attributes, which come from the world's blueprint library.
+The CARLA extension gives every CARLA sensor. `SensorManager` attaches a sensor to a world's actor and gives its measurements on each `tick`. Each sensor reads its settings from its actor's attributes, which come from the world's blueprint library. If `spawn_sensor` fails, the world and the manager keep their prior records. The failed sensor does not consume an actor id.
 
 The port follows the CARLA source at commit `1360bb9`. The records and their bytes come from `LibCarla/source/carla/sensor`. What each sensor measures comes from CARLA's simulator plugin, `Carla/Sensor` and `Carla/Sensor/V2X`. See [CARLA world](CARLA-world) for the world and [CARLA](CARLA) for the RGB, depth and semantic cameras of a scene.
 

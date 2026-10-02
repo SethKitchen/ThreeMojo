@@ -68,7 +68,7 @@ control.throttle = 0.5
 world.apply_control(car, control)
 ```
 
-A spawn fails when the new vehicle's or walker's box meets the box of another vehicle or walker. `try_spawn_actor` returns None instead. A sensor or a prop can have a parent, and then its transform is in the parent's frame.
+A spawn fails when the new vehicle's or walker's box meets the box of another vehicle or walker. `try_spawn_actor` returns None instead. A failed spawn leaves the actor and physics lists unchanged and does not consume an actor id. Required vehicle attributes are checked before the world adds a body. A sensor or a prop can have a parent, and then its transform is in the parent's frame.
 
 The spawn points are the start of each lane of the map's topology, 0.5 m above the road. CARLA makes them so for a map that has none placed.
 
