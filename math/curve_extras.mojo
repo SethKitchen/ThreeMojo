@@ -135,8 +135,11 @@ struct ExtraCurve(SpaceCurve):
             The point, in meters.
 
         Raises:
-            Error: Never for a curve that was constructed.
+            Error: If the mutable kind is not valid. The parameter remains
+                unbounded, as in three.js.
         """
+        if not self.kind.is_valid():
+            raise Error("A named curve's kind must be one of the fourteen")
         var s = self.scale
         if self.kind == GRANNY_KNOT:
             var a = 2 * pi * t
@@ -222,7 +225,7 @@ struct ExtraCurve(SpaceCurve):
             var y = sin(3 * fi) * ring
             var z = 0.2 * sin(20 * fi)
             return point3(x, y, z) * s
-        # The constructor refused every other kind, so this is the last.
+        # The dispatch check refused every other kind, so this is the last.
         var fi = t * pi * 2
         var ring = 1 + 0.5 * (cos(5 * fi) + 0.4 * cos(20 * fi))
         var x = cos(4 * fi) * ring
@@ -241,7 +244,8 @@ struct ExtraCurve(SpaceCurve):
             The direction.
 
         Raises:
-            Error: Never for a curve that was constructed.
+            Error: If t is not finite or outside zero to one, or the mutable
+                kind is not valid.
         """
         return chord_tangent(self, t)
 

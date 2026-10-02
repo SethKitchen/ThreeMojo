@@ -84,6 +84,11 @@ or a `u` outside zero through one, which three.js clamps silently and
 which here says the caller has computed something wrong.
 """
 
+from math.curve_checks import (
+    check_curve_parameter,
+    curve_sample_count,
+    curve_count_product,
+)
 from math.vector2 import Vector2
 from std.math import cos, floor, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
@@ -266,7 +271,7 @@ def _catmull_rom_slope(
     return cubic + square + v0
 
 
-def u_to_t(table: List[Float32], u: Float32) -> Float32:
+def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
     """Return the `t` at which a curve has run `u` of its length.
 
     three.js's `getUtoTmapping`: find the two samples the distance falls
@@ -287,7 +292,14 @@ def u_to_t(table: List[Float32], u: Float32) -> Float32:
 
     Returns:
         The parameter at that distance, from zero through one.
+
+    Raises:
+        Error: If u is not finite or outside zero to one, or the table has
+            fewer than two entries.
     """
+    check_curve_parameter(Float64(u))
+    if len(table) < 2:
+        raise Error("A curve length table needs at least two entries")
     var last = len(table) - 1
     var target = u * table[last]
     var index = 1
@@ -453,6 +465,17 @@ struct Curve(Copyable, Movable):
         var s = sin(self.rotation)
         return Vector2(dx * c - dy * s, dx * s + dy * c)
 
+    def _validate(self) raises:
+        """Check mutable dispatch and storage in constant time."""
+        if not self.kind.is_valid():
+            raise Error("A curve needs a kind that exists")
+        var wanted = self.kind.control_count()
+        if wanted == 0:
+            if len(self.points) < 2:
+                raise Error("A spline needs at least two points")
+        elif len(self.points) != wanted:
+            raise Error("A curve's points must match its kind")
+
     def point(self, t: Float32) raises -> Vector2:
         """Return the point at `t` along this curve's own parameter.
 
@@ -464,10 +487,11 @@ struct Curve(Copyable, Movable):
             The point, in meters.
 
         Raises:
-            Error: If `t` falls outside zero through one.
+            Error: If `t` is not finite or falls outside zero through one,
+                or the mutable curve is not valid.
         """
-        if t < 0 or t > 1:
-            raise Error("A curve's t must lie from zero through one")
+        check_curve_parameter(Float64(t))
+        self._validate()
         if self.kind == LINE:
             # three.js's `LineCurve.getPoint`: the end itself at one, so a
             # closed path ends exactly where it began.
@@ -584,11 +608,12 @@ struct Curve(Copyable, Movable):
             The direction, of unit length.
 
         Raises:
-            Error: If `t` falls outside zero through one, or if the curve
+            Error: If `t` is not finite or outside zero through one, the
+                mutable curve is not valid, or the curve
                 turns back on itself at `t` and has no direction there.
         """
-        if t < 0 or t > 1:
-            raise Error("A curve's t must lie from zero through one")
+        check_curve_parameter(Float64(t))
+        self._validate()
         var slope = self._slope(t)
         if slope.length() == 0:
             raise Error("A curve has no direction where it turns back")
@@ -605,12 +630,12 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
-        if divisions < 1:
-            raise Error("A curve needs at least one division")
+        var sample_count = curve_sample_count(divisions)
         var out = List[Vector2]()
-        for index in range(divisions + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             out.append(self.point(Float32(index) / Float32(divisions)))
         return out^
 
@@ -625,7 +650,8 @@ struct Curve(Copyable, Movable):
             last the curve's whole length.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
         var samples = self.sample(divisions)
         var out = List[Float32]()
@@ -635,7 +661,7 @@ struct Curve(Copyable, Movable):
             out.append(out[index - 1] + step)
         return out^
 
-    def arc_divisions(self) -> Int:
+    def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its
         length is measured.
 
@@ -647,9 +673,15 @@ struct Curve(Copyable, Movable):
 
         Returns:
             The number of runs, never fewer than `ARC_DIVISIONS`.
+
+        Raises:
+            Error: If the mutable curve is not valid or its count overflows.
         """
+        self._validate()
         if self.kind == SPLINE:
-            var wanted = (len(self.points) - 1) * SEGMENT_SAMPLES
+            var wanted = curve_count_product(
+                len(self.points) - 1, SEGMENT_SAMPLES
+            )
             if wanted > ARC_DIVISIONS:
                 return wanted
         return ARC_DIVISIONS
@@ -663,8 +695,8 @@ struct Curve(Copyable, Movable):
             least as long as any set of chords across it.
 
         Raises:
-            Error: If a sample falls outside the curve, which cannot
-                happen for a curve that was constructed.
+            Error: If the mutable curve is not valid or a sample count
+                cannot fit in Int.
         """
         var divisions = self.arc_divisions()
         var table = self.lengths(divisions)
@@ -680,10 +712,10 @@ struct Curve(Copyable, Movable):
             The point, in meters.
 
         Raises:
-            Error: If `u` falls outside zero through one.
+            Error: If `u` is not finite or falls outside zero through one,
+                or the mutable curve is not valid.
         """
-        if u < 0 or u > 1:
-            raise Error("A curve's u must lie from zero through one")
+        check_curve_parameter(Float64(u))
         return self.point(u_to_t(self.lengths(self.arc_divisions()), u))
 
     def tangent_at(self, u: Float32) raises -> Vector2:
@@ -697,11 +729,11 @@ struct Curve(Copyable, Movable):
             The direction, of unit length.
 
         Raises:
-            Error: If `u` falls outside zero through one, or if the curve
+            Error: If `u` is not finite or outside zero through one, the
+                mutable curve is not valid, or the curve
                 turns back on itself there.
         """
-        if u < 0 or u > 1:
-            raise Error("A curve's u must lie from zero through one")
+        check_curve_parameter(Float64(u))
         return self.tangent(u_to_t(self.lengths(self.arc_divisions()), u))
 
     def spaced_points(self, divisions: Int) raises -> List[Vector2]:
@@ -715,16 +747,16 @@ struct Curve(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one.
+            Error: If `divisions` is less than one, its sample count cannot
+                fit in Int, or the mutable curve is not valid.
         """
-        if divisions < 1:
-            raise Error("A curve needs at least one division")
+        var sample_count = curve_sample_count(divisions)
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for
         # every point returned.
         var table = self.lengths(self.arc_divisions())
         var out = List[Vector2]()
-        for index in range(divisions + 1):  # pragma: no branch
+        for index in range(sample_count):  # pragma: no branch
             var u = Float32(index) / Float32(divisions)
             out.append(self.point(u_to_t(table, u)))
         return out^
