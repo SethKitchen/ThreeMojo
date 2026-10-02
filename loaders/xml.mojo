@@ -11,7 +11,7 @@ leans on the browser's `DOMParser`, so this is a small reader of the part
 of XML 1.0 a model file uses: elements, attributes, character data, the
 five named entities and numeric character references, CDATA sections,
 comments, processing instructions, and a document type declaration, which
-is skipped. A file that is not well formed is refused with the byte it
+is skipped. Common malformed input is refused with the byte it
 went wrong at, as `DOMParser` refuses it with a `parsererror`: a tag that
 is not closed, a closing tag that names another element, an attribute
 given twice, an entity that is not known, text after the root element.
@@ -28,8 +28,10 @@ Comments and processing instructions are dropped.
 
 **What is not read.** A document type declaration is stepped over whole,
 so an entity it declares is not known and is refused where it is used.
-Namespaces are not resolved: `a:b` is an element named `a:b`. The text is
-taken to be UTF-8 and is not checked.
+Namespaces are not resolved: `a:b` is an element named `a:b`. Input is
+a UTF-8 String; forbidden XML characters are checked. Complete name,
+processing-instruction and prolog grammar checks remain outside this
+limited reader's current validation.
 """
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -277,7 +279,20 @@ def parse_xml(text: String) raises -> XmlDocument:
             nested deeper than `MAX_XML_DEPTH`.
     """
     var bytes = List[UInt8]()
-    for byte in text.as_bytes():
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        var byte = raw[index]
+        var control = byte < 32 and not _is_space(Int(byte))
+        var noncharacter = (
+            byte == 0xEF
+            and index + 2 < len(raw)
+            and raw[index + 1] == 0xBF
+            and (raw[index + 2] == 0xBE or raw[index + 2] == 0xBF)
+        )
+        if control or noncharacter:
+            raise Error(
+                "XML at byte " + String(index) + ": a forbidden character"
+            )
         bytes.append(byte)
     var parser = _Parser(bytes^)
     var document = XmlDocument()
@@ -341,9 +356,14 @@ def _append_utf8(mut out: List[UInt8], point: Int):
 
 def _is_character(point: Int) -> Bool:
     """Return True if a character reference names a character XML allows:
-    not zero, not a surrogate half, and not past Unicode."""
+    a permitted whitespace, BMP character or supplementary character."""
     return (
-        point > 0 and point <= 0x10FFFF and (point < 0xD800 or point > 0xDFFF)
+        point == 9
+        or point == 10
+        or point == 13
+        or (point >= 0x20 and point <= 0xD7FF)
+        or (point >= 0xE000 and point <= 0xFFFD)
+        or (point >= 0x10000 and point <= 0x10FFFF)
     )
 
 
@@ -446,7 +466,7 @@ struct _Parser(Movable):
             if self.starts_with("<?"):
                 self.skip_past("?>", "a processing instruction")
             elif self.starts_with("<!--"):
-                self.skip_past("-->", "a comment")
+                self.comment()
             elif self.starts_with("<!DOCTYPE"):
                 if not prolog:
                     raise Error(
@@ -457,22 +477,50 @@ struct _Parser(Movable):
             else:
                 return
 
+    def comment(mut self) raises:
+        """Read a comment, rejecting an internal double hyphen."""
+        self.at += 4
+        while not self.starts_with("-->"):
+            if self.done():
+                raise Error(self.where() + "a comment is not closed")
+            if self.starts_with("--"):
+                raise Error(self.where() + "a comment contains a double hyphen")
+            self.at += 1
+        self.at += 3
+
     def doctype(mut self) raises:
-        """Step over a document type declaration, internal subset and
-        all."""
+        """Skip the DTD without expanding entities or reading external data."""
         var depth = 0
+        var quote = 0
         while True:
             var byte = self.peek()
             if byte < 0:
                 raise Error(
                     self.where() + "a document type declaration is not closed"
                 )
+            if quote != 0:
+                if byte == quote:
+                    quote = 0
+                self.at += 1
+                continue
+            if self.starts_with("<!--"):
+                self.comment()
+                continue
+            if self.starts_with("<?"):
+                self.skip_past("?>", "a processing instruction")
+                continue
             self.at += 1
-            if byte == 91:
+            if byte == 34 or byte == 39:
+                quote = byte
+            elif byte == 91:
                 depth += 1
             elif byte == 93:
+                if depth == 0:
+                    raise Error(
+                        self.where() + "a document type bracket is not open"
+                    )
                 depth -= 1
-            elif byte == 62 and depth <= 0:
+            elif byte == 62 and depth == 0:
                 return
 
     def reference(mut self, mut out: List[UInt8]) raises:
@@ -482,7 +530,7 @@ struct _Parser(Movable):
         self.at += 1
         var body = List[UInt8]()
         while self.peek() != 59:
-            if self.peek() < 0 or len(body) > 10:
+            if self.peek() < 0:
                 self.at = start
                 raise Error(self.where() + "a reference is not closed by ';'")
             body.append(self.bytes[self.at])
@@ -519,13 +567,32 @@ struct _Parser(Movable):
         Raises:
             Error: If the digits are not digits, or name no character.
         """
-        var point: Int
-        try:
-            if word.startswith("#x"):
-                point = atol(String(word[byte=2:]), base=16)
-            else:
-                point = atol(String(word[byte=1:]))
-        except:
+        var radix = 10
+        var first = 1
+        if word.startswith("#x"):
+            radix = 16
+            first = 2
+        var digits = word.as_bytes()
+        var point = 0
+        for index in range(first, len(digits)):
+            var byte = Int(digits[index])
+            var digit = -1
+            if byte >= 48 and byte <= 57:
+                digit = byte - 48
+            elif radix == 16 and byte >= 65 and byte <= 70:
+                digit = byte - 65 + 10
+            elif radix == 16 and byte >= 97 and byte <= 102:
+                digit = byte - 97 + 10
+            if digit < 0:
+                self.at = start
+                raise Error(self.where() + "a character reference is malformed")
+            if point > (0x10FFFF - digit) // radix:
+                self.at = start
+                raise Error(
+                    self.where() + "a character reference names nothing"
+                )
+            point = point * radix + digit
+        if first == len(digits):
             self.at = start
             raise Error(self.where() + "a character reference is malformed")
         if not _is_character(point):
@@ -555,6 +622,8 @@ struct _Parser(Movable):
             elif _is_space(byte):
                 out.append(32)
                 self.at += 1
+                if byte == 13 and self.peek() == 10:
+                    self.at += 1
             else:
                 out.append(UInt8(byte))
                 self.at += 1
@@ -669,13 +738,15 @@ struct _Parser(Movable):
                 self.at += 1
                 if self.peek() == 10:
                     self.at += 1
+            elif self.starts_with("]]>"):
+                raise Error(self.where() + "a CDATA close outside CDATA")
             elif byte != 60:
                 text.append(UInt8(byte))
                 self.at += 1
             elif self.starts_with("</"):
                 self.end_tag(document, open, texts)
             elif self.starts_with("<!--"):
-                self.skip_past("-->", "a comment")
+                self.comment()
             elif self.starts_with("<![CDATA["):
                 self.at += 9
                 while not self.starts_with("]]>"):
@@ -683,8 +754,14 @@ struct _Parser(Movable):
                         raise Error(
                             self.where() + "a CDATA section is not closed"
                         )
-                    text.append(self.bytes[self.at])
-                    self.at += 1
+                    if self.peek() == 13:
+                        text.append(10)
+                        self.at += 1
+                        if self.peek() == 10:
+                            self.at += 1
+                    else:
+                        text.append(self.bytes[self.at])
+                        self.at += 1
                 self.at += 3
             elif self.starts_with("<?"):
                 self.skip_past("?>", "a processing instruction")
