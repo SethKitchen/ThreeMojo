@@ -1022,5 +1022,12 @@ def test_the_mip_map_depth_of_field_pass_is_checked() raises:
     assert_almost_equal(defaults.max_blur, Float32(1))
 
 
+def test_negative_radius_and_infinite_sigma_are_refused() raises:
+    with assert_raises():
+        _ = blur_pass(-1)
+    with assert_raises(contains="sigma"):
+        _ = classic_bloom_pass(sigma=inf[DType.float32]())
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

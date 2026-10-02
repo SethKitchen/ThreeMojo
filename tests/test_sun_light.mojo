@@ -54,6 +54,7 @@ from objects.mesh import Mesh
 from render.framebuffer import Color
 from renderers.renderer import Renderer
 from std.math import inf, nan, sqrt
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -416,6 +417,31 @@ def test_overflowing_cascade_positions_do_not_change_the_scene() raises:
         second.shadow.right.value,
     )
     assert_at(scene.world_position(sun.nodes[0]), before.x, before.y, before.z)
+
+
+def test_a_sun_refuses_changed_node_and_target_mappings() raises:
+    var scene = Scene()
+    var sun = SunLight(scene)
+    var camera = a_short_camera()
+    var original_node = scene.lights[sun.lights[0]].node
+    scene.lights[sun.lights[0]].node = sun.targets[0]
+    with assert_raises(contains="not in this scene"):
+        sun.update(scene, camera)
+    scene.lights[sun.lights[0]].node = original_node
+    scene.lights[sun.lights[0]].target = sun.nodes[0]
+    with assert_raises(contains="not in this scene"):
+        sun.update(scene, camera)
+
+
+def test_a_unit_direction_cannot_overflow_a_finite_cascade_position() raises:
+    from lights.sun_light import _finite_point
+
+    var largest = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+    var edge = Vector3(largest, -largest, largest)
+    var direction = Vector3(1, -1, 1)
+    direction.normalize()
+    assert_true(_finite_point(edge + direction))
+    assert_at(edge + direction, edge.x, edge.y, edge.z)
 
 
 def main() raises:

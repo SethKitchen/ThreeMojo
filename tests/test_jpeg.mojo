@@ -1126,5 +1126,14 @@ def test_a_scan_names_one_to_all_of_the_components() raises:
     refused(patched(whole, segment(whole, 0xDA) + 13, 0x10))
 
 
+def test_complete_nonmarker_bytes_cannot_end_a_scan() raises:
+    var restart_reader = BitReader([UInt8(0), UInt8(0xD0)], 0)
+    with assert_raises(contains="without its marker"):
+        restart_reader.restart(UInt8(0xD0))
+    var end_reader = BitReader([UInt8(0), UInt8(0xD9)], 0)
+    with assert_raises(contains="without a marker"):
+        _ = end_reader.end()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -405,8 +405,10 @@ struct SunLight(Movable):
             light.shadow.far = Length(cascade.far, METER)
             light.cascade = cascade.band(index == SUN_CASCADES - 1)
             light.validate()
-            var aim = cascade.position + fit.direction
-            if not (_finite_point(cascade.position) and _finite_point(aim)):
+            # fit_sun normalized the finite nonzero sun direction. Adding
+            # that bounded direction cannot overflow a finite position:
+            # near the largest finite Float32 they are below half an ULP.
+            if not _finite_point(cascade.position):
                 raise Error("A sun's cascade position must be finite")
             changes.append(light)
         # All lights and node references are valid before the first write.
