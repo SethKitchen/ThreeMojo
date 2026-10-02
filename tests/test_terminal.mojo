@@ -23,6 +23,7 @@ from controls.input import (
 )
 from render.framebuffer import Color, Framebuffer
 from std.ffi import c_char, c_int, external_call
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -250,6 +251,17 @@ def test_poll_reads_keys_and_the_mouse_in_pixels() raises:
     assert_equal(len(window.poll(Duration(100.0, MILLISECOND))), 0)
     with assert_raises(contains="negative"):
         _ = window.poll(Duration(-1.0, SECOND))
+    with assert_raises(contains="negative"):
+        _ = window.poll(Duration(-0.5, MILLISECOND))
+    for seconds in [
+        inf[DType.float32](),
+        nan[DType.float32](),
+        Float32(2147483.75),
+        Float32(3e6),
+    ]:
+        with assert_raises(contains="finite"):
+            _ = window.poll(Duration(seconds, SECOND))
+    assert_equal(len(window.poll(Duration(0.5, MILLISECOND))), 0)
     window.close()
     with assert_raises(contains="closed"):
         _ = window.poll(Duration(0.0, SECOND))
