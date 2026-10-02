@@ -667,6 +667,8 @@ In code, `morph_target_index(mesh.morph_target_dictionary, name)` gives the inde
 
 `animation/animation_clip_creator.mojo` is three.js's `AnimationClipCreator`. Each function returns a clip of one track, with no name.
 
+The shake and pulsation factories compute their key count without a counting loop. A nonfinite duration or an unrepresentable key count raises before the random generator advances.
+
 | Function | three.js | The track |
 |---|---|---|
 | `create_rotation_animation(node, period, axis)` | `CreateRotationAnimation` | One angle, from 0 to 360 radians |
