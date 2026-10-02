@@ -275,7 +275,7 @@ def _cross_side(a: ClipVertex, b: ClipVertex, plane: Plane) -> ClipVertex:
     return _mix_vertex(a, b, t)
 
 
-def _clip_side(polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+def _clip_side(var polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
     """Return `polygon` cut down to the side of `plane` it faces.
 
     `_clip_plane` for a plane that is not one of the camera's depth
@@ -283,14 +283,25 @@ def _clip_side(polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
     distance rather than a z. A corner on the plane is kept.
 
     Args:
-        polygon: The corners, in order.
+        polygon: The corners, in order, transferred to this pass.
         plane: The plane, facing the kept side.
 
     Returns:
         The surviving corners, in order.
     """
-    var kept = List[ClipVertex]()
+    # Most planes keep the polygon whole or discard it whole. Move its
+    # existing storage through the first case; the second needs no output
+    # storage. Only a crossing needs interpolation and a new polygon.
+    var inside = 0
     for position in range(len(polygon)):
+        inside += Int(plane.distance_to_point(polygon[position].position) >= 0)
+    if inside == 0:
+        return List[ClipVertex]()
+    if inside == len(polygon):
+        return polygon^
+    var kept = List[ClipVertex](capacity=len(polygon) + 1)
+    # The whole-polygon cases returned; kept and rejected corners exist.
+    for position in range(len(polygon)):  # pragma: no branch
         var current = polygon[position]
         var following = polygon[(position + 1) % len(polygon)]
         var current_in = plane.distance_to_point(current.position) >= 0
@@ -322,7 +333,7 @@ def within_sides(position: Vector3, sides: List[Plane]) -> Bool:
 
 
 def _clip_plane(
-    polygon: List[ClipVertex], plane_z: Float32, keep_nearer: Bool
+    var polygon: List[ClipVertex], plane_z: Float32, keep_nearer: Bool
 ) -> List[ClipVertex]:
     """Return `polygon` cut down to the kept side of one plane.
 
@@ -332,7 +343,7 @@ def _clip_plane(
     applied one after the other without a special case between them.
 
     Args:
-        polygon: The corners, in order.
+        polygon: The corners, in order, transferred to this pass.
         plane_z: Where the plane sits on the camera's z axis.
         keep_nearer: True to keep what is nearer the camera than the plane
             (the far plane), False to keep what is further (the near plane).
@@ -340,8 +351,21 @@ def _clip_plane(
     Returns:
         The surviving corners, in order.
     """
-    var kept = List[ClipVertex]()
+    # Most planes keep the polygon whole or discard it whole. Move its
+    # existing storage through the first case; the second needs no output
+    # storage. Only a crossing needs interpolation and a new polygon.
+    var inside = 0
     for position in range(len(polygon)):
+        inside += Int(
+            _inside(polygon[position].position.z, plane_z, keep_nearer)
+        )
+    if inside == 0:
+        return List[ClipVertex]()
+    if inside == len(polygon):
+        return polygon^
+    var kept = List[ClipVertex](capacity=len(polygon) + 1)
+    # The whole-polygon cases returned; kept and rejected corners exist.
+    for position in range(len(polygon)):  # pragma: no branch
         var current = polygon[position]
         var following = polygon[(position + 1) % len(polygon)]
         var current_in = _inside(current.position.z, plane_z, keep_nearer)
@@ -434,27 +458,27 @@ def clip_ordered(
     Returns:
         Corners three at a time, as `clip_depth` returns them.
     """
-    var corners = List[ClipVertex]()
-    corners.append(a)
-    corners.append(b)
-    corners.append(c)
+    var corners: List[ClipVertex] = [a, b, c]
 
     # Near first, so the far pass usually gets an empty or already-small
     # polygon. Order does not change the result, only the work.
-    var in_front = _clip_plane(corners, -near, True)
-    var within = _clip_plane(in_front, -far, False)
+    var in_front = _clip_plane(corners^, -near, True)
+    var within = _clip_plane(in_front^, -far, False)
     for side in range(len(sides)):
-        within = _clip_side(within, sides[side])
+        within = _clip_side(within^, sides[side])
 
     var triangles = List[ClipVertex]()
     if len(any_of) == 0:
+        # One triangle already has the fan's order. Keep its buffer.
+        if len(within) == 3:
+            return within^
         _fan(within, triangles)
         return triangles^
     # Not empty: the return above took that case.
     for index in range(len(any_of)):  # pragma: no branch
-        var piece = _clip_side(within, any_of[index])
+        var piece = _clip_side(within.copy(), any_of[index])
         for earlier in range(index):
-            piece = _clip_side(piece, flipped(any_of[earlier]))
+            piece = _clip_side(piece^, flipped(any_of[earlier]))
         _fan(piece, triangles)
     return triangles^
 
