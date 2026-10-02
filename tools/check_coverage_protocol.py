@@ -409,11 +409,12 @@ def main():
         interrupted = {}
         for size in ('512', '-512'):
             expected_record = run([str(work / 'boundary'), size]).stderr.encode()
-            for mode in ('eintr', 'error', 'short', 'zero'):
+            # Check forwarding independently before exercising errno/retry paths.
+            for mode in ('passthrough', 'eintr', 'error', 'short', 'zero'):
                 environment = dict(os.environ, **{preload: str(library), 'THREEMOJO_WRITE_TEST': mode})
                 result = subprocess.run([str(work / 'boundary'), size], capture_output=True,
                                         env=environment, timeout=5)
-                if mode == 'eintr':
+                if mode in ('passthrough', 'eintr'):
                     assert result.returncode == 0 and result.stderr == expected_record, result
                 else:
                     assert result.returncode == -signal.SIGABRT, (mode, result)

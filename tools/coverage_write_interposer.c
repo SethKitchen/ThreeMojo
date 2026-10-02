@@ -3,7 +3,9 @@
  * Deterministic libc errors for the coverage runtime regression only.
  */
 #define _GNU_SOURCE
+#ifndef __APPLE__
 #include <dlfcn.h>
+#endif
 #include <errno.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -14,7 +16,16 @@ static void catch_signal(int number) { (void)number; }
 
 static ssize_t coverage_test_write(int fd, const void *buffer, size_t count) {
     static unsigned interruptions;
+#ifdef __APPLE__
+    /* dyld does not interpose references from the image defining the tuple.
+     * dlsym(RTLD_NEXT, "write") is different: dyld interposes that lookup too,
+     * so it can return coverage_test_write and recurse instead of forwarding.
+     */
+    ssize_t (*real_write)(int, const void *, size_t) = write;
+#else
     ssize_t (*real_write)(int, const void *, size_t) = dlsym(RTLD_NEXT, "write");
+    if (!real_write) abort();
+#endif
     const char *mode = getenv("THREEMOJO_WRITE_TEST");
     if (fd == 2 && count >= 3 && memcmp(buffer, "COV", 3) == 0 && mode) {
         if (strcmp(mode, "signal") == 0) {
