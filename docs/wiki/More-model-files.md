@@ -182,6 +182,18 @@ The loader refuses these, with a message that names the problem:
 
 `unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods, ZIP64 archives and archives on more than one disk.
 
+The end record's comment length must reach the archive end. Candidate checks follow the central headers and their local-data ranges. The central directory must end at that record, and its size and file count must agree. Shared directory suffixes are cached so repeated candidates do not scan those records again.
+
+The reader selects the last structurally admissible end record. Two complete layouts can fit the same bytes, so this rule cannot recover the writer's intent. Payload expansion and CRC-32 checks run once after selection. One bounded digital-signature record can follow the directory entries. The reader skips its data without authenticating it.
+
+Names, extra fields and entry comments must fit inside the directory. Local headers and file data must fit before the directory. Invalid UTF-8 in a name becomes replacement characters.
+
+The record layout follows [PKWARE ZIP APPNOTE 6.3.10](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT), sections 4.3.6 and 4.3.12–13. ZIP64 end records and compressed or encrypted directories remain unsupported.
+
+The writer checks all lengths before it writes output. Names and local padding can use at most 65,535 bytes each. An archive can have at most 65,534 entries. Entry sizes, directory sizes and offsets must not use the reserved ZIP64 values. The complete archive must stay below 4 GiB.
+
+Alignment must be positive. The padding for each entry must fit its field; normal 64-byte USDZ alignment is unchanged. [Issue #415](https://github.com/SethKitchen/ThreeMojo/issues/415).
+
 ## SVG
 
 `loaders/svg.mojo`. `read_svg(path)` reads a Scalable Vector Graphics file into shape paths, one for each element that draws. `loaders/svg_shapes.mojo` turns a shape path into filled shapes and into strokes. three.js: `SVGLoader`, `SVGLoader.createShapes` and `SVGLoader.pointsToStroke`.
