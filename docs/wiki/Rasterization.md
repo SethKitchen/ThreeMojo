@@ -118,6 +118,8 @@ The mode rides bits 19 and 20 of the packed depth state, and the log factor ride
 
 ## Clipping
 
+A clip-intersection union assigns geometry on a shared plane boundary to its first piece. Repeated planes do not draw a coplanar triangle or segment twice. Public depth-clipping calls require finite, ordered near and far planes. A finite negative near plane remains valid for an orthographic view.
+
 `clip_depth(a, b, c, near, far, sides)` cuts a triangle against the near and far planes in camera space, and then against the four side planes in `sides`. It returns zero or more triangles, fanned from the first surviving corner. Every varying is interpolated to the cut, including the world position and the distance along a line. `clip_segment` cuts a segment the same way. The sides come from `Frustum.side_planes(camera.projection_matrix())`, the same planes the culler reads in world space. Without them a triangle past the edge of the view still projected onto the target, and a [viewport](Renderer#viewport-and-scissor) smaller than the target drew it.
 
 ## Culling
