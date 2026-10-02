@@ -21,7 +21,9 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import directional_light
+from loaders.json import parse_json
 from loaders.gltf import (
+    _Loader,
     COMPONENT_BYTE,
     COMPONENT_SHORT,
     COMPONENT_UNSIGNED_BYTE,
@@ -1455,6 +1457,27 @@ def test_the_edges_of_every_check_are_reached() raises:
             '"nodes":[{"matrix":[1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1]}],"scenes":[{"nodes":[0]}]'
         )
     )
+
+
+def test_loader_entry_array_and_meshopt_boundaries() raises:
+    var loader = _Loader(
+        parse_json('{"nodes":[{}],"vector":4}'), List[UInt8](), ""
+    )
+    with assert_raises(contains="no nodes entry at index -1"):
+        _ = loader.entry("nodes", -1)
+    with assert_raises(contains="must hold 3 numbers"):
+        _ = loader.numbers(loader.document.root(), "vector", 3)
+    for buffer_index in [-1, 0]:
+        var text = (
+            String(
+                '{"buffers":[{"byteLength":1,"uri":"data:x;base64,AA=="}],"bufferViews":[{"extensions":{"EXT_meshopt_compression":{"buffer":'
+            )
+            + String(buffer_index)
+            + ',"byteOffset":2,"byteLength":0,"byteStride":1,"count":0}}}]}'
+        )
+        var compressed = _Loader(parse_json(text), List[UInt8](), "")
+        with assert_raises(contains="glTF: a compressed buffer view"):
+            compressed.read_buffers()
 
 
 def main() raises:

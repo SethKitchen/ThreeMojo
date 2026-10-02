@@ -57,6 +57,8 @@ def test_words_are_read_by_their_spelling() raises:
     # Pairs of letters, a silent final e, and an h on its own.
     assert_true(_same(_shapes("the"), [TH, E]))
     assert_true(_same(_shapes("make"), [PP, AA, KK]))
+    # A short word after a boundary keeps its final e.
+    assert_true(_same(_shapes("  be"), [SILENT, PP, E]))
     assert_true(_same(_shapes("chop"), [CH, OH, PP]))
     assert_true(_same(_shapes("shoe"), [CH, OH, E]))
     assert_true(_same(_shapes("phone"), [FF, OH, NN]))

@@ -148,6 +148,12 @@ def test_a_bad_style_file_is_refused() raises:
         _ = HairStyleFile(short)
     var wrong = _file("wrong", 1, 1, 20)
     var bytes = Path(wrong).read_bytes()
+    for index in range(1, 4):
+        var invalid = bytes.copy()
+        invalid[index] = 88
+        Path(wrong).write_bytes(invalid)
+        with assert_raises(contains="Not a hair style"):
+            _ = HairStyleFile(wrong)
     bytes[0] = 88
     Path(wrong).write_bytes(bytes)
     with assert_raises(contains="Not a hair style"):

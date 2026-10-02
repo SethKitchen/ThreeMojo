@@ -12,10 +12,18 @@ of three layers and three surfaces, and LWO3 standard, Phong and physical
 surfaces of node attributes, image nodes and image maps.
 """
 
+from loaders.lwo_iff import (
+    LwoTree,
+    _number as lwo_number,
+    _object,
+    parse_lwo_tree,
+)
 from core.assets import Assets
 from core.scene import Scene
 from loaders.json import BOOLEAN, JsonDocument, NULL, NUMBER, STRING, parse_json
 from loaders.lwo import (
+    _MaterialParser,
+    _Params,
     LwoMap,
     LwoMaterial,
     LwoMesh,
@@ -312,6 +320,65 @@ def test_a_path_names_the_model_as_three_js_does() raises:
     # three.js splits a path that starts with `Objects` into characters.
     assert_equal(lwo_resource_path("Objects/a.lwo"), "")
     assert_equal(lwo_model_name("Objects/a.lwo"), "o")
+
+
+def test_a_nearly_opaque_environment_is_not_refractive() raises:
+    var tree = parse_lwo_tree(Path("assets/lwo/standard.lwo").read_bytes())
+    for index in range(len(tree.objects)):
+        var transparency = tree.child(index, "Transparency")
+        if transparency >= 0:
+            tree.set(transparency, "value", lwo_number(0.0001))
+    var materials = _MaterialParser("").parse(tree)
+    assert_equal(len(materials), 1)
+    assert_false(materials[0].env_refraction)
+    assert_almost_equal(materials[0].opacity, 0.9999)
+
+
+def test_unmapped_specular_is_kept_without_roughness() raises:
+    var tree = LwoTree()
+    var attribute = tree.add()
+    tree.set(attribute, "value", lwo_number(0.4))
+    tree.set(0, "Specular", _object(attribute))
+    var params = _Params("test")
+    _MaterialParser("").attributes(tree, 0, params)
+    assert_true(params.has_attribute("specular"))
+    assert_equal(params.material.specular[0], 0.4)
+    # A map takes precedence even when no roughness attribute exists.
+    params.mark("specularMap")
+    tree.set(attribute, "value", lwo_number(0.8))
+    _MaterialParser("").attributes(tree, 0, params)
+    assert_equal(params.material.specular[0], 0.4)
+
+
+def test_auv_normal_chunk_is_skipped_in_lwo2() raises:
+    var bytes: List[UInt8] = [
+        70,
+        79,
+        82,
+        77,
+        0,
+        0,
+        0,
+        16,
+        76,
+        87,
+        79,
+        50,
+        65,
+        85,
+        86,
+        78,
+        0,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+    ]
+    var tree = parse_lwo_tree(bytes)
+    assert_equal(tree.format, "LWO2")
 
 
 def main() raises:

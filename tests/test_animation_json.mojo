@@ -76,7 +76,7 @@ from exporters.object_json import object_to_json
 from geometries.box import box
 from lights.light import point_light
 from loaders.json import parse_json
-from loaders.object_loader import read_object_json
+from loaders.object_loader import _Loader, read_object_json
 from materials.material import Material, MaterialId
 from math.matrix4 import Matrix4
 from objects.mesh import Mesh
@@ -125,6 +125,11 @@ def check_path(
 
 
 def test_track_names_parse_as_three_js_parses_them() raises:
+    var loader = _Loader(parse_json("{}"), "")
+    assert_equal(
+        loader.find_object(-1, loader.document.root(), ".", Scene()), -1
+    )
+    check_path("Node.bones.position", "Node", "bones", "", "position", "")
     check_path("Cube.position", "Cube", "", "", "position", "")
     check_path(".material.opacity", "", "material", "", "opacity", "")
     check_path(".bones[hip].quaternion", "", "bones", "hip", "quaternion", "")

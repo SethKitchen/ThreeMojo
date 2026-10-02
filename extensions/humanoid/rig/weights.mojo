@@ -214,8 +214,8 @@ def _welded_edges(
             var q = points[candidate]
             if (
                 px == Int(q.x * 1e5)
+                # Equal hash, x and y imply equal z: XOR is invertible.
                 and py == Int(q.y * 1e5)
-                and pz == Int(q.z * 1e5)
             ):
                 same = candidate
                 break

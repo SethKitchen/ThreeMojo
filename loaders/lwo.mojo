@@ -531,11 +531,8 @@ struct _MaterialParser:
         if file.truthy():
             var env = self.texture(file.text)
             ref m = params.material
-            if (
-                params.has_attribute("transparent")
-                and params.has_attribute("opacity")
-                and m.opacity < 0.999
-            ):
+            # attributes() always marks opacity with transparent.
+            if params.has_attribute("transparent") and m.opacity < 0.999:
                 m.env_refraction = True
                 params.drop_attribute("reflectivity")
                 params.drop_attribute("combine")

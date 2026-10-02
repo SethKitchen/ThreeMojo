@@ -628,9 +628,10 @@ def _from_code(
     """Port three.js's `getMaterialFromCode`: the main color, or the main edge
     color for an edge, stands for the parent's; then the file's color."""
     var own = code
-    if (not for_edge and code == MAIN_COLOUR_CODE) or (
-        for_edge and code == MAIN_EDGE_COLOUR_CODE
-    ):
+    if for_edge:
+        if code == MAIN_EDGE_COLOUR_CODE:
+            own = parent
+    elif code == MAIN_COLOUR_CODE:
         own = parent
     return info.local(own)
 
@@ -761,9 +762,10 @@ struct LDrawBuilder(Movable):
                 ):
                     continue
                 var lines = self.model.nodes[n].is_lines()
-                if (not lines and code == MAIN_COLOUR_CODE) or (
-                    lines and code == MAIN_EDGE_COLOUR_CODE
-                ):
+                if lines:
+                    if code == MAIN_EDGE_COLOUR_CODE:
+                        code = parent
+                elif code == MAIN_COLOUR_CODE:
                     code = parent
                 var material = _find(codes, ids, code)
                 if material < 0:
