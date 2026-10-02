@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import textwrap
 
 from coverage_io import Reducer
 from run_suite import result_errors, slow_tests
@@ -50,6 +51,18 @@ CASES = [
      ('or', 1, ('atom', 0))),
     ('P0 and (1 not in member_values(mask, order, fail))',
      ('and', 0, ('atom', ('not', 1)))),
+    ('scalar_bool(P0) and P1', ('and', 0, 1)),
+    ('optional_value(P0)', 0),
+    ('optional_custom(P0, order) or P1', ('or', 0, 1)),
+    ('list_custom(P0, order) and P1', ('and', 0, 1)),
+    ('not P0 or not (optional_value(P1) or P2)',
+     ('or', ('not', 0), ('not', ('or', 1, 2)))),
+    ('optional_value(P0) and (optional_value(P1) or P2)',
+     ('and', 0, ('or', 1, 2))),
+    ('text_value(P0) and Int(P1) or list_value(P2)',
+     ('or', ('and', 0, 1), 2)),
+    ('borrowed if P1 else borrowed',
+     ('atom', ('choose', ('boolable', 0), 1, ('boolable', 0)))),
 ]
 
 
@@ -65,6 +78,13 @@ def evaluate(tree, mask, fail, order, probes, slot):
             slot[0] += 1
         return value
     op, *args = tree
+    if op == 'boolable':
+        order.append('b')
+        value = bool(mask & (1 << args[0]))
+        if slot is not None:
+            probes.append((slot[0], value))
+            slot[0] += 1
+        return value
     if op == 'choose':
         choose = evaluate(args[1], mask, fail, order, [], None)
         return evaluate(args[0] if choose else args[2], mask, fail, order, [], None)
@@ -85,7 +105,7 @@ def evaluate(tree, mask, fail, order, probes, slot):
 
 
 def leaves(tree):
-    if isinstance(tree, int) or tree[0] == 'atom':
+    if isinstance(tree, int) or tree[0] in ('atom', 'boolable'):
         return 1
     return sum(leaves(child) for child in tree[1:])
 
@@ -100,6 +120,53 @@ def mark(mask: Int, index: Int, mut order: String, fail: Int) raises -> Bool:
     if index == fail:
         raise Error("fixture exception")
     return (mask & (1 << index)) != 0
+
+
+@fieldwise_init
+struct Observable(Movable, Boolable):
+    var value: Bool
+    var order: Pointer[String, MutUntrackedOrigin]
+
+    def __bool__(self) -> Bool:
+        self.order[] += "b"
+        return self.value
+
+
+def observable(value: Bool, mut order: String) -> Observable:
+    return Observable(value, Pointer(to=order).unsafe_origin_cast[MutUntrackedOrigin]())
+
+
+def scalar_bool(value: Bool) -> SIMD[DType.bool, 1]:
+    return SIMD[DType.bool, 1](value)
+
+
+def optional_value(value: Bool) -> Optional[List[Float64]]:
+    if value:
+        return List[Float64]([1.0])
+    return None
+
+
+def optional_custom(value: Bool, mut order: String) -> Optional[Observable]:
+    if value:
+        return observable(False, order)
+    return None
+
+
+def list_custom(value: Bool, mut order: String) -> List[Observable]:
+    var items = List[Observable]()
+    if value:
+        items.append(observable(False, order))
+    return items^
+
+
+def text_value(value: Bool) -> String:
+    return "x" if value else ""
+
+
+def list_value(value: Bool) -> List[Int]:
+    if value:
+        return [1]
+    return []
 
 
 def identity(value: Bool, text: String) -> Bool:
@@ -140,6 +207,7 @@ def case_{number}(mask: Int, fail: Int) raises:
     var order = String("")
     var values: List[Bool] = [False, True]
     _ = values
+    var borrowed = observable((mask & 1) != 0, order)
     try:
 '''
         decisions.append(len(text.splitlines()) + 1)
@@ -149,12 +217,81 @@ def case_{number}(mask: Int, fail: Int) raises:
             print("RESULT", {number}, mask, fail, "F", order)
     except error:
         print("RESULT", {number}, mask, fail, "E", order, String(error))
+    _ = borrowed.value
 '''
     text += '\n\ndef test_semantics() raises:\n    var fail = Int(getenv("THREEMOJO_GROUPING_FAIL", "-1"))\n    for mask in range(64):\n'
     for number in range(len(CASES)):
         text += f'        case_{number}(mask, fail)\n'
     text += '\n\ndef main() raises:\n    TestSuite.discover_tests[__functions_in_module()]().run()\n'
     return text, decisions
+
+
+def lifetime_source():
+    """Observe move-only container destruction before later operands and bodies."""
+    s = textwrap.dedent('''\
+    @fieldwise_init
+    struct Item(Movable):
+        var id: Int
+        var drops: Pointer[Int, MutUntrackedOrigin]
+        def __deinit__(deinit self):
+            self.drops[] = self.drops[] * 10 + self.id
+            print("DROP", self.id, self.drops[])
+
+    def optional(id: Int, full: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> Optional[Item]:
+        print("MAKE", id)
+        if full:
+            return Optional[Item](Item(id, drops))
+        return None
+
+    def items(id: Int, full: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> List[Item]:
+        print("MAKE", id)
+        var result = List[Item]()
+        if full:
+            result.append(Item(id, drops))
+        return result^
+
+    def observe(id: Int, result: Bool, drops: Pointer[Int, MutUntrackedOrigin]) -> Bool:
+        print("OBSERVE", id, drops[])
+        return result
+    ''')
+    cases = []
+    for kind in ('optional', 'items'):
+        other = 'items' if kind == 'optional' else 'optional'
+        for first in ('True', 'False'):
+            for second in ('True', 'False'):
+                left = f'{kind}(1, {first}, drops)'
+                right = f'{kind}(2, {second}, drops)'
+                mixed = f'{other}(2, {second}, drops)'
+                observe = f'observe(3, {second}, drops)'
+                for expression in (
+                    f'{left} and {right}', f'{left} or {right}',
+                    f'{left} and {observe}', f'{left} or {observe}',
+                    f'({left} or {right}) and {observe}',
+                    f'({left} and {right}) or {observe}',
+                    f'not ({left} or {right})',
+                    f'retained and {observe}', f'retained or {observe}',
+                    f'(retained or {observe}) and {left}',
+                    f'(retained and {observe}) or {left}',
+                    f'{left} and {mixed}', f'{left} or {mixed}',
+                ):
+                    number = len(cases)
+                    cases.append(expression)
+                    s += f"""
+def case_{number}():
+    print("CASE", {number})
+    var state = 0
+    var drops = Pointer(to=state).unsafe_origin_cast[MutUntrackedOrigin]()
+    var retained = {kind}(4, {first}, drops)
+    if {expression}:
+        print("BODY", {number}, state)
+    else:
+        print("ELSE", {number}, state)
+    print("AFTER", {number}, Bool(retained), state)
+"""
+    s += '\ndef main():\n' + ''.join(
+        f'    case_{number}()\n    print("END", {number})\n'
+        for number in range(len(cases)))
+    return s, cases
 
 
 def run(command, **kwargs):
@@ -308,15 +445,71 @@ def main() raises:
         (work / 'branch-report.txt').write_text(branch_report.stdout)
         assert 'condition 1:' in result.stdout and 'condition 2:' in result.stdout, result.stdout
         (work / 'negative-report.txt').write_text(result.stdout + result.stderr)
+        # A generic conversion must not silently alter custom __bool__ calls.
+        # Native same-type `or` retests the selected value in the outer context.
+        custom_source = '''@fieldwise_init
+struct Custom(Movable, Boolable):
+    var value: Bool
+    var changing: Bool
+    var calls: Pointer[Int, MutUntrackedOrigin]
+
+    def __bool__(self) -> Bool:
+        self.calls[] += 1
+        return self.calls[] % 2 == 1 if self.changing else self.value
+
+def main():
+    var calls = 0
+    var counter = Pointer(to=calls).unsafe_origin_cast[MutUntrackedOrigin]()
+    var result = False
+    if Custom(True, CHANGE, counter) or Custom(True, CHANGE, counter):
+        result = True
+    print("CUSTOM", result, calls)
+'''
+        for changing in (False, True):
+            name = 'changing' if changing else 'stable'
+            (native / 'custom.mojo').write_text(custom_source.replace('CHANGE', str(changing)))
+            run([mojo, 'build', '-Werror', '-I', str(native), str(native / 'custom.mojo'),
+                 '-o', str(work / 'custom')])
+            result = run([str(work / 'custom')], timeout=5)
+            assert result.stdout.strip() == f'CUSTOM {not changing} 2', result.stdout
+            (work / f'custom-{name}-native.txt').write_text(result.stdout)
+            run([str(build), str(rewritten), 'custom.mojo'], cwd=native)
+            custom_manifest = (rewritten / 'manifest.txt').read_text()
+            assert sum(row.startswith('C custom ') for row in custom_manifest.splitlines()) == 2
+            assert sum(row.startswith('M custom ') for row in custom_manifest.splitlines()) == 2
+            (work / f'custom-{name}-manifest.txt').write_text(custom_manifest)
+            result = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
+                                     str(rewritten / 'custom.mojo'), '-o', str(work / 'rejected')],
+                                    text=True, capture_output=True)
+            assert result.returncode != 0 and 'custom Boolable truth conversions are not yet supported' in result.stderr, result
+            (work / f'custom-{name}-rejected.txt').write_text(result.stderr)
+
+        lifetime, lifetime_cases = lifetime_source()
+        (native / 'lifetime.mojo').write_text(lifetime)
+        run([str(build), str(rewritten), 'lifetime.mojo'], cwd=native)
+        lifetime_results = []
+        for label, folder in (('native', native), ('instrumented', rewritten)):
+            binary = work / f'lifetime-{label}'
+            run([mojo, 'build', '-Werror', '-I', str(folder),
+                 str(folder / 'lifetime.mojo'), '-o', str(binary)])
+            result = run([str(binary)], timeout=5)
+            lifetime_results.append(result.stdout)
+            (work / f'lifetime-{label}.txt').write_text(result.stdout)
+        assert lifetime_results[0] == lifetime_results[1], 'Container destruction order differs'
+        (work / 'lifetime-cases.txt').write_text('\n'.join(lifetime_cases) + '\n')
+
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
             for path in work.glob('*.txt'):
                 shutil.copy(path, args.output / path.name)
+            shutil.copy(native / 'lifetime.mojo', args.output / 'lifetime-native.mojo')
+            shutil.copy(rewritten / 'lifetime.mojo', args.output / 'lifetime-instrumented.mojo')
             shutil.copy(native / 'fixture.mojo', args.output / 'native.mojo')
             shutil.copy(rewritten / 'fixture.mojo', args.output / 'instrumented.mojo')
-            shutil.copy(rewritten / 'manifest.txt', args.output / 'manifest.txt')
+            (args.output / 'manifest.txt').write_text('\n'.join(manifest) + '\n')
         print(f'PASS: {len(CASES)} native/instrumented cases, 64 truth assignments, normal and 6 throwing positions; '
-              'exact order/count/outcomes, manifest C/M, raw/reduced Mojo vectors, and negative report')
+              'exact order/count/outcomes, manifest C/M, raw/reduced Mojo vectors, and negative report; '
+              f'{len(lifetime_cases)} container destructor-order cases')
 
 
 if __name__ == '__main__':
