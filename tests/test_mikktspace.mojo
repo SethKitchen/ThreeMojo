@@ -96,7 +96,7 @@ def check_sums(tangents: List[Float32], sum: Float64, weighted: Float64) raises:
     for i in range(len(tangents)):
         s += Float64(tangents[i])
         w += abs(Float64(tangents[i])) * Float64(i % 7 + 1)
-    if abs(s - sum) > 1e-5 or abs(w - weighted) > 1e-5:
+    if not (abs(s - sum) <= 1e-5) or not (abs(w - weighted) <= 1e-5):
         raise Error(
             "sums "
             + String(s)
@@ -114,7 +114,7 @@ def check(
 ) raises:
     """Check a run of numbers from `start`, each to within 1e-6."""
     for i in range(len(expected)):
-        if abs(Float64(actual[start + i]) - expected[i]) > 1e-6:
+        if not (abs(Float64(actual[start + i]) - expected[i]) <= 1e-6):
             raise Error(
                 "entry "
                 + String(start + i)
@@ -123,6 +123,77 @@ def check(
                 + " but got "
                 + String(actual[start + i])
             )
+
+
+def test_check_rejects_nonfinite_components() raises:
+    var expected: List[Float64] = [0, 1, -2, 3]
+    var matching: List[Float32] = [0, 1, -2, 3, 0, 1, -2, 3, 0, 1, -2, 3]
+    var nonfinite: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for start in [0, 4, 8]:
+        check(matching, expected, start)
+        for component in range(len(expected)):
+            for bad in nonfinite:
+                var actual = matching.copy()
+                actual[start + component] = bad
+                with assert_raises(
+                    contains="entry " + String(start + component)
+                ):
+                    check(actual, expected, start)
+
+
+def test_check_sums_rejects_nonfinite_components() raises:
+    # Both aggregates become nonfinite when one tangent component is nonfinite.
+    var matching: List[Float32] = [1, -2, 3, -4, 5, -6, 7, -8]
+    check_sums(matching, -4, 148)
+    var nonfinite: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for component in range(len(matching)):
+        for bad in nonfinite:
+            var actual = matching.copy()
+            actual[component] = bad
+            with assert_raises(contains="sums "):
+                check_sums(actual, -4, 148)
+
+
+def test_check_sums_rejects_a_nonfinite_sum_independently() raises:
+    # Inject the reference to isolate this comparison: the weighted sum matches.
+    for bad in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        with assert_raises(contains="sums "):
+            check_sums([1, -2, 3, -4], bad, 30)
+
+
+def test_check_sums_rejects_a_nonfinite_weighted_sum_independently() raises:
+    # Inject the reference to isolate this comparison: the unweighted sum matches.
+    for bad in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        with assert_raises(contains="sums "):
+            check_sums([1, -2, 3, -4], -2, bad)
+
+
+def test_checks_keep_their_finite_tolerances() raises:
+    check([99, 0, 0, 99], [1e-6, -1e-6], 1)
+    check_sums([0], 1e-5, -1e-5)
+    for sign in [Float64(-1), Float64(1)]:
+        with assert_raises():
+            check([99, 0, 99], [sign * 1.1e-6], 1)
+        with assert_raises():
+            check_sums([0], sign * 1.1e-5, 0)
+        with assert_raises():
+            check_sums([0], 0, sign * 1.1e-5)
 
 
 def test_a_grid_matches_three() raises:
