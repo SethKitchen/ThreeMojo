@@ -876,5 +876,57 @@ def test_instrumentation_checks_exact_utf8_record_boundaries() raises:
         assert_equal(raised, size == 513)
 
 
+def test_trait_defaults_have_probes_and_private_buffers() raises:
+    var source = String(
+        '"""Module."""\ntrait Defaults:\n'
+        "    def abstract(self):\n        ... # declaration\n"
+        '    def concrete(self):\n        """Default."""\n'
+        "        if left and right:\n            return True\n"
+        "        return False\n"
+    )
+    var result = instrument(source, "m")
+    assert_equal(result.lines, [7, 8, 9])
+    assert_equal(result.branches, [7])
+    assert_equal(result.conditions, [2])
+    assert_true(result.text.startswith('"""Module."""\nfrom coverage.runtime'))
+    assert_true("var _cov_eval_state0" not in result.text)
+    assert_true(
+        '        """Default."""\n'
+        "        var _cov_eval_state1 = _cov_eval_buffer()\n"
+        in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(left, _cov_eval_state1, "m:7.0", 0)' in result.text
+    )
+    assert_true("        ... # declaration\n" in result.text)
+
+
+def test_all_generated_names_avoid_the_entire_source() raises:
+    var source = String(
+        "def outer(_cov_hit: Int, _cov_branch: Int):\n"
+        "    var _cov_hit_ = 2\n"
+        "    var _cov_branch_ = 3\n"
+        "    var _cov_loop_7 = 40\n"
+        "    var _cov_loop__7 = 50\n"
+        "    var _cov_eval_buffer = 60\n"
+        "    for index in range(2):\n"
+        "        if index > 0:\n            print(_cov_hit)\n"
+        "    def inner(_cov_eval_state0: Int):\n"
+        "        if _cov_branch > 0 and _cov_branch_ > 0:\n"
+        "            return _cov_loop_7\n"
+        "        return _cov_loop__7\n"
+        "    return inner(_cov_eval_buffer)\n"
+    )
+    var result = instrument(source, "m")
+    assert_true("hit as _cov_hit__, branch as _cov_branch__" in result.text)
+    assert_true('if _cov_branch__("m:8", index > 0):' in result.text)
+    assert_true("var _cov_loop___7 = 0" in result.text)
+    assert_true('_ = _cov_branch__("m:7", _cov_loop___7 > 0)' in result.text)
+    assert_true("var _cov_eval__state1 = _cov_eval__buffer()" in result.text)
+    assert_equal(result.lines, [2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14])
+    assert_equal(result.branches, [7, 8, 11])
+    assert_equal(result.conditions, [0, 0, 2])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

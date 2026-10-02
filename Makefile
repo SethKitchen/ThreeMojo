@@ -1439,3 +1439,4 @@ test-tools:
 test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
+	@python3 tools/check_coverage_sources.py --mojo $(MOJO)

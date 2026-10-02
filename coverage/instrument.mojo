@@ -13,10 +13,6 @@ and only ever lives under `coverage/build/`.
 
 from coverage.scanner import Scanner, indent_of, _characters, _quoted_end
 
-comptime PROBE_IMPORT = (
-    "from coverage.runtime import hit as _cov_hit, branch as _cov_branch"
-)
-
 # Decisions whose condition is wrapped so both outcomes become observable.
 comptime BRANCH_KEYWORDS = ["if ", "elif ", "while "]
 
@@ -352,6 +348,7 @@ def _wrap_condition(
     id: String,
     frame: String = "_cov_eval_state0",
     stem: String = "_cov_eval_",
+    branch: String = "_cov_branch",
 ) raises -> Wrapped:
     """Return `line` with its decision and each condition wrapped for probing.
 
@@ -365,7 +362,8 @@ def _wrap_condition(
         keyword: The decision keyword the line begins with.
         id: Probe id for the decision; conditions get `id.0`, `id.1`, ...
         frame: The private operand buffer in this function invocation.
-        stem: A helper-name prefix absent from the source.
+        stem: An evaluation-helper prefix absent from the source.
+        branch: A branch-helper alias absent from the source.
 
     Returns:
         The rewritten line, unchanged if it holds no usable condition.
@@ -403,7 +401,8 @@ def _wrap_condition(
         return Wrapped(
             " " * indent
             + keyword
-            + '_cov_branch("'
+            + branch
+            + '("'
             + id
             + '", '
             + rebuilt
@@ -449,12 +448,13 @@ def _opens_top_level_block(line: String) -> Bool:
         stripped.startswith("def ")
         or stripped.startswith("async def ")
         or stripped.startswith("struct ")
+        or stripped.startswith("trait ")
         or stripped.startswith("@")
     )
 
 
 def _close_loops(
-    mut out: String, mut closers: List[_LoopCloser], indent: Int
+    mut out: String, mut closers: List[_LoopCloser], indent: Int, branch: String
 ) raises:
     """Emit the trailing probe for every loop whose body has just ended.
 
@@ -468,7 +468,9 @@ def _close_loops(
         _ = closers.pop()
         out += (
             " " * last.indent
-            + '_ = _cov_branch("'
+            + "_ = "
+            + branch
+            + '("'
             + last.id
             + '", '
             + last.flag
@@ -484,6 +486,8 @@ def _emit_loop(
     header: String,
     number: Int,
     module: String,
+    branch: String,
+    loop_stem: String,
 ):
     """Emit a `for` loop's counter, its header, and the probe on entry.
 
@@ -500,8 +504,10 @@ def _emit_loop(
             was joined from several physical lines.
         number: The source line the header started on.
         module: Probe id prefix.
+        branch: A branch-helper alias absent from the source.
+        loop_stem: A loop-counter prefix absent from the source.
     """
-    var flag = "_cov_loop_" + String(number)
+    var flag = loop_stem + String(number)
     var id = module + ":" + String(number)
     branches.append(number)
     conditions.append(0)
@@ -512,8 +518,19 @@ def _emit_loop(
     # non-empty.
     var body_indent = " " * (indent + 4)
     out += body_indent + flag + " += 1\n"
-    out += body_indent + '_ = _cov_branch("' + id + '", True)\n'
+    out += body_indent + "_ = " + branch + '("' + id + '", True)\n'
     closers.append(_LoopCloser(indent, id, flag))
+
+
+def _fresh_name(var name: String, source: String) -> String:
+    """Return a generated name or prefix absent from the entire source.
+
+    Checking the full text also protects nested scopes, parameters, imported
+    names, generic callbacks, and longer identifiers sharing the prefix.
+    """
+    while name in source:
+        name += "_"
+    return name^
 
 
 def instrument(source: String, module: String) raises -> Instrumented:
@@ -536,9 +553,10 @@ def instrument(source: String, module: String) raises -> Instrumented:
             "Coverage module ID exceeds the 512-byte atomic record limit"
         )
     var scanner = Scanner()
-    var stem = String("_cov_eval_")
-    while stem in source:
-        stem += "_"
+    var stem = _fresh_name(String("_cov_eval_"), source)
+    var hit = _fresh_name(String("_cov_hit"), source)
+    var branch = _fresh_name(String("_cov_branch"), source)
+    var loop_stem = _fresh_name(String("_cov_loop_"), source)
     var declarations = List[String]()
     var used_frames = List[Int]()
     var out = String("")
@@ -579,7 +597,10 @@ def instrument(source: String, module: String) raises -> Instrumented:
         if not import_emitted and not was_prose and not was_continuation:
             if _opens_top_level_block(line):
                 out += (
-                    PROBE_IMPORT
+                    "from coverage.runtime import hit as "
+                    + hit
+                    + ", branch as "
+                    + branch
                     + ", begin as "
                     + stem
                     + "begin, leaf as "
@@ -634,6 +655,8 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         pending,
                         pending_line,
                         module,
+                        branch,
+                        loop_stem,
                     )
                 else:
                     var id = module + ":" + String(pending_line)
@@ -643,6 +666,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         id,
                         stem + "state" + String(pending_frame),
                         stem,
+                        branch,
                     )
                     if joined.text != pending:
                         branches.append(pending_line)
@@ -661,12 +685,12 @@ def instrument(source: String, module: String) raises -> Instrumented:
             and not String(line.strip()).startswith("#")
         )
         if significant:
-            _close_loops(out, closers, indent_of(line))
+            _close_loops(out, closers, indent_of(line), branch)
 
         if executable:
             lines.append(number)
             out += " " * indent_of(line)
-            out += '_cov_hit("' + module + ":" + String(number) + '")\n'
+            out += hit + '("' + module + ":" + String(number) + '")\n'
 
         var excluded = PRAGMA_NO_BRANCH in line
 
@@ -681,7 +705,15 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 continue
             if not excluded:
                 _emit_loop(
-                    out, branches, conditions, closers, line, number, module
+                    out,
+                    branches,
+                    conditions,
+                    closers,
+                    line,
+                    number,
+                    module,
+                    branch,
+                    loop_stem,
                 )
                 continue
 
@@ -707,6 +739,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     id,
                     stem + "state" + String(scanner.function_number()),
                     stem,
+                    branch,
                 )
                 if wrapped.text != line:
                     branches.append(number)
@@ -722,7 +755,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
         out += pending + "\n"
 
     # Loops running to the end of the file still need their trailing probe.
-    _close_loops(out, closers, 0)
+    _close_loops(out, closers, 0, branch)
 
     # Only compound decisions need a buffer. Unused declarations disappear.
     for frame in range(len(declarations)):
