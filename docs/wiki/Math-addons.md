@@ -54,7 +54,7 @@ Both give the value that three.js gives, bit for bit. The arithmetic is in `Floa
 | `intersects_obb(other, epsilon)` | The separating axis test of two boxes. |
 | `intersects_plane(plane)` | Whether a plane passes through the box. |
 | `intersect_ray(ray)`, `intersects_ray(ray)` | Where a ray meets the box, or only whether. |
-| `apply_matrix4(m)` | Carry the box through an affine transform. |
+| `apply_matrix4(m)` | Carry the box through a finite affine transform that preserves perpendicular box axes. |
 | `a == b` | three.js's `equals`, exact. |
 
 The port differs from three.js in three places:
@@ -64,6 +64,18 @@ The port differs from three.js in three places:
 - `from_box3` refuses an empty box, and `intersects_box3` says that an empty box meets nothing.
 
 A half size that is negative or not finite is refused.
+
+`apply_matrix4` transforms the box's own axes. Reflections keep a proper rotation and nonnegative half sizes, including when the box is already rotated.
+
+Nonuniform scale is supported when the transformed box axes stay perpendicular. This includes scale along the box axes. A nonuniform world scale can shear a rotated box. Such a transform is refused. A shear is not approximated by an OBB.
+
+Normalized axis dot products can differ from zero by at most `1e-6`. This tolerance allows Float32 rounding. The method then corrects the axes to an orthonormal frame. Each geometric half size is its old value times its transformed axis length.
+
+The stored half sizes also bound Float32 rounding when a local point is formed, transformed and tested. Each scalar operation uses the error bound `u * absolute_magnitude + 2^-150`, with `u = 2^-24`. The method propagates these errors using sums of absolute products, then rounds the final extents outward. Products by zero or signed one, and additions of zero, add no error. An axis-aligned box at the origin keeps exact extents under a signed-permutation transform.
+
+This is a conservative numerical bound, not exact arithmetic or a general shear bound. Cancellation can require a visible increase in a thin extent beside a large extent or center. The increase depends on the absolute products, not the ULP of the small result.
+
+The method refuses nonfinite inputs, projections, collapsed axes, and positive half sizes that underflow. It also refuses center, half-size and conservative-bound overflow. Every refusal leaves the box unchanged.
 
 ## Capsule
 
