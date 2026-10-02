@@ -49,7 +49,8 @@ from core.buffer_geometry import (
 )
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
-from std.math import cos, sin, sqrt
+from math.norm import normalized2
+from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 
@@ -181,6 +182,16 @@ def cylinder(
     # runs.
     var slope = (bottom - top) / tall
     var lean = sqrt(1 + slope * slope)
+    var radial_normal = Float32(1)
+    if not isfinite(lean):
+        # Height and radius difference give the same direction without a
+        # slope that can overflow before it reaches normalization.
+        var direction = normalized2(
+            Float64(tall), Float64(bottom) - Float64(top)
+        )
+        radial_normal = Float32(direction[0])
+        slope = Float32(direction[1])
+        lean = 1
     for row in range(height_segments + 1):  # pragma: no branch
         var v = Float32(row) / Float32(height_segments)
         var radius = v * (bottom - top) + top
@@ -193,9 +204,9 @@ def cylinder(
             data.append(radius * sin_theta)
             data.append(y)
             data.append(radius * cos_theta)
-            normals.append(sin_theta / lean)
+            normals.append(sin_theta * radial_normal / lean)
             normals.append(slope / lean)
-            normals.append(cos_theta / lean)
+            normals.append(cos_theta * radial_normal / lean)
             uvs.append(u)
             uvs.append(1 - v)
 

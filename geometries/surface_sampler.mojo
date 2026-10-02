@@ -103,6 +103,14 @@ def _area(a: Vector3, b: Vector3, c: Vector3) -> Float64:
     return sqrt(nx * nx + ny * ny + nz * nz) * 0.5
 
 
+def _vertex_weight(attribute: BufferAttribute, vertex: Int) raises -> Float64:
+    """Read one used vertex's finite, nonnegative weight."""
+    var value = Float64(attribute.component(vertex, 0))
+    if not isfinite(value) or value < 0:
+        raise Error("A vertex weight must be finite and nonnegative")
+    return value
+
+
 struct MeshSurfaceSampler(Movable):
     """Weighted random points on the triangles of a geometry. three.js:
     `MeshSurfaceSampler`."""
@@ -201,9 +209,12 @@ struct MeshSurfaceSampler(Movable):
 
         Raises:
             Error: If the positions do not make whole triangles, an index
-                points past the positions, or a weight is negative or not a
-                number.
+                points past the positions, a used weight is negative or not
+                finite, or a positive weight cannot keep a finite, nonzero
+                interval in the Float32 distribution. A failed build clears
+                the previous distribution.
         """
+        self.distribution.clear()
         var faces = self.face_count()
         ref positions = self.geometry.attribute_view(POSITION)
         var weights = List[Float32]()
@@ -215,25 +226,40 @@ struct MeshSurfaceSampler(Movable):
                     self.weight_attribute.value()
                 )
                 weight = (
-                    Float64(weigh.component(corners[0], 0))
-                    + Float64(weigh.component(corners[1], 0))
-                    + Float64(weigh.component(corners[2], 0))
+                    _vertex_weight(weigh, corners[0])
+                    + _vertex_weight(weigh, corners[1])
+                    + _vertex_weight(weigh, corners[2])
                 )
             weight *= _area(
                 positions.vector3(corners[0]),
                 positions.vector3(corners[1]),
                 positions.vector3(corners[2]),
             )
-            if not isfinite(weight) or weight < 0:
+            # Each checked vertex weight is nonnegative, and _area is a
+            # square root. Their product cannot be negative; nonfinite
+            # positions can still make it NaN or infinite.
+            if not isfinite(weight):
                 raise Error(
                     "A triangle's weight must be a number, not negative"
                 )
-            weights.append(Float32(weight))
+            var stored_weight = Float32(weight)
+            if not isfinite(stored_weight) or (
+                weight > 0 and stored_weight == 0
+            ):
+                raise Error("A positive triangle weight must fit in Float32")
+            weights.append(stored_weight)
         var distribution = List[Float32]()
         var total = Float64(0)
+        var previous = Float32(0)
         for face in range(faces):
             total += Float64(weights[face])
-            distribution.append(Float32(total))
+            var upper = Float32(total)
+            if not isfinite(upper) or (weights[face] > 0 and upper <= previous):
+                raise Error(
+                    "Positive weights need distinct finite Float32 intervals"
+                )
+            distribution.append(upper)
+            previous = upper
         self.distribution = distribution^
 
     def _binary_search(self, x: Float64) -> Int:

@@ -21,6 +21,12 @@ import tempfile
 COLOR = re.compile(r"\x1b\[[0-9;]*m")
 DIAGNOSTIC = re.compile(r"^(.+?):(\d+):(\d+):\s*(?:fatal )?error:\s*(.*)$", re.M)
 NOTE = re.compile(r"^.*?:\d+:\d+:\s*note:\s*(.*)$", re.M)
+# The pinned compiler can emit this startup warning without failing to compile.
+# Match the entire line so real crashes, import errors and added text still fail.
+CRASHPAD_STARTUP_WARNING = (
+    "Failed to initialize Crashpad.  Crash reporting will not be available.  "
+    "Cause: while locating crashpad handler: unable to locate crashpad handler executable"
+)
 INFRASTRUCTURE = re.compile(
     r"unable to (?:locate|find|open|load)|cannot (?:find|open|load) (?:file|module)|"
     r"module .*not found|no such file or directory|failed to (?:load|import)|"
@@ -39,6 +45,8 @@ def rejection_error(fixture, returncode, output, expectations=None):
     if returncode != 1:
         return f"compiler failed abnormally (exit {returncode})"
     output = COLOR.sub("", output)
+    output = "\n".join(line for line in output.splitlines()
+                       if line != CRASHPAD_STARTUP_WARNING)
     if INFRASTRUCTURE.search(output):
         return "infrastructure or import failure"
     diagnostics = DIAGNOSTIC.findall(output)

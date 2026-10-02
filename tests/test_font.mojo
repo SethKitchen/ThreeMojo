@@ -86,6 +86,39 @@ def test_the_signed_area_says_which_way_a_contour_runs() raises:
     assert_false(is_clockwise(square(0, 2, False)))
 
 
+def test_translation_does_not_change_contour_area_or_winding() raises:
+    """Small contours keep their area when moved far from the origin."""
+    for offset in [Float32(-100000), Float32(0), Float32(100000)]:
+        for clockwise in [False, True]:
+            var points = square(offset, offset + 1, clockwise)
+            var expected = Float32(-1) if clockwise else Float32(1)
+            assert_equal(signed_area(points), expected)
+            assert_equal(is_clockwise(points), clockwise)
+            points.append(points[0])
+            assert_equal(signed_area(points), expected)
+    assert_equal(signed_area([Vector2(7, 8)]), 0)
+    assert_equal(signed_area([Vector2(7, 8), Vector2(9, 10)]), 0)
+
+
+def test_winding_does_not_narrow_a_small_area_to_zero() raises:
+    """A clockwise contour keeps its sign below Float32's area range."""
+    var points = square(0, 1e-30, True)
+    assert_true(is_clockwise(points))
+    points.reverse()
+    assert_false(is_clockwise(points))
+
+
+def test_translated_shape_paths_keep_their_holes() raises:
+    """Outline classification is unchanged by a large translation."""
+    for offset in [Float32(-100000), Float32(100000)]:
+        var path = ShapePath()
+        draw(path, square(offset, offset + 4, True))
+        draw(path, square(offset + 1, offset + 2, False))
+        var shapes = path.to_shapes()
+        assert_equal(len(shapes), 1)
+        assert_equal(shapes[0].hole_count(), 1)
+
+
 def test_a_point_inside_a_polygon() raises:
     for clockwise in [False, True]:
         var box = square(0, 2, clockwise)

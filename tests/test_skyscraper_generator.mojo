@@ -14,6 +14,7 @@ three.js's modules: 54 vertices a window, 6 a pane, 36 a box, 72 a pier,
 
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from generators.skyscraper import (
+    _Baked,
     ARCADE,
     AWNING,
     Affine,
@@ -28,6 +29,7 @@ from generators.skyscraper import (
     SkyscraperParts,
     SkyscraperStyle,
     WALL,
+    WindowRoom,
     bake,
     build_faces,
     build_footprint,
@@ -39,7 +41,8 @@ from generators.skyscraper import (
     window_geometry,
 )
 from generators.utils import PART_ID, Vec3d
-from std.math import inf, nan
+from geometries.plane import plane
+from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -48,7 +51,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length, METER
+from units.si import Angle, DEGREE, Length, METER
 
 
 def _small() -> SkyscraperParameters:
@@ -292,7 +295,54 @@ def test_small_tower_matches_three() raises:
     # Every normal is unit length.
     var normal = geometry.attribute_view(String(NORMAL)).vector3(pane)
     assert_almost_equal(normal.length(), 1, atol=1e-6)
+    # A pane faces along its frame's +z column, at every tower height.
+    # Unit length alone cannot detect a translated normal's wrong direction.
+    for pane_index in range(len(parts.glass)):
+        var expected = parts.glass[pane_index].z_axis
+        for vertex in range(6):
+            var at = pane + pane_index * 6 + vertex
+            var n = geometry.attribute_view(NORMAL).vector3(at)
+            assert_almost_equal(n.x, Float32(expected.x), atol=1e-6)
+            assert_almost_equal(n.y, Float32(expected.y), atol=1e-6)
+            assert_almost_equal(n.z, Float32(expected.z), atol=1e-6)
     assert_equal(generator.build().vertex_count(), 11364)
+
+
+def test_baked_rigid_normals_ignore_translation() raises:
+    """A translated panel keeps its direction; a rotated panel turns it."""
+    var panel = plane(Length(1, METER), Length(1, METER)).to_non_indexed()
+    for height in [Float64(0), Float64(10), Float64(100)]:
+        for rotated in [False, True]:
+            var x_axis = Vec3d(0, 0, -1) if rotated else Vec3d(1, 0, 0)
+            var z_axis = Vec3d(1, 0, 0) if rotated else Vec3d(0, 0, 1)
+            var placement = Affine(
+                x_axis, Vec3d(0, 1, 0), z_axis, Vec3d(7, height, -3)
+            )
+            var baked = _Baked()
+            baked.add(panel, [placement], WALL, True, List[WindowRoom]())
+            var result = baked.geometry()
+            for vertex in range(result.vertex_count()):
+                var normal = result.attribute_view(NORMAL).vector3(vertex)
+                assert_equal(normal.x, Float32(z_axis.x))
+                assert_equal(normal.y, Float32(z_axis.y))
+                assert_equal(normal.z, Float32(z_axis.z))
+
+
+def test_baked_scaled_normals_use_the_inverse_transpose() raises:
+    """A slanted panel's normal follows nonuniform scale, without a move."""
+    var panel = plane(Length(1, METER), Length(1, METER)).to_non_indexed()
+    panel.rotate_y(Angle(45, DEGREE))
+    var placement = Affine(
+        Vec3d(2, 0, 0), Vec3d(0, 3, 0), Vec3d(0, 0, 4), Vec3d(7, 10, -3)
+    )
+    var baked = _Baked()
+    baked.add(panel, [placement], WALL, False, List[WindowRoom]())
+    var result = baked.geometry()
+    for vertex in range(result.vertex_count()):
+        var normal = result.attribute_view(NORMAL).vector3(vertex)
+        assert_almost_equal(normal.x, Float32(2 / sqrt(5.0)), atol=1e-6)
+        assert_almost_equal(normal.y, 0, atol=1e-6)
+        assert_almost_equal(normal.z, Float32(1 / sqrt(5.0)), atol=1e-6)
 
 
 def test_an_arcade_tower_matches_three() raises:

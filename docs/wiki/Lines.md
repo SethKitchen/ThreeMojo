@@ -204,6 +204,8 @@ scene.add_wide_line(Line2(path, ink, node))
 
 A wide-line geometry holds its points in pairs, one pair per segment. That is the layout `SEGMENTS` reads. three.js keeps the same pairs in `instanceStart` and `instanceEnd`. An edges or a wireframe geometry is therefore a wide-line geometry already.
 
+The draw range counts position slots. Drawing and picking start pairs at the first slot in the range. They leave out an unpaired last point. Hit segment numbers, colors, and dash distances still refer to the full geometry.
+
 A `color` attribute of three floats per point gives the vertex colors. The colors are linear, as a mesh's are.
 
 ### The width
@@ -255,7 +257,7 @@ The distance along the line is worked out by the renderer, as for a [dashed line
 
 `Raycaster.intersect_wide_line` is three.js's `LineSegments2.raycast`. It takes the camera and the image size, which three.js reads from `raycaster.camera` and `material.resolution`. See [Raycasting](Raycasting).
 
-A width in the world is measured in the world. A width in pixels is measured on the image, from the point one meter along the ray. A hit's `triangle` says which segment was struck.
+A width in the world is measured in the world. A width in pixels is measured on the image, from the point one meter along the ray. A hit's `triangle` says which segment was struck. Its `point_on_line` is the nearest point on the segment.
 
 ### What is not ported, and what differs
 
@@ -264,7 +266,7 @@ A width in the world is measured in the world. A width in pixels is measured on 
 - **A width in the world is a flat ribbon.** three.js traces a capsule for each fragment. Here the ribbon faces the camera, and its outline matches the capsule's outline. Where the ribbon passes through another surface, the two cross along a different curve.
 - **A segment with no length is a round dot.** three.js normalizes a zero vector there, and GLSL leaves the result undefined.
 - **A hit outside `near` and `far` is dropped.** three.js's `LineSegments2.raycast` keeps it. A mesh hit is dropped in both.
-- **Not ported:** the `fwidth` ramp of `LineMaterial`'s `alphaToCoverage`, the raycaster's `params.Line2.threshold`, a hit's `pointOnLine` and `LineMaterial.resolution`. A `Line2` casts no shadow and receives none.
+- **Not ported:** the `fwidth` ramp of `LineMaterial`'s `alphaToCoverage`, the raycaster's `params.Line2.threshold` and `LineMaterial.resolution`. A `Line2` casts no shadow and receives none.
 - **`intersect_scene` does not pick a wide line.** It has no camera for a width in pixels.
 
 ### What raises

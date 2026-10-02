@@ -941,7 +941,8 @@ def _by_time(var events: List[DVSEvent]) -> List[DVSEvent]:
             var end = min(start + 2 * width, count)
             var left = start
             var right = middle
-            for dest in range(start, end):
+            # start < count and width >= 1 imply end > start.
+            for dest in range(start, end):  # pragma: no branch
                 if left < middle and (
                     right >= end or events[left].t <= events[right].t
                 ):

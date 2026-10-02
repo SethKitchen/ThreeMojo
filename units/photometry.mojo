@@ -189,9 +189,6 @@ struct Luminance(ImplicitlyCopyable, Writable):
 
         Returns:
             The sum in nits.
-
-        Raises:
-            None.
         """
         return Self(self.nits + other.nits, NIT)
 
@@ -203,9 +200,6 @@ struct Luminance(ImplicitlyCopyable, Writable):
 
         Returns:
             The difference in nits.
-
-        Raises:
-            None.
         """
         return Self(self.nits - other.nits, NIT)
 
@@ -228,9 +222,6 @@ struct Luminance(ImplicitlyCopyable, Writable):
 
         Returns:
             The scaled luminance.
-
-        Raises:
-            None.
         """
         return self * factor
 

@@ -39,8 +39,8 @@ other than `size` cubed, and for bytes a number outside zero to one, which
 a `Uint8Array` would wrap. A `LUT_1D_SIZE` line is refused: three.js reads
 no one-dimensional table either.
 
-**Not ported.** three.js's `LUT3dlLoader` and `LUTImageLoader`, which
-read `.3dl` files and image strips.
+Related loaders: `loaders.lut_3dl` reads `.3dl` files and
+`loaders.lut_image` reads image strips.
 """
 
 from math.vector3 import Vector3

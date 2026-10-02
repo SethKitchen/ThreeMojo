@@ -43,7 +43,7 @@ A triangle with two corners in one place is dropped, as in three.js. three.js ra
 
 ## Box lines
 
-`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box.
+`box_line(width, height, depth, width_segments, height_segments, depth_segments)` is a box as line segments. Draw it with a `LineSegments`. Each segment boundary gives a ring of four sticks round the box. The three extents must be finite and positive.
 
 ## Tessellate
 
@@ -132,7 +132,11 @@ A three.js group holds its children. Here a group is a scene node, and a mesh na
 
 `NURBSSurface` is a `ParametricSurface`, so `parametric(surface, slices, stacks)` makes a mesh of it. `NURBSVolume.point(u, v, w)` gives a point inside a volume.
 
-The knots must not fall, and their count must be the number of control points, plus the degree, plus one. three.js does not check this.
+The knots must be finite and must not fall. Their count must be the number of control points, plus the degree, plus one. The degree must be less than the control point count. The active interval, from `knots[degree]` to `knots[control_point_count]`, must have positive width.
+
+These checks apply to every axis of a surface or volume. Repeated knots are allowed when the active interval stays nonempty. three.js does not check these conditions.
+
+Weighted derivatives above the polynomial degree are zero, including the weight component. This corrects three.js's padding weight of one. Constant NURBS curves have zero tangents. Rational curves can still have nonzero higher derivatives when their weights vary.
 
 ## Named curves
 
@@ -179,7 +183,9 @@ The arithmetic is in doubles, as in three.js. The sky and the trees take their r
 
 ## Tube painter
 
-A `TubePainter` is a pen that draws tubes. `move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
+A `TubePainter` is a pen that draws tubes. `move_to` and `line_to` refuse a nonfinite position before changing the pen.
+
+`move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
 
 three.js fills a buffer of a million vertices. Here the lists grow. Draw the geometry with a `STANDARD` material that reads the vertex colors, and turn frustum culling off, as three.js does.
 

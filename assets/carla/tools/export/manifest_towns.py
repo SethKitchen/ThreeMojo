@@ -91,8 +91,12 @@ def main(argv=None):
     parser.add_argument("--urls")
     args = parser.parse_args(argv)
     manifest = tool.load_manifest(args.manifest)
-    index = json.load(open(args.index, encoding="utf-8"))
-    urls = json.load(open(args.urls, encoding="utf-8")) if args.urls else {}
+    with open(args.index, encoding="utf-8") as source:
+        index = json.load(source)
+    urls = {}
+    if args.urls:
+        with open(args.urls, encoding="utf-8") as source:
+            urls = json.load(source)
     old = {e["id"]: e for e in manifest["entries"]}
     kept = [e for e in manifest["entries"] if not e["id"].startswith(PREFIX)]
     added = []
@@ -105,6 +109,10 @@ def main(argv=None):
         added.append(entry_of(package_id, item, url))
         bindings["town." + town_of(item)] = package_id
     manifest["entries"] = kept + added
+    removed = set(old) - {entry["id"] for entry in manifest["entries"]}
+    for key, value in manifest["bindings"].items():
+        if value in removed:
+            manifest["bindings"][key] = None
     tool.save_manifest(manifest, args.manifest)
     print(f"{len(added)} towns written, {sum(1 for e in added if e['files'][0]['url'])} with a URL")
 

@@ -15,6 +15,10 @@ With FILE..., prints the FILEs that the change can affect, in their order:
   them: a module beside the importer first, then the repo root.
 - A file under `assets/` affects each `.mojo` file whose source quotes a path
   that the asset's path starts with, as `"assets/draco/"` does.
+- A changed test or test helper also selects the library it exercises and
+  every suite that can reach that library, so coverage loss is checked.
+  Removed imports use the full check because the current graph no longer
+  describes the test's former coverage obligations.
 - Documentation (`*.md`, `docs/`, `out/`) affects no `.mojo` file.
 - Any other change affects everything: the Makefile, the CI workflow, the
   coverage tool (it decides what coverage means), a deleted test suite (its
@@ -58,7 +62,7 @@ def git(*args):
             capture_output=True,
             text=True,
         ).stdout
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, UnicodeError, subprocess.CalledProcessError):
         return None
 
 
@@ -165,73 +169,144 @@ def resolve(name, importer, known):
     return []
 
 
-def affected_set(changed):
+def reachable(seeds, edges):
+    """Return the transitive closure of `seeds` through `edges`."""
+    found = set()
+    pending = list(seeds)
+    while pending:
+        path = pending.pop()
+        if path not in found:
+            found.add(path)
+            pending.extend(edges.get(path, ()))
+    return found
+
+
+def explain(reasons, message):
+    """Append an optional diagnostic without changing machine-readable output."""
+    if reasons is not None:
+        reasons.append(message)
+
+
+def affected_set(changed, reasons=None):
     """Return the `.mojo` files a change affects, or ALL."""
     for path, deleted in changed.items():
         if is_documentation(path):
             continue
         if path.endswith(".mojo") and not path.startswith("coverage/"):
             if deleted and path.startswith("tests/test_"):
+                explain(reasons, "a test suite was deleted: " + path)
                 return ALL
             continue
         if path.startswith("assets/"):
             continue
+        explain(reasons, "a build input has no narrower dependency rule: " + path)
         return ALL
 
     files = mojo_files()
     known = set(files) | {p for p in changed if p.endswith(".mojo")}
-    importers = {}
+    importers, imports = {}, {}
     seeds = {p for p in changed if p.endswith(".mojo")}
     assets = [p for p in changed if p.startswith("assets/")]
     for path in files:
-        with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
-            source = handle.read()
+        try:
+            with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
+                source = handle.read()
+        except (OSError, UnicodeError):
+            explain(reasons, "a source file could not be read: " + path)
+            return ALL
         for name in imported_names(source):
             for target in resolve(name, path, known):
                 if target != path:
                     importers.setdefault(target, set()).add(path)
+                    imports.setdefault(path, set()).add(target)
         for quoted in QUOTED_ASSET.findall(source):
             if any(asset.startswith(quoted) for asset in assets):
                 seeds.add(path)
 
-    affected = set()
-    pending = list(seeds)
-    while pending:
-        path = pending.pop()
-        if path in affected:
-            continue
-        affected.add(path)
-        pending.extend(importers.get(path, ()))
+    affected = reachable(seeds, importers)
+    if any(path.startswith("tests/") for path in seeds):
+        # An edited test can stop exercising unchanged library code. Measure
+        # its imports too, with all the suites that can reach those modules.
+        # Include users of a changed helper, not only the helper's imports.
+        tests = {path for path in affected if path.startswith("tests/")}
+        measured = reachable(tests, imports)
+        affected.update(reachable(measured, importers))
     return affected
+
+
+def test_imports_removed(changed, base, reasons=None):
+    """Return True if a changed test drops imports, or its past is unknown.
+
+    The current graph cannot reach an import a test no longer names. Fall
+    back to the full check rather than lose that former coverage obligation.
+    Added tests have no former imports; their current graph is sufficient.
+    """
+    tests = [path for path in changed
+             if path.startswith("tests/") and path.endswith(".mojo")]
+    if not tests:
+        return False
+    merge_base = git("merge-base", base, "HEAD")
+    if merge_base is None:
+        explain(reasons, "the test import baseline could not be established")
+        return True
+    revision = merge_base.strip()
+    tracked = git("ls-tree", "-r", "--name-only", "-z", revision, "--", *tests)
+    if tracked is None:
+        explain(reasons, "the baseline test inventory could not be read")
+        return True
+    for path in filter(None, tracked.split("\0")):
+        if changed[path]:
+            explain(reasons, "a test or helper was deleted: " + path)
+            return True
+        before = git("show", revision + ":" + path)
+        if before is None:
+            explain(reasons, "a baseline test could not be read: " + path)
+            return True
+        try:
+            with open(os.path.join(ROOT, path), encoding="utf-8") as source:
+                after = source.read()
+        except (OSError, UnicodeError):
+            explain(reasons, "a changed test could not be read: " + path)
+            return True
+        if set(imported_names(before)) - set(imported_names(after)):
+            explain(reasons, "a test or helper removed imports: " + path)
+            return True
+    return False
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", required=True, help="the ref to compare with")
+    parser.add_argument("--verbose", action="store_true", help="explain ALL selection on stderr")
     parser.add_argument("--changed", action="store_true", help="changed only")
     parser.add_argument("--list", action="store_true", help="print the change")
     parser.add_argument("files", nargs="*")
     options = parser.parse_args()
 
+    reasons = []
     changed = changed_paths(options.base)
+    if changed is None:
+        explain(reasons, "Git could not establish the changed inputs")
+    elif test_imports_removed(changed, options.base, reasons):
+        changed = None
+    affected = ALL if changed is None else affected_set(changed, reasons)
+    if options.verbose and affected == ALL:
+        for reason in reasons:
+            print("affected: ALL because " + reason, file=sys.stderr)
     if options.list:
-        if changed is None or affected_set(changed) == ALL:
+        if affected == ALL:
             print(ALL)
         else:
             print("\n".join(sorted(changed)))
         return 0
 
     candidates = [path.removeprefix("./") for path in options.files]
-    if changed is None:
+    if affected == ALL:
         selected = candidates
+    elif options.changed:
+        selected = [path for path in candidates if path in changed]
     else:
-        affected = affected_set(changed)
-        if affected == ALL:
-            selected = candidates
-        elif options.changed:
-            selected = [path for path in candidates if path in changed]
-        else:
-            selected = [path for path in candidates if path in affected]
+        selected = [path for path in candidates if path in affected]
     print(" ".join(selected))
     return 0
 

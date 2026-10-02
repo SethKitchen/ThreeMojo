@@ -508,7 +508,7 @@ def mix_into_pile(
     """
     var part = share / (so_far + share)
     var at = slot * PILE
-    if kind.is_boolean():
+    if kind.is_discrete():
         # three.js's `_select`: the value takes the pile if its share is
         # at least one half.
         if part >= 0.5:
@@ -550,7 +550,7 @@ def rest_into_pile(
             a line or along an arc, or for a flag a choice of one value.
     """
     var at = slot * PILE
-    if kind.is_boolean():
+    if kind.is_discrete():
         # three.js's `_select` with the original coming in at the missing
         # weight.
         if 1 - total >= 0.5:
@@ -612,7 +612,7 @@ def additive_identity(
         piles[at + offset] = 0
     if kind == QUATERNION:
         piles[at + 3] = 1
-    elif kind.is_boolean():
+    elif kind.is_discrete():
         piles[at] = original[0]
 
 
@@ -636,7 +636,7 @@ def mix_additive_into_pile(
             and a flag is chosen as `mix_into_pile` chooses one.
     """
     var at = slot * PILE
-    if kind.is_boolean():
+    if kind.is_discrete():
         if share >= 0.5:
             piles[at] = value[0]
         return
@@ -674,7 +674,7 @@ def add_onto_pile(
             the additive one.
     """
     var at = slot * PILE
-    if kind.is_boolean():
+    if kind.is_discrete():
         piles[at] = additive[at]
         return
     if kind == QUATERNION:

@@ -29,6 +29,32 @@ These three.js members are not ported:
 - `Vector3.setFromColor` and `Color.setFromVector3` join two packages that do not import each other.
 - `Triangle.getInterpolatedAttribute` reads an attribute.
 
+## Scalar lengths and directions
+
+`math.norm` provides `length2`, `length3`, and `length4` for scalar components.
+The matching `normalized2`, `normalized3`, and `normalized4` functions return
+component tuples. Each function keeps the input precision, either `Float32`
+or `Float64`.
+
+Finite nonzero directions normalize to unit length even when a direct squared
+norm overflows or underflows. Zero directions stay zero. A length can return
+infinity when the true length cannot fit in the input type. Ordinary inputs
+keep the direct sum-of-squares arithmetic. Vector and quaternion normalization
+use these shared functions. A zero quaternion still becomes the identity.
+
+Matrix axis lengths, rotation extraction, and decomposition use the same
+scale-safe directions. Decomposition refuses nonfinite entries, zero axes,
+and axis lengths that cannot fit in `Float32`. It leaves output arguments
+unchanged on these errors. A mirrored transform keeps its negative x scale
+even when the direct determinant underflows or overflows.
+
+Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
+axis or tolerance and a negative tolerance. Extreme finite uniform scales
+still qualify as scaled rotations.
+
+Squared lengths and dot products return their direct arithmetic result. They
+can overflow or underflow even when a length or unit direction is representable.
+
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
@@ -298,7 +324,11 @@ An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only w
 | `look_at(eye, target, up)` | The view matrix of a camera at `eye`. |
 | `viewport(width, height)` | Normalized device space to pixels. Rows count down. |
 
-Each raises for a degenerate volume. `look_at` never raises. A camera at its own target looks down its own -z. An up vector along the view direction is nudged off it, as three.js does.
+Projection bounds must be finite and ordered. An infinite far plane is refused. The builders raise if the volume is degenerate or a required coefficient cannot fit in `Float32`. Intermediate overflow uses a wider calculation when the final coefficients can fit.
+
+Both `Matrix4.look_at` and the view builder use the same basis. Positions must be finite. Up must be finite and nonzero. A camera at its own target uses +z as its backward axis. Parallel up is nudged off the view direction. The basis accepts very small and large finite directions.
+
+`Matrix4.look_at` keeps translation and the bottom row, and leaves the matrix unchanged on failure. The view builder also refuses an offset that cannot fit in `Float32`. Frustum builders refuse nonfinite matrices and depth distances.
 
 Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.
 

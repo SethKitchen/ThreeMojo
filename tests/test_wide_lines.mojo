@@ -40,6 +40,7 @@ from objects.line_segments2 import (
     MIN_CAP_STEPS,
     cap_steps,
     dash_spans,
+    drawn_segments,
     line_geometry,
     line_segments_geometry,
 )
@@ -783,6 +784,173 @@ def test_a_pick_skips_a_hidden_or_empty_line_and_refuses_nonsense() raises:
     assert_equal(
         len(ray.intersect_wide_line(scene, assets, 1, camera, SIZE, SIZE)), 0
     )
+
+
+def ranged_sticks(start: Int, count: Int) raises -> BufferGeometry:
+    """Return two vertical sticks with a selected position-slot range."""
+    var geometry = line_segments_geometry(
+        [
+            Vector3(-0.5, -0.5, 0),
+            Vector3(-0.5, 0.5, 0),
+            Vector3(0.5, -0.5, 0),
+            Vector3(0.5, 0.5, 0),
+        ],
+        [
+            FloatColor(1, 0, 0),
+            FloatColor(1, 0, 0),
+            FloatColor(0, 1, 0),
+            FloatColor(0, 1, 0),
+        ],
+    )
+    geometry.set_draw_range(start, count)
+    return geometry^
+
+
+def test_wide_segment_ranges_count_complete_pairs() raises:
+    var geometry = ranged_sticks(0, 4)
+    for span in [
+        (0, 4, 0, 2),
+        (2, 2, 2, 1),
+        (1, 3, 1, 1),
+        (3, 1, 3, 0),
+        (2, 0, 2, 0),
+        (1, Int.MAX, 1, 1),
+        (Int.MAX, Int.MAX, 4, 0),
+    ]:
+        geometry.set_draw_range(span[0], span[1])
+        var run = drawn_segments(geometry)
+        assert_equal(run[0], span[2])
+        assert_equal(run[1], span[3])
+    geometry.set_draw_range(2)
+    assert_equal(drawn_segments(geometry)[1], 1)
+    geometry.draw_range.start = -1
+    with assert_raises():
+        _ = drawn_segments(geometry)
+    geometry.set_draw_range(0)
+    geometry.set_index([0, 1, 2])
+    with assert_raises(contains="cannot be indexed"):
+        _ = drawn_segments(geometry)
+    with assert_raises():
+        _ = drawn_segments(sticks([0, 0, 0]))
+    assert_equal(drawn_segments(line_segments_geometry(List[Vector3]()))[1], 0)
+
+
+def test_a_wide_line_draws_the_range_with_original_colors() raises:
+    var assets = Assets()
+    var geometry = assets.geometries.add(ranged_sticks(2, Int.MAX))
+    var paint = assets.materials.add(
+        line_material(
+            Color(255, 255, 255), LineWidth(pixels=2), vertex_colors=True
+        )
+    )
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, a_camera())
+    assert_equal(Int(image.get_pixel(4, 8).r), 0)
+    assert_equal(Int(image.get_pixel(4, 8).g), 0)
+    assert_true(image.get_pixel(12, 8).g > 128)
+    assert_equal(Int(image.get_pixel(12, 8).r), 0)
+    for span in [(0, 0), (3, 1), (Int.MAX, Int.MAX)]:
+        assets.geometries.geometries[geometry.value].set_draw_range(
+            span[0], span[1]
+        )
+        assert_equal(len(renderer.prepare(scene, assets, a_camera())), 0)
+
+
+def test_a_wide_line_picks_only_the_range_with_original_segment_ids() raises:
+    for width in [LineWidth(pixels=2), LineWidth(world=Length(0.2, METER))]:
+        var assets = Assets()
+        var geometry = assets.geometries.add(ranged_sticks(2, Int.MAX))
+        var paint = assets.materials.add(line_material(RED, width))
+        var scene = a_scene()
+        scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+        var ray = Raycaster(Vector3(-0.5, 0, 4), Vector3(0, 0, -1))
+        assert_equal(
+            len(
+                ray.intersect_wide_line(
+                    scene, assets, 0, a_camera(), SIZE, SIZE
+                )
+            ),
+            0,
+        )
+        ray.set(Vector3(0.5, 0, 4), Vector3(0, 0, -1))
+        var hits = ray.intersect_wide_line(
+            scene, assets, 0, a_camera(), SIZE, SIZE
+        )
+        assert_equal(len(hits), 1)
+        assert_equal(hits[0].triangle, 1)
+        for span in [(0, 0), (3, 1), (Int.MAX, Int.MAX)]:
+            assets.geometries.geometries[geometry.value].set_draw_range(
+                span[0], span[1]
+            )
+            assert_equal(
+                len(
+                    ray.intersect_wide_line(
+                        scene, assets, 0, a_camera(), SIZE, SIZE
+                    )
+                ),
+                0,
+            )
+
+
+def test_a_wide_line_starts_pairing_at_an_odd_draw_slot() raises:
+    var assets = Assets()
+    var geometry = assets.geometries.add(ranged_sticks(1, 3))
+    var paint = assets.materials.add(line_material(RED, LineWidth(pixels=2)))
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    var ray = Raycaster(Vector3(0, 0, 4), Vector3(0, 0, -1))
+    var hits = ray.intersect_wide_line(scene, assets, 0, a_camera(), SIZE, SIZE)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].triangle, 0)
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    assert_true(lit(renderer.render(scene, assets, a_camera()), 8, 8))
+
+
+def test_a_ranged_wide_dash_keeps_its_full_geometry_distance() raises:
+    var assets = Assets()
+    var shape = line_segments_geometry(
+        [
+            Vector3(-0.5, 0, 0),
+            Vector3(-0.5, 0.25, 0),
+            Vector3(0.5, -0.5, 0),
+            Vector3(0.5, 0.5, 0),
+        ]
+    )
+    shape.set_draw_range(2, 2)
+    var geometry = assets.geometries.add(shape^)
+    var paint = assets.materials.add(
+        line_material(
+            RED,
+            LineWidth(pixels=2),
+            dash_size=Length(0.25, METER),
+            gap_size=Length(0.25, METER),
+        )
+    )
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, a_camera())
+    assert_false(lit(image, 12, 11))
+    assert_true(lit(image, 12, 9))
+    assert_false(lit(image, 4, 7))
+
+
+def test_a_wide_line_picker_refuses_indexed_points() raises:
+    var assets = Assets()
+    var shape = ranged_sticks(0, 4)
+    shape.set_index([0, 1, 2])
+    var geometry = assets.geometries.add(shape^)
+    var paint = assets.materials.add(line_material(RED, LineWidth(pixels=2)))
+    var scene = a_scene()
+    scene.add_wide_line(LineSegments2(geometry, paint, NodeId(0)))
+    var ray = Raycaster(Vector3(0.5, 0, 4), Vector3(0, 0, -1))
+    with assert_raises(contains="cannot be indexed"):
+        _ = ray.intersect_wide_line(scene, assets, 0, a_camera(), SIZE, SIZE)
 
 
 def main() raises:

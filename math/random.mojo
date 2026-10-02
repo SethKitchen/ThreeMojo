@@ -13,9 +13,6 @@ def mulberry32_step(mut state: UInt32) -> Float64:
     Returns:
         The next sample in `[0, 1)`, with JavaScript's `Math.imul` and
         unsigned-shift arithmetic.
-
-    Raises:
-        None.
     """
     state = state + 0x6D2B79F5
     var t = state

@@ -416,6 +416,13 @@ def _keep_order(mut items: List[BatchedDrawItem]):
     pass
 
 
+def _range_fits(start: Int, count: Int, limit: Int) -> Bool:
+    """Return whether a nonnegative range fits, without adding its ends."""
+    return (
+        start >= 0 and count >= 0 and start <= limit and count <= limit - start
+    )
+
+
 # The largest count a batch accepts when none is given. three.js has no
 # default: its constructor asks for all three.
 comptime NO_LIMIT = Int.MAX
@@ -703,11 +710,13 @@ struct BatchedMesh(Copyable, Movable):
         else:
             index_room = -1
             indices = -1
-        var too_many_indices = (
-            has_index and index_start + index_room > self.max_index_count
+        var too_many_indices = has_index and not _range_fits(
+            index_start, index_room, self.max_index_count
         )
         if (
-            self.next_vertex_start + vertex_room > self.max_vertex_count
+            not _range_fits(
+                self.next_vertex_start, vertex_room, self.max_vertex_count
+            )
             or too_many_indices
         ):
             raise Error("A reserved range does not fit in the batch")
@@ -792,10 +801,10 @@ struct BatchedMesh(Copyable, Movable):
             if span.index_start >= 0:
                 span.index_start = next_index
                 next_index += span.reserved_index_count
-                self.next_index_start = next_index
             span.vertex_start = next_vertex
             next_vertex += span.reserved_vertex_count
-            self.next_vertex_start = next_vertex
+        self.next_vertex_start = next_vertex
+        self.next_index_start = next_index
 
     def set_instance_count(mut self, count: Int) raises:
         """Change how many instances the batch holds at most, three.js's
@@ -835,20 +844,23 @@ struct BatchedMesh(Copyable, Movable):
             max_index_count: The new largest index count.
 
         Raises:
-            Error: If a range in use reaches past either.
+            Error: If either count is negative, or a range in use reaches
+                past either limit.
         """
+        if max_vertex_count < 0 or max_index_count < 0:
+            raise Error("A batched mesh cannot hold a negative count")
         for span in self.geometries:
             if not span.active:
                 continue
-            if (
-                span.vertex_start + span.reserved_vertex_count
-                > max_vertex_count
+            if not _range_fits(
+                span.vertex_start, span.reserved_vertex_count, max_vertex_count
             ):
                 raise Error(
                     "A batched mesh cannot shrink below the vertices it uses"
                 )
-            var end = span.index_start + span.reserved_index_count
-            if span.index_start >= 0 and end > max_index_count:
+            if span.index_start >= 0 and not _range_fits(
+                span.index_start, span.reserved_index_count, max_index_count
+            ):
                 raise Error(
                     "A batched mesh cannot shrink below the indices it uses"
                 )

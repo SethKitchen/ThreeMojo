@@ -37,6 +37,8 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
+OBJ polygon convexity is checked in translated, widened coordinates so small or large finite model scales do not change whether a face is accepted.
+
 ## ObjModel and ObjObject
 
 `ObjModel.objects` holds one `ObjObject` per object, in file order. `count()` says how many. `ObjModel.material_libraries` holds the file name of each `mtllib` line, in file order.
@@ -226,7 +228,9 @@ var shape = assets.geometries.add(model.take_geometry())
 | `parse_stl_text(text) -> StlModel` | Read the text of an ASCII file. |
 | `is_binary_stl(bytes) -> Bool` | Tell the two encodings apart, as three.js does. |
 
-A file exactly as long as its face count says is binary. Otherwise, a file with `solid` in its first ten bytes is ASCII. Any other file is binary.
+ASCII input can begin with one UTF-8 byte-order mark. Both byte and text parsers ignore that leading marker; embedded markers remain data.
+
+A file exactly as long as its face count says is binary. Otherwise, a file with `solid` starting at byte offset zero through four is ASCII. Any other file is binary.
 
 ### StlModel
 

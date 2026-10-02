@@ -20,6 +20,7 @@ from loaders.json import (
     JsonNode,
     parse_json,
 )
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -284,6 +285,28 @@ def test_the_edges_of_every_check_are_reached() raises:
     assert_equal(got[0], UInt8(0xEE))
     assert_equal(got[1], UInt8(0x80))
     assert_equal(got[2], UInt8(0x80))
+
+
+def test_integer_conversion_checks_range_and_finiteness_first() raises:
+    for text in ["1e300", "-1e300", "9000000000000001", "-9000000000000001"]:
+        var document = parse_json(text)
+        with assert_raises(contains="whole number"):
+            _ = document.integer(document.root())
+    for value in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        var document = parse_json("0")
+        document.nodes[0].number = value
+        with assert_raises(contains="whole number"):
+            _ = document.integer(document.root())
+    var high = parse_json("9000000000000000")
+    assert_equal(high.integer(high.root()), 9000000000000000)
+    var low = parse_json("-9000000000000000")
+    assert_equal(low.integer(low.root()), -9000000000000000)
+    var zero = parse_json("-0")
+    assert_equal(zero.integer(zero.root()), 0)
 
 
 def main() raises:

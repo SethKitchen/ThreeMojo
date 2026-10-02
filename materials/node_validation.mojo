@@ -77,13 +77,15 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     var size = len(program.code)
     if size < nodes.PROGRAM_HEADER:
         raise Error("Object JSON: a node program's code is too short")
-    for value in program.code:
+    # The header check above guarantees at least PROGRAM_HEADER words.
+    for value in program.code:  # pragma: no branch
         if not isfinite(value):
             raise Error("Object JSON: a node program needs finite code")
     var starts = List[Int]()
     var counts = List[Int]()
     var pool = nodes.PROGRAM_HEADER
-    for output in range(nodes.NODE_OUTPUT_COUNT):
+    # The serialized header always has NODE_OUTPUT_COUNT output entries.
+    for output in range(nodes.NODE_OUTPUT_COUNT):  # pragma: no branch
         var start = _whole(program.code[output * 2], size)
         var count = _whole(program.code[output * 2 + 1], nodes.MAX_INSTRUCTIONS)
         if count > 0:
@@ -159,7 +161,8 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                     "Object JSON: texture and cube sampler spans overlap"
                 )
     var graph = nodes.NodeGraph()
-    for output in range(nodes.NODE_OUTPUT_COUNT):
+    # The serialized header always has NODE_OUTPUT_COUNT output entries.
+    for output in range(nodes.NODE_OUTPUT_COUNT):  # pragma: no branch
         for instruction in range(counts[output]):
             var at = starts[output] + instruction * nodes.INSTRUCTION_FLOATS
             var kind = nodes.NodeKind(
@@ -182,12 +185,13 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                     " instruction"
                 )
             graph._check_stage(nodes.NodeOutput(output), kind)
+            # Every instruction has these four register slots.
             for slot in [
                 nodes.INSTRUCTION_A,
                 nodes.INSTRUCTION_B,
                 nodes.INSTRUCTION_C,
                 nodes.INSTRUCTION_DEST,
-            ]:
+            ]:  # pragma: no branch
                 _ = _whole(program.code[at + slot], nodes.MAX_REGISTERS - 1)
             if nodes._is_attribute(kind):
                 _ = _whole(

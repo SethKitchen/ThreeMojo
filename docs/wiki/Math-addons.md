@@ -30,7 +30,7 @@ three.js takes a `get` that reads each item's key. Here the items are indices in
 
 `ImprovedNoise().noise(x, y, z)` is Ken Perlin's improved noise. It is zero at every whole-number point.
 
-`SimplexNoise(random)` is Stefan Gustavson's simplex noise. `noise(x, y)`, `noise3d(x, y, z)` and `noise4d(x, y, z, w)` give the value in two, three and four dimensions.
+`SimplexNoise(random)` is Stefan Gustavson's simplex noise. It refuses finite coordinates if their lattice transform overflows, before converting lattice cells to integer indices. `noise(x, y)`, `noise3d(x, y, z)` and `noise4d(x, y, z, w)` give the value in two, three and four dimensions.
 
 | Member | Meaning |
 |---|---|
@@ -108,7 +108,9 @@ A `SurfaceSample` holds the triangle, the position and the unit normal. It also 
 
 The random numbers come from a `SeededRandom`, so the same seed gives the same points. Each sample draws three numbers in the order of three.js. A seeded three.js sampler picks the same triangles and the same points.
 
-A missing weight attribute, a weight that is negative or not a number, and positions that do not make whole triangles are refused. A sample from a surface with no weight is refused too.
+A missing weight attribute, a used vertex weight that is negative or not finite, and positions that do not make whole triangles are refused. Empty and all-zero distributions can be built, but cannot be sampled.
+
+Positive triangle weights must keep finite, nonzero intervals in the `Float32` distribution. A build refuses overflow, underflow to zero, or a positive interval lost to rounding. A failed build clears the old distribution. Correct the input and build again before sampling.
 
 ## Color maps
 

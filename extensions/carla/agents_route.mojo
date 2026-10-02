@@ -64,6 +64,7 @@ from extensions.carla.agents_misc import (
 )
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.road_info import CHANGE_LEFT, CHANGE_RIGHT, LANE_DRIVING
+from extensions.carla.search_queue import _MinCostQueue
 from math.vector3 import Vector3
 from std.ffi import external_call
 from std.math import floor, sqrt
@@ -636,20 +637,14 @@ struct GlobalRoutePlanner(Movable):
         # equal costs the lowest node id. A node comes out once; a later
         # entry for it is skipped.
         var out = List[RouteNodeId]()
-        var open = List[Tuple[Float64, Int]]()
+        var open = _MinCostQueue()
         var g = Dict[Int, Float64]()
         var came_from = Dict[Int, Int]()
         var closed = Dict[Int, Bool]()
         g[source] = 0.0
-        open.append((self._heuristic(source, target), source))
+        open.push(self._heuristic(source, target), source)
         while len(open) > 0:
-            var best = 0
-            for i in range(1, len(open)):
-                if open[i][0] < open[best][0] or (
-                    open[i][0] == open[best][0] and open[i][1] < open[best][1]
-                ):
-                    best = i
-            var current = open.pop(best)[1]
+            var current = open.pop()[1]
             if current == target:
                 var nodes = List[Int]()
                 nodes.append(current)
@@ -672,11 +667,9 @@ struct GlobalRoutePlanner(Movable):
                 if not Bool(known) or tentative < known.value():
                     g[neighbor] = tentative
                     came_from[neighbor] = current
-                    open.append(
-                        (
-                            tentative + self._heuristic(neighbor, target),
-                            neighbor,
-                        )
+                    open.push(
+                        tentative + self._heuristic(neighbor, target),
+                        neighbor,
                     )
         return out^
 

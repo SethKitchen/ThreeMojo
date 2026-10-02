@@ -379,9 +379,6 @@ def vessel_tissue(arterial: Bool) -> SoftTissue:
 
     Returns:
         The arterial or venous template.
-
-    Raises:
-        None.
     """
     if arterial:
         return arterial_tissue()

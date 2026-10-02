@@ -185,6 +185,13 @@ class CoverageStagingTests(unittest.TestCase):
 
 class CoverageIoTests(unittest.TestCase):
     def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
+        self.check_capture_and_replay()
+
+    def test_capture_and_replay_close_files_under_resource_warnings(self):
+        with patch.dict('os.environ', {'PYTHONWARNINGS': 'error::ResourceWarning'}):
+            self.check_capture_and_replay()
+
+    def check_capture_and_replay(self):
         import gzip
         import sys
         import coverage_io
@@ -199,14 +206,16 @@ class CoverageIoTests(unittest.TestCase):
                 source.write_bytes(stream + str(index).encode())
                 capture = root / f'{index}.txt.gz'
                 self.assertEqual(coverage_io.capture([
-                    sys.executable, '-c', 'import sys;sys.stderr.buffer.write(open(sys.argv[1], "rb").read());print("passed")', str(source)
+                    sys.executable, '-c', 'import sys,pathlib;sys.stderr.buffer.write(pathlib.Path(sys.argv[1]).read_bytes());print("passed")', str(source)
                 ], root / f'{index}.out', capture), 0)
                 # Other output passes through, after the records.
                 self.assertEqual(gzip.decompress(capture.read_bytes()), reduced + str(index).encode())
                 captures.append(capture)
             result = root / 'replayed'
             command = [sys.executable, '-c',
-                       'import sys; out=open(sys.argv[1], "wb"); [out.write(open(p,"rb").read()) for p in sys.argv[2:]]', str(result)]
+                       'import sys,shutil\nwith open(sys.argv[1], "wb") as out:\n'
+                       ' for path in sys.argv[2:]:\n'
+                       '  with open(path, "rb") as source: shutil.copyfileobj(source, out)', str(result)]
             self.assertEqual(coverage_io.report(command, captures), 0)
             self.assertEqual(result.read_bytes(), reduced + b'0' + reduced + b'1')
 

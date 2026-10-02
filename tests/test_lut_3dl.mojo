@@ -14,7 +14,12 @@ and as a column of squares.
 """
 
 from loaders.json import JsonDocument, parse_json
-from loaders.lut_3dl import lut_3dl_byte, parse_lut_3dl, read_lut_3dl
+from loaders.lut_3dl import (
+    _checked_grid_cells,
+    lut_3dl_byte,
+    parse_lut_3dl,
+    read_lut_3dl,
+)
 from loaders.lut_image import lut_image_from, parse_lut_image, read_lut_image
 from render.png import DecodedImage
 from render.srgb import SRGB
@@ -133,6 +138,22 @@ def test_lut_size_and_storage_are_checked_before_transpose() raises:
     var huge = DecodedImage(Int.MAX, 2, List[UInt8](), SRGB)
     with assert_raises(contains="image size cannot fit"):
         _ = lut_image_from(huge)
+
+
+def test_3dl_grid_storage_is_bounded_before_allocation() raises:
+    assert_equal(_checked_grid_cells(1), 1)
+    assert_equal(_checked_grid_cells(256), 256 * 256 * 256)
+    # Allocation-free exact boundary for four Float64 values per cell.
+    assert_equal(_checked_grid_cells(660561), 288229738124138481)
+    with assert_raises(contains="temporary grid storage"):
+        _ = _checked_grid_cells(660562)
+    with assert_raises(contains="temporary grid storage"):
+        _ = _checked_grid_cells(Int(1) << 20)
+    for size in [Int(1) << 22, Int.MAX]:
+        with assert_raises(contains="size cannot fit"):
+            _ = _checked_grid_cells(size)
+    with assert_raises(contains="dimensions must be positive"):
+        _ = _checked_grid_cells(0)
 
 
 def main() raises:
