@@ -2299,5 +2299,113 @@ def test_signals_move_off_lanes() raises:
     _near(alone.signal(SignalId("s")).transform.location, 10.0, 1.75, 0.0)
 
 
+def test_signal_validity_from_center_to_driving_lane_is_kept() raises:
+    var builder = MapBuilder()
+    var road = _flat_road(
+        builder,
+        1,
+        0,
+        0,
+        0,
+        10,
+        -1,
+        0,
+        0,
+        True,
+        [(0, LANE_NONE, 0, 0), (1, LANE_DRIVING, 0, 0)],
+    )
+    var handle = builder.add_signal(
+        road,
+        SignalId("edge"),
+        2,
+        0,
+        "",
+        "",
+        "+",
+        0,
+        "",
+        "274",
+        "",
+        0,
+        "",
+        0,
+        0,
+        "",
+        0,
+        0,
+        0,
+    )
+    builder.add_validity_to_signal_reference(handle, LaneId(0), LaneId(1))
+    var map = builder.build()
+    assert_equal(len(map.road(RoadId(1)).info.signals), 1)
+    assert_equal(
+        map.road(RoadId(1)).info.signals[0].validities[0],
+        LaneValidity(LaneId(0), LaneId(1)),
+    )
+
+
+def test_returning_to_another_lane_is_not_a_two_node_loop() raises:
+    var builder = MapBuilder()
+    _ = _flat_road(
+        builder,
+        1,
+        0,
+        0,
+        0,
+        10,
+        -1,
+        0,
+        2,
+        True,
+        [(-1, LANE_DRIVING, 0, 1), (-2, LANE_DRIVING, 0, 0)],
+    )
+    _ = _flat_road(
+        builder, 2, 10, 0, 0, 10, -1, 1, 0, True, [(1, LANE_DRIVING, -2, 0)]
+    )
+    var map = builder.build()
+    var next = map.next(_w(1, 0, -1, 5), 20)
+    assert_equal(len(next), 1)
+    assert_equal(next[0].road_id.value, 1)
+    assert_equal(next[0].lane_id.value, -2)
+    assert_almost_equal(next[0].s, 5, atol=0.001)
+
+
+def test_same_lane_in_a_later_section_is_not_a_return_loop() raises:
+    var builder = MapBuilder()
+    var road = _flat_road(
+        builder, 1, 0, 0, 0, 30, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, -1)]
+    )
+    for section in range(1, 3):
+        var start = Float64(section * 10)
+        var index = builder.add_road_section(road, SectionId(section), start)
+        _ = builder.add_road_section_lane(
+            road, index, LaneId(-1), LANE_DRIVING, False, LaneId(-1), LaneId(-1)
+        )
+        builder.create_lane_width(
+            builder.lane(RoadId(1), LaneId(-1), start), start, 3.5, 0, 0, 0
+        )
+    var map = builder.build()
+    var next = map.next(_w(1, 0, -1, 5), 20)
+    assert_equal(len(next), 1)
+    assert_equal(next[0].section_id.value, 2)
+    assert_almost_equal(next[0].s, 25, atol=0.001)
+
+
+def test_gentle_long_curve_is_split_by_distance() raises:
+    var builder = MapBuilder()
+    var road = _flat_road(
+        builder, 1, 0, 0, 0, 250, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
+    )
+    var geometry = builder.roads[road].info.geometries[0].geometry.copy()
+    builder.roads[road].info.geometries[0].geometry = with_arc(
+        geometry^, 0.000001
+    )
+    var map = builder.build()
+    # Total turn is only 0.00025 radians, below the 0.0314-radian angle threshold.
+    # Three pieces therefore come from the 100-meter distance cap and final tail.
+    assert_equal(map.segment_count(), 3)
+    assert_almost_equal(Float64(map.segment(2)[1].x), 250, atol=0.01)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

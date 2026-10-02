@@ -747,6 +747,13 @@ def test_dormant_respawn() raises:
     shared.parameters.set_synchronous_mode(False)
     stage.update(1, shared, map, _at(1.01))
     _near(shared.control_frame[1].transform.location.x, 125)
+    # Once the asynchronous interval elapses, a new sample is drawn.
+    # The candidate grids are already held, so its location stays put.
+    var expected_draws = shared.random_device.copy()
+    _ = expected_draws.next()
+    stage.update(1, shared, map, _at(1.1))
+    _near(shared.control_frame[1].transform.location.x, 125)
+    assert_equal(shared.random_device.next(), expected_draws.next())
     # Every ring node's grid taken: it stays.
     shared.parameters.set_synchronous_mode(True)
     for g in range(0, 40):

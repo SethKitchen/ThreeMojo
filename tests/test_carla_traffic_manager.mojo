@@ -1603,5 +1603,16 @@ def test_segment_keys_sort_by_road_lane_and_section() raises:
     assert_equal(keys[3].text(), "3:-1:0")
 
 
+def test_track_rejects_each_invalid_id_independently() raises:
+    var track = TrackTraffic()
+    with assert_raises(contains="not valid"):
+        track.update_passing_vehicle(WaypointId(1), ActorId(-2))
+    with assert_raises(contains="not valid"):
+        track.remove_passing_vehicle(WaypointId(-1), ActorId(1))
+    with assert_raises(contains="not valid"):
+        track.add_taken_grid(JuncId(1), ActorId(-2))
+    assert_equal(len(track.get_passing_vehicles(WaypointId(1))), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

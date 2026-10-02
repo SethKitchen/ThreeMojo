@@ -2207,5 +2207,12 @@ def test_optical_flow_colors() raises:
         _ = encode_flow_image(1, 1, [0.1])
 
 
+def test_projection_vertical_whitespace_stays_in_values() raises:
+    # PROJ's regex excludes space, tab, CR and LF, but accepts VT and FF.
+    var params = parse_projection_parameters("+a=one\x0btwo +b=three\x0cfour")
+    assert_equal(params["a"], "one\x0btwo")
+    assert_equal(params["b"], "three\x0cfour")
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

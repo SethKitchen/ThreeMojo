@@ -745,6 +745,13 @@ def test_behavior_agent_slows_for_a_turn() raises:
     assert_almost_equal(
         kmh(agent.agent.local_planner.target_speed), 25, atol=1e-3
     )
+    for index in range(len(agent.agent.local_planner.queue)):
+        agent.agent.local_planner.queue[index].road_option = OPTION_LEFT
+    _ = agent.run_step(world)
+    assert_equal(agent.incoming_direction.value, OPTION_LEFT.value)
+    assert_almost_equal(
+        kmh(agent.agent.local_planner.target_speed), 25, atol=1e-3
+    )
 
 
 def test_behavior_agent_red_light_and_walkers() raises:
@@ -1175,6 +1182,74 @@ def test_constant_velocity_agent_standing_still() raises:
     _ = agent.run_step(world)
     _ = world.tick()
     assert_true(_speed(world, car) < 2)
+
+
+def test_two_sided_marking_allows_lane_change() raises:
+    var world = _world(_two_lane("both", "both"))
+    var car = _car(world, 5.3, 1.75)
+    var agent = BasicAgent(world, car)
+    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 5.3)
+    var path = agent.generate_lane_change_path(
+        world.map, start, OPTION_CHANGE_LANE_RIGHT
+    )
+    assert_equal(_short(path), _LC_RIGHT)
+
+
+def test_approaching_car_detects_a_target_inside_junction() raises:
+    var world = _town()
+    var car = _car(world, 55.3, 1.75)
+    var target = _car(world, 62.3, 1.75)
+    var agent = BasicAgent(world, car)
+    agent.set_destination(world, Vector3(110.3, 1.75, 0))
+    assert_true(
+        agent.vehicle_obstacle_detected(
+            world, _ids(target), Length(15, METER)
+        ).obstacle_was_found
+    )
+
+
+def test_tailgating_right_only_mark_needs_a_driving_neighbor() raises:
+    var allowed = _world(_two_lane("increase"))
+    assert_equal(_tailgate(allowed, 20.3, 1.75), 200)
+    var text = (
+        String(TWO_LANE)
+        .replace("{CHANGE}", "increase")
+        .replace("{CENTER}", "none")
+    )
+    text = text.replace(
+        '<lane id="-2" type="driving">', '<lane id="-2" type="sidewalk">'
+    )
+    var sidewalk = _world(load_opendrive(text))
+    assert_equal(_tailgate(sidewalk, 20.3, 1.75), 0)
+
+
+def test_turning_or_junction_agent_does_not_start_tailgating() raises:
+    var world = _world(_two_lane())
+    var car = _car(world, 20.3, 1.75)
+    var agent = BehaviorAgent(world, car)
+    var waypoint = world.map.closest_waypoint_on_road(
+        Vector3(20.3, 1.75, 0)
+    ).value()
+    agent.direction = OPTION_LEFT
+    assert_false(
+        agent.collision_and_car_avoid_manager(
+            world, waypoint
+        ).obstacle_was_found
+    )
+    assert_equal(agent.behavior.tailgate_counter, 0)
+    var junction = _town()
+    var inside = _car(junction, 65.3, 1.75)
+    var crossing = BehaviorAgent(junction, inside)
+    crossing.direction = OPTION_LANE_FOLLOW
+    var at = junction.map.closest_waypoint_on_road(
+        Vector3(65.3, 1.75, 0)
+    ).value()
+    assert_false(
+        crossing.collision_and_car_avoid_manager(
+            junction, at
+        ).obstacle_was_found
+    )
+    assert_equal(crossing.behavior.tailgate_counter, 0)
 
 
 def main() raises:
