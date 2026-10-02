@@ -2024,7 +2024,9 @@ def trees_transform(
             for lane in section.lanes:
                 if lane.type == LANE_DRIVING:
                     var lid = lane.id.value
-                    if lid < 0 and (min_lane == 0 or lid < min_lane):
+                    # LaneSection stores IDs in ascending order. The first
+                    # negative driving lane is already the outermost one.
+                    if lid < 0 and min_lane == 0:
                         min_lane = lid
                     elif lid > 0:
                         # The lanes come in order of id, so a later one

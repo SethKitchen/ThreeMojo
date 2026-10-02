@@ -1215,5 +1215,20 @@ def test_undefined_axles_and_unbraked_wheels() raises:
     assert_almost_equal(w[0].brake_torque, 1500, atol=1e-3)
 
 
+def test_control_opposite_range_boundaries() raises:
+    var throttle = VehicleControl()
+    throttle.throttle = -0.01
+    with assert_raises(contains="Throttle"):
+        throttle.check()
+    var steering = VehicleControl()
+    steering.steer = 1.01
+    with assert_raises(contains="Steer"):
+        steering.check()
+    var brake = VehicleControl()
+    brake.brake = 1.01
+    with assert_raises(contains="Brake"):
+        brake.check()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

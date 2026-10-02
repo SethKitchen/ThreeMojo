@@ -858,6 +858,10 @@ def test_ca_service_fixed_rate_and_roadside_units() raises:
     world.actors[car.value - 1].semantic_tags = List[SemanticTag]()
     var unknown = CaService(world, car, 0.1, 1.0, True, CamNoise(), 0)
     assert_equal(unknown.station_type.value, 0)
+    world.elapsed_seconds = 3
+    var unidentified = unknown.trigger(world, projection, tick, rng).value()
+    assert_equal(unidentified.high_frequency.present, CONTAINER_NOTHING)
+    assert_equal(unidentified.low_frequency.present, CONTAINER_NOTHING)
     var noise = CamNoise.from_attributes(
         world.blueprints.at("sensor.other.v2x").description()
     )

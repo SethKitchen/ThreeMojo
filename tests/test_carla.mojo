@@ -671,6 +671,11 @@ def test_lidar_scan() raises:
     assert_almost_equal(first.point.x, 9.0, atol=1e-3)
     assert_equal(first.channel, 0)
     assert_almost_equal(first.intensity, d.intensity(_m(9.0)), atol=1e-3)
+    # Strong returns bypass the random intensity-drop test entirely.
+    d.dropoff_intensity_limit = 0.01
+    var strong = scan_lidar(scene, assets, sensor, d, tick, _deg(0), 7)
+    assert_equal(len(strong.points), 30)
+    assert_almost_equal(strong.points[0].intensity, first.intensity, atol=1e-6)
     # The drop-off keeps only rays above the limit, or those the draw keeps.
     d.dropoff_intensity_limit = 0.5
     d.dropoff_zero_intensity = 1.0

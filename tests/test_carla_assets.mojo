@@ -1151,5 +1151,28 @@ def test_models_and_towns_with_no_material_or_with_instances() raises:
     assert_equal(len(lampless.lamps), 0)
 
 
+def test_town_lamp_tag_requires_the_exact_string() raises:
+    var folder = temporary_path("threemojo_carla_lamp_tags/")
+    makedirs(folder, exist_ok=True)
+    for tag in ["7", '"glass"']:
+        Path(folder + "town.gltf").write_text(
+            String(TOWN_GLTF).replace('"carla":"lamp"', '"carla":' + tag)
+        )
+        var registry = AssetRegistry(
+            parse_manifest(
+                _manifest(_entry("town", "town", _file("model", "town.gltf")))
+            ),
+            folder,
+        )
+        var scene = Scene()
+        var assets = Assets()
+        var parent = scene.add(Object3D())
+        var placed = registry.place_town(
+            0, scene, assets, parent, Length(10, METER)
+        )
+        assert_equal(placed.mesh_count, 8)
+        assert_equal(len(placed.lamp_materials), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

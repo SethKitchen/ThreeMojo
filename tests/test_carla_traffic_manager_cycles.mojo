@@ -7,6 +7,9 @@
 
 from extensions.carla.actor import ActorId
 from extensions.carla.opendrive import load_opendrive
+from extensions.carla.road_info import RoadId, LaneId
+from extensions.carla.transform import CarlaRotation
+from units.si import Angle, DEGREE
 from extensions.carla.traffic_manager_localization import (
     LocalizationStage,
     _branch_end,
@@ -491,6 +494,136 @@ def test_long_acyclic_path_has_no_fixed_walk_limit() raises:
     assert_equal(buffer[2047].value, 2047)
     assert_equal(len(shared.marked_for_removal), 2)
     assert_equal(len(shared.parameters.get_imported_route(ActorId(1))), 1)
+
+
+def test_lane_change_obstacle_filters_and_near_lane_availability() raises:
+    var map = load_opendrive(straight_town())
+    # Two same-grid vehicles, with a free lane beside both. Vary just one
+    # geometric discriminator or lane-availability fact at a time.
+    for scenario in range(8):
+        var shared = _line(
+            map, [(10.0, False), (40.0, False), (60.0, False), (70.0, False)]
+        )
+        shared.local_map.waypoints[0].next_right_waypoint = SimpleWaypointIndex(
+            2
+        )
+        shared.local_map.waypoints[1].next_right_waypoint = SimpleWaypointIndex(
+            3
+        )
+        shared.buffer_map[2] = [SimpleWaypointIndex(1)]
+        shared.track_traffic.update_grid_position(
+            ActorId(1), [SimpleWaypointIndex(0)], shared.local_map
+        )
+        shared.track_traffic.update_grid_position(
+            ActorId(2), [SimpleWaypointIndex(0)], shared.local_map
+        )
+        if scenario == 1:
+            shared.local_map.waypoints[0].is_junction = True
+        elif scenario == 2:
+            shared.local_map.waypoints[1].waypoint.road_id = RoadId(2)
+        elif scenario == 3:
+            shared.local_map.waypoints[1].waypoint.lane_id = LaneId(-2)
+        elif scenario == 4:
+            shared.local_map.waypoints[1].transform.rotation = CarlaRotation(
+                Angle(0, DEGREE), Angle(180, DEGREE), Angle(0, DEGREE)
+            )
+        elif scenario == 5:
+            shared.local_map.waypoints[
+                0
+            ].next_right_waypoint = SimpleWaypointIndex(-1)
+        elif scenario == 6:
+            shared.track_traffic.update_passing_vehicle(
+                shared.local_map.waypoints[2].id, ActorId(3)
+            )
+        if scenario == 7:
+            shared.local_map.waypoints[
+                1
+            ].next_right_waypoint = SimpleWaypointIndex(-1)
+            shared.local_map.waypoints[
+                1
+            ].next_left_waypoint = SimpleWaypointIndex(3)
+        var stage = LocalizationStage()
+        var selected = stage._assign_lane_change(
+            ActorId(1),
+            Vector3(10, 1.75, 0),
+            0.0,
+            False,
+            True,
+            shared,
+            [SimpleWaypointIndex(0)],
+        )
+        assert_equal(selected.is_some(), scenario == 0)
+        if scenario == 0:
+            assert_equal(selected.value, 3)
+
+
+def test_horizon_trim_keeps_a_far_junction_tail() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _line(map, [(10.0, False), (20.0, False), (60.0, True)])
+    shared.buffer_map[1] = _seed(shared, [0, 1, 2])
+    var stage = LocalizationStage()
+    _put(shared, 1, 8, 1.75, 0, 0)
+    _vehicles(shared, [1])
+    _localize(stage, shared)
+    _same(_indices(shared, 1), [0, 1, 2])
+
+
+def test_town03_entrance_outside_roundabout_radius_is_kept() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _line(map, [(100.0, False), (105.0, True)])
+    shared.local_map.name = "Carla/Maps/Town03"
+    var stage = LocalizationStage()
+    assert_true(
+        stage._at_junction_entrance(
+            shared.local_map,
+            [SimpleWaypointIndex(0), SimpleWaypointIndex(1)],
+            Vector3(100, 1.75, 0),
+        )
+    )
+
+
+def test_safe_space_stops_at_nearby_fork_or_next_junction() raises:
+    var map = load_opendrive(straight_town())
+    for fork in [True, False]:
+        var shared = _line(
+            map,
+            [
+                (10.0, False),
+                (15.0, True),
+                (25.0, False),
+                (27.0, not fork),
+                (28.0, False),
+                (29.0, False),
+            ],
+        )
+        if fork:
+            shared.local_map.waypoints[3].next_waypoints = [
+                SimpleWaypointIndex(4),
+                SimpleWaypointIndex(5),
+            ]
+        var buffer = _seed(shared, [0, 1])
+        var stage = LocalizationStage()
+        stage._extend_and_find_safe_space(ActorId(1), True, shared, buffer)
+        var points = stage.vehicles_at_junction_entrance[1]
+        assert_equal(points[0].value, 2)
+        assert_equal(points[1].value, 3)
+
+
+def test_forced_lane_change_stops_on_junction_destination() raises:
+    var map = load_opendrive(straight_town())
+    var shared = _line(map, [(10.0, False), (20.0, True), (30.0, False)])
+    shared.local_map.waypoints[0].next_right_waypoint = SimpleWaypointIndex(1)
+    var stage = LocalizationStage()
+    var selected = stage._assign_lane_change(
+        ActorId(1),
+        Vector3(10, 1.75, 0),
+        0.0,
+        True,
+        True,
+        shared,
+        [SimpleWaypointIndex(0)],
+    )
+    assert_equal(selected.value, 1)
 
 
 def main() raises:

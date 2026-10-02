@@ -1069,6 +1069,23 @@ def test_mesh_rays_meet_a_scene() raises:
             [Vector3(1, 0, 0), Vector3(0, 0, 0)],
         )
 
+    with assert_raises(contains="one actor, tag and velocity"):
+        _ = MeshRays(
+            Pointer(to=scene),
+            Pointer(to=assets),
+            [ActorId(1), ActorId(2)],
+            List[SemanticTag](),
+            [Vector3(1, 0, 0), Vector3(0, 0, 0)],
+        )
+    with assert_raises(contains="one actor, tag and velocity"):
+        _ = MeshRays(
+            Pointer(to=scene),
+            Pointer(to=assets),
+            [ActorId(1), ActorId(2)],
+            [CAR, BUILDING],
+            List[Vector3](),
+        )
+
 
 # --- the event camera ----------------------------------------------------------------
 
@@ -1690,6 +1707,21 @@ def test_v2x_bytes() raises:
                 )
             ]
         )
+
+
+def test_normal_radius_cannot_be_zero_for_this_engine() raises:
+    # IEEE Float32 rounds draw-1 to 2^30 exactly on this closed interval.
+    # Its two midpoint ties round to the even 2^30 significand.
+    assert_true(Float32(1073741791) < Float32(1073741824))
+    assert_true(Float32(1073741889) > Float32(1073741824))
+    for state in range(1073741793, 1073741890):
+        assert_equal(Float32(state - 1) / Float32(2147483648), 0.5)
+        var random = SensorRandom(1)
+        random.state = UInt64(state)
+        assert_true(random.uniform() != 0.5)
+    # Nonzero centered draws are at least 2^-24; squares cannot underflow.
+    var step = Float32(0.000000059604644775390625)
+    assert_true(step * step > 0)
 
 
 def main() raises:

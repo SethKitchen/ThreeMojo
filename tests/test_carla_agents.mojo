@@ -1262,5 +1262,18 @@ def test_misc_speed_and_arc_cosine() raises:
     assert_almost_equal(_acos_degrees(-1.5), 180, atol=1e-9)
 
 
+def test_full_local_queue_does_not_generate_more_waypoints() raises:
+    var world = _world(_town())
+    var car = _car(world, 5.3, 1.75)
+    var planner = LocalPlanner(world, car)
+    _ = planner.run_step(world)
+    planner.min_waypoint_queue_length = 1
+    var size = len(planner.queue)
+    var last = planner.queue[size - 1].waypoint
+    _ = planner.run_step(world)
+    assert_equal(len(planner.queue), size)
+    assert_equal(planner.queue[size - 1].waypoint.s, last.s)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

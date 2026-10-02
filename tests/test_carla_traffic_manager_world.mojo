@@ -751,5 +751,32 @@ def test_unregister_a_large_vehicle() raises:
     assert_false(bus.value in tm.shared.large_vehicles)
 
 
+def test_stuck_selection_never_chooses_a_registered_hero() raises:
+    var world = _world(straight_town())
+    var tm = _manager(world)
+    var hero = _spawn(world, 20, 1.75, "hero")
+    tm.register_vehicles(world, [hero])
+    tm.set_desired_speed(hero, Velocity(0))
+    _run(tm, world, 40)
+    var now = tm.alsm.current_time
+    # An old idle entry can survive a role change. With heroes alone,
+    # there is no eligible candidate even if that entry looks stuck.
+    tm.alsm.idle_time[hero.value] = now - 300
+    tm.alsm.elapsed_last_actor_destruction = now - 20
+    _run(tm, world, 1)
+    assert_true(world.is_alive(hero))
+    var ordinary = _spawn(world, 60, 1.75)
+    tm.register_vehicles(world, [ordinary])
+    tm.set_desired_speed(ordinary, Velocity(0))
+    _run(tm, world, 40)
+    now = tm.alsm.current_time
+    tm.alsm.idle_time[hero.value] = now - 300
+    tm.alsm.idle_time[ordinary.value] = now - 150
+    tm.alsm.elapsed_last_actor_destruction = now - 20
+    _run(tm, world, 1)
+    assert_true(world.is_alive(hero))
+    assert_false(world.is_alive(ordinary))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

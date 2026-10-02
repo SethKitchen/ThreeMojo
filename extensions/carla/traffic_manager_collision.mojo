@@ -603,12 +603,18 @@ struct CollisionStage(Movable):
             not closest.check_junction()
             and shared.local_map.at(buffer[look_ahead_index]).check_junction()
         )
-        if not (
-            at_entrance and light.at_traffic_light and stopped_by_light
-        ) and (
-            (ego_inside_junction and in_cross_range)
-            or (not ego_inside_junction and other_in_front and in_ego_range)
-        ):
+        # Choose the range policy once. Repeating the junction flag in
+        # both alternatives creates a coupled, non-independent condition.
+        # The light guard still short-circuits before either range policy.
+        var may_negotiate = False
+        if not (at_entrance and light.at_traffic_light and stopped_by_light):
+            if ego_inside_junction:
+                if in_cross_range:
+                    may_negotiate = True
+            else:
+                if other_in_front and in_ego_range:
+                    may_negotiate = True
+        if may_negotiate:
             var g = self.get_geometry_between_actors(reference, other, shared)
             var ego_angular_priority = reference_dot < other_heading.dot(
                 other_to_reference

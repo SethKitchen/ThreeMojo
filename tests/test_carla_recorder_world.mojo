@@ -104,6 +104,7 @@ from extensions.carla.replayer_helper import (
     find_traffic_sign_at,
     interpolated_transform,
     lerp_angle,
+    process_door_vehicle,
     process_event_add,
     process_event_parent,
     process_position,
@@ -1146,6 +1147,16 @@ def test_helper_edges() raises:
     var nudged = LogVector(at.x + 0.25, at.y, at.z)
     assert_true(find_traffic_sign_at(world, nudged) == ActorId(3))
     assert_true(find_traffic_sign_at(world, LogVector(1, 2, 3)) == NO_ACTOR)
+    assert_true(
+        find_traffic_sign_at(world, LogVector(at.x, at.y + 10000, at.z))
+        == NO_ACTOR
+    )
+    assert_true(
+        find_traffic_sign_at(world, LogVector(at.x, at.y, at.z + 10000))
+        == NO_ACTOR
+    )
+    process_door_vehicle(world, RecordedDoorVehicle(car, VehicleDoor(99), True))
+    assert_false(world.is_door_open(car, DOOR_FRONT_LEFT))
     # Parents: a dead child or parent, or a vehicle child, is refused.
     assert_false(process_event_parent(world, ActorId(99), car))
     assert_false(process_event_parent(world, prop, ActorId(99)))
@@ -1383,6 +1394,24 @@ def test_helper_spawn_and_light_edges() raises:
         )
     )
     assert_false(world.traffic_lights.groups[0].frozen)
+
+
+def test_camera_follow_refuses_an_invalid_spectator_registry() raises:
+    var world = _world()
+    var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
+    var spectator = world.get_spectator()
+    var before = world.get_transform(spectator)
+    assert_false(world.destroy_actor(spectator))
+    # This is an invalid-registry boundary, not a normal World lifecycle:
+    # the public mutable field no longer names the protected spectator.
+    world.spectator = NO_ACTOR
+    assert_false(set_camera_position(world, car, _pose(0, 0, 0, 0)))
+    assert_true(world.get_transform(spectator).location == before.location)
+    world.spectator = spectator
+    assert_true(set_camera_position(world, car, _pose(0, 0, 0, 0)))
+    assert_true(
+        world.get_transform(spectator).location == world.get_location(car)
+    )
 
 
 def main() raises:
