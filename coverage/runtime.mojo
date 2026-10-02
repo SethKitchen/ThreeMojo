@@ -75,8 +75,8 @@ def hit(id: StaticString):
 
 
 @inline(.never)
-def branch(id: StaticString, value: Bool) -> Bool:
-    """Record an outcome hit and return the unchanged Boolean value.
+def branch[T: Boolable](id: StaticString, value: T) -> Bool:
+    """Convert one truth-testable operand once and record its Boolean outcome.
 
     COVLINE carries all hit payloads, including condition and decision outcomes.
     Only complete COVEVAL2 records supply compound MC-DC evidence.
@@ -84,13 +84,14 @@ def branch(id: StaticString, value: Bool) -> Bool:
 
     Args:
         id: Static source ID. The full UTF-8 record must fit in 512 bytes.
-        value: The original decision or condition outcome.
+        value: The original truth-testable decision or condition operand.
 
     Returns:
-        The original value.
+        The operand's Boolean value, evaluated exactly once.
     """
-    _emit_hit(id, StaticString(":T\n") if value else StaticString(":F\n"))
-    return value
+    var outcome = value.__bool__()
+    _emit_hit(id, StaticString(":T\n") if outcome else StaticString(":F\n"))
+    return outcome
 
 
 def buffer() -> List[Int]:
@@ -123,19 +124,143 @@ def begin(mut values: List[Int], width: Int) -> Bool:
 def leaf(
     value: Bool, mut values: List[Int], id: StaticString, index: Int
 ) -> Bool:
-    """Record one evaluated operand, after its original expression completes.
+    """Record a Boolean operand without changing its value.
 
     Args:
-        value: The original operand's Boolean value.
+        value: The original Boolean operand.
         values: The current invocation's operand buffer.
         id: The condition's static hit identifier.
         index: The condition's slot in the buffer.
 
     Returns:
-        The original value.
+        The unchanged operand.
     """
     values[index] = Int(value)
     return branch(id, value)
+
+
+@inline(.never)
+def leaf(
+    value: SIMD[DType.bool, 1],
+    mut values: List[Int],
+    id: StaticString,
+    index: Int,
+) -> Bool:
+    """Record a scalar SIMD comparison or standard math predicate.
+
+    Args:
+        value: The Boolean scalar, borrowed without copying.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+
+    Returns:
+        The scalar's Boolean value.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def leaf(
+    value: Int, mut values: List[Int], id: StaticString, index: Int
+) -> Bool:
+    """Record a standard-library operand with a pure truth conversion.
+
+    Args:
+        value: The original truth-testable operand, borrowed without copying.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+
+    Returns:
+        The operand's Boolean value.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def leaf(
+    value: String, mut values: List[Int], id: StaticString, index: Int
+) -> Bool:
+    """Record a standard-library operand with a pure truth conversion.
+
+    Args:
+        value: The original truth-testable operand, borrowed without copying.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+
+    Returns:
+        The operand's Boolean value.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def leaf[
+    T: Movable, //
+](
+    value: Optional[T], mut values: List[Int], id: StaticString, index: Int
+) -> Bool:
+    """Record a standard-library operand with a pure truth conversion.
+
+    Args:
+        value: The original truth-testable operand, borrowed without copying.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+
+    Returns:
+        The operand's Boolean value.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def leaf[
+    T: Movable, //
+](value: List[T], mut values: List[Int], id: StaticString, index: Int) -> Bool:
+    """Record a standard-library operand with a pure truth conversion.
+
+    Args:
+        value: The original truth-testable operand, borrowed without copying.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+
+    Returns:
+        The operand's Boolean value.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def leaf[
+    T: Boolable, *Ts: AnyType
+](
+    value: T, mut values: List[Int], id: StaticString, index: Int, *extra: *Ts
+) -> Bool:
+    """Reject unverified truth conversion instead of changing source behavior.
+
+    The trailing pack makes this a fallback after the fixed pure-type overloads.
+    It also prevents implicit Optional construction from admitting a custom type.
+
+    Args:
+        value: An unsupported operand.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+        extra: The overload-resolution fallback pack; callers leave it empty.
+
+    Returns:
+        No value. Instantiation fails with an actionable diagnostic.
+    """
+    comptime assert False, (
+        "Coverage compound operands support Bool, scalar SIMD Bool, Int,"
+        " String, Optional and List; custom Boolable truth conversions are not"
+        " yet supported. Do not exclude the source; see the coverage"
+        " truth-conversion limit."
+    )
 
 
 @inline(.never)

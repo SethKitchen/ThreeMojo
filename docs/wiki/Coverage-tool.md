@@ -71,11 +71,21 @@ Executable trait defaults are measured. Abstract `...` declarations and docstrin
 
 Version 2 fixes the ambiguous evaluation boundaries tracked in [issue #385](https://github.com/SethKitchen/ThreeMojo/issues/385). Its supported limits are below. These targeted checks do not establish full repository coverage. The leaf obligations added by issue #535 still require a new complete repository capture. Check the source, test scope and trace limits with each result. A percentage is not an engineering validation certificate.
 
+### Truth-conversion limit
+
+Simple decisions accept any `Boolable` value. Their helper borrows the value and calls `__bool__` exactly once. Compound operands support `Bool`, `SIMD[DType.bool, 1]`, `Int`, `String`, `Optional[T]` and `List[T]`. Their pinned standard-library truth tests read only the value, presence flag or length. The element type does not supply their truth test.
+
+Custom `Boolable` operands in compound decisions fail compilation with a coverage diagnostic. Mojo can test a selected custom operand twice when both logical operands have the same type. Converting that operand to `Bool` early can change side effects or the decision. A borrowing wrapper also changes type identity through its origin parameters. The tool must reject this case until it can preserve the native conversions. Do not omit the source or its obligations to bypass this limit.
+
+[Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order. A move-only custom operand verifies simple-decision borrowing and conversion side effects. Stable and changing custom truth tests verify the explicit compound rejection.
+
+Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body. [Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) tracks general custom compound semantics and lifetimes.
+
 ### Evaluation protocol
 
 Each function invocation that has a compound decision owns one private operand buffer. Other functions have no buffer. The new buffer and helper names use a prefix absent from the source. The buffer factory also avoids unqualified caller-scope `List` and `Int` names.
 
-A begin operation clears the buffer before each reached `if`, `elif` or `while` evaluation. It does not change the original operand order or short-circuit behavior. Each completed leaf writes its condition hit. All hit records use `COVLINE`, including payloads with a condition index and a `T` or `F` outcome.
+A begin operation clears the buffer before each reached `if`, `elif` or `while` evaluation. It does not change the original operand order or short-circuit behavior. Each completed leaf writes its condition hit. The runtime accepts standard-library truth-testable operands without requiring implicit argument conversion. All hit records use `COVLINE`, including payloads with a condition index and a `T` or `F` outcome.
 
 A completed decision writes its outcome hit and one `COVEVAL2:<decision>:<T|F>:<vector>;` record. Each vector character is `T`, `F` or `-` for an unevaluated leaf. The record ends with a newline.
 
