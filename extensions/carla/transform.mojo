@@ -18,7 +18,8 @@ three.js frame, where P is that swap, and the determinant stays one.
 
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import cos, sin, trunc
+from std.ffi import external_call
+from std.math import cos, isfinite, nan, sin
 from units.si import DEGREE, Angle, Length
 
 
@@ -149,8 +150,12 @@ struct CarlaRotation(Equatable, ImplicitlyCopyable, Writable):
     def normalized(self) -> CarlaRotation:
         """Wrap each angle into [-180, 180) degrees, `Rotation::Normalize`.
 
+        Finite angles reduce without loss of whole-turn remainders.
+        Both 180 and -180 become -180. Zero keeps the input sign.
+        A nonfinite angle becomes NaN.
+
         Returns:
-            The same rotation with each angle wrapped.
+            The same rotation with each finite angle wrapped.
         """
         var out = self
         out.pitch = _wrap_degrees(self.pitch)
@@ -191,8 +196,16 @@ struct CarlaRotation(Equatable, ImplicitlyCopyable, Writable):
 
 
 def _wrap_degrees(angle: Float32) -> Float32:
-    var out = angle - 360.0 * trunc(angle / 360.0)
-    if out < 0.0:
+    """Wrap to [-180, 180), keep signed zero, and map nonfinite to NaN."""
+    # Most comparisons already use this interval. Keep their bits directly.
+    if angle >= -180.0 and angle < 180.0:
+        return angle
+    if not isfinite(angle):
+        return nan[DType.float32]()
+    # fmodf reduces the significand, without subtracting a rounded quotient.
+    # Keep negative small angles unchanged: adding 360 can erase low bits.
+    var out = external_call["fmodf", Float32](angle, Float32(360))
+    if out < -180.0:
         out += 360.0
     if out >= 180.0:
         out -= 360.0

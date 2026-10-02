@@ -46,6 +46,18 @@ var along_and_off = distance_segment_to_point(
 
 An arc has a length, a heading and a curvature. The heading is an `Angle` and the curvature is an `InverseLength`.
 
+## Integer vector norms
+
+`Vector3DInt.squared_length` returns an exact `UInt64`. The former return type was `Int64`, which could overflow for valid components. Each signed 32-bit component is squared in `Int64`. Each square converts to `UInt64` before addition. The largest sum is 13835058055282163712, for three components of -2147483648.
+
+`Vector3DInt.length` returns a finite, nonnegative `Float64`. It converts the exact sum to `Float64`, then takes the square root. The relative error is below 2^-51. Zero gives an exact zero. The other integer vector operations keep their existing contracts.
+
+## Normalize and compare rotations
+
+`CarlaRotation.normalized` reduces each finite `Float32` angle into [-180, 180) degrees. Both endpoints become -180. Whole turns reduce to zero with the input sign. The remainder is stable at large angles: 1e10 degrees becomes -80 degrees. A negative angle near zero keeps its low bits.
+
+`rotations_equal` uses the same reduction for each angle. Signed zeros compare equal. A nonfinite angle becomes NaN during normalization. A rotation with a nonfinite angle compares unequal, including to itself. This rule also applies to `transforms_equal` and bounding box equality.
+
 ## Read a geolocation
 
 A map's projection turns a CARLA location into a latitude, a longitude and an altitude. The GNSS sensor and `Map::TransformToGeolocation` use this math.
@@ -69,6 +81,10 @@ var geo = projection.transform_to_geo_location(Vector3(100, -200, 3))
 | `utm` | `UNIVERSAL_TRANSVERSE_MERCATOR` | `zone`, `south`, and the header offset |
 | `merc` | `WEB_MERCATOR` | none |
 | `lcc` | `LAMBERT_CONFORMAL_CONIC` | `lat_0`, `lat_1`, `lat_2`, `lon_0`, `x_0`, `y_0` |
+
+A supplied UTM `zone` is read once with `stod`, including decimal exponents and ignored text after the numeric prefix. The value must be finite, at least 1 and less than 61 before integer conversion. Fractional values still truncate toward zero: 1.5 selects zone 1, and 60.5 selects zone 60. A value below 1 or at least 61 raises an error. Large and nonfinite values cannot wrap into a valid zone.
+
+The returned reference longitude uses the selected zone's central meridian, 6 times the zone minus 183 degrees. This fixes the former fractional reference: 31.5 now gives zone 31 and 3 degrees, rather than 6 degrees. Exponents now select the same numeric value for the zone and reference: `3.1e1` selects zone 31. With no zone, the existing default stays zone 31 with a zero reference.
 
 Another value, or no `+proj`, gives the default transverse Mercator. The ellipsoid comes from `ellps` or `datum`, then `a`, `b`, `f` and `rf`. Without any of them it is WGS 84.
 
@@ -143,7 +159,7 @@ Each kind is a type with `is_valid`, and the functions that read one refuse a va
 The port refuses input where CARLA reads out of bounds, divides by zero or wraps around. It also fixes some behavior that has no use.
 
 - A bounding box half size must be finite and zero or more.
-- A UTM zone must be from 1 to 60. CARLA takes any zone.
+- A UTM zone must be from 1 to 60 after the checked fractional conversion above. CARLA takes any zone.
 - `stod` does not read a hexadecimal float. It reads the zero before the `x`.
 - `CarlaMesh.generate_ply` writes a PLY file. CARLA's `GeneratePLY` returns an empty string.
 - `CarlaMesh.concat_mesh` refuses a link count larger than either mesh.

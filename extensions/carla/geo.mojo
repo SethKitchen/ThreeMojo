@@ -34,9 +34,11 @@ and `pow`, as CARLA does.
 
 - A number in a PROJ string is read as `std::stod` reads it, except a
   hexadecimal float, which reads as the zero before the `x`.
-- A UTM zone must be from 1 to 60, and a bad number raises. CARLA takes
-  any zone. CARLA logs a warning for a missing parameter, and this port
-  logs nothing.
+- A UTM zone number must be finite, at least 1 and less than 61 before
+  conversion. Fractional numbers truncate toward zero, so 60.5 selects
+  zone 60. The reference uses the selected zone's central meridian.
+  CARLA takes any zone. CARLA logs a warning for a missing parameter,
+  and this port logs nothing.
 """
 
 from loaders.js_number import js_pow
@@ -50,6 +52,7 @@ from std.math import (
     cos,
     hypot,
     inf,
+    isfinite,
     isinf,
     nan,
     pi,
@@ -1383,7 +1386,11 @@ def parse_geo_projection_and_reference(
         The projection and the geo reference. `tmerc`, `utm`, `merc` and
         `lcc` pick a projection. Without `+proj`, or with another one, the
         default transverse Mercator on the parsed ellipsoid, with no PROJ
-        string and a zero reference.
+        string and a zero reference. A supplied UTM zone is read with
+        `stod` and must be finite in [1, 61) before integer conversion.
+        Fractions truncate toward zero. The selected zone sets the
+        reference longitude. A missing zone keeps zone 31 and a zero
+        reference.
 
     Raises:
         Error: If a number cannot be read or the UTM zone is not valid.
@@ -1409,10 +1416,13 @@ def parse_geo_projection_and_reference(
     if proj == "utm":
         var p = UniversalTransverseMercatorParams()
         if "zone" in parameters:
-            p.zone = UtmZone(Int(Int32(stoll(parameters["zone"]))))
-            if not p.zone.is_valid():
-                raise Error("A UTM zone must be from 1 to 60")
-            reference.longitude_degrees = 6.0 * stod(parameters["zone"]) - 183.0
+            var zone = stod(parameters["zone"])
+            # The accepted Float64 interval fits Int32 before conversion.
+            # Test finiteness first so NaN cannot pass ordered comparisons.
+            if not isfinite(zone) or zone < 1.0 or zone >= 61.0:
+                raise Error("A UTM zone must be finite and in [1, 61)")
+            p.zone = UtmZone(Int(Int32(zone)))
+            reference.longitude_degrees = p.zone.central_meridian_degrees()
         p.north = "south" not in parameters
         p.ellps = ellipsoid
         p.offset = create_offset_transform(offsets)
