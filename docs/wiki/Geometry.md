@@ -522,7 +522,15 @@ var inside = hull.contains_point(Vector3(0, 0, 0))
 | `contains_point(point) -> Bool` | Whether no face can see the point. |
 | `tolerance` | How far outside a face a point must be before the face can see it. |
 
-The hull does its arithmetic in `Float64`, as JavaScript does. The tolerance is three.js's: three times the `Float64` epsilon, times the size of the point set. Coplanar faces are not merged, as in three.js.
+The hull does its arithmetic in `Float64`, as JavaScript does. Both the constructor and `contains_point` accept a `List[SIMD[DType.float64, 4]]` and a `SIMD[DType.float64, 4]`, respectively. These forms use the first three components and ignore the fourth. They do not narrow coordinates to `Float32`. The `Vector3` forms are also available. A query with a nonfinite spatial component returns False.
+
+The tolerance is three.js's: three times the `Float64` epsilon, times the sum of the greatest absolute coordinate on each axis. It uses the original coordinate units. You can change `tolerance` for later containment queries. At subnormal scales, the stored tolerance can round to zero. Zero stays the comparison threshold; the hull does not replace it with a hidden positive threshold.
+
+Extreme coordinates are scaled by an exact power of two before construction. Original point indices stay unchanged. Ordinary coordinates keep the three.js operation order for resolved, normal-range calculations. A nonzero normal whose squared length is subnormal is normalized after scaling.
+
+A range error means that scaling would lose input detail, or that a geometric direction cannot be resolved in `Float64`. A conditioned face must place its own vertices on its plane within the stored tolerance. A zero tolerance can therefore cause a range error for slanted faces. An unresolved plane at zero tolerance also gives a range error. This is different from the error for points on a plane within a positive tolerance.
+
+These checks do not implement exact geometric predicates for every Float64 input. Coplanar faces are not merged, as in three.js.
 
 three.js returns an empty hull for fewer than four points. It returns a flat or broken hull for points on one line or one plane. This port raises in all three cases. `setFromObject` and `intersectRay` are not ported.
 
