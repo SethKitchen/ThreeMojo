@@ -275,42 +275,14 @@ def decompose(matrix: Matrix4) raises -> Pose:
         three.js.
 
     Raises:
-        Error: If the matrix flattens an axis, which leaves no rotation.
+        Error: If the matrix is not finite, flattens an axis, or has a
+            scale that cannot fit in Float32.
     """
-    var sx = Vector3(matrix.get(0, 0), matrix.get(1, 0), matrix.get(2, 0))
-    var sy = Vector3(matrix.get(0, 1), matrix.get(1, 1), matrix.get(2, 1))
-    var sz = Vector3(matrix.get(0, 2), matrix.get(1, 2), matrix.get(2, 2))
-    var x = sx.length()
-    var y = sy.length()
-    var z = sz.length()
-    if x * y * z == 0:
-        raise Error("A transform that flattens an axis has no rotation")
-    if matrix.determinant() < 0:
-        x = -x
-    var rotation = Matrix4()
-    rotation.set(
-        sx.x / x,
-        sy.x / y,
-        sz.x / z,
-        0,
-        sx.y / x,
-        sy.y / y,
-        sz.y / z,
-        0,
-        sx.z / x,
-        sy.z / y,
-        sz.z / z,
-        0,
-        0,
-        0,
-        0,
-        1,
-    )
-    return Pose(
-        Vector3(matrix.get(0, 3), matrix.get(1, 3), matrix.get(2, 3)),
-        Quaternion.from_matrix(rotation),
-        Vector3(x, y, z),
-    )
+    var position = Vector3(0, 0, 0)
+    var quaternion = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    matrix.decompose(position, quaternion, scale)
+    return Pose(position, quaternion, scale)
 
 
 struct TransformFrame(ImplicitlyCopyable):
