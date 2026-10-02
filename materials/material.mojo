@@ -2382,12 +2382,9 @@ struct Material(ImplicitlyCopyable):
                     " no shadow falls, and an opaque one would hide the"
                     " floor it catches a shadow on"
                 )
-            if (
-                map != NO_TEXTURE
-                or alpha_map != NO_TEXTURE
-                or vertex_colors
-                or wireframe
-            ):
+            # The earlier wireframe guard already requires kind == BASIC.
+            # This SHADOW branch therefore cannot receive wireframe=True.
+            if map != NO_TEXTURE or alpha_map != NO_TEXTURE or vertex_colors:
                 raise Error(
                     "A shadow material shows its shadow and nothing else: no"
                     " map, no alpha map, no vertex colors and no wireframe"
