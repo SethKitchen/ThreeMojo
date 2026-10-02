@@ -44,6 +44,26 @@ The file formats keep a scale and a rotation. `write_covariance` makes the covar
 - `update_sort(world, view, near)` sorts the splats from far to near into `order`. It uses 4096 depth bins and a stable counting sort, as three.js's CPU sort does. It sorts again only when the view direction turns by more than the threshold of three.js.
 - `spherical_harmonics_colors(camera)` gives the view-dependent color of each splat for a camera position in the object's space.
 
+## Ray query precision
+
+Ray sphere tests and local box intervals use 64-bit intermediates. Box
+intervals use a nearby point on the ray as their parameter origin. The
+per-splat sphere test shares the ray distance calculation. The calculation
+uses the stored direction's actual norm. It does not assume that a stored
+32-bit unit direction has an exact norm of one.
+
+The ellipsoid equation is solved about its nearest point to the ray. This
+avoids subtraction of large squared terms at a distant origin. Surface
+points are formed relative to the splat center before conversion to 32-bit
+coordinates. The world distance still controls the near and far filters.
+
+Tests cover large and small covariances, rotated axes, exact misses, and
+scaled and sheared world transforms. These tests do not establish correct
+results for every finite input. Bound construction can still overflow at
+extreme finite centers; [issue #549](https://github.com/SethKitchen/ThreeMojo/issues/549)
+tracks that separate limit. See [issue #498](https://github.com/SethKitchen/ThreeMojo/issues/498)
+for the squared-distance audit.
+
 ## The draw
 
 Register a splat with `scene.add_gaussian_splat(splat^)`. `Renderer.render`
