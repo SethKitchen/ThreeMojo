@@ -173,7 +173,7 @@ The route planner and the pedestrian navigation mesh use one private binary min-
 
 Area costs must be finite and at least 1. Both the setter and the read boundary check this, including direct changes to the public cost array. A NaN search score raises an error. Use an excluded area flag to block travel, as CARLA's filters do. This finite-cost check is a port safety rule; upstream Detour does not enforce it in its setter.
 
-Each queue push and pop costs O(log n) for n pending entries. This change does not speed up graph construction or spatial queries. It does not fix the separate topology and lane-boundary issues.
+Each queue push and pop costs O(log n) for n pending entries. This change does not speed up graph construction or spatial queries. [Lane endpoint corrections](CARLA-maps#lane-endpoints) retain dead-end topology and keep backward traversal on its starting road.
 
 Run `mojo run -I . bench/carla_search_queue_bench.mojo` to compare queue operations at 100, 1,000 and 10,000 entries. This benchmark excludes map lookup and geometry work. The tests compare complete generated route and navigation paths with the previous linear-selection search.
 

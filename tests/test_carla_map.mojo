@@ -1050,16 +1050,19 @@ def test_until_lane_end() raises:
     _same(ahead[3], 1, 0, -1, 29.0)
     _same(ahead[4], 1, 1, -1, 36.0)
     _same(ahead[8], 1, 1, -1, 60.0)
+    var expected = [8.0, 15.0, 22.0, 29.0, 36.0, 43.0, 50.0, 57.0, 60.0]
+    for i in range(len(expected)):
+        _same(ahead[i], 1, 0 if i < 4 else 1, -1, expected[i])
     var back = map.next_until_lane_end(_w(2, 0, 1, 39.0), 15.0)
     assert_equal(len(back), 3)
     _same(back[2], 2, 0, 1, 0.0)
     var prev = map.previous_until_lane_start(_w(10, 0, -1, 20.0), 5.0)
-    assert_equal(len(prev), 5)
+    assert_equal(len(prev), 4)
     _same(prev[3], 10, 0, -1, 0.0)
-    _same(prev[4], 1, 0, -1, 30.0)
-    # With no lane behind at the end, CARLA reads past an empty list.
-    with assert_raises():
-        _ = map.previous_until_lane_start(_w(1, 1, -1, 50.0), 4.0)
+    # The remainder follows the backward direction on an isolated end.
+    var isolated = map.previous_until_lane_start(_w(1, 1, -1, 50.0), 4.0)
+    assert_equal(len(isolated), 13)
+    _same(isolated[12], 1, 0, -1, 0.0)
 
 
 def test_generation() raises:
@@ -1092,15 +1095,27 @@ def test_generation() raises:
 def test_topology() raises:
     var map = load_opendrive_file(TOWN)
     var topology = map.generate_topology()
-    assert_equal(len(topology), 13)
-    # From the Python copy of `GenerateTopology`.
+    assert_equal(len(topology), 18)
+    # The five previously dropped increasing-s dead ends are road 2/-1,
+    # 3/-1, 5/-1, 6/+1 (LHT) and 7/-1. Their XML lengths give each end.
+    # The 13 existing pairs retain their relative order.
+    _same(topology[6][0], 2, 0, -1, 0.0)
+    _same(topology[6][1], 2, 0, -1, 40.0)
+    _same(topology[9][0], 3, 0, -1, 0.0)
+    _same(topology[9][1], 3, 0, -1, 30.0)
+    _same(topology[10][0], 5, 0, -1, 0.0)
+    _same(topology[10][1], 5, 0, -1, 57.0)
+    _same(topology[13][0], 6, 0, 1, 0.0)
+    _same(topology[13][1], 6, 0, 1, 20.0)
+    _same(topology[14][0], 7, 0, -1, 0.0)
+    _same(topology[14][1], 7, 0, -1, 10.0)
     _same(topology[0][0], 1, 0, -1, 0.0)
     _same(topology[0][1], 1, 1, -1, 30.0)
     _same(topology[1][0], 1, 0, 1, 30.0)
     _same(topology[1][1], 1, 0, 1, 0.0)
-    _same(topology[8][0], 5, 0, 1, 57.0)
-    _same(topology[8][1], 5, 0, 1, 0.0)
-    _same(topology[12][1], 3, 0, -1, 0.0)
+    _same(topology[11][0], 5, 0, 1, 57.0)
+    _same(topology[11][1], 5, 0, 1, 0.0)
+    _same(topology[17][1], 3, 0, -1, 0.0)
 
 
 def test_junctions() raises:
@@ -1614,8 +1629,13 @@ def test_map_of_odd_roads() raises:
     var entries = map.generate_waypoints_on_road_entries()
     assert_equal(len(entries), 1)
     assert_equal(entries[0].road_id, RoadId(4))
-    # Both lanes end at their road's end and lead nowhere.
-    assert_equal(len(map.generate_topology()), 0)
+    # Both dead-end lanes retain their own full-precision endpoint.
+    var topology = map.generate_topology()
+    assert_equal(len(topology), 2)
+    _same(topology[0][0], 1, 0, -1, 5.0)
+    _same(topology[0][1], 1, 0, -1, 10.0)
+    _same(topology[1][0], 4, 0, -1, 0.0)
+    _same(topology[1][1], 4, 0, -1, 10.0)
     assert_false(map.waypoint_xodr(RoadId(2), LaneId(-1), _m(2.5)))
     assert_equal(len(map.junction_waypoints(JuncId(7), LANE_ANY)), 0)
     # The crosswalk before the section stands at the origin, each corner
@@ -1712,6 +1732,9 @@ def test_three_roads_cross() raises:
         True,
         lanes,
     )
+    # A fourth road crosses the same box but is not in this junction.
+    # It must not enter either side of a reported conflict pair.
+    _ = _flat_road(b, 13, 0, 0, 0, 20, -1, 0, 0, True, lanes)
     b.add_junction(JuncId(100), "x")
     for i in range(3):
         b.add_connection(JuncId(100), ConId(i), RoadId(0), RoadId(10 + i))
@@ -2027,7 +2050,7 @@ def test_builder_links() raises:
     for pair in topology:
         if pair[0].road_id == RoadId(3) and pair[0].section_id == SectionId(0):
             found = True
-            _same(pair[1], 3, 1, -1, 10.0)
+            _same(pair[1], 3, 0, -1, 10.0)
     assert_true(found)
 
 

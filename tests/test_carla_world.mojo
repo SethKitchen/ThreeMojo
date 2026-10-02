@@ -268,7 +268,9 @@ def test_world_on_a_map() raises:
         if d.length() < 1e-3:
             found = True
     assert_true(found)
-    assert_equal(len(world.get_spawn_points()), 13)
+    # One spawn per topology pair: the old 13 plus retained dead ends
+    # on road/lane 2/-1, 3/-1, 5/-1, 6/+1 (LHT), and 7/-1.
+    assert_equal(len(world.get_spawn_points()), 18)
     var empty = World(load_opendrive("<OpenDRIVE></OpenDRIVE>"))
     assert_equal(len(empty.get_actors()), 1)
     assert_equal(len(empty.get_spawn_points()), 0)

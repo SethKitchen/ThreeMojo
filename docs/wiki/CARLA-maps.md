@@ -63,6 +63,18 @@ Right and left are as the lane's traffic sees them. A lane that runs against s f
 
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 
+## Lane endpoints
+
+`generate_topology` keeps each dead-end driving lane. Its terminal waypoint uses the known road, section and lane with an s in double precision. It does not look the endpoint up again through `waypoint_xodr`. This keeps the endpoint in its own section when rounding would select the next section or reject the road end. Connected pairs keep their existing order.
+
+`next_until_lane_end` and `previous_until_lane_start` follow the unique lane path within the starting road. They stop at a road boundary, an unlinked section boundary or a branch. The final waypoint is the reachable endpoint in the requested direction. A start already at or beyond that inward endpoint returns an empty list.
+
+The inward offset is capped at one quarter of the section length so tiny positive sections retain valid endpoints. If no interior value is representable, the boundary is used. A positive final remainder still emits the endpoint, even below the usual inward offset.
+
+The input s must be finite and inside the specified lane section. Shared endpoints are valid for either adjacent section. The spacing must be finite and greater than `EPSILON`. A spacing that cannot advance the waypoint raises an error.
+
+The endpoint is resolved before sampling. A large interval does not traverse a different road. Ordinary forward samples keep the existing spacing and order. Exact endpoints do not add a duplicate sample.
+
 ## Traffic rules
 
 A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s and its right lanes against it. `right`, `left`, the lane change and the sign placement all follow the rule.
@@ -106,6 +118,8 @@ The map functions are `generate_mesh`, `generate_chunked_mesh`, `generate_ordere
 This port keeps CARLA's numbers except for the corrections listed here.
 
 - Waypoint pitch uses the arctangent of the elevation grade, with the sign required by CARLA's corrected rotation convention. Uphill waypoints face uphill in either traffic direction. CARLA's old lane transform used the raw grade as a positive angle. The sign follows the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h).
+- Topology retains dead-end lanes and their section identity. The pinned [CARLA `Map.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/road/Map.cpp) narrows the endpoint to a float before lookup. This can drop an increasing-s lane at the road end. The port deliberately corrects that behavior. See [issue #285](https://github.com/SethKitchen/ThreeMojo/issues/285).
+- Backward lane traversal measures the remainder toward the lane start. The pinned [CARLA `Waypoint.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/client/Waypoint.cpp) uses the forward remainder for its final backward step. That can leave the starting road or fail at an isolated end. The port deliberately corrects that behavior and handles exact and unlinked section endpoints. See [issue #286](https://github.com/SethKitchen/ThreeMojo/issues/286).
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
 - CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float.
 - A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains.
