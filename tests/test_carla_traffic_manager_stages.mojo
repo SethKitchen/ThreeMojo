@@ -1302,7 +1302,7 @@ def test_collision_edge_cases() raises:
 
 
 def test_collision_lock_on_a_clear_path() raises:
-    # A cached comparison, read swapped for the ego: 3 m from its body to
+    # A cached comparison, with the smaller actor as reference: 3 m from its body to
     # the lead's path, 2 m from the lead's body to its own path, the
     # paths touching and the boxes 1 m apart. Both paths are clear of the
     # other's body; the ego's body is the farther, so it yields. The
@@ -1311,7 +1311,7 @@ def test_collision_lock_on_a_clear_path() raises:
     var shared = _setup_follow(map, 50, 60, 5)
     var stage = CollisionStage()
     stage.collision_locks[1] = CollisionLock(9.0, 9.0, ActorId(2))
-    stage.geometry_cache[(1 << 32) | 2] = GeometryComparison(2.0, 3.0, 0.0, 1.0)
+    stage.geometry_cache[(1 << 32) | 2] = GeometryComparison(3.0, 2.0, 0.0, 1.0)
     var result = stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)
     assert_true(result[0])
     _near(result[1], 1.0)

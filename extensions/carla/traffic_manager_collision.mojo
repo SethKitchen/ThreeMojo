@@ -35,7 +35,9 @@ curving path, so it does not serve here.
 
 **Differences from CARLA.** CARLA walks the candidates in hash order
 before it sorts them; here they come by id before the sort, and the sort
-keeps ties in that order.
+keeps ties in that order. The pair cache stores distances in actor-id
+order and orients each read to the caller. The path strip includes its
+last buffered waypoint when it reaches the end.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/CollisionStage.cpp`.
 """
@@ -194,6 +196,7 @@ struct CollisionStage(Movable):
     """The collision stage, CARLA's `CollisionStage`."""
 
     var collision_locks: Dict[Int, CollisionLock]
+    # The smaller actor id is the reference in every cached comparison.
     var geometry_cache: Dict[Int, GeometryComparison]
     var geodesic_boundary_map: Dict[Int, List[Vector3]]
 
@@ -316,8 +319,9 @@ struct CollisionStage(Movable):
             _ = self.collision_locks.pop(actor.value)
 
     def reset(mut self):
-        """Drop every lock, `Reset`."""
+        """Drop every lock and cached comparison, `Reset`."""
         self.collision_locks = Dict[Int, CollisionLock]()
+        self.clear_cycle_cache()
 
     def clear_cycle_cache(mut self):
         """Forget this step's boundaries and distances, `ClearCycleCache`."""
@@ -440,13 +444,12 @@ struct CollisionStage(Movable):
             var right = List[Vector3]()
             var has_end = False
             var end_forward = Vector3(0, 0, 0)
-            var current = buffer[target[1]]
             var reached = False
             var j = target[1]
-            # CARLA also stops at the path's end. The last node sets
-            # `reached`, so that test never ends the loop.
+            # Read node j before testing its distance and final index.
+            # The endpoint must not lag one waypoint behind the index.
             while not reached:
-                ref point = map.at(current)
+                ref point = map.at(buffer[j])
                 if (
                     distance_squared(start, point.location()) > extension_square
                     or j == len(buffer) - 1
@@ -468,7 +471,6 @@ struct CollisionStage(Movable):
                     right.append(point.location() + side * -1.0)
                     has_end = True
                     end_forward = forward
-                current = buffer[j]
                 j += 1
             boundary = List[Vector3]()
             for k in range(len(right) - 1, -1, -1):  # pragma: no branch
@@ -487,8 +489,9 @@ struct CollisionStage(Movable):
         """Return the four distances between two actors,
         `GetGeometryBetweenActors`, cached for the step.
 
-        CARLA caches the pair once and swaps the two cross distances on
-        every later read, whichever actor asks.
+        The cache uses the smaller actor id as its reference. A read
+        swaps only the two cross distances when the larger actor asks.
+        The first caller and later query order do not change the result.
 
         Args:
             reference: The vehicle that asks.
@@ -505,25 +508,31 @@ struct CollisionStage(Movable):
         var high = max(reference.value, other.value)
         var key = (low << 32) | high
         var cached = self.geometry_cache.get(key)
+        var result: GeometryComparison
         if Bool(cached):
-            var result = cached.value()
+            result = cached.value()
+        else:
+            var reference_box = self.get_boundary(ActorId(low), shared)
+            var other_box = self.get_boundary(ActorId(high), shared)
+            var reference_geodesic = self.get_geodesic_boundary(
+                ActorId(low), shared
+            )
+            var other_geodesic = self.get_geodesic_boundary(
+                ActorId(high), shared
+            )
+            result = GeometryComparison(
+                polygon_distance(reference_box, other_geodesic),
+                polygon_distance(other_box, reference_geodesic),
+                polygon_distance(reference_geodesic, other_geodesic),
+                polygon_distance(reference_box, other_box),
+            )
+            self.geometry_cache[key] = result
+        if reference.value > other.value:
             var swap = result.reference_vehicle_to_other_geodesic
             result.reference_vehicle_to_other_geodesic = (
                 result.other_vehicle_to_reference_geodesic
             )
             result.other_vehicle_to_reference_geodesic = swap
-            return result
-        var reference_box = self.get_boundary(reference, shared)
-        var other_box = self.get_boundary(other, shared)
-        var reference_geodesic = self.get_geodesic_boundary(reference, shared)
-        var other_geodesic = self.get_geodesic_boundary(other, shared)
-        var result = GeometryComparison(
-            polygon_distance(reference_box, other_geodesic),
-            polygon_distance(other_box, reference_geodesic),
-            polygon_distance(reference_geodesic, other_geodesic),
-            polygon_distance(reference_box, other_box),
-        )
-        self.geometry_cache[key] = result
         return result
 
     def negotiate_collision(
