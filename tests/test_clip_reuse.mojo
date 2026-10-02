@@ -10,6 +10,8 @@ from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from renderers.clip import (
     ClipVertex,
+    _KEEP_FARTHER,
+    _KEEP_NEARER,
     _clip_plane,
     _clip_side,
     _cross_at,
@@ -168,9 +170,9 @@ def test_clipping_reuses_whole_polygon_storage() raises:
     ]
     var held = source.copy()
     var address = Int(held.unsafe_ptr())
-    held = _clip_plane(held^, -1, True)
+    held = _clip_plane[_KEEP_FARTHER](held^, -1)
     assert_equal(Int(held.unsafe_ptr()), address)
-    held = _clip_plane(held^, -3, False)
+    held = _clip_plane[_KEEP_NEARER](held^, -3)
     assert_equal(Int(held.unsafe_ptr()), address)
     held = _clip_side(held^, Plane(Vector3(1, 0, 0), 0))
     assert_equal(Int(held.unsafe_ptr()), address)
@@ -182,7 +184,7 @@ def test_clipping_reuses_whole_polygon_storage() raises:
     # Empty polygons still flow through all later planes.
     held = _clip_side(held^, Plane(Vector3(-1, 0, 0), -4))
     assert_equal(len(held), 0)
-    held = _clip_plane(held^, -1, True)
+    held = _clip_plane[_KEEP_FARTHER](held^, -1)
     held = _clip_side(held^, Plane(Vector3(0, 1, 0), 0))
     assert_equal(len(held), 0)
 

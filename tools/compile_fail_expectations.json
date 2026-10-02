@@ -572,6 +572,58 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_depth_clip_point_side_must_be_valid.mojo": {
+    "errors": [
+      {
+        "line": 11,
+        "column": 5,
+        "message": "function instantiation failed"
+      }
+    ],
+    "notes": [
+      "call expansion failed with parameter value(s): (...)",
+      "constraint failed: Invalid depth clipping side",
+      "function instantiation failed"
+    ]
+  },
+  "tests/compile_fail/a_depth_clip_polygon_side_must_be_valid.mojo": {
+    "errors": [
+      {
+        "line": 11,
+        "column": 5,
+        "message": "function instantiation failed"
+      }
+    ],
+    "notes": [
+      "call expansion failed with parameter value(s): (...)",
+      "constraint failed: Invalid depth clipping side",
+      "function instantiation failed"
+    ]
+  },
+  "tests/compile_fail/a_depth_clip_side_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "invalid call to '_clip_plane': '_clip_plane' parameter 'side' has '_DepthClipSide' type, but value has type 'IntLiteral[0]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_depth_clip_side_is_not_a_bool.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to '_inside': '_inside' parameter 'side' has '_DepthClipSide' type, but value has type 'Bool'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_depth_func_is_not_a_bare_int.mojo": {
     "errors": [
       {
