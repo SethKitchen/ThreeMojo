@@ -465,7 +465,7 @@ def test_a_loop_stops_the_path() raises:
     _put(shared, 1, 10, 1.75, 0, 0)
     _vehicles(shared, [1])
     _localize(stage, shared)
-    _same(_indices(shared, 1), [0, 1, 0])
+    _same(_indices(shared, 1), [0, 1])
 
 
 def Waypoint_at(road: Int, lane: Int, s: Float64) -> Waypoint:

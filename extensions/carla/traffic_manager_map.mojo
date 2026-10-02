@@ -901,8 +901,13 @@ struct InMemoryMap(Movable):
 
     def _assign_turn(mut self, start: SimpleWaypointIndex):
         var traversed = List[Int]()
+        var visited = Set[Int]()
         var end = start.value
         while self.waypoints[end].check_junction():
+            if end in visited:
+                # A cyclic junction has no exit. Keep its road options.
+                return
+            visited.add(end)
             traversed.append(end)
             if len(self.waypoints[end].next_waypoints) == 0:
                 break
