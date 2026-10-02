@@ -43,30 +43,82 @@ def _count_quotes(line: String) -> Int:
     return count
 
 
-def _bracket_delta(line: String) -> Int:
-    """Return opened-minus-closed brackets on `line`, ignoring string bodies."""
-    var depth = 0
-    var quote = String("")
-    var escaped = False
-    for cp in line.codepoint_slices():
-        if quote != "":
-            # A quote after an odd backslash run stays inside the literal.
-            if escaped:
-                escaped = False
-            elif cp == "\\":
-                escaped = True
-            elif cp == quote:
-                quote = String("")
+def _characters(text: String) -> List[String]:
+    """Return the codepoints used by the source lexer."""
+    var chars = List[String]()
+    for cp in text.codepoint_slices():
+        chars.append(String(cp))
+    return chars^
+
+
+def _quote_delimiter(chars: List[String], start: Int) -> String:
+    """Return the one- or three-character delimiter at an opening quote."""
+    var quote = chars[start]
+    if start + 2 < len(chars):
+        if chars[start + 1] == quote and chars[start + 2] == quote:
+            return quote * 3
+    return quote.copy()
+
+
+def _literal_end(chars: List[String], start: Int, delimiter: String) -> Int:
+    """Find a closing delimiter after `start`, which is inside a literal."""
+    var width = 1 if delimiter == '"' or delimiter == "'" else 3
+    var quote = String('"') if delimiter.startswith('"') else String("'")
+    var index = start
+    while index < len(chars):
+        if chars[index] == "\\":
+            index += 2
             continue
+        if chars[index] == quote:
+            if width == 1:
+                return index + 1
+            if index + 2 < len(chars):
+                if chars[index + 1] == quote and chars[index + 2] == quote:
+                    return index + 3
+        index += 1
+    return -1
+
+
+def _quoted_end(chars: List[String], start: Int) -> Int:
+    """Return the position after a quoted literal, or -1 if unfinished.
+
+    Single and triple delimiters both preserve escaped quote characters.
+    """
+    var delimiter = _quote_delimiter(chars, start)
+    var width = 1 if delimiter == '"' or delimiter == "'" else 3
+    return _literal_end(chars, start + width, delimiter)
+
+
+def _bracket_delta(line: String, mut literal: String) -> Int:
+    """Scan one physical line, retaining an unfinished literal's delimiter.
+
+    The scanner carries bracket and quote state instead of rescanning a long
+    continuation. A trailing backslash escapes the physical newline, so the
+    next line still starts at an unescaped character inside the literal.
+    """
+    var chars = _characters(line)
+    var depth = 0
+    var index = 0
+    while index < len(chars):
+        if literal != "":
+            var end = _literal_end(chars, index, literal)
+            if end < 0:
+                return depth
+            literal = String("")
+            index = end
+            continue
+        var cp = chars[index]
         if cp == '"' or cp == "'":
-            quote = String(cp)
-        elif cp == "#":
-            # A trailing comment cannot affect bracket depth.
+            literal = _quote_delimiter(chars, index)
+            index += 1 if literal == '"' or literal == "'" else 3
+            continue
+        if cp == "#":
             break
-        elif cp == "(" or cp == "[" or cp == "{":
+        if cp == "(" or cp == "[" or cp == "{":
             depth += 1
         elif cp == ")" or cp == "]" or cp == "}":
             depth -= 1
+        index += 1
     return depth
 
 
@@ -88,6 +140,7 @@ struct Scanner(Movable):
 
     var _in_docstring: Bool
     var _open_brackets: Int
+    var _literal: String
     # Innermost block last. A statement is executable only when the innermost
     # enclosing block is a `def`; a nested `def` must not be mistaken for the
     # end of the function containing it, which a single indent value cannot
@@ -98,6 +151,7 @@ struct Scanner(Movable):
         """Start a scan at the top of a file."""
         self._in_docstring = False
         self._open_brackets = 0
+        self._literal = String("")
         self._scopes = List[_Scope]()
 
     def _close_scopes_at_or_above(mut self, indent: Int):
@@ -109,7 +163,7 @@ struct Scanner(Movable):
 
     def in_continuation(self) -> Bool:
         """Return True if the next line continues an unclosed statement."""
-        return self._open_brackets > 0
+        return self._open_brackets > 0 or self._literal != ""
 
     def in_docstring(self) -> Bool:
         """Return True if the scan is currently inside a multi-line docstring.
@@ -140,8 +194,8 @@ struct Scanner(Movable):
         var stripped = String(line.strip())
 
         # A continuation of a multi-line statement is never probed on its own.
-        if self._open_brackets > 0:
-            self._open_brackets += _bracket_delta(line)
+        if self.in_continuation():
+            self._open_brackets += _bracket_delta(line, self._literal)
             return False
 
         if self._in_docstring:
@@ -169,7 +223,7 @@ struct Scanner(Movable):
         # formatter, a multi-line `elif`, a decorator with arguments — and
         # missing that makes the continuation look like a fresh statement,
         # which then gets a probe inserted into the middle of an expression.
-        self._open_brackets += _bracket_delta(line)
+        self._open_brackets += _bracket_delta(line, self._literal)
 
         if stripped.startswith("@"):
             return False

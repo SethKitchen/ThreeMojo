@@ -11,7 +11,7 @@ line number embedded in the probe id, so the instrumented copy is disposable
 and only ever lives under `coverage/build/`.
 """
 
-from coverage.scanner import Scanner, indent_of
+from coverage.scanner import Scanner, indent_of, _characters, _quoted_end
 
 comptime PROBE_IMPORT = (
     "from coverage.runtime import hit as _cov_hit, branch as _cov_branch"
@@ -99,24 +99,23 @@ def _statement_colon(line: String) -> Int:
     Colons inside brackets (type annotations, dict literals), inside string
     literals, or after a `#` comment do not end the header.
     """
+    var chars = _characters(line)
     var depth = 0
-    var quote = String("")
-    var escaped = False
     var index = 0
     var found = -1
-    for cp in line.codepoint_slices():
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif cp == "\\":
-                escaped = True
-            elif cp == quote:
-                quote = String("")
-        elif cp == '"' or cp == "'":
-            quote = String(cp)
-        elif cp == "#":
-            break
-        elif cp == "(" or cp == "[" or cp == "{":
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                break
+            index = end
+            continue
+        if cp == "#":
+            while index < len(chars) and chars[index] != "\n":
+                index += 1
+            continue
+        if cp == "(" or cp == "[" or cp == "{":
             depth += 1
         elif cp == ")" or cp == "]" or cp == "}":
             depth -= 1
@@ -132,22 +131,25 @@ def _strip_comment(line: String) -> String:
     Joining the physical lines of a multi-line header would otherwise push the
     code after a comment onto the same line, commenting it out.
     """
+    var chars = _characters(line)
     var out = String("")
-    var quote = String("")
-    var escaped = False
-    for cp in line.codepoint_slices():
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif cp == "\\":
-                escaped = True
-            elif cp == quote:
-                quote = String("")
-        elif cp == '"' or cp == "'":
-            quote = String(cp)
-        elif cp == "#":
-            break
-        out += String(cp)
+    var index = 0
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                # Trailing whitespace still belongs to an unfinished literal.
+                return out + _substring(line, index, len(chars))
+            out += _substring(line, index, end)
+            index = end
+            continue
+        if cp == "#":
+            while index < len(chars) and chars[index] != "\n":
+                index += 1
+            continue
+        out += cp
+        index += 1
     return String(out.rstrip())
 
 
@@ -170,16 +172,24 @@ def _word_at(chars: List[String], start: Int, word: String) raises -> Bool:
     return True
 
 
-def _separator_at(chars: List[String], index: Int) raises -> String:
-    """Return the boolean operator starting at `index`, or an empty string.
+def _token_boundary(ch: String) -> Bool:
+    """Return True for whitespace or a delimiter next to a logical keyword."""
+    return ch in " \t\r\n()[]{}"
 
-    Matches ` and ` / ` or ` with their surrounding spaces so that identifiers
-    such as `android` or `original` are never split.
+
+def _separator_at(chars: List[String], index: Int) raises -> String:
+    """Return a top-level expression keyword with surrounding spaces.
+
+    Token boundaries accept tabs and adjacent parentheses, but not identifiers
+    such as `android` or `original`. The caller keeps quoted text opaque.
     """
-    if _word_at(chars, index, String(" and ")):
-        return String(" and ")
-    if _word_at(chars, index, String(" or ")):
-        return String(" or ")
+    if index > 0 and not _token_boundary(chars[index - 1]):
+        return String("")
+    for word in [String("and"), String("or"), String("if")]:
+        var end = index + _codepoint_count(word)
+        if _word_at(chars, index, word):
+            if end == len(chars) or _token_boundary(chars[end]):
+                return " " + word + " "
     return String("")
 
 
@@ -187,8 +197,9 @@ def split_conditions(condition: String) raises -> List[String]:
     """Split `condition` into operands and the operators between them.
 
     Returns alternating entries: operand, operator, operand, ... Only
-    top-level operators split, so brackets and string literals stay intact and
-    `not (a and b)` remains a single condition.
+    top-level `and`, `or` and `if` keywords split. Calls, indexing
+    and string literals stay intact.
+    The wrapper visits complete parenthesized groups separately.
 
     Args:
         condition: The decision's condition text.
@@ -199,33 +210,20 @@ def split_conditions(condition: String) raises -> List[String]:
     Raises:
         Error: Never; present to match the helpers it calls.
     """
-    var chars = List[String]()
-    for cp in condition.codepoint_slices():
-        chars.append(String(cp))
-
+    var chars = _characters(condition)
     var parts = List[String]()
     var current = String("")
     var depth = 0
-    var quote = String("")
-    var escaped = False
     var index = 0
 
     while index < len(chars):
         var ch = chars[index]
-        if quote != "":
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == quote:
-                quote = String("")
-            current += ch
-            index += 1
-            continue
         if ch == '"' or ch == "'":
-            quote = ch
-            current += ch
-            index += 1
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                end = len(chars)
+            current += _substring(condition, index, end)
+            index = end
             continue
         if ch == "(" or ch == "[" or ch == "{":
             depth += 1
@@ -240,13 +238,87 @@ def split_conditions(condition: String) raises -> List[String]:
                 var consumed = 0
                 for _ in separator.codepoint_slices():
                     consumed += 1
-                index += consumed
+                index += consumed - 2
                 continue
         current += ch
         index += 1
 
     parts.append(String(current.strip()))
     return parts^
+
+
+def _is_group(condition: String) raises -> Bool:
+    """Return True when one parenthesis pair encloses the entire expression.
+
+    `(a or b) == c` is one comparison, not a Boolean group. Parentheses in
+    calls, subscripts and quoted strings must not change that classification.
+    """
+    if not condition.startswith("("):
+        return False
+    var chars = _characters(condition)
+    var depth = 0
+    var index = 0
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == '"' or cp == "'":
+            var end = _quoted_end(chars, index)
+            if end < 0:
+                return False
+            index = end
+            continue
+        if cp == "(" or cp == "[" or cp == "{":
+            depth += 1
+        elif cp == ")" or cp == "]" or cp == "}":
+            depth -= 1
+            if depth == 0:
+                return cp == ")" and index == len(chars) - 1
+        index += 1
+    return False
+
+
+def _wrap_leaf(condition: String, id: String, mut count: Int) -> String:
+    """Wrap one opaque expression without changing its evaluation."""
+    var result = (
+        '_cov_branch("' + id + "." + String(count) + '", ' + condition + ")"
+    )
+    count += 1
+    return result^
+
+
+def _wrap_leaves(
+    condition: String, id: String, mut count: Int
+) raises -> String:
+    """Wrap Boolean leaves, retaining every logical operator and group.
+
+    Only the decision's Boolean grammar is traversed. An atomic call, index,
+    comparison or arithmetic expression stays intact, even if it contains a
+    Boolean expression used as an argument or value. No leaf is duplicated.
+    """
+    var parts = split_conditions(condition)
+    # Conditional expressions bind less tightly than Boolean operators.
+    # Keep them opaque, including any leading `not`, rather than change which
+    # arm runs or move a logical operator across the conditional expression.
+    for index in range(1, len(parts), 2):
+        if parts[index] == " if ":
+            return _wrap_leaf(String(condition.strip()), id, count)
+    if len(parts) > 1:
+        var out = String("")
+        for index in range(len(parts)):
+            if index % 2 == 1:
+                out += parts[index]
+            else:
+                out += _wrap_leaves(parts[index], id, count)
+        return out^
+    var text = parts[0].copy()
+    if _is_group(text):
+        var inner = _substring(text, 1, _codepoint_count(text) - 1)
+        return "(" + _wrap_leaves(inner, id, count) + ")"
+    var chars = _characters(text)
+    if len(chars) > 3 and _word_at(chars, 0, String("not")):
+        if _token_boundary(chars[3]):
+            var inner = _substring(text, 3, len(chars))
+            return "not " + _wrap_leaves(inner, id, count)
+    return _wrap_leaf(text, id, count)
 
 
 struct Wrapped(Movable):
@@ -288,7 +360,9 @@ def _wrap_condition(
 
     var indent = indent_of(line)
     var condition_start = indent + _codepoint_count(keyword)
-    var condition = String(_substring(line, condition_start, colon).strip())
+    var condition = String(
+        _strip_comment(_substring(line, condition_start, colon)).strip()
+    )
     if condition == "":
         return Wrapped(String(line), 0)
     # `while True:` is a loop, not a decision: a literal condition has exactly
@@ -296,30 +370,13 @@ def _wrap_condition(
     if condition == "True" or condition == "False":
         return Wrapped(String(line), 0)
 
-    var parts = split_conditions(condition)
-    var rebuilt = String("")
     var conditions = 0
-    # A single operand needs no inner probe; the decision's own probe says
-    # everything there is to say about it.
-    var split = len(parts) > 1
-    var index = 0
-    while index < len(parts):
-        if index % 2 == 1:
-            rebuilt += parts[index]
-        elif split:
-            rebuilt += (
-                '_cov_branch("'
-                + id
-                + "."
-                + String(conditions)
-                + '", '
-                + parts[index]
-                + ")"
-            )
-            conditions += 1
-        else:
-            rebuilt += parts[index]
-        index += 1
+    var rebuilt = _wrap_leaves(condition, id, conditions)
+    # The decision already measures a single leaf, including a negated leaf.
+    # Keep its original spelling, including redundant grouping and whitespace.
+    if conditions == 1:
+        rebuilt = condition.copy()
+        conditions = 0
 
     # Everything from the colon onward is kept so trailing comments survive.
     var tail = _substring(line, colon, _codepoint_count(line))
@@ -461,7 +518,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
         # The import cannot precede a module docstring, which must stay the
         # file's first expression, so it goes just above the first definition.
-        if not import_emitted and not was_prose:
+        if not import_emitted and not was_prose and not was_continuation:
             if _opens_top_level_block(line):
                 out += PROBE_IMPORT + "\n"
                 import_emitted = True
@@ -469,7 +526,17 @@ def instrument(source: String, module: String) raises -> Instrumented:
         # Still accumulating a header split over several physical lines.
         if pending != "":
             pending_excluded = pending_excluded or PRAGMA_NO_BRANCH in line
-            pending += " " + _strip_comment(String(line.strip()))
+            # A triple-quoted literal can contain newlines, comments and
+            # indentation. Keep those bytes until the whole header is parsed.
+            if (
+                '"""' in pending
+                or "'''" in pending
+                or '"""' in line
+                or "'''" in line
+            ):
+                pending += "\n" + line
+            else:
+                pending += " " + _strip_comment(String(line.strip()))
             if _statement_colon(pending) >= 0:
                 if pending_excluded:
                     out += pending + "\n"
