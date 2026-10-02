@@ -1096,8 +1096,7 @@ struct CarlaRenderer(Movable):
             length=len(self.scene.meshes), fill=UNLABELED
         )
         var at = 0
-        # The town always adds its road.
-        for tag in self.town.tags:  # pragma: no branch
+        for tag in self.town.tags:
             tags[at] = tag
             at += 1
         for tag in self.props.tags:

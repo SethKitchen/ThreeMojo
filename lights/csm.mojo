@@ -520,7 +520,8 @@ struct CSM(Movable):
             raise Error("A CSM shadow map size must be positive")
         if len(self.frustums) != self.cascades:
             raise Error("A CSM needs one frustum per cascade")
-        for frustum in self.frustums:
+        # `_check_lights` requires cascades >= 1; lengths match above.
+        for frustum in self.frustums:  # pragma: no branch
             if len(frustum.near) != 4 or len(frustum.far) != 4:
                 raise Error("A CSM frustum needs four corners per plane")
 

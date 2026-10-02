@@ -168,7 +168,8 @@ struct TreeParameters(Copyable, Movable):
         Raises:
             Error: If there is no level, a list is empty, a child count is
                 negative, the step length or the pipe exponent is not
-                positive, or a number is not finite.
+                positive, the taper curve is negative, an active root flare
+                has no positive fraction, or a number is not finite.
         """
         if self.levels < 1:
             raise Error("A tree needs one level at least")
@@ -181,15 +182,36 @@ struct TreeParameters(Copyable, Movable):
         for level in range(len(self.children)):  # pragma: no branch
             if self.children[level] < 0:
                 raise Error("A child count must be zero or more")
+        for angle in self.branch_angle:  # pragma: no branch
+            check_finite(radians(angle), "A branch angle")
+        for amount in self.gnarl:  # pragma: no branch
+            check_finite(amount, "A gnarl")
+        check_finite(radians(self.angle_variance), "An angle variance")
+        check_finite(self.length_ratio, "A length ratio")
+        check_finite(self.length_variance, "A length variance")
+        check_finite(self.branch_length_falloff, "A branch length falloff")
+        check_finite(meters(self.trunk_length), "A trunk length")
+        check_finite(meters(self.trunk_radius), "A trunk radius")
+        check_finite(self.taper, "A taper")
+        check_finite(self.taper_curve, "A taper curve")
+        check_finite(self.root_flare, "A root flare")
+        check_finite(self.flare_frac, "A flare fraction")
+        check_finite(self.radius_exponent, "A radius exponent")
+        check_finite(meters(self.min_radius), "A minimum radius")
+        check_finite(meters(self.min_length), "A minimum length")
+        check_finite(Float64(self.droop.to(PER_METER)), "A droop")
+        check_finite(self.up_pull, "An up pull")
+        check_finite(meters(self.section_length), "A section length")
+        check_finite(self.child_start, "A child start")
+        check_finite(self.trunk_clear, "A trunk clearance")
         if meters(self.section_length) <= 0:
             raise Error("A tree's section length must be positive")
         if self.radius_exponent <= 0:
             raise Error("A tree's radius exponent must be positive")
-        check_finite(meters(self.trunk_length), "A trunk length")
-        check_finite(meters(self.trunk_radius), "A trunk radius")
-        check_finite(self.taper + self.taper_curve, "A taper")
-        check_finite(self.root_flare + self.flare_frac, "A root flare")
-        check_finite(self.length_ratio, "A length ratio")
+        if self.taper_curve < 0:
+            raise Error("A tree's taper curve must be zero or more")
+        if self.root_flare > 0 and self.flare_frac <= 0:
+            raise Error("An active root flare needs a positive flare fraction")
 
 
 def _perpendicular(v: Vec3d) -> Vec3d:
@@ -261,7 +283,11 @@ def _grow(
 ):
     """Grow one branch as a tube, then its children, three.js's
     `growBranch`."""
-    var sections = max(3, min(24, _js_round(length / meters(p.section_length))))
+    # Clamp in floating point before converting to Int. A finite length
+    # and step can have a quotient far outside the integer range.
+    var sections = _js_round(
+        max(3.0, min(24.0, length / meters(p.section_length)))
+    )
     var radial = max(3, p.radial_segments - level)
     var step = length / Float64(sections)
     var gnarl = p.gnarl[min(level, len(p.gnarl) - 1)]
@@ -292,10 +318,13 @@ def _grow(
     if level >= p.levels - 1 or length < meters(p.min_length):
         return
     var n = p.children[min(level, len(p.children) - 1)]
+    if n == 0:
+        return
     var angle = radians(p.branch_angle[min(level, len(p.branch_angle) - 1)])
     var pipe_drop = pow(1.0 / Float64(n), 1.0 / p.radius_exponent)
     var up = Vec3d(0, 1, 0)
-    for i in range(n):
+    # Validation rejects negative counts; zero returned above.
+    for i in range(n):  # pragma: no branch
         var t = start + (
             Float64(i) + 0.5 + (random.next() - 0.5) * 0.6
         ) / Float64(n) * (1 - start)

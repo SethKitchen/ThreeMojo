@@ -48,6 +48,7 @@ milliseconds.
 """
 
 import glob
+import math
 import os
 import struct
 import sys
@@ -66,28 +67,56 @@ TO_METERS = 0.01
 STILL = 1e-7
 
 
-def read_obj(path):
-    """Return an OBJ file's vertices, texture coordinates and faces.
+def _obj_index(text, count):
+    """Resolve a nonzero OBJ index, using the current count for negatives."""
+    value = int(text)
+    if value == 0:
+        raise ValueError("An OBJ index must not be zero")
+    if value < 0:
+        value += count
+        if value < 0:
+            raise ValueError("An OBJ relative index is out of range")
+        return value
+    return value - 1
 
-    Each face is a list of (vertex, texture coordinate) index pairs,
-    counted from zero.
+
+def read_obj(path):
+    """Return finite OBJ positions, texture coordinates and indexed faces.
+
+    Each face needs at least three position/texture-coordinate pairs.
+    Indices are returned from zero. Negative indices are relative to the
+    declarations before that face; positive references can point forward.
+    Invalid coordinates, corner fields or references raise ValueError.
     """
     points, uvs, faces = [], [], []
     with open(path, encoding="ascii") as source:
-        for line in source:
-            words = line.split()
+        for line_number, line in enumerate(source, 1):
+            words = line.split("#", 1)[0].split()
             if not words:
                 continue
-            if words[0] == "v":
-                points.append(tuple(float(x) for x in words[1:4]))
-            elif words[0] == "vt":
-                uvs.append(tuple(float(x) for x in words[1:3]))
+            if words[0] in ("v", "vt"):
+                width = 3 if words[0] == "v" else 2
+                if len(words) < width + 1:
+                    raise ValueError(f"{path}:{line_number}: short OBJ coordinate row")
+                values = tuple(float(x) for x in words[1:width + 1])
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError(f"{path}:{line_number}: non-finite OBJ coordinate")
+                (points if words[0] == "v" else uvs).append(values)
             elif words[0] == "f":
+                if len(words) < 4:
+                    raise ValueError(f"{path}:{line_number}: an OBJ face needs three corners")
                 corners = []
                 for corner in words[1:]:
                     parts = corner.split("/")
-                    corners.append((int(parts[0]) - 1, int(parts[1]) - 1))
+                    if len(parts) not in (2, 3) or not parts[0] or not parts[1]:
+                        raise ValueError(f"{path}:{line_number}: an OBJ corner needs position/texture indices")
+                    corners.append((_obj_index(parts[0], len(points)),
+                                    _obj_index(parts[1], len(uvs))))
                 faces.append(corners)
+    for face in faces:
+        for position, texture in face:
+            if not (0 <= position < len(points) and 0 <= texture < len(uvs)):
+                raise ValueError(f"{path}: an OBJ face index is out of range")
     return points, uvs, faces
 
 

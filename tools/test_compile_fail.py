@@ -14,6 +14,12 @@ from unittest.mock import patch
 import compile_fail
 
 
+CRASHPAD_WARNING = (
+    "Failed to initialize Crashpad.  Crash reporting will not be available.  "
+    "Cause: while locating crashpad handler: unable to locate crashpad handler executable"
+)
+
+
 class DiagnosticTests(unittest.TestCase):
     fixture = "tests/compile_fail/fixture.mojo"
 
@@ -29,6 +35,42 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_compiled_fixture_fails(self):
         self.assertIn("compiled", compile_fail.rejection_error(self.fixture, 0, ""))
+
+    def test_exact_crashpad_warning_with_expected_rejection(self):
+        expected = {"errors": [{"line": 13, "column": 17,
+                    "message": "cannot implicitly convert 'Int' value to 'BodyId'"}],
+                    "notes": []}
+        for newline in ("\n", "\r\n"):
+            output = CRASHPAD_WARNING + newline + self.diagnostic()
+            self.assertIsNone(compile_fail.rejection_error(
+                self.fixture, 1, output, expected))
+            self.assertIn("unexpected source", compile_fail.rejection_error(
+                self.fixture, 1, output + self.diagnostic("unexpected token"), expected))
+
+    def test_crashpad_warning_without_source_rejection_fails(self):
+        self.assertIn("no located source error", compile_fail.rejection_error(
+            self.fixture, 1, CRASHPAD_WARNING + "\n"))
+        for code in (0, -11, 139):
+            self.assertIsNotNone(compile_fail.rejection_error(
+                self.fixture, code, CRASHPAD_WARNING + "\n" + self.diagnostic()))
+
+    def test_crashpad_warning_does_not_hide_real_failures(self):
+        for failure in ("LLVM ERROR: invalid IR", "segmentation fault", "stack dump",
+                        "PLEASE submit a bug report", "internal compiler error",
+                        "Assertion 'x != 0' failed", "out of memory",
+                        "unable to locate module 'extensions'",
+                        "failed to import module 'extensions'"):
+            with self.subTest(failure=failure):
+                self.assertIn("infrastructure", compile_fail.rejection_error(
+                    self.fixture, 1, CRASHPAD_WARNING + "\n" + self.diagnostic() + failure))
+
+    def test_only_exact_whole_crashpad_warning_line_is_allowed(self):
+        for warning in ("prefix " + CRASHPAD_WARNING, CRASHPAD_WARNING + " suffix",
+                        CRASHPAD_WARNING.replace("handler executable", "module 'extensions'"),
+                        self.diagnostic(CRASHPAD_WARNING).rstrip("\n")):
+            with self.subTest(warning=warning):
+                self.assertIn("infrastructure", compile_fail.rejection_error(
+                    self.fixture, 1, warning + "\n" + self.diagnostic()))
 
     def test_signal_timeout_and_shell_error_fail(self):
         for code in (-11, -9, 124, 126, 127, 137, 139):
@@ -135,6 +177,33 @@ class RunnerTests(unittest.TestCase):
             rc, output, _ = self.run_main(fixture.name, results)
             self.assertEqual(rc, 1)
             self.assertIn('unknown argument --bad', output)
+
+    def test_control_with_crashpad_warning_still_requires_success(self):
+        with tempfile.NamedTemporaryFile(suffix='.mojo') as fixture:
+            warning = (CRASHPAD_WARNING + '\n').encode()
+            for code in (1, -11, 139):
+                with self.subTest(code=code):
+                    rc, output, build = self.run_main(fixture.name, [
+                        subprocess.CompletedProcess([], code, warning)])
+                    self.assertEqual(rc, 1)
+                    self.assertEqual(build.call_count, 1)
+                    self.assertIn('control failed', output)
+                    self.assertIn(CRASHPAD_WARNING, output)
+            rc, output, build = self.run_main(fixture.name, [
+                subprocess.CompletedProcess([], 0, warning),
+                subprocess.CompletedProcess([], 1, warning +
+                    f'{fixture.name}:1:1: error: invalid conversion\n'.encode())])
+            self.assertEqual(rc, 0)
+            self.assertEqual(build.call_count, 2)
+
+    def test_failed_fixture_retains_crashpad_warning_and_real_error(self):
+        with tempfile.NamedTemporaryFile(suffix='.mojo') as fixture:
+            diagnostic = CRASHPAD_WARNING + '\nLLVM ERROR: invalid IR\n'
+            rc, output, _ = self.run_main(fixture.name, [
+                subprocess.CompletedProcess([], 0, b''),
+                subprocess.CompletedProcess([], 1, diagnostic.encode())])
+            self.assertEqual(rc, 1)
+            self.assertIn(diagnostic, output)
 
     def test_launch_failure_and_timeout_fail(self):
         with tempfile.NamedTemporaryFile(suffix='.mojo') as fixture:

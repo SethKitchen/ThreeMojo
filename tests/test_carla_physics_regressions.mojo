@@ -11,7 +11,12 @@ from extensions.carla.physics.simulation import CarlaPhysics
 from extensions.carla.physics.world import PhysicsWorld
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.testing import TestSuite, assert_almost_equal, assert_true
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_true,
+)
 from units.si import Duration, KILOGRAM, Length, METER, Mass, SECOND
 
 
@@ -130,6 +135,15 @@ def test_external_force_and_torque_span_the_tick() raises:
         sim.tick(Duration(0.05, SECOND), substeps)
         assert_almost_equal(sim.velocity(id).x, 0.5, atol=1e-6)
         assert_almost_equal(sim.angular_velocity(id).z, 0.5, atol=1e-6)
+
+
+def test_empty_simulation_ticks_without_bodies_or_events() raises:
+    var sim = CarlaPhysics()
+    for substeps in [1, 4]:
+        sim.tick(Duration(0.05, SECOND), substeps)
+        assert_equal(len(sim.world.bodies), 0)
+        assert_equal(len(sim.events), 0)
+        assert_equal(sim.world.contact_count, 0)
 
 
 def main() raises:

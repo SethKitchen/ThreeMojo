@@ -9,9 +9,10 @@
 A `GaussianSplat` holds a `GaussianSplatGeometry` and the scene node that
 places it. It keeps what three.js's object keeps beside its GPU buffers:
 
-- **Bounds.** `compute_bounding_box` and `compute_bounding_sphere` grow
-  each splat by its drawn extent, `SPLAT_KERNEL_CUTOFF` times the square
-  root of its largest variance, as three.js does.
+- **Bounds.** The box grows each splat by the largest coordinate extent,
+  as in three.js. The sphere uses the largest absolute covariance row sum
+  to bound rotated long axes. This corrects three.js's diagonal-only
+  sphere, which can reject a ray inside a rotated anisotropic splat.
 - **A raycast.** `raycast` meets the ray with the ellipsoid each splat's
   covariance describes, at the kernel's cutoff: three.js's
   `computeRayIntersection`. Splats fainter than `MIN_RAYCAST_OPACITY` are
@@ -148,6 +149,21 @@ struct GaussianSplat(Copyable, Movable):
         )
         return SPLAT_KERNEL_CUTOFF * sqrt(largest)
 
+    def _sphere_extent(self, index: Int) -> Float64:
+        """Return a conservative radius for a positive covariance matrix.
+
+        The largest absolute row sum bounds every covariance eigenvalue.
+        Unlike the largest diagonal, it covers a rotated long axis.
+        """
+        ref c = self.splat_geometry.covariances
+        var xy = abs(Float64(c[index * 6 + 1]))
+        var xz = abs(Float64(c[index * 6 + 2]))
+        var yz = abs(Float64(c[index * 6 + 4]))
+        var x = abs(Float64(c[index * 6])) + xy + xz
+        var y = abs(Float64(c[index * 6 + 3])) + xy + yz
+        var z = abs(Float64(c[index * 6 + 5])) + xz + yz
+        return SPLAT_KERNEL_CUTOFF * sqrt(max(x, max(y, z)))
+
     def _center(self, index: Int) -> Vector3:
         """Return a splat's center.
 
@@ -184,7 +200,7 @@ struct GaussianSplat(Copyable, Movable):
         var reach = Float32(0)
         for index in range(self.count()):
             var far = sphere.center.distance_to(self._center(index)) + Float32(
-                self._extent(index)
+                self._sphere_extent(index)
             )
             reach = max(reach, far)
         sphere.radius = reach
@@ -260,7 +276,7 @@ struct GaussianSplat(Copyable, Movable):
         if not largest > 0:
             return -1
         var center = self._center(index)
-        var bound = SPLAT_KERNEL_CUTOFF * sqrt(largest)
+        var bound = self._sphere_extent(index)
         if Float64(_distance_sq(origin, direction, center)) > bound * bound:
             return -1
         var floor_variance = largest * COVARIANCE_FLATNESS
@@ -272,7 +288,7 @@ struct GaussianSplat(Copyable, Movable):
         var t12 = c12 * c02 - a22 * c01
         var t13 = c12 * c01 - a11 * c02
         var determinant = a00 * t11 + c01 * t12 + c02 * t13
-        if not determinant > 0:
+        if not (a00 > 0 and a00 * a11 - c01 * c01 > 0 and determinant > 0):
             return -1
         var inv = 1 / determinant
         var i00 = t11 * inv

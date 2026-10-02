@@ -330,7 +330,8 @@ struct LightProbeGrid(Copyable, Movable):
             raise Error(
                 "A light probe grid needs one stored probe per grid point"
             )
-        for index in range(len(self.probes)):
+        # `_probe_count` requires positive axes; storage matches above.
+        for index in range(len(self.probes)):  # pragma: no branch
             if not self.probes[index].is_finite():
                 raise Error("A light probe grid's coefficients must be finite")
             var scaled = self.probes[index]

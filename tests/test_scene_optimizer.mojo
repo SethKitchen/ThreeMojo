@@ -328,5 +328,44 @@ def test_geometries_without_positions_stay_in_place() raises:
     assert_true(scene.in_scene(second))
 
 
+def test_meshes_on_plain_groups_can_join_a_batch() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var side = Length(1, METER)
+    var shape = assets.geometries.add(box(side, side, side))
+    var material = assets.materials.add(Material(Color(255, 255, 255)))
+    var first = scene.add(group())
+    var second = scene.add(group())
+    scene.add_mesh(Mesh(shape, material, first))
+    scene.add_mesh(Mesh(shape, material, second))
+    var stats = SceneOptimizer().to_batched_mesh(scene, assets)
+    assert_equal(stats.original_meshes, 2)
+    assert_equal(stats.batched_meshes, 1)
+    assert_false(scene.in_scene(first))
+    assert_false(scene.in_scene(second))
+    assert_equal(scene.batched_meshes[0].count(), 2)
+
+
+def test_pruning_uses_the_current_bone_references() raises:
+    var scene = Scene()
+    var mesh = scene.add(Object3D())
+    var bone = scene.add(Object3D())
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            GeometryId(0),
+            MaterialId(0),
+            mesh,
+            Skeleton([Bone(bone, Matrix4())]),
+        )
+    )
+    # The public bone list can be cleared during a scene edit. Pruning
+    # follows its current references, without discarding the mesh itself.
+    scene.skinned_meshes[0].skeleton.bones.clear()
+    SceneOptimizer().remove_empty_nodes(scene, NO_PARENT)
+    assert_true(scene.in_scene(mesh))
+    assert_false(scene.in_scene(bone))
+    assert_equal(len(scene.skinned_meshes), 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

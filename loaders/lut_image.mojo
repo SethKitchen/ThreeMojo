@@ -113,7 +113,8 @@ def lut_image_from(image: DecodedImage) raises -> LutImage:
     if width != size * size:
         raise Error("LUT image: a row must be as many squares as tall")
     var column = List[UInt8](length=size * width * 4, fill=0)
-    for i in range(size):
+    # `size` is `height`, which the positive-dimensions check accepted.
+    for i in range(size):  # pragma: no branch
         # Inside the loop over `size`, so `size` is one or more here.
         for y in range(size):  # pragma: no branch
             for x in range(size):  # pragma: no branch

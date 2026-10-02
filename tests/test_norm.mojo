@@ -236,5 +236,21 @@ def test_coordinate_conversions_keep_extreme_radii_and_angles() raises:
     assert_almost_equal(spherical.phi.to(RADIAN), Float32(pi / 4), atol=1e-6)
 
 
+def test_zero_vector_angles_are_symmetric_at_every_scale() raises:
+    for scale in [Float32(1), Float32(1e-30), Float32(1e30)]:
+        var zero2 = Vector2(0, 0)
+        var axis2 = Vector2(scale, 0)
+        var zero3 = Vector3(0, 0, 0)
+        var axis3 = Vector3(scale, 0, 0)
+        for angle in [
+            zero2.angle_to(axis2).to(RADIAN),
+            axis2.angle_to(zero2).to(RADIAN),
+            zero3.angle_to(axis3).to(RADIAN),
+            axis3.angle_to(zero3).to(RADIAN),
+        ]:
+            assert_true(isfinite(angle))
+            assert_almost_equal(angle, Float32(pi / 2), atol=1e-6)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -22,13 +22,35 @@ class EnvironmentTests(unittest.TestCase):
                     one = Path(a['THREEMOJO_TEST_TMPDIR'])
                     two = Path(b['THREEMOJO_TEST_TMPDIR'])
                     self.assertNotEqual(one, two)
-                    self.assertEqual(one.parent, Path(parent))
+                    self.assertEqual(one.parent, Path(parent).resolve())
                     self.assertEqual(a['TMPDIR'], str(one))
                     (one / 'same.bin').write_text('one')
                     (two / 'same.bin').write_text('two')
                     self.assertEqual((one / 'same.bin').read_text(), 'one')
                 self.assertFalse(one.exists())
                 self.assertFalse(two.exists())
+
+    def test_symlink_tmpdir_resolves_roots_and_cleans_up(self):
+        with tempfile.TemporaryDirectory() as folder:
+            parent = Path(folder) / 'parent'
+            parent.mkdir()
+            alias = Path(folder) / 'alias'
+            alias.symlink_to(parent, target_is_directory=True)
+            with patch.dict(os.environ, {'TMPDIR': str(alias)}):
+                with isolated_environment() as a, isolated_environment() as b:
+                    one = Path(a['THREEMOJO_TEST_TMPDIR'])
+                    two = Path(b['THREEMOJO_TEST_TMPDIR'])
+                    self.assertNotEqual(one, two)
+                    for root, env in ((one, a), (two, b)):
+                        self.assertEqual(root.parent, parent.resolve())
+                        self.assertTrue(root.parent.samefile(alias))
+                        self.assertEqual(env['TMPDIR'], str(root))
+                        (root / 'fixture.bin').write_bytes(b'fixture')
+                self.assertFalse(one.exists())
+                self.assertFalse(two.exists())
+            self.assertTrue(parent.is_dir())
+            self.assertTrue(alias.is_symlink())
+            self.assertEqual(list(parent.iterdir()), [])
 
     def test_coverage_capture_cleans_success_and_failure(self):
         with tempfile.TemporaryDirectory() as folder:

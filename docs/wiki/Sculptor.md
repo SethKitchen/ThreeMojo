@@ -26,7 +26,7 @@ The constructor raises for a mesh that is not in the scene, and for a mesh with 
 
 `stroke_from_ray(scene, assets, ray, world_radius)` stamps the tool once where the ray meets the mesh. The first stamp begins a stroke. Call `end_stroke` after the last stamp. `pick_from_ray` finds the hit and does not sculpt.
 
-A stroke works in the mesh's own space. The mesh's world matrix must scale by the same amount on each axis, by more than zero, and without shear. The sculptor raises for any other matrix.
+A stroke works in the mesh's own space. The mesh's world matrix must be finite and scale by the same amount on each axis, by more than zero, and without shear. Rotation and translation are allowed, including through a parent. The scale and shear checks allow for rounding in the stored `Float32` matrix. The sculptor raises for any other matrix.
 
 `world_radius` is a `Length` in world units. It must be positive and finite. The ray must have a finite origin and a direction that is not zero.
 

@@ -2097,7 +2097,11 @@ struct World(Movable):
                 # box must not remove the entries for the same light's others.
                 var kept = List[ActorId]()
                 var removed = False
-                for w in self.traffic_lights.lights[o.index].vehicles:
+                # _enter added one membership for this live overlap;
+                # each prior departure removed only its own membership.
+                for w in self.traffic_lights.lights[
+                    o.index
+                ].vehicles:  # pragma: no branch
                     if w == vehicle and not removed:
                         removed = True
                     else:

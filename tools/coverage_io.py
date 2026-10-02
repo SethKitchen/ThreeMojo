@@ -86,27 +86,60 @@ class Reducer:
             self.write(LINE + payload + b'\n')
 
 
-def capture(command, out_path, err_path):
+def capture(command, out_path, err_path, *, progress_interval=60):
     """Run a suite and keep what its probe records tell the report, once
     each, compressed; see `Reducer`."""
-    with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
-        with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE, env=environment) as process:
-            try:
-                reducer = Reducer(errors.write)
-                for line in process.stderr:
-                    reducer.feed(line)
-                status = process.wait()
-            except BaseException:
-                process.kill()
-                process.wait()
-                raise
-    if status:
-        print(f'{command[-1]} failed under instrumentation:')
-        with open(out_path, errors='replace') as output:
-            print(''.join(deque(output, maxlen=30)), end='')
-        with gzip.open(err_path, 'rt', errors='replace') as errors:
-            print(''.join(deque((line for line in errors if not line.startswith('COV')), maxlen=30)), end='')
-    return status if status >= 0 else 128 - status
+    if progress_interval <= 0:
+        raise ValueError('progress interval must be positive')
+    suite = Path(out_path).stem
+    started = time.monotonic()
+    stopped = threading.Event()
+    records = 0
+    first_probe = None
+
+    def progress(stage):
+        elapsed = time.monotonic() - started
+        phase = 'waiting for probes (compile/startup)' if first_probe is None else 'runtime probes observed'
+        print(f'Coverage {suite}: {stage}; {elapsed:.1f}s; {phase}; '
+              f'{records} stderr records', flush=True)
+
+    def heartbeat():
+        while not stopped.wait(progress_interval):
+            progress('running')
+
+    progress('start')
+    monitor = threading.Thread(target=heartbeat, daemon=True)
+    monitor.start()
+    try:
+        with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
+            with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE, env=environment) as process:
+                try:
+                    reducer = Reducer(errors.write)
+                    for line in process.stderr:
+                        records += 1
+                        if first_probe is None and line.lstrip().startswith((LINE, BRANCH)):
+                            first_probe = time.monotonic()
+                            progress('first probe')
+                        reducer.feed(line)
+                    status = process.wait()
+                except BaseException:
+                    process.kill()
+                    process.wait()
+                    raise
+        progress(f'complete (exit {status})')
+        if status:
+            print(f'{command[-1]} failed under instrumentation:')
+            with open(out_path, errors='replace') as output:
+                print(''.join(deque(output, maxlen=30)), end='')
+            with gzip.open(err_path, 'rt', errors='replace') as errors:
+                print(''.join(deque((line for line in errors if not line.startswith('COV')), maxlen=30)), end='')
+        return status if status >= 0 else 128 - status
+    except BaseException:
+        progress('aborted')
+        raise
+    finally:
+        stopped.set()
+        monitor.join()
 
 
 def report(command, captures):
