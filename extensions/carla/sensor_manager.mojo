@@ -121,6 +121,7 @@ from extensions.carla.sensor import CameraIntrinsics
 from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
+    validate_sensor_nonnegative,
     attribute_int,
     attribute_string,
 )
@@ -544,7 +545,9 @@ struct SensorManager(Movable):
         var k = kind.value()
         ref a = record.attributes
         var slot = _Slot(id, k, world.get_transform(id))
-        slot.sensor_tick = Float64(attribute_float(a, "sensor_tick", 0))
+        var sensor_tick = attribute_float(a, "sensor_tick", 0)
+        validate_sensor_nonnegative(sensor_tick, "sensor_tick")
+        slot.sensor_tick = Float64(sensor_tick)
         slot.rng = SensorRandom(attribute_int(a, "noise_seed", 0))
         if _is_camera(k):
             var fov = attribute_float(a, "fov", 90)
@@ -570,9 +573,8 @@ struct SensorManager(Movable):
                 )
         elif k == RAY_CAST_LIDAR_SENSOR or k == SEMANTIC_LIDAR_SENSOR:
             slot.lidar = lidar_description_from(a)
-            slot.lidar.validate()
         elif k == HSS_LIDAR_SENSOR:
-            slot.lidar = lidar_description_from(a)
+            slot.lidar = lidar_description_from(a, False)
             slot.hss_resolution = hss_resolution_from(a)
         elif k == RADAR:
             slot.radar = Radar(

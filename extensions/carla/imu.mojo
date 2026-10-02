@@ -30,6 +30,8 @@ the three gyroscope parts. The arithmetic is in `Float32`, as CARLA's.
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.sensor_attributes import (
     attribute_float,
+    validate_sensor_float,
+    validate_sensor_nonnegative,
     attribute_int,
 )
 from extensions.carla.sensor_noise import SensorRandom
@@ -74,6 +76,34 @@ struct IMUDescription(ImplicitlyCopyable):
         self.gyroscope_stddev = Vector3(0, 0, 0)
         self.gyroscope_bias = Vector3(0, 0, 0)
 
+    def validate(self) raises:
+        """Reject nonfinite physical settings and invalid domains.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(
+            self.accelerometer_stddev.x, "accelerometer_stddev.x"
+        )
+        validate_sensor_nonnegative(
+            self.accelerometer_stddev.y, "accelerometer_stddev.y"
+        )
+        validate_sensor_nonnegative(
+            self.accelerometer_stddev.z, "accelerometer_stddev.z"
+        )
+        validate_sensor_nonnegative(
+            self.gyroscope_stddev.x, "gyroscope_stddev.x"
+        )
+        validate_sensor_nonnegative(
+            self.gyroscope_stddev.y, "gyroscope_stddev.y"
+        )
+        validate_sensor_nonnegative(
+            self.gyroscope_stddev.z, "gyroscope_stddev.z"
+        )
+        validate_sensor_float(self.gyroscope_bias.x, "gyroscope_bias.x")
+        validate_sensor_float(self.gyroscope_bias.y, "gyroscope_bias.y")
+        validate_sensor_float(self.gyroscope_bias.z, "gyroscope_bias.z")
+
     @staticmethod
     def from_attributes(
         attributes: List[ActorAttributeValue],
@@ -87,14 +117,14 @@ struct IMUDescription(ImplicitlyCopyable):
             The settings.
 
         Raises:
-            Error: Never for these inputs; the number reader's error is
-                passed on.
+            Error: If a physical setting is nonfinite or outside its domain.
         """
         var d = IMUDescription()
         d.noise_seed = attribute_int(attributes, "noise_seed", 0)
         d.accelerometer_stddev = _vector(attributes, "noise_accel_stddev_")
         d.gyroscope_stddev = _vector(attributes, "noise_gyro_stddev_")
         d.gyroscope_bias = _vector(attributes, "noise_gyro_bias_")
+        d.validate()
         return d
 
 
@@ -223,12 +253,16 @@ struct IMU(Copyable, Movable):
     var rng: SensorRandom
     var accelerometer: Accelerometer
 
-    def __init__(out self, description: IMUDescription):
+    def __init__(out self, description: IMUDescription) raises:
         """Create an IMU.
 
         Args:
             description: Its settings. Its seed seeds the engine.
+
+        Raises:
+            Error: If a physical setting is nonfinite or outside its domain.
         """
+        description.validate()
         self.description = description
         self.rng = SensorRandom(description.noise_seed)
         self.accelerometer = Accelerometer()
