@@ -612,10 +612,57 @@ def js_cells(result: dict | None) -> tuple[str, str, str, float | None, int | No
     )
 
 
+def measurement_label(row: dict) -> str:
+    """Show a recorded row date without upgrading legacy aggregate metadata."""
+    date = row.get("measured_on")
+    if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        return "unknown"
+    if row.get("measurement_date_source") != "direct":
+        return f"unknown (legacy: {date})"
+    return date
+
+
+def require_same_measurement_host(previous: dict, host: dict) -> None:
+    """Refuse partial refreshes that would relabel another host's results."""
+    old = previous.get("host") if isinstance(previous, dict) else None
+    if not isinstance(old, dict) or not all(
+        isinstance(old.get(key), str)
+        and old[key].strip().lower() not in ("", "unknown", "missing", "not installed")
+        for key in ("cpu", "os", "mojo_1_1")
+    ) or old != host:
+        raise ValueError("Cannot merge results with different or missing host/toolchain metadata")
+
+
+def merge_measurements(previous: dict, fresh: dict) -> dict:
+    """Keep prior row dates and replace only the newly measured examples."""
+    require_same_measurement_host(previous, fresh["host"])
+    merged = dict(fresh)
+    by_name = {}
+    for original in previous.get("examples", []):
+        row = dict(original)
+        if "measured_on" not in row:
+            row["measured_on"] = previous.get("generated_at")
+            row["measurement_date_source"] = "legacy aggregate"
+        by_name[row["name"]] = row
+    for original in fresh["examples"]:
+        row = dict(original)
+        row["measured_on"] = fresh["generated_at"]
+        row["measurement_date_source"] = "direct"
+        by_name[row["name"]] = row
+    merged["examples"] = [by_name[item["name"]] for item in CATALOG if item["name"] in by_name]
+    merged["probe"] = previous.get("probe", {}) | fresh.get("probe", {})
+    merged["baselines"] = previous.get("baselines", {}) | fresh.get("baselines", {})
+    merged["threejs_webgl"] = any((row.get("threejs_webgl") or {}).get("ok") for row in merged["examples"])
+    compared = [row["mojo10"] for row in merged["examples"] if row.get("mojo10")]
+    merged["mojo10_total"] = len(compared)
+    merged["mojo10_refused"] = sum(not row.get("compile", row).get("ok") for row in compared)
+    return merged
+
+
 def example_table(rows: list[dict], webgl_ok: bool) -> str:
     lines = [
-        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | webgl run (s) | ThreeMojo frames (s) | cpu-flat frames (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | webgl run (s) | ThreeMojo frames (s) | cpu-flat frames (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) | Measured |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         tm = row["threemojo"]
@@ -666,7 +713,7 @@ def example_table(rows: list[dict], webgl_ok: bool) -> str:
             shown_flat_run, shown_flat_rss = run_r, rss_r
             shown_web_run, shown_web_rss = web_run, web_rss
         lines.append(
-            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {wr} | {tf} | {ff} | {wf} | {m} | {fm} | {wm} |".format(
+            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {wr} | {tf} | {ff} | {wf} | {m} | {fm} | {wm} | {recorded} |".format(
                 name=row["name"],
                 w=row["width"],
                 h=row["height"],
@@ -681,9 +728,11 @@ def example_table(rows: list[dict], webgl_ok: bool) -> str:
                 m=rss_l,
                 fm=shown_flat_rss,
                 wm=shown_web_rss,
+                recorded=measurement_label(row),
             )
         )
     lines.append("")
+    lines.append("A legacy date is from an older aggregate file; its per-row measurement date is unknown.")
     lines.append(
         "The `cpu-flat` columns fill the same triangles with each material's flat color and a depth test."
     )
@@ -813,6 +862,8 @@ def slim_payload(payload: dict) -> dict:
         slim["examples"].append(
             {
                 "name": row["name"],
+                "measured_on": row.get("measured_on", payload["generated_at"]),
+                "measurement_date_source": row.get("measurement_date_source", "direct"),
                 "width": row["width"],
                 "height": row["height"],
                 "frames": row["frames"],
@@ -849,7 +900,7 @@ def write_wiki(payload: dict, platform_key: str) -> None:
     host = payload["host"]
     host_md = "\n".join(
         [
-            f"- Date: `{payload['generated_at']}`",
+            f"- Latest refresh: `{payload['generated_at']}`",
             f"- OS: {host['os']}",
             f"- CPU: {host['cpu']}",
             f"- Mojo 1.1: `{host['mojo_1_1'] or 'missing'}`",
@@ -989,6 +1040,15 @@ def main() -> int:
         "mojo10_total": 0,
     }
 
+    previous = None
+    if args.merge and results.is_file():
+        previous = json.loads(results.read_text(encoding="utf-8"))
+        try:
+            require_same_measurement_host(previous, payload["host"])
+        except ValueError as error:
+            print(str(error) + ". Keep a separate full results file.", file=sys.stderr)
+            return 2
+
     print("== baselines ==", flush=True)
     payload["baselines"] = bench_baselines(mojo11)
     print(
@@ -1111,6 +1171,8 @@ def main() -> int:
         payload["examples"].append(
             {
                 "name": name,
+                "measured_on": payload["generated_at"],
+                "measurement_date_source": "direct",
                 "width": item["width"],
                 "height": item["height"],
                 "frames": item["frames"],
@@ -1122,26 +1184,8 @@ def main() -> int:
         )
 
     slim = slim_payload(payload)
-    if args.merge and results.is_file():
-        previous = json.loads(results.read_text(encoding="utf-8"))
-        by_name = {row["name"]: row for row in previous.get("examples", [])}
-        for row in slim["examples"]:
-            by_name[row["name"]] = row
-        slim["examples"] = [
-            by_name[item["name"]] for item in CATALOG if item["name"] in by_name
-        ]
-        if previous.get("probe"):
-            slim["probe"] = previous["probe"] | slim.get("probe", {})
-        if previous.get("baselines"):
-            slim["baselines"] = previous["baselines"] | slim.get("baselines", {})
-        slim["host"] = slim["host"] or previous.get("host", {})
-        slim["threejs_webgl"] = bool(
-            slim.get("threejs_webgl") or previous.get("threejs_webgl")
-        )
-        payload["examples"] = slim["examples"]
-        payload["probe"] = slim["probe"]
-        payload["host"] = slim["host"]
-        payload["threejs_webgl"] = slim["threejs_webgl"]
+    if previous is not None:
+        slim = merge_measurements(previous, slim)
     results.write_text(json.dumps(slim, indent=2) + "\n", encoding="utf-8")
     print(f"\nWrote {results.relative_to(ROOT)}", flush=True)
     print()

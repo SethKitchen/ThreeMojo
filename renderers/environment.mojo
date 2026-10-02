@@ -199,13 +199,7 @@ def scene_cube(
     """
     var camera = CubeCamera(near, far, size)
     camera.place(position)
-    var side = Renderer(size, size, renderer.workers)
-    side.background = renderer.background
-    side.shading = renderer.shading
-    side.depth_mode = renderer.depth_mode
-    side.local_clipping_enabled = renderer.local_clipping_enabled
-    side.shadow_map_type = renderer.shadow_map_type
-    side.set_ltc_tables(renderer.ltc_tables())
+    var side = renderer._cube_renderer(size, copy_probe_grid=False)
     side.set_light_probe_grid(LightProbeGrid(copy=probe_grid))
     # The six faces share the same layers, so they share one set of
     # shadow maps. Lights on other layers must not enter this set.

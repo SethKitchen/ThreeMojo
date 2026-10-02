@@ -304,9 +304,10 @@ def _sample_indices(
         var i0 = (block % bx) * BLOCK
         var j0 = ((block // bx) % by) * BLOCK
         var k0 = (block // (bx * by)) * BLOCK
-        for k in range(k0, k0 + BLOCK + 1):
-            for j in range(j0, j0 + BLOCK + 1):
-                for i in range(i0, i0 + BLOCK + 1):
+        # BLOCK is four: each inclusive block axis has five lattice points.
+        for k in range(k0, k0 + BLOCK + 1):  # pragma: no branch
+            for j in range(j0, j0 + BLOCK + 1):  # pragma: no branch
+                for i in range(i0, i0 + BLOCK + 1):  # pragma: no branch
                     var at = grid.index(i, j, k)
                     if values[at] == UNSAMPLED:
                         pending.append(at)

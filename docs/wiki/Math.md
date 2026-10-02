@@ -42,6 +42,16 @@ infinity when the true length cannot fit in the input type. Ordinary inputs
 keep the direct sum-of-squares arithmetic. Vector and quaternion normalization
 use these shared functions. A zero quaternion still becomes the identity.
 
+Matrix axis lengths, rotation extraction, and decomposition use the same
+scale-safe directions. Decomposition refuses nonfinite entries, zero axes,
+and axis lengths that cannot fit in `Float32`. It leaves output arguments
+unchanged on these errors. A mirrored transform keeps its negative x scale
+even when the direct determinant underflows or overflows.
+
+Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
+axis or tolerance and a negative tolerance. Extreme finite uniform scales
+still qualify as scaled rotations.
+
 Squared lengths and dot products return their direct arithmetic result. They
 can overflow or underflow even when a length or unit direction is representable.
 

@@ -427,5 +427,16 @@ def test_attribute_transfer_searches_past_the_first_populated_ring() raises:
         carry_attributes(empty, target)
 
 
+def test_attribute_transfer_accepts_two_empty_meshes() raises:
+    var source = _mesh([], [])
+    source.set_attribute(String(COLOR), BufferAttribute(List[Float32](), 3))
+    var target = _mesh([], [])
+    carry_attributes(source, target)
+    assert_equal(target.attribute_view(String(POSITION)).count(), 0)
+    ref colors = target.attribute_view(String(COLOR))
+    assert_equal(colors.count(), 0)
+    assert_equal(colors.item_size, 3)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

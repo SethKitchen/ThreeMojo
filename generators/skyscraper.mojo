@@ -162,9 +162,6 @@ struct Affine(ImplicitlyCopyable):
 
         Returns:
             The transformed direction, without the placement's translation.
-
-        Raises:
-            None.
         """
         return self.x_axis * v.x + self.y_axis * v.y + self.z_axis * v.z
 

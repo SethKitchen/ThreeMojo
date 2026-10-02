@@ -112,7 +112,7 @@ An instance's morph weights work as a mesh's do: the renderer morphs each instan
 
 An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. An instance appended to `matrices` after the colors has no color. `color_at` reads it as white, and the next `set_color_at` gives it white. The renderer also draws an instance past the end of `colors` in white, as three.js does. It ignores a color past the last instance.
 
-An instanced mesh wears no morph targets. Every instance draws the geometry unmorphed. three.js applies the mesh's `morphTargetInfluences` to every instance, or each instance's own through `setMorphAt` and `morphTexture`. Neither is ported.
+Picking reads each instance's morph weights. Sorting instances moves those weights with their matrices. `create_meshes_from_instanced_mesh` copies each instance's weights to its new mesh.
 
 ## BatchedMesh
 
@@ -179,7 +179,9 @@ Each set of two or more meshes becomes one `BatchedMesh` beside the first mesh. 
 
 Only static plain meshes of one material merge. Each batch shares its parent, visibility, layers, render order, culling, and shadow settings. Material keys compare every rendering field except RGB. Geometry equality compares every attribute and its stored values, including typed and interleaved attributes.
 
-Meshes with children, other objects on the same node, user data, morphs, custom shadow materials, instanced attributes, or a restricted draw range stay in place. Nodes listed in `keep` also stay in place. List camera nodes and nodes used by animation or application code in `keep`. The optimizer captures each eligible node's current transform. Later changes to its shared parent move the batch; later changes to the original mesh node do not.
+Meshes with children, other objects on the same node, user data, morphs, custom shadow materials, instanced attributes, or a restricted draw range stay in place. Gyroscopes, clipping groups, light targets, LOD levels, and skeleton bones also stay in place. Nodes listed in `keep` also stay in place.
+
+List camera nodes and nodes used by animation or application code in `keep`. The optimizer captures each eligible node's current transform. Later changes to its shared parent move the batch; later changes to the original mesh node do not.
 
 three.js also merges skinned and instanced meshes as plain ones. This port keeps them intact. `to_instancing_mesh` raises, because three.js does not have it either.
 

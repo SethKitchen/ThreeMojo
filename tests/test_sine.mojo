@@ -5,7 +5,7 @@
 
 """Tests for `math.sine`: the sine the CPU and a GPU kernel share."""
 
-from math.sine import fraction, noise_scale, sin_float32
+from math.sine import _complement_fraction, fraction, noise_scale, sin_float32
 from std.math import inf, isfinite, nan, sin
 from std.memory import bitcast
 from std.testing import (
@@ -41,7 +41,9 @@ def test_the_sine_agrees_with_libm() raises:
         3141.7,
     ]
     for x in angles:
-        assert_almost_equal(sin_float32(x), sin(x), atol=2e-6)
+        var actual = sin_float32(x)
+        assert_true(isfinite(actual))
+        assert_almost_equal(actual, sin(x), atol=2e-6)
 
 
 def test_an_angle_that_is_not_finite_has_no_sine() raises:
@@ -73,8 +75,10 @@ def test_large_finite_angles_agree_with_libm() raises:
         3e38,
     ]
     for x in samples:
-        assert_almost_equal(sin_float32(x), sin(x), atol=2e-6)
-        assert_almost_equal(sin_float32(-x), sin(-x), atol=2e-6)
+        for angle in [x, -x]:
+            var actual = sin_float32(angle)
+            assert_true(isfinite(actual))
+            assert_almost_equal(actual, sin(angle), atol=2e-6)
     # Stratify the whole finite exponent range and vary the significand.
     var state = UInt32(42)
     for exponent in range(1, 255):
@@ -86,13 +90,33 @@ def test_large_finite_angles_agree_with_libm() raises:
             assert_true(isfinite(actual))
             assert_true(abs(actual) <= 1)
             assert_almost_equal(actual, sin(x), atol=2e-6)
-            assert_almost_equal(sin_float32(-x), sin(-x), atol=2e-6)
+            var negative = sin_float32(-x)
+            assert_true(isfinite(negative))
+            assert_almost_equal(negative, sin(-x), atol=2e-6)
 
 
 def test_sine_preserves_signed_zero_and_subnormal_angles() raises:
     for bits in [UInt32(0), UInt32(0x80000000), UInt32(1), UInt32(0x80000001)]:
         var x = bitcast[DType.float32](bits)
         assert_equal(bitcast[DType.uint32](sin_float32(x)), bits)
+
+
+def test_fraction_complement_preserves_low_word_carry() raises:
+    # Negating a zero low word carries into the high word; a nonzero low
+    # word does not. These exact words test both arithmetic cases even
+    # though a zero low word does not occur in Float32 angle reduction.
+    var carry = _complement_fraction(0x81234567, 0)
+    assert_equal(carry[0], UInt32(0x7EDCBA99))
+    assert_equal(carry[1], UInt32(0))
+    var no_carry = _complement_fraction(0x81234567, 1)
+    assert_equal(no_carry[0], UInt32(0x7EDCBA98))
+    assert_equal(no_carry[1], UInt32(0xFFFFFFFF))
+    var all_bits = _complement_fraction(0xFFFFFFFF, 0xFFFFFFFF)
+    assert_equal(all_bits[0], UInt32(0))
+    assert_equal(all_bits[1], UInt32(1))
+    var zero = _complement_fraction(0, 0)
+    assert_equal(zero[0], UInt32(0))
+    assert_equal(zero[1], UInt32(0))
 
 
 def main() raises:

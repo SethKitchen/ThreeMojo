@@ -34,8 +34,14 @@ Or set `MOJO_1_0` to the Mojo 1.0 binary.
 ## Measure one example
 
 ```bash
-python3 tools/bench_examples.py --only cube
+python3 tools/bench_examples.py --only cube --merge
 ```
+
+Use `--merge` to keep the other recorded rows. The host and toolchain metadata must match the previous file. The runner refuses a mismatch before it measures or writes results.
+
+Without `--merge`, the command replaces that platform's results with the selected examples. Save the old file first if you need to keep it.
+
+Each new row records its measurement date. Retained rows keep their dates. A legacy label uses an older aggregate date; its exact row date is unknown. A date does not identify a source revision. Keep the results file with the source revision that you tested.
 
 ## Read the numbers
 

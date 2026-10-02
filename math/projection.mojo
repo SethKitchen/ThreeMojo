@@ -133,7 +133,10 @@ def perspective(
         c = Float32(-(Float64(far) + Float64(near)) / depth)
         d = Float32(-2 * Float64(far) * Float64(near) / depth)
         matrix.set(x, 0, a, 0, 0, y, b, 0, 0, 0, c, d, 0, 0, -1, 0)
-    if not matrix.is_finite() or x == 0 or y == 0 or d == 0:
+    # If the direct d underflows, the wide path above recomputes it.
+    # With far > near > 0, its magnitude is at least 2 * near, so it
+    # cannot round to zero. The x and y scales can still underflow.
+    if not matrix.is_finite() or x == 0 or y == 0:
         raise Error("The projection is not representable in Float32")
     return matrix^
 

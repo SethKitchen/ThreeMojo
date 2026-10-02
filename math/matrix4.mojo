@@ -32,6 +32,7 @@ passed where radians are meant.
 
 from math.euler import Euler
 from math.matrix3 import Matrix3
+from math.norm import length3, normalized3, _ordinary_squared
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import cos, fma, isfinite, sin, sqrt
@@ -69,6 +70,65 @@ def _cross_direction(first: Vector3, second: Vector3) -> Vector3:
         fma(first.y, second.z, Float32(0)) - fma(first.z, second.y, Float32(0)),
         fma(first.z, second.x, Float32(0)) - fma(first.x, second.z, Float32(0)),
         fma(first.x, second.y, Float32(0)) - fma(first.y, second.x, Float32(0)),
+    )
+
+
+def _determinant4[dtype: DType](e: Array[SIMD[dtype, 1], 16]) -> SIMD[dtype, 1]:
+    """Evaluate the same cofactor formula in either scalar precision."""
+    var n11 = e[0]
+    var n21 = e[1]
+    var n31 = e[2]
+    var n41 = e[3]
+    var n12 = e[4]
+    var n22 = e[5]
+    var n32 = e[6]
+    var n42 = e[7]
+    var n13 = e[8]
+    var n23 = e[9]
+    var n33 = e[10]
+    var n43 = e[11]
+    var n14 = e[12]
+    var n24 = e[13]
+    var n34 = e[14]
+    var n44 = e[15]
+
+    return (
+        n41
+        * (
+            n14 * n23 * n32
+            - n13 * n24 * n32
+            - n14 * n22 * n33
+            + n12 * n24 * n33
+            + n13 * n22 * n34
+            - n12 * n23 * n34
+        )
+        + n42
+        * (
+            n11 * n23 * n34
+            - n11 * n24 * n33
+            + n14 * n21 * n33
+            - n13 * n21 * n34
+            + n13 * n24 * n31
+            - n14 * n23 * n31
+        )
+        + n43
+        * (
+            n11 * n24 * n32
+            - n11 * n22 * n34
+            - n14 * n21 * n32
+            + n12 * n21 * n34
+            + n14 * n22 * n31
+            - n12 * n24 * n31
+        )
+        + n44
+        * (
+            -n13 * n22 * n31
+            - n11 * n23 * n32
+            + n11 * n22 * n33
+            + n13 * n21 * n32
+            - n12 * n21 * n33
+            + n12 * n23 * n31
+        )
     )
 
 
@@ -185,61 +245,15 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         # Read in place: a copy of sixteen floats per call was the whole
         # cost of asking a matrix a question.
         ref e = self.elements
-        var n11 = e[0]
-        var n21 = e[1]
-        var n31 = e[2]
-        var n41 = e[3]
-        var n12 = e[4]
-        var n22 = e[5]
-        var n32 = e[6]
-        var n42 = e[7]
-        var n13 = e[8]
-        var n23 = e[9]
-        var n33 = e[10]
-        var n43 = e[11]
-        var n14 = e[12]
-        var n24 = e[13]
-        var n34 = e[14]
-        var n44 = e[15]
+        return _determinant4(e)
 
-        return (
-            n41
-            * (
-                n14 * n23 * n32
-                - n13 * n24 * n32
-                - n14 * n22 * n33
-                + n12 * n24 * n33
-                + n13 * n22 * n34
-                - n12 * n23 * n34
-            )
-            + n42
-            * (
-                n11 * n23 * n34
-                - n11 * n24 * n33
-                + n14 * n21 * n33
-                - n13 * n21 * n34
-                + n13 * n24 * n31
-                - n14 * n23 * n31
-            )
-            + n43
-            * (
-                n11 * n24 * n32
-                - n11 * n22 * n34
-                - n14 * n21 * n32
-                + n12 * n21 * n34
-                + n14 * n22 * n31
-                - n12 * n24 * n31
-            )
-            + n44
-            * (
-                -n13 * n22 * n31
-                - n11 * n23 * n32
-                + n11 * n22 * n33
-                + n13 * n21 * n32
-                - n12 * n21 * n33
-                + n12 * n23 * n31
-            )
-        )
+    def _determinant_wide(self) -> Float64:
+        """Keep products of finite Float32 entries within Float64 range."""
+        var entries = Array[Float64, 16](fill=0)
+        # A matrix always has sixteen entries.
+        for index in range(16):  # pragma: no branch
+            entries[index] = Float64(self.elements[index])
+        return _determinant4(entries)
 
     def invert(mut self):
         """Invert this matrix in place.
@@ -559,22 +573,27 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             The rotation matrix.
 
         Raises:
-            Error: If an axis column has zero length -- a scale of zero on
-                that axis -- which leaves no direction to normalize.
+            Error: If an axis column is nonfinite or has zero length,
+                which leaves no finite direction to normalize.
         """
         ref e = self.elements
         var out = Matrix4()
         for axis in range(3):  # pragma: no branch
             var start = axis * 4
-            var length = self._axis_length(axis)
-            if length == 0:
+            var direction = Vector3(e[start], e[start + 1], e[start + 2])
+            if not _finite_direction(direction):
+                raise Error(
+                    "A transform axis must be finite to extract rotation"
+                )
+            if direction.x == 0 and direction.y == 0 and direction.z == 0:
                 raise Error(
                     "A transform with no extent along an axis has no rotation"
                     " to extract"
                 )
-            out.elements[start] = e[start] / length
-            out.elements[start + 1] = e[start + 1] / length
-            out.elements[start + 2] = e[start + 2] / length
+            direction.normalize()
+            out.elements[start] = direction.x
+            out.elements[start + 1] = direction.y
+            out.elements[start + 2] = direction.z
         return out^
 
     def is_rotation(self, tolerance: Float32 = FRAME_TOLERANCE) -> Bool:
@@ -621,12 +640,41 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             True for three axes of one positive length at right angles to
             each other, in a right-handed set. Translation is not looked at.
         """
-        var first = self._axis_length(0)
-        for axis in range(1, 3):  # pragma: no branch
-            if abs(self._axis_length(axis) - first) > tolerance * first:
+        if not isfinite(tolerance) or tolerance < 0:
+            return False
+        # Widen first: every finite Float32 axis length fits in Float64,
+        # including lengths that cannot be returned as a Float32 scale.
+        var lengths = Array[Float64, 3](fill=0)
+        # A matrix always has three linear axes.
+        for axis in range(3):  # pragma: no branch
+            var at = axis * 4
+            var x = Float64(self.elements[at])
+            var y = Float64(self.elements[at + 1])
+            var z = Float64(self.elements[at + 2])
+            if not isfinite(x) or not isfinite(y) or not isfinite(z):
                 return False
+            lengths[axis] = length3(x, y, z)
+        var first = lengths[0]
+        if first == 0:
+            return False
+        # The second and third axes are both present.
+        for axis in range(1, 3):  # pragma: no branch
+            if abs(lengths[axis] - first) > Float64(tolerance) * first:
+                return False
+        # This predicate concerns only the linear block. Translation and
+        # the projective row cannot change its orientation.
+        var x = Vector3(self.elements[0], self.elements[1], self.elements[2])
+        var y = Vector3(self.elements[4], self.elements[5], self.elements[6])
+        var z = Vector3(self.elements[8], self.elements[9], self.elements[10])
+        x.normalize()
+        y.normalize()
+        z.normalize()
+        var cross = _cross_direction(x, y)
         return (
-            self._axes_are_perpendicular(tolerance) and self.determinant() > 0
+            abs(x.dot(y)) <= tolerance
+            and abs(y.dot(z)) <= tolerance
+            and abs(z.dot(x)) <= tolerance
+            and cross.dot(z) > 0
         )
 
     def max_scale(self) -> Float32:
@@ -893,9 +941,11 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             scale: Receives the scale along each axis.
 
         Raises:
-            Error: If an axis has zero length. three.js divides by zero
-                and writes not-a-number into the rotation.
+            Error: If an axis has zero length, an entry is nonfinite, or
+                an axis length cannot fit in Float32. Outputs stay unchanged.
         """
+        if not self.is_finite():
+            raise Error("A transform must be finite to decompose")
         var sx = self._axis_length(0)
         var sy = self._axis_length(1)
         var sz = self._axis_length(2)
@@ -904,23 +954,51 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
                 "A transform with no extent along an axis has no rotation"
                 " to decompose"
             )
-        if self.determinant() < 0:
+        if not isfinite(sx) or not isfinite(sy) or not isfinite(sz):
+            raise Error("A decomposed axis scale must fit in Float32")
+        var determinant = self.determinant()
+        var mirrored = determinant < 0
+        # Subnormal determinants can lose their sign through rounded
+        # cofactors even before the final result becomes zero.
+        if abs(determinant) < Float32(1.1754943508222875e-38) or not isfinite(
+            determinant
+        ):
+            mirrored = self._determinant_wide() < 0
+        if mirrored:
             sx = -sx
-        position = Vector3.from_matrix_position(self)
         var rotation = self
-        rotation.scale(Vector3(1 / sx, 1 / sy, 1 / sz))
-        quaternion = Quaternion.from_matrix(rotation)
+        var ordinary = True
+        # Every transform has three linear axes.
+        for axis in range(3):  # pragma: no branch
+            ordinary = ordinary and _ordinary_squared(
+                self._axes_dot(axis, axis)
+            )
+        if ordinary:
+            # Keep the existing reciprocal-multiply order for ordinary axes.
+            rotation.scale(Vector3(1 / sx, 1 / sy, 1 / sz))
+        else:
+            # The fallback normalizes all three axes.
+            for axis in range(3):  # pragma: no branch
+                var at = axis * 4
+                var direction = normalized3(
+                    self.elements[at],
+                    self.elements[at + 1],
+                    self.elements[at + 2],
+                )
+                var sign = Float32(-1) if axis == 0 and mirrored else Float32(1)
+                rotation.elements[at] = direction[0] * sign
+                rotation.elements[at + 1] = direction[1] * sign
+                rotation.elements[at + 2] = direction[2] * sign
+        var result = Quaternion.from_matrix(rotation)
+        position = Vector3.from_matrix_position(self)
+        quaternion = result
         scale = Vector3(sx, sy, sz)
 
     def _axis_length(self, axis: Int) -> Float32:
         """Return the length of one axis column: the scale along that axis."""
         ref e = self.elements
         var start = axis * 4
-        return sqrt(
-            e[start] * e[start]
-            + e[start + 1] * e[start + 1]
-            + e[start + 2] * e[start + 2]
-        )
+        return length3(e[start], e[start + 1], e[start + 2])
 
     def _axes_dot(self, a: Int, b: Int) -> Float32:
         """Return the dot product of two axis columns."""
@@ -928,19 +1006,6 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         var i = a * 4
         var j = b * 4
         return e[i] * e[j] + e[i + 1] * e[j + 1] + e[i + 2] * e[j + 2]
-
-    def _axes_are_perpendicular(self, tolerance: Float32) -> Bool:
-        """Return True if each axis column is at right angles to the other
-        two, within `tolerance` on the cosine between them. An axis of zero
-        length has no direction, so it fails."""
-        for axis in range(3):  # pragma: no branch
-            var other = (axis + 1) % 3
-            var lengths = self._axis_length(axis) * self._axis_length(other)
-            if lengths == 0:
-                return False
-            if abs(self._axes_dot(axis, other) / lengths) > tolerance:
-                return False
-        return True
 
 
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:

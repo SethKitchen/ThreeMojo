@@ -12,7 +12,9 @@
 | `world` | Contact solving, integration and ray casts |
 | `quantities` | Torque, energy, momentum, stiffness and unit constants |
 
-The `extensions/carla/physics/` paths for these five modules remain valid. They import the shared definitions. They do not copy the solver or wrap its types. A body made through either path can enter the same world.
+The `extensions/carla/physics/` paths for these five modules remain supported compatibility imports. They re-export the shared definitions, with no separate solver or wrapper types. A body made through either path can enter the same world.
+
+Use `extensions.physics` for new consumers of the shared mechanics. The CARLA compatibility imports have no planned removal.
 
 Vehicle setup, wheel forces, CARLA controls, the walker controller and `CarlaPhysics` stay in `extensions/carla/physics/`. They are domain models and tick orchestration. The [CARLA physics](CARLA-physics) page describes them.
 
