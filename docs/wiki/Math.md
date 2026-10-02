@@ -362,6 +362,8 @@ Normalized device space is unitless. World space is meters and screen space is p
 | `is_front_facing(direction) -> Bool` | True if a ray along the direction meets the front. |
 | `closest_point_to_point(point) -> Vector3` | The nearest point on the face, an edge or a corner. |
 
+Barycentric queries use widened signed-area products. Thin triangles keep their nonzero area instead of losing it to a difference of dot products. Off-plane queries use the orthogonal projection onto the plane. Octree containment uses the same calculation.
+
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 
 `Triangle.from_points_and_indices(points, a, b, c)` picks three corners from a list. An index out of range raises. `intersects_box(box)` is `Box3.intersects_triangle`. `a == b` compares the corners in order.

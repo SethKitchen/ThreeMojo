@@ -29,6 +29,93 @@ def _cross(a: Vector3, b: Vector3) -> Vector3:
     return out
 
 
+comptime _WideVector = SIMD[DType.float64, 4]
+
+
+def _wide(point: Vector3) -> _WideVector:
+    """Widen coordinates before subtracting or multiplying them."""
+    return _WideVector(Float64(point.x), Float64(point.y), Float64(point.z), 0)
+
+
+def _wide_cross(a: _WideVector, b: _WideVector) -> _WideVector:
+    """Return a cross product without narrowing its components."""
+    return _WideVector(
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+        0,
+    )
+
+
+def _wide_unit(value: Float64) -> Float64:
+    """Limit a segment parameter to its closed interval."""
+    return max(Float64(0), min(Float64(1), value))
+
+
+def _segment_closest_points(
+    start1: Vector3,
+    end1: Vector3,
+    start2: Vector3,
+    end2: Vector3,
+    point_epsilon: Float64,
+) -> Tuple[Vector3, Vector3]:
+    """Apply Ericson's constrained segment minimization in Float64.
+
+    The squared cross product replaces the cancelling Gram determinant.
+    Recompute the other parameter when an endpoint constrains the minimum.
+    The caller chooses when a short segment counts as a point.
+    """
+    var first = _wide(start1)
+    var second = _wide(start2)
+    var d1 = _wide(end1) - first
+    var d2 = _wide(end2) - second
+    var r = first - second
+    var a = (d1 * d1).reduce_add()
+    var e = (d2 * d2).reduce_add()
+    var f = (d2 * r).reduce_add()
+    var s = Float64(0)
+    var t = Float64(0)
+    if a <= point_epsilon and e <= point_epsilon:
+        pass
+    elif a <= point_epsilon:
+        t = _wide_unit(f / e)
+    else:
+        var c = (d1 * r).reduce_add()
+        if e <= point_epsilon:
+            s = _wide_unit(-c / a)
+        else:
+            var b = (d1 * d2).reduce_add()
+            var normal = _wide_cross(d1, d2)
+            var denom = (normal * normal).reduce_add()
+            if denom != 0:
+                s = _wide_unit(
+                    (_wide_cross(d2, r) * normal).reduce_add() / denom
+                )
+            else:
+                # Preserve Octree's tie choice for parallel overlapping lines.
+                var at_start = f / e
+                var at_end = (b + f) / e
+                if abs(at_start - 0.5) >= abs(at_end - 0.5):
+                    s = 1
+            t = (b * s + f) / e
+            if t < 0:
+                t = 0
+                s = _wide_unit(-c / a)
+            elif t > 1:
+                t = 1
+                s = _wide_unit((b - c) / a)
+    var on_first = first + d1 * s
+    var on_second = second + d2 * t
+    return (
+        Vector3(
+            Float32(on_first[0]), Float32(on_first[1]), Float32(on_first[2])
+        ),
+        Vector3(
+            Float32(on_second[0]), Float32(on_second[1]), Float32(on_second[2])
+        ),
+    )
+
+
 @fieldwise_init
 struct Triangle(Equatable, ImplicitlyCopyable):
     """Three corners, counterclockwise when seen from the front."""
@@ -119,24 +206,22 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """Return a point's barycentric coordinates, or None for a
         degenerate triangle.
 
-        The formula uses dot products within the plane, so it answers for
-        the point's projection onto the plane.
+        Signed subtriangle cross products give the weights. Their dot
+        products with the face normal discard the off-plane component.
+        Widen before subtracting: the small cross product remains nonzero
+        even when Float32 dot products round two thin edges to parallel.
         """
-        var v0 = self.c - self.a
-        var v1 = self.b - self.a
-        var v2 = point - self.a
-        var dot00 = v0.dot(v0)
-        var dot01 = v0.dot(v1)
-        var dot02 = v0.dot(v2)
-        var dot11 = v1.dot(v1)
-        var dot12 = v1.dot(v2)
-        var denom = dot00 * dot11 - dot01 * dot01
+        var origin = _wide(self.a)
+        var b = _wide(self.b) - origin
+        var c = _wide(self.c) - origin
+        var offset = _wide(point) - origin
+        var normal = _wide_cross(b, c)
+        var denom = (normal * normal).reduce_add()
         if denom == 0:
             return None
-        var inverse = 1 / denom
-        var u = (dot11 * dot02 - dot01 * dot12) * inverse
-        var v = (dot00 * dot12 - dot01 * dot02) * inverse
-        return Vector3(1 - u - v, v, u)
+        var at_b = (_wide_cross(offset, c) * normal).reduce_add() / denom
+        var at_c = (_wide_cross(b, offset) * normal).reduce_add() / denom
+        return Vector3(Float32(1 - at_b - at_c), Float32(at_b), Float32(at_c))
 
     def contains_point(self, point: Vector3) raises -> Bool:
         """Return True if a point, projected onto the plane, lies inside
@@ -420,35 +505,11 @@ struct Line3(Equatable, ImplicitlyCopyable):
         Returns:
             The squared distance between the two points.
         """
-        var d1 = self.delta()
-        var d2 = other.delta()
-        var r = self.start - other.start
-        var a = d1.dot(d1)
-        var e = d2.dot(d2)
-        var f = d2.dot(r)
-        var s = Float32(0)
-        var t = Float32(0)
-        if a <= POINT_EPSILON and e <= POINT_EPSILON:
-            pass
-        elif a <= POINT_EPSILON:
-            t = _unit(f / e)
-        else:
-            var c = d1.dot(r)
-            if e <= POINT_EPSILON:
-                s = _unit(-c / a)
-            else:
-                var b = d1.dot(d2)
-                var denom = a * e - b * b
-                s = _unit((b * f - c * e) / denom) if denom != 0 else 0
-                t = (b * s + f) / e
-                if t < 0:
-                    t = 0
-                    s = _unit(-c / a)
-                elif t > 1:
-                    t = 1
-                    s = _unit((b - c) / a)
-        on_self = self.start + d1 * s
-        on_other = other.start + d2 * t
+        var points = _segment_closest_points(
+            self.start, self.end, other.start, other.end, Float64(POINT_EPSILON)
+        )
+        on_self = points[0]
+        on_other = points[1]
         var gap = on_self - on_other
         return gap.dot(gap)
 

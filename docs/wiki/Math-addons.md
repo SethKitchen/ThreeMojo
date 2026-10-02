@@ -1,6 +1,6 @@
 # Math addons
 
-These are the math addons of three.js's `examples/jsm/math/`. They are noise, an oriented box, a capsule, a collision octree, a surface sampler, color maps, color spaces and HSV colors. Each module is a line-by-line port. Its tests check it against values that three.js 0.180 calculated.
+These are the math addons of three.js's `examples/jsm/math/`. They are noise, an oriented box, a capsule, a collision octree, a surface sampler, color maps, color spaces and HSV colors. The tests retain three.js 0.180 reference values. They also check deliberate corrections with independent geometric references.
 
 ![Hills from simplex noise turn under a lamp](out/mathaddons.png)
 
@@ -89,10 +89,19 @@ An `Octree` sorts triangles into nested boxes. A game builds it from a level onc
 
 `triangle_capsule_intersect`, `triangle_sphere_intersect` and `box_intersects_triangle` answer for one triangle. A contact gives the push direction, the point met and the depth.
 
-The boxes are nodes in one list, and each node holds indices into `triangles`. Every query visits the boxes and the triangles in the order of three.js, so a push is the push that three.js gives.
+The boxes are nodes in one list, and each node holds indices into `triangles`. Every query visits the boxes and the triangles in the order of three.js. Contact distances use corrected geometric minima.
 
-The port differs from three.js in two places:
+Sphere queries accept a center on either side of a face. A face contact pushes toward the front, even from behind. An edge contact pushes away from the nearest edge. Capsule queries ignore a segment wholly behind the face. Their face contacts push toward the front. A ray only meets the front.
 
+Front-face, edge or vertex tangency gives a contact with zero depth. A sphere tangent to the back of a face still gets the push toward the front. A zero total push gives a zero collision direction.
+
+A collinear triangle uses its nonzero edges. An edge of zero length is ignored. A triangle made of one repeated point meets nothing. Zero separation from a collinear edge has no unique normal, so it gives a zero direction.
+
+The port differs from three.js in these places:
+
+- Sphere edge tests compare the full squared distance with the full squared radius. They select the nearest edge. This corrects missed coplanar and behind-plane contacts.
+- Segment tests recompute the other parameter after an endpoint limits the minimum. The solver is shared with `Line3`. Octree keeps every nonzero segment; `Line3` keeps its documented short-segment threshold.
+- Thin-triangle containment uses the stable barycentric kernel from `Triangle`.
 - `triangles_per_leaf` and `max_level` hold at every level. three.js reads them only on the root.
 - `from_graph_node` reads the plain meshes, `Scene.meshes`. three.js also reads a skinned mesh in its bind pose, and an instanced mesh once.
 

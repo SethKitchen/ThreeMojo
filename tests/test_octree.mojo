@@ -10,7 +10,10 @@ The level is a six by six grid of quads with stepped heights, and a wall.
 Both this file and the reference script build it the same way. The
 expected values were calculated by three.js 0.180, by node on
 `examples/jsm/math/Octree.js`: which triangles each query gathers, in
-three.js's order, and each push and hit.
+three.js's order, and each ray hit. Corrected sphere and capsule pushes
+use the independent Float64 oracle in `tools/reference_octree_contacts.py`.
+That oracle enumerates segment boundaries and solves projected faces in 2D.
+It does not call production Mojo or three.js. Tolerances are unchanged.
 """
 
 from core.assets import Assets
@@ -35,7 +38,7 @@ from math.triangle import Triangle
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import nan
+from std.math import isfinite, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -51,6 +54,7 @@ comptime TOLERANCE = Float64(2e-6)
 
 def assert_vector(v: Vector3, x: Float32, y: Float32, z: Float32) raises:
     """Assert a vector's components, within the tolerance."""
+    assert_true(isfinite(v.x) and isfinite(v.y) and isfinite(v.z))
     assert_almost_equal(v.x, x, atol=TOLERANCE)
     assert_almost_equal(v.y, y, atol=TOLERANCE)
     assert_almost_equal(v.z, z, atol=TOLERANCE)
@@ -264,8 +268,8 @@ def test_a_shallow_tree_stops_at_its_last_level() raises:
     assert_equal(hit.value().index, 43)
     var push = tree.sphere_intersect(Sphere(Vector3(0.3, 0.3, 0.2), 0.5))
     assert_true(Bool(push))
-    assert_vector(push.value().normal, 0.361426413, 0.861296713, 0.357125878)
-    assert_almost_equal(push.value().depth, 0.421781927, atol=TOLERANCE)
+    assert_vector(push.value().normal, 0.366205719, 0.857370227, 0.361676188)
+    assert_almost_equal(push.value().depth, 0.423775139, atol=TOLERANCE)
 
 
 def test_an_empty_tree_meets_nothing() raises:
@@ -435,8 +439,8 @@ def test_sphere_triangles_match_three() raises:
     assert_equal(len(tree.sphere_triangles(Sphere(Vector3(0, 5, 0), 0.5))), 0)
 
 
-def test_sphere_intersect_matches_three() raises:
-    """The push out of the level, as three.js gives it."""
+def test_sphere_intersect_corrected_contacts() raises:
+    """The push uses independently verified geometric contact minima."""
     var tree = built()
     assert_false(
         Bool(tree.sphere_intersect(Sphere(Vector3(0.3, 0.9, 0.2), 0.5)))
@@ -444,9 +448,9 @@ def test_sphere_intersect_matches_three() raises:
     var ground_push = tree.sphere_intersect(Sphere(Vector3(0.3, 0.3, 0.2), 0.5))
     assert_true(Bool(ground_push))
     assert_vector(
-        ground_push.value().normal, 0.317669362, 0.867351234, 0.383129239
+        ground_push.value().normal, 0.323529868, 0.863319750, 0.387307932
     )
-    assert_almost_equal(ground_push.value().depth, 0.432467163, atol=TOLERANCE)
+    assert_almost_equal(ground_push.value().depth, 0.433936204, atol=TOLERANCE)
     var wall_push = tree.sphere_intersect(Sphere(Vector3(1.7, 1, 0), 0.5))
     assert_true(Bool(wall_push))
     assert_vector(
@@ -516,8 +520,8 @@ def test_capsule_triangles_match_three() raises:
     )
 
 
-def test_capsule_intersect_matches_three() raises:
-    """The push out of the level, as three.js gives it."""
+def test_capsule_intersect_corrected_contacts() raises:
+    """The push uses independently verified geometric contact minima."""
     var tree = built()
     assert_false(
         Bool(
@@ -531,17 +535,17 @@ def test_capsule_intersect_matches_three() raises:
     )
     assert_true(Bool(ground_push))
     assert_vector(
-        ground_push.value().normal, 0.0492065363, 0.971848309, 0.230411634
+        ground_push.value().normal, 0.200127260, 0.898653291, 0.390347721
     )
-    assert_almost_equal(ground_push.value().depth, 0.281368315, atol=TOLERANCE)
+    assert_almost_equal(ground_push.value().depth, 0.311127039, atol=TOLERANCE)
     var wall_push = tree.capsule_intersect(
         Capsule(Vector3(1.8, 0.8, 0.1), Vector3(1.8, 1.8, 0.1), 0.3)
     )
     assert_true(Bool(wall_push))
     assert_vector(
-        wall_push.value().normal, -0.540581882, 0.703015268, 0.462104648
+        wall_push.value().normal, -0.486480398, 0.458550909, 0.743685341
     )
-    assert_almost_equal(wall_push.value().depth, 0.346594006, atol=TOLERANCE)
+    assert_almost_equal(wall_push.value().depth, 0.388795016, atol=TOLERANCE)
     var slope_push = tree.capsule_intersect(
         Capsule(Vector3(-1.2, 0.3, -1.4), Vector3(-0.4, 0.5, -1.0), 0.3)
     )
@@ -602,7 +606,6 @@ def test_triangle_sphere_intersect_matches_three() raises:
         Sphere(Vector3(1.1, 0.1, 0.5), 0.3),
         Sphere(Vector3(0.2, 1, 0.2), 0.3),
         Sphere(Vector3(3, 0.1, 3), 0.3),
-        Sphere(Vector3(-0.1, -0.1, -0.1), 0.3),
     ]
     for sphere in misses:
         assert_false(Bool(triangle_sphere_intersect(sphere, ground())))
@@ -630,9 +633,13 @@ def test_a_degenerate_triangle_meets_by_its_edges() raises:
     assert_vector(met.value().normal, 0, 1, 0)
     assert_vector(met.value().point, 0.5, 0, 0)
     assert_almost_equal(met.value().depth, 0.2, atol=TOLERANCE)
-    assert_false(
-        Bool(triangle_sphere_intersect(Sphere(Vector3(0.5, 0.1, 0), 0.3), flat))
+    var sphere = triangle_sphere_intersect(
+        Sphere(Vector3(0.5, 0.1, 0), 0.3), flat
     )
+    assert_true(Bool(sphere))
+    assert_vector(sphere.value().point, 0.5, 0, 0)
+    assert_vector(sphere.value().normal, 0, 1, 0)
+    assert_almost_equal(sphere.value().depth, 0.2, atol=TOLERANCE)
     var point = Triangle(Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0))
     assert_false(
         Bool(
