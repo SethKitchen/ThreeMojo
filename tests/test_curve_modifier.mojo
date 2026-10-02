@@ -20,7 +20,7 @@ from geometries.curve_modifier import (
 )
 from math.curve_extras import helix_curve, torus_knot
 from math.matrix4 import translation
-from std.math import nan
+from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_raises
 
 
@@ -30,7 +30,7 @@ def check3(actual: List[Float32], vertex: Int, expected: List[Float64]) raises:
     for axis in range(3):
         var got = Float64(actual[vertex * 3 + axis])
         var scale = max(1.0, abs(expected[axis]))
-        if abs(got - expected[axis]) > 2e-4 * scale:
+        if not (abs(got - expected[axis]) <= 2e-4 * scale):
             raise Error(
                 "vertex "
                 + String(vertex)
@@ -41,6 +41,43 @@ def check3(actual: List[Float32], vertex: Int, expected: List[Float64]) raises:
                 + " but got "
                 + String(got)
             )
+
+
+def test_check3_rejects_nonfinite_components() raises:
+    var expected: List[Float64] = [0, 2, -100]
+    var matching: List[Float32] = [0, 2, -100, 0, 2, -100, 0, 2, -100]
+    var nonfinite: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for vertex in range(3):
+        check3(matching, vertex, expected)
+        for axis in range(3):
+            for bad in nonfinite:
+                var actual = matching.copy()
+                actual[vertex * 3 + axis] = bad
+                with assert_raises(
+                    contains="vertex "
+                    + String(vertex)
+                    + " axis "
+                    + String(axis)
+                ):
+                    check3(actual, vertex, expected)
+
+
+def test_check3_keeps_its_scaled_finite_tolerance() raises:
+    check3([0, 0, 0], 0, [2e-4, -2e-4, 0])
+    var expected: List[Float64] = [0, 2, -100]
+    for axis in range(3):
+        for sign in [Float64(-1), Float64(1)]:
+            var actual: List[Float32] = [0, 2, -100]
+            var tolerance = 2e-4 * max(1.0, abs(expected[axis]))
+            actual[axis] = Float32(expected[axis] + sign * tolerance * 0.5)
+            check3(actual, 0, expected)
+            actual[axis] = Float32(expected[axis] + sign * tolerance * 2)
+            with assert_raises():
+                check3(actual, 0, expected)
 
 
 def points() raises -> BufferGeometry:
