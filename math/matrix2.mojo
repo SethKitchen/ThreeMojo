@@ -12,6 +12,7 @@ column vector on its right, as `Matrix3` and `Matrix4` do. `Box2` is
 the first point expanded into it becomes both.
 """
 
+from math.box_extent import _shrink_exceeds_extent
 from math.vector2 import Vector2
 from math.matrix_inverse import (
     _inverse_needs_wide,
@@ -297,6 +298,8 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Returns:
             Whether they share a point.
         """
+        if self.is_empty() or other.is_empty():
+            return False
         return not (
             other.max.x < self.min.x
             or other.min.x > self.max.x
@@ -351,7 +354,12 @@ struct Box2(Equatable, ImplicitlyCopyable):
             The box.
         """
         var half = size * 0.5
-        return Box2(center - half, center + half)
+        var box = Box2(center - half, center + half)
+        # Rounding at a large center, or halving a negative subnormal,
+        # can erase the inside-out corners that encode a negative extent.
+        if (size.x < 0 or size.y < 0) and not box.is_empty():
+            return Box2.empty()
+        return box
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if both corners are exactly equal, three.js's
@@ -384,8 +392,17 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Args:
             amount: How far to move each edge out, per axis.
         """
+        if self.is_empty():
+            return
+        var over_shrunk = _shrink_exceeds_extent(
+            self.min.x, self.max.x, amount.x
+        ) or _shrink_exceeds_extent(self.min.y, self.max.y, amount.y)
         self.min = self.min - amount
         self.max = self.max + amount
+        # Keep ordinary corner arithmetic, but do not let rounding turn an
+        # over-shrunk finite interval into a nonempty point.
+        if over_shrunk and not self.is_empty():
+            self = Box2.empty()
 
     def expand_by_scalar(mut self, amount: Float32):
         """Grow the box by `amount` on every side, three.js's
@@ -407,6 +424,10 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Returns:
             Whether this box holds all of it.
         """
+        if other.is_empty():
+            return True
+        if self.is_empty():
+            return False
         return (
             self.min.x <= other.min.x
             and other.max.x <= self.max.x
@@ -442,5 +463,7 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Args:
             offset: How far.
         """
+        if self.is_empty():
+            return
         self.min = self.min + offset
         self.max = self.max + offset
