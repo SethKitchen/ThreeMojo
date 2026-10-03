@@ -145,7 +145,7 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from std.memory import bitcast
 from std.os import makedirs
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -2123,4 +2123,5 @@ def test_wheel_kind_fields_reject_independently() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

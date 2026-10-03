@@ -131,7 +131,7 @@ from extensions.carla.weather import WeatherParameters, weather_preset
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
 from math.vector4 import Vector4
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -1415,4 +1415,5 @@ def test_camera_follow_refuses_an_invalid_spectator_registry() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

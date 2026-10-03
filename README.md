@@ -61,6 +61,8 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Project tools
 
+- [x] [Portable asset and test roots](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): explicit asset roots, isolated direct-run fixtures, and subprocess ownership checks [#310](https://github.com/SethKitchen/ThreeMojo/issues/310)
+
 - [x] [Pinned fixture runtimes](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#verify-generated-fixtures): exact VTK and sRGB regeneration without replacing accepted results [#497](https://github.com/SethKitchen/ThreeMojo/issues/497)
 
 - [x] [Reviewed negative diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#regenerate-negative-diagnostics): explicit selected-fixture updates preserve strict checks and replace expectations atomically [#504](https://github.com/SethKitchen/ThreeMojo/issues/504)

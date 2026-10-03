@@ -13,7 +13,7 @@ from extensions.carla.assets import AssetRegistry, parse_manifest
 from extensions.carla.sensor import GROUND, SIDEWALK
 from std.os import makedirs
 from std.pathlib import Path
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from test_carla_assets import TOWN_GLTF, _manifest, _entry, _file
 from extensions.carla.weather import weather_preset
 from math.vector3 import Vector3
@@ -87,4 +87,5 @@ def test_package_sidewalk_and_ground_are_wettable() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

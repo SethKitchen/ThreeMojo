@@ -62,7 +62,7 @@ from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from render.texture_store import NO_TEXTURE
 from std.os import makedirs
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -1175,4 +1175,5 @@ def test_town_lamp_tag_requires_the_exact_string() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

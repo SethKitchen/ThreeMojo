@@ -21,6 +21,19 @@ Mojo needs the repository root on its import path. `-I .` does that.
 
 Without `-I .` the compiler reports `unable to locate module 'math'`.
 
+Suites that write fixtures use one private temporary directory for each run.
+They honor `TMPDIR` and remove their files on success or an exception.
+The direct run does not enforce a timeout. Use `tools/run_suite.py` for that:
+
+```bash
+python3 tools/run_suite.py --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
+```
+
+The runner also removes the directory after a timeout.
+Run `make test-portability` to check asset roots from another working directory
+and temporary-file isolation across concurrent native processes.
+`make check-cpu` includes this check.
+
 ## Run one example
 
 ```bash

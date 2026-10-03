@@ -15,7 +15,7 @@ from coverage.report import (
     parse_hits,
     parse_manifest,
 )
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -352,4 +352,5 @@ def test_large_report_counts_stay_separate_and_keep_the_same_totals() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()
