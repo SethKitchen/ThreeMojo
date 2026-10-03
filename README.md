@@ -15,7 +15,9 @@ Rendered by `examples/photo.mojo`: a PNG decoded by this project, on a cube, see
 
 ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. The core CPU renderer uses the Mojo standard library. The optional GPU backend needs MAX.
 
-The project exists to learn graphics and Mojo from first principles. It is not a drop-in replacement for three.js. The [feature checklist](#features) says what is ported.
+The project exists to learn graphics and Mojo from first principles.
+
+ThreeMojo implements the three.js features in the [feature checklist](#features), within each linked page's documented limits. Programs use Mojo APIs and CPU or MAX GPU execution. Existing JavaScript code and browser integrations need adaptation to this API and runtime.
 
 ## Install
 
@@ -52,20 +54,39 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item has a port, tests and documentation on the linked wiki page. Each item has a GitHub issue. The coverage badge states the required threshold, not the result for an unverified revision. Confirm a revision's results from its completed checks. See [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#limits) for known measurement limits.
 
-Every three.js feature in scope is ported: 215 features, and none is open. Each wiki page lists what its port leaves out, under "What is not ported". [Out of scope](#out-of-scope) lists what the port leaves out on purpose, and why. Open the dropdown under a section to see what is ported.
+The checklist covers three.js ports, project tools and extensions. A checked item records implementation within its linked page's limits. It does not establish complete upstream behavior or performance parity.
+
+Some portable features remain partial, including [GLSL shaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset), [volume materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported) and [image formats](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#what-is-not-ported). [Out of scope](#out-of-scope) lists excluded APIs and addons. Expand a dropdown to see implemented entries; open entries remain visible.
 
 <!-- features -->
+### Remaining three.js parity
+
+- [ ] [GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): unsigned types, explicit texture gradients and finite loop semantics [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
+- [ ] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
+- [ ] [Volume lighting and depth](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported): opaque-scene depth and rectangle lights from three.js r186 [#616](https://github.com/SethKitchen/ThreeMojo/issues/616)
+- [ ] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): 4x4 and 6x6 block formats from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
+
 ### Navigation safety
 
+<details>
+<summary>Implemented: 1</summary>
+
 - [x] [Finite navigation search budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#search-budgets): sparse node records, explicit work limits, and distinct exhaustion results [#479](https://github.com/SethKitchen/ThreeMojo/issues/479)
+
+</details>
 
 ### Physics safety
 
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
+<details>
+<summary>Implemented: 2</summary>
+
 - [x] [Tires on moving supports](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-physics#moving-supports): relative contact velocity, shared support response and two-body effective mass [#296](https://github.com/SethKitchen/ThreeMojo/issues/296)
 
 - [x] [Guarded body mass API](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#change-a-bodys-motion-mode): value accessors, validated mode and inverse-tensor setters, and state-entry consistency checks [#554](https://github.com/SethKitchen/ThreeMojo/issues/554)
+
+</details>
 
 ### Numerical range
 
@@ -73,13 +94,21 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Numeric correctness
 
+<details>
+<summary>Implemented: 1</summary>
+
 - [x] [Exact periodic remainders](https://github.com/SethKitchen/ThreeMojo/wiki/Math#periodic-scalar-helpers): finite binary reduction, strict Euclidean ranges, and range-safe positive pingpong periods [#603](https://github.com/SethKitchen/ThreeMojo/issues/603)
+
+</details>
 
 ### Project tools
 
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 - [ ] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion and synthetic reproduction; historical production source provenance remains open [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
+
+<details>
+<summary>Implemented: 8</summary>
 
 - [x] [Portable asset and test roots](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): explicit asset roots, isolated direct-run fixtures, and subprocess ownership checks [#310](https://github.com/SethKitchen/ThreeMojo/issues/310)
 
@@ -96,6 +125,8 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 - [x] [Complete coverage vectors](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): recursion, exceptions and concurrent calls retain separate evaluation operands [#385](https://github.com/SethKitchen/ThreeMojo/issues/385)
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
+
+</details>
 
 ### Scene
 
@@ -125,7 +156,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 
 <details>
-<summary>Ported: 26</summary>
+<summary>Ported: 27</summary>
 
 - [x] [Procedural generators](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-generators): seeded city with skyscrapers, sidewalks, street furniture, cars and pedestrians, forest, terrain and tree generators [#254](https://github.com/SethKitchen/ThreeMojo/issues/254). Scale-safe tree frames and checked output ranges [#448](https://github.com/SethKitchen/ThreeMojo/issues/448)
 - [x] [Sculptor, SculptorMesh, SculptorTools and SculptorUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor): brush, inflate, smooth, flatten and the other strokes, from a ray or a pointer, with adaptive topology [#255](https://github.com/SethKitchen/ThreeMojo/issues/255). [Minimum world scale](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor#minimum-world-scale) [#458](https://github.com/SethKitchen/ThreeMojo/issues/458)
@@ -279,11 +310,10 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Loaders and exporters
 
-- [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
-
 <details>
-<summary>Ported: 23</summary>
+<summary>Ported: 24</summary>
 
+- [x] [TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#materialx) [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
 - [x] [USD import: USDZLoader with the USDA and USDC parsers](https://github.com/SethKitchen/ThreeMojo/wiki/More-model-files#usd): USDA text, USDC crates and USDZ archives composed as three.js r186 reads them [#248](https://github.com/SethKitchen/ThreeMojo/issues/248)
 - [x] [three.js's node JSON: NodeLoader, NodeMaterialLoader and NodeObjectLoader](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#threejss-node-json): node materials saved by three.js read into a node graph and compiled [#257](https://github.com/SethKitchen/ThreeMojo/issues/257)
 - [x] [glTF meshopt compression, WebP textures and material variants](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf-extensions): `EXT_meshopt_compression`, `EXT_texture_webp` and `KHR_materials_variants`, bit-exact against the decoders three.js uses. [#201](https://github.com/SethKitchen/ThreeMojo/issues/201)
@@ -390,7 +420,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 
 <details>
-<summary>Ported: 14</summary>
+<summary>Ported: 18</summary>
 
 - [x] [Exact singular matrix inversion](https://github.com/SethKitchen/ThreeMojo/wiki/Math#matrix-inverses): Matrix2, Matrix3 and Matrix4 inversion preserve exact singularity and valid small determinants for finite Float32 inputs. [#522](https://github.com/SethKitchen/ThreeMojo/issues/522)
 - [x] [Object3D.up, Timer, Vector4 and small math and color members](https://github.com/SethKitchen/ThreeMojo/wiki/Math#vector4): up, property lookups, Timer, Vector4, HSV, texture and half-float utilities [#188](https://github.com/SethKitchen/ThreeMojo/issues/188)
@@ -421,6 +451,9 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 Content that is not a three.js port lives under `extensions/`. These features have implementations, regression tests and documentation.
 A checked box records implemented scope. It does not establish engineering or clinical validity.
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
+
+<details>
+<summary>Implemented: 34</summary>
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
@@ -458,9 +491,11 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 
+</details>
+
 ### Out of scope
 
-Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.
+This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.
 
 These addons are out of scope too. Each line gives the reason.
 
