@@ -25,8 +25,8 @@ flags on top. It uses these well-known patterns:
   middle. A step costs its length times the area cost of the polygon it
   crosses, as a query filter sets it. The heuristic is the straight
   distance to the goal, which never overestimates while no area costs
-  less than 1. When the goal cannot be reached, the path ends at the
-  polygon nearest the goal.
+  less than 1. A partial path keeps the previous best-record rule:
+  replace the selected record only on a strict heuristic improvement.
 - **The funnel algorithm.** The straight path pulls the route tight
   through the portals. A point is added where the route crosses from one
   area kind into another, as CARLA asks for with its area-crossing
@@ -37,7 +37,7 @@ flags on top. It uses these well-known patterns:
   chance in proportion to its area, then a triangle of its fan the same
   way, then a uniform point in the triangle.
 
-The area kinds and flags, the search limit of 256 polygons and the query
+The area kinds and flags, the output limit of 256 polygons and the query
 box of 2 m across and 4 m up are CARLA's, from
 `LibCarla/source/carla/nav/Navigation.h` and `Navigation.cpp`. The rest
 of the numbers are this port's own choices.
@@ -61,6 +61,12 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.sensor_noise import SensorRandom
 from extensions.carla.search_queue import _MinCostQueue
+from extensions.carla.navigation_search import (
+    NavigationSearchBudget,
+    NavigationSearchReport,
+    SEARCH_SUCCESS,
+    SEARCH_EXHAUSTED,
+)
 from math.vector3 import Vector3
 from std.math import cos, floor, isfinite, sin, sqrt
 from units.si import METER, Length
@@ -540,6 +546,31 @@ struct _SearchNode(ImplicitlyCopyable):
         self.closed = False
 
 
+struct NavPathResult(Movable):
+    """A bounded polygon path and its search report.
+
+    Args:
+        None.
+
+    Returns:
+        An empty path and report.
+
+    """
+
+    var polygons: List[NavPolygonId]
+    var report: NavigationSearchReport
+
+    def __init__(out self):
+        """Create an empty result.
+
+        Returns:
+            An empty result.
+
+        """
+        self.polygons = List[NavPolygonId]()
+        self.report = NavigationSearchReport()
+
+
 struct NavMesh(Movable):
     """CARLA's pedestrian navigation mesh: polygons and their portals."""
 
@@ -779,8 +810,9 @@ struct NavMesh(Movable):
         end_point: Vector3,
         filter: NavQueryFilter,
         max_polygons: Int = MAX_POLYS,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
     ) raises -> List[NavPolygonId]:
-        """Return the polygons of the cheapest route, A* over the polygons.
+        """Return a cheapest polygon route with finite search limits.
 
         Args:
             start: The polygon at the start.
@@ -788,44 +820,95 @@ struct NavMesh(Movable):
             start_point: The start.
             end_point: The goal.
             filter: Which polygons may be used, and their costs.
-            max_polygons: The most polygons to return, from the start.
+            max_polygons: The maximum output length, not a work limit.
+            budget: The independent search work and storage limits.
 
         Returns:
-            The polygons from the start to the goal, or to the polygon
-            nearest the goal when the goal cannot be reached.
+            The route, or the previous best-record partial path if unreachable.
+            The output keeps its prefix when `max_polygons` is smaller.
 
         Raises:
-            Error: If an id names no polygon, an area cost is invalid,
-                or a search score is NaN.
+            Error: If `find_path_result` fails, or a search limit is exhausted.
         """
+        var result = self.find_path_result(
+            start, end, start_point, end_point, filter, max_polygons, budget
+        )
+        if result.report.status == SEARCH_EXHAUSTED:
+            raise Error("Navigation search budget exhausted")
+        var out = result.polygons^
+        result.polygons = List[NavPolygonId]()
+        return out^
+
+    def find_path_result(
+        self,
+        start: NavPolygonId,
+        end: NavPolygonId,
+        start_point: Vector3,
+        end_point: Vector3,
+        filter: NavQueryFilter,
+        max_polygons: Int = MAX_POLYS,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
+    ) raises -> NavPathResult:
+        """Return a polygon route with explicit work and termination data.
+
+        Args:
+            start: The polygon at the start.
+            end: The polygon at the goal.
+            start_point: The start.
+            end_point: The goal.
+            filter: Which polygons may be used, and their costs.
+            max_polygons: The nonnegative maximum output length.
+            budget: The independent finite search limits.
+
+        Returns:
+            A result with success, unreachable, exhausted, or truncated status.
+            Partial paths preserve the strict best-record update rule, as before.
+            No mesh-wide node array is allocated or scanned.
+
+        Raises:
+            Error: If an id, limit, area cost, or search score is invalid.
+        """
+        budget.validate()
+        if max_polygons < 0:
+            raise Error("Navigation output limit must be nonnegative")
         var s = self._check(start)
         var e = self._check(end)
-        var nodes = List[_SearchNode]()
-        # The mesh has the start polygon, checked above.
-        for _ in range(len(self.polygons)):  # pragma: no branch
-            nodes.append(_SearchNode())
-        nodes[s].position = start_point
-        nodes[s].heuristic = _distance(start_point, end_point)
-        nodes[s].total = nodes[s].heuristic
-        nodes[s].open = True
-        var best = s
+        var result = NavPathResult()
+        var nodes = Dict[Int, _SearchNode]()
         var open = _MinCostQueue()
-        open.push(nodes[s].total, s)
+        if not result.report._admit(budget, 0, True):
+            return result^
+        var first = _SearchNode()
+        first.position = start_point
+        first.heuristic = _distance(start_point, end_point)
+        first.total = first.heuristic
+        first.open = True
+        nodes[s] = first
+        var best = s
+        open.push(first.total, s)
         while len(open) > 0:
+            if not result.report._pop(budget):
+                break
             var entry = open.pop()
             var current = entry[1]
-            # A cheaper route can supersede a queued score. Closed nodes
-            # can reopen, so check both membership and the current score.
+            # Reopened nodes can have old queue entries. Both membership
+            # and score must match, and stale pops still consume work.
             if not nodes[current].open or entry[0] != nodes[current].total:
+                result.report.stale += 1
                 continue
             nodes[current].open = False
             nodes[current].closed = True
             if current == e:
                 best = e
+                result.report.status = SEARCH_SUCCESS
+                break
+            if not result.report._expand(budget):
                 break
             var here = nodes[current].position
             var cost_here = filter.area_cost(self.polygons[current].area)
             for portal in self.polygons[current].portals:
+                if not result.report._edge(budget):
+                    break
                 var n = portal.neighbor
                 if not filter.passes(self.polygons[n].flags):
                     continue
@@ -837,30 +920,38 @@ struct NavMesh(Movable):
                 if n == e:
                     cost += heuristic * filter.area_cost(self.polygons[n].area)
                     heuristic = 0.0
-                if (nodes[n].open or nodes[n].closed) and cost >= nodes[n].cost:
+                var known = nodes.get(n)
+                if Bool(known) and cost >= known.value().cost:
                     continue
-                nodes[n].cost = cost
-                nodes[n].heuristic = heuristic
-                nodes[n].total = cost + heuristic
-                nodes[n].parent = current
-                nodes[n].position = mid
-                nodes[n].open = True
-                nodes[n].closed = False
-                open.push(nodes[n].total, n)
+                if not result.report._admit(budget, len(open), not Bool(known)):
+                    break
+                var next = _SearchNode()
+                if Bool(known):
+                    result.report.reopened += Int(known.value().closed)
+                next.cost = cost
+                next.heuristic = heuristic
+                next.total = cost + heuristic
+                next.parent = current
+                next.position = mid
+                next.open = True
+                nodes[n] = next
+                open.push(next.total, n)
                 if heuristic < nodes[best].heuristic:
                     best = n
+            if result.report.status == SEARCH_EXHAUSTED:
+                break
         var reversed = List[Int]()
         var at = best
         while at >= 0:
             reversed.append(at)
             at = nodes[at].parent
-        var out = List[NavPolygonId]()
-        # The path holds the start at least.
-        for i in range(len(reversed) - 1, -1, -1):  # pragma: no branch
-            if len(out) == max_polygons:
-                break
-            out.append(NavPolygonId(reversed[i]))
-        return out^
+        var count = min(len(reversed), max_polygons)
+        for i in range(count):
+            result.polygons.append(
+                NavPolygonId(reversed[len(reversed) - 1 - i])
+            )
+        result.report._truncate(count < len(reversed))
+        return result^
 
     def _portal(self, a: Int, b: Int) raises -> Tuple[Vector3, Vector3]:
         # The left and right ends of the portal from a to b, as a walker
