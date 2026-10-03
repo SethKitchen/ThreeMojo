@@ -69,7 +69,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Numerical range
 
-- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, finite three-point normals, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
 
 ### Numeric correctness
 

@@ -42,7 +42,9 @@ Unlike three.js 0.180, plane normalization uses a wider fallback for extreme
 finite components. Normal and constant use the same divisor. A normalized
 constant can still be infinite when its true value cannot fit in Float32.
 `from_normal_and_point` widens the dot product before division when the direct
-result loses range or is too close to cancellation.
+result loses range or is too close to cancellation. Three-point construction
+also retains the original finite coordinate products before normalization.
+Its constant uses the original coordinate determinant in the wide fallback.
 """
 
 from math.box_extent import (
@@ -54,8 +56,14 @@ from math.box_extent import (
 )
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
-from math.matrix_determinant import _sum_products
+from math.matrix_determinant import _determinant3_f32, _sum_products
 from math.triangle import Line3, Triangle
+from math.triangle_normal import (
+    _coordinate_plane_through_origin,
+    _finite_triangle,
+    _ordinary_triangle_cross,
+    _triangle_cross_wide,
+)
 from math.vector3 import Vector3
 from math.norm import length3, _ordinary_squared
 from std.math import inf, isfinite, sqrt
@@ -69,6 +77,9 @@ from std.sys.intrinsics import unlikely
 # sqrt(3) times max finite; eight unit roundoffs need fewer than 14 steps.
 # The remaining margin covers the norm and final division.
 comptime _PLANE_CONSTANT_LIMIT = Float32(3.4028169760142154e38)
+# Three-point normals also include bounded Float32 edge/cross error. The
+# full direction bound and point dot need fewer than 512 top-binade steps.
+comptime _GEOMETRIC_PLANE_CONSTANT_LIMIT = Float32(3.402719620448118e38)
 
 
 @no_inline
@@ -112,6 +123,31 @@ def _plane_point_constant_wide(normal: Vector3, point: Vector3) -> Float32:
         # The expansion requires finite factors. Preserve IEEE behavior.
         product = left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
     return Float32(-product / length3(left[0], left[1], left[2]))
+
+
+@no_inline
+def _plane_coplanar_components_wide(
+    a: Vector3, b: Vector3, c: Vector3
+) raises -> Tuple[Vector3, Float32]:
+    """Normalize an exact-sign cross and coordinate determinant for finite points.
+    """
+    var wide = _triangle_cross_wide(a, b, c)
+    var magnitude = length3(wide[0], wide[1], wide[2])
+    if magnitude == 0:
+        raise Error("Three points on one line do not make a plane")
+    # Multiplying a rounded unit normal by a large point can lose a small
+    # residual. The shared determinant retains all 72-bit triple products.
+    var determinant = _determinant3_f32(
+        [a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]
+    )
+    return (
+        Vector3(
+            Float32(wide[0] / magnitude),
+            Float32(wide[1] / magnitude),
+            Float32(wide[2] / magnitude),
+        ),
+        Float32(-determinant / magnitude),
+    )
 
 
 @fieldwise_init
@@ -964,11 +1000,33 @@ struct Plane(Equatable, ImplicitlyCopyable):
             Error: If the points lie on one line, or two of them coincide,
                 which leaves no plane to choose.
         """
-        var normal = c - b
-        normal.cross(a - b)
-        if normal.length() == 0:
-            raise Error("Three points on one line do not make a plane")
-        return Plane(normal, -normal.dot(a))
+        var cb = c - b
+        var ab = a - b
+        var normal = cb
+        normal.cross(ab)
+        if _ordinary_triangle_cross(cb, ab, normal):
+            var constant = -normal.dot(a)
+            var plane = Plane(normal, constant)
+            var point_scale = max(abs(a.x), max(abs(a.y), abs(a.z)))
+            # A rounded cross can erase a small geometric plane constant.
+            # Subnormal raw dots also lose relative accuracy. Retain the
+            # original points for range loss, cancellation, and finite limits.
+            if point_scale == 0 or (
+                _ordinary_squared(abs(constant))
+                and abs(plane.constant) > Float32(3.0517578125e-5) * point_scale
+                and abs(plane.constant) < _GEOMETRIC_PLANE_CONSTANT_LIMIT
+            ):
+                return plane
+            if _coordinate_plane_through_origin(a, b, c):
+                return plane
+        if not _finite_triangle(a, b, c):
+            # Keep the original IEEE arithmetic for nonfinite coordinates.
+            return Plane(normal, -normal.dot(a))
+        var components = _plane_coplanar_components_wide(a, b, c)
+        var plane = Plane(Vector3(1, 0, 0), 0)
+        plane.normal = components[0]
+        plane.constant = components[1]
+        return plane
 
     def distance_to_point(self, point: Vector3) -> Float32:
         """Return how far `point` is in front of this plane: negative
