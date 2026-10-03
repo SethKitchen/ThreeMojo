@@ -3873,6 +3873,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/an_anatomy_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'AnatomyMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/an_animal_age_is_not_a_bare_int.mojo": {
     "errors": [
       {
