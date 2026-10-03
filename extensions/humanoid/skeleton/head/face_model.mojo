@@ -25,6 +25,10 @@ files into `assets/face/ict_face.bin`, keeping the first sixty identity
 modes. Its frame: meters, plus y up, plus z out of the face. See
 THIRD-PARTY-NOTICES.md.
 
+The reader checks externally supplied files against the bounded converted
+asset contract. A partial read certifies only its loaded sections. See
+`docs/wiki/Converted-assets.md` for limits and provenance status.
+
 This is not a three.js port. See Extensions.
 
     var model = FaceModel(FACE_MODEL_PATH)
@@ -35,7 +39,7 @@ This is not a three.js port. See Extensions.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from math.vector3 import Vector3
-from std.math import min
+from std.math import isfinite, min
 
 # Where the converted model is kept, from the repository's root.
 comptime FACE_MODEL_PATH = "assets/face/ict_face.bin"
@@ -56,6 +60,9 @@ comptime _FOLLOWED = 11
 comptime _WEIGHTS = 12
 # The header: the tag, the version and fourteen counts.
 comptime HEADER = 64
+# Validate these limits before any header count is multiplied or allocated.
+comptime _MAX_BYTES = 64 * 1024 * 1024
+comptime _MAX_COUNT = 1024 * 1024
 
 
 @fieldwise_init
@@ -92,7 +99,7 @@ comptime EYELASHES = FacePart(25351, 26719)
 
 def _need(bytes: List[UInt8], at: Int, count: Int) raises:
     """Raise unless `count` bytes follow `at`."""
-    if at + count > len(bytes):
+    if count > len(bytes) - at:
         raise Error("The face model ends early")
 
 
@@ -104,6 +111,115 @@ def _u32(bytes: List[UInt8], at: Int) -> Int:
         | (Int(bytes[at + 2]) << 16)
         | (Int(bytes[at + 3]) << 24)
     )
+
+
+def _count_limit(value: Int, limit: Int) raises:
+    """Refuse a header count before any multiplication or allocation."""
+    if value > limit:
+        raise Error("A face model count exceeds its limit")
+
+
+def _header(bytes: List[UInt8], path: String) raises:
+    """Validate the tag and bounded counts before computing any span."""
+    if (
+        len(bytes) < HEADER
+        or bytes[0] != 73
+        or bytes[1] != 67
+        or bytes[2] != 84
+        or bytes[3] != 70
+    ):
+        raise Error("Not a face model: " + path)
+    if _u32(bytes, 4) != _VERSION:
+        raise Error("A face model of another version: " + path)
+    _count_limit(_u32(bytes, 8), 65536)
+    _count_limit(_u32(bytes, 12), 65536)
+    _count_limit(_u32(bytes, 16), _MAX_COUNT)
+    _count_limit(_u32(bytes, 20), 1024)
+    _count_limit(_u32(bytes, 24), 1024)
+    _count_limit(_u32(bytes, 28), _MAX_COUNT)
+    _count_limit(_u32(bytes, 32), _MAX_COUNT)
+    _count_limit(_u32(bytes, 36), _MAX_COUNT)
+    _count_limit(_u32(bytes, 40), _MAX_COUNT)
+    _count_limit(_u32(bytes, 44), _MAX_COUNT)
+    _count_limit(_u32(bytes, 48), _MAX_BYTES - HEADER)
+    _count_limit(_u32(bytes, 52), 65536)
+    _count_limit(_u32(bytes, 56), _MAX_COUNT)
+    _count_limit(_u32(bytes, 60), 65536)
+    if _prefix(bytes, -1, True) > _MAX_BYTES - HEADER:
+        raise Error("A face model exceeds its byte limit")
+
+
+def _indices(bytes: List[UInt8], at: Int, count: Int, domain: Int) raises:
+    """Refuse every 16-bit index outside its section's domain."""
+    var words = bytes.unsafe_ptr().unsafe_bitcast[UInt16]()
+    var first = at // 2
+    var k = 0
+    # Scalar loads need only UInt16 alignment, including packed section starts.
+    # Reduce a block at a time so validation has no per-index branch overhead.
+    while count - k >= 8:
+        var values = SIMD[DType.uint16, 8](
+            words[unsafe_offset=first + k + 0],
+            words[unsafe_offset=first + k + 1],
+            words[unsafe_offset=first + k + 2],
+            words[unsafe_offset=first + k + 3],
+            words[unsafe_offset=first + k + 4],
+            words[unsafe_offset=first + k + 5],
+            words[unsafe_offset=first + k + 6],
+            words[unsafe_offset=first + k + 7],
+        )
+        if Int(values.reduce_max()) >= domain:
+            raise Error("A face model index is out of range")
+        k += 8
+    for rest in range(k, count):
+        if Int(words[unsafe_offset=first + rest]) >= domain:
+            raise Error("A face model index is out of range")
+
+
+def _finite(bytes: List[UInt8], at: Int, count: Int) raises:
+    """Refuse nonfinite Float32 values before exposing an array."""
+    var words = bytes.unsafe_ptr().unsafe_bitcast[UInt32]()
+    var first = at // 4
+    var k = 0
+    # An all-ones exponent denotes infinity or NaN, irrespective of its sign.
+    while count - k >= 8:
+        var values = SIMD[DType.uint32, 8](
+            words[unsafe_offset=first + k + 0],
+            words[unsafe_offset=first + k + 1],
+            words[unsafe_offset=first + k + 2],
+            words[unsafe_offset=first + k + 3],
+            words[unsafe_offset=first + k + 4],
+            words[unsafe_offset=first + k + 5],
+            words[unsafe_offset=first + k + 6],
+            words[unsafe_offset=first + k + 7],
+        )
+        if (values & 0x7F800000).eq(0x7F800000).reduce_or():
+            raise Error("A face model value must be finite")
+        k += 8
+    for rest in range(k, count):
+        if words[unsafe_offset=first + rest] & 0x7F800000 == 0x7F800000:
+            raise Error("A face model value must be finite")
+
+
+def _members(
+    bytes: List[UInt8], at: Int, count: Int, present: List[Bool]
+) raises:
+    """Require each already range-checked skin index in the kept set."""
+    var words = bytes.unsafe_ptr().unsafe_bitcast[UInt16]()
+    for k in range(count):
+        if not present[Int(words[unsafe_offset=at // 2 + k])]:
+            raise Error("A face model coarse vertex is missing")
+
+
+def _scale(bytes: List[UInt8], at: Int) raises -> Float32:
+    """Return a nonnegative finite scale whose signed-byte products fit."""
+    var value = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
+        unsafe_offset=at // 4
+    ]
+    if not isfinite(value):
+        raise Error("A face model scale must be finite")
+    if value < 0 or value > Float32(1e30):
+        raise Error("A face model scale is out of range")
+    return value
 
 
 def _prefix(header: List[UInt8], identities: Int, expressions: Bool) -> Int:
@@ -205,26 +321,15 @@ struct FaceModel(Movable):
 
         Raises:
             Error: If the file cannot be read, is not a face model, or is
-                cut short.
+                cut short, exceeds the documented limits, or has invalid values.
         """
         with open(path, "r") as source:
             self.bytes = source.read_bytes(HEADER)
-            if len(self.bytes) == HEADER:
-                self.bytes.extend(
-                    source.read_bytes(
-                        _prefix(self.bytes, identities, expressions)
-                    )
-                )
-        if (
-            len(self.bytes) < HEADER
-            or self.bytes[0] != 73
-            or self.bytes[1] != 67
-            or self.bytes[2] != 84
-            or self.bytes[3] != 70
-        ):
-            raise Error("Not a face model: " + path)
-        if _u32(self.bytes, 4) != _VERSION:
-            raise Error("A face model of another version: " + path)
+            _header(self.bytes, path)
+            var wanted = _prefix(self.bytes, identities, expressions)
+            self.bytes.extend(source.read_bytes(wanted))
+        # Unrequested trailing modes are not read or certified. Every byte
+        # admitted to this model is checked before it can reach a caller.
         var vertices = _u32(self.bytes, 8)
         var drawn = _u32(self.bytes, 12)
         var triangle_count = _u32(self.bytes, 16)
@@ -232,7 +337,8 @@ struct FaceModel(Movable):
         var shapes = _u32(self.bytes, 24)
         if identities >= 0:
             modes = min(modes, identities)
-        if not expressions:
+        var read_shapes = expressions or modes > 0
+        if not read_shapes:
             shapes = 0
         var skin = _u32(self.bytes, 28)
         var edges = _u32(self.bytes, 32)
@@ -286,6 +392,46 @@ struct FaceModel(Movable):
         self.sections.append(at)
         self.sizes.append(followers * 2)
         at += followers * 8
+        var skin_vertices = min(vertices, FACE_AND_HEAD.end)
+        if kept > skin_vertices or followers > skin_vertices:
+            raise Error("A face model coarse section has inconsistent counts")
+        _indices(
+            self.bytes,
+            self.sections[_POSITION_OF],
+            self.sizes[_POSITION_OF],
+            vertices,
+        )
+        _indices(
+            self.bytes, self.sections[_TRIANGLES], self.sizes[_TRIANGLES], drawn
+        )
+        _indices(
+            self.bytes, self.sections[_SKIN], self.sizes[_SKIN], skin_vertices
+        )
+        _indices(
+            self.bytes, self.sections[_EDGES], self.sizes[_EDGES], skin_vertices
+        )
+        _indices(
+            self.bytes,
+            self.sections[_CORNERS],
+            self.sizes[_CORNERS],
+            skin_vertices,
+        )
+        _indices(
+            self.bytes,
+            self.sections[_COARSE],
+            self.sizes[_COARSE],
+            skin_vertices,
+        )
+        _indices(
+            self.bytes, self.sections[_KEPT], self.sizes[_KEPT], skin_vertices
+        )
+        _indices(self.bytes, self.sections[_LINKS], self.sizes[_LINKS], kept)
+        _indices(
+            self.bytes, self.sections[_FOLLOWED], self.sizes[_FOLLOWED], kept
+        )
+        _finite(self.bytes, self.sections[_NEUTRAL], self.sizes[_NEUTRAL])
+        _finite(self.bytes, self.sections[_UVS], self.sizes[_UVS])
+        _finite(self.bytes, self.sections[_WEIGHTS], self.sizes[_WEIGHTS])
         var lengths = _shorts(self.bytes, self.sections[_LENGTHS], holes)
         self.hole_corners = _shorts(
             self.bytes, self.sections[_CORNERS], corners
@@ -297,12 +443,30 @@ struct FaceModel(Movable):
             )
         if self.hole_starts[len(self.hole_starts) - 1] != corners:
             raise Error("A face model's holes miscount their corners")
+        for length in lengths:
+            if length < 3:
+                raise Error("A face model hole needs at least three corners")
+        # The downstream coarse remap must never produce its -1 sentinel.
+        var kept_vertices = _shorts(self.bytes, self.sections[_KEPT], kept)
+        var present = List[Bool](length=skin_vertices, fill=False)
+        for vertex in kept_vertices:
+            if present[vertex]:
+                raise Error("A face model repeats a coarse vertex")
+            present[vertex] = True
+        _members(
+            self.bytes, self.sections[_COARSE], self.sizes[_COARSE], present
+        )
+        _members(
+            self.bytes, self.sections[_CORNERS], self.sizes[_CORNERS], present
+        )
         self.expression_names = List[String]()
         self.expression_scales = List[Float32]()
         self.expression_counts = List[Int]()
         self.expression_vertices = List[Int]()
         self.expression_moves = List[Int]()
         var identities_at = at + shape_bytes
+        if read_shapes:
+            _need(self.bytes, at, shape_bytes)
         for _ in range(shapes):  # pragma: no branch
             _need(self.bytes, at, 1)
             var length = Int(self.bytes[at])
@@ -314,14 +478,26 @@ struct FaceModel(Movable):
             at = _aligned(at + 1 + length)
             _need(self.bytes, at, 8)
             var moved = _u32(self.bytes, at)
-            self.expression_scales.append(_floats(self.bytes, at + 4, 1)[0])
+            self.expression_scales.append(_scale(self.bytes, at + 4))
             at += 8
-            _need(self.bytes, at, _aligned(moved * 2) + moved * 3)
+            if moved > 65536:
+                raise Error("A face model expression count exceeds its limit")
+            _need(self.bytes, at, _aligned(moved * 2) + _aligned(moved * 3))
+            _indices(self.bytes, at, moved, vertices)
             self.expression_counts.append(moved)
             self.expression_vertices.append(at)
             at = _aligned(at + moved * 2)
             self.expression_moves.append(at)
             at = _aligned(at + moved * 3)
+        if read_shapes:
+            if at != identities_at:
+                raise Error("A face model shape section has inconsistent bytes")
+        if not expressions:
+            self.expression_names.clear()
+            self.expression_scales.clear()
+            self.expression_counts.clear()
+            self.expression_vertices.clear()
+            self.expression_moves.clear()
         at = identities_at
         var mode = _aligned(4 + vertices * 3)
         if modes > 0:
@@ -329,7 +505,7 @@ struct FaceModel(Movable):
         self.identity_offsets = List[Int](capacity=modes)
         self.identity_scales = List[Float32](capacity=modes)
         for _ in range(modes):  # pragma: no branch
-            self.identity_scales.append(_floats(self.bytes, at, 1)[0])
+            self.identity_scales.append(_scale(self.bytes, at))
             self.identity_offsets.append(at + 4)
             at += mode
 
