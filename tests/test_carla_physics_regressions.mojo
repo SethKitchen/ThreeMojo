@@ -5,7 +5,7 @@
 
 """Regression checks for static primitive contacts and tick-level forces."""
 
-from extensions.carla.physics.body import DYNAMIC, STATIC, RigidBody
+from extensions.carla.physics.body import DYNAMIC, KINEMATIC, STATIC, RigidBody
 from extensions.carla.physics.shape import Shape
 from extensions.carla.physics.simulation import CarlaPhysics
 from extensions.carla.physics.world import PhysicsWorld
@@ -111,7 +111,7 @@ def test_dynamic_box_and_capsule_meet_static_round_shapes() raises:
 
 
 def test_external_force_and_torque_span_the_tick() raises:
-    for substeps in [1, 5]:
+    for substeps in [1, 5, 10]:
         var sim = CarlaPhysics()
         sim.world.gravity = Vector3(0, 0, 0)
         var id = sim.add_body(
@@ -144,6 +144,64 @@ def test_empty_simulation_ticks_without_bodies_or_events() raises:
         assert_equal(len(sim.world.bodies), 0)
         assert_equal(len(sim.events), 0)
         assert_equal(sim.world.contact_count, 0)
+
+
+def test_tick_force_consumption_across_body_kinds_and_ghosts() raises:
+    for substeps in [1, 5, 10]:
+        for kind in [STATIC, KINEMATIC, DYNAMIC]:
+            for ghost in [False, True]:
+                var sim = CarlaPhysics()
+                sim.world.gravity = Vector3(0, 0, 0)
+                var body = RigidBody(
+                    DYNAMIC,
+                    Shape.sphere(Length(1)),
+                    Mass(2),
+                    Vector3(0, 0, 0),
+                    Quaternion.identity(),
+                )
+                body.set_kind(kind)
+                body.collides = not ghost
+                body.force = Vector3(20, 0, 0)
+                body.torque = Vector3(0, 0, 8)
+                _ = sim.add_body(body^)
+                sim.tick(Duration(0.05, SECOND), substeps)
+                var expected = Float32(0.5) if kind == DYNAMIC else Float32(0)
+                assert_almost_equal(
+                    sim.world.bodies[0].linear_velocity.x, expected, atol=1e-6
+                )
+                assert_almost_equal(
+                    sim.world.bodies[0].angular_velocity.z, expected, atol=1e-6
+                )
+                assert_true(sim.world.bodies[0].force == Vector3(0, 0, 0))
+                assert_true(sim.world.bodies[0].torque == Vector3(0, 0, 0))
+                # A later dynamic mode must not revive consumed forces.
+                sim.world.bodies[0].set_kind(DYNAMIC)
+                sim.tick(Duration(0.05, SECOND), substeps)
+                assert_almost_equal(
+                    sim.world.bodies[0].linear_velocity.x, expected, atol=1e-6
+                )
+                assert_almost_equal(
+                    sim.world.bodies[0].angular_velocity.z, expected, atol=1e-6
+                )
+                # Mode changes before a tick retain that tick's pending input.
+                sim.world.bodies[0].set_kind(STATIC)
+                sim.world.bodies[0].force = Vector3(20, 0, 0)
+                sim.world.bodies[0].torque = Vector3(0, 0, 8)
+                sim.world.bodies[0].set_kind(KINEMATIC)
+                sim.world.bodies[0].set_kind(DYNAMIC)
+                sim.tick(Duration(0.05, SECOND), substeps)
+                assert_almost_equal(
+                    sim.world.bodies[0].linear_velocity.x,
+                    0.5,
+                    atol=1e-6,
+                )
+                assert_almost_equal(
+                    sim.world.bodies[0].angular_velocity.z,
+                    0.5,
+                    atol=1e-6,
+                )
+                assert_true(sim.world.bodies[0].force == Vector3(0, 0, 0))
+                assert_true(sim.world.bodies[0].torque == Vector3(0, 0, 0))
 
 
 def main() raises:
