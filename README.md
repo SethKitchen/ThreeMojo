@@ -403,7 +403,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Animation
 
 <details>
-<summary>Ported: 8</summary>
+<summary>Ported: 9</summary>
+
+- [x] [Exact animation loop accounting](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#large-advances): bounded dyadic counts, reduced phases, and unchanged-state range errors [#610](https://github.com/SethKitchen/ThreeMojo/issues/610)
 
 - [x] [Clip creator, mixer setTime, element paths, morph tracks by name and instanced morphs](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#paths-in-json): ready-made clips, vector elements, map layouts and per-instance morphs [#195](https://github.com/SethKitchen/ThreeMojo/issues/195)
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)

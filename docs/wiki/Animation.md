@@ -542,6 +542,55 @@ The reader finds the node of a path as three.js's `PropertyBinding.findNode` doe
 
 `animation_json.mojo` holds the parts: `parse_track_name` is three.js's `parseTrackName`, `write_clip` is `AnimationClip.toJSON`, and `read_clip` is `AnimationClip.parse`.
 
+## Large advances
+
+An action stores time as Float32. It first rounds the scaled step to Float32.
+It then rounds the phase plus that step to Float32. Loop accounting uses these
+stored results. It does not recover time lost in those two operations.
+
+For a repeating action, the whole count and residual come from exact binary
+arithmetic. The code does not visit each elapsed loop. A phase rounded up to
+the next leg's boundary is reduced to the Float32 value just below that
+boundary. A reduced phase of zero uses positive zero.
+A zero step keeps the phase, direction, and count and clears last-move flags.
+
+Arrival at the forward end counts as a crossing. Arrival at zero while moving
+backward does not count until the phase goes below zero. The first backward
+crossing of a new action does not count as a completed repetition. These rules
+are the existing three.js r180 rules. ONCE still finishes at the forward end,
+and below the backward end, rather than on backward arrival at zero.
+
+An unsupported advance raises before changing action timing or event fields.
+The scaled step and phase sum must be finite. The crossing magnitude and
+starting whole-count magnitude must fit Int. The cumulative loop count must
+also fit Int. The reduced phase must fit Float32.
+
+Mixer updates check all active action clocks before
+changing their clock or event state. `set_time` checks the reset-phase move
+before clearing the old phases. Scene and property errors keep their
+existing behavior.
+
+A finite repetition limit can finish a larger jump. The action computes the
+last permitted endpoint without converting the unconstrained count to Int.
+It sends FINISHED with a loop delta of zero. As before, it keeps the last stored
+loop count and started flag. A backward action with Int.MAX repetitions can
+therefore finish even when its pending count is Int.MAX plus one.
+
+An initial reverse PING_PONG jump that exhausts a positive repetition limit
+now ends at the same final endpoint as exact short steps. The first reverse
+wrap is included before counting completed legs. Zero repetitions still stop
+at the initial boundary. This guarantees the final endpoint, not identical
+intermediate events or stored counters across different step sizes. The
+existing difference from three.js's finished-frame overshoot parity remains.
+
+The correction changes large-ratio results from the old Float32 formula.
+It also differs from three.js r180 when JavaScript Number cannot hold the
+exact whole count. For a clip of 1.5 seconds, one advance of 2**25
+seconds now stores phase 0.5 and loop count 22,369,621. The old native result
+was phase -1 and count 22,369,622. Existing ordinary three.js controls remain.
+`python3 tools/reference_animation_loops.py --check` verifies independent Fraction
+controls for the stored-operation contract and the range rules.
+
 ## Events
 
 The mixer records what happens to each action during an update. Read the events with `drain_events` after each update.
