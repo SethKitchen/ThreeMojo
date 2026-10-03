@@ -6,6 +6,7 @@
 """Muscle bellies that bulge in a pose, and engineering mode's skin,
 skeleton and muscle layers."""
 
+from extensions.anatomy.mode import ENGINEERING_MODE, GAME_MODE, AnatomyMode
 from extensions.animals.anatomy.body import MAMMAL
 from extensions.animals.anatomy.flex import (
     fiber_ratio,
@@ -19,6 +20,8 @@ from extensions.animals.anatomy.render import (
     SKIN_LAYER,
     anatomy_layers,
     anatomy_materials,
+    materials_in_mode,
+    mesh_in_mode,
     muscle_model,
     skeleton_model,
 )
@@ -154,12 +157,22 @@ def test_skeleton_and_muscles_are_solids() raises:
 def test_engineering_layers_mesh_and_light() raises:
     var rat = _rat()
     var muscles = animal_muscles(rat.rig, MAMMAL, Mass(0.3, KILOGRAM))
-    var layers = anatomy_layers(rat, muscles, walk_pose(rat.rig, 0.2), 2)
+    var layers = mesh_in_mode(
+        rat, muscles, walk_pose(rat.rig, 0.2), ENGINEERING_MODE, 2
+    )
     assert_equal(len(layers), 3)
     for i in [SKIN_LAYER, BONE_LAYER, MUSCLE_LAYER]:
         assert_true(layers[i].vertex_count() > 50)
     with assert_raises(contains="muscles"):
         _ = anatomy_layers(rat, List[AnimalMuscle](), rat.bind_pose())
+    var game = mesh_in_mode(rat, muscles, rat.bind_pose(), GAME_MODE, 2)
+    assert_equal(len(game), 1)
+    assert_equal(len(materials_in_mode(GAME_MODE)), 1)
+    assert_equal(len(materials_in_mode(ENGINEERING_MODE)), 3)
+    with assert_raises(contains="mode"):
+        _ = mesh_in_mode(rat, muscles, rat.bind_pose(), AnatomyMode(7))
+    with assert_raises(contains="mode"):
+        _ = materials_in_mode(AnatomyMode(-2))
     var looks = anatomy_materials()
     assert_equal(len(looks), 3)
     assert_true(looks[SKIN_LAYER].transparent)

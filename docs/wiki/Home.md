@@ -80,6 +80,7 @@ Look something up.
 - [Extensions](Extensions)
 - [Water](Water)
 - [Animals](Animals)
+  - [Animal anatomy](Animal-anatomy)
 - [CARLA](CARLA)
 - [Femur](Femur)
 - [Tibia](Tibia)
