@@ -40,6 +40,9 @@ mean radius. `HairStyleFile.strand` puts a strand on a person's
 cranium, so a style fits every head a genome makes. See
 THIRD-PARTY-NOTICES.md.
 
+External converted files must satisfy the bounded input contract in
+`docs/wiki/Converted-assets.md`. All decoded components must be finite.
+
 This is not a three.js port. See Extensions.
 
     var style = HairStyleFile(hair_style_path(LAYERED))
@@ -49,6 +52,7 @@ This is not a three.js port. See Extensions.
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from math.vector3 import Vector3
+from std.math import isfinite
 
 comptime _VERSION = 1
 comptime _HEADER = 20
@@ -249,34 +253,51 @@ struct HairStyleFile(Movable):
             path: The style's file.
 
         Raises:
-            Error: If the file cannot be read, is not a style, or is cut
-                short.
+            Error: If the file cannot be read, is not a style, is cut
+                short, has trailing bytes, or exceeds its count or scale limits.
         """
         var bytes: List[UInt8]
-        with open(path, "r") as source:
-            bytes = source.read_bytes()
-        if (
-            len(bytes) < _HEADER
-            or bytes[0] != 84
-            or bytes[1] != 72
-            or bytes[2] != 82
-            or bytes[3] != 83
-        ):
-            raise Error("Not a hair style: " + path)
-        if _u32(bytes, 4) != _VERSION:
-            raise Error("The hair style is another version: " + path)
-        self.count = _u32(bytes, 8)
-        self.points = _u32(bytes, 12)
-        if self.count < 1 or self.points < 2:
-            raise Error("The hair style has no strands: " + path)
         var roots_at = _HEADER
-        var offsets_at = (roots_at + self.count * 6 + 3) // 4 * 4
-        var end = offsets_at + self.count * self.points * 6
+        var offsets_at: Int
+        var end: Int
+        with open(path, "r") as source:
+            bytes = source.read_bytes(_HEADER)
+            if (
+                len(bytes) < _HEADER
+                or bytes[0] != 84
+                or bytes[1] != 72
+                or bytes[2] != 82
+                or bytes[3] != 83
+            ):
+                raise Error("Not a hair style: " + path)
+            if _u32(bytes, 4) != _VERSION:
+                raise Error("The hair style is another version: " + path)
+            self.count = _u32(bytes, 8)
+            self.points = _u32(bytes, 12)
+            if self.count < 1 or self.points < 2:
+                raise Error("The hair style has no strands: " + path)
+            if self.count > 65536 or self.points > 256:
+                raise Error("The hair style count exceeds its limit: " + path)
+            # Both counts are bounded before multiplication. At most one million
+            # points can allocate vectors or contribute to the requested byte span.
+            if self.count * self.points > 1024 * 1024:
+                raise Error(
+                    "The hair style point total exceeds its limit: " + path
+                )
+            offsets_at = (roots_at + self.count * 6 + 3) // 4 * 4
+            end = offsets_at + self.count * self.points * 6
+            bytes.extend(source.read_bytes(end - _HEADER + 1))
         if end > len(bytes):
             raise Error("The hair style ends early: " + path)
+        if len(bytes) != end:
+            raise Error("The hair style has trailing bytes: " + path)
         var scale = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
             unsafe_offset=4
         ]
+        if not isfinite(scale):
+            raise Error("The hair style scale must be finite: " + path)
+        if scale < 0 or scale > Float32(1e30):
+            raise Error("The hair style scale is out of range: " + path)
         var shorts = bytes.unsafe_ptr().unsafe_bitcast[Int16]()
         self.roots = List[Vector3](capacity=self.count)
         var unit = Float32(1) / Float32(32767)
