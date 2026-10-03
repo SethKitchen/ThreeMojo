@@ -201,6 +201,33 @@ The towns are made in three steps. They run on Windows, like the vehicle scripts
 
 The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python packages.
 
+Far buildings and tree impostors share a bake only when their ordered
+geometry and resolved materials match. The cache key and atlas name include
+the texture file contents, material parameters and bake settings. A component
+with different material overrides keeps its own far appearance. Each build
+starts a new cache. Its geometry, materials and texture files must stay fixed
+until that build ends.
+
+## Test the town exporter
+
+The standard-library identity checks run with `make test-tools`.
+The synthetic bake checks need only NumPy and Pillow. They use two small
+meshes and two colors. They need no CARLA release, server or GPU.
+Only mesh simplification is substituted. The tests use the real material
+reconstruction, texture conversion, bake rasterizers and GLB writer. They
+check the packed pixels, shared bakes and byte-identical repeated builds.
+
+Use a separate test environment with Python 3.11 or later:
+
+```sh
+uv venv .venv-carla-export --python "$(command -v python3)"
+uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+.venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
+```
+
+The existing Linux and macOS lint jobs run this command. They keep the Mojo
+environment unchanged. A missing dependency or wheel fails the check.
+
 ## Why not Poly Haven
 
 Poly Haven has no CARLA vehicles or towns. CARLA's own models are in the CARLA release, in Unreal's format, under CC BY 4.0. The manifest still uses Poly Haven and ambientCG for the procedural town's textures and skies.

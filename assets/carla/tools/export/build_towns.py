@@ -21,6 +21,7 @@ and no engine path: `check_clean` refuses one that does.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -34,6 +35,7 @@ import numpy
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import carla_gltf_fix as fix  # noqa: E402
+from bake_identity import BakeIdentity  # noqa: E402
 
 BASE = os.path.abspath(os.environ.get("CARLA_EXPORT_DIR", "."))
 RAW = os.path.join(BASE, "raw_town")
@@ -571,7 +573,7 @@ def impostor(parts, library, out_dir, name):
     atlas = Image.new("RGBA", (2 * IMPOSTOR_SIZE, IMPOSTOR_SIZE))
     atlas.paste(views[0], (0, 0))
     atlas.paste(views[1], (IMPOSTOR_SIZE, 0))
-    tag = "impostor_%08x" % zlib.crc32(name.encode())
+    tag = library._bake_tag(name, "impostor", parts)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     atlas.save(os.path.join(out_dir, "textures", tag + ".png"), optimize=True)
     gltf = library.gltf
@@ -769,7 +771,7 @@ def baked_building(parts, library, out_dir, name, target):
         fu = (span_u[1] - corners[mine] @ u) / max(span_u[1] - span_u[0], 1e-6)
         uvs[mine, :, 0] = (offsets[k] + numpy.clip(fr, 0, 1) * image.shape[1]) / atlas_w
         uvs[mine, :, 1] = numpy.clip(fu, 0, 1) * image.shape[0] / atlas_h
-    tag = "baked_%08x" % zlib.crc32(name.encode())
+    tag = library._bake_tag(name, "baked", parts, target)
     os.makedirs(os.path.join(out_dir, "textures"), exist_ok=True)
     Image.fromarray((numpy.clip(atlas, 0, 1) * 255).astype(numpy.uint8), "RGB").save(
         os.path.join(out_dir, "textures", tag + ".jpg"), quality=85)
@@ -807,6 +809,33 @@ class Library:
         self.pngs = fix.index_files(RAW, ".png")
         self.index = {}
         self.masked = {}
+        self._bake_identity = BakeIdentity(self.gltf, out_dir)
+        self._bake_geometry = {}
+
+    def _bake_tag(self, mesh_path, kind, parts, target=None):
+        """Hash ordered, immutable geometry and resolved material inputs.
+
+        The arrays and material tables stay fixed during one build. Hash
+        each primitive once, with fixed byte order and widths, independent
+        of its original array layout. Keep its reference to prevent object
+        id reuse. Placement transforms are applied after cache lookup.
+        """
+        ordered = []
+        for primitive, material in parts:
+            identity = id(primitive)
+            if identity not in self._bake_geometry:
+                digest = hashlib.sha256()
+                for field in ("positions", "normals", "uvs", "triangles"):
+                    values = numpy.ascontiguousarray(primitive[field], dtype="<i8" if field == "triangles" else "<f8")
+                    digest.update(json.dumps([field, values.shape], separators=(",", ":")).encode())
+                    digest.update(memoryview(values).cast("B"))
+                self._bake_geometry[identity] = (primitive, digest.hexdigest())
+            ordered.append((self._bake_geometry[identity][1], material))
+        if kind == "baked":
+            settings = [target, BAKE_DENSITY, BAKE_MOST, BAKE_VIEWS, CLUSTER_CELL, CLUSTER_DIVISIONS]
+        else:
+            settings = [IMPOSTOR_SIZE, IMPOSTOR_SAMPLES, IMPOSTOR_LIGHT.tolist()]
+        return self._bake_identity.key(mesh_path, kind, ordered, settings)
 
     def material(self, name):
         """Return the glTF index of the material named `name`."""
@@ -921,9 +950,9 @@ def lamp_heads(primitives, mesh_path):
     """Return where a lamp mesh's heads are, in its own frame: the middle
     of each connected piece of its glass, or the top of a lamp with no
     glass. None for a mesh that is not a lamp."""
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
     if mesh_path.endswith(LAMP_GLASS):
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
         points = numpy.concatenate([p["positions"] for p in primitives])
         faces = numpy.concatenate([p["triangles"] + sum(len(q["positions"]) for q in primitives[:i])
                                    for i, p in enumerate(primitives)])
@@ -1015,6 +1044,7 @@ def build(town, max_size, tile):
                for key, count in planned.items()}
     for row, mesh_path, kind, primitives, copies in jobs:
         names = slot_materials(row, primitives)
+        first_visible = next((i for i, name in enumerate(names) if name != GRID), None)
         if mesh_path not in heads_of:
             heads_of[mesh_path] = lamp_heads(primitives, mesh_path)
         heads = heads_of[mesh_path]
@@ -1034,22 +1064,22 @@ def build(town, max_size, tile):
                 if lod == 1 and kind == "building":
                     # A building's far level is its baked proxy, made once
                     # for all its primitives.
-                    if index != 0:
+                    if index != first_visible:
                         continue
-                    key = (mesh_path, "baked")
+                    parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
+                    goal = max(8, int(limit_of(kind, total, mesh_path, 1) * factors[(kind, 1)]))
+                    key = library._bake_tag(mesh_path, "baked", parts, goal)
                     if key not in lowered:
-                        parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
-                        goal = max(8, int(limit_of(kind, total, mesh_path, 1) * factors[(kind, 1)]))
                         lowered[key] = baked_building(parts, library, out_dir, mesh_path, goal)
                     part, part_material = lowered[key]
                 elif lod == 1 and TREES in mesh_path:
                     # A tree's far level is its impostor, drawn once for
                     # all its primitives.
-                    if index != 0:
+                    if index != first_visible:
                         continue
-                    key = (mesh_path, "impostor")
+                    parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
+                    key = library._bake_tag(mesh_path, "impostor", parts)
                     if key not in lowered:
-                        parts = [(p, library.material(n)) for p, n in zip(primitives, names) if n != GRID]
                         lowered[key] = impostor(parts, library, out_dir, mesh_path)
                     part, part_material = lowered[key]
                 else:
