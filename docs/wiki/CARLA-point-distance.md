@@ -41,9 +41,12 @@ It also changes false ties between unequal point distances.
 ## Remaining limits
 
 Exact sample order does not establish an exact curve minimum.
-The general refiner still needs scaled distance bounds and cross-candidate certificates.
-The affine projection also needs a complete finite-range analysis.
-Candidate admission needs a separate bound for the RTree changes in [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
+The integrated general refiner uses [normalized distance bounds](CARLA-normalized-refinement)
+and [cross-candidate certificates](CARLA-cross-candidate-certificates).
+The exact axis specialization verifies inverse seeds and stored-point brackets.
+Other affine projections do not bypass the general proof.
+[Candidate admission](CARLA-index-admission) uses the separate corrected R-tree bound
+from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
 Border-only lanes and total work budgets remain separate open issues.
 
 ## Controls

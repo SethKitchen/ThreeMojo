@@ -1,17 +1,19 @@
 # CARLA cross-candidate certificates
 
-## Prototype scope
+## Draft scope
 
-This source prototype holds lane selection until it has a minimum-distance certificate.
+The lane query holds selection until it has a minimum-distance certificate.
 It remains part of held [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
-It considers every matching segment for isolated controls.
+It admits candidates with the separate index and full-curve bounds.
 A cached full rounded-center box can exclude a segment after an incumbent exists.
 The box lower bound must exceed that stored point's upper bound.
+
 This strict exclusion preserves index ties and remains valid after an incumbent improvement.
 Unknown boxes retain their candidate.
 The query must be finite, including when the map has no matching segment.
-The prototype must not use the former index stopping rule.
-Sound index admission from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589) remains a separate integration gate.
+The former unbounded-error index stopping rule is not used.
+The integrated [index admission layer](CARLA-index-admission) uses the corrected
+R-tree contract from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
 
 ## Candidate certificate
 
@@ -35,6 +37,7 @@ Its upper bound must be strictly less than an earlier-index competitor's lower b
 Two exact minimum witnesses use the existing exact point-distance predicate.
 Exact ties retain the earlier segment index.
 An unresolved overlap raises an error.
+
 Overlapping candidates resume only their retained cells within the original cumulative limits.
 A few nearby probes cannot certify a global minimum.
 
@@ -49,13 +52,16 @@ A distance-gap-only result must prove the same classification for the returned s
 Each cell bounds the rounded center and width expressions.
 It bounds the sign of four times the plan squared distance minus the width squared.
 Width bounds are computed before curve quadrature.
+
 An exact minimizing point has plan squared distance no greater than the certificate's three-dimensional upper bound.
 This gives an upper sign bound restricted to possible minimizing points.
 A negative upper sign bound and positive width can prove inside without curve quadrature.
 This bound must not be used as a bound for every non-minimizing point in the cell.
+
 The fallback intersects its full-cell sign bound with this minimizing-set bound.
 An empty intersection proves that the cell contains no exact minimizing point.
 An inside result also requires positive width throughout the cell.
+
 A nonpositive width is outside.
 A zero sign is outside because the test is strict.
 An unresolved sign, unresolved record branch, or disagreement raises an error.
@@ -68,6 +74,7 @@ Its stored x evaluator is monotone.
 It accepts an inverse seed only after the stored x value equals the query x value.
 Otherwise it bisects ordered nonnegative Float64 parameters to an adjacent bracket.
 It uses exact point order for the two final values.
+
 It exports its consumed counters.
 Other straight geometries still require the general certificate.
 
@@ -78,14 +85,16 @@ Classification continues the selected candidate's counters.
 Each retained cell consumes its existing node charge before a width-only decision.
 A width-only decision consumes no curve quadrature terms because it evaluates no curve quadrature.
 All actual curve work retains its existing term charge.
+
 The general distance tolerance is unchanged.
 Exhaustion raises an error and cannot produce an off-road answer.
-Enumeration has no new map-wide work bound.
+Candidate admission has no new map-wide work bound.
 
-The focused controls cover bound overlap, equality order, scale rebasing, exact extreme-scale comparisons, retained cells, strict boundaries, counter exhaustion, and nonfinite queries on an empty map.
+The focused controls cover bound overlap, equality order, scale rebasing, exact extreme-scale comparisons, retained cells, strict boundaries, and counter exhaustion.
+They also cover nonfinite queries on an empty map.
 The original controls retain cached-box exclusion and unknown-box admission checks.
 Native compilation, native controls, coverage, consumer checks, and ordinary-query cost remain release gates.
-This source-only prototype does not claim those gates have passed.
+Focused native controls do not replace the full final release gates.
 
 
 ## Bounded candidate resumption
@@ -100,6 +109,7 @@ Only retained cells can reopen.
 Old strict exclusions remain valid after an incumbent improvement.
 A resumed interval keeps its old depth.
 An evaluated terminal point keeps its bound and depth.
+
 Only complete terminal-point coverage can establish an exact witness without the separate exact specializations.
 A tolerance-closed interval cannot establish exactness.
 

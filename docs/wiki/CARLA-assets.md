@@ -24,6 +24,50 @@ The CARLA town can use real assets in place of its procedural ones: photoscanned
 
 To fetch one entry, give its id, for example `fetch carla.vehicle.audi.a2`. The tool writes a file only after its sum matches. It never writes over a file that is already verified.
 
+## Recover an offline cache
+
+Use `fetch --offline` when a host is unavailable or this computer must not
+download files. It opens no URLs, including local `file://` URLs.
+It verifies cached archives before extracting missing members.
+It never changes the manifest or replaces a mismatched file.
+
+1. Obtain the exact pinned archive from an existing backup or an approved source.
+   A rebuilt archive can have a different checksum, even if its contents look the same.
+   Do not use `--pin` or change the manifest checksum to accept it.
+2. Read the entry's `files[].path` and `sha256` in `assets/carla/manifest.json`.
+   Put the archive at that path under the cache root.
+   For example, the Audi A2 archive belongs at
+   `.cache/carla-assets/carla/vehicles/vehicle.audi.a2.zip`.
+   Keep any existing mismatched file separately before placing a replacement.
+3. Verify the archive and extract missing members without downloading:
+
+   ```sh
+   python3 assets/carla/tools/carla_assets.py fetch --offline carla.vehicle.audi.a2
+   ```
+
+4. Check that the selected archive and every named member are present and correct:
+
+   ```sh
+   python3 assets/carla/tools/carla_assets.py verify --strict carla.vehicle.audi.a2
+   ```
+
+Both commands return a nonzero exit code for missing, unpinned or mismatched
+selected files. An invalid entry id also fails.
+`fetch --offline` cannot be combined with `--pin`.
+An existing member with different bytes stops extraction.
+Keep that file separately, then repeat the offline command to restore it
+from the verified archive.
+
+Omit the ids to process every entry.
+Use `--cache PATH` before the command to select a different cache root.
+Ordinary `verify` still reports missing and unpinned files without failing.
+Use `--strict` when a complete selected cache is required.
+
+Keep `manifest.json` and `ATTRIBUTION.md` beside backup or downloadable archives.
+Keep the applicable attribution with rendered distributions too.
+These files preserve the pinned sums, CARLA release, conversion changes,
+CARLA Team credit, source links and CC BY 4.0 link.
+
 ## Preload texture maps
 
 Call `registry.preload(workers)` before building a town to decode each
@@ -64,6 +108,30 @@ python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/A
 Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
 The current share links are not a durable distribution guarantee.
 
+## Hosting work still required
+
+Offline recovery does not provide a hosted mirror.
+[#309](https://github.com/SethKitchen/ThreeMojo/issues/309) remains open.
+Before publishing converted archives, the owner must approve these details:
+
+- The maintainer who can publish and the maintainer-controlled destination.
+- The exact source archives and their existing pinned checksums.
+- Measured archive sizes, total transfer size, and permitted storage and bandwidth costs.
+- Public download access and the manifest and attribution packaged with the archives.
+
+The manifest does not record archive sizes.
+The vehicle estimates below do not measure all six town packages.
+An authorized publisher needs access to the source bytes and an upload-capable
+account or tool at the approved destination.
+Offline recovery does not grant that access or authorize an upload.
+Do not create a release or change credentials to bypass this step.
+
+After setup, test a real download into an empty cache.
+Verify its archive and extracted members against the unchanged manifest.
+Test permission failures, quota responses and HTML error pages at the selected host.
+The tool's synthetic tests cover these responses without downloading assets.
+They do not prove a live host is durable or accessible.
+
 ## The CARLA vehicles
 
 The manifest has 41 vehicles from the CARLA 0.9.16 release. Each vehicle is one zip of about 1 to 8 MB, 125 MB in total. The zip holds a glTF file, its buffer and its textures. The model faces plus x, stands on y = 0 and is in meters.
@@ -97,7 +165,8 @@ The zips are too large to commit. Each one is a file in a shared Google Drive fo
 
 To add the URLs after you rebuild the zips:
 
-1. Upload each zip. Share each one with anyone who has the link.
+1. Obtain the owner's approval described in "Hosting work still required".
+   Upload each approved zip. Share it with the approved download audience.
 2. Write a JSON file that maps each zip name to its share link:
 
    ```json

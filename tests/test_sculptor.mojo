@@ -36,6 +36,7 @@ from geometries.box import box
 from geometries.plane import plane
 from geometries.sculptor import (
     _compact_dirty_vertices,
+    MIN_WORLD_SCALE,
     SCULPT_BRUSH,
     SCULPT_CHANGE,
     SCULPT_CLAY,
@@ -1506,6 +1507,180 @@ def test_rotated_meshes_sculpt_the_same_surface_in_local_space() raises:
         assert_almost_equal(
             sculptor.get_world_radius().to(METER), 0.625 * scale, atol=1e-6
         )
+
+
+def test_world_scale_boundary_uses_stored_axis_lengths() raises:
+    """The adjacent Float32 below, at and above the strict limit agree.
+
+    Exact quarter turns avoid moving the boundary through rotation rounding.
+    Each accepted variant must match the ordinary local-space brush result.
+    """
+    var reference_assets = Assets()
+    var reference_scene = _scene(_bumpy(), reference_assets, Object3D())
+    var reference = Sculptor(reference_scene, reference_assets, 0)
+    reference.set_tool(SCULPT_INFLATE)
+    reference.set_detail(0)
+    assert_true(
+        reference.stroke_from_ray(
+            reference_scene, reference_assets, _down(), Length(0.625, METER)
+        )
+    )
+    # Powers of two have different Float32 spacing on their two sides.
+    var boundary = Float32(MIN_WORLD_SCALE)
+    var scales: List[Float32] = [
+        boundary * (1 - Float32(1.0 / 16777216)),
+        boundary,
+        boundary * (1 + Float32(1.0 / 8388608)),
+    ]
+    assert_true(scales[0] < boundary)
+    assert_equal(Float64(scales[1]), MIN_WORLD_SCALE)
+    assert_true(scales[2] > boundary)
+    for scale_index in range(3):
+        var scale = scales[scale_index]
+        for variant in range(3):
+            var node = _matrix_node(
+                Vector3(scale, 0, 0),
+                Vector3(0, scale, 0),
+                Vector3(0, 0, scale),
+            )
+            if variant == 1:
+                node = _matrix_node(
+                    Vector3(0, 0, -scale),
+                    Vector3(0, scale, 0),
+                    Vector3(scale, 0, 0),
+                )
+            elif variant == 2:
+                node = _matrix_node(
+                    Vector3(0, scale, 0),
+                    Vector3(0, 0, scale),
+                    Vector3(scale, 0, 0),
+                )
+            var assets = Assets()
+            var scene = _scene(_bumpy(), assets, node^)
+            scene.update()
+            var world = scene.world_matrix(scene.meshes[0].node)
+            for column in range(3):
+                var x = Float64(world.elements[column * 4])
+                var y = Float64(world.elements[column * 4 + 1])
+                var z = Float64(world.elements[column * 4 + 2])
+                var axis2 = x * x + y * y + z * z
+                assert_equal(axis2, Float64(scale) * Float64(scale))
+                assert_equal(
+                    axis2 > MIN_WORLD_SCALE * MIN_WORLD_SCALE,
+                    scale_index == 2,
+                )
+            var ray = _down()
+            ray.apply_matrix4(world)
+            var sculptor = Sculptor(scene, assets, 0)
+            sculptor.set_tool(SCULPT_INFLATE)
+            sculptor.set_detail(0)
+            if scale_index < 2:
+                with assert_raises(contains="MIN_WORLD_SCALE"):
+                    _ = sculptor.stroke_from_ray(
+                        scene, assets, ray, Length(0.625 * scale, METER)
+                    )
+                assert_false(sculptor.has_hit())
+                assert_false(sculptor.is_sculpting())
+                assert_equal(len(sculptor.events), 0)
+                continue
+            assert_true(
+                sculptor.stroke_from_ray(
+                    scene, assets, ray, Length(0.625 * scale, METER)
+                )
+            )
+            ref got = sculptor.sculpt_mesh()
+            ref expected = reference.sculpt_mesh()
+            assert_equal(got.nb_vertices, expected.nb_vertices)
+            assert_equal(got.nb_faces, expected.nb_faces)
+            for at in range(got.nb_vertices * 3):
+                assert_true(isfinite(got.vertices[at]))
+                assert_almost_equal(
+                    Float64(got.vertices[at]),
+                    Float64(expected.vertices[at]),
+                    atol=1e-6,
+                )
+            var hit = sculptor.get_hit_point()
+            var expected_hit = reference.get_hit_point()
+            assert_almost_equal(hit.x, expected_hit.x, atol=1e-6)
+            assert_almost_equal(hit.y, expected_hit.y, atol=1e-6)
+            assert_almost_equal(hit.z, expected_hit.z, atol=1e-6)
+            assert_almost_equal(
+                sculptor.get_world_radius().to(METER) / scale,
+                Float32(0.625),
+                atol=1e-6,
+            )
+
+
+def test_small_rotated_parent_scale_uses_the_final_world_matrix() raises:
+    """A tiny composed rotation still picks the known local plane center."""
+    for accepted in [False, True]:
+        var scale = Float32(MIN_WORLD_SCALE * (2.0 if accepted else 0.5))
+        var node = Object3D()
+        node.rotate_y(Angle(0.3, RADIAN))
+        node.rotate_x(Angle(-0.7, RADIAN))
+        node.set_scale(scale * 2, scale * 2, scale * 2)
+        var assets = Assets()
+        var scene = _scene(
+            plane(Length(2, METER), Length(2, METER), 2, 2), assets, node^
+        )
+        var parent = Object3D()
+        parent.rotate_z(Angle(0.2, RADIAN))
+        parent.set_scale(0.5, 0.5, 0.5)
+        var parent_id = scene.add(parent^)
+        var child_id = scene.meshes[0].node
+        scene.add(child_id, parent=parent_id)
+        scene.update()
+        var world = scene.world_matrix(child_id)
+        for column in range(3):
+            var x = Float64(world.elements[column * 4])
+            var y = Float64(world.elements[column * 4 + 1])
+            var z = Float64(world.elements[column * 4 + 2])
+            assert_equal(
+                x * x + y * y + z * z > MIN_WORLD_SCALE * MIN_WORLD_SCALE,
+                accepted,
+            )
+        var ray = _ray(0, 0, 3, 0, 0, -1)
+        ray.apply_matrix4(world)
+        var sculptor = Sculptor(scene, assets, 0)
+        var camera = PerspectiveCamera(
+            Angle(50, DEGREE),
+            1,
+            Length(scale * 0.1, METER),
+            Length(scale * 10, METER),
+        )
+        camera.place(
+            world.transform_point(Vector3(0, 0, 3)),
+            world.transform_point(Vector3(0, 0, 0)),
+        )
+        camera.up = world.transform_direction(Vector3(0, 1, 0))
+        sculptor.connect(0, 0, 200, 200)
+        if not accepted:
+            with assert_raises(contains="MIN_WORLD_SCALE"):
+                _ = sculptor.pick_from_ray(
+                    scene, ray, Length(0.625 * scale, METER)
+                )
+            with assert_raises(contains="MIN_WORLD_SCALE"):
+                _ = sculptor.pick_from_pointer(camera, scene, 100, 100)
+            continue
+        assert_true(
+            sculptor.pick_from_ray(scene, ray, Length(0.625 * scale, METER))
+        )
+        var hit = sculptor.get_hit_point()
+        assert_almost_equal(hit.x, 0.0, atol=1e-6)
+        assert_almost_equal(hit.y, 0.0, atol=1e-6)
+        assert_almost_equal(hit.z, 0.0, atol=1e-6)
+        assert_almost_equal(
+            sculptor.get_world_radius().to(METER) / scale,
+            Float32(0.625),
+            atol=1e-6,
+        )
+        assert_true(sculptor.pick_from_pointer(camera, scene, 100, 100))
+        var pointer_hit = sculptor.get_hit_point()
+        assert_almost_equal(pointer_hit.x, 0.0, atol=POINTER)
+        assert_almost_equal(pointer_hit.y, 0.0, atol=POINTER)
+        assert_almost_equal(pointer_hit.z, 0.0, atol=POINTER)
+        assert_true(isfinite(sculptor.get_world_radius().to(METER)))
+        assert_true(sculptor.get_world_radius().to(METER) > 0)
 
 
 def test_a_pointer_picks_a_rotated_and_scaled_mesh() raises:

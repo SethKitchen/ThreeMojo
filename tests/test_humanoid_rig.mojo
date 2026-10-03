@@ -21,8 +21,17 @@ from extensions.humanoid.rig.clips import (
     walk_clip,
     wave_clip,
 )
+from extensions.humanoid.fidelity import (
+    CANONICAL_RECIPE,
+    ENGINEERING_USE,
+    FIDELITY_KEY,
+    GAME_RECIPE,
+    humanoid_provenance,
+    require_bake_provenance,
+)
 from extensions.humanoid.rig.game import (
     add_game_humanoid,
+    game_build_settings,
     carry_attributes,
 )
 from extensions.humanoid.rig.joints import (
@@ -348,6 +357,14 @@ def test_a_game_humanoid_is_built_bound_and_light() raises:
         followers=1,
         workers=available_workers(),
     )
+    var expected = humanoid_provenance(
+        _spec(),
+        game_build_settings(3000, 12, 8, 8, guides=12, followers=1),
+        String(CANONICAL_RECIPE),
+        String(GAME_RECIPE),
+        "unverified-converted-ICTF-THRS",
+    )
+    require_bake_provenance(scene.get(person.root).user_data, expected)
     assert_equal(len(person.bones), JOINT_COUNT)
     assert_equal(len(person.skins), 3)
     assert_equal(len(person.strands), 1)
@@ -556,6 +573,16 @@ def test_attribute_transfer_accepts_two_empty_meshes() raises:
     ref colors = target.attribute_view(String(COLOR))
     assert_equal(colors.count(), 0)
     assert_equal(colors.item_size, 3)
+
+
+def test_game_builder_refuses_engineering_before_scene_edits() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var before = scene.count()
+    with assert_raises(contains="Engineering use is unsupported"):
+        _ = add_game_humanoid(scene, assets, root, _spec(), use=ENGINEERING_USE)
+    assert_equal(scene.count(), before)
 
 
 def main() raises:

@@ -3,8 +3,8 @@
 
 """Direct Road proof controls, separate from required full-Map construction.
 
-The translated-grid Map case remains an explicit required known blocker in
-both test_carla_axis_lane_minimum and test_carla_axis_translated_map_blocker.
+The translated-grid Map case separately checks explicit construction refusal.
+These direct-Road controls retain the successful exact minimum and tie cases.
 """
 
 from extensions.carla.geometry import LINE, RoadGeometry

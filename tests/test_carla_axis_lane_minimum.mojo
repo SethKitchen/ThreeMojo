@@ -62,15 +62,13 @@ def test_reverse_lane_uses_same_exact_parameter_minimum() raises:
     assert_true(Bool(map.waypoint(location)))
 
 
-def test_translated_parameter_grid_keeps_exact_bracket_order() raises:
-    # Near 1e20 the representable parameter spacing is exactly 16384.
-    # C_x(s)=s-1e20, so 10000 is nearer 16384 than zero. A query of
-    # 8192 is an exact distance tie; the helper keeps the lower parameter.
+def test_translated_parameter_grid_rejects_unrepresentable_subdivision() raises:
+    # Preserve the original five-ULP Map input. No contiguous partition
+    # can meet the unchanged one-millimeter parameter-matched chord target.
+    # The exact bracket and tie successes remain in the direct-Road suite.
     var base = Float64(1e20)
-    var map = _flat_map(length=81920.0, record_s=base)
-    assert_equal(map.closest_waypoint_on_road(Vector3(10000, 0.0001, 0)).value().s, base + 16384.0)
-    assert_equal(map.closest_waypoint_on_road(Vector3(8192, 0.0001, 0)).value().s, base)
-    assert_equal(map.closest_waypoint_on_road(Vector3(5000, 0.0001, 0)).value().s, base)
+    with assert_raises(contains="Float64 road-s resolution"):
+        _ = _flat_map(length=81920.0, record_s=base)
 
 
 def test_wide_origin_search_reaches_adjacent_stored_parameters() raises:

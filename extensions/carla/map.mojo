@@ -15,15 +15,22 @@ where a waypoint is (`compute_transform`), what lies ahead of it (`next`,
 
 **The segment index.** The index starts with CARLA's heading and length
 partition. It splits again at record boundaries and until quarter-point
-chord errors are at most one millimeter. This prototype enumerates every
-matching segment in deterministic index order. A full rounded-center box
-can exclude a segment only when it is strictly farther than a known point.
-Each remaining candidate exports a bounded minimum-distance certificate. Candidate selection requires proved
-dominance; an overlapping result raises instead of selecting a sample.
-Strict waypoint classification covers every possible minimizing cell.
-Sound index admission remains separate work in #589.
-This corrects the
-upstream treatment of curved lane offsets and lane distance as road s.
+chord errors are at most one millimeter. A required split without an
+interior Float64 road-s value raises a resolution error. A positive
+nonterminal index step must also advance in lane order. The line and its
+stored-point minima can still be representable. This sampled target is not
+an unsampled error bound. A separate full-center enclosure and the R-tree's
+bounded distance key control candidate admission. An unknown bound keeps
+the candidate. Each remaining candidate exports a bounded minimum-distance
+certificate. Overlapping candidates resume with their remaining work budget.
+Selection requires proved dominance; unresolved work raises an accuracy
+error. Strict waypoint classification covers every possible minimizing
+cell. It uses the selected Float64 center before public location narrowing.
+
+The public `segment_count` and `segment` methods expose this accuracy-driven
+index. Its partition and count can change when the geometry requires more
+subdivision. Lane order and index tie rules remain deterministic. This
+corrects curved lane offsets and the treatment of lane distance as road s.
 
 **Order.** CARLA keeps roads, junctions and signals in hash maps and
 walks them in hash order. This port walks them in order of id, so a list
@@ -929,7 +936,9 @@ struct Map(Movable):
 
         Raises:
             Error: If a lane's records are missing where the segments need
-                them, or an index endpoint is not finite in Float32 storage.
+                them, an index endpoint is not finite in Float32 storage,
+                or Float64 road-s resolution prevents a required split or
+                a positive nonterminal index step.
         """
         self.roads = roads^
         self.junctions = junctions^
@@ -2604,6 +2613,13 @@ struct Map(Movable):
         mid.s = first.s + (second.s - first.s) * 0.5
         var turn = self.roads[at[0]]._lane_turn_bound(first.s, second.s)
         if error > 0.000001 or turn > 0.5:
+            # Adjacent road-s values cannot produce an interior waypoint.
+            # Do not repeat the same failed interval up to the depth cap.
+            if mid.s == first.s or mid.s == second.s:
+                raise Error(
+                    "Lane center cannot meet the spatial subdivision target "
+                    "at Float64 road-s resolution"
+                )
             if depth >= 24:
                 raise Error("Lane center exceeds the spatial subdivision limit")
             var middle = self.compute_transform(mid)
@@ -2700,7 +2716,15 @@ struct Map(Movable):
                 # CARLA also stops where the step leaves the section. A
                 # step of at most `remaining` stops short of the section's
                 # end, so it gives one waypoint in the same section.
+                var previous_s = next_w.s
                 next_w = self.next(next_w, delta)[0]
+                # This positive nonterminal step must advance in lane order.
+                # The terminal branch above can still insert a zero span.
+                if next_w.s <= previous_s if positive else next_w.s >= previous_s:
+                    raise Error(
+                        "Lane index sampling cannot advance "
+                        "at Float64 road-s resolution"
+                    )
                 var next_t = self.compute_transform(next_w)
                 var angle = Float64(
                     vector_angle(

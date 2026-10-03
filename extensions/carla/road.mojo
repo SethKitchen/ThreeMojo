@@ -21,9 +21,14 @@ index: `lane_transform` is `Lane::ComputeTransform`, `lane_corners` is
 `lane_is_straight` is `Lane::IsStraight`. A `LaneKey` names a lane from
 anywhere in the map: its road id, its section id and its lane id.
 
-CARLA writes a point in single precision. This port computes in double
-and rounds at the end, where CARLA hands back a `Location`; the two agree
-to within a float's rounding.
+CARLA writes a point in single precision. This port computes lane centers
+in double and rounds at the public `Location` boundary. Internal nearest
+queries retain the double center. The lane pose follows the derivative of
+that center, including changing widths and sampled-reference tangents.
+This intentionally corrects CARLA's use of a slope as an angle. Pitch
+also accounts for the lane center's horizontal speed. A section with a
+width-record kink does not use the two-row straight-lane mesh shortcut.
+These corrections can change poses, nearest waypoints and mesh counts.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.

@@ -38,6 +38,7 @@ Equality retains the candidate and the insertion-order tie policy.
 This bound does not prove a minimum inside an admitted segment.
 Cross-candidate minimum intervals and strict on-road classification need separate certificates.
 It does not change the local refinement limits or provide a global map work budget.
+
 The query rejects a nonfinite Float32 query before it enters the index.
 Construction rejects an endpoint that cannot be stored as a finite Float32 value.
 It does not clamp or silently cap that coordinate.

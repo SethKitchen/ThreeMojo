@@ -57,11 +57,21 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 <!-- features -->
 ### Physics safety
 
+- [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
+
 - [x] [Tires on moving supports](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-physics#moving-supports): relative contact velocity, shared support response and two-body effective mass [#296](https://github.com/SethKitchen/ThreeMojo/issues/296)
 
 - [x] [Guarded body mass API](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#change-a-bodys-motion-mode): value accessors, validated mode and inverse-tensor setters, and state-entry consistency checks [#554](https://github.com/SethKitchen/ThreeMojo/issues/554)
 
+### Numerical range
+
+- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+
 ### Project tools
+
+- [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
+
+- [ ] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion and synthetic reproduction; historical production source provenance remains open [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
 - [x] [Portable asset and test roots](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): explicit asset roots, isolated direct-run fixtures, and subprocess ownership checks [#310](https://github.com/SethKitchen/ThreeMojo/issues/310)
 
@@ -110,7 +120,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 <summary>Ported: 26</summary>
 
 - [x] [Procedural generators](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-generators): seeded city with skyscrapers, sidewalks, street furniture, cars and pedestrians, forest, terrain and tree generators [#254](https://github.com/SethKitchen/ThreeMojo/issues/254). Scale-safe tree frames and checked output ranges [#448](https://github.com/SethKitchen/ThreeMojo/issues/448)
-- [x] [Sculptor, SculptorMesh, SculptorTools and SculptorUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor): brush, inflate, smooth, flatten and the other strokes, from a ray or a pointer, with adaptive topology [#255](https://github.com/SethKitchen/ThreeMojo/issues/255)
+- [x] [Sculptor, SculptorMesh, SculptorTools and SculptorUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor): brush, inflate, smooth, flatten and the other strokes, from a ray or a pointer, with adaptive topology [#255](https://github.com/SethKitchen/ThreeMojo/issues/255). [Minimum world scale](https://github.com/SethKitchen/ThreeMojo/wiki/Sculptor#minimum-world-scale) [#458](https://github.com/SethKitchen/ThreeMojo/issues/458)
 - [x] [LoftGeometry, WireframeGeometry2, ClippingGroup and more](https://github.com/SethKitchen/ThreeMojo/wiki/Lofts-and-clipping-groups): lofts, wide wireframes, clipping groups on both backends, path helpers, kelvin colors, clip files and cube depth [#256](https://github.com/SethKitchen/ThreeMojo/issues/256)
 - [x] [RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry-addons#roller-coaster): track geometry, tube strokes, convex breaking, space-filling curves and UV images [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
 - [x] [Shapes and extrusions in three.js's order](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#how-it-is-cut-up): earcut with holes, and three.js's vertex and triangle order for ShapeGeometry and ExtrudeGeometry [#215](https://github.com/SethKitchen/ThreeMojo/issues/215)

@@ -21,6 +21,12 @@ Changing the public direction does not extend every other method's
 contract to arbitrary non-unit vectors. three.js leaves normalization to
 the caller.
 
+## Range correction
+
+Unlike three.js 0.180, `look_at` widens extreme finite positions before
+subtraction and normalization. Ordinary directions keep their arithmetic order.
+The correction does not add new nonfinite-input errors.
+
 A hit is an `Optional`. A ray that misses has no point to give, and a
 point picked to mean "none" would be a point somewhere. three.js returns
 `null` for the same reason. `intersect_*` gives the point and
@@ -41,6 +47,7 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
 from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
+from math.norm import normalized3, _ordinary_squared
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
@@ -484,7 +491,19 @@ struct Ray(ImplicitlyCopyable):
         var toward = target - self.origin
         if toward.length() == 0:
             raise Error("A ray cannot look at its own origin")
-        toward.normalize()
+        if _ordinary_squared(toward.dot(toward)):
+            toward.normalize()
+        else:
+            # Widen positions before subtraction. Opposite finite Float32
+            # positions can have a difference that cannot fit in Float32.
+            var unit = normalized3(
+                Float64(target.x) - Float64(self.origin.x),
+                Float64(target.y) - Float64(self.origin.y),
+                Float64(target.z) - Float64(self.origin.z),
+            )
+            toward = Vector3(
+                Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
+            )
         self.direction = toward
 
     def recast(mut self, t: Float32):

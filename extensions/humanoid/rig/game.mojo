@@ -28,6 +28,16 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from extensions.humanoid.fidelity import (
+    CANONICAL_RECIPE,
+    FIDELITY_KEY,
+    GAME_RECIPE,
+    VISUAL_USE,
+    HumanoidUse,
+    humanoid_provenance,
+    require_humanoid_use,
+)
+from core.user_data import UserData
 from extensions.humanoid.rig.joints import (
     HEAD,
     HIPS,
@@ -246,6 +256,7 @@ def add_game_humanoid(
     guides: Int = 0,
     followers: Int = 0,
     workers: Int = 1,
+    use: HumanoidUse = VISUAL_USE,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -268,6 +279,7 @@ def add_game_humanoid(
             shell alone.
         followers: Follow strands round each guide.
         workers: How many threads mesh the skin.
+        use: Visual use only. Engineering use is refused before scene edits.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -276,7 +288,31 @@ def add_game_humanoid(
         Error: If the spec, a detail or the style is refused, or the
             scene refuses a node or a mesh.
     """
-    var root = scene.attach(Object3D(), parent)
+    require_humanoid_use(use)
+    var settings = game_build_settings(
+        triangles,
+        detail,
+        hand_detail,
+        hair_detail,
+        hair_style,
+        guides,
+        followers,
+        skin_paint,
+        hair_paint,
+        eye_paint,
+    )
+    var node = Object3D()
+    node.user_data.set_json(
+        String(FIDELITY_KEY),
+        humanoid_provenance(
+            spec,
+            settings,
+            String(CANONICAL_RECIPE),
+            String(GAME_RECIPE),
+            "unverified-converted-ICTF-THRS",
+        ).to_json(),
+    )
+    var root = scene.attach(node^, parent)
     var body = body_skin_mesh(
         spec, detail, workers, LEG_GAP * Float32(spec.stature.value) / 1.8288
     )
@@ -381,3 +417,56 @@ def add_game_humanoid(
             )
         )
     return GameHumanoid(rig^, root, bones^, skins^, strands^)
+
+
+def game_build_settings(
+    triangles: Int = 0,
+    detail: Int = 56,
+    hand_detail: Int = 24,
+    hair_detail: Int = 32,
+    hair_style: HairStyle = GROWN,
+    guides: Int = 0,
+    followers: Int = 0,
+    skin_paint: MaterialId = UNSET_PAINT,
+    hair_paint: MaterialId = UNSET_PAINT,
+    eye_paint: MaterialId = UNSET_PAINT,
+) raises -> UserData:
+    """Record every game-builder option that changes a visual recipe.
+
+    Material IDs refer to the caller's asset store. This is not a material
+    content digest. Worker count changes execution, not the visual recipe.
+
+    Args:
+        triangles: Triangle budget.
+        detail: Body sampling detail.
+        hand_detail: Hand sampling detail.
+        hair_detail: Hair sampling detail.
+        hair_style: Named hair style.
+        guides: Guide count.
+        followers: Follower count.
+        skin_paint: Skin material ID, or the default sentinel.
+        hair_paint: Hair material ID, or the default sentinel.
+        eye_paint: Eye material ID, or the default sentinel.
+
+    Returns:
+        A value snapshot independent of the canonical spec.
+
+    Raises:
+        Error: If the hair style is unnamed or a value is not finite.
+    """
+    if not hair_style.is_valid():
+        raise Error("Game build settings require a named hair style")
+    var settings = UserData()
+    settings.set_string("triangles", String(triangles))
+    settings.set_string("body_detail", String(detail))
+    settings.set_string("hand_detail", String(hand_detail))
+    settings.set_string("hair_detail", String(hair_detail))
+    settings.set_string("hair_style", String(hair_style.value))
+    settings.set_string("guides", String(guides))
+    settings.set_string("followers", String(followers))
+    settings.set_string("skin_material_id", String(skin_paint.value))
+    settings.set_string("hair_material_id", String(hair_paint.value))
+    settings.set_string("eye_material_id", String(eye_paint.value))
+    settings.set_number("leg_gap_m_at_template_stature", Float64(LEG_GAP))
+    settings.set_number("crotch_m_at_template_stature", Float64(CROTCH))
+    return settings^

@@ -15,7 +15,7 @@ into the next. It prints how long the build, the bake and the load
 took, and how many frames a second it rendered.
 
 The optional second argument is the baked file; the default is
-`out/humanoid.glb`. Delete it to bake again. The optional third is the
+`out/humanoid.glb`. A stale or unversioned recipe is refused. Delete it to bake again. The optional third is the
 budget of triangles for the skin; the default is 10000.
 """
 
@@ -29,7 +29,15 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from exporters.gltf import GLB, write_gltf
+from exporters.gltf import GLB, GltfExportOptions, write_gltf
+from core.user_data import UserData
+from extensions.humanoid.fidelity import (
+    CANONICAL_RECIPE,
+    FIDELITY_KEY,
+    GAME_RECIPE,
+    humanoid_provenance,
+    require_bake_provenance,
+)
 from extensions.humanoid.rig.clips import (
     idle_clip,
     jump_clip,
@@ -37,7 +45,7 @@ from extensions.humanoid.rig.clips import (
     walk_clip,
     wave_clip,
 )
-from extensions.humanoid.rig.game import add_game_humanoid
+from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import ambient_light, directional_light
@@ -69,6 +77,17 @@ def _seconds_since(start: Int) -> Float64:
     return Float64(perf_counter_ns() - start) / 1e9
 
 
+def _expected_provenance(triangles: Int) raises -> UserData:
+    """Return this example's canonical and visual creation recipe."""
+    return humanoid_provenance(
+        HumanoidSpec(Length(6.0, FOOT), MALE),
+        game_build_settings(triangles),
+        String(CANONICAL_RECIPE),
+        String(GAME_RECIPE),
+        "unverified-converted-ICTF-THRS",
+    )
+
+
 def _bake(path: String, triangles: Int) raises:
     """Build the humanoid and its clips, and write them to `path`."""
     var start = perf_counter_ns()
@@ -91,7 +110,11 @@ def _bake(path: String, triangles: Int) raises:
     clips.append(wave_clip(person.bones, person.rig))
     print("Built in", _seconds_since(start), "s")
     var written = perf_counter_ns()
-    write_gltf(path, scene, assets, GLB, animations=clips^)
+    var options = GltfExportOptions()
+    options.scene_user_data.set_json(
+        String(FIDELITY_KEY), _expected_provenance(triangles).to_json()
+    )
+    write_gltf(path, scene, assets, GLB, animations=clips^, options=options^)
     print("Baked", path, "in", _seconds_since(written), "s")
 
 
@@ -114,6 +137,7 @@ def main() raises:
     var assets = Assets()
     var scene = Scene()
     var model = read_gltf(baked, scene, assets)
+    require_bake_provenance(model.scene_extras, _expected_provenance(triangles))
     print("Loaded in", _seconds_since(start), "s")
     var mixer = AnimationMixer()
     var actions = List[Int]()

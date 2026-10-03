@@ -10,7 +10,9 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 This draft removes raw squared-distance overflow and underflow from local search decisions.
 It retains finite Float64 center coordinates and the existing parameter domain.
 It remains part of the held global lane work in [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
-It does not complete cross-candidate minimum certification or RTree admission.
+This layer composes with [cross-candidate certificates](CARLA-cross-candidate-certificates)
+and [index admission](CARLA-index-admission). Normalized arithmetic alone does
+not establish those guarantees.
 
 ## Distance units
 
@@ -84,7 +86,7 @@ The quarter-point chord target is not used as a certified deviation.
 An unresolved enclosure becomes the whole coordinate space.
 It disables this rejection and does not become an empty candidate.
 The cache has the same geometry snapshot as the segment index.
-A separate RTree key-error bound remains required for index-level admission.
+The integrated index-admission layer uses a separate R-tree key-error bound.
 
 ## Controls
 
