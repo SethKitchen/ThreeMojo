@@ -46,7 +46,7 @@ The integral runs over the one skin of the limb. The final cells stop at exact s
 
 Knee tissues, foot ligaments, vessels, lymphatics and nerves have no separate density assignment. A higher-priority overlapping region wins. Otherwise they use the fat proxy. No uncertainty bound is asserted. Bone pore-fluid and pore-marrow mass is not added to apparent bone mass.
 
-The segments follow de Leva (1996). Horizontal planes through the hip joint's center, the knee's and the lateral malleolus cut the limb. The knee's center is the middle of the femoral condyles.
+De Leva (1996) provides context for these authored segment cuts. Horizontal planes through the hip joint's center, the knee's and the lateral malleolus cut the limb. The knee's center is the middle of the femoral condyles.
 
 ## Reproducible results
 

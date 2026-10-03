@@ -16,6 +16,7 @@ from std.math import ceil, isfinite, min
 from units.si import Length
 
 comptime MAX_SAMPLE_CELLS = 2_000_000
+"""Maximum cells in one bounded sampling request."""
 
 
 struct SampleGrid(ImplicitlyCopyable):
@@ -25,11 +26,17 @@ struct SampleGrid(ImplicitlyCopyable):
     """
 
     var low: Vector3
+    """Minimum box corner, in meters."""
     var high: Vector3
+    """Maximum box corner, in meters."""
     var step: Length
+    """Maximum requested cell width."""
     var nx: Int
+    """Number of clipped cells along x."""
     var ny: Int
+    """Number of clipped cells along y."""
     var nz: Int
+    """Number of clipped cells along z."""
 
     def __init__(out self, low: Vector3, high: Vector3, step: Length) raises:
         """Check the complete work request before constructing cell counts.

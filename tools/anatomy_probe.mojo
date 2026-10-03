@@ -3,7 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Emit bounded canonical evidence as JSON Lines; no validation claim."""
+"""Emit intermediate canonical records for anatomy_validity.py.
+
+The Float32-only spine protocol uses zero for the unmeasured sacral-body
+field. The report writer must replace that specific placeholder with null
+and identify the authored support plane. Raw rows are not validity reports.
+"""
 
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.sex import MALE, FEMALE

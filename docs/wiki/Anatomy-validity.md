@@ -20,6 +20,12 @@ Use `--sex female`, `--side left`, `--athleticism toned` or `--stature-m 1.63` t
 
 Omit `--build` to reuse the probe. Its sidecar must match the source digest and binary digest. Rebuild after a source change. Reports record both digests, the exact compiler version and `--Werror`.
 
+The source digest includes all repository Mojo files, except build and cache copies. It also includes the report writer and provenance inventory. Unrelated Mojo changes therefore require a rebuild. This conservative rule avoids an incomplete dependency claim.
+
+The committed report is a reference for its recorded source revision. It does not describe a later combined revision. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
+
+The report uses an initial source and inventory snapshot. It rechecks source, probe and metadata before return. An observed change fails the report. These checks do not provide an atomic filesystem transaction.
+
 `--use game-fantasy` permits the labeled template estimate. Engineering, whole-body, dynamic/constitutive, patient-specific and clinical/safety requests still produce an evidence report. They return exit code 2 because their use gate is unsupported. A failed calculation returns exit code 1. A supported labeled estimate returns 0.
 
 ## Read the report
@@ -37,7 +43,9 @@ The JSON schema version is 1. Every quantity has a unit in its key or its stated
 - `provenance_inventory` distinguishes cited inputs from authored parameters
 - `gate` states the supported label and the missing validation evidence
 
-The leg frame origin is the tibiofemoral joint line. Plus x is body-right. Plus y is proximal. Plus z is anterior. Inertia entries are `xx`, `yy`, `zz`, `xy`, `xz` and `yz`, about the center of mass. Off-diagonal entries are negative products of inertia. The six-entry representation is symmetric by construction.
+The leg frame origin is the tibiofemoral joint line. Plus x is body-right. Plus y is proximal. Plus z is anterior.
+
+Inertia entries are `xx`, `yy`, `zz`, `xy`, `xz` and `yz`, about the center of mass. Off-diagonal entries are negative products of inertia. The six-entry representation is symmetric by construction.
 
 ## Numerical evidence
 
@@ -53,7 +61,9 @@ Each refinement comparison records mass differences, the center displacement vec
 
 Each accepted cell receives one density assignment. The final cell on each axis stops at the exact integration plane. Cuboid self-inertia is included. This avoids the gaps or overlaps from rounded counts of full-sized cells.
 
-The assignment order is dermis, bone or marrow, then soft tissue. Bone selection uses femur, tibia, fibula, patella and the named foot-bone order. Cortical and trabecular assignments use apparent bone density. Marrow uses the named fat proxy before any overlapping muscle or tendon. Soft tissue uses the first leg muscle or tendon, then the first foot muscle or tendon, then the unresolved fat proxy.
+The assignment order is dermis, bone or marrow, then soft tissue. Bone selection uses femur, tibia, fibula, patella and the named foot-bone order. Cortical and trabecular assignments use apparent bone density. Marrow uses the named fat proxy before any overlapping muscle or tendon.
+
+Soft tissue uses the first leg muscle or tendon, then the first foot muscle or tendon, then the unresolved fat proxy.
 
 The report stores volume and mass for all seven exclusive assignments. Region mass must sum to segment mass. Region volume must not exceed its integration box. Composition rejects duplicate segments, missing segments, mismatched steps, different envelope bounds, gaps and overlapping cut planes.
 
@@ -63,9 +73,13 @@ Do not add individual bone mass, soft-part mass, a second skin mass or `SweepFie
 
 ## Geometry diagnostics
 
-The default probe checks all 435 distinct pairs among 30 lower-limb bones. These are six leg/leg pairs, 104 leg/foot pairs and 325 foot/foot pairs. It checks 30 knee pairs: 20 leg-bone/tissue pairs and ten tissue/tissue pairs. Spine checks include C2 through C7, T1 through L5, the C7/T1 transition and the neighboring discs. The spine pass returns 67 pair records and 23 endplane records. The L5 lower disc endpoint uses the authored sacral support plane. It does not assert a flat sacral-body surface.
+The default probe checks all 435 distinct pairs among 30 lower-limb bones. These are six leg/leg pairs, 104 leg/foot pairs and 325 foot/foot pairs. It checks 30 knee pairs: 20 leg-bone/tissue pairs and ten tissue/tissue pairs.
 
-A positive gap between conservative bounding boxes is a clearance lower bound. A negative field witness identifies sampled common interior. Field values need not be exact distances. They are not penetration depth or physical clearance. No sampled hit does not prove no overlap. The report names omitted muscle, foot-ligament, vessel, nerve and lymphatic pair checks.
+Spine checks include C2 through C7, T1 through L5, the C7/T1 transition and the neighboring discs. The spine pass returns 67 pair records and 23 endplane records. The L5 lower disc endpoint uses the authored sacral support plane. It does not assert a flat sacral-body surface.
+
+A positive gap between conservative bounding boxes is a clearance lower bound. A negative field witness identifies sampled common interior of the component envelopes. Bone fields are outer envelopes; a witness does not identify cortical, trabecular or marrow occupancy. Field values need not be exact distances. They are not penetration depth or physical clearance.
+
+No sampled hit does not prove no overlap. The report names omitted muscle, foot-ligament, vessel, nerve and lymphatic pair checks.
 
 The provenance inventory has an explicit intentional-overlap allowlist. It covers construction primitives inside one named field, contained anatomy inside the skin domain, and the leg/foot envelope union. It permits a shared body/disc endplane surface within 1e-6 m. It permits no positive-volume body/disc overlap. Distinct bones are not exempted by the construction-union rule.
 

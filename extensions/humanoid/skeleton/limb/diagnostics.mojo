@@ -28,10 +28,15 @@ struct PairDiagnostic(ImplicitlyCopyable):
     """
 
     var bounds_gap: Length
+    """Clearance lower bound between conservative field boxes."""
     var samples: Int
+    """Number of tested cell centers."""
     var overlap_samples: Int
+    """Number of centers with both field values negative."""
     var overlap_volume: Volume
+    """Estimated common-interior volume from accepted cells."""
     var field_witness: Length
+    """Minimum sampled maximum field value; not a true distance."""
 
 
 def _check_bounds(low: Vector3, high: Vector3) raises:
@@ -54,6 +59,10 @@ def diagnose_pair[
     step: Length,
 ) raises -> PairDiagnostic:
     """Sample the intersecting box of two already validated solids.
+
+    Parameters:
+        F: Type of the first canonical field.
+        G: Type of the second canonical field.
 
     Args:
         first: The first canonical field.

@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -189,11 +190,23 @@ def annotate_diagnostics(groups):
                 identity = 'canonical/' + group + '/' + '|'.join(components)
                 row['pair_id'] = identity
                 row['allowlist_applied'] = False
+                row['geometry_kind'] = 'implicit component envelope intersection'
                 row['contact_intent'] = 'unclassified; an anatomical attachment is not an established volume allowance'
             elif row.get('record') == 'endplane':
                 identity = 'canonical/spine/endplane/' + row['body']
                 row['endplane_id'] = identity
                 row['boundary_contact_rule'] = 'spine_endplane_boundary_contact'
+                if row['body'] == 'thoracolumbar/16':
+                    # This is an authored plane, not a sampled sacral solid.
+                    # Refuse protocol drift rather than discard a measurement.
+                    if row['next_body_outside_field_m'] != 0:
+                        raise ValueError('unexpected sacral support-plane placeholder')
+                    row['next_body_sampled'] = False
+                    row['next_body_outside_field_m'] = None
+                    row['next_reference_kind'] = 'authored sacral support plane'
+                else:
+                    row['next_body_sampled'] = True
+                    row['next_reference_kind'] = 'neighboring vertebral body'
             else:
                 raise ValueError('unknown diagnostic record')
             if identity in seen:
@@ -224,7 +237,7 @@ def diagnostic_findings(groups):
                     if row[key] <= 0:
                         reasons.append(key)
                 # L5 uses an authored support plane, not a sampled flat sacrum.
-                if row['body'] != 'thoracolumbar/16' and row['next_body_outside_field_m'] <= 0:
+                if row['next_body_sampled'] and row['next_body_outside_field_m'] <= 0:
                     reasons.append('next_body_outside_field_m')
                 if reasons:
                     findings.append({'kind': 'incompatible_endplanes', 'body': row['body'], 'reasons': reasons})
@@ -233,13 +246,35 @@ def diagnostic_findings(groups):
     return findings
 
 
-def source_digest(root):
+def source_snapshot(root):
+    """Read bound inputs once, retaining hashes and the exact inventory bytes."""
     digest = hashlib.sha256()
+    hashes = {}
+    inventory_path = root/'docs/validation/anatomy-provenance.json'
     paths = [p for p in root.rglob('*.mojo') if not any(s in ('.cache', '.git', 'build', '.venv', 'node_modules') for s in p.relative_to(root).parts)]
-    paths += [root/'tools/anatomy_validity.py', root/'docs/validation/anatomy-provenance.json']
+    paths += [root/'tools/anatomy_validity.py', inventory_path]
     for path in sorted(paths):
-        digest.update(str(path.relative_to(root)).encode()+b'\0'+path.read_bytes()+b'\0')
-    return digest.hexdigest()
+        content = path.read_bytes()
+        name = str(path.relative_to(root))
+        digest.update(name.encode()+b'\0'+content+b'\0')
+        hashes[name] = hashlib.sha256(content).hexdigest()
+        if path == inventory_path:
+            inventory = content
+    return digest.hexdigest(), hashes, inventory
+
+
+def source_digest(root):
+    return source_snapshot(root)[0]
+
+
+def verify_report_inputs(root, probe, provenance, snapshot, metadata):
+    """Reject observed input changes; this is not an atomic filesystem transaction."""
+    current = source_snapshot(root)
+    if (current != snapshot or current[0] != provenance['source_sha256']
+            or hashlib.sha256(probe.read_bytes()).hexdigest() != provenance['binary_sha256']
+            or probe.with_suffix(probe.suffix+'.provenance.json').read_bytes() != metadata
+            or json.loads(metadata) != provenance):
+        raise ValueError('report inputs changed during execution; rebuild before reporting')
 
 
 def prepare_probe(root, probe, mojo, build):
@@ -250,7 +285,11 @@ def prepare_probe(root, probe, mojo, build):
         if version != PINNED_TOOLCHAIN:
             raise ValueError('the report requires pinned Mojo 1.1.0 (8189361e)')
         probe.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([mojo, 'build', '--Werror', '-I', str(root), str(root/'tools/anatomy_probe.mojo'), '-o', str(probe)], check=True, timeout=600, cwd=root)
+        # Use the repository's relative invocation. The pinned compiler can
+        # crash for the equivalent all-absolute include/source/output form.
+        command = [mojo, 'build', '--Werror', '-I', '.', 'tools/anatomy_probe.mojo',
+                   '-o', os.path.relpath(probe, root)]
+        subprocess.run(command, check=True, timeout=600, cwd=root)
         if source_digest(root) != digest:
             raise ValueError('source changed during compilation; rebuild before reporting')
         record = {'source_sha256': digest, 'toolchain': version, 'flags': ['--Werror'],
@@ -281,15 +320,21 @@ def report(args):
     steps = grid_steps(args.steps_mm)
     if not 1.2 <= finite(args.stature_m, 'stature') <= 2.5:
         raise ValueError('stature must be in the software range 1.2 through 2.5 m')
-    provenance = prepare_probe(ROOT, args.probe.resolve(), args.mojo, args.build)
-    controls = probe_rows(args.probe.resolve(), 'controls', 'none', 5, args)
+    probe = args.probe.resolve()
+    provenance = prepare_probe(ROOT, probe, args.mojo, args.build)
+    snapshot = source_snapshot(ROOT)
+    metadata = probe.with_suffix(probe.suffix+'.provenance.json').read_bytes()
+    verify_report_inputs(ROOT, probe, provenance, snapshot, metadata)
+    inventory = json.loads(snapshot[2])
+    source_files = sorted({path for item in inventory['parameters'] for path in item['source_files']})
+    controls = probe_rows(probe, 'controls', 'none', 5, args)
     if len(controls) != 1 or controls[0].get('record') != 'controls' or controls[0].get('passed') is not True:
         raise ValueError('independent controls did not pass')
     segments = {}
     for segment in SEGMENTS:
         rows = []
         for step in steps:
-            found = probe_rows(args.probe.resolve(), 'segment', segment, step, args)
+            found = probe_rows(probe, 'segment', segment, step, args)
             if len(found) != 1 or found[0].get('segment') != segment:
                 raise ValueError('probe returned the wrong segment')
             row = found[0]
@@ -298,14 +343,12 @@ def report(args):
             row['tensor_checks'] = validate_segment(row)
             rows.append(row)
         segments[segment] = {'grids': rows, 'sampling_sensitivity': sampling_sensitivity(rows)}
-    diagnostics = annotate_diagnostics({mode: probe_rows(args.probe.resolve(), mode, 'none', min(steps), args) for mode in ('bones', 'knee', 'spine')})
-    inventory = json.loads((ROOT/'docs/validation/anatomy-provenance.json').read_text())
-    source_files = sorted({path for item in inventory['parameters'] for path in item['source_files']})
+    diagnostics = annotate_diagnostics({mode: probe_rows(probe, mode, 'none', min(steps), args) for mode in ('bones', 'knee', 'spine')})
     result = {'schema_version': 1, 'result_label': 'template estimate', 'gate': use_gate(args.use),
               'build_provenance': provenance,
-              'source_file_sha256': {path: hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in source_files},
-              'report_logic_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-              'inventory_sha256': hashlib.sha256((ROOT/'docs/validation/anatomy-provenance.json').read_bytes()).hexdigest(),
+              'source_file_sha256': {path: snapshot[1][path] for path in source_files},
+              'report_logic_sha256': snapshot[1]['tools/anatomy_validity.py'],
+              'inventory_sha256': snapshot[1]['docs/validation/anatomy-provenance.json'],
               'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/595', 'https://github.com/SethKitchen/ThreeMojo/issues/596'],
               'spec': {'stature_m': args.stature_m, 'sex': args.sex, 'side': args.side, 'athleticism': args.athleticism, 'genome': 'template'},
               'frame': {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
@@ -313,7 +356,7 @@ def report(args):
               'controls': controls[0], 'segments': segments,
               'composition': compose_segments([segments[s]['grids'][-1] for s in SEGMENTS]),
               'diagnostics': diagnostics, 'geometry_findings': diagnostic_findings(diagnostics),
-              'diagnostic_limits': {'step_m': min(steps)/1000, 'absence_of_hits_proves_clearance': False, 'field_values_are_true_clearance': False,
+              'diagnostic_limits': {'step_m': min(steps)/1000, 'absence_of_hits_proves_clearance': False, 'field_values_are_true_clearance': False, 'bone_fields_are_disjoint_material_regions': False,
                 'not_evaluated': ['muscle-to-muscle and muscle-to-bone pairs', 'foot ligaments', 'vascular, nerve and lymphatic pairs', 'whole-body overlap', 'dynamic contact', 'visual/rig/bake mapping (#297)']},
               'accounting': {'exclusive_density_precedence': list(REGIONS), 'bone_precedence': ['femur','tibia','fibula','patella'] + [r['second'] for r in diagnostics['bones'] if r['first'] == 'femur' and r['second'].startswith('foot/')],
                 'soft_precedence': 'First leg muscle/tendon, then first foot muscle/tendon, then unresolved fat proxy.',
@@ -321,6 +364,7 @@ def report(args):
                 'missing': ['contralateral limb','pelvis/trunk/head/arms/hands','tissue above the hip cut','bone pore-fluid and pore-marrow mass','separate unresolved tissue densities']},
               'provenance_inventory': inventory}
     finite_tree(result)
+    verify_report_inputs(ROOT, probe, provenance, snapshot, metadata)
     return result
 
 

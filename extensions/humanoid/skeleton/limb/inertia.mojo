@@ -22,9 +22,9 @@ separate density assignment. A higher-priority overlapping region wins;
 otherwise they use the adipose proxy. No uncertainty bound is asserted.
 Bone pore-fluid and pore-marrow mass is not added to apparent bone mass.
 
-The segments follow de Leva (1996): horizontal planes through the hip
-joint's center, the knee's, at the femoral condyles, and the lateral
-malleolus cut the limb into a thigh, a shank and a foot.
+De Leva (1996) provides context for these authored segment cuts.
+Horizontal planes through the hip center, femoral-condyle midpoint
+and lateral malleolus divide thigh, shank and foot.
 
     var thigh = segment_inertia(person, THIGH)
     thigh.mass.to(KILOGRAM)
@@ -185,11 +185,17 @@ struct SegmentEstimate(ImplicitlyCopyable):
     """
 
     var inertia: SegmentInertia
+    """Mass, center and full tensor about the center of mass."""
     var region_volumes: SIMD[DType.float64, 8]
+    """Exclusive region volumes in cubic meters; entry seven is padding."""
     var region_masses: SIMD[DType.float64, 8]
+    """Assigned region masses in kilograms; entry seven is padding."""
     var low: Vector3
+    """Minimum canonical integration corner, in meters."""
     var high: Vector3
+    """Maximum canonical integration corner, in meters."""
     var step: Length
+    """Maximum requested grid-cell width."""
 
     def region_volume(self, region: LimbRegion) raises -> Volume:
         """Return one exclusive density region's sampled volume.

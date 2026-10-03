@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -138,12 +139,17 @@ class AnatomyValidityTests(unittest.TestCase):
             av.annotate_diagnostics({'bones': [{'record': 'unknown'}]})
         end = av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'cervical/2'}]})['spine'][0]
         self.assertEqual(end['endplane_id'], 'canonical/spine/endplane/cervical/2')
+        lower = av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'thoracolumbar/16', 'next_body_outside_field_m': 0.0}]})['spine'][0]
+        self.assertFalse(lower['next_body_sampled'])
+        self.assertIsNone(lower['next_body_outside_field_m'])
+        with self.assertRaisesRegex(ValueError, 'placeholder'):
+            av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'thoracolumbar/16', 'next_body_outside_field_m': 0.1}]})
 
     def test_unallowlisted_overlap_and_incompatible_endplanes_are_visible(self):
         pair = {'record': 'pair', 'first': 'bone', 'second': 'disc', 'overlap_samples': 1, 'overlap_volume_m3': 1e-9}
         end = {'record': 'endplane', 'body': 'cervical/2', 'disc_gap_m': 0.001,
                'body_disc_endplane_error_m': 0.0, 'next_body_disc_endplane_error_m': 0.0,
-               'body_outside_field_m': 0.0001, 'next_body_outside_field_m': 0.0001,
+               'body_outside_field_m': 0.0001, 'next_body_outside_field_m': 0.0001, 'next_body_sampled': True,
                'disc_outside_upper_field_m': 0.0001, 'disc_outside_lower_field_m': 0.0001}
         self.assertEqual(av.diagnostic_findings({'spine': [end]}), [])
         self.assertEqual(av.diagnostic_findings({'spine': [pair]})[0]['kind'], 'unallowlisted_sampled_overlap')
@@ -152,9 +158,31 @@ class AnatomyValidityTests(unittest.TestCase):
             self.assertTrue(av.diagnostic_findings({'spine': [bad]}))
         for key in ('body_disc_endplane_error_m', 'next_body_disc_endplane_error_m'):
             self.assertTrue(av.diagnostic_findings({'spine': [end | {key: 1e-3}]}))
-        self.assertEqual(av.diagnostic_findings({'spine': [end | {'body': 'thoracolumbar/16', 'next_body_outside_field_m': 0}]}), [])
+        self.assertEqual(av.diagnostic_findings({'spine': [end | {'body': 'thoracolumbar/16', 'next_body_outside_field_m': None, 'next_body_sampled': False}]}), [])
         with self.assertRaises(ValueError):
             av.diagnostic_findings({'spine': [{'record': 'missing'}]})
+
+    def test_probe_build_uses_relative_pinned_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'tools').mkdir()
+            (root/'docs/validation').mkdir(parents=True)
+            (root/'tools/anatomy_validity.py').write_text('fixture')
+            (root/'tools/anatomy_probe.mojo').write_text('def main(): pass')
+            (root/'docs/validation/anatomy-provenance.json').write_text('{}')
+            probe = root/'.cache/probe'
+            calls = []
+            def run(command, **options):
+                calls.append((command, options))
+                if command[-1] == '--version':
+                    return av.subprocess.CompletedProcess(command, 0, stdout=av.PINNED_TOOLCHAIN)
+                probe.write_bytes(b'fixture binary')
+                return av.subprocess.CompletedProcess(command, 0)
+            with patch.object(av.subprocess, 'run', side_effect=run):
+                metadata = av.prepare_probe(root, probe, 'mojo', True)
+            self.assertEqual(calls[1][0], ['mojo', 'build', '--Werror', '-I', '.', 'tools/anatomy_probe.mojo', '-o', '.cache/probe'])
+            self.assertEqual(calls[1][1]['cwd'], root)
+            self.assertEqual(metadata['source_sha256'], av.source_digest(root))
 
     def test_source_bound_probe_rejects_missing_or_stale_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -182,6 +210,72 @@ class AnatomyValidityTests(unittest.TestCase):
             (root/'tools/anatomy_validity.py').write_text('two')
             with self.assertRaisesRegex(ValueError, 'stale'):
                 av.prepare_probe(root, probe, 'mojo', False)
+
+    def test_report_rejects_observed_input_mutations_during_probes(self):
+        # Exercise the real report/provenance path without compiling or
+        # executing a native probe. Mutate both early and at the last probe.
+        for stage in ('controls', 'spine'):
+            for mutation in ('none', 'source', 'new_source', 'removed_source',
+                             'logic', 'inventory', 'binary', 'metadata'):
+                with self.subTest(stage=stage, mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    (root/'tools').mkdir()
+                    (root/'docs/validation').mkdir(parents=True)
+                    logic = root/'tools/anatomy_validity.py'
+                    logic.write_text('report fixture')
+                    source = root/'bound.mojo'
+                    source.write_text('def fixture(): pass')
+                    inventory_path = root/'docs/validation/anatomy-provenance.json'
+                    inventory = {'parameters': [{'source_files': ['bound.mojo']}]}
+                    inventory_path.write_text(json.dumps(inventory))
+                    probe = root/'probe'
+                    probe.write_bytes(b'initial binary')
+                    provenance = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': ['--Werror'],
+                                  'source_sha256': av.source_digest(root),
+                                  'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
+                    metadata = probe.with_suffix('.provenance.json')
+                    metadata.write_text(json.dumps(provenance))
+                    args = SimpleNamespace(steps_mm=[20, 10, 5], stature_m=1.8288,
+                                           probe=probe, mojo='mojo', build=False,
+                                           use='template-estimate', sex='male',
+                                           side='right', athleticism='untoned')
+
+                    def rows(_probe, mode, part, step, _args):
+                        if mode == stage:
+                            if mutation == 'source':
+                                source.write_text('def changed(): pass')
+                            elif mutation == 'new_source':
+                                (root/'added.mojo').write_text('def added(): pass')
+                            elif mutation == 'removed_source':
+                                source.unlink()
+                            elif mutation == 'logic':
+                                logic.write_text('changed logic')
+                            elif mutation == 'inventory':
+                                inventory_path.write_text(json.dumps(inventory | {'changed': True}))
+                            elif mutation == 'binary':
+                                probe.write_bytes(b'changed binary')
+                            elif mutation == 'metadata':
+                                # Even a semantically equal sidecar edit is
+                                # an observed replacement of bound evidence.
+                                metadata.write_text(json.dumps(provenance)+'\n')
+                        if mode == 'controls':
+                            return [{'record': 'controls', 'passed': True}]
+                        if mode == 'segment':
+                            low, high = {'foot': (-1, 0), 'shank': (0, 1), 'thigh': (1, 2)}[part]
+                            return [row(part, low, high, step/1000)]
+                        return []
+
+                    with patch.object(av, 'ROOT', root), patch.object(av, 'probe_rows', side_effect=rows):
+                        if mutation == 'none':
+                            result = av.report(args)
+                            self.assertEqual(result['build_provenance'], provenance)
+                            self.assertEqual(result['provenance_inventory'], inventory)
+                            self.assertEqual(result['source_file_sha256']['bound.mojo'], av.hashlib.sha256(source.read_bytes()).hexdigest())
+                            self.assertEqual(result['inventory_sha256'], av.hashlib.sha256(inventory_path.read_bytes()).hexdigest())
+                            self.assertEqual(result['report_logic_sha256'], av.hashlib.sha256(logic.read_bytes()).hexdigest())
+                        else:
+                            with self.assertRaisesRegex(ValueError, 'inputs changed during execution'):
+                                av.report(args)
 
 
 if __name__ == '__main__':

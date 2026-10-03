@@ -1631,6 +1631,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_limb_region_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'region_label': value passed to 'region' cannot be converted from 'IntLiteral[0]' to 'LimbRegion'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_limb_segment_is_not_a_bare_int.mojo": {
     "errors": [
       {
