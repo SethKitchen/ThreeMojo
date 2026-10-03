@@ -12,12 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "22d63b03d956da10a6551aa72afa8ff47b4e0771c6779ba432a14c77f2fb9e27",
+    "source_sha256": "9dea34ae93856e6bdad249fc20d6837263277b2c5679d232fe8190d1944ae3c7",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
-      "--Werror"
+      "--Werror",
+      "--num-threads",
+      "1"
     ],
-    "binary_sha256": "d4110decfab772a2d1a36194491b2753a7b393f2f34653978b9a22fd7a712e5f"
+    "binary_sha256": "4a6b8ef0209cb1bc6ea0b64c3912e047ba3a15a56c38a71943b7a1d345f9f085"
   },
   "source_file_sha256": {
     "extensions/humanoid/athleticism.mojo": "e9452e65b527c6f0ccd9c30663f1d0466dbd506753fb8346d8f663bd805a3735",
@@ -61,7 +63,7 @@
     "extensions/humanoid/skeleton/torso/sweep.mojo": "30b8d75082c062a4a45925f2d884da28cb08410c7f43bb03a99b5e77bd096410",
     "extensions/humanoid/spec.mojo": "994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224"
   },
-  "report_logic_sha256": "d096bed17258ef1c273b6e30988b2962f3cb014d1204f22c46aaa9395e21cdfb",
+  "report_logic_sha256": "3a3d52a918febc46eb6646d856b34963e4077327bb25a2b91c374debc668dc5b",
   "inventory_sha256": "346da07584ae3ad05b59c1b9fae9a5c7ffa9b2a9019b3a1d7e728031694f5114",
   "follow_ups": [
     "https://github.com/SethKitchen/ThreeMojo/issues/595",
