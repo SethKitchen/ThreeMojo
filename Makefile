@@ -722,6 +722,7 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/water.png \
            $(OUT_DIR)/animals.png \
            $(OUT_DIR)/walk.png \
+           $(OUT_DIR)/animal_anatomy.png \
            $(OUT_DIR)/carla_towns.png \
            $(OUT_DIR)/game_humanoid.png \
            $(OUT_DIR)/hairstyles.png \
@@ -1369,6 +1370,13 @@ $(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
 $(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Game mode beside engineering mode, at real size and walking speed.
+$(OUT_DIR)/animal_anatomy.png: $(EXAMPLE_INPUTS_animal_anatomy)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animal_anatomy.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 
