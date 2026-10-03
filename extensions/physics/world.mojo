@@ -21,10 +21,13 @@ One `step` does this, in order:
 5. Restitution is a second pass, as in Box2D 3.0: each point that hit
    faster than the bounce threshold gets the speed apart that the
    restitution asks for.
-6. Split impulses push overlapping bodies apart. They change the
-   positions and not the velocities, so they add no energy.
-7. Velocities move the bodies. The orientation integrates as a
-   quaternion and is normalized.
+6. Split impulses push overlapping bodies apart. They change pose and
+   not the stored velocities. For anisotropic bodies this correction
+   can change rotational energy.
+7. Velocities move the bodies. A symmetric split of exact rotations
+   advances free anisotropic rotation while preserving world momentum
+   up to rounding. Isotropic and custom constrained bodies retain the
+   normalized-quaternion prescribed-velocity update.
 
 A ray cast, `raycast`, finds the nearest shape a ray meets. It is what a
 wheel's suspension and a walker's floor test use.
@@ -595,15 +598,25 @@ struct PhysicsWorld(Movable):
                 continue
             var com = body.world_center_of_mass()
             var w = body.angular_velocity + body.push_angular
+            var free_rotation = False
+            if body.kind() == DYNAMIC and body._rotate_free(h):
+                # Physical drift already updated pose and omega. Split
+                # correction remains pose-only, as in the contact solver.
+                free_rotation = True
+                w = body.push_angular
             var q = body.rotation
-            var spin = Quaternion(w.x, w.y, w.z, 0) * q
-            q = Quaternion(
-                q.x + spin.x * 0.5 * h,
-                q.y + spin.y * 0.5 * h,
-                q.z + spin.z * 0.5 * h,
-                q.w + spin.w * 0.5 * h,
-            )
-            q.normalize()
+            # A second normalization can change the Float32 pose after
+            # free drift reconstructed omega from it. Leave that pose
+            # untouched unless an actual split correction is required.
+            if not free_rotation or w != Vector3(0, 0, 0):
+                var spin = Quaternion(w.x, w.y, w.z, 0) * q
+                q = Quaternion(
+                    q.x + spin.x * 0.5 * h,
+                    q.y + spin.y * 0.5 * h,
+                    q.z + spin.z * 0.5 * h,
+                    q.w + spin.w * 0.5 * h,
+                )
+                q.normalize()
             body.rotation = q
             com = com + (body.linear_velocity + body.push_velocity) * h
             body.position = com - q.rotate(body.center_of_mass)
