@@ -41,6 +41,12 @@ def slab(raw):
     return True
 
 def norm(v): return v[0]*v[0]+v[1]*v[1]+v[2]*v[2]
+def exact_f32_difference(a,b,difference):
+    if a==0 or b==0:return True
+    if max(abs(a),abs(b))>2**28*min(abs(a),abs(b)):return False
+    try:return val(bits(difference))==difference
+    except OverflowError:return False
+
 paths={}
 def model(raw):
     a,b,p=(tuple(val(v) for v in raw[i:i+3]) for i in (0,3,6))
@@ -48,27 +54,33 @@ def model(raw):
     ab,ap,bp=sub(b,a),sub(p,a),sub(p,b)
     da=sum(x*y for x,y in zip(ap,ab)); db=sum(x*y for x,y in zip(bp,ab))
     ga=2**-49*sum(abs(x*y) for x,y in zip(ap,ab));gb=2**-49*sum(abs(x*y) for x,y in zip(bp,ab))
+    end_dot = da - norm(ab)
+    end_guard = 2**-48*(sum(abs(x*y) for x,y in zip(ap,ab)) + norm(ab))
     if norm(ab)==0:r,path=norm(ap),'point'
-    elif da < -ga:r,path=norm(ap),'start'
-    elif db > gb:r,path=norm(bp),'end'
+    elif ga == 0 or da < -ga:r,path=norm(ap),'start'
+    elif end_dot > end_guard:r,path=norm(bp),'end'
     else:
         cross=[];scale=[]
         for i in range(3):
             j,k=(i+1)%3,(i+2)%3
             l,r=ap[j]*ab[k],ap[k]*ab[j]
             cross.append(l-r);scale.append(abs(l)+abs(r))
-        if da>ga and db < -gb and norm(cross)>=2**-12*norm(scale):r,path=norm(cross)/norm(ab),'interior'
+        if da>ga and end_dot < -end_guard and norm(cross)>=2**-12*norm(scale):r,path=norm(cross)/norm(ab),'interior'
         else:
-            # Model the candidate's exact-sign polynomials, not the oracle's
-            # clamped-projection distance formula.
             af,bf,pf=tuple(map(F.from_float,a)),tuple(map(F.from_float,b)),tuple(map(F.from_float,p))
             df,uf,vf=sub(bf,af),sub(pf,af),sub(pf,bf)
+            local=all(exact_f32_difference(x,y,d) and exact_f32_difference(x,z,u)
+                      for x,y,z,d,u in zip(a,b,p,ab,ap))
+            if local:
+                assert tuple(map(F.from_float,ab))==df
+                assert tuple(map(F.from_float,ap))==uf
             if dot(uf,df)<=0:r=norm(ap)
             elif dot(vf,df)>=0:r=norm(bp)
+            elif local:r=norm(cross)/norm(ab)
             else:
                 c=[float(uf[(i+1)%3]*df[(i+2)%3]-uf[(i+2)%3]*df[(i+1)%3]) for i in range(3)]
                 r=norm(c)/float(dot(df,df))
-            path='exact'
+            path='local' if local else 'exact'
     gap=tuple(max(min(x,y)-z,z-max(x,y),0) for x,y,z in zip(a,b,p))
     r=max(r,norm(gap))
     paths[path]=paths.get(path,0)+1
@@ -135,6 +147,8 @@ for name,r in D:
 
 slab_paths = {"fast": 0, "exact": 0}
 def parameter_before(a,b):
+    if a[1] == b[1] and a[2] == b[2]:
+        return a[0] < b[0]
     left=(a[0]-a[1])*(b[2]-b[1])
     right=(b[0]-b[1])*(a[2]-a[1])
     difference=left-right

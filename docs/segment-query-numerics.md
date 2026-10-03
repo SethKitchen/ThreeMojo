@@ -1,6 +1,6 @@
 # Numerical contract and bounds for issue 589
 
-Inputs covered here are finite IEEE Float32 coordinates. A box may have
+Inputs covered here are finite IEEE Float32 coordinates. A box can have
 infinite outer faces, which are skipped without arithmetic. NaN input is not a
 newly supported contract. Distances are Float64 estimates, not exact rational
 values or a promise of correctly rounded nearest ordering at every ulp tie.
@@ -14,6 +14,7 @@ An exact nonzero Float32 difference is at least 2^-149 and below 2^129.
 Squared differences are therefore in [2^-298, 2^258); a three-term norm is
 below 2^260. Raw degree-two products and all endpoint-dot/cross sums remain
 normal Float64. Squared cross products extend to 2^-596 and below 2^520.
+
 Their ratio to a length squared remains normal: the most conservative lower
 bound is 2^-856. There is no overflow, underflow, or tolerance-based zero
 classification in this finite domain. Degenerate identical endpoints are
@@ -31,13 +32,26 @@ roundings stays below 16u times the computed sum.
 The fast path accepts an exterior endpoint only when its dot is farther from
 zero than this guard. It computes that endpoint's gap directly from p-a or
 p-b. It never reconstructs the endpoint using a rounded projection parameter.
-A dot at or near zero goes to an exact-sign original-coordinate polynomial.
-Thus an interior foot whose t rounds to 1 cannot be silently snapped to b.
+
+If the computed projection absolute-product sum is zero, every product is
+zero. No nonzero difference or product can underflow in this domain. Each
+zero product therefore has an exactly zero factor. This certifies the first
+endpoint dot, including signed zero, without an expansion.
+
+For the other endpoint, subtract the squared length L from the projection.
+The exact result is (p-b).(b-a). The projection error is below 16u*S.
+The length error is below 8u*L. The subtraction adds less than 2u*(S+L).
+A guard of 32u*fl(S+L) therefore bounds their combined error, including the
+positive sum's rounding.
+
+Uncertain signs go to exact-sign original-coordinate polynomials. Thus a
+small exterior endpoint gap cannot be lost when the wide projection equals
+L. An interior foot whose t rounds to 1 cannot be snapped to b.
 
 ## Fast interior distance
 
-Each component C of (p-a) cross (b-a) has absolute error below 16u times
-S = abs(rounded left product) + abs(rounded right product), by the same
+For each cross component, let S = abs(rounded left product) + abs(rounded
+right product). The component error is below 16u*S. This follows from the
 rounded-difference/product argument and one final subtraction. The norm of
 the cross-vector error is therefore below 16u norm(S).
 
@@ -48,6 +62,28 @@ The relative error after squaring, summing, dividing by the wide length norm,
 and accounting for the rounded differences in that norm is below 2^-40.
 A zero S is exact and gives an exact zero cross product. Otherwise severe
 cancellation fails the check and evaluates original-coordinate expansions.
+
+## Certified local differences
+
+An uncertain case can still have exact local differences. The certificate
+reads the original widened Float32 coordinates. A zero input makes subtraction
+exact. Otherwise the larger magnitude must be at most 2^28 times the smaller.
+This comparison is exact because multiplication by 2^28 only shifts bits.
+
+The binary exponents then differ by at most 28. Two 24-bit inputs and one
+possible carry fit within 53 bits. The Float64 subtraction is therefore exact.
+A Float32 round trip must also preserve that exact result. A round trip alone
+would not preserve a small endpoint lost during a large wide subtraction.
+
+If all three direction and three query differences pass, their products are
+exact Float64 values. Uncertain endpoint signs use three-term or six-term
+expansions of those products. Each cross component uses two exact products.
+Its subtraction has relative error at most u, even after severe cancellation.
+The squared norm and division then have relative error below 16u. This is
+inside the unchanged 2^-40 budget.
+
+A failed certificate uses the original-coordinate expansion. No small value
+is treated as zero, and the supported input domain does not change.
 
 ## Expansion fallback
 
@@ -70,6 +106,7 @@ relative error below 3*gamma_23, hence below 70u. This also retains the exact
 sign and exact zero. Squaring the cross estimates, taking their positive norm,
 and dividing by the length estimate keeps the relative distance error below
 512u = 2^-44. This remains inside the fast path's 2^-40 budget.
+
 Endpoint distances use the direct endpoint gap, with at most gamma_5 relative
 error. No intermediate rounded t is used on either interior path.
 
@@ -85,11 +122,19 @@ interval. Its exact distance to p is no greater. The implemented gap is
 computed by ordered Float32 comparisons and a monotone Float64 subtraction.
 Squaring nonnegative values and summing in the same axis order are monotone
 IEEE operations. Therefore the computed node-box key is no greater than the
-computed endpoint-box key, not merely within an epsilon. A no-inline shared
-helper makes node and endpoint-box calls use the same compiled arithmetic,
-including any permitted multiply-add contraction.
+computed endpoint-box key, not merely within an epsilon.
 
-The final segment key is max(robust_distance, endpoint_box_key). It follows
+The shared helper
+uses explicit nested FMA operations. These fix the rounding graph for node,
+endpoint, and segment-box calls, including after inlining. Each gap is
+nonnegative, so each fused operation is monotone in its inputs.
+
+For a certified endpoint, every ancestor contains that endpoint. The index
+uses the shared box-distance helper on the degenerate endpoint box. This
+avoids a separate endpoint norm and segment-box evaluation. The raw distance
+primitive still computes endpoint norms directly for other callers.
+
+For an interior result, the key is max(robust_distance, endpoint_box_key). It follows
 that every ancestor node key is <= that segment key. The heap's existing
 node-before-entry tie rule can then expose all possible equal-key entries
 before returning an entry. This restores the needed pruning invariant.
@@ -108,8 +153,12 @@ nearest ordering. Equal computed keys keep insertion order.
 
 Each retained parameter is (face-start)/(end-start) with a positive
 denominator. Original coordinates are widened before any subtraction.
-The fast comparison cross-multiplies the two ratios. Its absolute error is
-below 16u times the sum of absolute computed products. Outside that guard its
+When both stored starts and ends match, face order gives parameter order
+without arithmetic. Otherwise the fast comparison cross-multiplies the two
+ratios.
+
+Its absolute error is below 16u times the sum of absolute computed products.
+Outside that guard its
 sign is resolved. Inside it, the 8-term polynomial expands original inputs
 and yields the exact sign. Division never collapses distinct near-0.5 slabs.
 The active near/far parameters start at exact 0 and 1. This gives exact

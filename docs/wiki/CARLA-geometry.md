@@ -107,7 +107,7 @@ var nearest = tree.get_nearest_neighbours(Vector3(5, 2, 0), 1)
 
 A filter is a struct with an `accepts` method, as `PointFilter` and `SegmentFilter` define. `get_intersections` returns the segments that meet a `Box3`.
 
-The results come nearest first. Entries at the same distance come in the order of insertion. Boost leaves this order open. Code that depends on a tied result must use the port's insertion rule.
+The results come in computed squared-distance order. Equal keys use insertion order. Boost leaves this order open. Code that depends on a tied result must use the port's insertion rule.
 
 ### Finite segment queries
 
@@ -116,6 +116,7 @@ Reversing a segment does not change its distance key. The nearest point can
 be inside a segment even when its parameter rounds to an endpoint in Float64.
 The distance kernel uses endpoint signs and cross products to retain that gap.
 It uses expanded products when ordinary wide arithmetic cannot resolve them.
+
 Distances are Float64 estimates. They are not exact rational results.
 The [numerical design](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/segment-query-numerics.md)
 gives the error bounds and the supported ordering contract.

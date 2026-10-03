@@ -16,6 +16,21 @@ from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
 
 
+@fieldwise_init
+struct _SegmentMeasure(ImplicitlyCopyable):
+    """An interior squared distance, or the identity of a closest endpoint.
+
+    When endpoint is True, at_end selects the caller's end argument and
+    distance2 is unused. Otherwise distance2 is the interior estimate and
+    at_end is unused. This lets an index evaluate an endpoint with exactly
+    the same arithmetic as its node bounds, without a second distance.
+    """
+
+    var distance2: Float64
+    var endpoint: Bool
+    var at_end: Bool
+
+
 def _difference_dot3(
     a: Array[Float64, 3],
     b: Array[Float64, 3],
@@ -70,15 +85,13 @@ def _point_segment_exact(
     a: Array[Float64, 3],
     b: Array[Float64, 3],
     p: Array[Float64, 3],
-    ap: Array[Float64, 3],
-    bp: Array[Float64, 3],
-) -> Float64:
+) -> _SegmentMeasure:
     """Resolve endpoint signs and interior cross products before cancellation.
     """
     if _difference_dot3(p, a, b, a) <= 0:
-        return _norm2(ap)
+        return _SegmentMeasure(0, True, False)
     if _difference_dot3(p, b, a, b) <= 0:
-        return _norm2(bp)
+        return _SegmentMeasure(0, True, True)
     var cross = Array[Float64, 3](fill=0)
     var axis = 0
     while axis < 3:
@@ -88,44 +101,116 @@ def _point_segment_exact(
             p[j], a[j], b[k], a[k], p[k], a[k], b[j], a[j]
         )
         axis += 1
-    return _norm2(cross) / _difference_dot3(b, a, b, a)
+    return _SegmentMeasure(
+        _norm2(cross) / _difference_dot3(b, a, b, a), False, False
+    )
 
 
-def _point_segment_ordered(a: Vector3, b: Vector3, p: Vector3) -> Float64:
+def _difference_is_exact_f32(
+    a: Float64, b: Float64, difference: Float64
+) -> Bool:
+    """Certify an exact Float32 difference of two widened Float32 values.
+
+    The difference argument is the Float64 result of b-a. A round trip
+    alone is insufficient when a wide subtraction lost a small
+    endpoint. With exponent separation at most 28, both 24-bit inputs and
+    a possible carry fit in 53 bits, so the wide subtraction is exact first.
+    """
+    if a == 0 or b == 0:
+        return True
+    if max(abs(a), abs(b)) > 268435456.0 * min(abs(a), abs(b)):
+        return False
+    return Float64(Float32(difference)) == difference
+
+
+@no_inline
+def _local_differences_are_exact(
+    a: Array[Float64, 3],
+    b: Array[Float64, 3],
+    p: Array[Float64, 3],
+    ab: Array[Float64, 3],
+    ap: Array[Float64, 3],
+) -> Bool:
+    var axis = 0
+    while axis < 3:
+        if not _difference_is_exact_f32(a[axis], b[axis], ab[axis]):
+            return False
+        if not _difference_is_exact_f32(a[axis], p[axis], ap[axis]):
+            return False
+        axis += 1
+    return True
+
+
+@no_inline
+def _point_segment_refined(
+    a: Array[Float64, 3],
+    b: Array[Float64, 3],
+    p: Array[Float64, 3],
+    ab: Array[Float64, 3],
+    ap: Array[Float64, 3],
+    len2: Float64,
+    dot_a: Float64,
+    scale_a: Float64,
+    end_dot: Float64,
+    end_guard: Float64,
+) -> _SegmentMeasure:
+    """Use exact local products when certified; otherwise expand coordinates."""
+    if not _local_differences_are_exact(a, b, p, ab, ap):
+        return _point_segment_exact(a, b, p)
+    comptime guard = 1.7763568394002505e-15
+    if dot_a <= guard * scale_a:
+        if _sum_products[3](ap, ab) <= 0:
+            return _SegmentMeasure(0, True, False)
+    if end_dot >= -end_guard:
+        if (
+            _sum_products[6](
+                [ap[0], ap[1], ap[2], -ab[0], -ab[1], -ab[2]],
+                [ab[0], ab[1], ab[2], ab[0], ab[1], ab[2]],
+            )
+            >= 0
+        ):
+            return _SegmentMeasure(0, True, True)
+    # Each factor is now an exact Float32 value. Products fit in 48 bits,
+    # so their Float64 subtraction has relative error at most u even when
+    # nearly canceled. The norm and division remain below the 2^-40 budget.
+    var cross = Array[Float64, 3](fill=0)
+    var axis = 0
+    while axis < 3:
+        var j = (axis + 1) % 3
+        var k = (axis + 2) % 3
+        cross[axis] = ap[j] * ab[k] - ap[k] * ab[j]
+        axis += 1
+    return _SegmentMeasure(_norm2(cross) / len2, False, False)
+
+
+def _point_segment_ordered(
+    a: Vector3, b: Vector3, p: Vector3
+) -> _SegmentMeasure:
     var aa = [Float64(a.x), Float64(a.y), Float64(a.z)]
     var bb = [Float64(b.x), Float64(b.y), Float64(b.z)]
     var pp = [Float64(p.x), Float64(p.y), Float64(p.z)]
-    var ab = Array[Float64, 3](fill=0)
-    var ap = Array[Float64, 3](fill=0)
-    var bp = Array[Float64, 3](fill=0)
-    var dot_a = Float64(0)
-    var dot_b = Float64(0)
-    var scale_a = Float64(0)
-    var scale_b = Float64(0)
-    var axis = 0
-    while axis < 3:
-        ab[axis] = bb[axis] - aa[axis]
-        ap[axis] = pp[axis] - aa[axis]
-        bp[axis] = pp[axis] - bb[axis]
-        var product_a = ap[axis] * ab[axis]
-        var product_b = bp[axis] * ab[axis]
-        dot_a += product_a
-        dot_b += product_b
-        scale_a += abs(product_a)
-        scale_b += abs(product_b)
-        axis += 1
+    var ab = [bb[0] - aa[0], bb[1] - aa[1], bb[2] - aa[2]]
+    var ap = [pp[0] - aa[0], pp[1] - aa[1], pp[2] - aa[2]]
     var len2 = _norm2(ab)
     if len2 == 0:
-        return _norm2(ap)
-    # u=2^-53. Each difference is rounded at most once; each product and
-    # three-term sum adds at most three roundings. 16u times the computed
-    # absolute-product sum bounds the dot error, with room for its rounding.
+        return _SegmentMeasure(0, True, False)
+    var products = [ap[0] * ab[0], ap[1] * ab[1], ap[2] * ab[2]]
+    var dot_a = products[0] + products[1] + products[2]
+    var scale_a = abs(products[0]) + abs(products[1]) + abs(products[2])
+    # The projection error is below 16u*scale_a, u=2^-53. A zero
+    # absolute-product sum certifies an exact zero: no term underflows.
     comptime guard = 1.7763568394002505e-15
-    if dot_a < -guard * scale_a:
-        return _norm2(ap)
-    if dot_b > guard * scale_b:
-        return _norm2(bp)
-    if dot_a > guard * scale_a and dot_b < -guard * scale_b:
+    if scale_a == 0 or dot_a < -guard * scale_a:
+        return _SegmentMeasure(0, True, False)
+    # (p-a).(b-a) - |b-a|^2 equals (p-b).(b-a) exactly. Its rounded
+    # form has error below 32u*(scale_a+len2), including subtraction.
+    # Ambiguous endpoint differences still use the original polynomials;
+    # neither this sign nor an interior foot is inferred from rounded t.
+    var end_dot = dot_a - len2
+    var end_guard = 2 * guard * (scale_a + len2)
+    if end_dot > end_guard:
+        return _SegmentMeasure(0, True, True)
+    if dot_a > guard * scale_a and end_dot < -end_guard:
         var cross = Array[Float64, 3](fill=0)
         var scale = Array[Float64, 3](fill=0)
         var axis = 0
@@ -144,23 +229,54 @@ def _point_segment_ordered(a: Vector3, b: Vector3, p: Vector3) -> Float64:
         # sums and division keep the relative distance error below 2^-40.
         # A zero scale has only zero products and needs no expansion.
         if numerator >= 0.000244140625 * magnitude:
-            return numerator / len2
-    return _point_segment_exact(aa, bb, pp, ap, bp)
+            return _SegmentMeasure(numerator / len2, False, False)
+    return _point_segment_refined(
+        aa, bb, pp, ab, ap, len2, dot_a, scale_a, end_dot, end_guard
+    )
 
 
-def _point_segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
-    """Return a wide squared distance invariant under endpoint reversal.
+def _point_segment_measure(
+    a: Vector3, b: Vector3, p: Vector3
+) -> _SegmentMeasure:
+    """Classify the closest feature with canonical endpoint arithmetic.
 
     Coordinates must be finite Float32 values. Canonical endpoint order
     makes both paths use the same operations after reversal. Neither the
     fast path nor the expansion division promises correctly rounded output.
     """
+    var reverse: Bool
     if a.x != b.x:
-        if a.x > b.x:
-            return _point_segment_ordered(b, a, p)
+        reverse = a.x > b.x
     elif a.y != b.y:
-        if a.y > b.y:
-            return _point_segment_ordered(b, a, p)
-    elif a.z > b.z:
-        return _point_segment_ordered(b, a, p)
-    return _point_segment_ordered(a, b, p)
+        reverse = a.y > b.y
+    else:
+        reverse = a.z > b.z
+    var first = a
+    var last = b
+    if reverse:
+        first = b
+        last = a
+    var result = _point_segment_ordered(first, last, p)
+    result.at_end = result.at_end != reverse
+    return result
+
+
+def _point_segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
+    """Return a wide squared distance invariant under endpoint reversal.
+
+    Finite Float32 coordinates are required. Endpoint gaps are evaluated
+    directly. Interior values use the shared guarded measure.
+    """
+    var result = _point_segment_measure(a, b, p)
+    if result.endpoint:
+        var endpoint = a
+        if result.at_end:
+            endpoint = b
+        return _norm2(
+            [
+                Float64(p.x) - Float64(endpoint.x),
+                Float64(p.y) - Float64(endpoint.y),
+                Float64(p.z) - Float64(endpoint.z),
+            ]
+        )
+    return result.distance2

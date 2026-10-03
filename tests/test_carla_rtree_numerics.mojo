@@ -15,12 +15,20 @@ from extensions.carla.rtree import (
     SegmentElement,
     SegmentFilter,
     _box_distance2,
+    _SegmentParameter,
+    _parameter_before,
     _segment_distance2,
     segment_intersects_box,
 )
 from math.bounds import Box3
 from math.vector3 import Vector3
-from math.segment import _point_segment_distance2
+from math.segment import (
+    _difference_determinant,
+    _point_segment_distance2,
+    _point_segment_measure,
+    _difference_is_exact_f32,
+    _local_differences_are_exact,
+)
 from std.memory import bitcast
 from std.math import inf
 from std.testing import TestSuite, assert_equal, assert_true
@@ -6222,6 +6230,155 @@ def test_infinite_outer_box_faces() raises:
         segment_intersects_box(Vector3(-2, 2, 3), Vector3(2, 3, 4), box), False
     )
     assert_true(segment_intersects_box(Vector3(0, 0, 0), Vector3(0, 0, 0), box))
+
+
+def test_exact_shared_denominator_parameters() raises:
+    var large = Float64(Float32(1e38))
+    var a = _SegmentParameter(1, -large, large)
+    var b = _SegmentParameter(2, -large, large)
+    assert_true(_parameter_before(a, b))
+    assert_equal(_parameter_before(b, a), False)
+    assert_equal(_parameter_before(a, a), False)
+    var minus_zero = -Float64(0)
+    assert_equal(
+        _parameter_before(
+            _SegmentParameter(minus_zero, minus_zero, 1),
+            _SegmentParameter(0, 0, 1),
+        ),
+        False,
+    )
+    # Shared starts alone do not imply shared denominators.
+    assert_equal(
+        _parameter_before(
+            _SegmentParameter(1, 0, 2), _SegmentParameter(2, 0, 4)
+        ),
+        False,
+    )
+    assert_true(
+        _parameter_before(
+            _SegmentParameter(1, 0, 4), _SegmentParameter(2, 1, 4)
+        )
+    )
+
+
+def test_exact_zero_endpoint_dot_certificates() raises:
+    var minus_zero = bitcast[DType.float32](UInt32(0x80000000))
+    var a = Vector3(0, minus_zero, 0)
+    var b = Vector3(1, 0, minus_zero)
+    for p in [Vector3(minus_zero, 1, minus_zero), Vector3(1, 1, 0)]:
+        assert_equal(_point_segment_distance2(a, b, p), Float64(1))
+        assert_equal(_point_segment_distance2(b, a, p), Float64(1))
+    # Cancellation gives zero dots with nonzero absolute-product sums.
+    # These still need the expansion path, for each endpoint separately.
+    a = Vector3(0, 0, 0)
+    b = Vector3(1, 1, 0)
+    for p in [Vector3(-1, 1, 0), Vector3(0, 2, 0)]:
+        assert_equal(_point_segment_distance2(a, b, p), Float64(2))
+        assert_equal(_point_segment_distance2(b, a, p), Float64(2))
+
+
+def test_expansion_magnitude_regression() raises:
+    # Exact input words supplied by the independent arithmetic review.
+    # The expansion's absolute-component-sum ratio is about 2.8215, so the
+    # magnitude proof must use nonadjacency and its bound of three.
+    var words = [
+        UInt32(0x21BB7FCC),
+        UInt32(0xEB450330),
+        UInt32(0x80800000),
+        UInt32(0xD1FB6520),
+        UInt32(0x9BBC8638),
+        UInt32(0xD1FB6520),
+        UInt32(0x50886EAF),
+        UInt32(0xEB450330),
+    ]
+    var values = Array[Float64, 8](fill=0)
+    for i in range(8):
+        values[i] = Float64(bitcast[DType.float32](words[i]))
+    var got = _difference_determinant(
+        values[0],
+        values[1],
+        values[2],
+        values[3],
+        values[4],
+        values[5],
+        values[6],
+        values[7],
+    )
+    var expected = Float64(-2.47146128228861e21)
+    assert_true(abs(got - expected) <= abs(expected) * 1e-14)
+
+
+def test_local_difference_certificates() raises:
+    var tiny = Float64(bitcast[DType.float32](UInt32(1)))
+    assert_true(_difference_is_exact_f32(0, tiny, tiny))
+    assert_true(_difference_is_exact_f32(tiny, 0, -tiny))
+    assert_true(_difference_is_exact_f32(-2, 1, 3))
+    assert_equal(_difference_is_exact_f32(1, 268435456, 268435455), False)
+    var large = Float64(Float32(1e38))
+    # The wide result round-trips through Float32, but lost the endpoint 1.
+    assert_equal(Float64(Float32(large - 1)), large - 1)
+    assert_equal(_difference_is_exact_f32(1, large, large - 1), False)
+    assert_equal(_difference_is_exact_f32(large, 1, 1 - large), False)
+    var limit = Float64(bitcast[DType.float32](UInt32(0x7F7FFFFF)))
+    assert_equal(_difference_is_exact_f32(-limit, limit, 2 * limit), False)
+    var a = [Float64(1), Float64(0), Float64(0)]
+    var b = [Float64(2), Float64(0), Float64(0)]
+    var p = [Float64(268435456), Float64(0), Float64(0)]
+    assert_equal(
+        _local_differences_are_exact(
+            a,
+            b,
+            p,
+            [Float64(1), Float64(0), Float64(0)],
+            [Float64(268435455), Float64(0), Float64(0)],
+        ),
+        False,
+    )
+    assert_equal(
+        _local_differences_are_exact(
+            a,
+            p,
+            b,
+            [Float64(268435455), Float64(0), Float64(0)],
+            [Float64(1), Float64(0), Float64(0)],
+        ),
+        False,
+    )
+
+
+def test_subnormal_interior_foot_near_both_endpoints() raises:
+    var tiny = bitcast[DType.float32](UInt32(1))
+    var a = Vector3(0, 0, 0)
+    var b = Vector3(1, 1, tiny)
+    # First projection is tiny^2 > 0. Last projection is -tiny^2 < 0.
+    # Both nearest points are interior, even though their distance rounds 2.
+    for p in [Vector3(1, -1, tiny), Vector3(0, 2, 0)]:
+        assert_equal(_point_segment_measure(a, b, p).endpoint, False)
+        assert_equal(_point_segment_measure(b, a, p).endpoint, False)
+        assert_equal(_point_segment_distance2(a, b, p), Float64(2))
+        assert_equal(_point_segment_distance2(b, a, p), Float64(2))
+
+
+def test_wide_endpoint_boundaries_without_local_certificate() raises:
+    var large = Float32(1729382256910270464)
+    var step = Float32(137438953472)
+    var expected = 2 * Float64(step) * Float64(step)
+    var a = Vector3(-large, -large, 0)
+    var b = Vector3(-1, -1, 0)
+    var p = Vector3(-large + step, -large - step, 0)
+    var first = _point_segment_measure(a, b, p)
+    assert_true(first.endpoint)
+    assert_equal(first.at_end, False)
+    assert_equal(_point_segment_distance2(a, b, p), expected)
+    assert_equal(_segment_distance2(b, a, p), expected)
+    a = Vector3(1, 1, 0)
+    b = Vector3(large, large, 0)
+    p = Vector3(large + step, large - step, 0)
+    var last = _point_segment_measure(a, b, p)
+    assert_true(last.endpoint)
+    assert_true(last.at_end)
+    assert_equal(_point_segment_distance2(a, b, p), expected)
+    assert_equal(_segment_distance2(b, a, p), expected)
 
 
 def main() raises:

@@ -22,7 +22,7 @@ there. A filter is a struct with an `accepts` method, as CARLA's is a
 lambda.
 
 **Order of results.** Boost leaves the order of a query's results open.
-This port gives the nearest first, and entries at the same distance in
+This port gives the nearest first, and entries with the same computed key in
 the order they were inserted. `intersections` gives entries in the order
 they were inserted.
 
@@ -39,9 +39,10 @@ keeps nearest-query node bounds conservative. This correction does not change
 CARLA's segment construction or the insertion-order tie rule.
 """
 
+from std.math import fma
 from math.bounds import Box3
 from math.vector3 import Vector3
-from math.segment import _difference_determinant, _point_segment_distance2
+from math.segment import _difference_determinant, _point_segment_measure
 
 # Boost's `linear<16>`: at most 16 entries a node, at least 30 percent.
 comptime _MAX_ENTRIES = 16
@@ -121,18 +122,25 @@ def _gap(low: Float32, high: Float32, p: Float32) -> Float64:
     return 0.0
 
 
-@no_inline
 def _box_distance2(box: Box3, p: Vector3) -> Float64:
-    # One compiled boundary gives node and endpoint-box keys the same
-    # operation graph, including any permitted multiply-add contraction.
+    # Explicit fused operations give every call the same rounding graph,
+    # including after inlining. Each operation is monotone for these gaps.
     var dx = _gap(box.min.x, box.max.x, p.x)
     var dy = _gap(box.min.y, box.max.y, p.y)
     var dz = _gap(box.min.z, box.max.z, p.z)
-    return dx * dx + dy * dy + dz * dz
+    return fma(dx, dx, fma(dy, dy, dz * dz))
 
 
 def _segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
-    """A wide segment distance with a monotone index lower-bound floor."""
+    """A wide segment key whose node bounds use the same arithmetic."""
+    var result = _point_segment_measure(a, b, p)
+    if result.endpoint:
+        var endpoint = a
+        if result.at_end:
+            endpoint = b
+        # Every ancestor box contains this endpoint. One shared evaluation
+        # gives its key directly; no raw norm or segment-box floor is needed.
+        return _box_distance2(Box3(endpoint, endpoint), p)
     var box = Box3(
         Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)),
         Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)),
@@ -140,7 +148,7 @@ def _segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
     # Rounding can put an interior distance a few ulps below its box key.
     # Gap, square and sum are monotone, so every containing node's key is
     # no greater than this floor. Nodes still precede entries at equal keys.
-    return max(_point_segment_distance2(a, b, p), _box_distance2(box, p))
+    return max(result.distance2, _box_distance2(box, p))
 
 
 @fieldwise_init
@@ -153,6 +161,10 @@ struct _SegmentParameter(ImplicitlyCopyable):
 
 
 def _parameter_before(a: _SegmentParameter, b: _SegmentParameter) -> Bool:
+    # A shared positive denominator makes original face order exact. This
+    # includes repeated slabs and common diagonal corner/edge contacts.
+    if a.start == b.start and a.end == b.end:
+        return a.face < b.face
     var left = (a.face - a.start) * (b.end - b.start)
     var right = (b.face - b.start) * (a.end - a.start)
     var difference = left - right
@@ -222,9 +234,6 @@ def segment_intersects_box(start: Vector3, end: Vector3, box: Box3) -> Bool:
     Returns:
         Whether any point of the segment is in the box. An empty box
         meets nothing. Infinite outer faces need no clipping.
-
-    Raises:
-        None.
     """
     if box.is_empty():
         return False
