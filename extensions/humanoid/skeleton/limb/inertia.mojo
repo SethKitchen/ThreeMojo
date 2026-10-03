@@ -17,9 +17,10 @@ inside the skin takes the density of what fills it.
 | A muscle belly or a tendon | `muscle_tissue` or `tendon_tissue` |
 | Everything else | `adipose_tissue` |
 
-Knee tissues, foot ligaments, vessels, lymphatics and nerves count as
-adipose tissue. Their volume is small, and their densities lie within
-a fifth of it.
+Knee tissues, foot ligaments, vessels, lymphatics and nerves have no
+separate density assignment. A higher-priority overlapping region wins;
+otherwise they use the adipose proxy. No uncertainty bound is asserted.
+Bone pore-fluid and pore-marrow mass is not added to apparent bone mass.
 
 The segments follow de Leva (1996): horizontal planes through the hip
 joint's center, the knee's, at the femoral condyles, and the lateral
@@ -75,7 +76,6 @@ from extensions.humanoid.skeleton.occupancy import (
     MARROW,
     BoneOccupancy,
     check_mass_step,
-    grid_cells,
 )
 from extensions.humanoid.skeleton.soft_tissue import (
     adipose_tissue,
@@ -87,8 +87,19 @@ from extensions.humanoid.skeleton.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
+from extensions.humanoid.skeleton.limb.sampling import SampleGrid
+from extensions.humanoid.skeleton.limb.regions import (
+    LimbRegion,
+    DERMIS_REGION,
+    CORTICAL_REGION,
+    TRABECULAR_REGION,
+    MARROW_PROXY_REGION,
+    MUSCLE_REGION,
+    TENDON_REGION,
+    FAT_PROXY_REGION,
+)
 from math.vector3 import Vector3
-from std.math import sqrt
+from std.math import isfinite, sqrt
 from units.si import (
     KILOGRAM,
     KILOGRAM_SQUARE_METER,
@@ -97,10 +108,11 @@ from units.si import (
     MILLIMETER,
     Mass,
     MomentOfInertia,
+    Volume,
 )
 
-# The grid a segment is sampled on by default: fine enough that a
-# thigh's inertia settles to a fraction of a percent.
+# Default maximum grid-cell width. Convergence depends on the spec and
+# reported quantity; no universal sampling-error claim is made.
 comptime INERTIA_STEP = Length(5.0, MILLIMETER)
 
 
@@ -163,6 +175,56 @@ struct SegmentInertia(ImplicitlyCopyable):
 
 
 @fieldwise_init
+struct SegmentEstimate(ImplicitlyCopyable):
+    """One segment estimate with exclusive region accounting.
+
+    `region_volumes` are in cubic meters; `region_masses` are in kilograms.
+    Their first seven entries follow `LimbRegion`; the last is padding.
+    Bounds are meters in the canonical leg frame. They are integration
+    cut planes, not a measured anatomical tissue partition.
+    """
+
+    var inertia: SegmentInertia
+    var region_volumes: SIMD[DType.float64, 8]
+    var region_masses: SIMD[DType.float64, 8]
+    var low: Vector3
+    var high: Vector3
+    var step: Length
+
+    def region_volume(self, region: LimbRegion) raises -> Volume:
+        """Return one exclusive density region's sampled volume.
+
+        Args:
+            region: A named density assignment.
+
+        Returns:
+            The region volume.
+
+        Raises:
+            Error: If the region is not named.
+        """
+        if not region.is_valid():
+            raise Error("A limb region must be named")
+        return Volume(Float32(self.region_volumes[region.value]))
+
+    def region_mass(self, region: LimbRegion) raises -> Mass:
+        """Return one exclusive density region's assigned mass.
+
+        Args:
+            region: A named density assignment.
+
+        Returns:
+            The mass assigned to that region.
+
+        Raises:
+            Error: If the region is not named.
+        """
+        if not region.is_valid():
+            raise Error("A limb region must be named")
+        return Mass(Float32(self.region_masses[region.value]))
+
+
+@fieldwise_init
 struct _Box(ImplicitlyCopyable):
     """The region a segment's cells are drawn from."""
 
@@ -190,6 +252,30 @@ def segment_inertia(
     Raises:
         Error: If `spec` or `side` is refused, if `segment` is not
             named, or if `step` is out of range.
+    """
+    return segment_estimate(spec, segment, side, step).inertia
+
+
+def segment_estimate(
+    spec: HumanoidSpec,
+    segment: LimbSegment,
+    side: BodySide = RIGHT,
+    step: Length = INERTIA_STEP,
+) raises -> SegmentEstimate:
+    """Return a canonical segment estimate and its exclusive density regions.
+
+    Args:
+        spec: Standing height, osteological sex and athleticism.
+        segment: `THIGH`, `SHANK` or `FOOT_SEGMENT`.
+        side: The named side. A right limb is the default.
+        step: Maximum cell width, 2 mm through 20 mm.
+
+    Returns:
+        Inertia, exact sampling bounds and per-region accounting.
+
+    Raises:
+        Error: If the spec, side, segment or step is invalid, or the
+            sampling box exceeds the bounded grid work limit.
     """
     if not segment.is_valid():
         raise Error("A limb segment must be the thigh, the shank or the foot")
@@ -241,29 +327,24 @@ def segment_inertia(
     var dermal = skin_tissue().wet_density.value
     var flesh = muscle_tissue().wet_density.value
     var cord = tendon_tissue().wet_density.value
-    var s = step.value
-    var nx = grid_cells(box.high.x - box.low.x, s)
-    var ny = grid_cells(box.high.y - box.low.y, s)
-    var nz = grid_cells(box.high.z - box.low.z, s)
-    var cell = Float64(s) * Float64(s) * Float64(s)
+    var grid = SampleGrid(box.low, box.high, step)
     var mass = Float64(0)
     var first = SIMD[DType.float64, 4](0)
-    # Second moments: xx, yy, zz, xy, xz, yz.
     var second = SIMD[DType.float64, 8](0)
-    for iz in range(nz):  # pragma: no branch
-        var z = box.low.z + (Float32(iz) + 0.5) * s
-        for iy in range(ny):  # pragma: no branch
-            var y = box.low.y + (Float32(iy) + 0.5) * s
-            for ix in range(nx):  # pragma: no branch
-                var x = box.low.x + (Float32(ix) + 0.5) * s
-                var p = Vector3(x, y, z)
+    var volumes = SIMD[DType.float64, 8](0)
+    var masses = SIMD[DType.float64, 8](0)
+    var densities = SIMD[DType.float32, 8](
+        dermal, cortical, trabecular, fat, flesh, cord, fat, 0
+    )
+    for iz in range(grid.nz):  # pragma: no branch
+        for iy in range(grid.ny):  # pragma: no branch
+            for ix in range(grid.nx):  # pragma: no branch
+                var p, widths = grid._cell(ix, iy, iz)
                 var d = skin.distance(p)
                 if d >= 0:
                     continue
-                var rho: Float32
-                if d > -dermis:
-                    rho = dermal
-                else:
+                var region = DERMIS_REGION
+                if d <= -dermis:
                     var fill = _bone_fill(
                         p,
                         pose,
@@ -274,42 +355,79 @@ def segment_inertia(
                         foot_bones,
                         ankle,
                     )
-                    if fill == CORTICAL_FILL:
-                        rho = cortical
-                    elif fill == EMPTY or fill == MARROW:
-                        rho = _soft_density(
+                    var soft = FAT_PROXY_REGION
+                    # Marrow is assigned its documented fat proxy before
+                    # checking overlapping muscle or tendon solids.
+                    if fill == EMPTY:
+                        soft = _soft_region(
                             p,
                             muscles,
                             tendons,
                             foot_muscles,
                             foot_tendons,
                             ankle,
-                            fat,
-                            flesh,
-                            cord,
                         )
-                    else:
-                        rho = trabecular
-                var m = Float64(rho) * cell
-                var r = SIMD[DType.float64, 4](
-                    Float64(x), Float64(y), Float64(z), 0
+                    region = _occupied_region(fill, soft)
+                var cell = (
+                    Float64(widths.x) * Float64(widths.y) * Float64(widths.z)
                 )
-                mass += m
-                first += r * m
-                second += (
-                    SIMD[DType.float64, 8](
-                        r[0] * r[0],
-                        r[1] * r[1],
-                        r[2] * r[2],
-                        r[0] * r[1],
-                        r[0] * r[2],
-                        r[1] * r[2],
-                        0,
-                        0,
-                    )
-                    * m
-                )
-    return _inertia(mass, first, second, length)
+                var m = Float64(densities[region.value]) * cell
+                volumes[region.value] += cell
+                masses[region.value] += m
+                _add_cell(mass, first, second, m, p, widths)
+    return SegmentEstimate(
+        _inertia(mass, first, second, length),
+        volumes,
+        masses,
+        box.low,
+        box.high,
+        step,
+    )
+
+
+def _occupied_region(
+    fill: BoneOccupancy, soft: LimbRegion
+) raises -> LimbRegion:
+    """Choose one assignment; a bone or marrow excludes a soft-tissue hit."""
+    if not fill.is_valid() or not soft.is_valid():
+        raise Error("An occupancy and its soft region must be named")
+    if fill == CORTICAL_FILL:
+        return CORTICAL_REGION
+    if fill == MARROW:
+        return MARROW_PROXY_REGION
+    if fill == EMPTY:
+        return soft
+    return TRABECULAR_REGION
+
+
+def _add_cell(
+    mut mass: Float64,
+    mut first: SIMD[DType.float64, 4],
+    mut second: SIMD[DType.float64, 8],
+    m: Float64,
+    p: Vector3,
+    widths: Vector3,
+):
+    """Accumulate a constant-density cuboid, including its own inertia."""
+    var r = SIMD[DType.float64, 4](Float64(p.x), Float64(p.y), Float64(p.z), 0)
+    var w = SIMD[DType.float64, 4](
+        Float64(widths.x), Float64(widths.y), Float64(widths.z), 0
+    )
+    mass += m
+    first += r * m
+    second += (
+        SIMD[DType.float64, 8](
+            r[0] * r[0] + w[0] * w[0] / 12,
+            r[1] * r[1] + w[1] * w[1] / 12,
+            r[2] * r[2] + w[2] * w[2] / 12,
+            r[0] * r[1],
+            r[0] * r[2],
+            r[1] * r[2],
+            0,
+            0,
+        )
+        * m
+    )
 
 
 def _inertia(
@@ -319,8 +437,8 @@ def _inertia(
     length: Float32,
 ) raises -> SegmentInertia:
     """Return the tensor about the center of mass from raw moments."""
-    # Every segment holds sampled bone and muscle, so its mass is never
-    # zero and the division below is safe.
+    if not isfinite(mass) or mass <= 0:
+        raise Error("A sampled segment must have finite positive mass")
     var c = first / mass
     # Second moments about the center, by the parallel-axis theorem.
     var sxx = second[0] - mass * c[0] * c[0]
@@ -385,29 +503,25 @@ def _bone_fill(
     return EMPTY
 
 
-def _soft_density(
+def _soft_region(
     p: Vector3,
     muscles: List[MuscleField],
     tendons: List[Bool],
     foot_muscles: List[FootMuscleField],
     foot_tendons: List[Bool],
     ankle: Vector3,
-    fat: Float32,
-    flesh: Float32,
-    cord: Float32,
-) -> Float32:
-    """Return the density of the soft tissue at `p`: a muscle's, a
-    tendon's, or fat's."""
+) -> LimbRegion:
+    """Return the first soft-tissue assignment, or the unresolved fat proxy."""
     for index in range(len(muscles)):  # pragma: no branch
         if _inside(muscles[index].low, muscles[index].high, p):
             if muscles[index].distance(p) < 0:
-                return cord if tendons[index] else flesh
+                return TENDON_REGION if tendons[index] else MUSCLE_REGION
     var local = p - ankle
     for index in range(len(foot_muscles)):  # pragma: no branch
         if _inside(foot_muscles[index].low, foot_muscles[index].high, local):
             if foot_muscles[index].distance(local) < 0:
-                return cord if foot_tendons[index] else flesh
-    return fat
+                return TENDON_REGION if foot_tendons[index] else MUSCLE_REGION
+    return FAT_PROXY_REGION
 
 
 def _inside(low: Vector3, high: Vector3, p: Vector3) -> Bool:
