@@ -54,6 +54,16 @@ Coverage is exact for each module it measures, because every suite that can reac
 
 The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs the checks on Ubuntu and on a macOS runner with Apple Silicon.
 
+## Verify generated fixtures
+
+`python3 tools/fixture_manifest.py` checks the accepted hashes. It does not regenerate fixtures.
+
+The VTK and sRGB generators have a verified runtime: Node 24.19.0, V8 13.6.233.17-node.51, Linux x64 and three 0.180.0. VTK also needs @xmldom/xmldom 0.9.12. The sRGB verifier supplies `--no-use-std-math-pow`; the default flag changes 30 Float64 words.
+
+Install the locked dependencies with `npm ci --ignore-scripts --prefix tools/fixture-runtime`. Then run `python3 tools/fixture_runtime.py vtk` and `python3 tools/fixture_runtime.py js_number`. Both commands use temporary output directories and compare against accepted results. They do not replace the fixtures.
+
+These pins reproduce the current baseline. They do not identify the original generation environment. The separate `assets/js_number/v8.json` snapshot remains unreproduced. See the [runtime evidence and limits](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/fixture-runtime-baselines.md).
+
 ## Regenerate negative diagnostics
 
 Use `--update-expectations` only after you review a changed or new negative fixture.

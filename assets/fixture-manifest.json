@@ -291,17 +291,43 @@
       "generator_sha256": "43ff409c9e16aff3139ffa244444994ae31642a61be5aac47f8154c01a8eff41",
       "three_version": null,
       "version_evidence": "The original generator does not record its three.js version.",
-      "cwd": "assets/js_number",
+      "cwd": ".",
       "commands": [
-        "node srgb.mjs > srgb.generated.txt"
+        "npm ci --ignore-scripts --prefix tools/fixture-runtime",
+        "python3 tools/fixture_runtime.py js_number"
       ],
       "notes": [
-        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
-        "Supply and record an exact three version before regeneration. Review the generated words against _SRGB_TO_LINEAR in loaders/js_number.mojo; do not overwrite the module with stdout."
+        "The verified runtime reproduces the accepted baseline. It does not identify the original generation environment.",
+        "The verifier checks the Node, V8, platform, architecture, flags and dependency pins. It runs the generator in temporary storage.",
+        "All 256 accepted sRGB words match with the recorded pow flag on this verified runtime. Default flags change 30 words by one ULP.",
+        "assets/js_number/v8.json is a separate number-format snapshot. The sRGB command does not regenerate it."
       ],
       "artifacts": {
         "assets/js_number/v8.json": "3818f7a49f6a5fad3ee9be3ce7a7d7721b402d5c301ecd7a19b0472d108ad091",
         "loaders/js_number.mojo": "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101"
+      },
+      "verified_runtime": {
+        "node": "24.19.0",
+        "v8": "13.6.233.17-node.51",
+        "platform": "linux",
+        "arch": "x64",
+        "node_flags": [
+          "--no-use-std-math-pow"
+        ],
+        "dependencies": {
+          "three": "0.180.0"
+        },
+        "evidence": "docs/fixture-runtime-baselines.md",
+        "historical_environment_recovered": false
+      },
+      "separate_snapshot": {
+        "path": "assets/js_number/v8.json",
+        "generator": null,
+        "historical_node_major": 22,
+        "historical_node": null,
+        "historical_v8": null,
+        "evidence": "tests/test_js_number.mojo names Node 22 but does not record an exact Node or V8 version.",
+        "status": "not_regenerated"
       }
     },
     {
@@ -833,14 +859,15 @@
       "generator_sha256": "92fae74eb0f12d2e5449cbada20c48719ff583cdaa6d699cec738787d89abab6",
       "three_version": "0.180.0",
       "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
-      "cwd": "assets/vtk",
+      "cwd": ".",
       "commands": [
-        "npm install --no-save --package-lock=false three@0.180.0",
-        "node three_vtk.mjs"
+        "npm ci --ignore-scripts --prefix tools/fixture-runtime",
+        "python3 tools/fixture_runtime.py vtk"
       ],
       "notes": [
-        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
-        "Install @xmldom/xmldom. Its historical version was not recorded; a reproducible auxiliary dependency pin remains open."
+        "The verified runtime reproduces the accepted baseline. It does not identify the original generation environment.",
+        "The verifier checks the Node, V8, platform, architecture, flags and dependency pins. It runs the generator in temporary storage.",
+        "All 13 VTK artifacts match byte-for-byte. Historical Node, V8 and @xmldom/xmldom versions remain unknown."
       ],
       "artifacts": {
         "assets/vtk/appended.vtp": "98a8a7b98d7d72c85c2e3a09ad3566a87d6697fa0a6cef054827d45de53d6c29",
@@ -856,6 +883,19 @@
         "assets/vtk/strips.vtp": "2e773ca17a0279dff6d7c7ef021d3f467a6a554c4508513dfe53ffa8164171e1",
         "assets/vtk/vtk.json": "4b6d2c0b878060071f52451f6cd03da69fd6eac91c0d51968ef1d893b5409b54",
         "assets/vtk/zlib.vtp": "e5edfd9efc7a8efc871873a5252020e040dc77fc474f32ef9b6a958fa1c4e50d"
+      },
+      "verified_runtime": {
+        "node": "24.19.0",
+        "v8": "13.6.233.17-node.51",
+        "platform": "linux",
+        "arch": "x64",
+        "node_flags": [],
+        "dependencies": {
+          "three": "0.180.0",
+          "@xmldom/xmldom": "0.9.12"
+        },
+        "evidence": "docs/fixture-runtime-baselines.md",
+        "historical_environment_recovered": false
       }
     }
   ]
