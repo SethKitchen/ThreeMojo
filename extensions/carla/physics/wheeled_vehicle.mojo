@@ -40,12 +40,14 @@ The vehicle model is this port's own. In this order:
    stops the sliding across the wheel, up to the cornering stiffness
    times the slip angle. All of it stays inside the friction circle of
    the tire's grip times its load. The tires are solved together, with
-   projected Gauss-Seidel on the chassis velocity the step will have, so
-   four wheels do not each stop the same slide. A wheel whose brake holds
+   projected Gauss-Seidel on the relative contact velocity the step will
+   have. Both bodies respond to each impulse. Wheels on the same support
+   share its predicted motion, so they do not each stop the same slide. A wheel whose brake holds
    more than its grip locks and slides, unless `abs_enabled`. A driven
    wheel whose torque passes its grip spins, unless
    `traction_control_enabled`.
-6. Air drag and downforce act at the center of mass.
+6. Air drag and downforce act at the center of mass. They use world
+   velocity in still air, separate from the support-relative tire speed.
 
 A tire's grip is `friction_force_multiplier` times the ground's
 friction. Its load is the spring force, blended with an equal share of
@@ -54,6 +56,14 @@ the weight by `wheel_load_ratio`.
 The rollover behavior is CARLA's, from `CarlaWheeledVehicle.cpp`:
 past 130 degrees of roll, four steps take 35 percent of the angular
 velocity each, and five seconds later the vehicle reports `ROLLOVER`.
+
+Differences from the earlier port:
+    The af6c253 tire model used chassis world velocity and chassis-only
+    effective mass. A braked car and its support moving together at 10 m/s
+    produced -20000 N without relative motion. Tire motion now includes
+    both bodies, including prescribed support rotation and pending forces.
+    Moving-support scenario replay therefore changes. This is the port's
+    own model, not a claim of identical CARLA trajectories.
 """
 
 from extensions.carla.physics.body import (
@@ -180,10 +190,37 @@ struct WheelState(ImplicitlyCopyable):
 
 
 @fieldwise_init
+struct _TireBody(ImplicitlyCopyable):
+    # One shared prediction per body, before the world's contact solve.
+    var id: BodyId
+    var center: Vector3
+    var inverse_mass: Float32
+    var inverse_inertia: Matrix3
+    var v: Vector3
+    var w: Vector3
+    var responds: Bool
+
+    def velocity_at(self, r: Vector3) -> Vector3:
+        return self.v + cross(self.w, r)
+
+    def apply(mut self, impulse: Vector3, r: Vector3):
+        self.v = self.v + impulse * self.inverse_mass
+        self.w = self.w + self.inverse_inertia.transform(cross(r, impulse))
+
+    def inverse_mass_along(self, r: Vector3, d: Vector3) -> Float32:
+        if not self.responds:
+            return 0
+        var c = cross(r, d)
+        return self.inverse_mass + c.dot(self.inverse_inertia.transform(c))
+
+
+@fieldwise_init
 struct _Tire(ImplicitlyCopyable):
     var wheel: Int
     var point: Vector3
     var r: Vector3
+    var support: Int
+    var support_r: Vector3
     var forward: Vector3
     var lateral: Vector3
     var mass_forward: Float32
@@ -723,18 +760,8 @@ struct WheeledVehicle(Copyable, Movable):
 
     def _tires(mut self, mut world: PhysicsWorld, h: Float32) raises:
         ref body = world.bodies[self.body.value]
-        var com = body.world_center_of_mass()
-        var inverse_mass = body.inverse_mass()
-        var inverse_inertia = body.world_inverse_inertia()
-        # The velocity the step will give the chassis before contacts.
-        var v = (
-            body.linear_velocity
-            + (world.gravity * body.gravity_scale + body.force * inverse_mass)
-            * h
-        )
-        var w = (
-            body.angular_velocity + inverse_inertia.transform(body.torque) * h
-        )
+        var chassis = _predict_tire_body(body, self.body, world.gravity, h)
+        var supports = List[_TireBody]()
         var tires = List[_Tire]()
         for i in range(len(self.wheels)):  # pragma: no branch
             ref setup = self.physics.wheels[i]
@@ -759,8 +786,26 @@ struct WheeledVehicle(Copyable, Movable):
             var heading = (turn * body.rotation).rotate(Vector3(1, 0, 0))
             var forward = unit_or(heading - n * heading.dot(n), heading)
             var lateral = cross(n, forward)
-            var r = state.contact_point - com
-            var at = v + cross(w, r)
+            var support = -1
+            for j in range(len(supports)):
+                if supports[j].id == state.ground:
+                    support = j
+                    break
+            if support < 0:
+                support = len(supports)
+                supports.append(
+                    _predict_tire_body(
+                        world.bodies[state.ground.value],
+                        state.ground,
+                        world.gravity,
+                        h,
+                    )
+                )
+            var r = state.contact_point - chassis.center
+            var support_r = state.contact_point - supports[support].center
+            var at = chassis.velocity_at(r) - supports[support].velocity_at(
+                support_r
+            )
             var along = at.dot(forward)
             var across = at.dot(lateral)
             state.lat_slip = atan2(across, abs(along))
@@ -790,10 +835,24 @@ struct WheeledVehicle(Copyable, Movable):
                     i,
                     state.contact_point,
                     r,
+                    support,
+                    support_r,
                     forward,
                     lateral,
-                    _mass_along(inverse_mass, inverse_inertia, r, forward),
-                    _mass_along(inverse_mass, inverse_inertia, r, lateral),
+                    1
+                    / (
+                        chassis.inverse_mass_along(r, forward)
+                        + supports[support].inverse_mass_along(
+                            support_r, forward
+                        )
+                    ),
+                    1
+                    / (
+                        chassis.inverse_mass_along(r, lateral)
+                        + supports[support].inverse_mass_along(
+                            support_r, lateral
+                        )
+                    ),
                     drive,
                     brake,
                     limit,
@@ -806,7 +865,10 @@ struct WheeledVehicle(Copyable, Movable):
         for _ in range(_TIRE_ITERATIONS):  # pragma: no branch
             for k in range(len(tires)):
                 ref t = tires[k]
-                var at = v + cross(w, t.r)
+                ref support = supports[t.support]
+                var at = chassis.velocity_at(t.r) - support.velocity_at(
+                    t.support_r
+                )
                 var along = max(
                     min(
                         t.along - t.mass_forward * at.dot(t.forward),
@@ -830,8 +892,9 @@ struct WheeledVehicle(Copyable, Movable):
                 )
                 t.along = along
                 t.across = across
-                v = v + impulse * inverse_mass
-                w = w + inverse_inertia.transform(cross(t.r, impulse))
+                chassis.apply(impulse, t.r)
+                if support.responds:
+                    support.apply(-impulse, t.support_r)
         for t in tires:
             ref setup = self.physics.wheels[t.wheel]
             ref state = self.wheels[t.wheel]
@@ -839,12 +902,14 @@ struct WheeledVehicle(Copyable, Movable):
             var force = (t.forward * t.along + t.lateral * t.across) / h
             world.bodies[self.body.value].add_force(force, t.point)
             _push_ground(world, state.ground, -force, t.point)
-            var ground = (v + cross(w, t.r)).dot(t.forward)
+            var relative = chassis.velocity_at(t.r) - supports[
+                t.support
+            ].velocity_at(t.support_r)
+            var ground = relative.dot(t.forward)
             var sliding = sqrt(t.along * t.along + t.across * t.across)
             state.skidding = (
                 sliding >= t.limit * 0.999
-                and abs((v + cross(w, t.r)).dot(t.lateral))
-                > setup.skid_threshold.value
+                and abs(relative.dot(t.lateral)) > setup.skid_threshold.value
             )
             if state.locked:
                 state.spin = 0
@@ -911,12 +976,37 @@ struct WheeledVehicle(Copyable, Movable):
 comptime _TO_RPM = Float32(60.0 / (2.0 * 3.141592653589793))
 
 
-def _mass_along(
-    inverse_mass: Float32, inverse_inertia: Matrix3, r: Vector3, d: Vector3
-) -> Float32:
-    """Return the chassis's effective mass along a direction at a point."""
-    var c = cross(r, d)
-    return 1 / (inverse_mass + c.dot(inverse_inertia.transform(c)))
+def _predict_tire_body(
+    body: RigidBody, id: BodyId, gravity: Vector3, h: Float32
+) -> _TireBody:
+    """Predict the world's force kick and its response to tire impulses."""
+    var inverse_mass = Float32(0)
+    var inverse_inertia = Matrix3()
+    inverse_inertia.multiply_scalar(0)
+    var v = body.linear_velocity
+    var w = body.angular_velocity
+    var responds = body.is_dynamic()
+    if responds:
+        inverse_mass = body.inverse_mass()
+        inverse_inertia = body.world_inverse_inertia()
+        var linear_factor = 1 / (1 + h * body.linear_damping)
+        var angular_factor = 1 / (1 + h * body.angular_damping)
+        v = (
+            v + (gravity * body.gravity_scale + body.force * inverse_mass) * h
+        ) * linear_factor
+        w = (w + inverse_inertia.transform(body.torque) * h) * angular_factor
+        # Tire forces are accumulated before that same damping kick.
+        inverse_mass *= linear_factor
+        inverse_inertia.multiply_scalar(angular_factor)
+    return _TireBody(
+        id,
+        body.world_center_of_mass(),
+        inverse_mass,
+        inverse_inertia,
+        v,
+        w,
+        responds,
+    )
 
 
 def _push_ground(
