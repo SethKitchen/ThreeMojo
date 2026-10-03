@@ -13,13 +13,17 @@ where a waypoint is (`compute_transform`), what lies ahead of it (`next`,
 `signals_in_distance`), and which waypoint is nearest a point
 (`closest_waypoint_on_road`, `waypoint`).
 
-**The segment index.** CARLA cuts every lane into straight segments, one
-per lane on a straight lane and one each time the heading turns by more
-than 1.8 degrees on a curved one, and keeps them in a Boost R-tree. The
-nearest-waypoint queries ask it for the nearest segment. This port keeps
-the same segments in `extensions.carla.rtree.SegmentCloudRtree`, which
-gives the nearest segment first and breaks a tie by the order the
-segments were made.
+**The segment index.** The index starts with CARLA's heading and length
+partition. It splits again at record boundaries and until quarter-point
+chord errors are at most one millimeter. Queries interpolate road s by
+chord fraction and refine against the original centerline. Nearby
+candidates are checked in deterministic index order. Nonconvex cubic centers
+on line-reference records supply polynomial stationary candidates. Every
+non-affine interval then requires a bounded global distance certificate.
+An unresolved numerical interval raises instead of returning a partial minimum.
+Full-curve bounds, including evaluator branches, control candidate admission.
+This corrects the
+upstream treatment of curved lane offsets and lane distance as road s.
 
 **Order.** CARLA keeps roads, junctions and signals in hash maps and
 walks them in hash order. This port walks them in order of id, so a list
@@ -42,6 +46,8 @@ and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 """
 
 from extensions.carla.geo import GeoLocation, GeoProjection
+from extensions.carla.curve_interval import _Interval
+from extensions.carla.lane_refinement import _admission_roundoff, _chord_error, _refine_lane
 from extensions.carla.math import (
     distance_segment_to_point,
     make_unit_vector,
@@ -78,12 +84,14 @@ from extensions.carla.rtree import (
     SegmentCloudRtree,
     SegmentElement,
     SegmentFilter,
+    _segment_distance2,
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.hashlib import Hasher
 from std.math import ceil, floor, isfinite, sin, sqrt
+from std.memory import bitcast
 from units.si import DEGREE, Angle, Length, METER
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
@@ -732,6 +740,75 @@ struct _LaneTypeFilter(ImplicitlyCopyable, SegmentFilter):
         return (element.end_value & self.mask) != 0
 
 
+def _polynomial_value(coefficients: List[Float64], t: Float64) -> Float64:
+    var value = coefficients[len(coefficients) - 1]
+    var i = len(coefficients) - 2
+    while i >= 0:
+        value = value * t + coefficients[i]
+        i -= 1
+    return value
+
+
+def _polynomial_candidates(coefficients: List[Float64]) -> List[Float64]:
+    # Rolle's theorem: the roots of each derivative partition the polynomial
+    # into monotone intervals. Keep those partition points too. Thus repeated
+    # roots need no residual tolerance and cannot disappear at a tangency.
+    # Degree is at most five: recursion has five levels and at most thirty-one
+    # interior candidates. Every sign-changing root gets 64 bounded bisections.
+    if len(coefficients) == 1:
+        return [0.0, 1.0]
+    var derivative = List[Float64]()
+    var index = 1
+    while index < len(coefficients):
+        derivative.append(Float64(index) * coefficients[index])
+        index += 1
+    var partition = _polynomial_candidates(derivative)
+    var candidates: List[Float64] = [0.0]
+    var i = 1
+    while i < len(partition):
+        var low = partition[i - 1]
+        var high = partition[i]
+        var before = _polynomial_value(coefficients, low)
+        var after = _polynomial_value(coefficients, high)
+        if (before < 0.0 and after > 0.0) or (before > 0.0 and after < 0.0):
+            var iterations = 0
+            while iterations < 64:
+                iterations += 1
+                var middle = low + (high - low) * 0.5
+                var value = _polynomial_value(coefficients, middle)
+                if (value < 0.0) == (before < 0.0):
+                    low = middle
+                else:
+                    high = middle
+            candidates.append(low + (high - low) * 0.5)
+        candidates.append(partition[i])
+        i += 1
+    return candidates^
+
+
+def _distance_is_convex(derivative: List[Float64]) -> Bool:
+    # Bernstein coefficients of the quartic second derivative on [0,1].
+    # Strict positive margin keeps roundoff away from the sign certificate.
+    var a = derivative[1]
+    var b = 2.0 * derivative[2]
+    var c = 3.0 * derivative[3]
+    var d = 4.0 * derivative[4]
+    var e = 5.0 * derivative[5]
+    var margin = (
+        64.0 * DOUBLE_EPSILON * (abs(a) + abs(b) + abs(c) + abs(d) + abs(e))
+    )
+    return (
+        min(
+            min(a, a + b * 0.25),
+            min(
+                a + b * 0.5 + c / 6.0,
+                min(a + b * 0.75 + c * 0.5 + d * 0.25, a + b + c + d + e),
+            ),
+        )
+        > margin
+    )
+
+
 def _concat(var dst: List[Waypoint], var src: List[Waypoint]) -> List[Waypoint]:
     # CARLA's `ConcatVectors`: the longer list goes first.
     if len(src) > len(dst):
@@ -827,6 +904,8 @@ struct Map(Movable):
     var _road_index: Dict[Int, Int]
     var _segments: List[_Segment]
     var _tree: SegmentCloudRtree
+    var _curve_deviation: Float64
+    var _endpoint_scale: Float64
 
     def __init__(
         out self,
@@ -858,6 +937,8 @@ struct Map(Movable):
             self._road_index[self.roads[i].id.value] = i
         self._segments = List[_Segment]()
         self._tree = SegmentCloudRtree()
+        self._curve_deviation = 0.0
+        self._endpoint_scale = 0.0
         self._create_segments()
 
     # --- lookups --------------------------------------------------------------
@@ -1199,9 +1280,9 @@ struct Map(Movable):
     ) raises -> Optional[Waypoint]:
         """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
 
-        CARLA finds the nearest segment of a lane of the given types, then
-        steps from the segment's start by the distance along it to the
-        point's foot.
+        The segment projection interpolates road s by its fraction.
+        Curved candidates are refined against the actual centerline.
+        Nearby segments are checked in deterministic index order.
 
         Args:
             location: The point, in CARLA's frame.
@@ -1216,26 +1297,128 @@ struct Map(Movable):
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
         var found = self._tree.get_nearest_neighbours_with_filter(
-            location, _LaneTypeFilter(lane_type.value)
+            location, _LaneTypeFilter(lane_type.value), 4
         )
         if len(found) == 0:
             return None
-        ref segment = self._segments[found[0].start_value]
-        var along = distance_segment_to_point(
-            location, segment.start, segment.end
-        )
+        # The projection fraction maps the chord to road s. Chord length
+        # does not: offsets, grades and curves change distance per unit s.
+        var best_index = found[0].start_value
+        var nearest = self._nearest_on_segment(best_index, location)
+        var best = nearest[0]
+        var best_distance = nearest[1]
+        var checked = 1
+        var count = 4
+        var candidates = found^
+        while True:
+            for i in range(checked, len(candidates)):
+                var index = candidates[i].start_value
+                ref segment = self._segments[index]
+                # Use the actual 3D Float64 key of the unchanged RTree.
+                # Quarter-point subdivision is not an admission certificate.
+                var chord_distance = sqrt(_segment_distance2(
+                    segment.start, segment.end, location
+                ))
+                var scale = max(self._endpoint_scale, Float64(max(
+                    abs(location.x), max(abs(location.y), abs(location.z))
+                )))
+                var margin = (_Interval.point(self._curve_deviation) +
+                    _Interval.point(_admission_roundoff(scale, self._curve_deviation))
+                ).high
+                if isfinite(margin) and chord_distance > sqrt(best_distance) + margin:
+                    return best
+                var nearest = self._nearest_on_segment(index, location)
+                var candidate = nearest[0]
+                var distance = nearest[1]
+                if distance < best_distance or (
+                    distance == best_distance and index < best_index
+                ):
+                    best = candidate
+                    best_distance = distance
+                    best_index = index
+            if len(candidates) < count:
+                return best
+            checked = len(candidates)
+            count *= 2
+            candidates = self._tree.get_nearest_neighbours_with_filter(
+                location, _LaneTypeFilter(lane_type.value), count
+            )
+
+    def _nearest_on_segment(
+        self, index: Int, location: Vector3
+    ) raises -> Tuple[Waypoint, Float64]:
+        ref segment = self._segments[index]
         var start = segment.first
         var end = segment.second
-        var delta = Float64(along[0].value)
-        var forward = self.is_positive_direction(start)
-        var final_s = start.s + delta if forward else start.s - delta
-        var past = final_s >= end.s if forward else final_s <= end.s
-        if past:
-            return end
-        if delta <= 0.0:
-            return start
-        # The foot lies inside the segment's lane, so one step stays in it.
-        return self.next(start, delta)[0]
+        var at = self._locate(start)
+        var one_point = self.roads[at[0]]._lane_point(at[1], at[2], start.s)
+        var two_point = self.roads[at[0]]._lane_point(at[1], at[2], end.s)
+        var dx = two_point.x - one_point.x
+        var dy = one_point.y - two_point.y
+        var dz = two_point.z - one_point.z
+        var norm = dx * dx + dy * dy + dz * dz
+        var fraction = 0.0
+        if norm > 0.0:
+            fraction = min(
+                max(
+                    (
+                        (Float64(location.x) - one_point.x) * dx
+                        + (Float64(location.y) + one_point.y) * dy
+                        + (Float64(location.z) - one_point.z) * dz
+                    )
+                    / norm,
+                    0.0,
+                ),
+                1.0,
+            )
+        var best = start
+        best.s += fraction * (end.s - start.s)
+        var best_distance = self.roads[at[0]]._lane_distance_squared(
+            at[1], at[2], best.s, location
+        )
+        if self.roads[at[0]].lane_is_straight(at[1]):
+            return (best, best_distance)
+        # Retain endpoints, including a minimum at a record or section edge.
+        var edge_index = 0
+        while edge_index < 2:
+            var edge = start if edge_index == 0 else end
+            var point = one_point if edge_index == 0 else two_point
+            edge_index += 1
+            var ex = point.x - Float64(location.x)
+            var ey = -point.y - Float64(location.y)
+            var ez = point.z - Float64(location.z)
+            var distance = ex * ex + ey * ey + ez * ez
+            if distance < best_distance:
+                best = edge
+                best_distance = distance
+        var low = min(start.s, end.s)
+        var high = max(start.s, end.s)
+        var derivative = self.roads[at[0]]._lane_distance_derivative(
+            at[1], at[2], low, high, location
+        )
+        if len(derivative) != 0:
+            if not _distance_is_convex(derivative):
+                var candidates = _polynomial_candidates(derivative)
+                var candidate_index = 0
+                while candidate_index < len(candidates):
+                    var t = candidates[candidate_index]
+                    candidate_index += 1
+                    var candidate = start
+                    candidate.s = low + t * (high - low)
+                    # Compare the original evaluator, not the polynomial fit.
+                    var distance = self.roads[at[0]]._lane_distance_squared(
+                        at[1], at[2], candidate.s, location
+                    )
+                    if distance < best_distance:
+                        best = candidate
+                        best_distance = distance
+        var resolved = _refine_lane(
+            self.roads[at[0]], at[1], at[2],
+            min(start.s, end.s), max(start.s, end.s),
+            location, best.s, best_distance,
+        )
+        best.s = resolved[0]
+        return (best, resolved[1])
 
     def waypoint(
         self, location: Vector3, lane_type: LaneType = LANE_DRIVING
@@ -2327,11 +2510,97 @@ struct Map(Movable):
         first: Waypoint,
         second: Waypoint,
     ) raises:
+        var at = self._locate(first)
+        var boundaries = self.roads[at[0]]._lane_record_boundaries(at[1])
+        var forward = first.s < second.s
+        var boundary = second.s
+        var found = False
+        var boundary_index = 0
+        while boundary_index < len(boundaries):
+            var s = boundaries[boundary_index]
+            boundary_index += 1
+            if forward:
+                if s > first.s and s <= boundary:
+                    boundary = s
+                    found = True
+            elif s <= first.s and s > boundary:
+                boundary = s
+                found = True
+        if found:
+            var before = first
+            var after = first
+            after.s = boundary
+            # Road s is nonnegative, and an internal boundary is positive.
+            before.s = bitcast[DType.float64](
+                bitcast[DType.uint64](boundary) - 1
+            )
+            var before_t = self.compute_transform(before)
+            var after_t = self.compute_transform(after)
+            if forward:
+                self._subdivide_segment(a, before_t, first, before, 0)
+                self._add_segment(after_t, b, after, second)
+            else:
+                self._subdivide_segment(a, after_t, first, after, 0)
+                self._add_segment(before_t, b, before, second)
+            return
+        self._subdivide_segment(a, b, first, second, 0)
+
+    def _subdivide_segment(
+        mut self,
+        a: CarlaTransform,
+        b: CarlaTransform,
+        first: Waypoint,
+        second: Waypoint,
+        depth: Int,
+    ) raises:
+        # Quarter points also expose cubic inflections that a midpoint misses.
+        var at = self._locate(first)
+        var one = self.roads[at[0]]._lane_point(at[1], at[2], first.s)
+        var two = self.roads[at[0]]._lane_point(at[1], at[2], second.s)
+        var error = 0.0
+        var quarter = 1
+        while quarter < 4:
+            var fraction = Float64(quarter) * 0.25
+            quarter += 1
+            var sample = first
+            sample.s += fraction * (second.s - first.s)
+            var point = self.roads[at[0]]._lane_point(at[1], at[2], sample.s)
+            var dx = point.x - (one.x + fraction * (two.x - one.x))
+            var dy = point.y - (one.y + fraction * (two.y - one.y))
+            var dz = point.z - (one.z + fraction * (two.z - one.z))
+            error = max(error, dx * dx + dy * dy + dz * dz)
+        var mid = first
+        mid.s = first.s + (second.s - first.s) * 0.5
+        var turn = self.roads[at[0]]._lane_turn_bound(first.s, second.s)
+        if error > 0.000001 or turn > 0.5:
+            if depth >= 24:
+                raise Error("Lane center exceeds the spatial subdivision limit")
+            var middle = self.compute_transform(mid)
+            self._subdivide_segment(a, middle, first, mid, depth + 1)
+            self._subdivide_segment(middle, b, mid, second, depth + 1)
+            return
         var lane_type = self.lane(first).type
         self._tree.insert_element(
             a.location, b.location, len(self._segments), lane_type.value
         )
         self._segments.append(_Segment(a.location, b.location, first, second))
+        var low = first.s
+        var high = second.s
+        var start = a.location
+        var end = b.location
+        if low > high:
+            low = second.s
+            high = first.s
+            start = b.location
+            end = a.location
+        var deviation = _chord_error(
+            self.roads[at[0]], at[1], at[2], low, high, start, end
+        )
+        self._curve_deviation = max(self._curve_deviation, deviation)
+        self._endpoint_scale = max(self._endpoint_scale, Float64(max(
+            max(abs(start.x), max(abs(start.y), abs(start.z))),
+            max(abs(end.x), max(abs(end.y), abs(end.z))),
+        )))
 
     def _create_segments(mut self) raises:
         # `Map::CreateRtree`.

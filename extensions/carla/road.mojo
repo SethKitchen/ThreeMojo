@@ -29,7 +29,13 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.
 """
 
-from extensions.carla.geometry import DirectedPoint, LINE
+from extensions.carla.geometry import (
+    ARC,
+    DirectedPoint,
+    LINE,
+    PARAM_POLY3,
+    SPIRAL,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import (
     InformationSet,
@@ -48,7 +54,13 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan, sqrt
+from extensions.carla.curve_trig import (
+    _curve_atan2 as atan2,
+    _curve_cos as cos,
+    _curve_sin as sin,
+    _sincos_derivative,
+)
+from std.math import isfinite, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -721,13 +733,9 @@ struct Road(Copyable, Movable):
     def lane_is_straight(self, section: Int) raises -> Bool:
         """Return True if a lane is one straight run, `Lane::IsStraight`.
 
-        A lane is straight when its whole section lies on one line record
-        and the road's elevation has no curvature. CARLA also reads lane
-        offset records from the lane, where there are none, so the lane
-        offset does not count.
-
-        Every lane of a section gives the same answer, so this takes the
-        section alone.
+        Every center must be affine in road s on one line record. Road
+        offsets and accumulated lane widths count, as does elevation.
+        Multiple records are conservatively treated as curved.
 
         Args:
             section: The section's index.
@@ -752,11 +760,20 @@ struct Road(Copyable, Movable):
             > record.s + record.geometry.length
         ):
             return False
+        if len(self.info.elevations) > 1 or len(self.info.lane_offsets) > 1:
+            return False
         for elevation in self.info.elevations:
-            if elevation.polynomial.c != 0.0:
+            if elevation.polynomial.c != 0.0 or elevation.polynomial.d != 0.0:
                 return False
-            if elevation.polynomial.d != 0.0:
+        for offset in self.info.lane_offsets:
+            if offset.polynomial.c != 0.0 or offset.polynomial.d != 0.0:
                 return False
+        for lane in self.sections[section].lanes:
+            if len(lane.info.widths) > 1:
+                return False
+            for width in lane.info.widths:
+                if width.polynomial.c != 0.0 or width.polynomial.d != 0.0:
+                    return False
         return True
 
     def _total_width(
@@ -766,22 +783,18 @@ struct Road(Copyable, Movable):
         # lane 0 and its rate of change. Plus is to the right.
         ref lanes = self.sections[section].lanes
         var negative = lane_id.value < 0
-        var order = List[Int]()
-        if negative:
-            # The section holds the lane, so it has lanes.
-            for i in range(len(lanes) - 1, -1, -1):  # pragma: no branch
-                if lanes[i].id.value < 0:
-                    order.append(i)
-        else:
-            # The section holds the lane, so it has lanes.
-            for i in range(len(lanes)):  # pragma: no branch
-                if lanes[i].id.value >= 1:
-                    order.append(i)
         var dist = 0.0
         var tangent = 0.0
         var sign = 1.0 if negative else -1.0
-        # The order holds the lane itself, so the loop breaks.
-        for i in order:  # pragma: no branch
+        # Visit the same inner-to-outer order without allocating a list.
+        # The section holds the lane, so this loop reaches it and breaks.
+        for position in range(len(lanes)):  # pragma: no branch
+            var i = len(lanes) - 1 - position if negative else position
+            if negative:
+                if lanes[i].id.value >= 0:
+                    continue
+            elif lanes[i].id.value < 1:
+                continue
             var width = info_at(lanes[i].info.widths, s)
             if not Bool(width):
                 raise Error("A lane has no width record at s")
@@ -802,15 +815,199 @@ struct Road(Copyable, Movable):
         if lane < 0 or lane >= len(self.sections[section].lanes):
             raise Error("The section has no lane at that index")
 
+    def _lane_record_boundaries(self, section: Int) -> List[Float64]:
+        # Each polynomial and each sampled reference interval is smooth only
+        # between its own boundaries. Do not join across a discontinuity.
+        var result = List[Float64]()
+        for record in self.info.geometries:
+            result.append(record.s)
+            for sample in record.geometry.samples:
+                result.append(record.s + sample.s)
+        for record in self.info.elevations:
+            result.append(record.s)
+        for record in self.info.lane_offsets:
+            result.append(record.s)
+        for lane in self.sections[section].lanes:
+            for record in lane.info.widths:
+                result.append(record.s)
+        return result^
+
+    def _lane_turn_bound(self, first: Float64, second: Float64) -> Float64:
+        # _add_segment splits at geometry boundaries before this call.
+        var at = info_index(self.info.geometries, min(first, second))
+        ref geometry = self.info.geometries[at].geometry
+        return max(
+            abs(geometry.curvature_start), abs(geometry.curvature_end)
+        ) * abs(second - first)
+
+    def _plan_derivative(
+        self, s: Float64
+    ) raises -> Tuple[Float64, Float64, Float64]:
+        var at = info_index(self.info.geometries, s)
+        ref record = self.info.geometries[at]
+        return record.geometry._derivative_at(s - record.s)
+
+    def _lane_point(
+        self, section: Int, lane: Int, s: Float64
+    ) raises -> DirectedPoint:
+        # Keep the center in double precision until the public transform.
+        var lane_id = self.sections[section].lanes[lane].id
+        var offset = 0.0
+        if lane_id.value != 0:
+            offset = self._total_width(section, s, lane_id)[0]
+        var lane_offset = info_at(self.info.lane_offsets, s)
+        if not Bool(lane_offset):
+            raise Error("The road has no lane offset record at s")
+        offset -= lane_offset.value().polynomial.evaluate(s)
+        return self._offset_lane_point(s, offset)
+
+    def _offset_lane_point(
+        self, s: Float64, offset: Float64
+    ) raises -> DirectedPoint:
+        var point = self._plan_point(s)
+        var at = info_index(self.info.geometries, s)
+        ref record = self.info.geometries[at]
+        if record.geometry.kind == ARC:
+            var d = min(max(s - record.s, 0.0), record.geometry.length)
+            point = record.geometry._arc_offset(d, offset)
+        else:
+            point.x += offset * sin(point.tangent)
+            point.y -= offset * cos(point.tangent)
+        var elevation = self.elevation_on(s)
+        point.z = elevation.evaluate(s)
+        point.pitch = elevation.tangent(s)
+        return point
+
+    def _lane_distance_squared(
+        self, section: Int, lane: Int, s: Float64, location: Vector3
+    ) raises -> Float64:
+        var point = self._lane_point(section, lane, s)
+        var dx = point.x - Float64(location.x)
+        var dy = -point.y - Float64(location.y)
+        var dz = point.z - Float64(location.z)
+        return dx * dx + dy * dy + dz * dz
+
+    def _lane_distance_derivative(
+        self,
+        section: Int,
+        lane: Int,
+        low: Float64,
+        high: Float64,
+        location: Vector3,
+    ) raises -> List[Float64]:
+        # A line-reference center is cubic between active record boundaries.
+        # Return half the derivative of squared distance in t=(s-low)/span.
+        # Empty means the interval cannot use this polynomial certificate.
+        var at = info_index(self.info.geometries, low)
+        if high <= low or at < 0:
+            return List[Float64]()
+        ref record = self.info.geometries[at]
+        if record.geometry.kind != LINE:
+            return List[Float64]()
+        if high > record.s + record.geometry.length:
+            return List[Float64]()
+        if info_index(self.info.geometries, high) != at:
+            return List[Float64]()
+        if info_index(self.info.elevations, low) != info_index(
+            self.info.elevations, high
+        ):
+            return List[Float64]()
+        if info_index(self.info.lane_offsets, low) != info_index(
+            self.info.lane_offsets, high
+        ):
+            return List[Float64]()
+        var offset = info_at(self.info.lane_offsets, low).value().polynomial
+        var q1 = -offset.tangent(low)
+        var q2 = -(offset.c + 3.0 * low * offset.d)
+        var q3 = -offset.d
+        ref lanes = self.sections[section].lanes
+        var id = lanes[lane].id
+        var negative = id.value < 0
+        var sign = 1.0 if negative else -1.0
+        if id.value != 0:
+            var done = False
+            var position = 0
+            while position < len(lanes):
+                var i = len(lanes) - 1 - position if negative else position
+                position += 1
+                if done:
+                    continue
+                if negative:
+                    if lanes[i].id.value >= 0:
+                        continue
+                elif lanes[i].id.value < 1:
+                    continue
+                ref widths = lanes[i].info.widths
+                var width_at = info_index(widths, low)
+                if info_index(widths, high) != width_at:
+                    return List[Float64]()
+                var width = widths[width_at].polynomial
+                var factor = sign * (0.5 if lanes[i].id == id else 1.0)
+                q1 += factor * width.tangent(low)
+                q2 += factor * (width.c + 3.0 * low * width.d)
+                q3 += factor * width.d
+                done = lanes[i].id == id
+        var point = self._lane_point(section, lane, low)
+        var dx = point.x - Float64(location.x)
+        var dy = point.y + Float64(location.y)
+        var heading = record.geometry.heading
+        var c = cos(heading)
+        var sn = sin(heading)
+        var span = high - low
+        var elevation = self.elevation_on(low)
+        # Use world-coordinate coefficients of the actual scalar evaluator.
+        # A polynomial sine/cosine pair need not satisfy C*C+S*S == 1.
+        # Translate before scaling and do not terminate by relative road s.
+        var coordinates: List[Float64] = [
+            dx,
+            span * c + q1 * span * sn,
+            q2 * span * span * sn,
+            q3 * span * span * span * sn,
+            dy,
+            span * sn - q1 * span * c,
+            -q2 * span * span * c,
+            -q3 * span * span * span * c,
+            point.z - Float64(location.z),
+            elevation.tangent(low) * span,
+            (elevation.c + 3.0 * low * elevation.d) * span * span,
+            elevation.d * span * span * span,
+        ]
+        var scale = span
+        var coordinate = 0
+        while coordinate < len(coordinates):
+            var value = coordinates[coordinate]
+            coordinate += 1
+            if not isfinite(value):
+                return List[Float64]()
+            scale = max(scale, abs(value))
+        var polynomial = List[Float64](length=6, fill=0.0)
+        var axis = 0
+        while axis < 3:
+            var i = 0
+            while i < 4:
+                var j = 1
+                while j < 4:
+                    polynomial[i + j - 1] += (
+                        coordinates[4 * axis + i]
+                        / scale
+                        * (coordinates[4 * axis + j] / scale)
+                        * Float64(j)
+                    )
+                    j += 1
+                i += 1
+            axis += 1
+        return polynomial^
+
     def lane_transform(
         self, section: Int, lane: Int, s: Float64
     ) raises -> CarlaTransform:
         """Return a lane's center at s in CARLA's frame, facing along it.
 
-        This follows `Lane::ComputeTransform`, except that the pitch is
-        the negative arctangent of the elevation grade. That matches the
-        corrected rotation convention and makes rising roads face uphill.
+        The heading and pitch follow the actual center derivative. This
+        corrects CARLA's use of the lateral derivative as an angle.
         A lane against s turns its yaw by 180 degrees and reverses pitch.
+        A zero horizontal derivative keeps the reference heading. A
+        stationary center has zero pitch; a vertical tangent has 90 degrees.
 
         Args:
             section: The section's index.
@@ -828,23 +1025,52 @@ struct Road(Copyable, Movable):
         if s > self.length or s < 0.0:
             raise Error("s is off the road")
         var lane_id = self.sections[section].lanes[lane].id
-        var t_offset = Float32(0)
-        var lane_tangent = Float32(0)
+        var offset = 0.0
+        var slope = 0.0
         if lane_id.value != 0:
             var total = self._total_width(section, s, lane_id)
-            t_offset = Float32(total[0])
-            lane_tangent = Float32(total[1])
+            offset = total[0]
+            slope = total[1]
         var lane_offset = info_at(self.info.lane_offsets, s)
         if not Bool(lane_offset):
             raise Error("The road has no lane offset record at s")
-        lane_tangent -= Float32(lane_offset.value().polynomial.tangent(s))
-        var point = self.directed_point(s)
-        point.apply_lateral_offset(Length(t_offset, METER))
-        point.tangent -= Float64(lane_tangent)
-        # Rotation's positive pitch points down. The elevation derivative is
-        # a grade, not an angle; use its arctangent before reversing traffic.
-        var pitch = -Float32(atan(point.pitch)) * _TO_DEGREES
+        offset -= lane_offset.value().polynomial.evaluate(s)
+        slope -= lane_offset.value().polynomial.tangent(s)
+        var point = self._offset_lane_point(s, offset)
+        var differential = self._plan_derivative(s)
+        var c = cos(point.tangent)
+        var sn = sin(point.tangent)
+        var normal = _sincos_derivative(point.tangent)
+        var dx = differential[0] + slope * sn + offset * differential[2] * normal[0]
+        var dy = differential[1] - slope * c - offset * differential[2] * normal[1]
+        var geometry_at = info_index(self.info.geometries, s)
+        ref geometry = self.info.geometries[geometry_at].geometry
+        if geometry.kind == ARC:
+            var distance = s - self.info.geometries[geometry_at].s
+            var derivative = geometry._arc_offset_derivative(
+                min(max(distance, 0.0), geometry.length), offset, slope,
+                distance >= 0.0 and distance <= geometry.length,
+            )
+            dx = derivative[0]
+            dy = derivative[1]
+        var magnitude = max(abs(dx), abs(dy))
+        var horizontal = 0.0
+        if magnitude > 0.0:
+            horizontal = magnitude * sqrt((dx / magnitude) * (dx / magnitude) + (dy / magnitude) * (dy / magnitude))
         var yaw = Float32(-point.tangent) * _TO_DEGREES
+        if horizontal > 0.0:
+            # Keep the reference heading's winding, while correcting its
+            # direction by the actual derivative in the reference frame.
+            yaw = (
+                Float32(
+                    -point.tangent + atan2(
+                        (dx / magnitude) * sn - (dy / magnitude) * c,
+                        (dx / magnitude) * c + (dy / magnitude) * sn,
+                    )
+                )
+                * _TO_DEGREES
+            )
+        var pitch = -Float32(atan2(point.pitch, horizontal)) * _TO_DEGREES
         if not self.is_positive_direction(lane_id):
             yaw += 180.0
             pitch = 360.0 - pitch
