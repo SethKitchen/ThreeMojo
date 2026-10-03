@@ -52,6 +52,134 @@ comptime BOUNDARY_WEIGHT = Float64(1000)
 
 
 @fieldwise_init
+struct TriangleBudgetMode(Equatable, ImplicitlyCopyable, Writable):
+    """Choose best effort or an all-or-nothing triangle budget.
+
+    Args:
+        value: The stored mode. Use `BEST_EFFORT` or `STRICT`.
+
+    Returns:
+        A typed mode. The fitting boundary checks its value.
+
+    Raises:
+        None.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this mode is named.
+
+        Returns:
+            True for `BEST_EFFORT` or `STRICT`.
+
+        """
+        return self == BEST_EFFORT or self == STRICT
+
+
+comptime BEST_EFFORT = TriangleBudgetMode(0)
+comptime STRICT = TriangleBudgetMode(1)
+
+
+@fieldwise_init
+struct TriangleBudgetReason(Equatable, ImplicitlyCopyable, Writable):
+    """Name one reason a triangle budget was not met.
+
+    Args:
+        value: The stored reason. Use a named reason constant.
+
+    Returns:
+        A typed reason. `TriangleBudgetResult.has_reason` checks it.
+
+    Raises:
+        None.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this reason is named.
+
+        Returns:
+            True for a minimum, small-source or safe-collapse limit.
+
+        """
+        return (
+            self == MINIMUM_SHARES
+            or self == SMALL_WELDED_SOURCES
+            or self == SAFE_COLLAPSE_LIMIT
+        )
+
+
+comptime MINIMUM_SHARES = TriangleBudgetReason(0)
+comptime SMALL_WELDED_SOURCES = TriangleBudgetReason(1)
+comptime SAFE_COLLAPSE_LIMIT = TriangleBudgetReason(2)
+
+
+@fieldwise_init
+struct TriangleBudgetResult(ImplicitlyCopyable):
+    """Report the actual triangle counts across unique geometries.
+
+    Reasons can overlap. A small welded source contributes its full count
+    to the minimum shares. Safe collapse limits include protected topology,
+    face turns and collapses that would cross a part's minimum.
+
+    Args:
+        requested_triangles: The caller's budget.
+        retained_triangles: The actual total after welding and decimation.
+        minimum_triangles: The sum of the minimum shares after welding.
+        small_source_triangles: The minimum triangles from sources below 32.
+        protected_triangles: Triangles retained above allocated shares.
+
+    Returns:
+        A result from `fit_triangle_budget_result`.
+
+    Raises:
+        None.
+    """
+
+    var requested_triangles: Int
+    var retained_triangles: Int
+    var minimum_triangles: Int
+    var small_source_triangles: Int
+    var protected_triangles: Int
+
+    def target_met(self) -> Bool:
+        """Return whether the retained total is within the budget.
+
+        Returns:
+            True if retained triangles do not exceed requested triangles.
+
+        """
+        return self.retained_triangles <= self.requested_triangles
+
+    def has_reason(self, reason: TriangleBudgetReason) raises -> Bool:
+        """Return whether a named limit contributed to a missed target.
+
+        Args:
+            reason: The reason to test.
+
+        Returns:
+            False for every reason when the target was met. Otherwise,
+            True for each limit that contributed. Reasons can overlap.
+
+        Raises:
+            Error: If the reason is not a named value.
+        """
+        if not reason.is_valid():
+            raise Error("The triangle budget reason must be a named value")
+        if self.target_met():
+            return False
+        if reason == SAFE_COLLAPSE_LIMIT:
+            return self.protected_triangles > 0
+        if self.minimum_triangles <= self.requested_triangles:
+            return False
+        if reason == SMALL_WELDED_SOURCES:
+            return self.small_source_triangles > 0
+        return True
+
+
+@fieldwise_init
 struct _Quadric(ImplicitlyCopyable):
     """The sum of squared distances to a set of planes, as ten numbers.
 
@@ -257,6 +385,10 @@ struct WeldedMesh(Movable):
             Error: If the geometry refuses an attribute or the index.
         """
         var count = len(self.positions)
+        # An empty index denotes an unindexed geometry. Keeping unused
+        # positions in that case would create triangles that welding removed.
+        if len(self.faces) == 0:
+            count = 0
         var sums = List[Vector3](length=count, fill=Vector3(0, 0, 0))
         for face in range(self.triangle_count()):
             var i0 = self.faces[face * 3]
@@ -285,9 +417,10 @@ struct WeldedMesh(Movable):
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
         if len(self.uvs) > 0:
-            geometry.set_attribute(
-                String(UV), BufferAttribute(self.uvs.copy(), 2)
-            )
+            var coordinates = self.uvs.copy()
+            if count == 0:
+                coordinates.clear()
+            geometry.set_attribute(String(UV), BufferAttribute(coordinates^, 2))
         geometry.set_index(self.faces.copy())
         return geometry^
 
@@ -949,21 +1082,25 @@ async def _simplify_task(
         index += tasks
 
 
-def fit_triangle_budget(
+def fit_triangle_budget_result(
     scene: Scene,
     mut assets: Assets,
     first_mesh: Int,
     budget: Int,
     workers: Int = 1,
-) raises:
+    mode: TriangleBudgetMode = BEST_EFFORT,
+) raises -> TriangleBudgetResult:
     """Decimate the meshes from `first_mesh` on toward one triangle budget.
 
     Each geometry the meshes name is welded, then decimated to its share
     of the budget; see `share_budget`. A geometry two meshes name is
     decimated once. The geometries are replaced in `assets`. Each keeps
     at least 32 triangles, or its count after welding if that is smaller.
-    The result can exceed the budget when these minimums or the safe
-    collapse rules prevent more reduction.
+    Best effort can exceed the budget when minimums or safe collapse
+    rules prevent more reduction. Strict mode raises before replacement
+    if the actual total exceeds the budget. Strict mode converts all
+    replacement geometries before it changes the store. Best effort
+    replaces one geometry at a time to keep its extra memory use low.
 
     Args:
         scene: The scene whose meshes to read.
@@ -971,14 +1108,25 @@ def fit_triangle_budget(
         first_mesh: The first mesh to decimate, such as the scene's mesh
             count before a body was added.
         budget: The target triangle count across unique geometries,
-            at least one. This is not a hard maximum.
+            at least one. Best effort can exceed it. Strict success
+            guarantees the retained total does not exceed it.
         workers: How many threads may weld and decimate.
+        mode: `BEST_EFFORT` accepts a missed target. `STRICT` refuses it.
+
+    Returns:
+        Requested and retained totals, minimum shares and the limits
+        encountered. Counts include each named geometry only once.
 
     Raises:
         Error: If `budget` or `workers` is less than one, `first_mesh` is
             out of range, or a geometry has no positions or holds a
-            partial triangle.
+            partial triangle. Also raises for an unnamed mode or a
+            missed strict target. Invalid input leaves assets unchanged.
+            Strict mode also leaves assets unchanged on conversion failure.
+            Best effort can replace earlier geometries before that error.
     """
+    if not mode.is_valid():
+        raise Error("The triangle budget mode must be best effort or strict")
     if budget < 1:
         raise Error("A triangle budget must be at least one")
     if workers < 1:
@@ -1012,8 +1160,14 @@ def fit_triangle_budget(
         )
     welds.wait()
     var counts = List[Int](capacity=count)
+    var minimum = 0
+    var small = 0
     for index in range(count):
-        counts.append(meshes[index].triangle_count())
+        var triangles = meshes[index].triangle_count()
+        counts.append(triangles)
+        minimum += min(MIN_PART_TRIANGLES, triangles)
+        if triangles < MIN_PART_TRIANGLES:
+            small += triangles
     var targets = share_budget(areas, counts, budget)
     var cuts = TaskGroup()
     for task in range(tasks):  # pragma: no branch
@@ -1031,5 +1185,81 @@ def fit_triangle_budget(
     # see, and Mojo destroys a value after its last use: this read keeps
     # them alive until every task has finished.
     _ = len(targets)
+    var retained = 0
+    var protected = 0
     for index in range(count):
-        assets.geometries.replace(ids[index], meshes[index].to_geometry())
+        var triangles = meshes[index].triangle_count()
+        retained += triangles
+        protected += max(0, triangles - targets[index])
+    var result = TriangleBudgetResult(
+        budget, retained, minimum, small, protected
+    )
+    if mode == STRICT and not result.target_met():
+        raise Error(
+            "Triangle budget not met: requested "
+            + String(budget)
+            + ", retained "
+            + String(retained)
+            + ", minimum shares "
+            + String(minimum)
+            + ", small welded sources "
+            + String(small)
+            + ", safe collapse excess "
+            + String(protected)
+            + "; assets were not changed"
+        )
+    if mode == STRICT:
+        _replace_budget_meshes(assets, ids, meshes)
+    else:
+        for index in range(count):
+            assets.geometries.replace(ids[index], meshes[index].to_geometry())
+    return result
+
+
+def _replace_budget_meshes(
+    mut assets: Assets, ids: List[GeometryId], meshes: List[WeldedMesh]
+) raises:
+    """Convert all meshes before replacing any previously checked id.
+
+    Args:
+        assets: The unchanged store from the fitting call.
+        ids: Unique ids already checked by the fitting call.
+        meshes: One final welded mesh for each id.
+
+    Raises:
+        Error: If a conversion fails. No asset changes in that case.
+    """
+    var count = len(ids)
+    var replacements = List[BufferGeometry](capacity=count)
+    for index in range(count):
+        replacements.append(meshes[index].to_geometry())
+    # The ids were checked when read and the store cannot change meanwhile.
+    for index in range(count - 1, -1, -1):
+        assets.geometries.replace(ids[index], replacements.pop())
+
+
+def fit_triangle_budget(
+    scene: Scene,
+    mut assets: Assets,
+    first_mesh: Int,
+    budget: Int,
+    workers: Int = 1,
+) raises:
+    """Fit a best-effort budget with the original no-result API.
+
+    Use `fit_triangle_budget_result` to inspect actual counts or choose
+    strict mode. Both APIs preserve the same safety rules.
+
+    Args:
+        scene: The scene whose meshes to read.
+        assets: The store that holds their geometries, changed in place.
+        first_mesh: The first mesh to decimate.
+        budget: The target count across unique geometries, at least one.
+        workers: How many threads may weld and decimate.
+
+    Raises:
+        Error: If the budget, worker count, first mesh or geometry is
+            invalid. A conversion error can follow earlier replacements,
+            as in the original best-effort implementation.
+    """
+    _ = fit_triangle_budget_result(scene, assets, first_mesh, budget, workers)
