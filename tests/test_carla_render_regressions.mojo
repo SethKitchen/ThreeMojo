@@ -10,7 +10,13 @@ from core.object3d import Object3D
 from extensions.carla.actor import ActorId
 from extensions.carla.cameras import DVSEvent, _by_time
 from extensions.carla.mesh_factory import ROAD_SURFACE
-from extensions.carla.sensor import ROAD, VEGETATION
+from extensions.carla.sensor import (
+    ROAD,
+    VEGETATION,
+    UNLABELED,
+    SemanticTag,
+    cityscapes_color,
+)
 from extensions.carla.weather import weather_preset
 from geometries.box import box
 from materials.material import BACK_SIDE, Material
@@ -18,7 +24,18 @@ from math.bounds import Plane
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.texture import COVERAGE, Texture, float_texture
+from render.srgb import LINEAR
+from render.texture import (
+    COVERAGE,
+    IGNORED,
+    NEAREST,
+    REPEAT,
+    Texture,
+    float_texture,
+)
+from render.texture_store import TextureId
+from materials.material import MaterialId
+from math.vector2 import Vector2
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from test_carla_render_scene import _renderer, _world
 from units.si import METER, Length
@@ -151,6 +168,7 @@ def test_cutout_depth_and_capture_materials_are_stable() raises:
     var world = _world(camera, cars, walker)
     var view = _renderer(world)
     var before = view.render_depth(world, camera)
+    var semantic_before = view.render_semantic(world, camera)
     var pixels: List[UInt8] = [255, 0, 0, 0]
     var texture = Texture(1, 1, pixels^, alpha=COVERAGE)
     var map = view.assets.textures.add(texture^)
@@ -170,6 +188,8 @@ def test_cutout_depth_and_capture_materials_are_stable() raises:
     )
     view.scene.update()
     var after = view.render_depth(world, camera)
+    var semantic_after = view.render_semantic(world, camera)
+    assert_equal(semantic_before.pixels, semantic_after.pixels)
     for y in range(before.height):
         for x in range(before.width):
             assert_equal(before.get_pixel(x, y).r, after.get_pixel(x, y).r)
@@ -177,6 +197,15 @@ def test_cutout_depth_and_capture_materials_are_stable() raises:
             assert_equal(before.get_pixel(x, y).b, after.get_pixel(x, y).b)
     # Make the foreground opaque, then hide it with a local clipping plane.
     view.assets.textures.textures[map.value].pixels[3] = 255
+    var opaque_depth = view.render_depth(world, camera)
+    var opaque_semantic = view.render_semantic(world, camera)
+    assert_true(opaque_depth.pixels != before.pixels)
+    assert_true(opaque_semantic.pixels != semantic_before.pixels)
+    var foreground = opaque_semantic.get_pixel(8, 6)
+    var expected = cityscapes_color(UNLABELED)
+    assert_equal(foreground.r, expected.r)
+    assert_equal(foreground.g, expected.g)
+    assert_equal(foreground.b, expected.b)
     var clipped = view.assets.materials.get(material)
     clipped.set_clipping_planes([Plane(Vector3(1, 0, 0), -100)])
     view.assets.materials.materials[material.value] = clipped
@@ -194,10 +223,180 @@ def test_cutout_depth_and_capture_materials_are_stable() raises:
     assert_equal(view.assets.materials.count(), count)
     assert_equal(view.assets.textures.count(), images)
     var original = view.scene.meshes[0].material
+    view.scene.meshes[0].materials = [original, material]
+    var original_groups = view.scene.meshes[0].materials.copy()
+    var background = view.scene.background
     view.scene.meshes[0].geometry = GeometryId(-1)
     with assert_raises():
         _ = view.render_depth(world, camera)
     assert_equal(view.scene.meshes[0].material, original)
+    assert_equal(view.scene.meshes[0].materials, original_groups)
+    assert_equal(view.scene.background.kind, background.kind)
+    assert_equal(view.scene.background.cube, background.cube)
+    assert_equal(view.scene.background.texture, background.texture)
+    assert_equal(view.scene.background.color.r, background.color.r)
+    assert_equal(view.scene.background.color.g, background.color.g)
+    assert_equal(view.scene.background.color.b, background.color.b)
+    assert_equal(view.scene.background.color.a, background.color.a)
+
+
+def test_sensor_cache_reuses_storage_and_observes_public_edits() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var view = _renderer(world)
+    var texture = Texture(2, 2, List[UInt8](length=16, fill=128))
+    var map = view.assets.textures.add(texture^)
+    var id = view.assets.materials.add(
+        Material(Color(20, 30, 40), map=map, alpha_test=0.25)
+    )
+    var flat = view._sensor_material(id, VEGETATION)
+    var white = view.assets.materials.get(flat).map
+    var pixels = Int(view.assets.textures.get(white).pixels.unsafe_ptr())
+    var offsets = Int(view.assets.textures.get(white).offsets.unsafe_ptr())
+    var ramp = Int(view.assets.textures.get(white).ramp.unsafe_ptr())
+    var textures = view.assets.textures.count()
+    var materials = view.assets.materials.count()
+    for _ in range(16):
+        view.coverage_read.clear()
+        assert_equal(view._sensor_material(id, VEGETATION), flat)
+        assert_equal(
+            Int(view.assets.textures.get(white).pixels.unsafe_ptr()), pixels
+        )
+        assert_equal(
+            Int(view.assets.textures.get(white).offsets.unsafe_ptr()), offsets
+        )
+        assert_equal(
+            Int(view.assets.textures.get(white).ramp.unsafe_ptr()), ramp
+        )
+    # Source RGB, even in a mip, has no effect on a white coverage map.
+    view.assets.textures.textures[map.value].pixels[0] = 7
+    view.assets.textures.textures[map.value].pixels[16] = 9
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, VEGETATION), flat)
+    assert_equal(
+        Int(view.assets.textures.get(white).pixels.unsafe_ptr()), pixels
+    )
+    assert_equal(view.assets.textures.get(white).pixels[0], 255)
+    assert_equal(view.assets.textures.get(map).pixels[0], 7)
+    # The source and the override hold distinct writable buffers.
+    assert_true(
+        Int(view.assets.textures.get(map).pixels.unsafe_ptr()) != pixels
+    )
+    view.assets.textures.textures[map.value].pixels[19] = 31
+    assert_equal(view.assets.textures.get(white).pixels[19], 128)
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, VEGETATION), flat)
+    assert_equal(view.assets.textures.get(white).pixels[19], 31)
+    # Samplers are public too; no update() or weather change is needed.
+    view.assets.textures.textures[map.value].repeat = Vector2(3, 2)
+    view.assets.textures.textures[map.value].wrap_s = REPEAT
+    view.assets.textures.textures[map.value].min_filter = NEAREST
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, VEGETATION), flat)
+    assert_true(view.assets.textures.get(white).repeat == Vector2(3, 2))
+    assert_equal(view.assets.textures.get(white).wrap_s, REPEAT)
+    assert_equal(view.assets.textures.get(white).min_filter, NEAREST)
+    view.assets.materials.materials[id.value].visible = False
+    assert_equal(view._sensor_material(id, VEGETATION), flat)
+    assert_equal(view.assets.materials.get(flat).visible, False)
+    view.assets.materials.materials[id.value].set_clipping_planes(
+        [Plane(Vector3(1, 0, 0), -7)], True, True
+    )
+    assert_equal(view._sensor_material(id, VEGETATION), flat)
+    assert_equal(view.assets.materials.get(flat).clip_intersection, True)
+    assert_equal(view.assets.materials.get(flat).clip_shadows, True)
+    assert_equal(
+        view.assets.materials.get(flat).clipping_planes()[0].constant, -7
+    )
+    assert_equal(view.assets.textures.count(), textures)
+    assert_equal(view.assets.materials.count(), materials)
+    with assert_raises():
+        _ = view._coverage_map(TextureId(-2))
+    with assert_raises():
+        _ = view._sensor_material(MaterialId(-1), ROAD)
+    with assert_raises():
+        _ = view._sensor_material(id, SemanticTag(30))
+
+
+def test_sensor_cache_observes_float_mips_and_replacement() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var view = _renderer(world)
+    var texture = float_texture(
+        2, 2, List[Float32](length=16, fill=0.5), mipmapped=True
+    )
+    var map = view.assets.textures.add(texture^)
+    var id = view.assets.materials.add(
+        Material(Color(20, 30, 40), map=map, alpha_test=0.25)
+    )
+    var flat = view._sensor_material(id, ROAD)
+    var white = view.assets.materials.get(flat).map
+    var data = Int(view.assets.textures.get(white).data.unsafe_ptr())
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, ROAD), flat)
+    assert_equal(Int(view.assets.textures.get(white).data.unsafe_ptr()), data)
+    view.assets.textures.textures[map.value].data[19] = 0.75
+    assert_equal(view.assets.textures.get(white).data[19], 0.5)
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, ROAD), flat)
+    assert_equal(view.assets.textures.get(white).data[19], 0.75)
+    assert_equal(view.assets.textures.get(white).data[16], 1)
+    assert_equal(view.assets.textures.get(map).data[16], 0.5)
+    # Replacing a public texture in the same slot invalidates its layout.
+    view.assets.textures.textures[map.value] = Texture(
+        1, 1, [UInt8(1), 2, 3, 127], mipmapped=False
+    )
+    view.coverage_read.clear()
+    assert_equal(view._sensor_material(id, ROAD), flat)
+    assert_equal(view.assets.textures.get(white).width, 1)
+    assert_equal(view.assets.textures.get(white).pixels[3], 127)
+    assert_equal(len(view.assets.textures.get(white).data), 0)
+
+
+def test_alpha_map_pixel_edits_and_visibility_change_public_captures() raises:
+    var camera = ActorId(0)
+    var cars = List[ActorId]()
+    var walker = ActorId(0)
+    var world = _world(camera, cars, walker)
+    var view = _renderer(world)
+    var before = view.render_depth(world, camera)
+    var semantic_before = view.render_semantic(world, camera)
+    var image = Texture(
+        1, 1, [UInt8(255), 0, 255, 255], color_space=LINEAR, alpha=IGNORED
+    )
+    var map = view.assets.textures.add(image^)
+    var material = view.assets.materials.add(
+        Material(Color(255, 0, 0), alpha_map=map, alpha_test=0.5)
+    )
+    var node = Object3D()
+    node.set_position(12, 2, 1.75)
+    view.scene.add_mesh(
+        Mesh(
+            view.assets.geometries.add(
+                box(Length(1, METER), Length(10, METER), Length(10, METER))
+            ),
+            material,
+            view.scene.add(node^),
+        )
+    )
+    view.scene.update()
+    var transparent = view.render_depth(world, camera)
+    assert_equal(transparent.pixels, before.pixels)
+    # Alpha maps read green directly. No owned white copy replaces it.
+    view.assets.textures.textures[map.value].pixels[1] = 255
+    var opaque = view.render_depth(world, camera)
+    assert_true(opaque.pixels != before.pixels)
+    var semantic = view.render_semantic(world, camera)
+    assert_true(semantic.pixels != semantic_before.pixels)
+    view.assets.materials.materials[material.value].visible = False
+    var hidden = view.render_depth(world, camera)
+    var hidden_semantic = view.render_semantic(world, camera)
+    assert_equal(hidden.pixels, before.pixels)
+    assert_equal(hidden_semantic.pixels, semantic_before.pixels)
 
 
 def main() raises:

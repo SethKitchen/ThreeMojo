@@ -455,7 +455,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 35</summary>
+<summary>Implemented: 36</summary>
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
@@ -489,6 +489,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Physics numerical contacts](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#numerical-contact-boundaries): preserve translated support points and finite friction means [#428](https://github.com/SethKitchen/ThreeMojo/issues/428), [#429](https://github.com/SethKitchen/ThreeMojo/issues/429)
 - [x] [Shared cached vehicle resources](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#share-cached-vehicle-resources): store-owned geometry and images, independent instance materials and pose, explicit cache invalidation, and failed-load rollback [#291](https://github.com/SethKitchen/ThreeMojo/issues/291)
 
+- [x] [Ground-truth override cache](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#ground-truth-override-cache): stable semantic/depth materials and exact mutable-texture invalidation without unchanged payload copies [#503](https://github.com/SethKitchen/ThreeMojo/issues/503)
 - [x] [Simulation-driven walker gait](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#walker-gait): alternating capsule limbs, smooth stops, capture-independent timing, and deterministic recorded playback [#290](https://github.com/SethKitchen/ThreeMojo/issues/290)
 
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
