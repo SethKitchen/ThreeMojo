@@ -61,6 +61,8 @@ The source is CARLA's `LibCarla/source/carla/nav/Navigation.cpp`.
 - CARLA gives a blocked walker a new filter in code that never runs; it
   is left out.
 - A walker placed where no polygon is near is refused.
+- Each polygon search uses `search_budget` and raises on exhaustion.
+  Localization, mesh construction, and crowd work have separate costs.
 """
 
 from extensions.carla.actor import (
@@ -85,6 +87,7 @@ from extensions.carla.navigation_mesh import (
     walker_filter,
 )
 from extensions.carla.sensor_noise import SensorRandom
+from extensions.carla.navigation_search import NavigationSearchBudget
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
 from std.math import atan2, sqrt
@@ -236,6 +239,7 @@ struct Navigation(Movable):
     """CARLA's pedestrian navigation: a crowd on a mesh."""
 
     var mesh: NavMesh
+    var search_budget: NavigationSearchBudget
     var ready: Bool
     var agents: List[CrowdAgent]
     var filters: List[NavQueryFilter]
@@ -249,16 +253,24 @@ struct Navigation(Movable):
     var probability_crossing: Float32
     var random: SensorRandom
 
-    def __init__(out self, var mesh: NavMesh) raises:
+    def __init__(
+        out self,
+        var mesh: NavMesh,
+        search_budget: NavigationSearchBudget = NavigationSearchBudget(),
+    ) raises:
         """Load a mesh and create the crowd, `Load` and `CreateCrowd`.
 
         Args:
             mesh: The mesh. With no polygon, the navigation is not ready
                 and every call does nothing.
+            search_budget: The finite policy for each polygon search. Map
+                localization and crowd work are outside this policy.
 
         Raises:
-            Error: Never; the filters are constants.
+            Error: If the search budget has a negative limit.
         """
+        search_budget.validate()
+        self.search_budget = search_budget
         self.ready = mesh.polygon_count() > 0
         self.mesh = mesh^
         self.agents = List[CrowdAgent]()
@@ -359,7 +371,13 @@ struct Navigation(Movable):
         if not (Bool(start) and Bool(end)):
             return None
         var polys = self.mesh.find_path(
-            start.value()[0], end.value()[0], from_location, to, filter
+            start.value()[0],
+            end.value()[0],
+            from_location,
+            to,
+            filter,
+            MAX_POLYS,
+            self.search_budget,
         )
         var goal = to
         var last = polys[len(polys) - 1]
@@ -630,28 +648,34 @@ struct Navigation(Movable):
         )
         if not Bool(at):
             return False
-        self.agents[index].target = at.value()[1]
-        self._plan(index)
+        self._plan_to(index, at.value()[1])
         return True
 
     def _plan(mut self, i: Int) raises:
-        # The corridor: the polygons from the agent to its target.
-        self.agents[i].corridor.clear()
+        self._plan_to(i, self.agents[i].target.value())
+
+    def _plan_to(mut self, i: Int, var goal: Vector3) raises:
+        # Compute before changing either field. Exhaustion preserves the
+        # previous target and corridor, including during crowd replanning.
         var f = self.filters[self.agents[i].filter_index]
         var at = self.agents[i].position
-        var goal = self.agents[i].target.value()
         # The agent stands on a polygon its filter allows, and its target
         # was found with filter 0, which every walker filter allows.
         var start = self.mesh.find_nearest_polygon(at, f, PICK_EXTENTS)
         var end = self.mesh.find_nearest_polygon(goal, f, PICK_EXTENTS)
         var path = self.mesh.find_path(
-            start.value()[0], end.value()[0], at, goal, f
+            start.value()[0],
+            end.value()[0],
+            at,
+            goal,
+            f,
+            MAX_POLYS,
+            self.search_budget,
         )
         var last = path[len(path) - 1]
         if last != end.value()[0]:
-            self.agents[i].target = self.mesh.closest_point_on_polygon(
-                last, goal
-            )
+            goal = self.mesh.closest_point_on_polygon(last, goal)
+        self.agents[i].target = goal
         self.agents[i].corridor = path^
 
     def _corner(mut self, i: Int) raises -> Vector3:
@@ -1366,13 +1390,20 @@ struct WalkerManager(Movable):
             var found = nav.get_agent_route(id, start.value(), to)
             if Bool(found):
                 path = found.value().copy()
+        var previous = self.walkers[id.value].copy()
         ref info = self.walkers[id.value]
         info.from_location = start.or_else(Vector3(0, 0, 0))
         info.to = to
         info.current_index = 0
         info.state = WALKER_IDLE
         info.route = route_points(path)
-        _ = self._next_point(nav, id, replan)
+        try:
+            _ = self._next_point(nav, id, replan)
+        except error:
+            # The route search can fit while its first corridor does not.
+            # Do not leave a new route record after failed preparation.
+            self.walkers[id.value] = previous^
+            raise error^
         return True
 
     def set_walker_next_point(
@@ -1400,17 +1431,22 @@ struct WalkerManager(Movable):
         if id.value not in self.walkers:
             return False
         ref info = self.walkers[id.value]
-        info.current_index += 1
-        if info.current_index < len(info.route):
-            info.state = WALKER_WALKING
-            var target = info.route[info.current_index].location
-            nav.pause_agent(id, False)
+        var next = info.current_index + 1
+        if next < len(info.route):
+            var target = info.route[next].location
             _ = nav.set_walker_direct_target(id, target)
+            info.current_index = next
+            info.state = WALKER_WALKING
+            nav.pause_agent(id, False)
             return True
-        info.state = WALKER_STOP
-        nav.pause_agent(id, True)
+        # A random replacement can also exhaust its search. Keep the
+        # current state until that attempt returns without an exception.
         if replan:
-            _ = self._route_to_random(nav, id, False)
+            if self._route_to_random(nav, id, False):
+                return True
+        self.walkers[id.value].current_index = next
+        self.walkers[id.value].state = WALKER_STOP
+        nav.pause_agent(id, True)
         return True
 
     def get_walker_next_point(self, id: ActorId) -> Optional[Vector3]:
