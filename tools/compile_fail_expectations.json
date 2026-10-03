@@ -4533,5 +4533,45 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/body_inverse_inertia_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_mass_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_inverse_mass_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_kind_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
   }
 }

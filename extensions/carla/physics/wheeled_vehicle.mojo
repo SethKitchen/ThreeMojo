@@ -724,7 +724,7 @@ struct WheeledVehicle(Copyable, Movable):
     def _tires(mut self, mut world: PhysicsWorld, h: Float32) raises:
         ref body = world.bodies[self.body.value]
         var com = body.world_center_of_mass()
-        var inverse_mass = body.inverse_mass
+        var inverse_mass = body.inverse_mass()
         var inverse_inertia = body.world_inverse_inertia()
         # The velocity the step will give the chassis before contacts.
         var v = (

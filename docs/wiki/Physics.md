@@ -42,7 +42,15 @@ Dynamic-to-kinematic changes keep velocity. Entering static stops linear, angula
 
 World position and orientation can change while physics is disabled. Restored world inertia uses the new orientation and the retained local tensor. Mass, inertia, mass-center and shape-offset setters reject edits to a disabled dynamic configuration. Restore dynamic mode before making those edits. A body created static or kinematic has no saved dynamic mass; create it dynamic first when later restoration is needed.
 
-Do not assign `kind`, mass-property fields or the shape directly to bypass this contract. Public fields remain for source compatibility and custom locked-axis setup while dynamic. The transition checks finite, reciprocal mass state and finite inverse-tensor entries. It does not repair a custom inverse tensor or validate a physical model. These checks preserve the existing locked-axis contract; `set_inertia` has the stricter solid-tensor contract below.
+Read `kind()`, `mass()`, `inverse_mass()` and `inverse_inertia()` as values. These replace the former public fields. Add parentheses to existing reads. Direct assignment to these names is a compile error. Change the mode with `set_kind`, the mass with `set_mass`, and solid inertia with `set_inertia`.
+
+Use `set_inverse_inertia` for a finite custom inverse tensor, including locked axes. This setter retains the supplied entries. A returned tensor is a copy; editing it does not edit the body. Custom tensors keep their previous finite-entry contract. Negative and nonsymmetric tensors remain accepted for compatibility. They do not need to describe a positive-definite solid.
+
+Mojo 1.1 has no enforced field privacy. Underscore storage is internal by convention, not a security boundary. Do not mutate that storage, use reflection to bypass setters, or replace the shape directly. The supported API prevents partial mode and mass edits; it does not make arbitrary storage access safe.
+
+`validate` checks valid mode, mesh restrictions, reciprocal dynamic mass, finite inverse tensors and zero disabled effective properties. Setters, standalone impulses, world insertion and each world step run this check. A step checks all bodies before it changes any body or consumes forces. A failed check leaves that operation's state unchanged. World insertion and standalone impulses can now raise `Error`.
+
+Validation runs at these boundaries, not inside each contact operation. Read accessors return stored values without validation. Pose, center, shape, material and motion fields remain mutable. These checks do not validate an arbitrary physical model or prevent deliberate, coherent edits to internal storage.
 
 
 ## Mass-property numerical range
@@ -59,7 +67,7 @@ Input coordinates already rounded to Float32 cannot recover lost geometric detai
 
 `RigidBody.set_mass` also requires representable inverse mass and inverse inertia. It computes and validates all candidate properties before it changes the body. `set_inertia` requires exact symmetry, finite entries and positive definiteness. Its inverse must remain finite and positive definite after conversion to Float32. Failed mass, inertia, shape-pose and center updates leave the old properties unchanged. Shape-pose updates normalize finite quaternions, as body construction does.
 
-The public inverse-inertia field still permits an intentional zero inverse along a locked axis. Set up such custom constraints while the body is dynamic. Mode changes retain that finite inverse exactly. Do not pass a singular inertia to `set_inertia` to request a locked axis: a zero inertia and a zero inverse inertia have different meanings.
+The `set_inverse_inertia` method permits an intentional zero inverse along a locked axis. Set up these custom constraints while the body is dynamic. Mode changes retain that finite inverse exactly. Do not pass a singular inertia to `set_inertia` to request a locked axis. A zero inertia and a zero inverse inertia have different meanings.
 
 Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent solid formulas over several scales. They check translated hulls, transformed centers, tensor rotation, mass scaling, symmetry, positive definiteness and failed-update atomicity. These checks establish a numerical contract. They do not establish physical calibration or add torque-free gyroscopic dynamics.
 

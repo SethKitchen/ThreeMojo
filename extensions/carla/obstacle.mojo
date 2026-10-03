@@ -232,7 +232,7 @@ def sweep_sphere(
         ref b = world.physics.world.bodies[i]
         if not b.collides or BodyId(i) in ignore:
             continue
-        if only_dynamics and b.kind == STATIC:
+        if only_dynamics and b.kind() == STATIC:
             continue
         var kept = List[Triangle]()
         if b.shape.kind == MESH:

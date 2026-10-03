@@ -24,7 +24,7 @@ from units.si import Duration, Length, Mass, MomentOfInertia, SECOND
 
 def _legacy_world(
     mut world: CarlaPhysicsWorld, var body: CarlaRigidBody
-) -> CarlaBodyId:
+) raises -> CarlaBodyId:
     return world.add_body(body^)
 
 
