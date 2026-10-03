@@ -23,6 +23,7 @@ USES = ('template-estimate', 'game-fantasy', 'engineering', 'whole-body',
         'dynamic-constitutive', 'patient-specific', 'clinical-safety')
 ROUNDING_TOLERANCE = 5e-6
 PINNED_TOOLCHAIN = 'Mojo 1.1.0 (8189361e)'
+BUILD_FLAGS = ['--Werror', '--num-threads', '1']
 
 
 def finite(value, name):
@@ -287,20 +288,22 @@ def prepare_probe(root, probe, mojo, build):
         probe.parent.mkdir(parents=True, exist_ok=True)
         # Use the repository's relative invocation. The pinned compiler can
         # crash for the equivalent all-absolute include/source/output form.
-        command = [mojo, 'build', '--Werror', '-I', '.', 'tools/anatomy_probe.mojo',
+        # Bound compiler concurrency: the pinned parallel build can crash
+        # during probe compilation. Keep this setting in the provenance.
+        command = [mojo, 'build', *BUILD_FLAGS, '-I', '.', 'tools/anatomy_probe.mojo',
                    '-o', os.path.relpath(probe, root)]
         subprocess.run(command, check=True, timeout=600, cwd=root)
         if source_digest(root) != digest:
             raise ValueError('source changed during compilation; rebuild before reporting')
-        record = {'source_sha256': digest, 'toolchain': version, 'flags': ['--Werror'],
+        record = {'source_sha256': digest, 'toolchain': version, 'flags': BUILD_FLAGS,
                   'binary_sha256': hashlib.sha256(probe.read_bytes()).hexdigest()}
         metadata.write_text(json.dumps(record, indent=2)+'\n')
     else:
         if not probe.is_file() or not metadata.is_file():
             raise ValueError('build the source-bound probe with --build first')
         record = json.loads(metadata.read_text())
-        if record.get('toolchain') != PINNED_TOOLCHAIN or record.get('flags') != ['--Werror']:
-            raise ValueError('probe provenance must record the exact pinned compiler and --Werror')
+        if record.get('toolchain') != PINNED_TOOLCHAIN or record.get('flags') != BUILD_FLAGS:
+            raise ValueError('probe provenance must record the exact pinned compiler and build flags')
         if record.get('source_sha256') != digest or record.get('binary_sha256') != hashlib.sha256(probe.read_bytes()).hexdigest():
             raise ValueError('probe provenance is stale; rebuild with --build')
     return record

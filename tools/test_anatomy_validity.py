@@ -180,9 +180,10 @@ class AnatomyValidityTests(unittest.TestCase):
                 return av.subprocess.CompletedProcess(command, 0)
             with patch.object(av.subprocess, 'run', side_effect=run):
                 metadata = av.prepare_probe(root, probe, 'mojo', True)
-            self.assertEqual(calls[1][0], ['mojo', 'build', '--Werror', '-I', '.', 'tools/anatomy_probe.mojo', '-o', '.cache/probe'])
+            self.assertEqual(calls[1][0], ['mojo', 'build', '--Werror', '--num-threads', '1', '-I', '.', 'tools/anatomy_probe.mojo', '-o', '.cache/probe'])
             self.assertEqual(calls[1][1]['cwd'], root)
             self.assertEqual(metadata['source_sha256'], av.source_digest(root))
+            self.assertEqual(metadata['flags'], ['--Werror', '--num-threads', '1'])
 
     def test_source_bound_probe_rejects_missing_or_stale_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -199,10 +200,10 @@ class AnatomyValidityTests(unittest.TestCase):
             metadata.write_text('{}')
             with self.assertRaisesRegex(ValueError, 'exact pinned compiler'):
                 av.prepare_probe(root, probe, 'mojo', False)
-            record = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': ['--Werror'], 'source_sha256': av.source_digest(root), 'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
+            record = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': av.BUILD_FLAGS, 'source_sha256': av.source_digest(root), 'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
             metadata.write_text(json.dumps(record))
             self.assertEqual(av.prepare_probe(root, probe, 'mojo', False), record)
-            for key, value in [('toolchain', None), ('toolchain', 'Mojo 1.1.0 unknown'), ('flags', []), ('flags', None)]:
+            for key, value in [('toolchain', None), ('toolchain', 'Mojo 1.1.0 unknown'), ('flags', []), ('flags', None), ('flags', ['--Werror'])]:
                 metadata.write_text(json.dumps(record | {key: value}))
                 with self.assertRaisesRegex(ValueError, 'exact pinned compiler'):
                     av.prepare_probe(root, probe, 'mojo', False)
@@ -230,7 +231,7 @@ class AnatomyValidityTests(unittest.TestCase):
                     inventory_path.write_text(json.dumps(inventory))
                     probe = root/'probe'
                     probe.write_bytes(b'initial binary')
-                    provenance = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': ['--Werror'],
+                    provenance = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': av.BUILD_FLAGS,
                                   'source_sha256': av.source_digest(root),
                                   'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
                     metadata = probe.with_suffix('.provenance.json')
