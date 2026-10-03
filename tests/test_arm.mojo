@@ -221,12 +221,10 @@ from extensions.humanoid.skeleton.occupancy import (
     EMPTY,
     TRABECULAR_FILL,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     CARTILAGE,
     LIGAMENT,
     MENISCUS,
-    SOFT_EMPTY,
-    SOFT_FILL,
     arterial_tissue,
     hair_tissue,
     ligament_tissue,
@@ -235,7 +233,11 @@ from extensions.humanoid.skeleton.soft_tissue import (
     nerve_tissue,
     skin_tissue,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.humanoid.skeleton.soft_tissue import (
+    SOFT_EMPTY,
+    SOFT_FILL,
+)
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )

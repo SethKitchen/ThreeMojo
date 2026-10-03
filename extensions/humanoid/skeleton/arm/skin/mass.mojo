@@ -17,14 +17,16 @@ from extensions.humanoid.skeleton.arm.frame import (
 from extensions.humanoid.skeleton.arm.skin.dimensions import (
     ArmSkinLayerField,
 )
+from extensions.anatomy.soft_tissue import (
+    SoftMass,
+    SoftTissue,
+    skin_tissue,
+)
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
-    SoftMass,
     SoftOccupancy,
-    SoftTissue,
     classify_soft,
     sample_soft_mass,
-    skin_tissue,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3

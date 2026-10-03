@@ -109,7 +109,8 @@ def _british() -> List[String]:
     """Return British spellings that the documentation must not use.
 
     Stems, so that a plural or a past tense is caught too. Each is chosen so
-    that no American word contains it.
+    that no American word contains it, except a name the checker removes
+    first, such as "greyhound".
     """
     return [
         "colour",
@@ -312,8 +313,13 @@ def _check_paragraph(
             )
     var british = _british()
     var american = _american()
+    # An American word that holds a British stem, such as the breed name
+    # "greyhound", is not a British spelling.
+    var plain = lowered
+    for word in ["greyhound"]:
+        plain = plain.replace(word, " ")
     for index in range(len(british)):
-        if lowered.find(british[index]) >= 0:
+        if plain.find(british[index]) >= 0:
             problems.append(
                 place
                 + "'"

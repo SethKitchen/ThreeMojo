@@ -23,12 +23,14 @@ from extensions.humanoid.skeleton.pelvis.lymph.dimensions import (
     PelvisLymphField,
     pelvis_lymph_distance,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
-    classify_soft,
     lymph_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
+    classify_soft,
 )
 from math.vector3 import Vector3
 from units.si import CUBIC_METER, KILOGRAM, Mass, Volume

@@ -133,6 +133,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_bone_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 15,
+        "message": "invalid call to 'check': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'BoneId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_bone_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2341,6 +2353,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_primitive_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_kind': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'PrimitiveKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_projection_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2811,6 +2835,18 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'SoftTissueKind'"
     ]
   },
+  "tests/compile_fail/a_species_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_species': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'SpeciesId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_spectrum_resolution_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2920,12 +2956,38 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_surface_class_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 14,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'surface' cannot be converted from 'IntLiteral[0]' to 'SurfaceClass'"
+    ]
+  },
   "tests/compile_fail/a_surface_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
         "line": 12,
         "column": 24,
         "message": "invalid call to 'surface_name': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'SurfaceKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_surface_part_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_part': value passed to 'part' cannot be converted from 'IntLiteral[0]' to 'SurfacePart'"
       }
     ],
     "notes": [
@@ -2951,6 +3013,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_tag_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "invalid call to 'tag_name': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'TagId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_texel_type_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3528,6 +3602,20 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_warp_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'WarpKind'"
+    ]
+  },
   "tests/compile_fail/a_water_view_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3784,6 +3872,66 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_anatomy_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'AnatomyMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_age_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'pick_age': value passed to 'requested' cannot be converted from 'IntLiteral[0]' to 'Age'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_quality_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "invalid call to 'animal_options': value passed to 'quality' cannot be converted from 'IntLiteral[0]' to 'Quality'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_sex_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "invalid call to 'animal_options': value passed to 'sex' cannot be converted from 'IntLiteral[0]' to 'Sex'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_variant_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "invalid call to 'animal_options': value passed to 'variant' cannot be converted from 'IntLiteral[0]' to 'Variant'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/an_animation_event_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4640,6 +4788,64 @@
         "line": 13,
         "column": 27,
         "message": "invalid call to 'has_reason': value passed to 'reason' cannot be converted from 'IntLiteral[0]' to 'TriangleBudgetReason'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_plan_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'segment_of': value passed to 'plan' cannot be converted from 'IntLiteral[0]' to 'BodyPlan'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_segment_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 35,
+        "message": "invalid call to 'segment_density': value passed to 'segment' cannot be converted from 'IntLiteral[0]' to 'Segment'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_tissue_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'tissue_density': value passed to 'tissue' cannot be converted from 'IntLiteral[2]' to 'BodyTissue'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_reference_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'ReferenceKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_evidence_grade_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'evidence_label': value passed to 'grade' cannot be converted from 'IntLiteral[1]' to 'Evidence'"
       }
     ],
     "notes": [

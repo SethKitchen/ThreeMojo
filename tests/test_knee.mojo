@@ -56,7 +56,7 @@ from extensions.humanoid.skeleton.look import (
     meniscus_phong,
 )
 from extensions.humanoid.skeleton.occupancy import MAX_STEP, MIN_STEP
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     ARTERIAL,
     CARTILAGE,
     HAIR as HAIR_KIND,
@@ -66,18 +66,20 @@ from extensions.humanoid.skeleton.soft_tissue import (
     MUSCLE,
     NERVE,
     SKIN as SKIN_KIND,
-    SOFT_EMPTY,
-    SOFT_FILL,
     TENDON,
     VENOUS,
-    SoftOccupancy,
     SoftTissue,
     SoftTissueKind,
     cartilage_tissue,
-    classify_soft,
-    filled_density,
     ligament_tissue,
     meniscus_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SOFT_EMPTY,
+    SOFT_FILL,
+    SoftOccupancy,
+    classify_soft,
+    filled_density,
 )
 from materials.material import DOUBLE_SIDE, PHONG
 from math.vector3 import Vector3

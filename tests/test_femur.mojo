@@ -40,7 +40,7 @@ from extensions.humanoid.skeleton.occupancy import (
     apparent_density_of,
     grid_cells,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneKind,
     cortical_tissue,
     trabecular_tissue,

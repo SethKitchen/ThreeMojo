@@ -204,6 +204,13 @@ COV_BUDGET := $(shell n=$(words $(COVERAGE_SUITES)); \
                 [ $$n -lt 60 ] && n=60; echo $$n)
 
 CACHE_DIR := .cache
+# A space and a newline, to turn a word list into lines.
+empty :=
+space := $(empty) $(empty)
+define newline
+
+
+endef
 # Shell quoting also protects flags that contain spaces or shell punctuation.
 quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
@@ -450,25 +457,32 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 
 # mojo format has no --check flag, so format scratch copies and diff them.
 # One invocation avoids paying compiler startup once for every source file.
+# The file list goes through a file: twice inline, it outgrows the 128 KiB
+# that Linux allows one shell argument.
+FMT_LIST := $(CACHE_DIR)/formatted-files
 fmt-check: $(FMT_STAMP)
 $(FMT_STAMP):
+	$(shell mkdir -p $(CACHE_DIR))
+	$(file >$(FMT_LIST),$(subst $(space),$(newline),$(strip $(FORMATTED))))
 	@fail=0; tmp=$$(mktemp -d) || exit 1; \
 	trap 'rm -rf "$$tmp"' 0; \
 	set --; \
-	for f in $(FORMATTED); do \
+	while read -r f; do \
+	  [ -n "$$f" ] || continue; \
 	  mkdir -p "$$tmp/$$(dirname "$$f")" || exit 1; \
 	  cp "$$f" "$$tmp/$$f" || exit 1; \
 	  set -- "$$@" "$$tmp/$$f"; \
-	done; \
+	done < $(FMT_LIST); \
 	if [ $$# -gt 0 ]; then \
 	  $(call run,$(MOJO) format -q "$$@"); \
 	  [ $$rc -eq 0 ] || exit $$rc; \
 	fi; \
-	for f in $(FORMATTED); do \
+	while read -r f; do \
+	  [ -n "$$f" ] || continue; \
 	  if ! diff -q "$$f" "$$tmp/$$f" > /dev/null; then \
 	    echo "needs formatting: $$f"; fail=1; \
 	  fi; \
-	done; \
+	done < $(FMT_LIST); \
 	if [ $$fail -ne 0 ]; then echo "Run 'make fmt'."; exit 1; fi; \
 	echo "All files formatted."
 	@$(call stamp,fmt)
@@ -720,6 +734,9 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
            $(OUT_DIR)/head.png \
            $(OUT_DIR)/water.png \
+           $(OUT_DIR)/animals.png \
+           $(OUT_DIR)/walk.png \
+           $(OUT_DIR)/animal_anatomy.png \
            $(OUT_DIR)/carla_towns.png \
            $(OUT_DIR)/game_humanoid.png \
            $(OUT_DIR)/hairstyles.png \
@@ -1353,6 +1370,27 @@ $(OUT_DIR)/integument.png: $(EXAMPLE_INPUTS_integument)
 $(OUT_DIR)/water.png: $(EXAMPLE_INPUTS_water) assets/pebbles.jpg
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Every procedural animal, one to a tile, turning.
+$(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animals.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A wolf walks one stride, re-meshed in each pose.
+$(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Game mode beside engineering mode, at real size and walking speed.
+$(OUT_DIR)/animal_anatomy.png: $(EXAMPLE_INPUTS_animal_anatomy)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animal_anatomy.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 

@@ -17,7 +17,7 @@ from extensions.humanoid.skeleton.occupancy import (
     MIN_STEP,
     TRABECULAR_FILL,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneKind,
     cortical_tissue,
     trabecular_tissue,

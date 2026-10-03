@@ -31,15 +31,15 @@ from extensions.humanoid.skeleton.occupancy import TRABECULAR_FILL
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     pelvis_dimensions,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     CARTILAGE,
     LIGAMENT,
     MENISCUS,
-    SOFT_FILL,
     lymph_tissue,
     muscle_tissue,
     nerve_tissue,
 )
+from extensions.humanoid.skeleton.soft_tissue import SOFT_FILL
 from extensions.humanoid.skeleton.torso.assembly import add_torso
 from extensions.humanoid.skeleton.torso.body import (
     BodySkinField,
@@ -224,7 +224,7 @@ from extensions.humanoid.skeleton.torso.vessels.mass import (
     torso_vessel_mass_from_dimensions,
     torso_vessel_occupancy,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )

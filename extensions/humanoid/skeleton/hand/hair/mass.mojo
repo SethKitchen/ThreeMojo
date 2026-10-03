@@ -21,7 +21,7 @@ from extensions.humanoid.skeleton.hand.hair.dimensions import (
     HandHair,
     hand_hair_field,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
     SoftTissue,
     hair_tissue,

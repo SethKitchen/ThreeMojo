@@ -17,14 +17,16 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 from extensions.humanoid.skeleton.torso.skin.dimensions import (
     TorsoSkinLayerField,
 )
+from extensions.anatomy.soft_tissue import (
+    SoftMass,
+    SoftTissue,
+    skin_tissue,
+)
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
-    SoftMass,
     SoftOccupancy,
-    SoftTissue,
     classify_soft,
     sample_soft_mass,
-    skin_tissue,
 )
 from math.vector3 import Vector3
 from units.si import Length
