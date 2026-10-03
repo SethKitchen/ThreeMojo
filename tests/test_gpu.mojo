@@ -72,6 +72,7 @@ from geometries.sphere import sphere
 from math.matrix4 import translation, scaling
 from math.vector2 import Vector2
 from std.math import cos, inf, isinf, max, pi, sin
+from std.sys import has_apple_gpu_accelerator
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
@@ -15140,7 +15141,11 @@ def test_shared_norms_preserve_tiny_and_large_directions() raises:
     var f32: List[Float32] = [0, 1e-30, 1, 1e30]
     var f64: List[Float64] = [0, 1e-200, 1, 1e200]
     check_norm_parity(f32, 1e-6)
-    check_norm_parity(f64, 1e-13)
+    # Metal has no Float64, so the Float64 kernel cannot even be built.
+    comptime if has_apple_gpu_accelerator():
+        print("SKIP (Apple GPU has no Float64): shared Float64 norms")
+    else:
+        check_norm_parity(f64, 1e-13)
 
 
 def matrix_inverse_sample(value: Float32) -> Array[Float32, 3]:
@@ -15165,35 +15170,43 @@ def matrix_inverse_sample(value: Float32) -> Array[Float32, 3]:
 
 
 def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
-    from std.math import isfinite
-
     if skipped_for_lack_of_a_gpu("shared matrix inverses across scales"):
         return
-    var inputs: List[Float32] = [0, 1e-30, 1, 1e30]
-    var context = DeviceContext()
-    var device_inputs = context.enqueue_create_buffer[DType.float32](
-        len(inputs)
-    )
-    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
-    with device_inputs.map_to_host() as host:
-        for at in range(len(inputs)):
-            host[at] = inputs[at]
-    context.enqueue_function[_ScalarMathKernels.matrix_inverse_kernel](
-        output.unsafe_ptr(),
-        device_inputs.unsafe_ptr(),
-        Int32(len(inputs)),
-        grid_dim=(1,),
-        block_dim=(32,),
-    )
-    context.synchronize()
-    with output.map_to_host() as host:
-        for at in range(len(inputs)):
-            var expected = matrix_inverse_sample(inputs[at])
-            for component in range(3):
-                var actual = host[3 * at + component]
-                var unit = Float32(0) if inputs[at] == 0 else (
-                    Float32(-1) if component == 2 else Float32(1)
-                )
-                assert_true(isfinite(actual) and isfinite(expected[component]))
-                assert_almost_equal(actual, unit, atol=1e-6)
-                assert_almost_equal(actual, expected[component], atol=1e-6)
+    # The wide inverse path is exact Float64 arithmetic, which Metal lacks.
+    comptime if has_apple_gpu_accelerator():
+        print("SKIP (Apple GPU has no Float64): shared wide matrix inverses")
+    else:
+        from std.math import isfinite
+
+        var inputs: List[Float32] = [0, 1e-30, 1, 1e30]
+        var context = DeviceContext()
+        var device_inputs = context.enqueue_create_buffer[DType.float32](
+            len(inputs)
+        )
+        var output = context.enqueue_create_buffer[DType.float32](
+            3 * len(inputs)
+        )
+        with device_inputs.map_to_host() as host:
+            for at in range(len(inputs)):
+                host[at] = inputs[at]
+        context.enqueue_function[_ScalarMathKernels.matrix_inverse_kernel](
+            output.unsafe_ptr(),
+            device_inputs.unsafe_ptr(),
+            Int32(len(inputs)),
+            grid_dim=(1,),
+            block_dim=(32,),
+        )
+        context.synchronize()
+        with output.map_to_host() as host:
+            for at in range(len(inputs)):
+                var expected = matrix_inverse_sample(inputs[at])
+                for component in range(3):
+                    var actual = host[3 * at + component]
+                    var unit = Float32(0) if inputs[at] == 0 else (
+                        Float32(-1) if component == 2 else Float32(1)
+                    )
+                    assert_true(
+                        isfinite(actual) and isfinite(expected[component])
+                    )
+                    assert_almost_equal(actual, unit, atol=1e-6)
+                    assert_almost_equal(actual, expected[component], atol=1e-6)

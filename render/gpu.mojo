@@ -12921,7 +12921,9 @@ struct _DeviceMemory(ImplicitlyCopyable, StorageMemory):
             if op == ATOMIC_LOAD.value:
                 return old
             var new = bitcast[DType.int32](atomic_result(op, old, value))
-            if Atomic[Int32].compare_exchange(bits, expected, new):
+            # Weak, because Apple GPUs have no strong compare-exchange. A
+            # spurious failure reloads `expected` and goes round again.
+            if Atomic[Int32].compare_exchange[weak=True](bits, expected, new):
                 return old
 
 
