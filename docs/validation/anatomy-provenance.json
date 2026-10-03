@@ -1,0 +1,463 @@
+{
+  "schema_version": 1,
+  "scope": "static canonical lower-limb template with bounded spine diagnostics",
+  "default_classification": "authored_template_or_unknown",
+  "classification_rule": "Only explicitly listed research-derived quantities have a cited origin. All remaining parameters in listed source modules are authored. Cited origin is not model validation.",
+  "parameters": [
+    {
+      "id": "spec",
+      "symbols": [
+        "HumanoidSpec.*"
+      ],
+      "source_files": [
+        "extensions/humanoid/spec.mojo",
+        "extensions/humanoid/sex.mojo",
+        "extensions/humanoid/athleticism.mojo"
+      ],
+      "classification": "caller_input_and_authored_selection",
+      "units": [
+        "m",
+        "named osteological sex",
+        "named athleticism"
+      ],
+      "supported_population": null,
+      "template_values": {
+        "stature_m": [
+          1.2,
+          2.5
+        ],
+        "sex": [
+          "male",
+          "female"
+        ],
+        "athleticism": [
+          "untoned",
+          "toned"
+        ],
+        "genome": "template only in this report"
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "No age, subject mass, measured body composition or patient calibration is supplied.",
+        "The height interval is a software range. Osteological sex selects a shape template."
+      ]
+    },
+    {
+      "id": "long_bone_regressions",
+      "symbols": [
+        "length",
+        "MALE_SLOPE",
+        "FEMALE_SLOPE",
+        "MALE_INTERCEPT_CM",
+        "FEMALE_INTERCEPT_CM"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/femur/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/tibia/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/fibula/dimensions.mojo"
+      ],
+      "classification": "inverse_of_cited_stature_regression",
+      "units": [
+        "cm",
+        "dimensionless slope"
+      ],
+      "supported_population": "Repository coefficients cite the American White adult lines of Trotter and Gleser (1952). This historical source population does not establish applicability to a caller.",
+      "template_values": {
+        "femur": {
+          "male": [
+            2.38,
+            61.41
+          ],
+          "female": [
+            2.47,
+            54.1
+          ]
+        },
+        "tibia": {
+          "male": [
+            2.52,
+            78.62
+          ],
+          "female": [
+            2.9,
+            61.53
+          ]
+        },
+        "fibula": {
+          "male": [
+            2.68,
+            71.78
+          ],
+          "female": [
+            2.93,
+            59.61
+          ]
+        },
+        "formula": "bone_cm = (stature_cm - intercept_cm)/slope"
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [
+        "https://doi.org/10.1002/ajpa.1330100407"
+      ],
+      "unknowns": [
+        "Original coefficient tables and calibration extrema were not independently re-extracted.",
+        "Inverting stature-on-bone regression does not calibrate bone-on-stature prediction.",
+        "The tibial regression omits the medial malleolus; the authored solid adds it."
+      ]
+    },
+    {
+      "id": "bone_shape",
+      "symbols": [
+        "all remaining long-bone dimensions and shell/end-region rules",
+        "PatellaDimensions.*",
+        "FootDimensions.*"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/femur/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/femur/mass.mojo",
+        "extensions/humanoid/skeleton/leg/tibia/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/tibia/mass.mojo",
+        "extensions/humanoid/skeleton/leg/fibula/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/fibula/mass.mojo",
+        "extensions/humanoid/skeleton/leg/patella/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/patella/mass.mojo",
+        "extensions/humanoid/skeleton/foot/bones/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/bones/mass.mojo"
+      ],
+      "classification": "authored_template",
+      "units": [
+        "m",
+        "dimensionless ratio",
+        "degree or radian as declared in source"
+      ],
+      "supported_population": null,
+      "template_values": null,
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "Shape ratios and landmarks are not a cited osteometric table.",
+        "Edits do not rebuild stored landmarks.",
+        "Foot bones have an authored shell and no medullary canal."
+      ]
+    },
+    {
+      "id": "cartilage_thickness",
+      "symbols": [
+        "KneeDimensions.femoral_thickness",
+        "KneeDimensions.tibial_thickness",
+        "KneeDimensions.patellar_thickness"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/knee/dimensions.mojo"
+      ],
+      "classification": "named_template_means_with_cited_context",
+      "units": [
+        "mm",
+        "dimensionless stature scale"
+      ],
+      "supported_population": "Shepherd and Seedhom (1999) studied 11 sets of cadaveric human ankle, knee and hip joints.",
+      "template_values": {
+        "six_foot_male_femur_mm": 2.2,
+        "six_foot_male_tibia_mm": 2.5,
+        "six_foot_male_patella_mm": 3.3
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [
+        "https://doi.org/10.1136/ard.58.1.27"
+      ],
+      "unknowns": [
+        "These are template choices, not subject measurements.",
+        "Stature scaling and female adjustments are authored.",
+        "No cartilage-specific density region exists in this integral."
+      ]
+    },
+    {
+      "id": "soft_geometry",
+      "symbols": [
+        "remaining KneeDimensions.*",
+        "MuscleDimensions.*",
+        "FootMuscleDimensions.*",
+        "ligament/vessel/nerve/lymph landmarks and radii"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/knee/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/muscles/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/vessels/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/nerves/dimensions.mojo",
+        "extensions/humanoid/skeleton/leg/lymph/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/muscles/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/vessels/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/nerves/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/lymph/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/ligaments/dimensions.mojo"
+      ],
+      "classification": "authored_template",
+      "units": [
+        "m",
+        "dimensionless ratio"
+      ],
+      "supported_population": null,
+      "template_values": {
+        "untoned_radius_scale": 0.8,
+        "toned_radius_scale": 1.0
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "No measured cross-section or muscle-volume data set calibrates these shapes.",
+        "Static geometry does not establish contact or load-bearing behavior."
+      ]
+    },
+    {
+      "id": "skin_and_placement",
+      "symbols": [
+        "LimbSkinField",
+        "leg/foot SkinField",
+        "LegAssembly",
+        "loft/fat/dermis/blend parameters"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/limb/skin.mojo",
+        "extensions/humanoid/skeleton/leg/skin/dimensions.mojo",
+        "extensions/humanoid/skeleton/foot/skin/dimensions.mojo",
+        "extensions/humanoid/skeleton/loft.mojo",
+        "extensions/humanoid/skeleton/leg/assembly.mojo",
+        "extensions/humanoid/skeleton/pelvis/bones/dimensions.mojo"
+      ],
+      "classification": "authored_geometric_envelope",
+      "units": [
+        "m",
+        "dimensionless ratio",
+        "section count"
+      ],
+      "supported_population": null,
+      "template_values": null,
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [
+        "https://github.com/SethKitchen/ThreeMojo/issues/297"
+      ],
+      "unknowns": [
+        "Convex-hull lofts and the smooth ankle union are not measured tissue boundaries.",
+        "Canonical-to-visual/rig/bake mapping remains separate #297.",
+        "The hip cut excludes proximal envelope above it."
+      ]
+    },
+    {
+      "id": "bone_density",
+      "symbols": [
+        "BoneTissue.tissue_density",
+        "BoneTissue.porosity"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/tissue.mojo"
+      ],
+      "classification": "research_metadata_with_authored_nominal_porosity",
+      "units": [
+        "kg/m^3",
+        "dimensionless porosity"
+      ],
+      "supported_population": "Research across anatomical sites and health states, summarized by Morgan, Unnikrishnan and Hussein (2018); no one calibrated template population.",
+      "template_values": {
+        "tissue_density_kg_m3": 2000,
+        "cortical_porosity": 0.1,
+        "trabecular_porosity": 0.8,
+        "cortical_apparent_kg_m3": 1800,
+        "trabecular_apparent_kg_m3": 400,
+        "literature_context_cortical_porosity": [
+          0.05,
+          0.15
+        ],
+        "literature_context_trabecular_porosity": [
+          0.4,
+          0.95
+        ]
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [
+        "https://doi.org/10.1146/annurev-bioeng-062117-121139"
+      ],
+      "unknowns": [
+        "Literature ranges are context, not a validated software interval.",
+        "Porosity is applied once; separate pore-fluid/marrow mass is not added.",
+        "Elastic metadata is unused by the integral and is not a constitutive law."
+      ]
+    },
+    {
+      "id": "muscle_density",
+      "symbols": [
+        "muscle_tissue().wet_density"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/soft_tissue.mojo"
+      ],
+      "classification": "named_density_with_cited_mammalian_research",
+      "units": [
+        "kg/m^3"
+      ],
+      "supported_population": "Mendez and Keys (1960), mammalian skeletal muscle. Human subject applicability is not established here.",
+      "template_values": 1060,
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "Mendez J, Keys A. Density and composition of mammalian muscle. Metabolism. 1960;9:184-188. The original experimental table was not re-extracted.",
+        "No age, site, composition or temperature uncertainty is propagated."
+      ]
+    },
+    {
+      "id": "density_proxies",
+      "symbols": [
+        "skin_tissue().wet_density",
+        "tendon_tissue().wet_density",
+        "adipose_tissue().wet_density",
+        "marrow and unresolved soft assignments"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/soft_tissue.mojo",
+        "extensions/humanoid/skeleton/limb/inertia.mojo",
+        "extensions/humanoid/skeleton/limb/regions.mojo"
+      ],
+      "classification": "authored_density_proxies",
+      "units": [
+        "kg/m^3"
+      ],
+      "supported_population": null,
+      "template_values": {
+        "dermis": 1100,
+        "tendon": 1120,
+        "fat_and_marrow_proxy": 920
+      },
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "The marrow-fat assignment is a documented template assumption, not a validated real marrow density.",
+        "Cartilage, menisci, ligaments, vessels, lymphatics and nerves have no separate assignment; any higher-priority tissue wins, otherwise fat is used.",
+        "Water fraction is not applied again to wet density."
+      ]
+    },
+    {
+      "id": "segment_cuts",
+      "symbols": [
+        "THIGH",
+        "SHANK",
+        "FOOT_SEGMENT",
+        "hip/knee/lateral-malleolus planes"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/limb/inertia.mojo"
+      ],
+      "classification": "authored_segmentation_with_cited_context",
+      "units": [
+        "m"
+      ],
+      "supported_population": "de Leva (1996) adjusted segment parameters from young adult research samples. Those data are context, not a matched validation set for this template.",
+      "template_values": null,
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [
+        "https://doi.org/10.1016/0021-9290(95)00178-6"
+      ],
+      "unknowns": [
+        "No matched subjects, measurement uncertainties or task-specific acceptance thresholds are supplied."
+      ]
+    },
+    {
+      "id": "spine_and_morph",
+      "symbols": [
+        "TorsoDimensions.*",
+        "HeadDimensions.*",
+        "TorsoFrame.*",
+        "HeadMorph.*",
+        "cervical and thoracolumbar discs"
+      ],
+      "source_files": [
+        "extensions/humanoid/skeleton/torso/bones/dimensions.mojo",
+        "extensions/humanoid/skeleton/head/frame.mojo",
+        "extensions/humanoid/skeleton/morph.mojo",
+        "extensions/humanoid/skeleton/head/bones/dimensions.mojo",
+        "extensions/humanoid/skeleton/head/ligaments/dimensions.mojo",
+        "extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo",
+        "extensions/humanoid/skeleton/torso/sweep.mojo"
+      ],
+      "classification": "authored_template",
+      "units": [
+        "template cm",
+        "m",
+        "dimensionless expression"
+      ],
+      "supported_population": null,
+      "template_values": null,
+      "software_range": "See the source guards. These are software limits, not empirical calibration limits.",
+      "empirical_range": null,
+      "uncertainty": null,
+      "references": [],
+      "unknowns": [
+        "Finite fantasy expressions remain allowed; finite input does not establish anatomical compatibility.",
+        "Endplane consistency is not load-bearing validation.",
+        "SweepField.volume sums overlaps and does not subtract cuts. It must not be added as a disjoint body-tissue total."
+      ]
+    }
+  ],
+  "intentional_overlap_allowlist": [
+    {
+      "id": "same_named_field_construction_union",
+      "scope": "Primitives inside one named bone, muscle or sweep field",
+      "reason": "Count the resulting union once.",
+      "does_not_allow": "Overlaps between distinct named bones or between a bone and a disc"
+    },
+    {
+      "id": "skin_envelope_contains_internal_regions",
+      "scope": "Skin envelope and its internal assignment regions",
+      "reason": "The envelope is the domain, not a second mass contribution."
+    },
+    {
+      "id": "leg_foot_skin_union",
+      "scope": "Leg and foot envelopes at the ankle",
+      "reason": "A smooth union is sampled once."
+    },
+    {
+      "id": "spine_endplane_boundary_contact",
+      "scope": "A body endplane and its corresponding neighboring disc endpoint",
+      "reason": "A shared zero-volume surface is intentional.",
+      "coordinate_tolerance_m": 1e-06,
+      "allowed_positive_overlap_volume_m3": 0,
+      "does_not_allow": "Reversed gaps or positive-volume body/disc overlap"
+    }
+  ],
+  "task_specific_reference_evidence": null,
+  "task_specific_acceptance_thresholds": null,
+  "engineering_validated": false,
+  "independent_method_references": [
+    {
+      "url": "https://ocw.mit.edu/courses/16-07-dynamics-fall-2009/resources/mit16_07f09_lec26/",
+      "use": "Tensor and parallel-axis definitions for independent analytic controls."
+    },
+    {
+      "url": "https://www.grc.nasa.gov/www/wind/valid/tutorial/spatconv.html",
+      "use": "Grid refinement principles; no CFD order or GCI bound is transferred to voxel anatomy."
+    },
+    {
+      "url": "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/assessing-credibility-computational-modeling-and-simulation-medical-device-submissions",
+      "use": "Context-specific credibility distinction only. No FDA assessment, clearance or certification is claimed."
+    }
+  ]
+}
