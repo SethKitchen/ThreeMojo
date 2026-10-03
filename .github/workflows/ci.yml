@@ -36,6 +36,7 @@ permissions:
 # tools/affected.py and the AFFECTED block in the Makefile. A push to main
 # checks everything, which also catches what the graph cannot see.
 env:
+  MODULAR_TELEMETRY_ENABLED: "false"
   AFFECTED: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
 
 jobs:
