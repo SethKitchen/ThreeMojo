@@ -69,6 +69,8 @@ A poly3 and a paramPoly3 keep CARLA's sample tables and its linear interpolation
 
 ## Lanes
 
+See [CARLA lane numerics](CARLA-lane-numerics) for the experimental centerline refinement and its current limits.
+
 A `LaneId` is minus for a lane on the right of the reference line and plus for a lane on the left. Lane 0 is the reference line. It has no width, but it carries the center mark.
 
 On a road that keeps traffic to the right, a right lane faces along the road. A left lane faces against it, so its yaw gains 180 degrees.
