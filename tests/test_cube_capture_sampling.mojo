@@ -56,7 +56,8 @@ def _triangles(mut assets: Assets, radiance: Float32 = 1) raises -> Scene:
     for face in range(FACE_COUNT):
         var forward = face_forward(face)
         var up = face_up(face)
-        var right = forward.cross(up)
+        var right = forward
+        right.cross(up)
         var positions = List[Float32]()
         for point in [
             Vector3(-1.6, -1.4, 2),
