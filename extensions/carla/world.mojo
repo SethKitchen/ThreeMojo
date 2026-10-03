@@ -20,7 +20,8 @@ set, one tick does this, in order:
 2. The stop and yield signs' give-way timers run down.
 3. The traffic-light groups advance their cycles.
 4. The physics steps, cut into substeps no longer than
-   `max_substep_delta_time`, at most `max_substeps` of them.
+   `max_substep_delta_time`, at most `max_substeps` of them. Each live
+   walker's procedural gait advances from horizontal speed and tick time.
 5. The world finds which road boxes each vehicle is in, and tells the
    lights and signs about each vehicle that came or went.
 6. The world takes its snapshot.
@@ -147,6 +148,7 @@ from extensions.carla.walker import (
     WalkerBoneControlOut,
     WalkerRecord,
 )
+from extensions.carla.walker_gait import WalkerGait
 from extensions.carla.weather import WeatherParameters
 from extensions.carla.world_snapshot import (
     ActorSnapshot,
@@ -1610,6 +1612,20 @@ struct World(Movable):
         self.physics.apply_walker_control(self.walkers[w].physics, control)
         self.walkers[w].control = control
 
+    def get_walker_gait(self, id: ActorId) raises -> WalkerGait:
+        """Read a copy of a capsule walker's simulation-driven gait.
+
+        Args:
+            id: A live walker.
+
+        Returns:
+            Its bounded phase and smooth amplitude, without advancing time.
+
+        Raises:
+            Error: If the actor is not a live walker.
+        """
+        return self.walkers[self._walker(id)].gait
+
     def get_walker_control(self, id: ActorId) raises -> WalkerControl:
         """Return the control a walker was last given, `GetWalkerControl`.
 
@@ -2248,6 +2264,15 @@ struct World(Movable):
         self._park_destroyed()
         # The spectator is always in the list.
         for i in range(len(self.actors)):  # pragma: no branch
+            if (
+                self.actors[i].is_alive()
+                and self.actors[i].kind == WALKER_ACTOR
+            ):
+                var velocity = self.get_velocity(self.actors[i].id)
+                velocity.z = 0
+                self.walkers[self.actors[i].handle].gait.advance(
+                    Velocity(velocity.length()), dt
+                )
             if not (
                 self.actors[i].is_alive()
                 and self.actors[i].kind == VEHICLE_ACTOR

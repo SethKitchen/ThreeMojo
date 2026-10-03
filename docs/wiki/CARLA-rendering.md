@@ -101,7 +101,17 @@ The body wears car paint: a metallic base under a clear coat, in the color of th
 | High beam | Brightest glow | Glow | Brighter spot light |
 | Brake | No change | Bright glow | No change |
 
-A walker is capsules, a head and shoes. The colors of the clothes come from the actor's id. The legs and the arms swing with the walker's speed.
+### Walker gait
+
+A procedural walker is capsules, a head and shoes. Its clothes use colors from the actor's id. `World.tick` advances its gait from horizontal speed and simulation time. Rendering only reads the pose. Repeated captures at one tick and a renderer created later see the same pose.
+
+At constant speed, one cycle uses 1.5 meters of horizontal travel. The left leg and right arm swing together. The other limbs swing in the opposite direction. The target amplitude is twelve degrees per meter per second, capped at thirty degrees. An exponential response with a 0.15 second time constant smooths speed changes. At rest the phase holds and the amplitude tends to zero.
+
+Each world tick uses its final horizontal speed for that tick. Vertical falls and teleports do not add a stride. A new actor starts standing; a destroyed actor's model is hidden.
+
+The phase stays within one cycle, including after long simulation times. `World.get_walker_gait` returns a copy without advancing it. `WalkerGait.advance` rejects negative or nonfinite speed and duration; a zero duration holds the pose. See [replay gait](CARLA-recorder#walker-gait) for recorded motion.
+
+This fixes [#290](https://github.com/SethKitchen/ThreeMojo/issues/290). Previously, constant speed produced a fixed limb angle and a sliding walker. The capsule character and its procedural limbs remain separate from the humanoid rig. Bone-control records do not drive these limbs. A cached walker model has no procedural joints and stays rigid.
 
 ## Weather
 
