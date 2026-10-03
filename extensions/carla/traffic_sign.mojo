@@ -32,6 +32,12 @@ again 0.5 s after a failed check.
 - CARLA crashes on a stop or speed-limit reference whose lane has no
   waypoint at the reference's s. This port skips that lane, as CARLA's
   yield sign does.
+- Trigger offsets use the resolved lane's travel direction, including
+  left-hand traffic and junction predecessors. CARLA `1360bb9` uses
+  lane signs alone. At s = 50 on left-hand lane 1, a 3 m offset now
+  gives s = 47 instead of 53. Right-hand offsets stay the same unless
+  a junction predecessor changes the lane sign. Left-hand scenario
+  replay can enter a trigger earlier.
 - CARLA finds a sign's references road by road in hash order. This port
   goes by road id.
 """
@@ -168,14 +174,12 @@ def _lane_bounds(map: Map, w: Waypoint) raises -> Tuple[Float64, Float64]:
     return (road.sections[section].s, road.section_length(section))
 
 
-def _shifted(
-    map: Map, w: Waypoint, lane: Int, distance: Float64
-) raises -> Waypoint:
+def _shifted(map: Map, w: Waypoint, distance: Float64) raises -> Waypoint:
     """Move a waypoint against a lane's traffic, clamped to its section."""
     var bounds = _lane_bounds(map, w)
     var low = bounds[0] + _EPSILON
     var high = bounds[0] + bounds[1] - _EPSILON
-    var s = w.s - distance if lane < 0 else w.s + distance
+    var s = w.s - distance if map.is_positive_direction(w) else w.s + distance
     var out = w
     out.s = min(max(s, low), high)
     return out
@@ -190,10 +194,10 @@ def _from_before_junction(map: Map, w: Waypoint) raises -> Waypoint:
     return w
 
 
-def _lane_box(map: Map, w: Waypoint, lane: Int) raises -> TriggerBox:
+def _lane_box(map: Map, w: Waypoint) raises -> TriggerBox:
     """The box before a signal on one lane: 1.5 m long, half a lane wide."""
     var width = max(Float32(0.5 * map.lane_width_meters(w) * 0.5), 0.01)
-    var at = _shifted(map, w, lane, 3.0)
+    var at = _shifted(map, w, 3.0)
     return TriggerBox(map.compute_transform(at), Vector3(1.5, width, 1.0))
 
 
@@ -235,7 +239,7 @@ def traffic_light_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
                 var w = _from_before_junction(map, found.value())
                 if map.lane_type(w) != LANE_DRIVING:
                     continue
-                out.append(_lane_box(map, w, lane))
+                out.append(_lane_box(map, w))
     return out^
 
 
@@ -347,7 +351,7 @@ def give_way_boxes(map: Map, id: SignalId) raises -> SignBoxes:
                 if map.lane_type(w) != LANE_DRIVING:
                     continue
                 out.effect.append(
-                    _lane_box(map, _from_before_junction(map, w), lane)
+                    _lane_box(map, _from_before_junction(map, w))
                 )
                 for before in map.predecessors(w):
                     if not (before.road_id.value in predecessors):
@@ -396,7 +400,7 @@ def speed_limit_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
                 var size = max(
                     Float32(0.7 * map.lane_width_meters(w) * 0.5), 0.01
                 )
-                var at = _shifted(map, w, lane, Float64(size))
+                var at = _shifted(map, w, Float64(size))
                 out.append(_cube(map, at, size))
     return out^
 

@@ -122,6 +122,16 @@ Each lane that a light holds gets a box 3 m before the light, against the lane's
 
 A vehicle that enters a box takes the light's state, and each change of the light reaches it at once. A vehicle is told green again after leaving the last occupied box of that light. The light's internal vehicle list has one entry per occupied box, so duplicate vehicle ids there are intentional.
 
+### Trigger offset direction
+
+The box center moves against the resolved lane's travel direction. Right-hand negative lanes and left-hand positive lanes travel with increasing s. Their offsets subtract from s. The other lanes add to s.
+
+A light, stop or yield box uses a 3 m offset. A speed-limit box uses its half size. Each center stays inside its lane section, at least 0.00001 m from either end. An offset does not cross a section boundary.
+
+The direction belongs to the waypoint that receives the box. A junction reference can move the box to a predecessor with a different lane id or road rule.
+
+At s = 50 on left-hand lane 1, the light box center is s = 47. The old lane-sign rule put it at s = 53. Left-hand scenario replay can therefore enter the box earlier. Existing right-hand results stay the same when a predecessor does not change the lane sign.
+
 ## Traffic signs
 
 The world places a stop sign for each signal of type 206, except the painted "Stencil_STOP". It places a yield sign for type 205. It places a speed-limit sign for type 274 with a subtype from 30 to 120 in steps of ten.
@@ -179,6 +189,7 @@ The sun's angles are `Angle`s and the fog distance is a `Length`. The other fiel
 - Traffic lights, signs and the spectator cannot be destroyed. The children of a destroyed actor stay where they were.
 - An actor without a body reports zero velocity and zero acceleration.
 - A light with no OpenDRIVE controller reads as zero in CARLA, because CARLA does not tell its controller the group. Here that light reports its state.
+- CARLA `1360bb9` [offsets sign boxes by lane sign alone](https://github.com/carla-simulator/carla/blob/1360bb9/Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Traffic/TrafficLightComponent.cpp#L74-L84). This port uses the resolved lane direction. See [Trigger offset direction](#trigger-offset-direction).
 - CARLA keeps the blueprints, groups and actors in hash maps. This port keeps them in a fixed order.
 - A walker's bones are data only. There is no skeleton, and each bone hangs from the walker's origin.
 - A hexadecimal float in an attribute reads as zero, where C reads it in full.
@@ -193,8 +204,9 @@ The sun's angles are `Angle`s and the fog distance is a `Length`. The other fiel
 
 ## Tests
 
-Three suites check the world against numbers from outside the port:
+The world suites check numbers from outside the port:
 
 - `tests/test_carla_world_blueprint.mojo`: the wildcard, `atoi` and `atof` results of glibc, the sensor attributes read out of CARLA's C++ by a script, and CARLA's weather table.
 - `tests/test_carla_world_signals.mojo`: a cross town with lights, stop, yield and speed-limit signs. The poses of the lights and boxes are worked by hand. The light cycles and the stop sign's checks come from Python models of CARLA's C++.
+- `tests/test_carla_trigger_direction.mojo`: both lane signs under right-hand and left-hand traffic, section clamps, predecessor changes, and world trigger entry and exit.
 - `tests/test_carla_world.mojo`: the settings, spawning, attachments, destroying, a free fall, pushes, vehicle controls, walkers and the snapshot.
