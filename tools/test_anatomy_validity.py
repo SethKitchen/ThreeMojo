@@ -40,6 +40,13 @@ class AnatomyValidityTests(unittest.TestCase):
         for values in ([-1, 1, 1, 0, 0, 0], [1, 1, 1, 2, 0, 0], [1, 1, 1, 0.9, 0.9, -0.9]):
             self.assertFalse(av.tensor_checks(values)['positive_semidefinite'])
         self.assertFalse(av.tensor_checks([10, 1, 1, 0, 0, 0])['triangle_inequalities'])
+        # PSD inertia is not enough: this rotated tensor has principal
+        # moments 2.8, .1, .1, although all coordinate diagonals equal 1.
+        impossible = [1, 1, 1, .9, .9, .9]
+        self.assertTrue(av.tensor_checks(impossible)['positive_semidefinite'])
+        self.assertFalse(av.tensor_checks(impossible)['triangle_inequalities'])
+        with self.assertRaisesRegex(ValueError, 'algebraic invariants'):
+            av.validate_segment(row() | {'inertia_kg_m2': impossible})
         with self.assertRaises(ValueError):
             av.tensor_checks([1, 2])
 
@@ -119,6 +126,19 @@ class AnatomyValidityTests(unittest.TestCase):
         self.assertEqual(rules['spine_endplane_boundary_contact']['allowed_positive_overlap_volume_m3'], 0)
         self.assertFalse(data['engineering_validated'])
 
+    def test_pair_ids_are_stable_and_never_exempt_positive_overlap(self):
+        a = {'record': 'pair', 'first': 'foot/first metatarsal', 'second': 'foot/medial cuneiform', 'overlap_samples': 2}
+        forward = av.annotate_diagnostics({'bones': [a.copy()]})['bones'][0]
+        backward = av.annotate_diagnostics({'bones': [a | {'first': a['second'], 'second': a['first']}]})['bones'][0]
+        self.assertEqual(forward['pair_id'], backward['pair_id'])
+        self.assertFalse(forward['allowlist_applied'])
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            av.annotate_diagnostics({'bones': [a.copy(), a.copy()]})
+        with self.assertRaises(ValueError):
+            av.annotate_diagnostics({'bones': [{'record': 'unknown'}]})
+        end = av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'cervical/2'}]})['spine'][0]
+        self.assertEqual(end['endplane_id'], 'canonical/spine/endplane/cervical/2')
+
     def test_unallowlisted_overlap_and_incompatible_endplanes_are_visible(self):
         pair = {'record': 'pair', 'first': 'bone', 'second': 'disc', 'overlap_samples': 1, 'overlap_volume_m3': 1e-9}
         end = {'record': 'endplane', 'body': 'cervical/2', 'disc_gap_m': 0.001,
@@ -149,11 +169,16 @@ class AnatomyValidityTests(unittest.TestCase):
             probe.write_text('binary')
             metadata = probe.with_suffix('.provenance.json')
             metadata.write_text('{}')
-            with self.assertRaisesRegex(ValueError, 'stale'):
+            with self.assertRaisesRegex(ValueError, 'exact pinned compiler'):
                 av.prepare_probe(root, probe, 'mojo', False)
-            record = {'source_sha256': av.source_digest(root), 'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
+            record = {'toolchain': av.PINNED_TOOLCHAIN, 'flags': ['--Werror'], 'source_sha256': av.source_digest(root), 'binary_sha256': av.hashlib.sha256(probe.read_bytes()).hexdigest()}
             metadata.write_text(json.dumps(record))
             self.assertEqual(av.prepare_probe(root, probe, 'mojo', False), record)
+            for key, value in [('toolchain', None), ('toolchain', 'Mojo 1.1.0 unknown'), ('flags', []), ('flags', None)]:
+                metadata.write_text(json.dumps(record | {key: value}))
+                with self.assertRaisesRegex(ValueError, 'exact pinned compiler'):
+                    av.prepare_probe(root, probe, 'mojo', False)
+            metadata.write_text(json.dumps(record))
             (root/'tools/anatomy_validity.py').write_text('two')
             with self.assertRaisesRegex(ValueError, 'stale'):
                 av.prepare_probe(root, probe, 'mojo', False)

@@ -80,8 +80,44 @@ from tests.test_anatomy_diagnostics import (
 
 
 @fieldwise_init
-struct _Placed[F: DistanceField](Copyable, DistanceField, Movable):
-    var field: Self.F
+struct _PlacedFemur(DistanceField, ImplicitlyCopyable):
+    var field: FemurField
+    var origin: Vector3
+
+    def distance(self, p: Vector3) -> Float32:
+        return self.field.distance(p - self.origin)
+
+
+@fieldwise_init
+struct _PlacedTibia(DistanceField, ImplicitlyCopyable):
+    var field: TibiaField
+    var origin: Vector3
+
+    def distance(self, p: Vector3) -> Float32:
+        return self.field.distance(p - self.origin)
+
+
+@fieldwise_init
+struct _PlacedFibula(DistanceField, ImplicitlyCopyable):
+    var field: FibulaField
+    var origin: Vector3
+
+    def distance(self, p: Vector3) -> Float32:
+        return self.field.distance(p - self.origin)
+
+
+@fieldwise_init
+struct _PlacedPatella(DistanceField, ImplicitlyCopyable):
+    var field: PatellaField
+    var origin: Vector3
+
+    def distance(self, p: Vector3) -> Float32:
+        return self.field.distance(p - self.origin)
+
+
+@fieldwise_init
+struct _PlacedFootBone(DistanceField, ImplicitlyCopyable):
+    var field: FootBoneField
     var origin: Vector3
 
     def distance(self, p: Vector3) -> Float32:
@@ -146,7 +182,7 @@ def _foot_pairs[
     step: Length,
 ) raises:
     for i in range(len(bones)):
-        var b = _Placed(bones[i], ankle)
+        var b = _PlacedFootBone(bones[i], ankle)
         _pair(
             a,
             lo,
@@ -267,19 +303,19 @@ def main() raises:
         return
     var pose = assemble_leg(spec, side)
     var f = FemurField(pose.femur)
-    var pf = _Placed(f, pose.femur_origin)
+    var pf = _PlacedFemur(f, pose.femur_origin)
     var flo = f.low + pose.femur_origin
     var fhi = f.high + pose.femur_origin
     var t = TibiaField(pose.tibia)
-    var pt = _Placed(t, pose.tibia_origin)
+    var pt = _PlacedTibia(t, pose.tibia_origin)
     var tlo = t.low + pose.tibia_origin
     var thi = t.high + pose.tibia_origin
     var b = FibulaField(pose.fibula)
-    var pb = _Placed(b, pose.fibula_origin)
+    var pb = _PlacedFibula(b, pose.fibula_origin)
     var blo = b.low + pose.fibula_origin
     var bhi = b.high + pose.fibula_origin
     var p = PatellaField(pose.patella)
-    var pp = _Placed(p, pose.patella_origin)
+    var pp = _PlacedPatella(p, pose.patella_origin)
     var plo = p.low + pose.patella_origin
     var phi = p.high + pose.patella_origin
     if args[1] == "bones":
@@ -302,8 +338,8 @@ def main() raises:
         _foot_pairs(pp, plo, phi, "patella", bones, names, ankle, step)
         for i in range(len(bones)):
             for j in range(i + 1, len(bones)):
-                var a = _Placed(bones[i], ankle)
-                var b = _Placed(bones[j], ankle)
+                var a = _PlacedFootBone(bones[i], ankle)
+                var b = _PlacedFootBone(bones[j], ankle)
                 _pair(
                     a,
                     bones[i].low + ankle,

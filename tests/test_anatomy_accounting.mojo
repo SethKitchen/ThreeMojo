@@ -170,7 +170,9 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
             )
         var actual = _tensor(result)
         for index in range(6):
-            assert_almost_equal(actual[index], Float64(expected[index]), atol=1.0e-10)
+            assert_almost_equal(
+                actual[index], Float64(expected[index]), atol=1.0e-10
+            )
         # The cut is not aligned with any of the three grids.
         var ma, fa, sa = _box(low, Vector3(high.x, 0.0043, high.z), step)
         var mb, fb, sb = _box(Vector3(low.x, 0.0043, low.z), high, step)
@@ -220,7 +222,9 @@ def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
     )
     var actual = _tensor(result)
     for index in range(6):
-        assert_almost_equal(actual[index], Float64(expected[index]), atol=1.0e-8)
+        assert_almost_equal(
+            actual[index], Float64(expected[index]), atol=1.0e-8
+        )
     for axis in range(3):
         assert_almost_equal(
             result.center.get_component(axis),

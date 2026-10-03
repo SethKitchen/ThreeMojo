@@ -24,7 +24,7 @@ Omit `--build` to reuse the probe. Its sidecar must match the source digest and 
 
 ## Read the report
 
-The JSON schema version is 1. Every quantity has a unit in its key or its stated frame.
+The JSON schema version is 1. Every quantity has a unit in its key or its stated frame. Pair IDs use a canonical group plus sorted component IDs. They remain stable when pair order changes. Reports retain source-file, report-logic, inventory and executable hashes.
 
 - `spec` identifies the input template. The report uses the template genome
 - `build_provenance` identifies the exact source and executable
@@ -45,7 +45,7 @@ The independent controls use a uniform rectangular solid and two unequal point m
 
 The uniform-solid absolute tolerances are 2e-8 kg for mass, 2e-8 m for center and 1e-10 kg m² for inertia. The point-mass tensor tolerance is 1e-8 kg m². The rigid-center tolerance is 2e-8 m. The overlap-box volume tolerance is 1e-11 m³. These are numerical test tolerances. They are not physical acceptance thresholds.
 
-The report checks all principal minors of a scaled symmetric tensor for positive semidefiniteness. It also checks the inertia triangle inequalities. The relative roundoff tolerance is 5e-6.
+The report checks all principal minors of a scaled symmetric tensor for positive semidefiniteness. It also checks all principal minors of the central second-moment matrix, `C = trace(I)/2 Identity - I`. This tests the principal-moment triangle inequalities in any frame. Coordinate-diagonal triangle checks alone are insufficient. The relative roundoff tolerance is 5e-6.
 
 Each refinement comparison records mass differences, the center displacement vector and norm, and all tensor differences. The tensor norm includes both copies of each off-diagonal entry. These are observed sampling sensitivities. They are not proven error bounds. The report does not assume a convergence order or transfer a CFD grid-convergence index to this sampler. Thin regions and density discontinuities can produce nonmonotone changes.
 
@@ -63,7 +63,7 @@ Do not add individual bone mass, soft-part mass, a second skin mass or `SweepFie
 
 ## Geometry diagnostics
 
-The default probe compares all 30 lower-limb bones in pairs. It compares the four leg bones with the five knee tissue fields and compares those tissues with one another. Spine checks include C2 through C7, T1 through L5, the C7/T1 transition and the neighboring discs. The L5 lower disc endpoint uses the authored sacral support plane. It does not assert a flat sacral-body surface.
+The default probe checks all 435 distinct pairs among 30 lower-limb bones. These are six leg/leg pairs, 104 leg/foot pairs and 325 foot/foot pairs. It checks 30 knee pairs: 20 leg-bone/tissue pairs and ten tissue/tissue pairs. Spine checks include C2 through C7, T1 through L5, the C7/T1 transition and the neighboring discs. The spine pass returns 67 pair records and 23 endplane records. The L5 lower disc endpoint uses the authored sacral support plane. It does not assert a flat sacral-body surface.
 
 A positive gap between conservative bounding boxes is a clearance lower bound. A negative field witness identifies sampled common interior. Field values need not be exact distances. They are not penetration depth or physical clearance. No sampled hit does not prove no overlap. The report names omitted muscle, foot-ligament, vessel, nerve and lymphatic pair checks.
 
@@ -82,6 +82,12 @@ Before a use case can be called engineering-validated, define its task, populati
 Tissue elastic metadata does not implement a constitutive law, activation or contact. Static packing and posed graphics do not establish dynamic or load-bearing behavior. No generic biomedical, clinical or safety certification is claimed.
 
 Canonical-to-visual, rig and bake mapping remains [issue #297](https://github.com/SethKitchen/ThreeMojo/issues/297). This report does not validate a posed, simplified or textured mesh.
+
+## Tracked limits
+
+[Issue #595](https://github.com/SethKitchen/ThreeMojo/issues/595) tracks classification and repair of current sampled-overlap findings. The default 5 mm template reports 21 bone-pair hits, 14 knee-pair hits and one full C2/C3 field hit. These 36 findings remain unallowlisted. All 23 body/disc endplane checks pass. A signed field witness is not a measured penetration depth. A sampled volume is not an exact overlap volume.
+
+[Issue #596](https://github.com/SethKitchen/ThreeMojo/issues/596) tracks the omitted tissue-pair classes. These follow-ups do not grant a clearance or certification claim to this report.
 
 ## References
 

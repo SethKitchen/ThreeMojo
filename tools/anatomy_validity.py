@@ -21,6 +21,7 @@ SEGMENTS = ('thigh', 'shank', 'foot')
 USES = ('template-estimate', 'game-fantasy', 'engineering', 'whole-body',
         'dynamic-constitutive', 'patient-specific', 'clinical-safety')
 ROUNDING_TOLERANCE = 5e-6
+PINNED_TOOLCHAIN = 'Mojo 1.1.0 (8189361e)'
 
 
 def finite(value, name):
@@ -58,15 +59,22 @@ def tensor_checks(values):
     values = [finite(v, 'inertia') for v in values]
     scale = max(map(abs, values))
     if scale == 0:
-        minors, triangle = [0.0]*7, 0.0
+        minors, covariance_minors = [0.0]*7, [0.0]*7
     else:
         x, y, z, a, b, c = [v/scale for v in values]
         minors = [x, y, z, x*y-a*a, x*z-b*b, y*z-c*c,
                   x*y*z+2*a*b*c-x*c*c-y*b*b-z*a*a]
-        triangle = min(x+y-z, x+z-y, y+z-x)
+        # Physical inertia additionally requires a positive-semidefinite
+        # central second-moment matrix C = trace(I)/2 Identity - I.
+        # Coordinate-diagonal triangles alone miss rotated counterexamples.
+        cx, cy, cz = (y+z-x)/2, (x+z-y)/2, (x+y-z)/2
+        ca, cb, cc = -a, -b, -c
+        covariance_minors = [cx, cy, cz, cx*cy-ca*ca, cx*cz-cb*cb, cy*cz-cc*cc,
+                             cx*cy*cz+2*ca*cb*cc-cx*cc*cc-cy*cb*cb-cz*ca*ca]
     return {'symmetric_by_representation': True,
             'positive_semidefinite': min(minors) >= -ROUNDING_TOLERANCE,
-            'triangle_inequalities': triangle >= -ROUNDING_TOLERANCE,
+            'triangle_inequalities': min(covariance_minors) >= -ROUNDING_TOLERANCE,
+            'scaled_central_second_moment_principal_minors': covariance_minors,
             'scaled_principal_minors': minors,
             'relative_roundoff_tolerance': ROUNDING_TOLERANCE}
 
@@ -171,6 +179,29 @@ def use_gate(use):
 
 
 
+def annotate_diagnostics(groups):
+    """Add stable pair IDs, retaining labels and every sampled hit."""
+    seen = set()
+    for group, rows in groups.items():
+        for row in rows:
+            if row.get('record') == 'pair':
+                components = sorted((row['first'].replace(' ', '_'), row['second'].replace(' ', '_')))
+                identity = 'canonical/' + group + '/' + '|'.join(components)
+                row['pair_id'] = identity
+                row['allowlist_applied'] = False
+                row['contact_intent'] = 'unclassified; an anatomical attachment is not an established volume allowance'
+            elif row.get('record') == 'endplane':
+                identity = 'canonical/spine/endplane/' + row['body']
+                row['endplane_id'] = identity
+                row['boundary_contact_rule'] = 'spine_endplane_boundary_contact'
+            else:
+                raise ValueError('unknown diagnostic record')
+            if identity in seen:
+                raise ValueError('duplicate diagnostic identity')
+            seen.add(identity)
+    return groups
+
+
 def diagnostic_findings(groups):
     """Name incompatible geometry without redefining measured parameters."""
     findings = []
@@ -179,7 +210,7 @@ def diagnostic_findings(groups):
             if row.get('record') == 'pair':
                 if row['overlap_samples'] > 0:
                     findings.append({'kind': 'unallowlisted_sampled_overlap',
-                                     'group': group, 'first': row['first'], 'second': row['second'],
+                                     'group': group, 'pair_id': row.get('pair_id'), 'first': row['first'], 'second': row['second'],
                                      'overlap_volume_m3': row['overlap_volume_m3'],
                                      'interpretation': 'Common interior was sampled. A construction-union allowance within one field does not exempt these distinct named fields.'})
             elif row.get('record') == 'endplane':
@@ -216,7 +247,7 @@ def prepare_probe(root, probe, mojo, build):
     metadata = probe.with_suffix(probe.suffix+'.provenance.json')
     if build:
         version = subprocess.run([mojo, '--version'], check=True, text=True, capture_output=True).stdout.strip()
-        if 'Mojo 1.1.0' not in version or '8189361e' not in version:
+        if version != PINNED_TOOLCHAIN:
             raise ValueError('the report requires pinned Mojo 1.1.0 (8189361e)')
         probe.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([mojo, 'build', '--Werror', '-I', str(root), str(root/'tools/anatomy_probe.mojo'), '-o', str(probe)], check=True, timeout=600, cwd=root)
@@ -229,6 +260,8 @@ def prepare_probe(root, probe, mojo, build):
         if not probe.is_file() or not metadata.is_file():
             raise ValueError('build the source-bound probe with --build first')
         record = json.loads(metadata.read_text())
+        if record.get('toolchain') != PINNED_TOOLCHAIN or record.get('flags') != ['--Werror']:
+            raise ValueError('probe provenance must record the exact pinned compiler and --Werror')
         if record.get('source_sha256') != digest or record.get('binary_sha256') != hashlib.sha256(probe.read_bytes()).hexdigest():
             raise ValueError('probe provenance is stale; rebuild with --build')
     return record
@@ -265,9 +298,16 @@ def report(args):
             row['tensor_checks'] = validate_segment(row)
             rows.append(row)
         segments[segment] = {'grids': rows, 'sampling_sensitivity': sampling_sensitivity(rows)}
-    diagnostics = {mode: probe_rows(args.probe.resolve(), mode, 'none', min(steps), args) for mode in ('bones', 'knee', 'spine')}
+    diagnostics = annotate_diagnostics({mode: probe_rows(args.probe.resolve(), mode, 'none', min(steps), args) for mode in ('bones', 'knee', 'spine')})
+    inventory = json.loads((ROOT/'docs/validation/anatomy-provenance.json').read_text())
+    source_files = sorted({path for item in inventory['parameters'] for path in item['source_files']})
     result = {'schema_version': 1, 'result_label': 'template estimate', 'gate': use_gate(args.use),
-              'build_provenance': provenance, 'spec': {'stature_m': args.stature_m, 'sex': args.sex, 'side': args.side, 'athleticism': args.athleticism, 'genome': 'template'},
+              'build_provenance': provenance,
+              'source_file_sha256': {path: hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in source_files},
+              'report_logic_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+              'inventory_sha256': hashlib.sha256((ROOT/'docs/validation/anatomy-provenance.json').read_bytes()).hexdigest(),
+              'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/595', 'https://github.com/SethKitchen/ThreeMojo/issues/596'],
+              'spec': {'stature_m': args.stature_m, 'sex': args.sex, 'side': args.side, 'athleticism': args.athleticism, 'genome': 'template'},
               'frame': {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
               'tensor_convention': {'order': ['xx','yy','zz','xy','xz','yz'], 'reference': 'center of mass', 'off_diagonal': 'negative products of inertia'},
               'controls': controls[0], 'segments': segments,
@@ -275,11 +315,11 @@ def report(args):
               'diagnostics': diagnostics, 'geometry_findings': diagnostic_findings(diagnostics),
               'diagnostic_limits': {'step_m': min(steps)/1000, 'absence_of_hits_proves_clearance': False, 'field_values_are_true_clearance': False,
                 'not_evaluated': ['muscle-to-muscle and muscle-to-bone pairs', 'foot ligaments', 'vascular, nerve and lymphatic pairs', 'whole-body overlap', 'dynamic contact', 'visual/rig/bake mapping (#297)']},
-              'accounting': {'exclusive_density_precedence': list(REGIONS), 'bone_precedence': ['femur','tibia','fibula','patella','foot bones in named_foot_bones order'],
+              'accounting': {'exclusive_density_precedence': list(REGIONS), 'bone_precedence': ['femur','tibia','fibula','patella'] + [r['second'] for r in diagnostics['bones'] if r['first'] == 'femur' and r['second'].startswith('foot/')],
                 'soft_precedence': 'First leg muscle/tendon, then first foot muscle/tendon, then unresolved fat proxy.',
                 'do_not_add': ['individual bone/soft-part mass reports','skin envelope mass a second time','SweepField.volume totals'],
                 'missing': ['contralateral limb','pelvis/trunk/head/arms/hands','tissue above the hip cut','bone pore-fluid and pore-marrow mass','separate unresolved tissue densities']},
-              'provenance_inventory': json.loads((ROOT/'docs/validation/anatomy-provenance.json').read_text())}
+              'provenance_inventory': inventory}
     finite_tree(result)
     return result
 
