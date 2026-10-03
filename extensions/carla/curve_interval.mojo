@@ -274,23 +274,41 @@ def _tight_sum_bound(one: _Interval, two: _Interval) -> _Interval:
 
 
 def _tight_product_bound(one: _Interval, two: _Interval) -> _Interval:
+    # Equal endpoint bits repeat the exact same pure directed operation.
+    # Reuse its result, preserving the original hull's signed-zero handling.
+    var first = _directed_endpoint_product(one.low, two.low)
+    if bitcast[DType.uint64](one.low) == bitcast[DType.uint64](one.high):
+        if bitcast[DType.uint64](two.low) == bitcast[DType.uint64](two.high):
+            return first.hull(first)
+        return first.hull(_directed_endpoint_product(one.low, two.high))
+    if bitcast[DType.uint64](two.low) == bitcast[DType.uint64](two.high):
+        return first.hull(_directed_endpoint_product(one.high, two.low))
     return (
-        _directed_endpoint_product(one.low, two.low)
-        .hull(_directed_endpoint_product(one.low, two.high))
+        first.hull(_directed_endpoint_product(one.low, two.high))
         .hull(_directed_endpoint_product(one.high, two.low))
         .hull(_directed_endpoint_product(one.high, two.high))
     )
 
 
+
 def _tight_quotient_bound(one: _Interval, two: _Interval) -> _Interval:
     if two.contains(0.0):
         return _Interval.whole()
+    # Equal endpoint bits repeat the exact same pure directed operation.
+    # Reuse its result, preserving the original hull's signed-zero handling.
+    var first = _directed_endpoint_quotient(one.low, two.low)
+    if bitcast[DType.uint64](one.low) == bitcast[DType.uint64](one.high):
+        if bitcast[DType.uint64](two.low) == bitcast[DType.uint64](two.high):
+            return first.hull(first)
+        return first.hull(_directed_endpoint_quotient(one.low, two.high))
+    if bitcast[DType.uint64](two.low) == bitcast[DType.uint64](two.high):
+        return first.hull(_directed_endpoint_quotient(one.high, two.low))
     return (
-        _directed_endpoint_quotient(one.low, two.low)
-        .hull(_directed_endpoint_quotient(one.low, two.high))
+        first.hull(_directed_endpoint_quotient(one.low, two.high))
         .hull(_directed_endpoint_quotient(one.high, two.low))
         .hull(_directed_endpoint_quotient(one.high, two.high))
     )
+
 
 
 def _tight_square_bound(value: _Interval) -> _Interval:
@@ -323,11 +341,13 @@ def _roundoff(magnitude: Float64) -> Float64:
 
 
 @fieldwise_init
-struct _Jet(ImplicitlyCopyable):
+struct _JetExpression[derivatives: Bool](ImplicitlyCopyable):
     # The value and two derivatives enclose the exact real expression in
     # stored Float64 constants. `error` bounds scalar evaluation roundoff.
     # Keeping error separate permits a centered form without differentiating
     # the staircase created by rounded scalar arithmetic.
+    # False is restricted to value/error consumers. Keep the same field layout
+    # for this prototype; unused derivative fields are whole, never a proof.
     var value: _Interval
     var first: _Interval
     var second: _Interval
@@ -336,10 +356,16 @@ struct _Jet(ImplicitlyCopyable):
     @staticmethod
     def constant(value: Float64) -> Self:
         var zero = _Interval.point(0.0)
+        comptime if not Self.derivatives:
+            zero = _Interval.whole()
         return Self(_Interval.point(value), zero, zero, 0.0)
 
     @staticmethod
     def variable(low: Float64, high: Float64) -> Self:
+        comptime if not Self.derivatives:
+            return Self(
+                _Interval(low, high), _Interval.whole(), _Interval.whole(), 0.0
+            )
         return Self(
             _Interval(low, high),
             _Interval.point(1.0),
@@ -353,17 +379,27 @@ struct _Jet(ImplicitlyCopyable):
         return self.value + _Interval(-self.error, self.error)
 
     def __neg__(self) -> Self:
+        comptime if not Self.derivatives:
+            return Self(
+                -self.value, _Interval.whole(), _Interval.whole(), self.error
+            )
         return Self(-self.value, -self.first, -self.second, self.error)
 
+    @always_inline
     def __add__(self, other: Self) -> Self:
+        var first = _Interval.whole()
+        var second = _Interval.whole()
+        comptime if Self.derivatives:
+            first = self.first + other.first
+            second = self.second + other.second
         if self.value.is_point(0.0) and self.error == 0.0:
             var value = other.value
             if other.value.is_point(0.0):
                 value = _Interval(-0.0, 0.0)
             return Self(
                 value,
-                self.first + other.first,
-                self.second + other.second,
+                first,
+                second,
                 other.error,
             )
         if other.value.is_point(0.0) and other.error == 0.0:
@@ -372,8 +408,8 @@ struct _Jet(ImplicitlyCopyable):
                 value = _Interval(-0.0, 0.0)
             return Self(
                 value,
-                self.first + other.first,
-                self.second + other.second,
+                first,
+                second,
                 self.error,
             )
         var value = _tight_sum_bound(self.value, other.value)
@@ -381,14 +417,15 @@ struct _Jet(ImplicitlyCopyable):
         var magnitude = _next_up(value.magnitude() + inherited)
         return Self(
             value,
-            self.first + other.first,
-            self.second + other.second,
+            first,
+            second,
             _next_up(inherited + _roundoff(magnitude)),
         )
 
     def __sub__(self, other: Self) -> Self:
         return self + (-other)
 
+    @always_inline
     def __mul__(self, other: Self) -> Self:
         var value = _tight_product_bound(self.value, other.value)
         var inherited = (
@@ -410,15 +447,18 @@ struct _Jet(ImplicitlyCopyable):
             error = other.error
         elif other.value.is_point(1.0) and other.error == 0.0:
             error = self.error
-        return Self(
-            value,
-            self.first * other.value + self.value * other.first,
-            self.second * other.value
-            + _Interval.point(2.0) * self.first * other.first
-            + self.value * other.second,
-            error,
-        )
+        var first = _Interval.whole()
+        var second = _Interval.whole()
+        comptime if Self.derivatives:
+            first = self.first * other.value + self.value * other.first
+            second = (
+                self.second * other.value
+                + _Interval.point(2.0) * self.first * other.first
+                + self.value * other.second
+            )
+        return Self(value, first, second, error)
 
+    @always_inline
     def __truediv__(self, other: Self) -> Self:
         var value = _tight_quotient_bound(self.value, other.value)
         var denominator = other.value.absolute().low - other.error
@@ -437,12 +477,15 @@ struct _Jet(ImplicitlyCopyable):
             )
             / _Interval.point(_next_down(denominator))
         ).high
-        var first = (self.first - value * other.first) / other.value
-        var second = (
-            self.second
-            - value * other.second
-            - _Interval.point(2.0) * first * other.first
-        ) / other.value
+        var first = _Interval.whole()
+        var second = _Interval.whole()
+        comptime if Self.derivatives:
+            first = (self.first - value * other.first) / other.value
+            second = (
+                self.second
+                - value * other.second
+                - _Interval.point(2.0) * first * other.first
+            ) / other.value
         return Self(
             value,
             first,
@@ -453,6 +496,9 @@ struct _Jet(ImplicitlyCopyable):
         )
 
     def sqrt(self) -> Self:
+        # Its zero shortcut reads derivative fields. No value-only variant
+        # is asserted, and the SPIRAL graph does not call it.
+        comptime assert Self.derivatives
         var value = self.value.sqrt()
         if self.value.is_point(0.0) and self.error == 0.0:
             if self.first.is_point(0.0) and self.second.is_point(0.0):
@@ -483,3 +529,15 @@ struct _Jet(ImplicitlyCopyable):
                 inherited + _roundoff(_next_up(value.magnitude() + inherited))
             ),
         )
+
+
+# Preserve all existing full-jet call sites and their constructor shape.
+comptime _Jet = _JetExpression[True]
+comptime _ValueJet = _JetExpression[False]
+
+
+def _without_derivatives(value: _Jet) -> _ValueJet:
+    # Do not round the ideal interval or reset its independent scalar error.
+    return _ValueJet(
+        value.value, _Interval.whole(), _Interval.whole(), value.error
+    )

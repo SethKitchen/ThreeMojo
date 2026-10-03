@@ -248,7 +248,15 @@ def _midpoint(low: Float64, high: Float64) -> Float64:
 
 def _expansion_center(low: Float64, high: Float64, best: Float64) -> Float64:
     var center = min(max(best, low), high)
-    if center <= low or center >= high:
+    if center <= low:
+        var interior = _next_up(low)
+        if interior > low and interior < high:
+            return interior
+        return _midpoint(low, high)
+    if center >= high:
+        var interior = _next_down(high)
+        if interior > low and interior < high:
+            return interior
         return _midpoint(low, high)
     return center
 
@@ -1132,9 +1140,20 @@ def _run_lane_search(
                         "Lane refinement exhausted its quadrature work limit"
                     )
                 certificate.terms += center_work
-                var center = _expansion_distance_jet(
-                    road, section, lane, center_s, location, scale
-                )
+                # A nonfinite second derivative makes _global_lower ignore
+                # its expansion argument. A finite rounded domain value also
+                # establishes that this is an evaluated expression enclosure,
+                # rather than an unvalidated whole/unknown record domain.
+                # Retain the original work reservation above. Only skip the
+                # unused traversal; no bound, tolerance, or cap changes.
+                var center = _Jet.constant(0.0)
+                if (
+                    domain.second.is_finite()
+                    or not domain.rounded_value().is_finite()
+                ):
+                    center = _expansion_distance_jet(
+                        road, section, lane, center_s, location, scale
+                    )
                 var delta = _Interval(lo, hi) - _Interval.point(center_s)
                 var lower = max(natural, _global_lower(domain, center, delta))
                 if lower > best_upper:

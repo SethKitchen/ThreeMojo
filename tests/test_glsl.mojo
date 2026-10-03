@@ -3047,7 +3047,7 @@ def test_the_models_turn_carries_the_normal_into_the_world() raises:
     )
 
 
-def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
+def test_while_and_do_loops_have_checked_limits() raises:
     # Five times through, then the condition leaves.
     var counted = (
         "float s = 0.0; int i = 0;\nwhile (i < 5) { s += 1.0; i++; }\n"
@@ -3060,9 +3060,9 @@ def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
         "    s += float(i);\n}\n"
     )
     assert_equal(number("s", "", jumps), 8)
-    # A loop that would run longer stops at the cap.
+    # A nonterminating loop is refused before any program can run.
     var endless = "float s = 0.0;\nwhile (true) s += 1.0;\n"
-    assert_equal(number("s", "", endless), Float32(MAX_WHILE_COUNT))
+    refused_statement(endless, "must provably stop within")
     # A do loop runs once before it asks.
     var once = "float s = 0.0;\ndo { s += 1.0; } while (false);\n"
     assert_equal(number("s", "", once), 1)
@@ -3078,7 +3078,7 @@ def test_while_and_do_loops_are_unrolled_to_a_cap() raises:
     )
     assert_equal(number("s", "", skipping), 3)
     # A for loop inside keeps its own count. Two while loops, one in the
-    # other, would unroll to MAX_WHILE_COUNT squared times.
+    # other, multiply the bounded expansion and its final condition slots.
     var nested = (
         "float s = 0.0; int i = 0;\nwhile (i < 3) {\n"
         "    for (int j = 0; j < 2; j++) { s += 1.0; }\n    i++;\n}\n"

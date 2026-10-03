@@ -17,6 +17,8 @@ from extensions.carla.curve_interval import (
     _tight_square_bound,
     _Interval,
     _Jet,
+    _JetExpression,
+    _without_derivatives,
     _power_quotient_bound,
 )
 from extensions.carla.curve_trig import (
@@ -27,6 +29,7 @@ from extensions.carla.curve_trig import (
     _curve_atan2,
     _curve_sin,
     _sincos_jet,
+    _sincos_expression,
     _sinc_jet,
     _uncertain,
 )
@@ -99,49 +102,71 @@ def _spiral_counts(geometry: RoadGeometry, d: _Jet) -> Tuple[Int, Int]:
 def _spiral_jet(
     geometry: RoadGeometry, d: _Jet, pieces: Int, translation: Vector3
 ) -> Tuple[_Jet, _Jet, _Jet]:
-    var k0 = _Jet.constant(geometry.curvature_start)
-    var rate = _Jet.constant(
+    return _spiral_expression(geometry, d, pieces, translation)
+
+
+def _spiral_expression[derivatives: Bool](
+    geometry: RoadGeometry,
+    d: _JetExpression[derivatives],
+    pieces: Int,
+    translation: Vector3,
+) -> Tuple[
+    _JetExpression[derivatives],
+    _JetExpression[derivatives],
+    _JetExpression[derivatives],
+]:
+    comptime Expression = _JetExpression[derivatives]
+    var k0 = Expression.constant(geometry.curvature_start)
+    var rate = Expression.constant(
         (geometry.curvature_end - geometry.curvature_start) / geometry.length
     )
-    var step = d / _Jet.constant(Float64(pieces))
+    var step = d / Expression.constant(Float64(pieces))
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
-    var x = _Jet.constant(0.0)
-    var y = _Jet.constant(0.0)
+    var x = Expression.constant(0.0)
+    var y = Expression.constant(0.0)
     var piece = 0
     while piece < pieces:
-        var start = step * _Jet.constant(Float64(piece))
+        var start = step * Expression.constant(Float64(piece))
         var i = 0
         while i < 5:
-            var t = start + step * _Jet.constant(0.5) * _Jet.constant(
-                1.0 + nodes[i]
+            var t = (
+                start
+                + step * Expression.constant(0.5)
+                * Expression.constant(1.0 + nodes[i])
             )
-            var theta = _Jet.constant(geometry.heading) + t * (
-                k0 + _Jet.constant(0.5) * rate * t
+            var theta = Expression.constant(geometry.heading) + t * (
+                k0 + Expression.constant(0.5) * rate * t
             )
-            var trig = _sincos_jet(theta)
+            var trig = _sincos_expression(theta)
             x = (
                 x
                 + step
-                * _Jet.constant(0.5)
-                * _Jet.constant(weights[i])
+                * Expression.constant(0.5)
+                * Expression.constant(weights[i])
                 * trig[1]
             )
             y = (
                 y
                 + step
-                * _Jet.constant(0.5)
-                * _Jet.constant(weights[i])
+                * Expression.constant(0.5)
+                * Expression.constant(weights[i])
                 * trig[0]
             )
             i += 1
         piece += 1
-    var heading = _Jet.constant(geometry.heading) + d * (
-        k0 + _Jet.constant(0.5) * rate * d
+    var heading = Expression.constant(geometry.heading) + d * (
+        k0 + Expression.constant(0.5) * rate * d
     )
     return (
-        (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x,
-        (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y,
+        (
+            Expression.constant(geometry.x)
+            - Expression.constant(Float64(translation.x))
+        ) + x,
+        (
+            Expression.constant(geometry.y)
+            + Expression.constant(Float64(translation.y))
+        ) + y,
         heading,
     )
 
@@ -223,8 +248,17 @@ def _sample_jet(
     )
 
 
-def _union_points(
-    one: Tuple[_Jet, _Jet, _Jet], two: Tuple[_Jet, _Jet, _Jet]
+def _union_points[derivatives: Bool](
+    one: Tuple[
+        _JetExpression[derivatives],
+        _JetExpression[derivatives],
+        _JetExpression[derivatives],
+    ],
+    two: Tuple[
+        _JetExpression[derivatives],
+        _JetExpression[derivatives],
+        _JetExpression[derivatives],
+    ],
 ) -> Tuple[_Jet, _Jet, _Jet]:
     return (
         _uncertain(one[0].rounded_value().hull(two[0].rounded_value())),
@@ -279,12 +313,16 @@ def _reference_jet(
         var counts = _spiral_counts(geometry, d)
         if counts[0] < 1 or counts[1] - counts[0] > 1:
             return _unknown_point()
-        var first = _spiral_jet(geometry, d, counts[0], translation)
         if counts[0] == counts[1]:
-            return first
+            return _spiral_jet(geometry, d, counts[0], translation)
         # A piece-count transition is an actual evaluator discontinuity.
+        # Its union discards both branches' derivatives. Evaluate the same
+        # value/error graphs without that derivative arithmetic. Keep the
+        # clamped ideal value and its error separate at this boundary.
+        var source = _without_derivatives(d)
         return _union_points(
-            first, _spiral_jet(geometry, d, counts[1], translation)
+            _spiral_expression(geometry, source, counts[0], translation),
+            _spiral_expression(geometry, source, counts[1], translation),
         )
     if len(geometry.samples) < 2:
         return _unknown_point()

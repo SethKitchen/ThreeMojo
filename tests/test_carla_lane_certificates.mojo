@@ -75,14 +75,35 @@ def test_expansion_uses_the_same_interior_clamp_branch() raises:
     assert_equal(endpoint.first.low, 0.0)
     assert_true(_global_lower(domain, endpoint, _Interval(0, 1)) > 0.5)
     var center_s = _expansion_center(0, 1, 0)
-    assert_equal(center_s, 0.5)
-    assert_equal(_expansion_center(0, 1, 1), 0.5)
+    assert_equal(bitcast[DType.uint64](center_s), UInt64(1))
+    assert_equal(
+        bitcast[DType.uint64](_expansion_center(0, 1, 1)),
+        UInt64(0x3FEFFFFFFFFFFFFF),
+    )
     assert_equal(_expansion_center(0, 1, 0.25), 0.25)
     var center = _scaled_point_distance_jet(
         _lane_jet(road, 0, 0, center_s, center_s), query, 0.25
     )
-    assert_true(_global_lower(domain, center, _Interval(-0.5, 0.5)) <= 0.0)
+    assert_true(center.first.is_finite())
+    assert_true(center.first.high < 0.0)
+    var delta = _Interval(0.0, 1.0) - _Interval.point(center_s)
+    assert_true(_global_lower(domain, center, delta) <= 0.0)
     assert_equal(road._lane_distance_squared(0, 0, 0.25, query), 0.0)
+
+
+def test_expansion_anchor_keeps_closed_domain_at_resolution_limits() raises:
+    var eta = bitcast[DType.float64](UInt64(1))
+    var largest = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
+    assert_equal(_expansion_center(0.0, eta, 0.0), 0.0)
+    assert_equal(_expansion_center(0.0, eta, eta), 0.0)
+    assert_equal(_expansion_center(1.0, 1.0, 1.0), 1.0)
+    var near_low = _expansion_center(-largest, largest, -largest)
+    var near_high = _expansion_center(-largest, largest, largest)
+    assert_true(near_low > -largest and near_low < largest)
+    assert_true(near_high > -largest and near_high < largest)
+    assert_equal(bitcast[DType.uint64](near_low), UInt64(0xFFEFFFFFFFFFFFFE))
+    assert_equal(bitcast[DType.uint64](near_high), UInt64(0x7FEFFFFFFFFFFFFE))
+    assert_equal(_expansion_center(-largest, largest, 0.0), 0.0)
 
 
 def test_normalization_does_not_enlarge_the_acceptance_budget() raises:

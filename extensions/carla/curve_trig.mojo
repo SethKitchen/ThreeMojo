@@ -11,7 +11,7 @@ interval derivatives are derivatives of the stored polynomials and reduction
 formulas. They do not substitute ideal sine derivatives for a polynomial.
 """
 
-from extensions.carla.curve_interval import _Interval, _Jet
+from extensions.carla.curve_interval import _Interval, _Jet, _JetExpression
 from std.math import atan, atan2, cos, floor, inf, isfinite, isnan, sin
 from std.memory import bitcast
 
@@ -96,10 +96,17 @@ def _scalar_polynomial[
 
 
 def _jet_polynomial[n: Int](coefficients: Array[Float64, n], x: _Jet) -> _Jet:
-    var result = _Jet.constant(coefficients[n - 1])
+    return _expression_polynomial(coefficients, x)
+
+
+def _expression_polynomial[n: Int, derivatives: Bool](
+    coefficients: Array[Float64, n], x: _JetExpression[derivatives]
+) -> _JetExpression[derivatives]:
+    comptime Expression = _JetExpression[derivatives]
+    var result = Expression.constant(coefficients[n - 1])
     var i = n - 2
     while i >= 0:
-        result = result * x + _Jet.constant(coefficients[i])
+        result = result * x + Expression.constant(coefficients[i])
         i -= 1
     return result
 
@@ -304,17 +311,26 @@ def _sinc_jet(value: _Jet) -> _Jet:
 
 
 def _sincos_branch(value: _Jet, quadrant: Int) -> Tuple[_Jet, _Jet]:
+    return _sincos_branch_expression(value, quadrant)
+
+
+def _sincos_branch_expression[derivatives: Bool](
+    value: _JetExpression[derivatives], quadrant: Int
+) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:
+    comptime Expression = _JetExpression[derivatives]
     # Products of constants are the same stored scalar values as the helper.
     # The derivative therefore includes only the variable subtraction and
     # the polynomial, not an ideal trigonometric identity.
     var high = Float64(quadrant) * _HALF_PI_HIGH
-    var low = _Jet.constant(Float64(quadrant)) * _Jet.constant(_HALF_PI_LOW)
-    var reduced = (value - _Jet.constant(high)) - low
+    var low = Expression.constant(Float64(quadrant)) * Expression.constant(
+        _HALF_PI_LOW
+    )
+    var reduced = (value - Expression.constant(high)) - low
     var square = reduced * reduced
-    var sine = reduced * _jet_polynomial(
+    var sine = reduced * _expression_polynomial(
         materialize[_SIN_COEFFICIENTS](), square
     )
-    var cosine = _jet_polynomial(materialize[_COS_COEFFICIENTS](), square)
+    var cosine = _expression_polynomial(materialize[_COS_COEFFICIENTS](), square)
     var mode = quadrant & 3
     if mode == 0:
         return (sine, cosine)
@@ -329,39 +345,68 @@ def _uncertain(value: _Interval) -> _Jet:
     return _Jet(value, _Interval.whole(), _Interval.whole(), 0.0)
 
 
+def _uncertain_expression[derivatives: Bool](
+    value: _Interval
+) -> _JetExpression[derivatives]:
+    return _JetExpression[derivatives](
+        value, _Interval.whole(), _Interval.whole(), 0.0
+    )
+
+
 def _sincos_jet(value: _Jet) -> Tuple[_Jet, _Jet]:
+    return _sincos_expression(value)
+
+
+def _sincos_expression[derivatives: Bool](
+    value: _JetExpression[derivatives]
+) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:
+    comptime Expression = _JetExpression[derivatives]
     var domain = value.rounded_value()
     if not domain.is_finite():
-        return (_uncertain(_Interval.whole()), _uncertain(_Interval.whole()))
+        return (
+            _uncertain_expression[derivatives](_Interval.whole()),
+            _uncertain_expression[derivatives](_Interval.whole()),
+        )
     if domain.magnitude() > _PHASE_LIMIT:
         if domain.low > _PHASE_LIMIT or domain.high < -_PHASE_LIMIT:
-            var unknown = _uncertain(_Interval(-1.0, 1.0))
+            var unknown = _uncertain_expression[derivatives](
+                _Interval(-1.0, 1.0)
+            )
             return (unknown, unknown)
-        return (_uncertain(_Interval.whole()), _uncertain(_Interval.whole()))
+        return (
+            _uncertain_expression[derivatives](_Interval.whole()),
+            _uncertain_expression[derivatives](_Interval.whole()),
+        )
     var selection = (
-        value * _Jet.constant(_INV_HALF_PI) + _Jet.constant(0.5)
+        value * Expression.constant(_INV_HALF_PI) + Expression.constant(0.5)
     ).rounded_value()
     var low = Int(floor(selection.low))
     var high = Int(floor(selection.high))
     if low == high:
-        return _sincos_branch(value, low)
+        return _sincos_branch_expression(value, low)
     if high - low > 4:
         # Polynomial output differs from exact [-1,1] by its arithmetic.
         # Evaluate possible branches only after further domain subdivision.
-        return (_uncertain(_Interval.whole()), _uncertain(_Interval.whole()))
-    var source = _Jet.variable(domain.low, domain.high)
-    var result = _sincos_branch(source, low)
+        return (
+            _uncertain_expression[derivatives](_Interval.whole()),
+            _uncertain_expression[derivatives](_Interval.whole()),
+        )
+    var source = Expression.variable(domain.low, domain.high)
+    var result = _sincos_branch_expression(source, low)
     var sine = result[0].rounded_value()
     var cosine = result[1].rounded_value()
     var quadrant = low + 1
     while quadrant <= high:
-        var piece = _sincos_branch(source, quadrant)
+        var piece = _sincos_branch_expression(source, quadrant)
         sine = sine.hull(piece[0].rounded_value())
         cosine = cosine.hull(piece[1].rounded_value())
         quadrant += 1
     # Quadrant changes are real branches in the scalar polynomial. No
     # smooth derivative is asserted across their rounded join.
-    return (_uncertain(sine), _uncertain(cosine))
+    return (
+        _uncertain_expression[derivatives](sine),
+        _uncertain_expression[derivatives](cosine),
+    )
 
 
 def _constant_sincos_jet(heading: Float64) -> Tuple[_Jet, _Jet]:

@@ -53,6 +53,7 @@ and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 """
 
 from extensions.carla.geo import GeoLocation, GeoProjection
+from extensions.carla.geometry import SPIRAL
 from extensions.carla.curve_interval import _Interval
 from extensions.carla.curve_distance import (
     _finite_point,
@@ -101,6 +102,7 @@ from extensions.carla.road_info import (
     SignalId,
     SignalOrientation,
     info_at,
+    info_index,
     infos_in_range,
     signal_orientation_of,
 )
@@ -745,6 +747,94 @@ struct Landmark(Copyable, Movable):
         self.waypoint = waypoint
         self.reference = reference.copy()
         self.distance = distance
+
+
+def _has_uniform_plan_classification(
+    bounds: Tuple[_Interval, _Interval, _Interval],
+    width: Float64,
+    location: Vector3,
+) -> Bool:
+    # This controls only heuristic eligibility. The supplied full-curve box
+    # must be the existing certified cache, never sampled chord padding.
+    if (
+        not bounds[0].is_finite()
+        or not bounds[1].is_finite()
+        or not bounds[2].is_finite()
+        or not isfinite(width)
+    ):
+        return False
+    if width <= 0.0:
+        # Nonpositive widths retain the original initialization as well.
+        return False
+    var x = bounds[0] - _Interval.point(Float64(location.x))
+    var y = bounds[1] - _Interval.point(Float64(location.y))
+    if not x.is_finite() or not y.is_finite():
+        return False
+    var scale = max(width, max(x.magnitude(), y.magnitude()))
+    var divisor = _Interval.point(scale)
+    var diameter = _Interval.point(width) / divisor
+    var difference = (
+        _Interval.point(4.0) * ((x / divisor).square() + (y / divisor).square())
+        - diameter.square()
+    )
+    # A strict inside bound or a closed outside bound covers every station.
+    # Any uncertain crossing retains the original midpoint initialization.
+    return difference.high < 0.0 or difference.low >= 0.0
+
+
+def _use_projected_spiral_seed(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    bounds: Tuple[_Interval, _Interval, _Interval],
+    location: Vector3,
+) -> Bool:
+    # ARC retains its original witness order and endpoint-proof eligibility.
+    # Variable/transitioning width records retain their original choices too.
+    var geometry_at = info_index(road.info.geometries, low)
+    if geometry_at < 0 or info_index(road.info.geometries, high) != geometry_at:
+        return False
+    if road.info.geometries[geometry_at].geometry.kind != SPIRAL:
+        return False
+    ref widths = road.sections[section].lanes[lane].info.widths
+    var width_at = info_index(widths, low)
+    if width_at < 0 or info_index(widths, high) != width_at:
+        return False
+    ref width = widths[width_at].polynomial
+    if width.b != 0.0 or width.c != 0.0 or width.d != 0.0:
+        return False
+    return _has_uniform_plan_classification(bounds, width.a, location)
+
+
+def _projected_seed(
+    start: Vector3,
+    end: Vector3,
+    first: Float64,
+    second: Float64,
+    location: Vector3,
+) -> Float64:
+    # Initial guess only. Stored Float32 coordinates are widened before
+    # subtraction. A finite nonzero chord has a finite normal Float64 norm.
+    # Degenerate/unsupported arithmetic retains the safe midpoint fallback.
+    var low = min(first, second)
+    var high = max(first, second)
+    var seed = _midpoint(low, high)
+    var dx = Float64(end.x) - Float64(start.x)
+    var dy = Float64(end.y) - Float64(start.y)
+    var dz = Float64(end.z) - Float64(start.z)
+    var qx = Float64(location.x) - Float64(start.x)
+    var qy = Float64(location.y) - Float64(start.y)
+    var qz = Float64(location.z) - Float64(start.z)
+    var denominator = dx * dx + dy * dy + dz * dz
+    var numerator = qx * dx + qy * dy + qz * dz
+    if denominator > 0.0 and isfinite(denominator) and isfinite(numerator):
+        var ratio = min(max(numerator / denominator, 0.0), 1.0)
+        var guess = first + (second - first) * ratio
+        if isfinite(guess):
+            seed = min(max(guess, low), high)
+    return seed
 
 
 @fieldwise_init
@@ -1523,8 +1613,26 @@ struct Map(Movable):
         var at = self._locate(waypoint)
         var low = min(segment.first.s, segment.second.s)
         var high = max(segment.first.s, segment.second.s)
-        # The seed is not a proof. All evaluator work belongs to the bounded
-        # refiner; straight real geometry cannot bypass stored-point proof.
+        var seed = _midpoint(low, high)
+        if _use_projected_spiral_seed(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            low,
+            high,
+            segment.bounds,
+            location,
+        ):
+            seed = _projected_seed(
+                segment.start,
+                segment.end,
+                segment.first.s,
+                segment.second.s,
+                location,
+            )
+        # This is not an admission, monotonicity, or accuracy certificate.
+        # The canonical evaluator and unchanged bounded search still verify
+        # the complete actual curve and charge every evaluated scalar point.
         var result = _refine_lane_certificate(
             self.roads[at[0]],
             at[1],
@@ -1532,7 +1640,7 @@ struct Map(Movable):
             low,
             high,
             location,
-            _midpoint(low, high),
+            seed,
             0.0,
         )
         waypoint.s = result.s
