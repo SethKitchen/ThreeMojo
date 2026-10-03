@@ -4,7 +4,7 @@
 
 ![A right knee shows natural ivory cartilage, menisci and collateral ligaments](out/knee.png)
 
-`extensions/humanoid/skeleton/leg/knee/{dimensions,geometry,mass}.mojo`. Shared field and isosurface code lives under `extensions/humanoid/skeleton/`. Soft-tissue density lives in `soft_tissue.mojo`. The visual look lives in `look.mojo`.
+`extensions/humanoid/skeleton/leg/knee/{dimensions,geometry,mass}.mojo`. Shared field and isosurface code lives under `extensions/humanoid/skeleton/`. Soft-tissue density lives in `extensions/anatomy/soft_tissue.mojo`, which the humanoid and the animals share. The visual look lives in `look.mojo`.
 
 This is not a three.js port. See [Extensions](Extensions), [Femur](Femur) and [Leg](Leg).
 

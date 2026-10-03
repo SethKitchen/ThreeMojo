@@ -5,7 +5,7 @@
 
 """A soft-tissue kind must be a `SoftTissueKind`, not a bare integer."""
 
-from extensions.humanoid.skeleton.soft_tissue import SoftTissue
+from extensions.anatomy.soft_tissue import SoftTissue
 from units.si import Density, GRAM_PER_CUBIC_CENTIMETER, MEGAPASCAL, Pressure
 
 

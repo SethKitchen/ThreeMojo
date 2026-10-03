@@ -25,10 +25,12 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
     pelvis_muscle_dimensions,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
     classify_soft,
 )
 from math.vector3 import Vector3

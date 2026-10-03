@@ -77,13 +77,13 @@ from extensions.humanoid.skeleton.occupancy import (
     BoneOccupancy,
     check_mass_step,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     adipose_tissue,
     muscle_tissue,
     skin_tissue,
     tendon_tissue,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )

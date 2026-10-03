@@ -54,12 +54,14 @@ from extensions.humanoid.skeleton.look import (
     nerve_phong,
     tendon_phong,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     NERVE,
-    SOFT_EMPTY,
-    SOFT_FILL,
     SoftTissueKind,
     nerve_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SOFT_EMPTY,
+    SOFT_FILL,
 )
 from materials.material import PHONG
 from math.vector3 import Vector3

@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.occupancy import (
     BoneOccupancy,
     sample_bone_mass,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,
