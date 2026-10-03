@@ -34,7 +34,19 @@ from extensions.carla.math import (
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan, atan2, ceil, cos, sin, sqrt
+from extensions.carla.curve_trig import (
+    _curve_atan as atan,
+    _curve_atan2 as atan2,
+    _curve_cos as cos,
+    _curve_sin as sin,
+    _atan_derivative,
+    _atan2_derivative,
+    _curve_sincos,
+    _sincos_derivative,
+    _curve_sinc,
+    _sinc_derivative,
+)
+from std.math import ceil, isfinite, sqrt
 from units.si import (
     DEGREE,
     PER_METER,
@@ -343,14 +355,53 @@ struct RoadGeometry(Copyable, Movable):
         return (start.x, start.y)
 
     def _arc(self, d: Float64) -> DirectedPoint:
+        return self._arc_offset(d, 0.0)
+
+    def _arc_offset(self, d: Float64, offset: Float64) -> DirectedPoint:
         var radius = 1.0 / self.curvature_start
-        comptime half_pi = 1.5707963267948966
-        var x = self.x + radius * cos(self.heading + half_pi)
-        var y = self.y + radius * sin(self.heading + half_pi)
-        var tangent = self.heading + d * self.curvature_start
-        x -= radius * cos(tangent + half_pi)
-        y -= radius * sin(tangent + half_pi)
-        return DirectedPoint(x, y, 0.0, tangent)
+        var turn = d * self.curvature_start
+        var half = turn * 0.5
+        var phase = self.heading + half
+        var factor = (radius + offset) * self.curvature_start * d
+        if not isfinite(radius):
+            # A finite offset cannot cancel an unrepresentable radius.
+            # This form still resolves every finite tiny-curvature increment.
+            factor = (1.0 + offset * self.curvature_start) * d
+        var chord = factor * _curve_sinc(half)
+        return DirectedPoint(
+            self.x + offset * sin(self.heading) + chord * cos(phase),
+            self.y - offset * cos(self.heading) + chord * sin(phase),
+            0.0,
+            self.heading + turn,
+        )
+
+    def _arc_offset_derivative(
+        self, d: Float64, offset: Float64, slope: Float64, active: Bool = True
+    ) -> Tuple[Float64, Float64]:
+        var radius = 1.0 / self.curvature_start
+        var k = self.curvature_start
+        var speed = 1.0 if active else 0.0
+        var half = (d * k) * 0.5
+        var dhalf = (speed * k) * 0.5
+        var phase = self.heading + half
+        var factor = (radius + offset) * k * d
+        var dfactor = slope * k * d + (radius + offset) * k * speed
+        if not isfinite(radius):
+            factor = (1.0 + offset * k) * d
+            dfactor = slope * k * d + (1.0 + offset * k) * speed
+        var sinc = _curve_sinc(half)
+        var chord = factor * sinc
+        var dchord = dfactor * sinc + factor * _sinc_derivative(half) * dhalf
+        var trig = _curve_sincos(phase)
+        var derivative = _sincos_derivative(phase)
+        return (
+            slope * sin(self.heading)
+            + dchord * trig[1]
+            + chord * derivative[1] * dhalf,
+            -slope * cos(self.heading)
+            + dchord * trig[0]
+            + chord * derivative[0] * dhalf,
+        )
 
     def _spiral(self, d: Float64) -> DirectedPoint:
         var k0 = self.curvature_start
@@ -360,8 +411,10 @@ struct RoadGeometry(Copyable, Movable):
         var step = d / Float64(pieces)
         var nodes = materialize[_GL_NODES]()
         var weights = materialize[_GL_WEIGHTS]()
-        var x = self.x
-        var y = self.y
+        # Accumulate displacement before adding the origin. Repeatedly
+        # rounding a large world origin would discard small quadrature terms.
+        var x = Float64(0.0)
+        var y = Float64(0.0)
         for piece in range(pieces):  # pragma: no branch
             var start = step * Float64(piece)
             for i in range(5):  # pragma: no branch
@@ -370,8 +423,79 @@ struct RoadGeometry(Copyable, Movable):
                 x += step * 0.5 * weights[i] * cos(theta)
                 y += step * 0.5 * weights[i] * sin(theta)
         return DirectedPoint(
-            x, y, 0.0, self.heading + d * (k0 + 0.5 * rate * d)
+            self.x + x,
+            self.y + y,
+            0.0,
+            self.heading + d * (k0 + 0.5 * rate * d),
         )
+
+    def _derivative_at(
+        self, distance: Float64
+    ) -> Tuple[Float64, Float64, Float64]:
+        if distance < 0.0 or distance > self.length:
+            return (0.0, 0.0, 0.0)
+        var d = distance
+        if self.kind == LINE:
+            return (cos(self.heading), sin(self.heading), 0.0)
+        if self.kind == ARC:
+            var derivative = self._arc_offset_derivative(d, 0.0, 0.0)
+            return (derivative[0], derivative[1], self.curvature_start)
+        if self.kind == SPIRAL:
+            var k0 = self.curvature_start
+            var rate = (self.curvature_end - k0) / self.length
+            var reach = max(abs(k0), abs(k0 + rate * d))
+            var pieces = 1 + Int(ceil(d * (1.0 + reach)))
+            var step = d / Float64(pieces)
+            var dstep = 1.0 / Float64(pieces)
+            var nodes = materialize[_GL_NODES]()
+            var weights = materialize[_GL_WEIGHTS]()
+            var dx = 0.0
+            var dy = 0.0
+            var piece = 0
+            while piece < pieces:
+                var start = step * Float64(piece)
+                var dstart = dstep * Float64(piece)
+                var i = 0
+                while i < 5:
+                    var t = start + step * 0.5 * (1.0 + nodes[i])
+                    var dt = dstart + dstep * 0.5 * (1.0 + nodes[i])
+                    var theta = self.heading + t * (k0 + 0.5 * rate * t)
+                    var dtheta = dt * (k0 + 0.5 * rate * t) + t * (
+                        0.5 * rate * dt
+                    )
+                    var trig = _curve_sincos(theta)
+                    var derivative = _sincos_derivative(theta)
+                    var factor = step * 0.5 * weights[i]
+                    var dfactor = dstep * 0.5 * weights[i]
+                    dx += dfactor * trig[1] + factor * derivative[1] * dtheta
+                    dy += dfactor * trig[0] + factor * derivative[0] * dtheta
+                    i += 1
+                piece += 1
+            return (dx, dy, k0 + d * rate)
+        var low = 0
+        var high = len(self.samples) - 1
+        while high - low > 1:
+            var middle = (low + high) // 2
+            if self.samples[middle].s < d:
+                low = middle
+            else:
+                high = middle
+        var one = self.samples[low]
+        var two = self.samples[high]
+        var span = two.s - one.s
+        var fraction = (two.s - d) / span
+        var tu = fraction * one.tu + (1.0 - fraction) * two.tu
+        var tv = fraction * one.tv + (1.0 - fraction) * two.tv
+        var du = (two.u - one.u) / span
+        var dv = (two.v - one.v) / span
+        var dtu = (two.tu - one.tu) / span
+        var dtv = (two.tv - one.tv) / span
+        var turn = _atan_derivative(tv) * dtv
+        if self.kind == PARAM_POLY3:
+            turn = _atan2_derivative(tv, tu, dtv, dtu)
+        var c = cos(self.heading)
+        var sn = sin(self.heading)
+        return (du * c - dv * sn, du * sn + dv * c, turn)
 
     def _sampled(self, d: Float64) -> DirectedPoint:
         # The first segment whose end reaches d. CARLA finds the same one

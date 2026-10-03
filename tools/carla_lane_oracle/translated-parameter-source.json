@@ -1,0 +1,70 @@
+{
+  "scope": "Exact translated-s construction and non-affine nonprogress counterexamples; not universal geometry proof",
+  "methods": [
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_start_of_lane",
+      "sha256": "82ea1414e34d897b744e8de1a37b1baaef3aca406c89bbcd19173d83d3ed4242"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_step",
+      "sha256": "cf7a4fa5a89ba46741d916dc81342899429d63b669d45bbf710e65ddf16a5161"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_subdivide_segment",
+      "sha256": "b88bca1cf78b5ae689a4b7dc2497685ba5da88ab8796b91f479c27bcc4f2642a"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_create_segments",
+      "sha256": "7bd4c6db06a7c89ba817d837f0e4795cf39aa609858bb629f918a13160156053"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "section_length",
+      "sha256": "bd95dc8f4f0cff0d44e92de456b0c2d1df604e434096284f8544e392d2c9e2a7"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "_plan_point",
+      "sha256": "2d51191373b7f82631fa1e266841af25f241f80cc12778f6992c2762519da90f"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "lane_is_straight",
+      "sha256": "a60fee57bbabf326431bfc75b0b1e4adf8d861c2c0e57c5f31ef65abf1705bcd"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "_total_width",
+      "sha256": "080b8f6e42f31289d8f1272a06ef7e811626b2491829587403f85c5dde9695d9"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "_lane_point",
+      "sha256": "47ecf5fc00aa746af86af70a77b67555dfd0a3ff9736e7e786c9486f4c22c1a0"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "name": "_offset_lane_point",
+      "sha256": "fb8b53c4e23ae4b52911394ec15526db769c90dc27d504f3166fd90ad8210911"
+    },
+    {
+      "path": "extensions/carla/geometry.mojo",
+      "name": "pos_at",
+      "sha256": "58784c2445a262b59afd10e4c8cfae95ec15aea3286418278e7db44af6145a17"
+    },
+    {
+      "path": "extensions/carla/polynomial.mojo",
+      "name": "evaluate",
+      "sha256": "428e87f664beb43a89d9ef4d1627bd640e4ad14fbb73fac2020b2bfcbbc991ab"
+    },
+    {
+      "path": "tests/test_carla_axis_translated_map_blocker.mojo",
+      "name": "_flat_map",
+      "sha256": "3ee31730603ecc6c614a4660f530bb5ecc20b9ae269270402e8c95455340f701"
+    }
+  ]
+}

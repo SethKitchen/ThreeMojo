@@ -94,6 +94,30 @@ A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s an
 9. It moves each sign that stands on a driving lane off that lane.
 
 The segments are in `extensions.carla.rtree.SegmentCloudRtree`.
+`segment_count()` and `segment()` return this nearest-waypoint index.
+They do not promise a fixed partition. Accuracy changes can add segments.
+The lane order and index tie rules stay deterministic.
+
+The quarter-point chord target is one millimeter. A required split needs
+an interior Float64 road-s value. Construction raises a resolution error
+when that value is unavailable. A positive nonterminal sampling step must
+also advance in lane order. A rounded unchanged step raises a resolution
+error. Terminal zero-span index entries remain valid.
+
+See [road-s resolution](CARLA-road-s-resolution).
+
+Sampling does not bound unsampled extrema. Candidate admission uses a separate full-center enclosure
+and the corrected R-tree distance bound. An unknown bound keeps a candidate.
+The minimum search proves candidate dominance and strict on-road status.
+
+It resumes overlapping candidates without resetting their work budgets.
+If the remaining budget cannot prove the result, the query raises an
+accuracy error. It does not return an unproved waypoint or off-road result.
+
+The [lane correction controls](CARLA-lane-correction-controls) explain the
+intentional pose, minimum, index and mesh changes. This work is still held
+for final qualification. Border-only lane support in issue #577 and global
+map work budgets in issue #580 remain separate work.
 
 ## Meshes
 
@@ -117,7 +141,10 @@ The map functions are `generate_mesh`, `generate_chunked_mesh`, `generate_ordere
 
 This port keeps CARLA's numbers except for the corrections listed here.
 
-- Waypoint pitch uses the arctangent of the elevation grade, with the sign required by CARLA's corrected rotation convention. Uphill waypoints face uphill in either traffic direction. CARLA's old lane transform used the raw grade as a positive angle. The sign follows the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h).
+- Lane yaw and pitch follow the lane-center derivative. Yaw uses the tangent angle, rather than treating lateral slope as an angle. Pitch uses elevation change divided by horizontal lane-center speed. This includes changing widths and sampled-reference tangents. Uphill waypoints face uphill in either traffic direction. The sign follows the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h).
+- Nearest-waypoint queries minimize the lane-center distance. They do not treat distance along an offset chord as road s. Internal selection and strict on-road checks keep the Float64 center. Only the public transform narrows the position.
+- The nearest-waypoint index splits at record boundaries and for lane-center chord error. Its public count can differ from CARLA's heading-only partition. A required split without an interior Float64 road-s value raises a resolution error.
+- A width-record kink prevents the straight-lane mesh shortcut. The existing mesh resolution then adds rows through that section. MeshFactory does not use the nearest-waypoint index as its mesh partition.
 - Topology retains dead-end lanes and their section identity. The pinned [CARLA `Map.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/road/Map.cpp) narrows the endpoint to a float before lookup. This can drop an increasing-s lane at the road end. The port deliberately corrects that behavior. See [issue #285](https://github.com/SethKitchen/ThreeMojo/issues/285).
 - Backward lane traversal measures the remainder toward the lane start. The pinned [CARLA `Waypoint.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/client/Waypoint.cpp) uses the forward remainder for its final backward step. That can leave the starting road or fail at an isolated end. The port deliberately corrects that behavior and handles exact and unlinked section endpoints. See [issue #286](https://github.com/SethKitchen/ThreeMojo/issues/286).
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
