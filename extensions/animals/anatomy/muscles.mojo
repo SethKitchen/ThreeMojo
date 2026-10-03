@@ -115,10 +115,9 @@ struct MuscleSpec(Copyable, Movable):
     # The axis its joints turn about, in the bind pose: `+x` for a limb
     # that swings fore and aft, `+z` for a wing that beats up and down.
     var axis: V3
-    # Where the path turns over a pulley on the origin's bone, if
-    # `has_via`: the line of action at the insertion points there.
-    var via: Attachment
-    var has_via: Bool
+    # Where the path turns over a pulley or wraps behind a joint, in
+    # order from the origin. Each rides its own bone.
+    var vias: List[Attachment]
 
 
 def _at(bone: String, a: String, b: String, t: Float64, o: V3) -> Attachment:
@@ -140,7 +139,7 @@ def _spec(
     var crosses: List[String],
     var bellies: List[String],
     axis: V3 = V3(1.0, 0.0, 0.0),
-    via: Optional[Attachment] = None,
+    var vias: List[Attachment] = [],
 ) -> MuscleSpec:
     return MuscleSpec(
         name,
@@ -155,8 +154,7 @@ def _spec(
         crosses^,
         bellies^,
         axis,
-        via.value().copy() if via else origin.copy(),
-        Bool(via),
+        vias^,
     )
 
 
@@ -211,9 +209,15 @@ def _mammal() -> List[MuscleSpec]:
         0.0, ["shoulder{S}"], ["scapmuscle"]))
     out.append(_spec("superficial digital flexor",
         _at("humerus{S}", "elbow{S}", "elbow{S}", 0.0, V3(0.0, 0.0, -0.10)),
-        _at("fpaw{S}", "mcp{S}", "ftoe{S}", 0.5, V3(0.0, -0.03, -0.05)),
+        _at("fpaw{S}", "mcp{S}", "ftoe{S}", 0.3, V3(0.0, -0.03, -0.02)),
         0.004, DESIGN, "", 0.15, "radius{S}", DESIGN, "",
-        0.0, ["elbow{S}", "wrist{S}", "mcp{S}"], ["forearmmuscle"]))
+        0.0, ["elbow{S}", "wrist{S}", "mcp{S}"], ["forearmmuscle"],
+        V3(1.0, 0.0, 0.0),
+        # Its tendon runs behind the carpus and over the sesamoids.
+        [
+            _at("radius{S}", "wrist{S}", "wrist{S}", 0.0, V3(0.0, 0.0, -0.06)),
+            _at("metacarpus{S}", "mcp{S}", "mcp{S}", 0.0, V3(0.0, 0.02, -0.08)),
+        ]))
     # fmt: on
     return out^
 
@@ -233,7 +237,7 @@ def _bird() -> List[MuscleSpec]:
         0.0, ["shoulder{S}"], [], V3(0.0, 0.0, 1.0),
         # Its tendon turns over the triosseal canal, above the shoulder,
         # and lifts the wing from there.
-        _at("chest", "shoulder{S}", "shoulder{S}", 0.0, V3(-0.15, 0.25, 0.05))))
+        [_at("chest", "shoulder{S}", "shoulder{S}", 0.0, V3(-0.15, 0.25, 0.05))]))
     # fmt: on
     return out^
 
@@ -295,42 +299,43 @@ struct AnimalMuscle(Copyable, Movable):
     var name: String
     var side: String
     var arch: MuscleArchitecture
-    var origin_bone: Int
-    var insertion_bone: Int
-    # The attachment points in the bind pose, in meters. `via` rides
-    # the origin's bone; without a pulley it is the origin.
-    var origin: V3
-    var via: V3
-    var insertion: V3
+    # The path in the bind pose, in meters: the origin, any pulleys,
+    # and the insertion. Each point rides the bone at the same index.
+    var points: List[V3]
+    var bones: List[Int]
     # The joints it crosses, by joint index.
     var joints: List[Int]
     # The bone that each joint is the head of: the one it turns.
     var joint_bones: List[Int]
+    # For each joint, the path segment that spans it: from point
+    # `k - 1` to point `k`.
+    var spans: List[Int]
     # The joints' axis in the bind pose, mirrored for the side.
     var axis: V3
     var share_source: Cited
     var fiber_source: Cited
     var bellies: List[String]
 
-    def path(self, world: List[Rigid]) -> Tuple[V3, V3, V3]:
-        """Return the origin, the pulley and the insertion in a pose.
+    def path(self, world: List[Rigid]) -> List[V3]:
+        """Return the path in a pose.
 
         Args:
             world: The pose's world transform of each bone.
 
         Returns:
-            The three points, in meters. The pulley is the origin when
-            the muscle runs straight.
+            The points, origin first, in meters.
         """
-        ref o = world[self.origin_bone]
-        var i = world[self.insertion_bone].apply(self.insertion)
-        return (o.apply(self.origin), o.apply(self.via), i)
+        var out = List[V3](capacity=len(self.points))
+        for k in range(len(self.points)):  # pragma: no branch
+            out.append(world[self.bones[k]].apply(self.points[k]))
+        return out^
 
     def moment_arms(self, rig: Rig, world: List[Rigid]) -> List[Length]:
         """Return the moment arm about each joint the muscle crosses.
 
         A positive arm turns the distal bone about the joint's axis by
         the right-hand rule: a limb extensor at the hip, a knee flexor.
+        Each uses the stretch of the path that spans the joint.
 
         Args:
             rig: The individual's rig.
@@ -345,8 +350,9 @@ struct AnimalMuscle(Copyable, Movable):
             ref turn = world[self.joint_bones[n]]
             var center = turn.apply(rig.joints[self.joints[n]])
             var axis = turn.turn(self.axis)
-            var lever = p[2] - center
-            var line = p[1] - p[2]
+            var k = self.spans[n]
+            var lever = p[k] - center
+            var line = p[k - 1] - p[k]
             var pull = line * (1.0 / length(line))
             var arm = dot(cross(lever, pull), axis)
             out.append(Length(Float32(arm), METER))
@@ -359,11 +365,63 @@ struct AnimalMuscle(Copyable, Movable):
             world: The pose's world transform of each bone.
 
         Returns:
-            Origin to insertion, in meters.
+            The path's length, in meters.
         """
         var p = self.path(world)
-        var unit = length(p[1] - p[0]) + length(p[2] - p[1])
+        var unit = 0.0
+        for k in range(1, len(p)):  # pragma: no branch
+            unit += length(p[k] - p[k - 1])
         return Length(Float32(unit), METER)
+
+
+def descends(rig: Rig, bone: Int, ancestor: Int) -> Bool:
+    """Return whether a bone is another or rides it.
+
+    Args:
+        rig: The rig.
+        bone: The bone, by index.
+        ancestor: The bone it may ride, by index.
+
+    Returns:
+        True if `bone` is `ancestor` or a child of a child of it.
+    """
+    var b = bone
+    while b >= 0:
+        if b == ancestor:
+            return True
+        b = rig.bones[b].parent.value
+    return False
+
+
+def spans_of(
+    rig: Rig, bones: List[Int], joint_bones: List[Int]
+) raises -> List[Int]:
+    """Return, for each joint, the path segment that crosses it.
+
+    Args:
+        rig: The rig.
+        bones: The bone each path point rides, origin first.
+        joint_bones: The bone each joint turns.
+
+    Returns:
+        For each joint, the index of the first point that the joint
+        moves: the segment ends there.
+
+    Raises:
+        Error: If the origin already rides the joint's bone, or no point
+            does.
+    """
+    var out = List[Int]()
+    for jb in joint_bones:  # pragma: no branch
+        if descends(rig, bones[0], jb):
+            raise Error("A muscle's origin must be above the joints it crosses")
+        var k = 1
+        while k < len(bones) and not descends(rig, bones[k], jb):
+            k += 1
+        if k == len(bones):
+            raise Error("A muscle must insert beyond the joints it crosses")
+        out.append(k)
+    return out^
 
 
 def _point(rig: Rig, at: Attachment, side: String, scale: Float64) raises -> V3:
@@ -413,11 +471,19 @@ def animal_muscles(
             var reach = length(
                 rig.tail_of(fiber_bone) - rig.head_of(fiber_bone)
             )
-            var origin = _point(rig, spec.origin, side, reach)
-            var insertion = _point(rig, spec.insertion, side, reach)
-            var via = _point(rig, spec.via, side, reach)
+            var points: List[V3] = [_point(rig, spec.origin, side, reach)]
+            var bones: List[Int] = [
+                rig.bone(_sided(spec.origin.bone, side)).value
+            ]
+            for via in spec.vias:
+                points.append(_point(rig, via, side, reach))
+                bones.append(rig.bone(_sided(via.bone, side)).value)
+            points.append(_point(rig, spec.insertion, side, reach))
+            bones.append(rig.bone(_sided(spec.insertion.bone, side)).value)
             var fiber = spec.fiber_ratio * reach
-            var unit = length(via - origin) + length(insertion - via)
+            var unit = 0.0
+            for k in range(1, len(points)):  # pragma: no branch
+                unit += length(points[k] - points[k - 1])
             var pennation = spec.pennation_degrees * 0.017453292519943295
             var slack = unit - fiber * cos(pennation)
             if slack <= 0.0:
@@ -443,18 +509,17 @@ def animal_muscles(
             var axis = V3(
                 spec.axis.x, spec.axis.y * mirror, spec.axis.z * mirror
             )
+            var spans = spans_of(rig, bones, joint_bones)
             out.append(
                 AnimalMuscle(
                     spec.name,
                     String(side),
                     arch,
-                    rig.bone(_sided(spec.origin.bone, side)).value,
-                    rig.bone(_sided(spec.insertion.bone, side)).value,
-                    origin,
-                    via,
-                    insertion,
+                    points^,
+                    bones^,
                     joints^,
                     joint_bones^,
+                    spans^,
                     axis,
                     spec.share_source.copy(),
                     spec.fiber_source.copy(),
