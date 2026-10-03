@@ -9,6 +9,7 @@ substituted; materials, textures, bake pixels and GLB packaging are real.
 
 from contextlib import ExitStack
 import copy
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -280,6 +281,125 @@ class TownBakeTests(unittest.TestCase):
                     self.assertEqual(entries, library.gltf[table][:len(entries)])
                 for uri, data in before_files.items():
                     self.assertEqual(data, (folder / uri).read_bytes())
+
+    def _masked_materials(self):
+        Image.new('RGB', (4, 4), 'red').save(self.raw / 'Shared.png')
+        Image.new('L', (4, 4), 255).save(self.raw / 'MaskA.png')
+        Image.new('L', (4, 4), 0).save(self.raw / 'MaskB.png')
+        for material, mask in (('A', 'MaskA'), ('B', 'MaskB')):
+            (self.raw / (material + '.mat')).write_text('Diffuse=Shared\nOpacity=' + mask + '\n')
+            (self.raw / (material + '.props.txt')).write_text('BlendMode = BLEND_Masked\n')
+
+    def _material_image_path(self, library, material):
+        texture = library.gltf['materials'][material]['pbrMetallicRoughness']['baseColorTexture']['index']
+        image = library.gltf['images'][library.gltf['textures'][texture]['source']]
+        return Path(library.package.out_dir) / image['uri']
+
+    def test_later_mask_material_cannot_overwrite_a_cached_input(self):
+        self._masked_materials()
+        folder = self.root / 'late-mask'
+        folder.mkdir()
+        library = tool.Library(str(folder), 512)
+        first = library.material('A')
+        parts = [(self.primitives[0], first)]
+        tag = library._bake_tag('mesh', 'impostor', parts)
+        path = self._material_image_path(library, first)
+        before = path.read_bytes()
+        second = library.material('B')
+        self.assertEqual(before, path.read_bytes())
+        self.assertNotEqual(path, self._material_image_path(library, second))
+        self.assertEqual(tag, library._bake_tag('mesh', 'impostor', parts))
+
+    def test_shared_color_mask_changes_real_bake_names_and_pixels(self):
+        self._masked_materials()
+        tags = {'baked': [], 'impostor': []}
+        for run, alpha in enumerate((0, 255)):
+            Image.new('L', (4, 4), alpha).save(self.raw / 'MaskB.png')
+            folder = self.root / ('mask-build-' + str(run))
+            folder.mkdir()
+            library = tool.Library(str(folder), 512)
+            first = library.material('A')
+            for kind in tags:
+                library._bake_tag('mesh', kind, [(self.primitives[0], first)], 12 if kind == 'baked' else None)
+            second = library.material('B')
+            parts = [(self.primitives[0], second)]
+            for bake, kind in ((tool.impostor, 'impostor'), (tool.baked_building, 'baked')):
+                args = (12,) if kind == 'baked' else ()
+                _, material = bake(parts, library, str(folder), 'mesh', *args)
+                tags[kind].append(library.gltf['materials'][material]['name'])
+                with Image.open(self._material_image_path(library, material)) as picture:
+                    pixels = numpy.asarray(picture.convert('RGBA')).copy()
+                if alpha:
+                    self.assertGreater(pixels[:, :, 0].max(), 100)
+                else:
+                    self.assertEqual(pixels[:, :, :3].max(), 0)
+                if kind == 'impostor':
+                    self.assertEqual(pixels[:, :, 3].max(), alpha)
+        for kind in tags:
+            with self.subTest(kind=kind):
+                self.assertNotEqual(*tags[kind])
+
+    def test_same_stem_texture_inputs_keep_distinct_packaged_pixels(self):
+        sources = []
+        for name, color in (('first', 'red'), ('second', 'green')):
+            directory = self.root / name
+            directory.mkdir()
+            path = directory / 'Shared.png'
+            Image.new('RGB', (4, 4), color).save(path)
+            sources.append(str(path))
+        for color in (False, True):
+            with self.subTest(color=color):
+                folder = self.root / ('ordinary-' + str(color))
+                gltf = {}
+                package = tool.fix.Package(gltf, str(folder), 512)
+                first = package.texture(sources[0], color)
+                first_uri = gltf['images'][gltf['textures'][first]['source']]['uri']
+                before = (folder / first_uri).read_bytes()
+                second = package.texture(sources[1], color)
+                second_uri = gltf['images'][gltf['textures'][second]['source']]['uri']
+                self.assertEqual(before, (folder / first_uri).read_bytes())
+                self.assertNotEqual(first_uri, second_uri)
+                self.assertEqual(first, package.texture(sources[0], color))
+                other = {}
+                copy_package = tool.fix.Package(other, str(folder / 'copy'), 512)
+                copy_package.texture(sources[0], color)
+                self.assertEqual(first_uri, other['images'][0]['uri'])
+
+    def test_content_names_preserve_texture_encoding_and_neutralization(self):
+        for neutral in (False, True):
+            stem = 'bmw_logo' if neutral else 'ordinary'
+            path = self.raw / (stem + '.png')
+            original = Image.new('RGB', (4, 4), (192, 64, 16))
+            original.paste((0, 128, 32), (2, 0, 4, 4))
+            original.save(path)
+            for color in (False, True):
+                with self.subTest(neutral=neutral, color=color):
+                    folder = self.root / (stem + str(color))
+                    gltf = {}
+                    package = tool.fix.Package(gltf, str(folder), 512)
+                    package.texture(str(path), color)
+                    uri = gltf['images'][0]['uri']
+                    data = (folder / uri).read_bytes()
+                    image_format = 'JPEG' if color or neutral else 'PNG'
+                    expected = Image.new('RGB', (8, 8), (96, 96, 24)) if neutral else original
+                    output = io.BytesIO()
+                    expected.save(output, format=image_format, **({'quality': 88} if color else {'optimize': True}))
+                    self.assertEqual(data, output.getvalue())
+                    suffix = '.jpg' if image_format == 'JPEG' else '.png'
+                    self.assertEqual(uri, 'textures/texture_' + hashlib.sha256(data).hexdigest() + suffix)
+
+    def test_equal_mask_pixels_share_one_packaged_image(self):
+        self._masked_materials()
+        Image.new('L', (4, 4), 255).save(self.raw / 'MaskB.png')
+        folder = self.root / 'same-mask'
+        folder.mkdir()
+        library = tool.Library(str(folder), 512)
+        first = library.material('A')
+        path = self._material_image_path(library, first)
+        before = path.read_bytes()
+        second = library.material('B')
+        self.assertEqual(path, self._material_image_path(library, second))
+        self.assertEqual(before, path.read_bytes())
 
     def test_geometry_and_settings_identity_uses_values_not_array_layout(self):
         folder = self.root / 'identity'

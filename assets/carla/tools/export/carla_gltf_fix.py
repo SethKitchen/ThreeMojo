@@ -25,13 +25,14 @@ pixels, color textures as JPEG and data textures as PNG.
 """
 
 import argparse
+import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import struct
 import sys
-import zlib
 
 from PIL import Image
 
@@ -113,6 +114,24 @@ class Package:
         gltf["textures"] = []
         gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}]
 
+    def _write_texture(self, image, image_format, **options):
+        """Name each packaged texture by its encoded bytes.
+
+        Different source paths can have the same stem, and one color can
+        have several masks. Neither case may overwrite a previous image:
+        near materials and memoized far-bake inputs still refer to it.
+        Equal encoded images can safely share a name across source paths.
+        """
+        with io.BytesIO() as output:
+            image.save(output, format=image_format, **options)
+            data = output.getvalue()
+        suffix = ".jpg" if image_format == "JPEG" else ".png"
+        name = "texture_" + hashlib.sha256(data).hexdigest() + suffix
+        os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
+        with open(os.path.join(self.out_dir, "textures", name), "wb") as target:
+            target.write(data)
+        return "textures/" + name
+
     def texture(self, source, color):
         """Return the texture index for image file `source`, adding it. A
         texture that `NEUTRAL` names becomes a small image of its average
@@ -122,9 +141,6 @@ class Package:
             return self.images[key]
         stem = os.path.splitext(os.path.basename(source))[0]
         neutral = bool(NEUTRAL.search(stem))
-        name = ("plain_%08x.jpg" % zlib.crc32(stem.encode())) if neutral else stem + (".jpg" if color else ".png")
-        os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
-        target = os.path.join(self.out_dir, "textures", name)
         image = Image.open(source)
         if neutral:
             average = image.convert("RGB").resize((1, 1), Image.BOX).getpixel((0, 0))
@@ -136,10 +152,10 @@ class Package:
                 Image.LANCZOS,
             )
         if color:
-            image.convert("RGB").save(target, quality=88)
+            uri = self._write_texture(image.convert("RGB"), "JPEG", quality=88)
         else:
-            image.convert("RGB").save(target, optimize=True)
-        self.gltf["images"].append({"uri": "textures/" + name})
+            uri = self._write_texture(image.convert("RGB"), "JPEG" if neutral else "PNG", optimize=True)
+        self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
         self.images[key] = index
@@ -175,10 +191,8 @@ class Package:
                 (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
                 Image.LANCZOS,
             )
-        name = os.path.splitext(os.path.basename(color))[0] + "_masked.png"
-        os.makedirs(os.path.join(self.out_dir, "textures"), exist_ok=True)
-        image.save(os.path.join(self.out_dir, "textures", name), optimize=True)
-        self.gltf["images"].append({"uri": "textures/" + name})
+        uri = self._write_texture(image, "PNG", optimize=True)
+        self.gltf["images"].append({"uri": uri})
         self.gltf["textures"].append({"sampler": 0, "source": len(self.gltf["images"]) - 1})
         index = len(self.gltf["textures"]) - 1
         self.images[key] = index

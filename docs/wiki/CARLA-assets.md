@@ -208,6 +208,11 @@ with different material overrides keeps its own far appearance. Each build
 starts a new cache. Its geometry, materials and texture files must stay fixed
 until that build ends.
 
+Packaged texture names use a hash of the encoded image bytes. Two material
+overrides can share a color map with different masks without replacing each
+other's image. Source images with the same filename also stay distinct.
+Equal encoded images can share one packaged file.
+
 ## Test the town exporter
 
 The standard-library identity checks run with `make test-tools`.
