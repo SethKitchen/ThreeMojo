@@ -1440,6 +1440,18 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'HitKind'"
     ]
   },
+  "tests/compile_fail/a_humanoid_use_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'require_humanoid_use': value passed to 'use' cannot be converted from 'IntLiteral[0]' to 'HumanoidUse'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_joint_is_not_a_bare_int.mojo": {
     "errors": [
       {
