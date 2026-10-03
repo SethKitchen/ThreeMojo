@@ -34,7 +34,10 @@ fog lights in fog.
 
 **Differences from CARLA.** The world always has weather. CARLA's
 `std::set_difference` in the safe-space check needs sorted input and is
-given hash sets; here the difference is the plain one.
+given hash sets; here the difference is the plain one. The turn speed
+uses a translation-stable radius and widens the product before the square
+root. A large finite radius therefore gives a finite speed. The caller
+still clamps that speed to the configured and landmark limits.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficLightStage.cpp`,
 `MotionPlanStage.cpp` and `VehicleLightStage.cpp`.
@@ -909,7 +912,9 @@ struct MotionPlanStage(Movable):
         Returns:
             The square root of r 0.6 9.81 for the circle of radius r
             through the path's first, middle and last nodes, in m/s; the
-            target speed for a path of fewer than three nodes.
+            target speed for a path of fewer than three nodes. A straight
+            path's `FLT_MAX` radius gives a finite, very large speed.
+            The caller applies the configured and landmark speed limits.
 
         Raises:
             Error: If a node is not on the map.
@@ -922,7 +927,13 @@ struct MotionPlanStage(Movable):
             map.at(buffer[len(buffer) // 2]).location(),
             map.at(buffer[len(buffer) - 1]).location(),
         )
-        return sqrt(radius.value * FRICTION * GRAVITY.value)
+        return Float32(
+            sqrt(
+                Float64(radius.value)
+                * Float64(FRICTION)
+                * Float64(GRAVITY.value)
+            )
+        )
 
     def remove_actor(mut self, actor: ActorId) raises:
         """Forget a vehicle's controller state, `RemoveActor`.
