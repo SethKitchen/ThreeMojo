@@ -49,7 +49,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.math import max
 from std.testing import (
@@ -394,4 +394,5 @@ def test_a_mohawk_shaves_the_sides() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

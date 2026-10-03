@@ -47,6 +47,20 @@ class CiPolicyTests(unittest.TestCase):
         self.text = WORKFLOW.read_text()
         self.jobs = jobs_of(self.text)
 
+    def test_linux_cpu_tools_include_the_portability_contract(self):
+        commands = re.findall(r'^        run: (make .+)$', self.jobs['lint'], re.MULTILINE)
+        self.assertEqual(len(commands), 1)
+        self.assertIn('test-portability', commands[0].split())
+        self.assertIn('test-coverage-tool', commands[0].split())
+
+    def test_macos_cpu_tools_include_the_portability_contract(self):
+        job = self.jobs['cpu-macos']
+        lint = re.search(r'^          - part: lint\n            target: (.+)$', job, re.MULTILINE)
+        self.assertIsNotNone(lint)
+        self.assertIn('test-portability', lint.group(1).split())
+        self.assertIn('test-coverage-tool', lint.group(1).split())
+        self.assertIn('run: make -B ${{ matrix.target }} AFFECTED="$AFFECTED"', job)
+
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
         # A future check job must opt out of draft PRs too. Only the wiki

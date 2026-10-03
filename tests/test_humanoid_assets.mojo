@@ -29,6 +29,12 @@ def test_asset_root_selection_and_path_validation() raises:
     assert_equal(
         hair_style_path(LAYERED), "/explicit asset root/hair/layered.bin"
     )
+    _ = setenv("THREEMOJO_ASSET_ROOT", "relative assets")
+    assert_equal(
+        humanoid_asset_path("assets/face/ict_face.bin"),
+        "relative assets/face/ict_face.bin",
+    )
+    assert_equal(hair_style_path(LAYERED), "relative assets/hair/layered.bin")
     _ = setenv("THREEMOJO_ASSET_ROOT", saved)
     with assert_raises(contains="must start with assets/"):
         _ = humanoid_asset_path("other/face.bin")

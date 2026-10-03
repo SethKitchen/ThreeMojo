@@ -189,7 +189,7 @@ from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
 from std.math import atan, log2, pi, pow, sqrt
 from std.os import makedirs
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -1338,4 +1338,5 @@ def test_a_road_set_with_no_roughness_and_a_town_with_no_trees() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

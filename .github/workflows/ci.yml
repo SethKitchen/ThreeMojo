@@ -71,7 +71,7 @@ jobs:
       # build tools. No MAX, which is what proves the no-dependencies claim
       # still holds.
       - name: lint
-        run: make -B fmt-check test-tools test-coverage-tool lint-cpu compile-fail docs-check AFFECTED="$AFFECTED"
+        run: make -B fmt-check test-tools test-coverage-tool test-portability lint-cpu compile-fail docs-check AFFECTED="$AFFECTED"
 
   cpu:
     if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
@@ -124,7 +124,7 @@ jobs:
       matrix:
         include:
           - part: lint
-            target: fmt-check test-tools test-coverage-tool lint-cpu compile-fail docs-check
+            target: fmt-check test-tools test-coverage-tool test-portability lint-cpu compile-fail docs-check
           - part: suites 1/2
             target: test-cpu SHARD=1/2
           - part: suites 2/2
