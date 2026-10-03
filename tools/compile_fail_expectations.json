@@ -4573,5 +4573,29 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_triangle_budget_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 62,
+        "message": "invalid call to 'fit_triangle_budget_result': value passed to 'mode' cannot be converted from 'IntLiteral[0]' to 'TriangleBudgetMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_triangle_budget_reason_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 27,
+        "message": "invalid call to 'has_reason': value passed to 'reason' cannot be converted from 'IntLiteral[0]' to 'TriangleBudgetReason'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }
