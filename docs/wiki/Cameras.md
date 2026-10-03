@@ -196,6 +196,8 @@ Each face camera looks along `face_forward(face)` with `face_up(face)` as its up
 
 `render_cube` draws each face with a renderer of the face's size and this renderer's background, shading and workers, through `render`. The scene's own background is in the faces. The tone mapping is left off, as three.js turns it off around its update: the faces are light the main frame maps once.
 
+`render_cube` uses the renderer's `antialias` and returns sRGB byte faces. `render_cube_into` draws into a caller-owned cube target and uses each face's `samples` instead. Use a float target to keep HDR light. Both paths average samples in linear light. See [Cube capture sampling](Renderer#cube-capture-sampling) for the contract.
+
 A cube camera at the center of a mirror ball sees the inside of the ball. three.js's examples hide the ball around the update. Here the camera has `layers`, as every camera has. Put the ball on a layer of its own and the main camera on both, and the cube camera does not draw it.
 
 The constructor refuses a size that is not positive. It refuses a near plane that is not in front of the camera, and a far plane that is not beyond it. A face that is none of the six is refused, and so is a stale scene or a missing node. `tests/compile_fail/` proves a bare float is not a plane.
