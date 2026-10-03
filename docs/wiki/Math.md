@@ -483,6 +483,72 @@ The floor accepts every positive `Int`, including `Int.MAX`.
 
 For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
 
+### Periodic scalar helpers
+
+`euclidean_modulo(n, m)` accepts Float32 inputs. For finite inputs and a
+nonzero divisor, its result has the divisor's sign and a magnitude below
+`abs(m)`. Exact multiples return a zero with the divisor's sign. The exact
+mathematical result is rounded to Float32. If that reaches the excluded
+endpoint, the result is the adjacent Float32 toward zero. A zero divisor,
+an infinite operand, or a NaN operand returns NaN.
+
+`pingpong(x, length)` accepts every finite Float32 input and positive finite
+length. Its result is from zero to the length, with positive zero at period
+boundaries. It constructs the period in Float64 and folds the exact binary
+remainder before the final Float32 rounding. It keeps small phases and cannot
+overflow for a positive finite length.
+
+A negative length keeps three.js's
+extension from `2 * length` to `length`. This negative extension can round to
+negative infinity when its result does not fit Float32. Zero lengths and
+nonfinite operands return NaN.
+
+`math/remainder.mojo` provides `remainder_float64(n, m)`. It returns the exact
+truncating remainder for every finite binary64 pair with a nonzero divisor.
+The sign, including a zero's sign, comes from the dividend. A finite dividend
+and infinite divisor return the dividend. Zero divisors, infinite dividends,
+and NaN operands return NaN. NaN payloads are not preserved.
+
+The shared primitive uses integer significands and powers of two. It does not
+use a floating-point quotient, floating-point `%`, or a host library. Its
+integer residual stays below a 53-bit divisor. Each shift is at most ten bits,
+so the intermediate fits UInt64. There are at most 205 shifts. The final exact
+remainder fits the input binary64 lattice, including subnormal values.
+
+`tools/reference_remainders.py` decodes inputs to exact Python fractions. It
+uses rational floor division and rounds directly to the target format. The
+saved controls cover every finite exponent field, both signs, subnormals,
+exact multiples, representable neighbors, and seeded random pairs. Run
+`python3 tools/reference_remainders.py --check` to check the controls. Use
+`--write` only for an intentional fixture change. The native suite compares
+bits, without a tolerance.
+
+CPU evidence does not verify GPU runtime behavior.
+
+#### Differences from three.js
+
+The upstream baseline is three.js 0.180.0, `src/math/MathUtils.js`. Its
+Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0, Float32 bits
+`0x71800000` are exactly `2^100`. Both native Float32 and widened Float64 `%`
+return zero for a divisor of `1.5`. Exact rational arithmetic gives one.
+The shared primitive returns one.
+
+This is a reproduced API counterexample;
+it does not identify the compiler's internal cause.
+
+The unconditional upstream add-divisor step can erase a small positive
+remainder or overflow. The pingpong formula can overflow its Float32 period
+or erase a small folded phase. These cases now follow the mathematical wave.
+Opposite-sign endpoint rounding uses the adjacent value toward zero, rather
+than wrapping to zero. Ordinary three.js fixtures remain covered. These
+corrections can change a caller's phase or replay at the affected boundaries.
+
+The caller audit found no other direct calls to these two helpers in the
+frozen source. The animation mixer has its own quotient-based loop counter
+and phase reduction. Its counter range and large-step behavior need a separate
+contract; this change does not modify them. Integer texture wrapping and the
+large-angle sine reducer use separate arithmetic and are unchanged.
+
 ## Large-angle sine regressions
 
 `tests/test_sine.mojo` checks representable neighbors around large multiples of

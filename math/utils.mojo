@@ -13,10 +13,16 @@ The random numbers come from a `SeededRandom`, three.js's Mulberry32
 generator, so that a sequence is the same on every run and every
 platform. three.js's unseeded `randFloat` reads `Math.random`; a caller
 here keeps a generator and asks it.
+
+Differences from three.js 0.180.0: periodic helpers reduce exact binary
+inputs before rounding. They avoid an overflowing period or add-divisor
+step, retain small phases, and clamp Euclidean endpoint rounding toward
+zero. See the Math wiki page for the finite and exceptional contracts.
 """
 
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
+from math.remainder import remainder_float64
 from math.smoothstep import smoothstep
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
@@ -102,29 +108,60 @@ def damp(x: Float32, y: Float32, rate: Float32, delta: Duration) -> Float32:
 
 
 def euclidean_modulo(n: Float32, m: Float32) -> Float32:
-    """Return the remainder of `n / m`, always with the sign of `m`.
+    """Return a remainder with the divisor's sign and a strict range.
 
     Args:
         n: The dividend.
         m: The divisor.
 
     Returns:
-        A value from zero up to, not including, `m`.
+        For finite operands and nonzero `m`, a result with the sign of `m`
+        and magnitude below `abs(m)`. Round the exact mathematical result
+        to Float32. If rounding reaches `m`, use its adjacent value toward
+        zero. Exact multiples return zero with the sign of `m`. A zero
+        divisor or either nonfinite operand returns NaN.
     """
-    return ((n % m) + m) % m
+    if not isfinite(n) or not isfinite(m) or m == 0:
+        return bitcast[DType.float32](UInt32(0x7FC00000))
+    var sign = bitcast[DType.uint32](m) & 0x80000000
+    var remainder = remainder_float64(abs(Float64(n)), abs(Float64(m)))
+    if remainder == 0:
+        return bitcast[DType.float32](sign)
+    if (n < 0) != (m < 0):
+        remainder = abs(Float64(m)) - remainder
+    var magnitude = Float32(remainder)
+    if magnitude >= abs(m):
+        magnitude = bitcast[DType.float32](
+            (bitcast[DType.uint32](m) & 0x7FFFFFFF) - 1
+        )
+    return bitcast[DType.float32](bitcast[DType.uint32](magnitude) | sign)
 
 
 def pingpong(x: Float32, length: Float32 = 1) -> Float32:
-    """Return a value that runs from zero to `length` and back.
+    """Return a triangular wave with an exact finite binary period.
 
     Args:
         x: The input.
-        length: The peak.
+        length: The peak. A positive finite value gives the usual wave.
 
     Returns:
-        A value from zero to `length`.
+        For positive finite `length` and finite `x`, a rounded value from
+        zero to `length`, including positive zero at each period boundary.
+        A negative length keeps three.js's extension from `2 * length` to
+        `length`. That extension can overflow to negative infinity. A zero
+        length or either nonfinite operand returns NaN.
     """
-    return length - abs(euclidean_modulo(x, length * 2) - length)
+    if not isfinite(x) or not isfinite(length) or length == 0:
+        return bitcast[DType.float32](UInt32(0x7FC00000))
+    var peak = abs(Float64(length))
+    var period = 2 * peak
+    var remainder = remainder_float64(abs(Float64(x)), period)
+    # Fold the magnitude directly. Subtracting a small phase from the
+    # peak and then subtracting again would erase that phase.
+    var folded = min(remainder, period - remainder)
+    if length < 0:
+        return Float32(folded - period)
+    return Float32(folded)
 
 
 def smootherstep(x: Float32, low: Float32, high: Float32) -> Float32:
