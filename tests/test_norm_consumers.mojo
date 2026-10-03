@@ -319,6 +319,8 @@ def test_tube_painter_keeps_nonzero_subnormal_strokes() raises:
 def test_vector2_zero_angle_obeys_signed_atan2() raises:
     assert_equal(Vector2(0.0, 0.0).angle().to(RADIAN), Float32(0))
     assert_equal(Vector2(-0.0, -0.0).angle().to(RADIAN), Float32(pi))
+    assert_equal(Vector2(-0.0, 0.0).angle().to(RADIAN), Float32(pi))
+    assert_equal(Vector2(0.0, -0.0).angle().to(RADIAN), 2 * Float32(pi))
 
 
 def main() raises:
